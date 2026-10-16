@@ -8,5 +8,5 @@
     "types": ["vite/client"],
     "noEmit": true
   },
-  "include": ["src", "vite.config.ts", "../src/shared"]
+  "include": ["src", "vite.config.ts", "../src/shared", "../test/web"]
 }

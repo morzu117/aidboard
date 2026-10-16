@@ -1,0 +1,101 @@
+/* Adaptations à l'application ; maquette.css reste identique à celle des maquettes. */
+body {
+  margin: 0;
+}
+.cadre[data-viewport] {
+  width: 100%;
+  min-height: 100vh;
+}
+.erreur-plein-ecran {
+  padding: var(--sp-8, 32px);
+  max-width: 640px;
+}
+
+/* Dialogues : absents des maquettes, construits avec leurs variables seulement. */
+.voile {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--sp-4);
+  background: rgba(0, 0, 0, 0.6);
+}
+.dialogue {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  width: min(560px, 100%);
+  max-height: 90vh;
+  overflow: auto;
+  padding: var(--sp-6);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-xl);
+  background: var(--surface-2);
+  box-shadow: var(--ombre);
+}
+.dialogue h2 {
+  margin: 0;
+  font-size: var(--fs-l);
+}
+.dialogue label {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  font-size: var(--fs-s);
+  color: var(--text-2);
+}
+.dialogue .champ,
+.dialogue .selecteur {
+  height: var(--h-champ);
+  width: 100%;
+}
+.dialogue-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--sp-2);
+  margin-top: var(--sp-2);
+}
+.apercu-branche {
+  font-size: var(--fs-s);
+  color: var(--text-3);
+  font-family: ui-monospace, monospace;
+}
+.sortie-action {
+  max-height: 200px;
+  overflow: auto;
+  padding: var(--sp-3);
+  border-radius: var(--r-m);
+  background: var(--surface-term);
+  font-family: ui-monospace, monospace;
+  font-size: var(--fs-s);
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+.message-erreur {
+  color: var(--s-erreur);
+  font-size: var(--fs-m);
+}
+.message-info {
+  color: var(--s-attente);
+  font-size: var(--fs-s);
+}
+.formulaire {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+}
+.masque {
+  display: none;
+}
+.sujet-grille.sujet-grille--seul {
+  grid-template-columns: minmax(0, 1fr);
+}
+.sortie-xterm {
+  padding: var(--sp-2);
+  overflow: auto;
+}
+.sujet-actions {
+  position: relative;
+}

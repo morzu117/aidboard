@@ -10,3 +10,4 @@ docs/
 agent.yml
 CLAUDE.md
 AGENTS.md
+web/src/styles/maquette.css
