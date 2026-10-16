@@ -403,6 +403,14 @@ body { background: var(--doc-bg); color: var(--text); font-family: var(--font); 
 .pied-terminal .taille { margin-left: auto; }
 [data-viewport="phone"] .pied-terminal .taille { display: none; }
 
+.memoire { display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: var(--r-l); background: var(--surface-2); }
+.memoire .titre-zone { padding: var(--sp-3) var(--sp-4) 0; }
+.memoire-onglets { display: flex; flex-wrap: wrap; gap: var(--sp-1); padding: var(--sp-2) var(--sp-3); border-bottom: 1px solid var(--line); }
+.memoire-onglets .onglet { border-radius: var(--r-s); border-bottom: 0; min-height: var(--h-controle-s); }
+.memoire-onglets .onglet.est-actif { background: var(--surface-4); }
+.memoire-page { display: flex; flex-direction: column; gap: var(--sp-2); padding: var(--sp-3) var(--sp-4); }
+.memoire-corps { margin: 0; padding: var(--sp-3); background: var(--surface-input); border-radius: var(--r-s); font-family: ui-monospace, monospace; font-size: var(--fs-s); line-height: var(--lh-term); white-space: pre-wrap; word-break: break-word; max-height: var(--h-terminal-sujet); overflow: auto; }
+
 .panneau { display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: var(--r-l); background: var(--surface-2); }
 .panneau-entete { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); padding: var(--sp-2); border-bottom: 1px solid var(--line); }
 .panneau-entete .pousser { margin-left: auto; padding-right: var(--sp-2); font-size: var(--fs-s); }
