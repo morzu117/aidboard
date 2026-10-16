@@ -12,6 +12,15 @@ while IFS= read -r line; do
     quit) exit 0 ;;
     fail) exit 3 ;;
     ask) printf 'Do you want to proceed?\n❯ 1. Yes\n  2. No\n' ;;
+    # « perm » et « stop » jouent les hooks de Claude Code avec les fixtures, quand le PTY porte AID_HOOK
+    perm)
+      printf 'Do you want to proceed?\n❯ 1. Yes\n  2. Yes, and don’t ask again\n  3. No\n'
+      [ -z "${AID_HOOK:-}" ] || sh "$AID_HOOK" PermissionRequest < "$(dirname "$0")/hooks/PermissionRequest.json"
+      IFS= read -r -n1 key
+      printf '\nréponse %s\n' "$key" ;;
+    stop)
+      [ -z "${AID_HOOK:-}" ] || sh "$AID_HOOK" Stop < "$(dirname "$0")/hooks/Stop.json"
+      printf 'tour fini\n' ;;
     *) printf '> %s\n' "$line" ;;
   esac
 done

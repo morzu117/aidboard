@@ -94,9 +94,10 @@ export function project(tx: Db, e: AidEvent): void {
       break;
     }
     case 'approval.resolved':
+      // la réponse donnée, l'agent repart ; refusée, la main revient à l'humain. Le hook suivant corrige.
       tx.prepare(
-        "UPDATE agents SET pending = NULL, updated_at = ? WHERE id = ? AND json_extract(pending, '$.id') = ?",
-      ).run(e.ts, e.agentId, d.pendingId ?? null);
+        "UPDATE agents SET pending = NULL, status = CASE WHEN status = 'needs_input' THEN ? ELSE status END, status_reason = NULL, status_at = ?, updated_at = ? WHERE id = ? AND json_extract(pending, '$.id') = ?",
+      ).run(d.option === 'no' ? 'idle' : 'working', e.ts, e.ts, e.agentId, d.pendingId ?? null);
       break;
     case 'run.state':
       tx.prepare('UPDATE runs SET state = ? WHERE id = ?').run(d.state, e.runId);

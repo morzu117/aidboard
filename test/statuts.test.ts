@@ -135,8 +135,30 @@ test('approval.resolved ne vide que la demande qu’il nomme', () => {
     });
   resolve('autre');
   expect(agent().pending?.id).toBe('tu_1');
+  expect(agent().status).toBe('needs_input');
   resolve('tu_1');
   expect(agent().pending).toBeNull();
+});
+
+test('une demande résolue ne laisse pas l’agent « en attente » : répondue il repart, refusée la main revient', () => {
+  const { store, status, agent } = setup();
+  const resolve = (option: string) =>
+    store.append({
+      source: 'daemon',
+      type: 'approval.resolved',
+      agentId: 'ag_1',
+      data: { pendingId: 'tu_1', option, by: 'human' },
+    });
+  status('hook:claude', { status: 'needs_input', reason: 'permission', pending: permission });
+  resolve('yes');
+  expect(agent()).toMatchObject({ status: 'working', statusReason: null, statusSource: 'hook' });
+  status('hook:claude', { status: 'needs_input', reason: 'permission', pending: permission });
+  resolve('no');
+  expect(agent()).toMatchObject({ status: 'idle', pending: null });
+  // une résolution en retard, l'agent déjà reparti : rien ne bouge
+  status('hook:claude', { status: 'working' });
+  resolve('no');
+  expect(agent().status).toBe('working');
 });
 
 test('la sortie de l’agent efface la demande et la pause', () => {

@@ -118,3 +118,23 @@ test('une réponse arrivée en retard n’écrase pas le dossier demandé depuis
   expect((champ as HTMLInputElement).value).toBe('/srv/code');
   expect(screen.queryByText('mon-depot')).toBeNull();
 });
+
+test('un chemin tapé avant le premier chargement n’est pas écrasé par sa réponse', async () => {
+  const h = setup(<Accueil />, snapshot());
+  let release!: () => void;
+  const first = new Promise<void>((r) => (release = r));
+  h.respond.set(
+    'GET /api/fs/dirs',
+    () =>
+      first.then(
+        () => new Response(JSON.stringify(listing()), { status: 200 }),
+      ) as unknown as Response,
+  );
+  await userEvent.click(await screen.findByRole('button', { name: 'Nouveau sujet' }));
+  const champ = await screen.findByLabelText('Aller au dossier');
+  await userEvent.type(champ, '/srv/code');
+  release();
+  // la liste s'affiche, mais le champ garde ce qui a été tapé
+  await screen.findByText('mon-depot');
+  expect((champ as HTMLInputElement).value).toBe('/srv/code');
+});
