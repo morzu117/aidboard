@@ -169,7 +169,9 @@ test('token de run : POST /api/events pour un autre runId refusé, pour le sien 
     payload: { source: 'hook:claude', type: 'agent.status', data: {}, runId: 'run_2' },
   });
   expect(autre.statusCode).toBe(403);
-  db.prepare("INSERT INTO workspaces VALUES ('ws_1','a','/a','main','/w','t')").run();
+  db.prepare(
+    "INSERT INTO workspaces (id, name, root, base_branch, worktrees_dir, created_at) VALUES ('ws_1','a','/a','main','/w','t')",
+  ).run();
   db.prepare(
     "INSERT INTO topics VALUES ('tp_1','ws_1','s','T','feat','feat/s','main','/w/s','active',NULL,'disabled','t','t')",
   ).run();

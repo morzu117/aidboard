@@ -131,7 +131,7 @@ complète l'enveloppe depuis l'environnement et la poste au daemon. Daemon absen
 
 - Branche : `<type>/<slug>`, `type` ∈ `feat`, `fix`, `chore`, `spike`. Sujet né d'une issue : `<type>/<numéro>-<slug>`.
 - Worktree : `~/.aid/worktrees/<workspace>/<slug>`, hors du repo.
-- Base : toujours `origin/<baseBranch>` après `git fetch`.
+- Base : toujours `origin/<baseBranch>` après `git fetch`. Exception : un dépôt purement local (sans remote `origin`) est accepté ; sa base est une branche locale (la courante par défaut), les worktrees en partent et le nettoyage compare à elle. Décision du 2026-10-16.
 - Jamais de push sur la branche principale. Jamais de merge sans validation humaine.
 
 | Action | Effet | État du sujet |

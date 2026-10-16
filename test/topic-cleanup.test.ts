@@ -187,3 +187,18 @@ test('sujet inconnu : 404 ; action inconnue : 404 ; sujet déjà archivé : 409'
   await cleanup(topicId);
   expect((await postAction(c, topicId, 'topic.cleanup')).statusCode).toBe(409);
 });
+
+test('dépôt sans origin : sujet créé depuis la branche locale, nettoyage comparé à elle', async () => {
+  c = await setupWorkspace({ local: true });
+  const { wt, branch, topicId } = await makeTopic(c);
+  expect(sh(wt, 'rev-parse', 'HEAD')).toBe(sh(c.clone, 'rev-parse', 'main'));
+  commitFile(wt, 'a.txt', 'a');
+  const refus = await cleanup(topicId);
+  expect(refus.data).toMatchObject({ outcome: 'needs_human', result: { unmergedCommits: 1 } });
+  // fusionné dans main en local : plus rien à confirmer
+  sh(c.clone, 'merge', '-q', '--ff-only', branch);
+  const ok = await cleanup(topicId);
+  expect(ok.data.outcome).toBe('succeeded');
+  expect(existsSync(wt)).toBe(false);
+  expect(hasBranch(branch)).toBe(false);
+});

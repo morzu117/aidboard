@@ -33,7 +33,13 @@ export function commitFile(
 
 export function makeOriginAndClone(
   tmp: string,
-  opts: { base?: string; name?: string; codegraph?: boolean; setHead?: boolean } = {},
+  opts: {
+    base?: string;
+    name?: string;
+    codegraph?: boolean;
+    setHead?: boolean;
+    local?: boolean;
+  } = {},
 ): { origin: string; clone: string } {
   const base = opts.base ?? 'main';
   const origin = join(tmp, 'origin.git');
@@ -46,6 +52,8 @@ export function makeOriginAndClone(
   commitFile(clone, 'README.md', '# dépôt de test\n', 'initial');
   sh(clone, 'push', '-q', '-u', 'origin', base);
   if (opts.setHead !== false) sh(clone, 'remote', 'set-head', 'origin', base);
+  // dépôt purement local : plus de remote du tout (les refs origin/* partent avec lui)
+  if (opts.local) sh(clone, 'remote', 'remove', 'origin');
   if (opts.codegraph) {
     mkdirSync(join(clone, '.codegraph'));
     writeFileSync(join(clone, '.codegraph', 'codegraph.db'), '');

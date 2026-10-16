@@ -13,7 +13,9 @@ function setup() {
 }
 
 function seed(db: Db) {
-  db.prepare("INSERT INTO workspaces VALUES ('ws_1','a','/a','main','/w','t0')").run();
+  db.prepare(
+    "INSERT INTO workspaces (id, name, root, base_branch, worktrees_dir, created_at) VALUES ('ws_1','a','/a','main','/w','t0')",
+  ).run();
   db.prepare(
     "INSERT INTO topics VALUES ('tp_1','ws_1','s','T','feat','feat/s','main','/w/s','draft',NULL,'disabled','t0','t0')",
   ).run();
@@ -59,7 +61,9 @@ test('mutate qui lève : ni ligne neuve ni événement', () => {
     store.append(
       { source: 'daemon', type: 'topic.state', topicId: 'tp_1', data: { state: 'active' } },
       (tx) => {
-        tx.prepare("INSERT INTO workspaces VALUES ('ws_2','b','/b','main','/w','t')").run();
+        tx.prepare(
+          "INSERT INTO workspaces (id, name, root, base_branch, worktrees_dir, created_at) VALUES ('ws_2','b','/b','main','/w','t')",
+        ).run();
         throw new Error('boum');
       },
     ),

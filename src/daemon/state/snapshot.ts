@@ -11,6 +11,7 @@ export function buildSnapshot(db: Db, all = false): StateSnapshot {
       id: r.id as string,
       name: r.name as string,
       root: r.root as string,
+      remote: (r.remote as string | null) ?? null,
       baseBranch: r.base_branch as string,
       worktreesDir: r.worktrees_dir as string,
       createdAt: r.created_at as string,

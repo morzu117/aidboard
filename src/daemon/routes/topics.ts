@@ -56,6 +56,7 @@ interface WorkspaceRow {
   root: string;
   base_branch: string;
   worktrees_dir: string;
+  remote: string | null;
 }
 
 export function registerTopicRoutes(app: FastifyInstance, deps: TopicRouteDeps): void {
@@ -99,6 +100,7 @@ export function registerTopicRoutes(app: FastifyInstance, deps: TopicRouteDeps):
         AID_SLUG: slug,
         AID_BRANCH: branch,
         AID_BASE: ws.base_branch,
+        AID_REMOTE: ws.remote ?? '',
         AID_WORKTREE: worktree,
       }),
       afterSuccess: () => {
@@ -194,6 +196,7 @@ export function registerTopicRoutes(app: FastifyInstance, deps: TopicRouteDeps):
         AID_SLUG: topic.worktree.split('/').at(-1) ?? '',
         AID_BRANCH: topic.branch,
         AID_BASE: topic.base,
+        AID_REMOTE: ws.remote ?? '',
         AID_WORKTREE: topic.worktree,
         AID_CODEGRAPH_BIN: deps.codegraphBin,
         ...(body.confirmUnmerged !== undefined && {

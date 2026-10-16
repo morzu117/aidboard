@@ -29,6 +29,7 @@ export const ws = (over: Partial<Workspace> = {}): Workspace => ({
   id: 'ws_1',
   name: 'aid',
   root: '/r',
+  remote: 'origin',
   baseBranch: 'main',
   worktreesDir: '/w',
   createdAt: 't',

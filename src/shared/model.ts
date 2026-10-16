@@ -13,6 +13,8 @@ export interface Workspace {
   id: string;
   name: string;
   root: string;
+  /** « origin », ou null pour un dépôt purement local */
+  remote: string | null;
   baseBranch: string;
   worktreesDir: string;
   createdAt: string;

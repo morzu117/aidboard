@@ -73,13 +73,32 @@ test('refuse un worktree lié', async () => {
   expect(r.json().error).toContain('worktree lié');
 });
 
-test('refuse un dépôt sans origin', async () => {
+test('un dépôt sans origin est accepté : base = branche courante, remote nul, avertissement', async () => {
   t = await startTestDaemon();
-  const dir = tmp();
-  sh(dir, 'init', '-q', '-b', 'main');
-  const r = await register({ path: dir });
-  expect(r.statusCode).toBe(422);
-  expect(r.json().error).toContain('origin');
+  const { clone } = makeOriginAndClone(tmp(), { local: true });
+  sh(clone, 'checkout', '-q', '-b', 'dev');
+  const r = await register({ path: clone });
+  expect(r.statusCode).toBe(201);
+  expect(r.json()).toMatchObject({ remote: null, baseBranch: 'dev' });
+  expect(r.json().warnings.join('\n')).toContain('sans remote origin');
+  const state = (
+    await t.d.app.inject({ method: 'GET', url: '/api/state', headers: t.headers })
+  ).json<{ workspaces: Array<{ remote: string | null }> }>();
+  expect(state.workspaces[0]!.remote).toBeNull();
+});
+
+test('un dépôt sans origin : une base précisée doit exister en local', async () => {
+  t = await startTestDaemon();
+  const { clone } = makeOriginAndClone(tmp(), { local: true });
+  const absente = await register({ path: clone, baseBranch: 'nexiste-pas' });
+  expect(absente.statusCode).toBe(422);
+  expect(absente.json().error).toContain('nexiste-pas');
+});
+
+test('un dépôt avec origin garde le remote « origin »', async () => {
+  t = await startTestDaemon();
+  const { clone } = makeOriginAndClone(tmp());
+  expect((await register({ path: clone })).json()).toMatchObject({ remote: 'origin' });
 });
 
 test('base non détectable : à préciser ; précisée mais absente : refus ; précisée et présente : ok', async () => {

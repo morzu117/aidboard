@@ -29,7 +29,9 @@ export async function startTestDaemon(
 }
 
 export function seedTopic(db: Db): void {
-  db.prepare("INSERT INTO workspaces VALUES ('ws_1','a','/a','main','/w','t0')").run();
+  db.prepare(
+    "INSERT INTO workspaces (id, name, root, base_branch, worktrees_dir, created_at) VALUES ('ws_1','a','/a','main','/w','t0')",
+  ).run();
   db.prepare(
     "INSERT INTO topics VALUES ('tp_1','ws_1','s','T','feat','feat/s','main','/definitely/missing','active',NULL,'disabled','t0','t0')",
   ).run();

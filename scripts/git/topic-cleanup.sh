@@ -23,11 +23,15 @@ git worktree prune  # worktree effacé à la main : on oublie son entrée
 have_branch=0
 git show-ref --verify --quiet "refs/heads/$AID_BRANCH" && have_branch=1
 if [ "$have_branch" = 1 ]; then
-  git fetch --quiet origin "$AID_BASE" || echo "fetch impossible : comparaison avec l'origin/$AID_BASE local" >&2
-  n="$(git rev-list --count "origin/$AID_BASE..$AID_BRANCH")"
+  base_ref="$AID_BASE"
+  if [ -n "${AID_REMOTE:-}" ]; then
+    base_ref="$AID_REMOTE/$AID_BASE"
+    git fetch --quiet "$AID_REMOTE" "$AID_BASE" || echo "fetch impossible : comparaison avec le $base_ref local" >&2
+  fi
+  n="$(git rev-list --count "$base_ref..$AID_BRANCH")"
   if [ "$n" -gt 0 ] && [ "${AID_CONFIRM_UNMERGED:-}" != "$n" ]; then
     printf '::aid:: {"unmergedCommits": %s}\n' "$n"
-    die_human "$n commit(s) absents de origin/$AID_BASE : confirmer pour supprimer"
+    die_human "$n commit(s) absents de $base_ref : confirmer pour supprimer"
   fi
 fi
 

@@ -211,7 +211,7 @@ function Contenu({ topicId }: { topicId: string }) {
           <span className="pastille pastille--discret" data-node="1-3.entete.base">
             base{' '}
             <span data-node="1-3.entete.base.branche" data-bind="sujet.base">
-              origin/{topic.base}
+              {workspace?.remote ? `${workspace.remote}/${topic.base}` : topic.base}
             </span>
           </span>
           <span

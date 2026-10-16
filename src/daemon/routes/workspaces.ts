@@ -7,7 +7,7 @@ import type { Workspace } from '../../shared/model.js';
 import { slugify } from '../../shared/slug.js';
 import type { Db } from '../db.js';
 import { AidHttpError } from '../errors.js';
-import { inspectRepo, NotARepo, remoteBranchExists } from '../git/inspect.js';
+import { inspectRepo, localBranchExists, NotARepo, remoteBranchExists } from '../git/inspect.js';
 import type { AidPaths } from '../paths.js';
 
 const ulid = monotonicFactory();
@@ -54,14 +54,17 @@ export function registerWorkspaceRoutes(
         `${repo.root} est un worktree lié : enregistrer le dépôt principal`,
       );
     }
-    if (!repo.hasOrigin) throw new AidHttpError(422, "le dépôt n'a pas de remote origin");
-    const base = body.baseBranch ?? repo.baseBranch;
+    // Sans origin, le projet est purement local : les sujets partent de la branche locale (par défaut la courante).
+    const base = body.baseBranch ?? (repo.hasOrigin ? repo.baseBranch : repo.currentBranch);
     if (!base) throw new AidHttpError(422, 'branche de base introuvable : la préciser');
-    if (!(await remoteBranchExists(repo.root, base))) {
+    if (repo.hasOrigin && !(await remoteBranchExists(repo.root, base))) {
       throw new AidHttpError(
         422,
         `origin/${base} est introuvable : faire un git fetch ou corriger la base`,
       );
+    }
+    if (!repo.hasOrigin && !(await localBranchExists(repo.root, base))) {
+      throw new AidHttpError(422, `la branche ${base} est introuvable dans le dépôt`);
     }
     if (deps.db.prepare('SELECT 1 FROM workspaces WHERE root = ?').get(repo.root)) {
       throw new AidHttpError(409, `${repo.root} est déjà enregistré`);
@@ -77,14 +80,20 @@ export function registerWorkspaceRoutes(
       id: `ws_${ulid()}`,
       name,
       root: repo.root,
+      remote: repo.hasOrigin ? 'origin' : null,
       baseBranch: base,
       worktreesDir: join(deps.paths.worktrees, name),
       createdAt: new Date().toISOString(),
     };
     deps.db
-      .prepare('INSERT INTO workspaces VALUES (?, ?, ?, ?, ?, ?)')
-      .run(ws.id, ws.name, ws.root, ws.baseBranch, ws.worktreesDir, ws.createdAt);
+      .prepare(
+        'INSERT INTO workspaces (id, name, root, base_branch, worktrees_dir, created_at, remote) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      )
+      .run(ws.id, ws.name, ws.root, ws.baseBranch, ws.worktreesDir, ws.createdAt, ws.remote);
     const warnings = wslWarnings(repo.root, (deps.procVersion ?? readProcVersion)());
+    if (!ws.remote) {
+      warnings.push(`dépôt sans remote origin : les sujets partiront de la branche locale ${base}`);
+    }
     return reply.code(201).send({ ...ws, warnings });
   });
 }

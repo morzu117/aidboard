@@ -1,18 +1,22 @@
 #!/usr/bin/env bash
-# topic.create : branche et worktree neufs depuis origin/<base>. cwd = racine du repo.
+# topic.create : branche et worktree neufs depuis origin/<base>, ou <base> pour un dépôt sans remote. cwd = racine du repo.
 set -euo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
 require_env AID_REPO_ROOT AID_SLUG AID_BRANCH AID_BASE AID_WORKTREE
 
-git fetch --quiet origin "$AID_BASE"
+base_ref="$AID_BASE"
+if [ -n "${AID_REMOTE:-}" ]; then
+  git fetch --quiet "$AID_REMOTE" "$AID_BASE"
+  base_ref="$AID_REMOTE/$AID_BASE"
+fi
 
 git show-ref --verify --quiet "refs/heads/$AID_BRANCH" && die_human "la branche $AID_BRANCH existe déjà"
 [ -e "$AID_WORKTREE" ] && die_human "le chemin $AID_WORKTREE existe déjà"
 
 mkdir -p "$(dirname "$AID_WORKTREE")"
 # --no-track : sans lui, origin/<base> devient l'amont, et un push pourrait partir sur la branche principale
-git worktree add --no-track -b "$AID_BRANCH" "$AID_WORKTREE" "origin/$AID_BASE"
+git worktree add --no-track -b "$AID_BRANCH" "$AID_WORKTREE" "$base_ref"
 
 if [ -f .worktreeinclude ]; then
   git ls-files --others --ignored --exclude-from=.worktreeinclude -z |
