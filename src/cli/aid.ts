@@ -14,17 +14,26 @@ const HELP = `aidboard ${readVersion()} : cockpit local des agents de code
   aid daemon      lance le daemon au premier plan
   aid emit        publie un événement d'agent (appelé par les hooks ; sans effet hors A-I-D)
   aid hooks       état des hooks Claude Code ; install | uninstall modifient ~/.claude/settings.json
+  aid mem …       la mémoire des agents : get, put, search, list, rm, export, import, reindex
+  aid mcp         serveur MCP (stdio) qui expose la mémoire à un agent
 `;
 
 async function main(): Promise<number> {
-  // ses propres options, appelée par les hooks : avant l'analyse stricte des options globales
-  if (process.argv[2] === 'emit') {
+  // ces sous-commandes ont leurs propres options, appelées par les hooks ou directement :
+  // avant l'analyse stricte des options globales
+  const first = process.argv[2];
+  if (first === 'emit') {
     const { runEmit } = await import('./commands/emit.js');
     return runEmit(process.argv.slice(3));
   }
-  if (process.argv[2] === 'hook') {
+  if (first === 'hook') {
     const { runHook } = await import('./commands/hook.js');
     return runHook(process.argv[3] ?? '');
+  }
+  if (first === 'mem') {
+    const { resolvePaths } = await import('../daemon/paths.js');
+    const { runMem } = await import('./commands/mem.js');
+    return runMem(process.argv.slice(3), resolvePaths());
   }
   const { values, positionals } = parseArgs({
     allowPositionals: true,
