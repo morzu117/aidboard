@@ -37,7 +37,7 @@ export function seedTopic(db: Db): void {
   ).run();
   db.prepare("INSERT INTO runs VALUES ('run_1','tp_1','standard','open','t0')").run();
   db.prepare(
-    "INSERT INTO agents VALUES ('ag_1','run_1','shell','free','pty','starting','/w/s','[\"sh\"]',NULL,NULL,NULL,'t0','t0')",
+    "INSERT INTO agents (id, run_id, kind, role, transport, status, cwd, command, pid, exit_code, issue, created_at, updated_at) VALUES ('ag_1','run_1','shell','free','pty','starting','/w/s','[\"sh\"]',NULL,NULL,NULL,'t0','t0')",
   ).run();
 }
 

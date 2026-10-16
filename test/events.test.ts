@@ -21,7 +21,7 @@ function seed(db: Db) {
   ).run();
   db.prepare("INSERT INTO runs VALUES ('run_1','tp_1','standard','open','t0')").run();
   db.prepare(
-    "INSERT INTO agents VALUES ('ag_1','run_1','shell','free','pty','starting','/w/s','[]',NULL,NULL,NULL,'t0','t0')",
+    "INSERT INTO agents (id, run_id, kind, role, transport, status, cwd, command, pid, exit_code, issue, created_at, updated_at) VALUES ('ag_1','run_1','shell','free','pty','starting','/w/s','[]',NULL,NULL,NULL,'t0','t0')",
   ).run();
 }
 
@@ -169,6 +169,9 @@ test('reconstruction : rejouer le journal redonne les mêmes tables', () => {
     'agent.exited',
     'run.state',
     'cost',
+    'agent.status',
+    'agent.tool',
+    'approval.resolved',
   ] as const;
   for (let i = 0; i < 50; i++) {
     const type = types[i % types.length]!;
@@ -182,9 +185,17 @@ test('reconstruction : rejouer le journal redonne les mêmes tables', () => {
       'agent.exited': { exitCode: i % 5, reason: i % 7 === 0 ? 'user' : 'exit' },
       'run.state': { state: `s${i}` },
       cost: { usd: i },
+      'agent.status': {
+        status: ['working', 'needs_input', 'idle'][i % 3],
+        reason: 'permission',
+        message: `m${i}`,
+        pending: { id: `p${i}`, kind: 'permission', question: 'q ?', options: [] },
+      },
+      'agent.tool': { label: `Bash(t${i})` },
+      'approval.resolved': { pendingId: `p${i - 1}` },
     }[type]!;
     store.append({
-      source: 'daemon',
+      source: type === 'agent.status' && i % 2 ? 'hook:claude' : 'daemon',
       type,
       topicId: 'tp_1',
       runId: 'run_1',
@@ -192,6 +203,24 @@ test('reconstruction : rejouer le journal redonne les mêmes tables', () => {
       data,
     });
   }
+  // la fin laisse un agent vivant, avec un outil, un statut sûr et une demande en cours
+  store.append({ source: 'daemon', type: 'agent.spawned', agentId: 'ag_1', data: { pid: 7 } });
+  store.append({
+    source: 'hook:claude',
+    type: 'agent.tool',
+    agentId: 'ag_1',
+    data: { label: 'Bash(x)' },
+  });
+  store.append({
+    source: 'hook:claude',
+    type: 'agent.status',
+    agentId: 'ag_1',
+    data: {
+      status: 'needs_input',
+      reason: 'permission',
+      pending: { id: 'p-fin', kind: 'permission', question: 'q ?', options: [] },
+    },
+  });
   const dump = () => ({
     topics: db.prepare('SELECT * FROM topics').all(),
     agents: db.prepare('SELECT * FROM agents').all(),
@@ -199,9 +228,12 @@ test('reconstruction : rejouer le journal redonne les mêmes tables', () => {
     actions: db.prepare('SELECT * FROM actions').all(),
   });
   const before = dump();
+  expect(before.agents[0]).toMatchObject({ status: 'needs_input', status_source: 'hook' });
+  expect(JSON.parse((before.agents[0] as { pending: string }).pending).id).toBe('p-fin');
   db.exec(`
     UPDATE topics SET state='draft', phase=NULL, index_state='disabled', updated_at='t0';
-    UPDATE agents SET status='starting', pid=NULL, exit_code=NULL, updated_at='t0';
+    UPDATE agents SET status='starting', pid=NULL, exit_code=NULL, status_reason=NULL, status_message=NULL,
+      status_source=NULL, status_at=NULL, status_detail=NULL, last_tool=NULL, pending=NULL, paused_at=NULL, updated_at='t0';
     UPDATE runs SET state='open';
     DELETE FROM actions;`);
   for (const e of store.since(null)) project(db, e);

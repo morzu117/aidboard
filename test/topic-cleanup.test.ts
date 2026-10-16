@@ -100,7 +100,7 @@ test('un agent vivant : 409, rien n’est lancé', async () => {
   };
   c.t.db
     .prepare(
-      "INSERT INTO agents VALUES ('ag_1', ?, 'shell', 'free', 'pty', 'starting', ?, '[]', NULL, NULL, NULL, 't', 't')",
+      "INSERT INTO agents (id, run_id, kind, role, transport, status, cwd, command, pid, exit_code, issue, created_at, updated_at) VALUES ('ag_1', ?, 'shell', 'free', 'pty', 'starting', ?, '[]', NULL, NULL, NULL, 't', 't')",
     )
     .run(run.id, wt);
   const r = await postAction(c, topicId, 'topic.cleanup');

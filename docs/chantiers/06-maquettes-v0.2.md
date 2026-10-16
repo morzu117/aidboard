@@ -69,7 +69,7 @@ permission est repéré sans ouvrir son terminal*.
 | --- | --- | --- |
 | E1 | **Commande de hook neutre hors A-I-D.** `aid hooks install` écrit `[ -z "$AID_HOOK" ] \|\| "$AID_HOOK" <Event>`. Le daemon injecte `AID_HOOK` dans chaque PTY : c'est le chemin absolu de `scripts/hooks/aid-hook.sh` livré dans le paquet. Ce script lance `"$AID_NODE" "$AID_CLI" hook "$1"`, deux chemins absolus injectés eux aussi. | Hors A-I-D, la variable est vide : le hook ne lance rien et ne coûte rien. Pas de dépendance au `PATH` ni à `npm i -g`. Une mise à jour du paquet ne casse pas la configuration. |
 | E2 | **Événements utilisés** : `UserPromptSubmit` → `working` ; `PreToolUse` → `working` + `agent.tool` (et `needs_input/question` pour `AskUserQuestion`) ; `PostToolUse` → `working` ; `PermissionRequest` → `needs_input/permission` ; `Notification` `elicitation_dialog` → `needs_input/question` ; `Stop` → `idle`. On n'utilise **pas** `SessionEnd` : la spec en fait `stopped`, mais un `/clear` le déclenche sans que le process s'arrête. `agent.exited` (daemon) reste la seule fin. | Sans `PostToolUse`, une permission accordée laisserait l'agent en « Attend une réponse » jusqu'au prochain outil. |
-| E3 | **Sous-sessions** : la première `session_id` reçue d'un agent devient la sienne. Un événement venu d'une autre session (un `claude -p` lancé par l'agent hérite de ses `AID_*`) ne compte que comme `agent.tool`. Il ne change jamais le statut. | Sinon, le `Stop` d'un agent de phase ferait passer l'orchestrateur en « À relire ». |
+| E3 | **Sous-sessions** : `aid hook` joint à l'événement la lignée de process du hook (`chain`, du plus proche au plus lointain, `{pid, comm}`). Si un process autre qu'un shell se trouve entre le hook et le pid de l'agent, l'événement vient d'une sous-session (un `claude -p` lancé par l'agent hérite de ses `AID_*`) : il ne change pas le statut. Lignée absente, ou agent absent de la lignée : l'événement compte. | Sinon, le `Stop` d'un agent de phase ferait passer l'orchestrateur en « À relire ». La `session_id` ne convient pas : un `/clear` en ouvre une nouvelle dans le même process. |
 | E4 | **Répondre à une demande** se fait au clavier, dans le PTY. Une permission : `1` pour Autoriser une fois, `2` pour « Toujours … », `Échap` pour Refuser. Une question : le chiffre de l'option. Avant d'envoyer une touche, le daemon vérifie sur le miroir que l'écran montre bien cette option (par exemple `1. Yes`, ou `2. <libellé>`). Sinon : 409, « l'écran ne montre plus cette demande : ouvrir le terminal ». « Toujours … » n'est proposé que si `permission_suggestions` n'est pas vide. Une question multiple ou à choix multiples n'a pas de boutons : seulement « Ouvrir le terminal ». | Le terminal reste la vérité. Un hook `PermissionRequest` bloquant qui attendrait le clic empêcherait de répondre dans le terminal. La vérification d'écran évite qu'un `1` arrive dans la zone de saisie. |
 | E5 | **Pause = SIGSTOP** du groupe de process, **Reprendre = SIGCONT**. Il ne s'agit pas d'un nouveau statut : un champ `pausedAt` s'ajoute. L'affichage « En pause » l'emporte sur le statut, et le statut d'origine est retrouvé à la reprise. `stop()` envoie SIGCONT avant ses signaux d'arrêt. | Les statuts de la spec restent fermés. Un process stoppé ne traite pas SIGINT ni SIGTERM avant d'être relancé. |
 | E6 | **Consigne à tous les agents** : elle est envoyée tout de suite aux agents `claude` et `codex` vivants et inactifs (`idle`, réel ou estimé). Jamais à un shell, qui exécuterait le texte. La case « Ajouter aux consignes globales » est **absente**, et l'aide devient « Envoyée maintenant aux agents inactifs. » | La spec interdit à A-I-D d'ajouter une option de lancement ou d'écrire un fichier de consignes : il n'existe donc pas de « reçue au démarrage par les suivants ». À rouvrir avec Julien. |
@@ -103,18 +103,18 @@ touchent l'UI, `npm run gate:e2e` aussi. Pas de bump de version.
 ### 06.2 — Statuts projetés
 
 - Migration `003_statuts.sql` sur `agents` : `status_reason`, `status_message`,
-  `status_source`, `status_at`, `session_id`, `last_tool`, `pending` (JSON de la demande
-  en cours), `paused_at`.
+  `status_source`, `status_at`, `status_detail` (JSON de l'estimation), `last_tool`,
+  `pending` (JSON de la demande en cours), `paused_at`.
 - `Agent` dans `src/shared/model.ts` gagne `statusReason`, `statusMessage`,
-  `statusSource` (`'hook' | 'heuristic' | 'daemon' | null`), `statusAt`, `lastTool`,
-  `pending` (`{ id, kind: 'permission' | 'question', question, options: {label, key}[] } | null`)
+  `statusSource` (`'hook' | 'heuristic' | 'daemon' | null`), `statusAt`, `statusDetail`, `lastTool`,
+  `pending` (`{ id, kind: 'permission' | 'question', question, options: {label, answer}[] } | null`,
+  où `answer` ∈ `yes`, `always`, `no`, `1`…`9` : jamais une touche),
   et `pausedAt`. L'instantané les rend.
 - Projecteur `agent.status` :
   - ignoré si l'agent est `done`, `error` ou `stopped` (rejeu tardif) ;
   - venu d'une source agent, `status` doit valoir `working`, `needs_input` ou `idle`, sinon
     il est ignoré ;
-  - E3 : si l'événement porte un `sessionId` différent de la `session_id` connue, seul
-    `last_tool` est mis à jour ;
+  - E3 : un événement d'une sous-session (`isSubSession(chain, pid)`) est ignoré ;
   - `heuristic` est ignoré quand `status_source = 'hook'` ;
   - `needs_input` enregistre `pending` depuis `data.pending` ; tout autre statut le vide ;
   - le champ `paused` n'est lu que si la source est `daemon` (E5).
