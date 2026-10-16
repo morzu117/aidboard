@@ -205,3 +205,51 @@ test('consignes : présence de CLAUDE.md et AGENTS.md, version du bloc et du noy
   expect((await get(ws.id)).json()).toMatchObject({ claudeMd: false, agentsMd: false });
   expect((await get('ws_inconnu')).statusCode).toBe(404);
 });
+
+test('namespace mémoire : project.namespace d’agent.yml, sinon le nom ; PATCH le change', async () => {
+  t = await startTestDaemon();
+  const a = makeOriginAndClone(tmp(), { name: 'avec-manifeste' });
+  writeFileSync(join(a.clone, 'agent.yml'), 'project:\n  namespace: aid\n');
+  expect((await register({ path: a.clone })).json().namespace).toBe('aid');
+  const b = makeOriginAndClone(tmp(), { name: 'sans-manifeste' });
+  const created = await register({ path: b.clone });
+  expect(created.json().namespace).toBe('sans-manifeste');
+  const c = makeOriginAndClone(tmp(), { name: 'manifeste-invalide' });
+  writeFileSync(join(c.clone, 'agent.yml'), 'project:\n  namespace: Majuscule\n');
+  expect((await register({ path: c.clone })).json().namespace).toBe('manifeste-invalide');
+
+  const id = created.json().id as string;
+  const patch = (payload: unknown, target = id) =>
+    t.d.app.inject({
+      method: 'PATCH',
+      url: `/api/workspaces/${target}`,
+      headers: t.headers,
+      payload: payload as never,
+    });
+  expect((await patch({ namespace: 'Majuscule' })).statusCode).toBe(400);
+  expect((await patch({ namespace: 'a/b' })).statusCode).toBe(400);
+  expect((await patch({ namespace: 'ok', extra: 1 })).statusCode).toBe(400);
+  expect((await patch({ namespace: 'projet' }, 'ws_absent')).statusCode).toBe(404);
+  expect((await patch({ namespace: 'projet' })).json()).toEqual({ id, namespace: 'projet' });
+  const state = await t.d.app.inject({ url: '/api/state', headers: t.headers });
+  const ws = (state.json().workspaces as Array<{ id: string; namespace: string }>).find(
+    (w) => w.id === id,
+  );
+  expect(ws?.namespace).toBe('projet');
+});
+
+test('au démarrage, un workspace sans namespace en reçoit un', async () => {
+  t = await startTestDaemon();
+  const home = t.home;
+  const { clone } = makeOriginAndClone(tmp(), { name: 'ancien' });
+  t.db
+    .prepare(
+      'INSERT INTO workspaces (id, name, root, base_branch, worktrees_dir, created_at, namespace) VALUES (?, ?, ?, ?, ?, ?, NULL)',
+    )
+    .run('ws_old', 'ancien', clone, 'main', '/w', 't0');
+  await t.d.stop();
+  t = await startTestDaemon(home);
+  expect(t.db.prepare("SELECT namespace FROM workspaces WHERE id = 'ws_old'").get()).toEqual({
+    namespace: 'ancien',
+  });
+});

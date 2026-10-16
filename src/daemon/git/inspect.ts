@@ -1,5 +1,7 @@
-import { existsSync, realpathSync } from 'node:fs';
+import { existsSync, readFileSync, realpathSync } from 'node:fs';
 import { join } from 'node:path';
+import { parse } from 'yaml';
+import { isValidNamespace } from '../memory/slug.js';
 import { git } from './exec.js';
 
 export interface RepoInfo {
@@ -43,6 +45,19 @@ export async function inspectRepo(path: string): Promise<RepoInfo> {
 
 export async function localBranchExists(root: string, branch: string): Promise<boolean> {
   return (await git(root, ['show-ref', '--verify', '--quiet', `refs/heads/${branch}`])).ok;
+}
+
+// `project.namespace` d'un agent.yml à la racine (DM2) ; absent ou invalide → undefined.
+export function readProjectNamespace(root: string): string | undefined {
+  const file = join(root, 'agent.yml');
+  if (!existsSync(file)) return undefined;
+  try {
+    const doc = parse(readFileSync(file, 'utf8')) as { project?: { namespace?: unknown } } | null;
+    const ns = doc?.project?.namespace;
+    return typeof ns === 'string' && isValidNamespace(ns) ? ns : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 export async function remoteBranchExists(root: string, branch: string): Promise<boolean> {

@@ -8,7 +8,14 @@ import type { Workspace, WorkspaceConsignes } from '../../shared/model.js';
 import { slugify } from '../../shared/slug.js';
 import type { Db } from '../db.js';
 import { AidHttpError } from '../errors.js';
-import { inspectRepo, localBranchExists, NotARepo, remoteBranchExists } from '../git/inspect.js';
+import {
+  inspectRepo,
+  localBranchExists,
+  NotARepo,
+  readProjectNamespace,
+  remoteBranchExists,
+} from '../git/inspect.js';
+import { isValidNamespace } from '../memory/slug.js';
 import type { AidPaths } from '../paths.js';
 
 const ulid = monotonicFactory();
@@ -17,6 +24,27 @@ const Body = Type.Object(
   { path: Type.String({ minLength: 1 }), baseBranch: Type.Optional(Type.String({ minLength: 1 })) },
   { additionalProperties: false },
 );
+const PatchBody = Type.Object(
+  { namespace: Type.String({ minLength: 1, maxLength: 100 }) },
+  { additionalProperties: false },
+);
+
+// Le namespace mémoire d'un workspace : celui du manifeste, sinon son nom.
+export function defaultNamespace(root: string, name: string): string {
+  return readProjectNamespace(root) ?? name;
+}
+
+// Un workspace enregistré avant la mémoire locale n'a pas de namespace : il en reçoit un au démarrage.
+export function reconcileNamespaces(db: Db, log: (line: string) => void): void {
+  const rows = db
+    .prepare('SELECT id, name, root FROM workspaces WHERE namespace IS NULL')
+    .all() as Array<{ id: string; name: string; root: string }>;
+  for (const w of rows) {
+    const ns = defaultNamespace(w.root, w.name);
+    db.prepare('UPDATE workspaces SET namespace = ? WHERE id = ?').run(ns, w.id);
+    log(`workspace ${w.name} : namespace mémoire « ${ns} »`);
+  }
+}
 
 export function readProcVersion(): string | null {
   return existsSync('/proc/version') ? readFileSync('/proc/version', 'utf8') : null;
@@ -100,13 +128,23 @@ export function registerWorkspaceRoutes(
       remote: repo.hasOrigin ? 'origin' : null,
       baseBranch: base,
       worktreesDir: join(deps.paths.worktrees, name),
+      namespace: defaultNamespace(repo.root, name),
       createdAt: new Date().toISOString(),
     };
     deps.db
       .prepare(
-        'INSERT INTO workspaces (id, name, root, base_branch, worktrees_dir, created_at, remote) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        'INSERT INTO workspaces (id, name, root, base_branch, worktrees_dir, created_at, remote, namespace) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
       )
-      .run(ws.id, ws.name, ws.root, ws.baseBranch, ws.worktreesDir, ws.createdAt, ws.remote);
+      .run(
+        ws.id,
+        ws.name,
+        ws.root,
+        ws.baseBranch,
+        ws.worktreesDir,
+        ws.createdAt,
+        ws.remote,
+        ws.namespace,
+      );
     const warnings = wslWarnings(repo.root, (deps.procVersion ?? readProcVersion)());
     if (!ws.remote) {
       warnings.push(`dépôt sans remote origin : les sujets partiront de la branche locale ${base}`);
@@ -156,5 +194,18 @@ export function registerWorkspaceRoutes(
       db.prepare('DELETE FROM workspaces WHERE id = ?').run(id);
     })();
     return reply.code(204).send();
+  });
+
+  app.patch('/api/workspaces/:id', { schema: { body: PatchBody } }, async (req) => {
+    const { id } = req.params as { id: string };
+    const { namespace } = req.body as { namespace: string };
+    if (!isValidNamespace(namespace)) {
+      throw new AidHttpError(400, 'namespace invalide : [a-z0-9][a-z0-9._-]*');
+    }
+    const r = deps.db
+      .prepare('UPDATE workspaces SET namespace = ? WHERE id = ?')
+      .run(namespace, id);
+    if (r.changes === 0) throw new AidHttpError(404, 'workspace inconnu');
+    return { id, namespace };
   });
 }

@@ -17,6 +17,7 @@ import { MemoryStore } from './memory/store.js';
 import { acquireLock } from './lock.js';
 import { ensureHome, resolvePaths } from './paths.js';
 import { reconcile } from './reconcile.js';
+import { reconcileNamespaces } from './routes/workspaces.js';
 import { type AuthState, createAuthState } from './security.js';
 import { buildServer } from './server.js';
 import { UpdateWatcher } from './updateWatcher.js';
@@ -68,6 +69,7 @@ export async function startDaemon(
       console.error(
         `spool : ${spool.rejected} événement(s) refusé(s), gardés dans ${paths.spool}/rejet`,
       );
+    reconcileNamespaces(opened, (l) => console.error(l));
     await ptyPreflight();
     const mirror = new MemoryMirror(paths.memory);
     await mirror.init();

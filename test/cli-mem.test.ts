@@ -154,6 +154,26 @@ describe.skipIf(!built)('aid mem en sous-processus', () => {
     expect(existsSync(join(home, 'memory', 'lesson', 'sqlite', 'wal.md'))).toBe(false);
   });
 
+  test('export puis import par le CLI ; reindex', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'aid-cli-exp-'));
+    const e = await mem(['export', '--dir', dir, '--scope', 'aid']);
+    expect(e.code, e.err).toBe(0);
+    expect(e.out).toContain('1 page(s) exportée(s)');
+    expect(existsSync(join(dir, 'aid', 'plan', 'alpha.md'))).toBe(true);
+    const i = await mem(['import', '--dir', dir]);
+    expect(i.code).toBe(0);
+    expect(i.err).toContain('refusée, existe déjà (2) : aid/plan/alpha');
+    expect(i.out).toContain('0 importée(s), 1 existante(s), 0 invalide(s)');
+    const ns = await mem(['import', '--dir', join(dir, 'aid', 'plan'), '--namespace', 'copie']);
+    expect(ns.out).toContain('1 importée(s)');
+    expect((await mem(['get', 'copie/alpha'])).code).toBe(0);
+    expect((await mem(['rm', 'copie/alpha'])).code).toBe(0);
+    const r = await mem(['reindex']);
+    expect(r.code).toBe(0);
+    expect(r.out).toContain('1 page(s) réindexée(s)');
+    expect((await mem(['export'])).code).toBe(1);
+  });
+
   test('AID_URL et AID_TOKEN priment sur daemon.json (agent lancé par A-I-D)', async () => {
     const { port, token } = info();
     const other = mkdtempSync(join(tmpdir(), 'aid-cli-mem-vide-'));

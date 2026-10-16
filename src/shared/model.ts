@@ -51,6 +51,7 @@ export interface Workspace {
   remote: string | null;
   baseBranch: string;
   worktreesDir: string;
+  namespace: string | null;
   createdAt: string;
 }
 

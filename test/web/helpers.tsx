@@ -32,6 +32,7 @@ export const ws = (over: Partial<Workspace> = {}): Workspace => ({
   remote: 'origin',
   baseBranch: 'main',
   worktreesDir: '/w',
+  namespace: null,
   createdAt: 't',
   ...over,
 });

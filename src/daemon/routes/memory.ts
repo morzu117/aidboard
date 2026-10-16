@@ -4,7 +4,7 @@ import { LESSON_NS, MEM_SLUG_RULE, type PutMode, RevisionConflict } from '../../
 import type { Db } from '../db.js';
 import { AidHttpError } from '../errors.js';
 import type { MemoryService, WriteContext } from '../memory/service.js';
-import { InvalidMemSlug, isValidMemSlug, namespaceOf } from '../memory/slug.js';
+import { InvalidMemSlug, isValidMemSlug, isValidNamespace, namespaceOf } from '../memory/slug.js';
 import type { Principal } from '../security.js';
 
 const PutBody = Type.Object(
@@ -160,7 +160,7 @@ export function registerMemoryRoutes(app: FastifyInstance, deps: MemoryRouteDeps
   app.post('/api/memory/import', { schema: { body: ImportBody } }, async (req) => {
     adminOnly(req);
     const body = req.body as Static<typeof ImportBody>;
-    if (body.namespace !== undefined && !isValidMemSlug(`${body.namespace}/x`)) {
+    if (body.namespace !== undefined && !isValidNamespace(body.namespace)) {
       throw new AidHttpError(400, `namespace invalide : ${MEM_SLUG_RULE}`);
     }
     return memory.import(body.dir, body.namespace);
