@@ -102,7 +102,7 @@ connaît que ce format.
 
 Types v1 : `agent.spawned`, `agent.exited`, `agent.status`, `agent.tool`, `run.state`,
 `run.command`, `approval.requested`, `approval.resolved`, `files.changed`, `cost`,
-`action.started`, `action.finished`, `topic.state`, `topic.phase`.
+`action.started`, `action.finished`, `topic.state`, `topic.phase`, `memory.page`.
 
 **Raisons de `needs_input`.** Elles reprennent la liste fermée d'escalade du kernel
 (`policy/orchestration.md`), plus deux cas propres aux sessions interactives et un
@@ -176,8 +176,8 @@ succès, `2` action humaine requise, autre = erreur.
 
 - Résolution du manifeste comme le kernel : `defaults.yml` < détection du repo < `agent.yml`.
 - Agents de la chaîne : `capabilities.dev_agent` / `review_agent` + section « Appel » de `adapters/<nom>.md`.
-- Un arbitrage rendu dans A-I-D s'écrit dans la page de plan du sujet (`gbrain put`), jamais dans `lessons`.
-- gbrain pas à la version épinglée = **bloquant** : A-I-D refuse de lancer un agent qui écrirait en mémoire.
+- Un arbitrage rendu dans A-I-D s'écrit dans la page de plan du sujet (`aid mem put --append`), jamais dans `lesson/`.
+- A-I-D porte la capacité `memory` du kernel depuis agent-kernel 0.9.0 ; un kernel qui déclare encore gbrain est signalé dans la santé machine.
 
 ## 7. Modes
 

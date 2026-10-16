@@ -26,14 +26,16 @@ aid                   # lance le daemon s'il ne tourne pas, ouvre le navigateur
 
 ou, sans installer : `npx aidboard`.
 
-| Commande           | Effet                                                                                |
-| ------------------ | ------------------------------------------------------------------------------------ |
-| `aid`              | démarre le daemon (détaché, ses agents survivent au terminal) et ouvre le navigateur |
-| `aid open`         | rouvre le navigateur sur le daemon qui tourne                                        |
-| `aid status`       | pid, port, nombre de sujets et d'agents vivants                                      |
-| `aid stop`         | arrête le daemon ; **refusé tant que des agents tournent** (code 2)                  |
-| `aid stop --force` | arrête le daemon et tous ses agents                                                  |
-| `aid doctor`       | vérifie la machine et dit quoi corriger                                              |
+| Commande           | Effet                                                                                                   |
+| ------------------ | ------------------------------------------------------------------------------------------------------- |
+| `aid`              | démarre le daemon (détaché, ses agents survivent au terminal) et ouvre le navigateur                    |
+| `aid open`         | rouvre le navigateur sur le daemon qui tourne                                                           |
+| `aid status`       | pid, port, nombre de sujets et d'agents vivants                                                         |
+| `aid stop`         | arrête le daemon ; **refusé tant que des agents tournent** (code 2)                                     |
+| `aid stop --force` | arrête le daemon et tous ses agents                                                                     |
+| `aid doctor`       | vérifie la machine et dit quoi corriger                                                                 |
+| `aid mem …`        | lit, écrit et cherche dans la mémoire locale (`get`, `put`, `search`, `list`, `rm`, `export`, `import`) |
+| `aid mcp`          | serveur MCP (stdio) exposant la mémoire locale aux clients qui le supportent                            |
 
 Premier pas : « Nouveau sujet » dans la barre. Sans dépôt enregistré, A-I-D demande d'abord le chemin de la racine d'un
 dépôt git (qui doit avoir un remote `origin`).
@@ -64,6 +66,7 @@ confiance : c'est normal, A-I-D n'y touche pas.
   daemon.log       journal du daemon
   logs/            sortie brute de chaque terminal (0600, supprimée au-delà de 30 jours)
   worktrees/       un dossier par workspace puis par sujet
+  memory/          mémoire locale, en markdown, sous git (dépôt séparé des workspaces)
 ```
 
 `AID_HOME` change ce dossier. Les journaux de terminaux peuvent contenir des secrets : ne pas les partager.
