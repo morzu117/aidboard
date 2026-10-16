@@ -237,6 +237,15 @@ export class MemoryStore {
     return out;
   }
 
+  jobCounts(): { pending: number; failed: number } {
+    const row = this.db
+      .prepare(
+        "SELECT sum(state IN ('pending', 'running')) AS pending, sum(state = 'failed') AS failed FROM memory_jobs",
+      )
+      .get() as { pending: number | null; failed: number | null };
+    return { pending: row.pending ?? 0, failed: row.failed ?? 0 };
+  }
+
   *all(): Iterable<MemoryPage> {
     for (const r of this.db
       .prepare('SELECT rowid, * FROM memory_pages ORDER BY slug')

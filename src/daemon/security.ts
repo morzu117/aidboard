@@ -106,7 +106,12 @@ export function registerSecurity(
     }
     req.principal = principal;
 
-    if (principal.kind === 'run' && !(req.method === 'POST' && path === '/api/events')) {
+    const memoryApi = path.startsWith('/api/memory/');
+    if (
+      principal.kind === 'run' &&
+      !memoryApi &&
+      !(req.method === 'POST' && path === '/api/events')
+    ) {
       return reply.code(403).send({ error: 'token de run : POST /api/events uniquement' });
     }
     const isSocket = path.startsWith('/ws/');

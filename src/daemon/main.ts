@@ -100,6 +100,7 @@ export async function startDaemon(
       db: opened,
       store,
       agents,
+      memory,
       paths,
       codegraphBin: opts.codegraphBin,
       requestStop: opts.onStopRequested,

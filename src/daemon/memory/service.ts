@@ -7,6 +7,15 @@ import {
   type SearchHit,
   type SearchMode,
 } from '../../shared/memory.js';
+
+export interface MemoryHealth {
+  pages: Record<string, number>;
+  fts: true;
+  vectors: 'ollama' | 'off';
+  pendingJobs: number;
+  failedJobs: number;
+  mirrorDirty: boolean;
+}
 import type { WorkspaceQueue } from '../actions/queue.js';
 import type { EventStore } from '../events/store.js';
 import { type MemoryMirror, walkMarkdown } from './mirror.js';
@@ -54,6 +63,18 @@ export class MemoryService {
     limit: number,
   ): Promise<{ mode: SearchMode; hits: SearchHit[] }> {
     return { mode: 'fts', hits: this.deps.store.searchFts(q, scope, limit) };
+  }
+
+  async health(): Promise<MemoryHealth> {
+    const jobs = this.deps.store.jobCounts();
+    return {
+      pages: this.deps.store.countByNamespace(),
+      fts: true,
+      vectors: 'off',
+      pendingJobs: jobs.pending,
+      failedJobs: jobs.failed,
+      mirrorDirty: await this.deps.mirror.dirty(),
+    };
   }
 
   put(slug: string, text: string, mode: PutMode, ctx: WriteContext, title?: string) {
