@@ -8,6 +8,13 @@ export interface AidConfig {
   editor: string[];
   env: { strip: string[] };
   terminal: { scrollback: number; logMaxBytes: number; logRetentionDays: number };
+  memory: MemoryConfig;
+}
+
+export interface MemoryConfig {
+  embeddings: { provider: 'off' | 'ollama'; model: string; url: string };
+  maintenance: { enabled: boolean; model: string; window: string };
+  git: { push: boolean };
 }
 
 export const DEFAULT_CONFIG: AidConfig = {
@@ -16,6 +23,11 @@ export const DEFAULT_CONFIG: AidConfig = {
   editor: [],
   env: { strip: ['ANTHROPIC_API_KEY', 'ANTHROPIC_AUTH_TOKEN'] },
   terminal: { scrollback: 5000, logMaxBytes: 50 * 1024 * 1024, logRetentionDays: 30 },
+  memory: {
+    embeddings: { provider: 'ollama', model: 'bge-m3', url: 'http://127.0.0.1:11434' },
+    maintenance: { enabled: false, model: 'qwen3:8b', window: '02:00-06:00' },
+    git: { push: false },
+  },
 };
 
 export class ConfigError extends Error {}
@@ -51,7 +63,7 @@ export function parseConfig(text: string): AidConfig {
   const doc: unknown = text.trim() === '' ? {} : parse(text);
   if (doc === null || doc === undefined) return structuredClone(DEFAULT_CONFIG);
   if (!isRecord(doc)) throw new ConfigError('config.yaml : un objet est attendu à la racine');
-  rejectUnknown(doc, ['host', 'port', 'editor', 'env', 'terminal'], '');
+  rejectUnknown(doc, ['host', 'port', 'editor', 'env', 'terminal', 'memory'], '');
 
   const cfg = structuredClone(DEFAULT_CONFIG);
   if (doc.host !== undefined && doc.host !== '127.0.0.1') {
@@ -80,7 +92,59 @@ export function parseConfig(text: string): AidConfig {
       cfg.terminal.logMaxBytes = positiveInt(doc.terminal.logMaxBytes, 'terminal.logMaxBytes');
     }
   }
+  if (doc.memory !== undefined) parseMemory(doc.memory, cfg.memory);
   return cfg;
+}
+
+function str(v: unknown, name: string): string {
+  if (typeof v !== 'string' || v === '')
+    throw new ConfigError(`config.yaml : ${name} doit être une chaîne`);
+  return v;
+}
+
+function bool(v: unknown, name: string): boolean {
+  if (typeof v !== 'boolean')
+    throw new ConfigError(`config.yaml : ${name} doit être true ou false`);
+  return v;
+}
+
+function parseMemory(raw: unknown, cfg: MemoryConfig): void {
+  if (!isRecord(raw)) throw new ConfigError('config.yaml : memory doit être un objet');
+  rejectUnknown(raw, ['embeddings', 'maintenance', 'git'], 'memory.');
+  const e = raw.embeddings;
+  if (e !== undefined) {
+    if (!isRecord(e)) throw new ConfigError('config.yaml : memory.embeddings doit être un objet');
+    rejectUnknown(e, ['provider', 'model', 'url'], 'memory.embeddings.');
+    if (e.provider !== undefined) {
+      if (e.provider !== 'off' && e.provider !== 'ollama') {
+        throw new ConfigError("config.yaml : memory.embeddings.provider vaut 'off' ou 'ollama'");
+      }
+      cfg.embeddings.provider = e.provider;
+    }
+    if (e.model !== undefined) cfg.embeddings.model = str(e.model, 'memory.embeddings.model');
+    if (e.url !== undefined) cfg.embeddings.url = str(e.url, 'memory.embeddings.url');
+  }
+  const m = raw.maintenance;
+  if (m !== undefined) {
+    if (!isRecord(m)) throw new ConfigError('config.yaml : memory.maintenance doit être un objet');
+    rejectUnknown(m, ['enabled', 'model', 'window'], 'memory.maintenance.');
+    if (m.enabled !== undefined)
+      cfg.maintenance.enabled = bool(m.enabled, 'memory.maintenance.enabled');
+    if (m.model !== undefined) cfg.maintenance.model = str(m.model, 'memory.maintenance.model');
+    if (m.window !== undefined) {
+      const w = str(m.window, 'memory.maintenance.window');
+      if (!/^([01]\d|2[0-3]):[0-5]\d-([01]\d|2[0-3]):[0-5]\d$/.test(w)) {
+        throw new ConfigError('config.yaml : memory.maintenance.window attend "HH:MM-HH:MM"');
+      }
+      cfg.maintenance.window = w;
+    }
+  }
+  const g = raw.git;
+  if (g !== undefined) {
+    if (!isRecord(g)) throw new ConfigError('config.yaml : memory.git doit être un objet');
+    rejectUnknown(g, ['push'], 'memory.git.');
+    if (g.push !== undefined) cfg.git.push = bool(g.push, 'memory.git.push');
+  }
 }
 
 export function loadConfig(p: AidPaths): AidConfig {
@@ -99,6 +163,17 @@ const DEFAULT_FILE = `# Configuration d'A-I-D. Tout est facultatif : ce sont les
 #   scrollback: 5000
 #   logMaxBytes: 52428800
 #   logRetentionDays: 30     # les journaux plus vieux sont supprimés au démarrage
+# memory:
+#   embeddings:
+#     provider: ollama       # off = recherche FTS5 seule ; ollama = vecteurs si le modèle répond
+#     model: bge-m3          # ollama pull bge-m3
+#     url: http://127.0.0.1:11434
+#   maintenance:
+#     enabled: false         # propositions (tags, doublons, découpage) par un modèle local, jamais appliquées sans clic
+#     model: qwen3:8b
+#     window: "02:00-06:00"
+#   git:
+#     push: false            # true : git push de ~/.aid/memory après chaque commit, si un remote origin existe
 `;
 
 export function writeDefaultConfigIfAbsent(p: AidPaths): void {

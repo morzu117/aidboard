@@ -11,7 +11,10 @@ import { purgeOldLogs } from './pty/retention.js';
 import { replaySpool } from './events/spool.js';
 import { EventStore } from './events/store.js';
 import { WorkspaceQueue } from './actions/queue.js';
+import { type Embedder, ollamaEmbedder, VectorIndex } from './memory/embed.js';
+import { MemoryJobs } from './memory/jobs.js';
 import { MemoryMirror } from './memory/mirror.js';
+import { MemoryWorker } from './memory/worker.js';
 import { MemoryService } from './memory/service.js';
 import { MemoryStore } from './memory/store.js';
 import { acquireLock } from './lock.js';
@@ -49,6 +52,8 @@ export async function startDaemon(
     onUpdateRequested?: () => void;
     /** `git ls-remote origin` en tâche de fond ; coupé dans les tests, pas de réseau à chaque daemon. */
     checkUpdates?: boolean;
+    // tests : un Embedder déterministe et des délais courts
+    memory?: { embedder?: Embedder; backoffMs?: number[]; pollMs?: number };
   } = {},
 ): Promise<DaemonHandle> {
   const paths = resolvePaths(opts.home);
@@ -71,15 +76,51 @@ export async function startDaemon(
       );
     reconcileNamespaces(opened, (l) => console.error(l));
     await ptyPreflight();
+    const log = (l: string) => console.error(l);
     const mirror = new MemoryMirror(paths.memory);
+    mirror.push = config.memory.git.push;
     await mirror.init();
+    const memStore = new MemoryStore(opened);
+    const jobs = new MemoryJobs(opened);
+    jobs.resetRunning();
+    const embCfg = config.memory.embeddings;
+    const embedder =
+      opts.memory?.embedder ??
+      (embCfg.provider === 'ollama' ? ollamaEmbedder(embCfg.url, embCfg.model, log) : null);
+    const vectors = embedder ? VectorIndex.load(opened, log) : null;
+    let hybridOn = false;
+    const worker =
+      embedder && vectors
+        ? new MemoryWorker({
+            jobs,
+            store: memStore,
+            vectors,
+            embedder,
+            log,
+            backoffMs: opts.memory?.backoffMs,
+            pollMs: opts.memory?.pollMs,
+          })
+        : null;
     const memory = new MemoryService({
-      store: new MemoryStore(opened),
+      store: memStore,
       mirror,
       events: store,
       queue: new WorkspaceQueue(),
-      log: (l) => console.error(l),
+      log,
+      ...(embedder && vectors && { hybrid: { index: vectors, embedder, enabled: () => hybridOn } }),
+      onWrite: (slug) => {
+        if (!hybridOn) return;
+        jobs.enqueue('embed', slug);
+        worker?.notify();
+      },
+      onRemove: (slug) => vectors?.remove(slug),
     });
+    if (embedder && vectors) {
+      // DM5 : décidé une fois au démarrage, pas de nouvel essai en boucle
+      hybridOn = await embedder.ready();
+      if (hybridOn) worker?.start();
+      else log('ollama injoignable : recherche FTS5 seule');
+    }
     let livePort = config.port;
     const auth = createAuthState();
     const agents = new AgentManager({
@@ -141,6 +182,7 @@ export async function startDaemon(
         await agents.stopAll('daemon_stop', 5000);
         agents.dispose();
         updates?.dispose();
+        await worker?.stop();
         await mirror.flush();
         await app.close();
         opened.close();

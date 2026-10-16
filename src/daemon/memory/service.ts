@@ -18,6 +18,7 @@ export interface MemoryHealth {
 }
 import type { WorkspaceQueue } from '../actions/queue.js';
 import type { EventStore } from '../events/store.js';
+import type { Embedder, VectorIndex } from './embed.js';
 import { type MemoryMirror, walkMarkdown } from './mirror.js';
 import { isValidMemSlug } from './slug.js';
 import { MemoryStore, renderMarkdown } from './store.js';
@@ -38,8 +39,13 @@ export interface MemoryServiceDeps {
   events: EventStore;
   queue: WorkspaceQueue;
   log?: (line: string) => void;
-  onWrite?: (slug: string) => void; // 06.7 : enfile un job d'embedding
+  onWrite?: (slug: string) => void; // enfile un job d'embedding
+  onRemove?: (slug: string) => void;
+  // Recherche hybride (06.7) : présent quand sqlite-vec est chargé ; `enabled` dit si Ollama répond.
+  hybrid?: { index: VectorIndex; embedder: Embedder; enabled: () => boolean };
 }
+
+const RRF_K = 60;
 
 // L'unique point d'entrée des routes, du CLI et du worker : base, puis fichier, puis commit différé.
 export class MemoryService {
@@ -57,12 +63,47 @@ export class MemoryService {
     return this.deps.store.list(prefix);
   }
 
+  // FTS d'abord ; si les vecteurs répondent, fusion RRF des deux classements (DM5).
   async search(
     q: string,
     scope: string | 'all',
     limit: number,
   ): Promise<{ mode: SearchMode; hits: SearchHit[] }> {
-    return { mode: 'fts', hits: this.deps.store.searchFts(q, scope, limit) };
+    const { store, hybrid } = this.deps;
+    const fts = store.searchFts(q, scope, hybrid?.enabled() ? limit * 2 : limit);
+    if (!hybrid?.enabled()) return { mode: 'fts', hits: fts };
+    let near: Array<{ slug: string; distance: number }>;
+    try {
+      const [qv] = await hybrid.embedder.embed([q]);
+      near = qv ? hybrid.index.nearest(qv, limit * 2) : [];
+    } catch (err) {
+      this.deps.log?.(`recherche : embedding de la requête impossible : ${(err as Error).message}`);
+      return { mode: 'fts', hits: fts.slice(0, limit) };
+    }
+    const scores = new Map<string, number>();
+    const add = (slug: string, rank: number) =>
+      scores.set(slug, (scores.get(slug) ?? 0) + 1 / (RRF_K + rank));
+    fts.forEach((h, i) => add(h.slug, i + 1));
+    near
+      .filter(
+        (n) => scope === 'all' || [scope, LESSON_NS].includes(n.slug.slice(0, n.slug.indexOf('/'))),
+      )
+      .forEach((n, i) => add(n.slug, i + 1));
+    const byFts = new Map(fts.map((h) => [h.slug, h]));
+    const hits: SearchHit[] = [];
+    for (const [slug, score] of [...scores.entries()].sort((a, b) => b[1] - a[1])) {
+      const known = byFts.get(slug);
+      const page = known ? undefined : store.get(slug);
+      if (!known && !page) continue;
+      hits.push({
+        slug,
+        title: known?.title ?? page!.title,
+        snippet: known?.snippet ?? page!.body.replace(/\s+/g, ' ').slice(0, 160),
+        score: Math.round(score * 1e6) / 1e6,
+      });
+      if (hits.length >= limit) break;
+    }
+    return { mode: 'hybrid', hits };
   }
 
   async health(): Promise<MemoryHealth> {
@@ -70,7 +111,7 @@ export class MemoryService {
     return {
       pages: this.deps.store.countByNamespace(),
       fts: true,
-      vectors: 'off',
+      vectors: this.deps.hybrid?.enabled() ? 'ollama' : 'off',
       pendingJobs: jobs.pending,
       failedJobs: jobs.failed,
       mirrorDirty: await this.deps.mirror.dirty(),
@@ -109,6 +150,7 @@ export class MemoryService {
       const page = store.get(slug);
       if (!page) return false;
       store.remove(slug);
+      this.deps.onRemove?.(slug);
       await mirror.remove(slug);
       mirror.scheduleCommit(`mem: ${slug} supprimée`);
       events.append({
@@ -128,6 +170,7 @@ export class MemoryService {
     return this.deps.queue.run(QUEUE_KEY, async () => {
       const { store, mirror } = this.deps;
       store.clear();
+      this.deps.hybrid?.index.clear();
       let pages = 0;
       for await (const f of mirror.readAll()) {
         try {

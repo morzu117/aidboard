@@ -5,6 +5,7 @@ import { type DaemonHandle, startDaemon } from '../../src/daemon/main.js';
 import type { AidConfig } from '../../src/daemon/config.js';
 import type { Db } from '../../src/daemon/db.js';
 import type { EventStore } from '../../src/daemon/events/store.js';
+import type { Embedder } from '../../src/daemon/memory/embed.js';
 
 export interface TestDaemon {
   d: DaemonHandle;
@@ -17,11 +18,16 @@ export interface TestDaemon {
 // Vrai daemon, AID_HOME temporaire, port éphémère, authentifié en Bearer.
 export async function startTestDaemon(
   home = mkdtempSync(join(tmpdir(), 'aid-d-')),
-  extra: { codegraphBin?: string; config?: Partial<AidConfig> } = {},
+  extra: {
+    codegraphBin?: string;
+    config?: Partial<AidConfig>;
+    memory?: { embedder?: Embedder; backoffMs?: number[]; pollMs?: number };
+  } = {},
 ): Promise<TestDaemon> {
   const d = await startDaemon({
     home,
     codegraphBin: extra.codegraphBin,
+    memory: extra.memory,
     config: { port: 0, ...extra.config },
     checkUpdates: false,
   });

@@ -50,6 +50,37 @@ test('le fichier par défaut créé est lisible et ne change rien', () => {
   expect(statSync(p.config).mode & 0o777).toBe(0o600);
 });
 
+test('memory : les défauts', () => {
+  expect(DEFAULT_CONFIG.memory).toEqual({
+    embeddings: { provider: 'ollama', model: 'bge-m3', url: 'http://127.0.0.1:11434' },
+    maintenance: { enabled: false, model: 'qwen3:8b', window: '02:00-06:00' },
+    git: { push: false },
+  });
+});
+
+test('memory : fusion partielle, le reste vient des défauts', () => {
+  const cfg = parseConfig('memory:\n  embeddings:\n    provider: off\n  git:\n    push: true\n');
+  expect(cfg.memory.embeddings).toEqual({ ...DEFAULT_CONFIG.memory.embeddings, provider: 'off' });
+  expect(cfg.memory.git).toEqual({ push: true });
+  expect(cfg.memory.maintenance).toEqual(DEFAULT_CONFIG.memory.maintenance);
+});
+
+test('memory : provider, window et clés inconnues sont refusés et nommés', () => {
+  expect(() => parseConfig('memory:\n  embeddings:\n    provider: bedrock\n')).toThrow(
+    "memory.embeddings.provider vaut 'off' ou 'ollama'",
+  );
+  expect(() => parseConfig('memory:\n  maintenance:\n    window: "2:00-6:00"\n')).toThrow(
+    'memory.maintenance.window',
+  );
+  expect(() => parseConfig('memory:\n  maintenance:\n    enabled: oui\n')).toThrow(
+    'memory.maintenance.enabled',
+  );
+  expect(() => parseConfig('memory:\n  embeddings:\n    modle: x\n')).toThrow(
+    'memory.embeddings.modle',
+  );
+  expect(() => parseConfig('memory:\n  entretien: true\n')).toThrow('memory.entretien');
+});
+
 test('ensureHome pose 0700, y compris sur un dossier déjà en 0755', () => {
   const home = tmp();
   mkdirSync(join(home, 'logs'), { mode: 0o755 });
