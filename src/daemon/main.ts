@@ -3,6 +3,8 @@ import type { AddressInfo } from 'node:net';
 import type { FastifyInstance } from 'fastify';
 import { type AidConfig, loadConfig, writeDefaultConfigIfAbsent } from './config.js';
 import { type Db, openDb } from './db.js';
+import { ptyPreflight } from './pty/native.js';
+import { AgentManager } from './pty/manager.js';
 import { EventStore } from './events/store.js';
 import { acquireLock } from './lock.js';
 import { ensureHome, resolvePaths } from './paths.js';
@@ -22,6 +24,7 @@ export interface DaemonHandle {
   auth: AuthState;
   db: Db;
   store: EventStore;
+  agents: AgentManager;
   stop(): Promise<void>;
 }
 
@@ -44,7 +47,17 @@ export async function startDaemon(
     db = opened;
     const store = new EventStore(opened);
     reconcile(opened, store);
+    await ptyPreflight();
+    let livePort = config.port;
     const auth = createAuthState();
+    const agents = new AgentManager({
+      store,
+      db: opened,
+      paths,
+      config,
+      auth,
+      port: () => livePort,
+    });
     const devOrigin = process.env.AID_DEV_ORIGIN;
     if (devOrigin) console.error(`AID_DEV_ORIGIN actif : ${devOrigin} accepté comme origine`);
     const app = await buildServer({
@@ -52,6 +65,7 @@ export async function startDaemon(
       auth,
       db: opened,
       store,
+      agents,
       paths,
       codegraphBin: opts.codegraphBin,
       devOrigin,
@@ -64,6 +78,7 @@ export async function startDaemon(
       throw err;
     }
     const port = (app.server.address() as AddressInfo).port;
+    livePort = port;
     writeFileSync(
       paths.daemonJson,
       JSON.stringify({
@@ -80,7 +95,9 @@ export async function startDaemon(
       auth,
       db: opened,
       store,
+      agents,
       async stop() {
+        await agents.stopAll('daemon_stop', 5000);
         await app.close();
         opened.close();
         rmSync(paths.daemonJson, { force: true });

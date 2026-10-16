@@ -8,6 +8,7 @@ import { afterEach, expect, test } from 'vitest';
 import { DEFAULT_CONFIG } from '../src/daemon/config.js';
 import { openDb } from '../src/daemon/db.js';
 import { resolvePaths } from '../src/daemon/paths.js';
+import { AgentManager } from '../src/daemon/pty/manager.js';
 import { EventStore } from '../src/daemon/events/store.js';
 import { type AuthState, createAuthState, issueRunToken } from '../src/daemon/security.js';
 import { buildServer } from '../src/daemon/server.js';
@@ -22,14 +23,11 @@ async function start() {
   const webRoot = mkdtempSync(join(tmpdir(), 'aid-web-'));
   writeFileSync(join(webRoot, 'index.html'), '<p>ok</p>');
   db = openDb(join(webRoot, 'state.db'));
-  app = await buildServer({
-    config: { ...DEFAULT_CONFIG, port: 0 },
-    auth,
-    db,
-    store: new EventStore(db),
-    paths: resolvePaths(webRoot),
-    webRoot,
-  });
+  const paths = resolvePaths(webRoot);
+  const store = new EventStore(db);
+  const config = { ...DEFAULT_CONFIG, port: 0 };
+  const agents = new AgentManager({ store, db, paths, config, auth, port: () => 0 });
+  app = await buildServer({ config, auth, db, store, agents, paths, webRoot });
   app.post('/api/probe', async () => ({ ok: true }));
   await app.listen({ host: '127.0.0.1', port: 0 });
   port = (app.server.address() as AddressInfo).port;

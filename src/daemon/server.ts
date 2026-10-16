@@ -8,22 +8,26 @@ import Fastify, { type FastifyInstance } from 'fastify';
 import type { AidConfig } from './config.js';
 import type { Db } from './db.js';
 import type { EventStore } from './events/store.js';
+import type { AgentManager } from './pty/manager.js';
 import { AidHttpError } from './errors.js';
 import type { AidPaths } from './paths.js';
 import { WorkspaceQueue } from './actions/queue.js';
 import { Indexer } from './topics/index.js';
 import { registerTopicRoutes } from './routes/topics.js';
 import { registerWorkspaceRoutes } from './routes/workspaces.js';
+import { registerAgentRoutes } from './routes/agents.js';
 import { registerEventRoutes } from './routes/events.js';
 import { registerStateRoutes } from './routes/state.js';
 import { type AuthState, registerSecurity } from './security.js';
 import { registerEventSocket } from './ws/events.js';
+import { registerPtySocket } from './ws/pty.js';
 
 export interface ServerDeps {
   config: AidConfig;
   auth: AuthState;
   db: Db;
   store: EventStore;
+  agents: AgentManager;
   paths: AidPaths;
   procVersion?: () => string | null;
   codegraphBin?: string;
@@ -59,6 +63,7 @@ export async function buildServer(deps: ServerDeps): Promise<FastifyInstance> {
     return reply.code(500).send({ error: 'erreur interne' });
   });
   registerStateRoutes(app, deps.db);
+  registerAgentRoutes(app, { db: deps.db, agents: deps.agents });
   registerWorkspaceRoutes(app, deps);
   const indexer = new Indexer({
     store: deps.store,
@@ -75,6 +80,12 @@ export async function buildServer(deps: ServerDeps): Promise<FastifyInstance> {
   });
   registerEventRoutes(app, deps.db, deps.store);
   registerEventSocket(app, deps.store);
+  registerPtySocket(app, {
+    db: deps.db,
+    paths: deps.paths,
+    config: deps.config,
+    agents: deps.agents,
+  });
   const webRoot = deps.webRoot === undefined ? defaultWebRoot() : deps.webRoot;
   if (webRoot) {
     await app.register(fastifyStatic, { root: webRoot });
