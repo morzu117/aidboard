@@ -12,6 +12,7 @@ export interface AidPaths {
   actionLogs: string;
   worktrees: string;
   spool: string;
+  memory: string;
 }
 
 export function resolvePaths(home = process.env.AID_HOME ?? join(homedir(), '.aid')): AidPaths {
@@ -25,6 +26,7 @@ export function resolvePaths(home = process.env.AID_HOME ?? join(homedir(), '.ai
     actionLogs: join(home, 'logs', 'actions'),
     worktrees: join(home, 'worktrees'),
     spool: join(home, 'spool'),
+    memory: join(home, 'memory'),
   };
 }
 

@@ -10,6 +10,10 @@ import { AgentManager } from './pty/manager.js';
 import { purgeOldLogs } from './pty/retention.js';
 import { replaySpool } from './events/spool.js';
 import { EventStore } from './events/store.js';
+import { WorkspaceQueue } from './actions/queue.js';
+import { MemoryMirror } from './memory/mirror.js';
+import { MemoryService } from './memory/service.js';
+import { MemoryStore } from './memory/store.js';
 import { acquireLock } from './lock.js';
 import { ensureHome, resolvePaths } from './paths.js';
 import { reconcile } from './reconcile.js';
@@ -30,6 +34,7 @@ export interface DaemonHandle {
   db: Db;
   store: EventStore;
   agents: AgentManager;
+  memory: MemoryService;
   stop(): Promise<void>;
 }
 
@@ -64,6 +69,15 @@ export async function startDaemon(
         `spool : ${spool.rejected} événement(s) refusé(s), gardés dans ${paths.spool}/rejet`,
       );
     await ptyPreflight();
+    const mirror = new MemoryMirror(paths.memory);
+    await mirror.init();
+    const memory = new MemoryService({
+      store: new MemoryStore(opened),
+      mirror,
+      events: store,
+      queue: new WorkspaceQueue(),
+      log: (l) => console.error(l),
+    });
     let livePort = config.port;
     const auth = createAuthState();
     const agents = new AgentManager({
@@ -119,10 +133,12 @@ export async function startDaemon(
       db: opened,
       store,
       agents,
+      memory,
       async stop() {
         await agents.stopAll('daemon_stop', 5000);
         agents.dispose();
         updates?.dispose();
+        await mirror.flush();
         await app.close();
         opened.close();
         rmSync(paths.daemonJson, { force: true });

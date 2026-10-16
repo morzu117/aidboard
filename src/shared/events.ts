@@ -28,6 +28,7 @@ export const EVENT_TYPES = [
   'plan.updated',
   'task.status',
   'instructions.updated',
+  'memory.page',
 ] as const;
 export type EventType = (typeof EVENT_TYPES)[number];
 
