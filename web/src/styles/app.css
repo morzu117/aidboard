@@ -93,9 +93,122 @@ body {
   grid-template-columns: minmax(0, 1fr);
 }
 .sortie-xterm {
+  /* pas de flex colonne (celle de .sortie) : elle rétrécissait l'élément xterm bien en dessous du conteneur ;
+     et une hauteur franche, sinon fit() mesure le contenu au lieu de l'espace disponible */
+  display: block;
+  height: max(var(--h-terminal-sujet), calc(100dvh - 340px));
+  padding: 0;
+  overflow: hidden;
+}
+/* xterm pose la classe « terminal » sur son élément racine : la maquette y avait déjà une règle (boîte de 128 px
+   à bordure, en flex) qui écrasait le terminal et laissait la zone vide. On la neutralise ici. */
+.sortie-xterm .terminal {
+  display: block;
+  height: 100%;
+  /* le remplissage est sur l'élément xterm, pas sur son parent : fit() ne retranche que le premier */
   padding: var(--sp-2);
-  overflow: auto;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  font-size: inherit;
+  line-height: normal;
 }
 .sujet-actions {
   position: relative;
+}
+
+.selecteur-dossier {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+.selecteur-dossier__barre {
+  display: flex;
+  gap: var(--sp-2);
+}
+.selecteur-dossier__liste {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  height: 240px;
+  overflow: auto;
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-m);
+  background: var(--surface-3);
+}
+.selecteur-dossier__item {
+  display: flex;
+  align-items: center;
+  padding-right: var(--sp-2);
+}
+.selecteur-dossier__ligne {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  min-height: var(--h-controle-s);
+  padding: 0 var(--sp-3);
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.selecteur-dossier__ligne:hover,
+.selecteur-dossier__ligne:focus-visible {
+  background: var(--surface-2);
+}
+.selecteur-dossier__vide {
+  padding: var(--sp-3);
+  color: var(--text-3);
+  font-size: var(--fs-s);
+}
+.selecteur-dossier__cache {
+  flex-direction: row !important;
+  align-items: center;
+  gap: var(--sp-2);
+}
+.selecteur-dossier__choix {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  flex-wrap: wrap;
+}
+
+.projets {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  margin-bottom: var(--sp-4);
+}
+.projet {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-2) var(--sp-3);
+  border: 1px solid var(--line);
+  border-radius: var(--r-m);
+  background: var(--surface-2);
+}
+.projet-texte {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+}
+.projet-chemin {
+  font-family: ui-monospace, monospace;
+  font-size: var(--fs-s);
+  color: var(--text-3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.entete-droite {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  flex-wrap: wrap;
 }

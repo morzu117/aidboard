@@ -9,16 +9,20 @@ import { Dialogue } from './Dialogue.js';
 export function NouveauSujet({
   onClose,
   onAddWorkspace,
+  initialWorkspaceId,
 }: {
   onClose: () => void;
   onAddWorkspace: () => void;
+  initialWorkspaceId?: string;
 }) {
   const { state, outputs, call } = useAid();
   const navigate = useNavigate();
   const workspaces = state?.workspaces ?? [];
   // le dernier enregistré : on vient en général de l'ajouter
   const latest = [...workspaces].sort((a, b) => a.createdAt.localeCompare(b.createdAt)).at(-1);
-  const [workspaceId, setWorkspaceId] = useState(latest?.id ?? '');
+  const [workspaceId, setWorkspaceId] = useState(
+    workspaces.find((w) => w.id === initialWorkspaceId)?.id ?? latest?.id ?? '',
+  );
   const [title, setTitle] = useState('');
   const [type, setType] = useState<TopicType>('feat');
   const [error, setError] = useState<string | null>(null);
@@ -61,7 +65,7 @@ export function NouveauSujet({
     <Dialogue titre="Nouveau sujet" onClose={onClose}>
       <form onSubmit={submit} className="formulaire" aria-label="Créer un sujet">
         <label>
-          Workspace
+          Projet
           <select
             className="selecteur"
             value={workspaceId}
@@ -82,7 +86,7 @@ export function NouveauSujet({
           onClick={onAddWorkspace}
           disabled={running}
         >
-          Ajouter un workspace…
+          Ajouter un projet…
         </button>
         <label>
           Titre

@@ -6,9 +6,10 @@ import { Barre } from './Barre.js';
 import { Shell } from './Shell.js';
 
 type Dialog = 'none' | 'workspace' | 'sujet';
-const LayoutCtx = createContext<{ openNewTopic: () => void; openNewWorkspace: () => void } | null>(
-  null,
-);
+const LayoutCtx = createContext<{
+  openNewTopic: (workspaceId?: string) => void;
+  openNewWorkspace: () => void;
+} | null>(null);
 
 export function useLayout() {
   const c = useContext(LayoutCtx);
@@ -19,21 +20,41 @@ export function useLayout() {
 export function Layout({ screen, children }: { screen: '1-1' | '1-3'; children: ReactNode }) {
   const { daemon, state } = useAid();
   const [dialog, setDialog] = useState<Dialog>('none');
-  // sans workspace, « Nouveau sujet » commence par enregistrer un dépôt
-  const openNewTopic = () =>
-    setDialog(state && state.workspaces.length === 0 ? 'workspace' : 'sujet');
+  // Un projet existe sans sujet : l'enregistrer ne force pas la création d'un sujet. Seul « Nouveau sujet » sans aucun
+  // projet enchaîne les deux (ou « Ajouter un projet… » depuis le dialogue de sujet, qui y revient).
+  const [thenTopic, setThenTopic] = useState(false);
+  const [preselected, setPreselected] = useState<string | undefined>();
+  const openNewTopic = (workspaceId?: string) => {
+    setPreselected(workspaceId);
+    if (state && state.workspaces.length === 0) {
+      setThenTopic(true);
+      setDialog('workspace');
+    } else setDialog('sujet');
+  };
+  const openNewWorkspace = () => {
+    setThenTopic(false);
+    setDialog('workspace');
+  };
   return (
-    <LayoutCtx.Provider value={{ openNewTopic, openNewWorkspace: () => setDialog('workspace') }}>
+    <LayoutCtx.Provider value={{ openNewTopic, openNewWorkspace }}>
       <Shell>
-        <Barre screen={screen} daemon={daemon} onNewTopic={openNewTopic} />
+        <Barre screen={screen} daemon={daemon} onNewTopic={() => openNewTopic()} />
         {children}
         {dialog === 'workspace' && (
-          <NouveauWorkspace onClose={() => setDialog('none')} onDone={() => setDialog('sujet')} />
+          <NouveauWorkspace
+            onClose={() => setDialog('none')}
+            onDone={() => setDialog(thenTopic ? 'sujet' : 'none')}
+          />
         )}
         {dialog === 'sujet' && (
           <NouveauSujet
+            initialWorkspaceId={preselected}
             onClose={() => setDialog('none')}
-            onAddWorkspace={() => setDialog('workspace')}
+            onAddWorkspace={() => {
+              setPreselected(undefined);
+              setThenTopic(true);
+              setDialog('workspace');
+            }}
           />
         )}
       </Shell>

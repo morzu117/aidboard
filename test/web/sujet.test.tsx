@@ -120,6 +120,8 @@ test('onglets : un terminal monté par agent, un seul visible ; « Arrêter » s
   expect(screen.getByTestId('term-ag_2').getAttribute('data-visible')).toBe('true');
   expect(screen.getByTestId('term-ag_1').getAttribute('data-visible')).toBe('false');
   expect(text('1-3.terminaux.onglet-1.type')).toBe('claude');
+  // « free » n'est pas du français : l'agent lancé à la main est « libre »
+  expect(text('1-3.terminaux.onglet-1.role')).toBe('libre');
   expect(node('1-3.terminaux.onglet-1.arreter')).not.toBeNull();
   expect(node('1-3.terminaux.onglet-2.arreter')).toBeNull();
   await userEvent.click(node('1-3.terminaux.onglet-1')!);

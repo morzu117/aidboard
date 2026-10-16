@@ -3,6 +3,7 @@ import type { ReactElement } from 'react';
 import { MemoryRouter } from 'react-router';
 import { vi } from 'vitest';
 import type { Agent, Topic, Workspace } from '../../src/shared/model.js';
+import type { FsListing } from '../../src/shared/fs.js';
 import type { StateSnapshot } from '../../src/shared/state.js';
 import { AidClient } from '../../web/src/data/client.js';
 import { AidProvider } from '../../web/src/data/useAidState.js';
@@ -79,6 +80,19 @@ export const snapshot = (over: Partial<StateSnapshot> = {}): StateSnapshot => ({
   ...over,
 });
 
+export const listing = (over: Partial<FsListing> = {}): FsListing => ({
+  path: '/home/moi',
+  parent: '/home',
+  home: '/home/moi',
+  isRepo: false,
+  entries: [
+    { name: 'docs', path: '/home/moi/docs', isRepo: false },
+    { name: 'mon-depot', path: '/home/moi/mon-depot', isRepo: true },
+  ],
+  truncated: false,
+  ...over,
+});
+
 export interface Harness {
   calls: Array<{ method: string; url: string; body: unknown }>;
   respond: Map<string, (body: unknown) => Response>;
@@ -97,8 +111,12 @@ export function setup(ui: ReactElement, state: StateSnapshot | 'down', route = '
       if (h.state === 'down') throw new TypeError('connexion refusée');
       return new Response(JSON.stringify(h.state), { status: 200 });
     }
-    const custom = h.respond.get(`${method} ${url}`);
+    const custom =
+      h.respond.get(`${method} ${url}`) ??
+      (url.startsWith('/api/fs/dirs') ? h.respond.get('GET /api/fs/dirs') : undefined);
     if (custom) return custom(body);
+    if (url.startsWith('/api/fs/dirs'))
+      return new Response(JSON.stringify(listing()), { status: 200 });
     return new Response('{}', { status: 200 });
   }) as unknown as typeof fetch;
   h.client = new AidClient({

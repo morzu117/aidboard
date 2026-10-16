@@ -2,6 +2,7 @@ import { Link } from 'react-router';
 import type { Agent, Topic, Workspace } from '../../../src/shared/model.js';
 import { aggregateStatus, Badge, Point, statusView } from '../ui/Statut.js';
 import { depuis } from '../ui/depuis.js';
+import { roleLabel } from '../ui/roles.js';
 
 export function CarteSujet({
   n,
@@ -66,7 +67,7 @@ export function CarteSujet({
                   data-node={id(`agent-${i + 1}.role`)}
                   data-bind="agent.role"
                 >
-                  {a.role}
+                  {roleLabel(a.role)}
                 </span>
               </span>
             );

@@ -3,24 +3,30 @@ import type { Workspace } from '../../../src/shared/model.js';
 import { AidApiError } from '../data/api.js';
 import { useAid } from '../data/useAidState.js';
 import { Dialogue } from './Dialogue.js';
+import { SelecteurDossier } from './SelecteurDossier.js';
 
 type Created = Workspace & { warnings: string[] };
 
 export function NouveauWorkspace({ onClose, onDone }: { onClose: () => void; onDone: () => void }) {
-  const { refresh, call } = useAid();
-  const [path, setPath] = useState('');
+  const { refresh, call, state } = useAid();
+  const [path, setPath] = useState<string | null>(null);
   const [base, setBase] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [warnings, setWarnings] = useState<string[] | null>(null);
   const [busy, setBusy] = useState(false);
 
+  // on repart du dossier qui contient le dernier dépôt enregistré : les dépôts d'une même personne sont souvent côte à côte
+  const last = state?.workspaces.at(-1)?.root;
+  const start = last ? last.slice(0, last.lastIndexOf('/')) || '/' : undefined;
+
   async function submit(e: FormEvent) {
+    if (path === null) return;
     e.preventDefault();
     setBusy(true);
     setError(null);
     try {
       const ws = await call<Created>('POST', '/api/workspaces', {
-        path: path.trim(),
+        path,
         ...(base.trim() && { baseBranch: base.trim() }),
       });
       await refresh();
@@ -35,7 +41,7 @@ export function NouveauWorkspace({ onClose, onDone }: { onClose: () => void; onD
 
   if (warnings) {
     return (
-      <Dialogue titre="Workspace enregistré" onClose={onDone}>
+      <Dialogue titre="Projet enregistré" onClose={onDone}>
         {warnings.map((w) => (
           <p key={w} className="message-info">
             {w}
@@ -50,18 +56,9 @@ export function NouveauWorkspace({ onClose, onDone }: { onClose: () => void; onD
     );
   }
   return (
-    <Dialogue titre="Nouveau workspace" onClose={onClose}>
+    <Dialogue titre="Nouveau projet" onClose={onClose}>
       <form onSubmit={submit} className="formulaire" aria-label="Enregistrer un dépôt">
-        <label>
-          Chemin du dépôt git (sa racine)
-          <input
-            className="champ"
-            value={path}
-            onChange={(e) => setPath(e.target.value)}
-            placeholder="/Users/moi/Projects/mon-depot"
-            autoFocus
-          />
-        </label>
+        <SelecteurDossier start={start} selected={path} onSelect={setPath} />
         <label>
           Branche de base (facultatif : détectée depuis origin)
           <input
@@ -83,7 +80,7 @@ export function NouveauWorkspace({ onClose, onDone }: { onClose: () => void; onD
           <button
             className="bouton bouton--primaire"
             type="submit"
-            disabled={busy || path.trim() === ''}
+            disabled={busy || path === null}
           >
             Enregistrer
           </button>

@@ -15,11 +15,11 @@ test('loading : des squelettes tant que l’instantané n’est pas arrivé', ()
   expect(node('1-1.grille.squelette-6')).not.toBeNull();
 });
 
-test('empty : aucun sujet, le bouton ouvre d’abord « Nouveau workspace » quand aucun dépôt n’est enregistré', async () => {
+test('empty : aucun sujet, le bouton ouvre d’abord « Nouveau projet » quand aucun dépôt n’est enregistré', async () => {
   setup(<Accueil />, snapshot());
-  expect(await screen.findByText(/Aucun sujet ouvert/)).toBeTruthy();
+  expect(await screen.findByText(/Aucun projet/)).toBeTruthy();
   await userEvent.click(node('1-1.vide.creer')!);
-  expect(await screen.findByRole('dialog', { name: 'Nouveau workspace' })).toBeTruthy();
+  expect(await screen.findByRole('dialog', { name: 'Nouveau projet' })).toBeTruthy();
 });
 
 test('empty avec un dépôt : « Nouveau sujet » ouvre la création de sujet', async () => {
