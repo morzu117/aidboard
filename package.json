@@ -17,10 +17,11 @@
     "test": "vitest run",
     "build": "tsup && vite build web",
     "e2e": "playwright test",
-    "gate": "npm run typecheck && npm run lint && npm run test && npm run build",
-    "gate:e2e": "npm run build && npm run e2e",
+    "gate": "npm run typecheck && npm run lint && npm run build && npm run test",
+    "gate:e2e": "npm run build && AID_PACK_TEST=1 vitest run test/pack.test.ts && npm run e2e",
     "dev:web": "vite web",
-    "dev:daemon": "tsup && node --enable-source-maps dist/cli/aid.js daemon --foreground"
+    "dev:daemon": "tsup && node --enable-source-maps dist/cli/aid.js daemon --foreground",
+    "prepack": "npm run build"
   },
   "dependencies": {
     "@fastify/cookie": "^11.1.3",
@@ -63,5 +64,19 @@
     "typescript-eslint": "^8.71.2",
     "vite": "^8.3.4",
     "vitest": "^5.0.5"
-  }
+  },
+  "files": [
+    "dist",
+    "migrations",
+    "scripts/git",
+    "README.md"
+  ],
+  "keywords": [
+    "agents",
+    "claude-code",
+    "codex",
+    "worktree",
+    "cockpit"
+  ],
+  "license": "MIT"
 }

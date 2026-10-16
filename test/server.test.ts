@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, readFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -35,4 +35,21 @@ test('port occupé : message clair, verrou libéré', async () => {
   const d = await startDaemon({ home: h, config: { port: 0 } });
   await d.stop();
   await new Promise((r) => blocker.close(r));
+});
+
+test('webRootFrom : dist/web depuis dist ou dist/cli, jamais le web/ source', async () => {
+  const { mkdirSync, writeFileSync } = await import('node:fs');
+  const { webRootFrom } = await import('../src/daemon/server.js');
+  const root = mkdtempSync(join(tmpdir(), 'aid-webroot-'));
+  mkdirSync(join(root, 'dist', 'cli'), { recursive: true });
+  mkdirSync(join(root, 'dist', 'web'), { recursive: true });
+  mkdirSync(join(root, 'web'), { recursive: true });
+  mkdirSync(join(root, 'src', 'daemon'), { recursive: true });
+  writeFileSync(join(root, 'dist', 'web', 'index.html'), '<p>build</p>');
+  writeFileSync(join(root, 'web', 'index.html'), '<script src="/src/main.tsx"></script>');
+  expect(webRootFrom(join(root, 'dist'))).toBe(join(root, 'dist', 'web'));
+  expect(webRootFrom(join(root, 'dist', 'cli'))).toBe(join(root, 'dist', 'web'));
+  expect(webRootFrom(join(root, 'src', 'daemon'))).toBeNull();
+  rmSync(join(root, 'dist', 'web', 'index.html'));
+  expect(webRootFrom(join(root, 'dist'))).toBeNull();
 });

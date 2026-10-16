@@ -1,4 +1,5 @@
 import { existsSync } from 'node:fs';
+import { basename, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { AddressInfo } from 'node:net';
 import fastifyCookie from '@fastify/cookie';
@@ -15,6 +16,7 @@ import { WorkspaceQueue } from './actions/queue.js';
 import { Indexer } from './topics/index.js';
 import { registerTopicRoutes } from './routes/topics.js';
 import { registerWorkspaceRoutes } from './routes/workspaces.js';
+import { registerDaemonRoutes } from './routes/daemon.js';
 import { registerAgentRoutes } from './routes/agents.js';
 import { registerEventRoutes } from './routes/events.js';
 import { registerStateRoutes } from './routes/state.js';
@@ -31,19 +33,46 @@ export interface ServerDeps {
   paths: AidPaths;
   procVersion?: () => string | null;
   codegraphBin?: string;
+  requestStop?: () => void;
   devOrigin?: string;
   webRoot?: string | null;
   logger?: boolean;
 }
 
+export function redactToken(url: string | undefined): string {
+  return (url ?? '').replace(/([?&]token=)[^&]*/g, '$1***');
+}
+
+// Le bundle place ses chunks dans dist/ ou dist/cli/ : on remonte jusqu'à l'ancêtre nommé « dist ».
+// Hors build (dev, tests) il n'y en a pas, et on ne va surtout pas servir web/index.html, le source.
+export function webRootFrom(from: string): string | null {
+  let dir = from;
+  for (let i = 0; i < 6; i++) {
+    if (basename(dir) === 'dist') {
+      const root = join(dir, 'web');
+      return existsSync(join(root, 'index.html')) ? root : null;
+    }
+    const parent = dirname(dir);
+    if (parent === dir) return null;
+    dir = parent;
+  }
+  return null;
+}
+
 export function defaultWebRoot(): string | null {
-  const root = fileURLToPath(new URL('../web/', import.meta.url));
-  return existsSync(root) ? root : null;
+  return webRootFrom(dirname(fileURLToPath(import.meta.url)));
 }
 
 export async function buildServer(deps: ServerDeps): Promise<FastifyInstance> {
   const app = Fastify({
-    logger: deps.logger ?? false,
+    // le token d'ouverture (/?token=…) ne doit pas finir dans daemon.log
+    logger: deps.logger
+      ? {
+          serializers: {
+            req: (r) => ({ method: r.method, url: redactToken(r.url), host: r.headers?.host }),
+          },
+        }
+      : false,
     // refuser un champ inconnu plutôt que de le retirer sans rien dire
     ajv: { customOptions: { removeAdditional: false } },
   });
@@ -63,6 +92,7 @@ export async function buildServer(deps: ServerDeps): Promise<FastifyInstance> {
     return reply.code(500).send({ error: 'erreur interne' });
   });
   registerStateRoutes(app, deps.db);
+  registerDaemonRoutes(app, { db: deps.db, requestStop: deps.requestStop ?? (() => undefined) });
   registerAgentRoutes(app, { db: deps.db, agents: deps.agents });
   registerWorkspaceRoutes(app, deps);
   const indexer = new Indexer({

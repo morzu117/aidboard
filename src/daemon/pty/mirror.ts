@@ -1,9 +1,15 @@
-import { SerializeAddon } from '@xterm/addon-serialize';
-import { Terminal } from '@xterm/headless';
+import { createRequire } from 'node:module';
+import type { Terminal as HeadlessTerminal } from '@xterm/headless';
+
+// Ces paquets sont du CommonJS : sous Node, un import nommé échoue (Vitest, lui, le tolère).
+const require = createRequire(import.meta.url);
+const { Terminal } = require('@xterm/headless') as typeof import('@xterm/headless');
+const { SerializeAddon } =
+  require('@xterm/addon-serialize') as typeof import('@xterm/addon-serialize');
 
 // Copie de l'écran d'un agent côté daemon. Il ne répond jamais au programme : son onData n'est relié à rien.
 export class TerminalMirror {
-  private readonly term: Terminal;
+  private readonly term: HeadlessTerminal;
   private readonly serializer = new SerializeAddon();
 
   constructor(

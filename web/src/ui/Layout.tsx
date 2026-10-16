@@ -30,7 +30,12 @@ export function Layout({ screen, children }: { screen: '1-1' | '1-3'; children: 
         {dialog === 'workspace' && (
           <NouveauWorkspace onClose={() => setDialog('none')} onDone={() => setDialog('sujet')} />
         )}
-        {dialog === 'sujet' && <NouveauSujet onClose={() => setDialog('none')} />}
+        {dialog === 'sujet' && (
+          <NouveauSujet
+            onClose={() => setDialog('none')}
+            onAddWorkspace={() => setDialog('workspace')}
+          />
+        )}
       </Shell>
     </LayoutCtx.Provider>
   );

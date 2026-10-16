@@ -34,8 +34,8 @@ Ne pas les rediscuter sans escalade.
 | Git | CLI `git` et `gh`, appelés par des scripts bash. Aucune bibliothèque git. |
 | Distribution | Paquet npm, lancé par `npx aid` (ou `aid` installé globalement). |
 | Consignes | **agent-kernel est la couche normative.** A-I-D n'invente aucun format de consignes et n'injecte rien dans les agents. |
-| Configuration | A-I-D lit `agent.yml`, `defaults.yml`, `adapters/`, `swairm.yml`. Aucun fichier A-I-D dans les repos en v1. Seul fichier propre : `~/.aid/config.yaml`. |
-| Swairm | A-I-D ne lance pas la ruche : il la suit par GitHub (issues, labels, commentaires, PR). Aucun changement demandé à Swairm. |
+| Configuration | A-I-D lit `agent.yml`, `defaults.yml`, `adapters/`. Aucun fichier A-I-D dans les repos en v1. Seul fichier propre : `~/.aid/config.yaml`. |
+| Swairm | A-I-D ne lance ni ne pilote la ruche : il la suit par le CLI `swairm`, en lecture seule, qui rend un JSON versionné (`status`, `inbox`, `events`). Un workspace est relié à son board par son remote `origin` (`owner/dépôt`). GitHub ne porte plus que les branches et les PR. Pour agir (valider un plan, répondre, merger), on passe par le cockpit de la ruche. Décision du 2026-10-15. |
 | grokbot | Agent cloud qui agit sur GitHub. Intégré par GitHub uniquement, aucun port entrant. |
 | Réseau | Le daemon écoute **uniquement** sur `127.0.0.1`. |
 
@@ -67,7 +67,7 @@ interface Agent {
   status: AgentStatus;
   cwd: string;          // worktree du sujet
   command: string[];
-  issue?: number;       // issue GitHub (Swairm, grokbot)
+  issue?: number;       // issue GitHub (grokbot)
 }
 ```
 
@@ -105,7 +105,8 @@ Types v1 : `agent.spawned`, `agent.exited`, `agent.status`, `agent.tool`, `run.s
 `action.started`, `action.finished`, `topic.state`, `topic.phase`.
 
 **Raisons de `needs_input`.** Elles reprennent la liste fermée d'escalade du kernel
-(`policy/orchestration.md`), plus deux cas propres aux sessions interactives :
+(`policy/orchestration.md`), plus deux cas propres aux sessions interactives et un
+cas propre à la ruche :
 
 | `reason` | Origine |
 | --- | --- |
@@ -117,6 +118,7 @@ Types v1 : `agent.spawned`, `agent.exited`, `agent.status`, `agent.tool`, `run.s
 | `delivery` | toutes les sous-tâches vertes : proposition de livraison |
 | `permission` | session interactive qui demande une autorisation d'outil |
 | `question` | session interactive qui pose une question |
+| `hive` | la ruche Swairm attend Julien : un élément de `swairm inbox` (§7) |
 
 **Émission : `aid emit`.** Le daemon injecte dans chaque PTY `AID_URL`, `AID_TOKEN`,
 `AID_TOPIC`, `AID_RUN`, `AID_AGENT`. Un hook appelle
@@ -172,10 +174,27 @@ session interactive joue l'orchestrateur du kernel, ses agents de phase (`claude
 héritent des `AID_*` et remontent sous le même sujet ; leur `total_cost_usd` alimente
 `cost`.
 
-**Swairm (v0.4).** La ruche se pilote par GitHub : l'Overmind relève les issues, le GO
-est un label, l'escalade est un commentaire. A-I-D lit issues, labels, commentaires,
-PR et `swairm-result.json` via `gh`, affiche le triage de l'Oracle comme plan, pose le
-label GO quand Julien valide, et transforme les escalades en `needs_input`.
+**Swairm (v0.4).** La ruche 2.0 tient son état dans un board local (un SQLite par
+dépôt, sous `~/.swairm/boards/`) ; GitHub n'est plus que la forge. A-I-D ne lit jamais
+ce board directement. Il lance le CLI `swairm` en sous-processus, comme `git` et `gh`,
+et ne s'appuie que sur son JSON :
+
+- `swairm status --json` (`swairm-status/1`) : les sujets de la ruche, leur état, leur
+  colonne, leurs pas, les vols en cours. Un sujet de la ruche devient un sujet A-I-D en
+  mode `swairm`, avec le même identifiant (sa branche `swairm/<slug>`). Sa branche et
+  son worktree sont ceux de la ruche : les règles du §5 ne s'y appliquent pas, et
+  A-I-D ne les crée ni ne les nettoie. Un vol en cours devient un agent
+  `swairm-drone` observé (`transport: 'remote'`).
+- `swairm inbox --json` (`swairm-inbox/1`) : chaque élément (décision, plan à valider,
+  livraison à merger, sujet garé) devient un `needs_input` de raison `hive`, dédoublonné
+  par sa `cle`. Le bouton ouvre le cockpit, car le CLI v1 n'écrit rien.
+- `swairm events --project <owner/dépôt> --since <seq> --follow --json`
+  (`swairm-event/1`) : un suivi par workspace en mode ruche. Chaque ligne devient un
+  événement de `source: "swairm"`. A-I-D garde le dernier `seq` par projet pour
+  reprendre après un redémarrage, et relit `status` et `inbox` à chaque événement reçu.
+
+Le CLI marche ruche éteinte comme allumée. Son contrat (formats, codes de sortie,
+installation) est `docs/cli-swairm.md` dans le dépôt swairm (chantier 06).
 
 **grokbot (v0.5).** Ses issues alimentent une colonne « à démarrer » ; ses PR sont
 suivies comme agents `grokbot-cloud` ; les arbitrages des sessions locales peuvent
@@ -240,7 +259,7 @@ orienter les choix, pas pour être anticipés dans le code.
 | --- | --- | --- |
 | v0.2 Statuts et diff | `aid emit`, hooks Claude Code, `notify` Codex, heuristique, boîte de réception, notifications, vue diff | Un agent qui attend une permission est repéré sans ouvrir son terminal |
 | v0.3 Git flow et kernel | Registre d'actions, lecture d'`agent.yml` et des adaptateurs, santé machine, dérive et `/sync`, phase du sujet, `sync`/`pr`/`merge`, sujet depuis une issue | Un sujet va de `draft` à `archived` sans quitter A-I-D ; un projet en retard sur le kernel est resynchronisé en un clic |
-| v0.4 Ruche Swairm | Issues, labels, commentaires via `gh`, plan de l'Oracle, label GO, `swairm-result.json`, escalades | Une issue va du triage à la PR fusionnée en ne passant que par A-I-D |
+| v0.4 Ruche Swairm | Suivi par le CLI `swairm` : sujets et vols (`status`), boîte de réception (`inbox`), journal (`events --follow`), renvoi au cockpit pour agir | Un plan à valider ou une décision de la ruche arrive dans la boîte de réception d'A-I-D sans que le cockpit soit ouvert |
 | v0.5 grokbot | PR grokbot suivies, sujets distants, `aid-inbox`, commandes `/aid` | Un arbitrage est rendu depuis le téléphone |
 
 ## 12. Contraintes de travail
@@ -254,7 +273,8 @@ orienter les choix, pas pour être anticipés dans le code.
 
 Aucune ne bloque la v0.1.
 
-- [ ] Ruche : noms exacts des labels (GO, escalade) et des commandes d'issue de l'Overmind ; état local `~/.swairm` lisible ?
+- [x] Ruche : suivie par le CLI `swairm` en lecture seule (décision du 2026-10-15). Les labels et les commandes d'issue de la ruche v1 ne servent plus.
+- [ ] Ruche : agir depuis A-I-D (valider un plan, répondre à une décision) demandera des commandes d'écriture au CLI `swairm`. À décider après la v0.4.
 - [ ] Mode standard : A-I-D observe-t-il une session qui joue l'orchestrateur, ou lance-t-il lui-même la boucle BUILD → GATE → REVIEW → TRIAGE ?
 - [ ] grokbot agit-il sous le compte GitHub de Julien ou sous le sien ?
 - [ ] grokbot expose-t-il un déclencheur, ou la délégation par issue `aid:delegate` est-elle la seule voie ?

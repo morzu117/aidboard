@@ -208,3 +208,30 @@ test('nettoyer un sujet sale : le refus est affiché et rien ne propose de force
   expect((await screen.findByRole('alert')).textContent).toContain('non commitées');
   expect(screen.queryByRole('button', { name: 'Supprimer quand même' })).toBeNull();
 });
+
+test('avec un dépôt déjà enregistré, « Ajouter un workspace » ouvre l’enregistrement et revient à la création de sujet', async () => {
+  const h = setup(<Accueil />, snapshot({ workspaces: [ws()] }));
+  h.respond.set(
+    'POST /api/workspaces',
+    json(201, { ...ws({ id: 'ws_2', name: 'autre' }), warnings: [] }),
+  );
+  await userEvent.click(await screen.findByRole('button', { name: 'Nouveau sujet' }));
+  await userEvent.click(screen.getByRole('button', { name: 'Ajouter un workspace…' }));
+  await userEvent.type(screen.getByLabelText(/Chemin du dépôt/), '/tmp/autre');
+  await userEvent.click(screen.getByRole('button', { name: 'Enregistrer' }));
+  expect(await screen.findByRole('dialog', { name: 'Nouveau sujet' })).toBeTruthy();
+});
+
+test('la création de sujet préselectionne le workspace le plus récent', async () => {
+  setup(
+    <Accueil />,
+    snapshot({
+      workspaces: [
+        ws({ id: 'ws_a', name: 'ancien', createdAt: '2026-01-01T00:00:00Z' }),
+        ws({ id: 'ws_z', name: 'récent', createdAt: '2026-10-01T00:00:00Z' }),
+      ],
+    }),
+  );
+  await userEvent.click(await screen.findByRole('button', { name: 'Nouveau sujet' }));
+  expect((screen.getByLabelText('Workspace') as HTMLSelectElement).value).toBe('ws_z');
+});

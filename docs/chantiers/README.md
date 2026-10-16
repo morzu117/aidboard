@@ -54,6 +54,7 @@ La spec est le document Claude Docs lié en tête du brief ; l'export `design/ma
 | Redémarrer le daemon arrête les agents, sauf les runs Swairm | Sans objet en v0.1 (pas de run Swairm). À garder en v0.4 : les runs Swairm vivent dans leur propre process. |
 | Sujet `draft` « créé, pas de worktree », écrans 2.1 et 2.2 (préparation, `topic.setup`, `topic.create-existante`) | **Reporté en v0.3.** En v0.1 le sujet n'existe en base qu'après le succès du script (décision du plan 02, testée). Le design git flow suppose un sujet `draft` pendant la préparation et une commande `worktree.setup` : il faudra une migration et lever l'unicité du slug pour un brouillon abandonné. |
 | `Sujet.prUrl`, entité `Tâche` (sous-worktrees `<branche>--t<n>`) | Reportés en v0.3 et v0.4. |
+| **Brief révisé du 2026-10-15 22:39** : la ruche Swairm est suivie par le CLI `swairm` en lecture seule (`status`, `inbox`, `events --follow`, JSON versionné), plus par `gh`, labels et commentaires ; plus de `swairm.yml` lu | **Aucun effet sur le code de la v0.1**, repris dans `brief.md`. À prévoir pour la v0.4 : (1) raison de `needs_input` `hive`, dédoublonnée par la `cle` de l'inbox ; (2) un sujet de la ruche a sa branche et son worktree gérés par la ruche : `topic.cleanup` doit **refuser** les sujets en mode `swairm` (les règles git du §5 du brief ne s'y appliquent pas) ; (3) un vol en cours est un agent `swairm-drone` `transport: 'remote'`, jamais lancé par le `AgentManager` ; (4) `aid doctor` vérifiera la présence du CLI `swairm` ; (5) le contrat du CLI est `docs/cli-swairm.md` dans le dépôt swairm. |
 | Spec : « sur Windows, le navigateur ouvre `http://localhost:<port>` » | Le plan 05 ouvre toujours `127.0.0.1` (un `localhost` peut se résoudre en `::1`). Le daemon accepte les deux dans `Host`. |
 
 ## 2. Registre des risques anticipés
@@ -87,19 +88,18 @@ lit ici et dans la section « Pièges » de chaque plan.
 
 ## 3. Ordre et branches
 
-Branches empilées : chacune part de la précédente, et sa PR vise la branche parente.
+Branches empilées : chacune part de la précédente, et sa PR vise la branche parente. **État au 2026-10-16 : les six
+chantiers sont exécutés en local (rien n'est poussé, aucune PR ouverte).**
 
-| N° | Chantier | Branche | Base de la PR | Modèle exécutant |
+| N° | Chantier | Branche | Base de la PR | État |
 | --- | --- | --- | --- | --- |
-| 00 | [Amorçage du dépôt](00-amorcage.md) | `chore/amorcage` | `main` | standard |
-| 01 | [Daemon : état, journal, sécurité](01-daemon-etat-securite.md) | `feat/daemon-socle` | `chore/amorcage` | standard |
-| 02 | [Workspaces, sujets et worktrees](02-workspaces-sujets.md) | `feat/sujets-worktrees` | `feat/daemon-socle` | standard |
-| 03 | [Terminaux persistants](03-terminaux-persistants.md) | `feat/terminaux` | `feat/sujets-worktrees` | **complexe** |
-| 04 | [Interface v0.1](04-interface.md) | `feat/interface-socle` | `feat/terminaux` | standard |
-| 05 | [CLI, distribution et recette](05-cli-distribution-recette.md) | `feat/cli-recette` | `feat/interface-socle` | standard |
-
-On peut paralléliser une partie : 04 peut démarrer sur une API simulée dès que 01 est
-livré, mais 04.4 (terminaux) attend 03.
+| 00 | [Amorçage du dépôt](00-amorcage.md) | `chore/amorcage` | `main` | fait |
+| 01 | [Daemon : état, journal, sécurité](01-daemon-etat-securite.md) | `feat/daemon-socle` | `chore/amorcage` | fait |
+| 02 | [Workspaces, sujets et worktrees](02-workspaces-sujets.md) | `feat/sujets-worktrees` | `feat/daemon-socle` | fait |
+| 03 | [Terminaux persistants](03-terminaux-persistants.md) | `feat/terminaux` | `feat/sujets-worktrees` | fait |
+| — | Alignement sur la spec v1 révisée + maquettes git flow | `feat/aligner-spec-v1` | `feat/terminaux` | fait |
+| 04 | [Interface v0.1](04-interface.md) | `feat/interface-socle` | `feat/aligner-spec-v1` | fait |
+| 05 | [CLI, distribution et recette](05-cli-distribution-recette.md) | `feat/cli-recette` | `feat/interface-socle` | fait, recette humaine à finir : [recette-v0.1.md](../recette-v0.1.md) |
 
 ## 4. Correspondance avec les critères d'acceptation du brief
 

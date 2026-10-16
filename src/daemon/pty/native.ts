@@ -25,7 +25,7 @@ export function fixSpawnHelperMode(): void {
 export async function ptyPreflight(): Promise<void> {
   try {
     fixSpawnHelperMode();
-    loaded = await import('node-pty');
+    loaded = createRequire(import.meta.url)('node-pty') as typeof NodePty;
   } catch (err) {
     throw new Error(
       `node-pty ne se charge pas : ${(err as Error).message}. ` +

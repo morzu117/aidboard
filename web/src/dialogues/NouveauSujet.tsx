@@ -6,11 +6,19 @@ import { AidApiError } from '../data/api.js';
 import { useAid } from '../data/useAidState.js';
 import { Dialogue } from './Dialogue.js';
 
-export function NouveauSujet({ onClose }: { onClose: () => void }) {
+export function NouveauSujet({
+  onClose,
+  onAddWorkspace,
+}: {
+  onClose: () => void;
+  onAddWorkspace: () => void;
+}) {
   const { state, outputs, call } = useAid();
   const navigate = useNavigate();
   const workspaces = state?.workspaces ?? [];
-  const [workspaceId, setWorkspaceId] = useState(workspaces[0]?.id ?? '');
+  // le dernier enregistré : on vient en général de l'ajouter
+  const latest = [...workspaces].sort((a, b) => a.createdAt.localeCompare(b.createdAt)).at(-1);
+  const [workspaceId, setWorkspaceId] = useState(latest?.id ?? '');
   const [title, setTitle] = useState('');
   const [type, setType] = useState<TopicType>('feat');
   const [error, setError] = useState<string | null>(null);
@@ -67,6 +75,15 @@ export function NouveauSujet({ onClose }: { onClose: () => void }) {
             ))}
           </select>
         </label>
+        <button
+          className="bouton bouton--fantome"
+          data-action="workspace.ajouter"
+          type="button"
+          onClick={onAddWorkspace}
+          disabled={running}
+        >
+          Ajouter un workspace…
+        </button>
         <label>
           Titre
           <input

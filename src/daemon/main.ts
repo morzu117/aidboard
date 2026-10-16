@@ -35,6 +35,7 @@ export async function startDaemon(
     config?: Partial<AidConfig>;
     logger?: boolean;
     codegraphBin?: string;
+    onStopRequested?: () => void;
   } = {},
 ): Promise<DaemonHandle> {
   const paths = resolvePaths(opts.home);
@@ -70,6 +71,7 @@ export async function startDaemon(
       agents,
       paths,
       codegraphBin: opts.codegraphBin,
+      requestStop: opts.onStopRequested,
       devOrigin,
       logger: opts.logger,
     });
