@@ -6,6 +6,7 @@ import { type Db, openDb } from './db.js';
 import { ptyPreflight } from './pty/native.js';
 import { AgentManager } from './pty/manager.js';
 import { purgeOldLogs } from './pty/retention.js';
+import { replaySpool } from './events/spool.js';
 import { EventStore } from './events/store.js';
 import { acquireLock } from './lock.js';
 import { ensureHome, resolvePaths } from './paths.js';
@@ -50,6 +51,12 @@ export async function startDaemon(
     db = opened;
     const store = new EventStore(opened);
     reconcile(opened, store);
+    // après la réconciliation : un statut d'un agent d'avant le redémarrage est journalisé, sans le ressusciter
+    const spool = replaySpool(paths.spool, opened, store);
+    if (spool.rejected > 0)
+      console.error(
+        `spool : ${spool.rejected} événement(s) refusé(s), gardés dans ${paths.spool}/rejet`,
+      );
     await ptyPreflight();
     let livePort = config.port;
     const auth = createAuthState();

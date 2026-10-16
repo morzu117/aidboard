@@ -93,6 +93,7 @@ export class AgentManager {
       AID_TOPIC: topic.id,
       AID_RUN: run.id,
       AID_AGENT: agentId,
+      AID_SPOOL: paths.spool,
     });
     let pty: IPty;
     try {

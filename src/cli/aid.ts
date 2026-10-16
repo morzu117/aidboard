@@ -10,9 +10,15 @@ const HELP = `aidboard ${readVersion()} : cockpit local des agents de code
   aid stop        arrête le daemon (refusé s'il reste des agents ; --force pour tout arrêter)
   aid doctor      vérifie la machine (node-pty, git, claude, codex, codegraph…)
   aid daemon      lance le daemon au premier plan
+  aid emit        publie un événement d'agent (appelé par les hooks ; sans effet hors A-I-D)
 `;
 
 async function main(): Promise<number> {
+  // ses propres options, appelée par les hooks : avant l'analyse stricte des options globales
+  if (process.argv[2] === 'emit') {
+    const { runEmit } = await import('./commands/emit.js');
+    return runEmit(process.argv.slice(3));
+  }
   const { values, positionals } = parseArgs({
     allowPositionals: true,
     options: {

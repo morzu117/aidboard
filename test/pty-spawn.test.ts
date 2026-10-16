@@ -68,7 +68,7 @@ test('ANTHROPIC_API_KEY n’atteint jamais le processus enfant, les AID_* y sont
   a.type('echo "TOK=$AID_TOKEN"; echo "TOP=$AID_TOPIC"; echo "RUN=$AID_RUN"\n');
   await waitFor(() => /RUN=run_\w+/.test(a.out()), 5000, 'variables');
   expect(a.out()).toContain('CLE=0');
-  expect(a.out()).toContain('AIDVARS=AID_AGENT,AID_RUN,AID_TOKEN,AID_TOPIC,AID_URL,');
+  expect(a.out()).toContain('AIDVARS=AID_AGENT,AID_RUN,AID_SPOOL,AID_TOKEN,AID_TOPIC,AID_URL,');
   expect(a.out()).toContain(`TOP=${a.topic.topicId}`);
   const token = /TOK=([A-Za-z0-9_-]{20,})/.exec(a.out())![1]!;
   expect(c.t.d.auth.runTokens.get(token)).toBe(a.agent.runId);
