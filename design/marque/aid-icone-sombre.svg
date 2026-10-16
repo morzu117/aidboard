@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 520 490" fill="none">
+  <title>AID — icône</title>
+  <g transform="translate(20 20)">
+    <path d="M70 70 245 225 70 380" stroke="#151719" stroke-width="140" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="410" cy="76" r="70" fill="#00D994"/>
+    <g fill="#151719">
+      <circle cx="410" cy="225" r="70"/>
+      <circle cx="410" cy="375" r="70"/>
+    </g>
+  </g>
+</svg>

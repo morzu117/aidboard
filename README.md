@@ -1,4 +1,7 @@
-# A-I-D Board
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="design/marque/aid-logo-arrondi_with_text.svg">
+  <img src="design/marque/aid-logo-arrondi_with_text-sombre.svg" alt="A-I-D Board" height="60">
+</picture>
 
 Cockpit local pour piloter des agents de code (Claude Code, Codex, un shell) sur plusieurs sujets en parallèle.
 Un **sujet** est une branche git et son worktree ; chaque agent tourne dans un terminal persistant du navigateur :
