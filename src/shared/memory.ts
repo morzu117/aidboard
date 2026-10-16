@@ -35,6 +35,20 @@ export type PutMode =
   | { kind: 'replace'; expectedRevision: number }
   | { kind: 'force' };
 
+export type ProposalKind = 'tags' | 'duplicate' | 'split';
+export type ProposalState = 'open' | 'applied' | 'rejected';
+
+export interface MemoryProposal {
+  id: string;
+  kind: ProposalKind;
+  slug: string;
+  payload: unknown;
+  rationale: string;
+  state: ProposalState;
+  createdAt: string;
+  decidedAt: string | null;
+}
+
 export class RevisionConflict extends Error {
   constructor(
     readonly slug: string,

@@ -13,6 +13,13 @@ import { EventStore } from './events/store.js';
 import { WorkspaceQueue } from './actions/queue.js';
 import { type Embedder, ollamaEmbedder, VectorIndex } from './memory/embed.js';
 import { MemoryJobs } from './memory/jobs.js';
+import {
+  type ChatModel,
+  MemoryProposals,
+  ollamaChatModel,
+  runMaintainJob,
+  scheduleMaintenance,
+} from './memory/maintain.js';
 import { MemoryMirror } from './memory/mirror.js';
 import { MemoryWorker } from './memory/worker.js';
 import { MemoryService } from './memory/service.js';
@@ -52,8 +59,14 @@ export async function startDaemon(
     onUpdateRequested?: () => void;
     /** `git ls-remote origin` en tâche de fond ; coupé dans les tests, pas de réseau à chaque daemon. */
     checkUpdates?: boolean;
-    // tests : un Embedder déterministe et des délais courts
-    memory?: { embedder?: Embedder; backoffMs?: number[]; pollMs?: number };
+    // tests : un Embedder/ChatModel déterministe, des délais courts, un rythme d'entretien rapide
+    memory?: {
+      embedder?: Embedder;
+      backoffMs?: number[];
+      pollMs?: number;
+      chatModel?: ChatModel;
+      maintenanceScheduleMs?: number;
+    };
   } = {},
 ): Promise<DaemonHandle> {
   const paths = resolvePaths(opts.home);
@@ -83,22 +96,30 @@ export async function startDaemon(
     const memStore = new MemoryStore(opened);
     const jobs = new MemoryJobs(opened);
     jobs.resetRunning();
+    const proposals = new MemoryProposals(opened);
     const embCfg = config.memory.embeddings;
     const embedder =
       opts.memory?.embedder ??
       (embCfg.provider === 'ollama' ? ollamaEmbedder(embCfg.url, embCfg.model, log) : null);
     const vectors = embedder ? VectorIndex.load(opened, log) : null;
+    const maintCfg = config.memory.maintenance;
+    const chatModel =
+      opts.memory?.chatModel ??
+      (maintCfg.enabled ? ollamaChatModel(embCfg.url, maintCfg.model) : null);
     let hybridOn = false;
     const worker =
-      embedder && vectors
+      (embedder && vectors) || chatModel
         ? new MemoryWorker({
             jobs,
             store: memStore,
-            vectors,
-            embedder,
+            vectors: vectors ?? undefined,
+            embedder: embedder ?? undefined,
             log,
             backoffMs: opts.memory?.backoffMs,
             pollMs: opts.memory?.pollMs,
+            maintain: chatModel
+              ? (job) => runMaintainJob(job, { store: memStore, proposals, model: chatModel, log })
+              : undefined,
           })
         : null;
     const memory = new MemoryService({
@@ -120,6 +141,23 @@ export async function startDaemon(
       hybridOn = await embedder.ready();
       if (hybridOn) worker?.start();
       else log('ollama injoignable : recherche FTS5 seule');
+    }
+    let maintenanceTimer: NodeJS.Timeout | null = null;
+    if (chatModel) {
+      worker?.start();
+      const tick = () => {
+        const n = scheduleMaintenance(new Date(), {
+          store: memStore,
+          jobs,
+          proposals,
+          enabled: maintCfg.enabled,
+          window: maintCfg.window,
+        });
+        if (n > 0) worker?.notify();
+      };
+      tick();
+      maintenanceTimer = setInterval(tick, opts.memory?.maintenanceScheduleMs ?? 15 * 60_000);
+      maintenanceTimer.unref();
     }
     let livePort = config.port;
     const auth = createAuthState();
@@ -144,6 +182,7 @@ export async function startDaemon(
       store,
       agents,
       memory,
+      memoryProposals: proposals,
       paths,
       codegraphBin: opts.codegraphBin,
       requestStop: opts.onStopRequested,
@@ -182,6 +221,7 @@ export async function startDaemon(
         await agents.stopAll('daemon_stop', 5000);
         agents.dispose();
         updates?.dispose();
+        if (maintenanceTimer) clearInterval(maintenanceTimer);
         await worker?.stop();
         await mirror.flush();
         await app.close();

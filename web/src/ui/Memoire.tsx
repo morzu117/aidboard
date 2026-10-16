@@ -1,14 +1,100 @@
 import { useEffect, useState } from 'react';
-import type { MemoryPage } from '../../../src/shared/memory.js';
+import type { MemoryPage, MemoryProposal, ProposalKind } from '../../../src/shared/memory.js';
 import { AidApiError } from '../data/api.js';
 import {
+  applyProposal,
+  fetchOpenProposals,
   fetchSubjectMemory,
   MEMORY_KIND_LABELS,
   MEMORY_KINDS,
   type MemoryKind,
+  rejectProposal,
 } from '../data/memory.js';
 import { useAid } from '../data/useAidState.js';
 import { depuis } from './depuis.js';
+
+const PROPOSAL_KIND_LABELS: Record<ProposalKind, string> = {
+  tags: 'Tags',
+  duplicate: 'Doublon',
+  split: 'Découpage',
+};
+
+function Propositions({ namespace, topicSlug }: { namespace: string; topicSlug: string }) {
+  const { state, call } = useAid();
+  const [proposals, setProposals] = useState<MemoryProposal[]>([]);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [erreur, setErreur] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchOpenProposals(call, namespace, topicSlug)
+      .then((p) => {
+        if (!cancelled) setProposals(p);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [call, namespace, topicSlug, state]);
+
+  async function decide(id: string, decision: 'apply' | 'reject') {
+    setBusy(id);
+    setErreur(null);
+    try {
+      await (decision === 'apply' ? applyProposal(call, id) : rejectProposal(call, id));
+      setProposals((prev) => prev.filter((p) => p.id !== id));
+    } catch (err) {
+      setErreur(err instanceof AidApiError ? err.message : String(err));
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  if (proposals.length === 0) return null;
+
+  return (
+    <div className="memoire-propositions" data-node="1-3.memoire.propositions">
+      {erreur && (
+        <p className="message-erreur" role="alert">
+          {erreur}
+        </p>
+      )}
+      {proposals.map((p) => (
+        <div
+          key={p.id}
+          className="memoire-proposition"
+          data-node="1-3.memoire.proposition"
+          data-bind="proposition"
+        >
+          <p className="texte-discret">
+            <span className="pastille pastille--discret">{PROPOSAL_KIND_LABELS[p.kind]}</span>{' '}
+            {p.rationale}
+          </p>
+          <div className="carte-actions">
+            <button
+              className="bouton bouton--contour"
+              data-action="memoire.proposition.appliquer"
+              type="button"
+              disabled={busy === p.id}
+              onClick={() => void decide(p.id, 'apply')}
+            >
+              Appliquer
+            </button>
+            <button
+              className="bouton bouton--fantome"
+              data-action="memoire.proposition.rejeter"
+              type="button"
+              disabled={busy === p.id}
+              onClick={() => void decide(p.id, 'reject')}
+            >
+              Rejeter
+            </button>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 export function Memoire({ namespace, topicSlug }: { namespace: string; topicSlug: string }) {
   const { state, call } = useAid();
@@ -42,6 +128,7 @@ export function Memoire({ namespace, topicSlug }: { namespace: string; topicSlug
       <h2 className="titre-zone" data-node="1-3.memoire.titre">
         Mémoire
       </h2>
+      <Propositions namespace={namespace} topicSlug={topicSlug} />
       <div className="memoire-onglets" role="tablist" aria-label="Phases">
         {MEMORY_KINDS.map((kind) => (
           <button

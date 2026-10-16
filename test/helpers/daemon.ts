@@ -6,6 +6,7 @@ import type { AidConfig } from '../../src/daemon/config.js';
 import type { Db } from '../../src/daemon/db.js';
 import type { EventStore } from '../../src/daemon/events/store.js';
 import type { Embedder } from '../../src/daemon/memory/embed.js';
+import type { ChatModel } from '../../src/daemon/memory/maintain.js';
 
 export interface TestDaemon {
   d: DaemonHandle;
@@ -21,7 +22,13 @@ export async function startTestDaemon(
   extra: {
     codegraphBin?: string;
     config?: Partial<AidConfig>;
-    memory?: { embedder?: Embedder; backoffMs?: number[]; pollMs?: number };
+    memory?: {
+      embedder?: Embedder;
+      backoffMs?: number[];
+      pollMs?: number;
+      chatModel?: ChatModel;
+      maintenanceScheduleMs?: number;
+    };
   } = {},
 ): Promise<TestDaemon> {
   const d = await startDaemon({

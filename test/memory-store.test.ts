@@ -22,7 +22,7 @@ function fresh(): MemoryStore {
 
 test('la migration 004 crée les tables mémoire et la colonne namespace', () => {
   fresh();
-  expect(db.pragma('user_version', { simple: true })).toBeGreaterThanOrEqual(5);
+  expect(db.pragma('user_version', { simple: true })).toBeGreaterThanOrEqual(6);
   const cols = (db.pragma('table_info(workspaces)') as { name: string }[]).map((c) => c.name);
   expect(cols).toContain('namespace');
   expect(() =>

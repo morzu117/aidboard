@@ -5,8 +5,9 @@ import type { MemoryStore } from './store.js';
 export interface WorkerDeps {
   jobs: MemoryJobs;
   store: MemoryStore;
-  vectors: VectorIndex;
-  embedder: Embedder;
+  // Absents si aucun Embedder n'est configuré : seuls des jobs `maintain` seront alors claimés.
+  vectors?: VectorIndex;
+  embedder?: Embedder;
   log: (line: string) => void;
   backoffMs?: number[]; // une entrée par nouvelle tentative ; au-delà : échec
   pollMs?: number;
@@ -83,6 +84,7 @@ export class MemoryWorker {
       if (!this.deps.maintain) throw new Error('entretien non disponible');
       return this.deps.maintain(job);
     }
+    if (!this.deps.embedder || !this.deps.vectors) throw new Error('embeddings indisponibles');
     const page = job.slug ? this.deps.store.get(job.slug) : undefined;
     if (!page) {
       if (job.slug) this.deps.vectors.remove(job.slug);
