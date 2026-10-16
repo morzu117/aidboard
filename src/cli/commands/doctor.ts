@@ -7,6 +7,7 @@ import { readProcVersion } from '../../daemon/routes/workspaces.js';
 import { loadConfig } from '../../daemon/config.js';
 import type { AidPaths } from '../../daemon/paths.js';
 import { isWsl } from '../browser.js';
+import { hooksStatus } from '../../daemon/hooks/claudeSettings.js';
 import { runningDaemon } from '../daemonInfo.js';
 import { readVersion } from '../version.js';
 
@@ -27,6 +28,7 @@ export interface Probes {
   loadSqlite(): Promise<string | null>;
   homeMode(): number | null; // null = ~/.aid absent
   port(): Promise<{ port: number; state: 'aid' | 'libre' | 'occupe' }>;
+  claudeHooks(): boolean; // les hooks d'A-I-D sont-ils dans la configuration de Claude Code ?
 }
 
 export function nodeSupported(v: string): boolean {
@@ -116,6 +118,14 @@ export async function runChecks(p: Probes): Promise<Check[]> {
     },
   );
 
+  if (p.has('claude')) {
+    verify(p.claudeHooks(), 'hooks Claude Code installés', {
+      level: 'warn',
+      label: 'hooks Claude Code absents',
+      detail: 'les statuts de claude seront seulement estimés : aid hooks install',
+    });
+  }
+
   if (isWsl(p.procVersion)) {
     verify(p.has('wslview'), 'wslview', {
       level: 'warn',
@@ -166,6 +176,7 @@ export function realProbes(paths: AidPaths): Probes {
         return null;
       }
     },
+    claudeHooks: () => hooksStatus().installed,
     async port() {
       const { port } = loadConfig(paths);
       if (await runningDaemon(paths)) return { port, state: 'aid' };

@@ -1,0 +1,21 @@
+{
+  "session_id": "s-1",
+  "cwd": "/w/s",
+  "hook_event_name": "PreToolUse",
+  "tool_name": "AskUserQuestion",
+  "tool_use_id": "toolu_02",
+  "tool_input": {
+    "questions": [
+      {
+        "question": "Quel séparateur par défaut pour le CSV ?",
+        "header": "Séparateur",
+        "multiSelect": false,
+        "options": [
+          { "label": "Point-virgule (Excel FR)", "description": "Ce qu'attend Excel en français" },
+          { "label": "Virgule", "description": "Le standard" },
+          { "label": "Rendre configurable", "description": "Une option" }
+        ]
+      }
+    ]
+  }
+}

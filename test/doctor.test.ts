@@ -18,6 +18,7 @@ const good: Probes = {
   loadSqlite: async () => null,
   homeMode: () => 0o40700,
   port: async () => ({ port: 4870, state: 'libre' }),
+  claudeHooks: () => true,
 };
 
 const levels = async (over: Partial<Probes>) =>
@@ -104,4 +105,14 @@ test('runDoctor : code 1 s’il y a un ✗, 0 sinon, et une ligne par contrôle'
   expect(
     await runDoctor(resolvePaths('/tmp/x'), { ...good, loadPty: async () => 'x' }, () => undefined),
   ).toBe(1);
+});
+
+test('hooks Claude Code absents : un ⚠ qui dit l’effet et la commande ; sans claude, rien', async () => {
+  const checks = await runChecks({ ...good, claudeHooks: () => false });
+  expect(checks.find((c) => c.label === 'hooks Claude Code absents')).toMatchObject({
+    level: 'warn',
+    detail: expect.stringContaining('aid hooks install'),
+  });
+  const sansClaude = await levels({ claudeHooks: () => false, has: (b) => b !== 'claude' });
+  expect(sansClaude.some((l) => l.includes('hooks'))).toBe(false);
 });

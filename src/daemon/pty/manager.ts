@@ -12,7 +12,7 @@ import { type AuthState, issueRunToken } from '../security.js';
 import { LogWriter } from './log.js';
 import { TerminalMirror } from './mirror.js';
 import { getPty } from './native.js';
-import { agentCommand, agentEnv, resolveOnPath, type SpawnKind } from './spawn.js';
+import { agentCommand, agentEnv, hookEnv, resolveOnPath, type SpawnKind } from './spawn.js';
 
 const ulid = monotonicFactory();
 const INITIAL = { cols: 120, rows: 32 };
@@ -94,6 +94,7 @@ export class AgentManager {
       AID_RUN: run.id,
       AID_AGENT: agentId,
       AID_SPOOL: paths.spool,
+      ...hookEnv(),
     });
     let pty: IPty;
     try {

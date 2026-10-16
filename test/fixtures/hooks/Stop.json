@@ -1,0 +1,7 @@
+{
+  "session_id": "s-1",
+  "cwd": "/w/s",
+  "hook_event_name": "Stop",
+  "stop_hook_active": false,
+  "last_assistant_message": "Tour terminé. J'ajoute les tests du tri ?\nDétails plus bas."
+}

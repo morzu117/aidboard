@@ -1,5 +1,6 @@
 import { accessSync, constants } from 'node:fs';
 import { delimiter, isAbsolute, join } from 'node:path';
+import { findAssetDir } from '../assets.js';
 
 export type SpawnKind = 'claude' | 'codex' | 'shell';
 
@@ -40,4 +41,22 @@ export function agentEnv(
   for (const key of strip) delete env[key];
   for (const key of Object.keys(env)) if (SESSION_MARKERS.test(key)) delete env[key];
   return { ...env, TERM: 'xterm-256color', COLORTERM: 'truecolor', ...aid };
+}
+
+/**
+ * Ce qu'il faut aux hooks Claude Code pour remonter les statuts (plan 06, E1) : le script livré et de quoi lancer la
+ * CLI sans dépendre du PATH. Sans CLI construite (tests unitaires sur les sources), pas de hooks : ils ne font rien.
+ */
+export function hookEnv(
+  find: (name: string, marker: string) => string = findAssetDir,
+): Record<`AID_${string}`, string> {
+  try {
+    return {
+      AID_HOOK: join(find('scripts/hooks', 'aid-hook.sh'), 'aid-hook.sh'),
+      AID_NODE: process.execPath,
+      AID_CLI: join(find('dist/cli', 'aid.js'), 'aid.js'),
+    };
+  } catch {
+    return {};
+  }
 }

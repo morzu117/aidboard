@@ -1,0 +1,8 @@
+{
+  "session_id": "s-1",
+  "cwd": "/w/s",
+  "hook_event_name": "PreToolUse",
+  "tool_name": "Write",
+  "tool_use_id": "toolu_03",
+  "tool_input": { "file_path": "src/pty/ring-buffer.ts", "content": "export {}" }
+}
