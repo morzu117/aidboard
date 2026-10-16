@@ -15,7 +15,11 @@ const script = (name: string) => join(import.meta.dirname, 'fixtures/scripts', n
 
 async function ctx(): Promise<ActionContext> {
   t = await startTestDaemon();
-  t.db.prepare("INSERT INTO workspaces VALUES ('ws_1','a','/a','main','/w','t0')").run();
+  t.db
+    .prepare(
+      "INSERT INTO workspaces (id, name, root, base_branch, worktrees_dir, created_at) VALUES ('ws_1','a','/a','main','/w','t0')",
+    )
+    .run();
   return { store: t.store, paths: resolvePaths(t.home), queue: new WorkspaceQueue() };
 }
 

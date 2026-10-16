@@ -1,12 +1,12 @@
 import { useState } from 'react';
-import { Link, useParams } from 'react-router';
+import { Link, useParams, useSearchParams } from 'react-router';
 import type { Agent, IndexState } from '../../../src/shared/model.js';
 import { AidApiError } from '../data/api.js';
 import { useAid } from '../data/useAidState.js';
 import { ConfirmerNettoyage } from '../dialogues/ConfirmerNettoyage.js';
 import { Terminal } from '../terminal/Terminal.js';
 import { Layout } from '../ui/Layout.js';
-import { Point, statusView } from '../ui/Statut.js';
+import { agentView, Point } from '../ui/Statut.js';
 import { Cote } from './Cote.js';
 import { useNettoyage } from './useNettoyage.js';
 import { roleLabel } from '../ui/roles.js';
@@ -28,7 +28,9 @@ const KINDS: Array<{ kind: Kind; label: string }> = [
 
 function Contenu({ topicId }: { topicId: string }) {
   const { state, daemon, retry, call } = useAid();
-  const [selected, setSelected] = useState<string | null>(null);
+  // « Ouvrir le terminal → » de la boîte de réception arrive avec ?agent= : son onglet est choisi
+  const [params] = useSearchParams();
+  const [selected, setSelected] = useState<string | null>(params.get('agent'));
   const [menu, setMenu] = useState<'aucun' | 'agent' | 'plus'>('aucun');
   const [erreur, setErreur] = useState<string | null>(null);
   const nettoyage = useNettoyage(topicId);
@@ -211,7 +213,7 @@ function Contenu({ topicId }: { topicId: string }) {
           <span className="pastille pastille--discret" data-node="1-3.entete.base">
             base{' '}
             <span data-node="1-3.entete.base.branche" data-bind="sujet.base">
-              origin/{topic.base}
+              {workspace?.remote ? `${workspace.remote}/${topic.base}` : topic.base}
             </span>
           </span>
           <span
@@ -294,7 +296,7 @@ function Contenu({ topicId }: { topicId: string }) {
               aria-label="Agents du sujet"
             >
               {agents.map((a, i) => {
-                const v = statusView(a.status);
+                const v = agentView(a);
                 return (
                   <span key={a.id} style={{ display: 'inline-flex' }}>
                     <button
@@ -306,7 +308,7 @@ function Contenu({ topicId }: { topicId: string }) {
                       type="button"
                       onClick={() => setSelected(a.id)}
                     >
-                      <Point tone={v.tone} label={v.label} />
+                      <Point tone={v.tone} label={v.label} estimated={v.estimated} />
                       <span data-node={`1-3.terminaux.onglet-${i + 1}.type`} data-bind="agent.type">
                         {a.kind}
                       </span>

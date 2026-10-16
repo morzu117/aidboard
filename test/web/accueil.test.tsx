@@ -57,19 +57,23 @@ test('default : une carte par sujet, avec branche, workspace, titre, badge, agen
   expect(node('1-1.grille.sujet-1.actions.ouvrir')?.getAttribute('href')).toBe('/sujets/tp_1');
 });
 
-test('un agent vivant est affiché « Lancé · statut non suivi », jamais « En cours »', async () => {
+test('un agent qui démarre est « Démarrage » ; un shell seul est « shell », sans rôle', async () => {
   setup(
     <Accueil />,
     snapshot({
       workspaces: [ws()],
-      topics: [topic()],
-      runs: [{ id: 'run_1', topicId: 'tp_1', mode: 'standard', state: 'open', createdAt: 't' }],
-      agents: [agent()],
+      topics: [topic(), topic({ id: 'tp_2', branch: 'feat/t', slug: 't' })],
+      runs: [
+        { id: 'run_1', topicId: 'tp_1', mode: 'standard', state: 'open', createdAt: 't' },
+        { id: 'run_2', topicId: 'tp_2', mode: 'standard', state: 'open', createdAt: 't' },
+      ],
+      agents: [agent({ kind: 'claude' }), agent({ id: 'ag_2', runId: 'run_2' })],
     }),
   );
   await screen.findByText('feat/s');
-  expect(text('1-1.grille.sujet-1.statut')).toBe('Lancé · statut non suivi');
-  expect(document.body.textContent).not.toContain('En cours');
+  expect(text('1-1.grille.sujet-1.statut')).toBe('Démarrage');
+  expect(text('1-1.grille.sujet-2.statut')).toBe('shell');
+  expect(node('1-1.grille.sujet-2.agent-1.role')).toBeNull();
 });
 
 test('le filtre par workspace masque les autres sujets', async () => {

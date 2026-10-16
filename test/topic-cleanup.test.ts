@@ -100,7 +100,7 @@ test('un agent vivant : 409, rien n’est lancé', async () => {
   };
   c.t.db
     .prepare(
-      "INSERT INTO agents VALUES ('ag_1', ?, 'shell', 'free', 'pty', 'starting', ?, '[]', NULL, NULL, NULL, 't', 't')",
+      "INSERT INTO agents (id, run_id, kind, role, transport, status, cwd, command, pid, exit_code, issue, created_at, updated_at) VALUES ('ag_1', ?, 'shell', 'free', 'pty', 'starting', ?, '[]', NULL, NULL, NULL, 't', 't')",
     )
     .run(run.id, wt);
   const r = await postAction(c, topicId, 'topic.cleanup');
@@ -186,4 +186,19 @@ test('sujet inconnu : 404 ; action inconnue : 404 ; sujet déjà archivé : 409'
   expect((await postAction(c, topicId, 'topic.explose')).statusCode).toBe(404);
   await cleanup(topicId);
   expect((await postAction(c, topicId, 'topic.cleanup')).statusCode).toBe(409);
+});
+
+test('dépôt sans origin : sujet créé depuis la branche locale, nettoyage comparé à elle', async () => {
+  c = await setupWorkspace({ local: true });
+  const { wt, branch, topicId } = await makeTopic(c);
+  expect(sh(wt, 'rev-parse', 'HEAD')).toBe(sh(c.clone, 'rev-parse', 'main'));
+  commitFile(wt, 'a.txt', 'a');
+  const refus = await cleanup(topicId);
+  expect(refus.data).toMatchObject({ outcome: 'needs_human', result: { unmergedCommits: 1 } });
+  // fusionné dans main en local : plus rien à confirmer
+  sh(c.clone, 'merge', '-q', '--ff-only', branch);
+  const ok = await cleanup(topicId);
+  expect(ok.data.outcome).toBe('succeeded');
+  expect(existsSync(wt)).toBe(false);
+  expect(hasBranch(branch)).toBe(false);
 });

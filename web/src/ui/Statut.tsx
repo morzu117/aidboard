@@ -1,24 +1,42 @@
-import type { AgentStatus } from '../../../src/shared/model.js';
+import { useId, useState } from 'react';
+import type { Agent } from '../../../src/shared/model.js';
+
+export type Tone = 'attente' | 'erreur' | 'relire' | 'cours' | 'pause' | 'inactif';
 
 export interface StatusView {
   label: string;
-  tone: 'attente' | 'erreur' | 'relire' | 'cours' | 'pause' | 'inactif';
+  tone: Tone;
+  /** statut déduit du terminal par l'heuristique, sans signal sûr */
+  estimated?: boolean;
 }
 
-// v0.1 : les statuts fins n'arrivent qu'en v0.2. Un agent vivant est « lancé, statut non suivi » :
-// afficher « En cours » pour un agent qui attend peut-être une permission serait un repli silencieux.
-export function statusView(status: AgentStatus): StatusView {
-  switch (status) {
+const ENDED = new Set<Agent['status']>(['done', 'error', 'stopped']);
+export const isAlive = (a: Agent) => !ENDED.has(a.status);
+
+/**
+ * Le statut affiché d'un agent. La pause l'emporte sur le statut (E5) ; un shell vivant n'a pas de
+ * statut suivi et s'affiche « shell » en gris ; `idle` se lit « À relire » sur une carte et « Tour
+ * terminé » dans la boîte de réception, ou « Inactif » quand l'heuristique en est la source.
+ */
+export function agentView(a: Agent, where: 'carte' | 'boite' = 'carte'): StatusView {
+  const alive = isAlive(a);
+  if (alive && a.pausedAt) return { label: 'En pause', tone: 'pause' };
+  if (alive && a.kind === 'shell') return { label: 'shell', tone: 'inactif' };
+  const estimated = a.statusSource === 'heuristic' || undefined;
+  switch (a.status) {
     case 'needs_input':
-      return { label: 'Attend une réponse', tone: 'attente' };
+      return { label: 'Attend une réponse', tone: 'attente', estimated };
     case 'error':
       return { label: 'Erreur', tone: 'erreur' };
     case 'idle':
-      return { label: 'À relire', tone: 'relire' };
+      if (where === 'carte') return { label: 'À relire', tone: 'relire', estimated };
+      return estimated
+        ? { label: 'Inactif', tone: 'relire', estimated }
+        : { label: 'Tour terminé', tone: 'relire' };
     case 'working':
-      return { label: 'En cours', tone: 'cours' };
+      return { label: 'En cours', tone: 'cours', estimated };
     case 'starting':
-      return { label: 'Lancé · statut non suivi', tone: 'pause' };
+      return { label: 'Démarrage', tone: 'cours' };
     case 'done':
       return { label: 'Terminé', tone: 'inactif' };
     case 'stopped':
@@ -26,47 +44,133 @@ export function statusView(status: AgentStatus): StatusView {
   }
 }
 
-// Le plus urgent d'abord : erreur, puis ce qui tourne sans être suivi, puis arrêté, puis terminé.
-const URGENCE: AgentStatus[] = [
-  'needs_input',
-  'error',
-  'idle',
-  'working',
-  'starting',
-  'stopped',
-  'done',
-];
+// Le plus urgent d'abord ; à urgence égale, l'ordre des agents.
+const URGENCE: Tone[] = ['attente', 'erreur', 'relire', 'cours', 'pause', 'inactif'];
+const rank = (a: Agent) => URGENCE.indexOf(agentView(a).tone);
 
-export function aggregateStatus(statuses: AgentStatus[]): AgentStatus | null {
-  for (const s of URGENCE) if (statuses.includes(s)) return s;
-  return null;
+/** L'agent qui donne son statut à la carte et reçoit les messages par défaut. Un shell ne compte que seul. */
+export function mostUrgent(agents: Agent[]): Agent | undefined {
+  const others = agents.filter((a) => a.kind !== 'shell');
+  const pool = others.length > 0 ? others : agents;
+  return pool.reduce<Agent | undefined>(
+    (best, a) => (!best || rank(a) < rank(best) ? a : best),
+    undefined,
+  );
+}
+
+export function topicView(agents: Agent[]): StatusView {
+  const a = mostUrgent(agents);
+  return a ? agentView(a) : { label: 'Aucun agent', tone: 'inactif' };
 }
 
 export function Point({
   tone,
   label,
   grand,
+  estimated,
+  dataNode,
 }: {
-  tone: StatusView['tone'];
+  tone: Tone;
   label?: string;
   grand?: boolean;
+  estimated?: boolean;
+  dataNode?: string;
 }) {
   return (
     <span
-      className={`point point--${tone}${grand ? ' point--grand' : ''}`}
+      className={`point point--${tone}${estimated ? ' point--estime' : ''}${grand ? ' point--grand' : ''}`}
+      data-node={dataNode}
       {...(label ? { role: 'img', 'aria-label': label } : { 'aria-hidden': true })}
     />
   );
 }
 
-export function Badge({ view, dataNode }: { view: StatusView; dataNode?: string }) {
+const duree = (ms: number) => {
+  const s = Math.round(ms / 1000);
+  return s < 60 ? `${s} s` : `${Math.round(s / 60)} min`;
+};
+
+/** Pourquoi le statut est estimé : la source, le silence, la dernière ligne et l'invite vues par l'heuristique. */
+function Infobulle({ id, agent, dataNode }: { id: string; agent: Agent; dataNode: string }) {
+  const d = agent.statusDetail ?? {};
+  const n = (rest: string) => `${dataNode}.${rest}`;
+  return (
+    <div className="infobulle" id={id} data-node={dataNode} data-layer="overlay" role="tooltip">
+      <p className="infobulle-titre" data-node={n('titre')}>
+        Statut estimé
+      </p>
+      <ul className="infobulle-liste">
+        <li className="infobulle-element" data-node={n('source')} data-bind="agent.source">
+          Source : heuristique, aucun hook reçu de {agent.kind}
+        </li>
+        {d.silenceMs !== undefined && (
+          <li
+            className="infobulle-element"
+            data-node={n('silence')}
+            data-bind="agent.silence_depuis"
+          >
+            Terminal silencieux depuis {duree(d.silenceMs)}
+          </li>
+        )}
+        {d.lastLine && (
+          <li
+            className="infobulle-element"
+            data-node={n('derniere-ligne')}
+            data-bind="terminal.ligne"
+          >
+            Dernière ligne : « {d.lastLine} »
+          </li>
+        )}
+        <li className="infobulle-element" data-node={n('invite')} data-bind="agent.invite_detectee">
+          Motif d’invite détecté : {d.promptDetected ? 'oui' : 'non'}
+        </li>
+      </ul>
+    </div>
+  );
+}
+
+export function Badge({
+  view,
+  dataNode,
+  agent,
+}: {
+  view: StatusView;
+  dataNode?: string;
+  /** l'agent dont vient le statut : son détail remplit l'infobulle d'un statut estimé */
+  agent?: Agent;
+}) {
+  const tipId = useId();
+  const [tip, setTip] = useState(false);
+  const cls = `badge badge--${view.tone === 'inactif' ? 'pause' : view.tone}`;
+  if (!view.estimated || !agent) {
+    return (
+      <span className={cls} data-node={dataNode} data-bind="sujet.statut">
+        {view.label}
+      </span>
+    );
+  }
+  const base = dataNode?.replace(/\.statut$/, '') ?? 'statut';
   return (
     <span
-      className={`badge badge--${view.tone === 'inactif' ? 'pause' : view.tone}`}
-      data-node={dataNode}
-      data-bind="sujet.statut"
+      className="ancre-infobulle"
+      onMouseEnter={() => setTip(true)}
+      onMouseLeave={() => setTip(false)}
+      onFocus={() => setTip(true)}
+      onBlur={() => setTip(false)}
     >
-      {view.label}
+      <span
+        className={`${cls} badge--estime`}
+        data-node={dataNode}
+        data-bind="sujet.statut"
+        tabIndex={0}
+        aria-describedby={tip ? tipId : undefined}
+      >
+        {view.label}{' '}
+        <span data-node={`${base}.estime`} data-bind="agent.source">
+          · estimé
+        </span>
+      </span>
+      {tip && <Infobulle id={tipId} agent={agent} dataNode={`${base}.infobulle`} />}
     </span>
   );
 }

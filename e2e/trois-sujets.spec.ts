@@ -45,5 +45,8 @@ test('trois sujets tournent en parallèle, chacun avec son terminal dans son wor
 
   await page.goto(process.env.AID_E2E_URL!);
   await expect(node(page, '1-1.entete.resume.sujets')).toHaveText(String(s.topics.length));
-  await expect(page.getByText('Lancé · statut non suivi').first()).toBeVisible();
+  // un shell n'a pas de statut suivi : sa carte dit « shell », jamais « En cours »
+  await expect(
+    page.locator('.badge[data-node$=".statut"]', { hasText: /^shell$/ }).first(),
+  ).toBeVisible();
 });

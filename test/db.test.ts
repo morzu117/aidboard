@@ -1,4 +1,4 @@
-import { mkdtempSync, mkdirSync, statSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import Database from 'better-sqlite3';
@@ -6,10 +6,15 @@ import { expect, test } from 'vitest';
 import { openDb } from '../src/daemon/db.js';
 
 const tmp = () => mkdtempSync(join(tmpdir(), 'aid-db-'));
+// la dernière version : une par fichier de migration livré
+const LATEST = readdirSync(join(import.meta.dirname, '../migrations')).filter((f) =>
+  f.endsWith('.sql'),
+).length;
 
-test('une base neuve est migrée en version 1', () => {
+test('une base neuve est migrée à la dernière version', () => {
   const db = openDb(join(tmp(), 'state.db'));
-  expect(db.pragma('user_version', { simple: true })).toBe(1);
+  expect(LATEST).toBeGreaterThanOrEqual(2);
+  expect(db.pragma('user_version', { simple: true })).toBe(LATEST);
   expect(db.pragma('foreign_keys', { simple: true })).toBe(1);
   expect(db.pragma('journal_mode', { simple: true })).toBe('wal');
   db.close();
@@ -18,17 +23,21 @@ test('une base neuve est migrée en version 1', () => {
 test('la réouverture ne ré-applique rien et garde les données', () => {
   const path = join(tmp(), 'state.db');
   const db = openDb(path);
-  db.prepare("INSERT INTO workspaces VALUES ('ws_1','a','/a','main','/w','t')").run();
+  db.prepare(
+    "INSERT INTO workspaces (id, name, root, base_branch, worktrees_dir, created_at) VALUES ('ws_1','a','/a','main','/w','t')",
+  ).run();
   db.close();
   const again = openDb(path);
   expect(again.prepare('SELECT count(*) c FROM workspaces').get()).toEqual({ c: 1 });
-  expect(again.pragma('user_version', { simple: true })).toBe(1);
+  expect(again.pragma('user_version', { simple: true })).toBe(LATEST);
   again.close();
 });
 
 test('les contraintes CHECK refusent un état inconnu', () => {
   const db = openDb(join(tmp(), 'state.db'));
-  db.prepare("INSERT INTO workspaces VALUES ('ws_1','a','/a','main','/w','t')").run();
+  db.prepare(
+    "INSERT INTO workspaces (id, name, root, base_branch, worktrees_dir, created_at) VALUES ('ws_1','a','/a','main','/w','t')",
+  ).run();
   const insert = (state: string) =>
     db
       .prepare(
@@ -78,8 +87,25 @@ test('une migration qui échoue ne laisse rien et ne change pas la version', () 
 test('le fichier de base est en 0600, wal compris', () => {
   const path = join(tmp(), 'state.db');
   const db = openDb(path);
-  db.prepare("INSERT INTO workspaces VALUES ('ws_1','a','/a','main','/w','t')").run();
+  db.prepare(
+    "INSERT INTO workspaces (id, name, root, base_branch, worktrees_dir, created_at) VALUES ('ws_1','a','/a','main','/w','t')",
+  ).run();
   expect(statSync(path).mode & 0o777).toBe(0o600);
   expect(statSync(`${path}-wal`).mode & 0o777).toBe(0o600);
+  db.close();
+});
+
+test('migration 002 : un workspace existant garde origin, un nouveau peut être local', () => {
+  const db = openDb(join(tmp(), 'state.db'));
+  db.prepare(
+    "INSERT INTO workspaces (id, name, root, base_branch, worktrees_dir, created_at) VALUES ('ws_1','a','/a','main','/w','t')",
+  ).run();
+  db.prepare(
+    "INSERT INTO workspaces (id, name, root, base_branch, worktrees_dir, created_at, remote) VALUES ('ws_2','b','/b','main','/w2','t',NULL)",
+  ).run();
+  expect(db.prepare('SELECT id, remote FROM workspaces ORDER BY id').all()).toEqual([
+    { id: 'ws_1', remote: 'origin' },
+    { id: 'ws_2', remote: null },
+  ]);
   db.close();
 });

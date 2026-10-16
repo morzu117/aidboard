@@ -41,6 +41,12 @@ test('en-tête : fil d’Ariane, titre, état, branche, base, worktree', async (
   expect(text('1-3.entete.worktree')).toBe('/w/s');
 });
 
+test('en-tête d’un projet sans remote : la base est la branche locale, sans « origin/ »', async () => {
+  open(snapshot({ workspaces: [ws({ remote: null })], topics: [topic()], runs: [run] }));
+  await screen.findByText('Mon sujet');
+  expect(text('1-3.entete.base.branche')).toBe('main');
+});
+
 test.each([
   ['disabled', 'index absent : lecture directe'],
   ['indexing', 'indexation en cours'],

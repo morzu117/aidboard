@@ -34,6 +34,7 @@ describe.skipIf(process.env.AID_PACK_TEST !== '1')('paquet', () => {
     expect(paths).toContain('migrations/001_init.sql');
     expect(paths).toContain('scripts/git/topic-create.sh');
     expect(paths).toContain('scripts/git/topic-cleanup.sh');
+    expect(paths).toContain('scripts/hooks/aid-hook.sh');
     expect(paths).toContain('README.md');
     for (const p of paths) {
       expect(p, p).not.toMatch(/^(src|test|e2e|design|docs|\.codegraph|node_modules)\//);

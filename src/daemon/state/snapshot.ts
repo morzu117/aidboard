@@ -5,12 +5,15 @@ import type { Db } from '../db.js';
 
 type Row = Record<string, unknown>;
 
+const parseJson = (v: unknown): unknown => (typeof v === 'string' ? JSON.parse(v) : null);
+
 export function buildSnapshot(db: Db, all = false): StateSnapshot {
   const workspaces = (db.prepare('SELECT * FROM workspaces ORDER BY name').all() as Row[]).map(
     (r): Workspace => ({
       id: r.id as string,
       name: r.name as string,
       root: r.root as string,
+      remote: (r.remote as string | null) ?? null,
       baseBranch: r.base_branch as string,
       worktreesDir: r.worktrees_dir as string,
       createdAt: r.created_at as string,
@@ -61,6 +64,14 @@ export function buildSnapshot(db: Db, all = false): StateSnapshot {
       pid: r.pid as number | null,
       exitCode: r.exit_code as number | null,
       issue: r.issue as number | null,
+      statusReason: (r.status_reason as string | null) ?? null,
+      statusMessage: (r.status_message as string | null) ?? null,
+      statusSource: (r.status_source as Agent['statusSource']) ?? null,
+      statusAt: (r.status_at as string | null) ?? null,
+      statusDetail: parseJson(r.status_detail) as Agent['statusDetail'],
+      lastTool: (r.last_tool as string | null) ?? null,
+      pending: parseJson(r.pending) as Agent['pending'],
+      pausedAt: (r.paused_at as string | null) ?? null,
       createdAt: r.created_at as string,
       updatedAt: r.updated_at as string,
     }));

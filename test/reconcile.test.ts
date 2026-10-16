@@ -12,7 +12,7 @@ test('les agents vivants passent en stopped, les actions en cours en failed', as
   seedTopic(t.db);
   t.db
     .prepare(
-      "INSERT INTO agents VALUES ('ag_done','run_1','shell','free','pty','done','/w','[]',NULL,0,NULL,'t0','t0')",
+      "INSERT INTO agents (id, run_id, kind, role, transport, status, cwd, command, pid, exit_code, issue, created_at, updated_at) VALUES ('ag_done','run_1','shell','free','pty','done','/w','[]',NULL,0,NULL,'t0','t0')",
     )
     .run();
   t.store.append({

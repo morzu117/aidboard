@@ -1,6 +1,6 @@
 import { Link } from 'react-router';
 import { useAid } from '../data/useAidState.js';
-import { aggregateStatus, Point, statusView } from '../ui/Statut.js';
+import { Point, topicView } from '../ui/Statut.js';
 
 export function Cote({ activeTopicId }: { activeTopicId: string }) {
   const { state, daemon } = useAid();
@@ -39,12 +39,7 @@ export function Cote({ activeTopicId }: { activeTopicId: string }) {
             {topics.map((t, ti) => {
               const n = (offsets[groupIndex] ?? 0) + ti + 1;
               const runIds = state.runs.filter((r) => r.topicId === t.id).map((r) => r.id);
-              const agg = aggregateStatus(
-                state.agents.filter((a) => runIds.includes(a.runId)).map((a) => a.status),
-              );
-              const view = agg
-                ? statusView(agg)
-                : { label: 'Aucun agent', tone: 'inactif' as const };
+              const view = topicView(state.agents.filter((a) => runIds.includes(a.runId)));
               return (
                 <Link
                   key={t.id}
@@ -53,7 +48,7 @@ export function Cote({ activeTopicId }: { activeTopicId: string }) {
                   data-node={`1-3.sujets.sujet-${n}`}
                   data-action="sujet.ouvrir"
                 >
-                  <Point tone={view.tone} label={view.label} />
+                  <Point tone={view.tone} label={view.label} estimated={view.estimated} />
                   <span data-node={`1-3.sujets.sujet-${n}.branche`} data-bind="sujet.branche">
                     {t.branch}
                   </span>

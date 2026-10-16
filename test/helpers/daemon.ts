@@ -29,13 +29,15 @@ export async function startTestDaemon(
 }
 
 export function seedTopic(db: Db): void {
-  db.prepare("INSERT INTO workspaces VALUES ('ws_1','a','/a','main','/w','t0')").run();
+  db.prepare(
+    "INSERT INTO workspaces (id, name, root, base_branch, worktrees_dir, created_at) VALUES ('ws_1','a','/a','main','/w','t0')",
+  ).run();
   db.prepare(
     "INSERT INTO topics VALUES ('tp_1','ws_1','s','T','feat','feat/s','main','/definitely/missing','active',NULL,'disabled','t0','t0')",
   ).run();
   db.prepare("INSERT INTO runs VALUES ('run_1','tp_1','standard','open','t0')").run();
   db.prepare(
-    "INSERT INTO agents VALUES ('ag_1','run_1','shell','free','pty','starting','/w/s','[\"sh\"]',NULL,NULL,NULL,'t0','t0')",
+    "INSERT INTO agents (id, run_id, kind, role, transport, status, cwd, command, pid, exit_code, issue, created_at, updated_at) VALUES ('ag_1','run_1','shell','free','pty','starting','/w/s','[\"sh\"]',NULL,NULL,NULL,'t0','t0')",
   ).run();
 }
 

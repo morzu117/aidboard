@@ -57,6 +57,45 @@ body {
   gap: var(--sp-2);
   margin-top: var(--sp-2);
 }
+/* Palette ⌘K : absente des maquettes, comme les dialogues. */
+.voile--haut {
+  align-items: flex-start;
+  padding-top: 12vh;
+}
+.palette {
+  gap: var(--sp-2);
+  padding: var(--sp-3);
+}
+.palette__liste {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 50vh;
+  overflow: auto;
+}
+.palette__item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  min-height: var(--h-controle);
+  padding: 0 var(--sp-3);
+  border-radius: var(--r-s);
+  color: var(--text);
+  cursor: pointer;
+}
+.palette__item.est-choisi {
+  background: var(--surface-3);
+}
+.palette__indice,
+.palette__vide {
+  color: var(--text-3);
+  font-size: var(--fs-s);
+}
+.palette__vide {
+  margin: 0;
+  padding: var(--sp-3);
+}
 .apercu-branche {
   font-size: var(--fs-s);
   color: var(--text-3);
@@ -176,39 +215,37 @@ body {
   flex-wrap: wrap;
 }
 
-.projets {
-  display: flex;
-  flex-direction: column;
-  gap: var(--sp-2);
-  margin-bottom: var(--sp-4);
+/* Infobulle d'un statut estimé : la maquette la place dans un cadre de survol, ici sous son badge. */
+.ancre-infobulle {
+  position: relative;
+  display: inline-flex;
+  flex: none;
 }
-.projet {
-  display: flex;
-  align-items: center;
-  gap: var(--sp-3);
-  padding: var(--sp-2) var(--sp-3);
-  border: 1px solid var(--line);
-  border-radius: var(--r-m);
-  background: var(--surface-2);
-}
-.projet-texte {
-  display: flex;
-  flex-direction: column;
-  flex: 1;
-  min-width: 0;
-}
-.projet-chemin {
-  font-family: ui-monospace, monospace;
-  font-size: var(--fs-s);
-  color: var(--text-3);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.ancre-infobulle .infobulle {
+  top: calc(100% + var(--sp-2));
+  left: auto;
+  right: 0;
+  width: min(var(--l-infobulle), 80vw);
 }
 
-.entete-droite {
+/* Terminal agrandi depuis une carte. */
+.dialogue--plein {
+  width: min(1400px, 100%);
+  height: 90vh;
+  max-height: 90vh;
+}
+.dialogue-titre {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: var(--sp-3);
-  flex-wrap: wrap;
+}
+/* la racine du Terminal n'est pas en flex : une hauteur franche, que fit() mesure */
+.dialogue--plein .sortie-xterm {
+  height: calc(90vh - 160px);
+}
+
+/* E9 : pas de colonne « À démarrer · issues GitHub » ; la liste prend toute la largeur. */
+.cadre[data-viewport] .boite-colonnes {
+  grid-template-columns: minmax(0, 1fr);
 }

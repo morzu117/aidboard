@@ -1,0 +1,18 @@
+{
+  "session_id": "s-1",
+  "transcript_path": "/tmp/t.jsonl",
+  "cwd": "/w/s",
+  "permission_mode": "default",
+  "hook_event_name": "PermissionRequest",
+  "tool_name": "Bash",
+  "tool_input": { "command": "npm test -- pty", "description": "Lancer les tests" },
+  "tool_use_id": "toolu_01",
+  "permission_suggestions": [
+    {
+      "type": "addRules",
+      "rules": [{ "toolName": "Bash", "ruleContent": "npm test:*" }],
+      "behavior": "allow",
+      "destination": "localSettings"
+    }
+  ]
+}

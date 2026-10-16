@@ -22,9 +22,12 @@ export function SelecteurDossier({
   // Seule la dernière demande compte : une réponse arrivée en retard (le premier chargement, par exemple) ne doit pas
   // écraser un dossier choisi ou un chemin tapé depuis.
   const latest = useRef(0);
+  // un chemin tapé depuis la demande : la liste s'affiche, le champ garde la saisie
+  const typed = useRef(false);
   const open = useCallback(
     (path: string | undefined, showHidden: boolean) => {
       const mine = ++latest.current;
+      typed.current = false;
       const qs = new URLSearchParams();
       if (path) qs.set('path', path);
       if (showHidden) qs.set('hidden', 'true');
@@ -32,7 +35,7 @@ export function SelecteurDossier({
         (l) => {
           if (mine !== latest.current) return;
           setListing(l);
-          setGoto(l.path);
+          if (!typed.current) setGoto(l.path);
           setError(null);
         },
         (err: unknown) => {
@@ -68,7 +71,10 @@ export function SelecteurDossier({
           className="champ"
           aria-label="Aller au dossier"
           value={goto}
-          onChange={(e) => setGoto(e.target.value)}
+          onChange={(e) => {
+            typed.current = true;
+            setGoto(e.target.value);
+          }}
           onKeyDown={onGotoKey}
           spellCheck={false}
         />

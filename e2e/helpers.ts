@@ -1,7 +1,7 @@
 import { mkdtempSync, realpathSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { expect, type BrowserContext, type Page } from '@playwright/test';
+import { expect, type BrowserContext, type Locator, type Page } from '@playwright/test';
 import { makeOriginAndClone } from '../test/helpers/git.js';
 
 export const url = () => process.env.AID_E2E_URL!;
@@ -21,13 +21,13 @@ export async function openApp(context: BrowserContext): Promise<Page> {
   return page;
 }
 
-export function newRepo(name: string, opts: { codegraph?: boolean } = {}): string {
+export function newRepo(name: string, opts: { codegraph?: boolean; local?: boolean } = {}): string {
   const dir = realpathSync(mkdtempSync(join(tmpdir(), 'aid-e2e-repo-')));
   return makeOriginAndClone(dir, { name, ...opts }).clone;
 }
 
-/** Enregistre un dépôt par le dialogue « Nouveau projet ». */
-export async function registerWorkspace(page: Page, path: string): Promise<void> {
+/** Enregistre un dépôt par le dialogue « Nouveau projet ». `warning` : l'avertissement attendu, puis « Continuer ». */
+export async function registerWorkspace(page: Page, path: string, warning?: RegExp): Promise<void> {
   await node(page, '1-1.barre.nouveau-sujet').click();
   // un premier dépôt ouvre directement « Nouveau projet » ; ensuite il faut passer par « Ajouter un projet »
   const ajouter = page.getByRole('button', { name: 'Ajouter un projet…' });
@@ -38,6 +38,10 @@ export async function registerWorkspace(page: Page, path: string): Promise<void>
   await expect(page.getByLabel('Aller au dossier')).toHaveValue(path);
   await page.getByRole('button', { name: 'Choisir ce dossier' }).click();
   await page.getByRole('button', { name: 'Enregistrer' }).click();
+  if (warning) {
+    await expect(page.getByRole('dialog', { name: 'Projet enregistré' })).toContainText(warning);
+    await page.getByRole('button', { name: 'Continuer' }).click();
+  }
   await expect(page.getByRole('dialog', { name: 'Nouveau sujet' })).toBeVisible();
 }
 
@@ -80,6 +84,23 @@ export async function launchShell(page: Page): Promise<string> {
   await expect(node(page, '1-3.terminaux.sortie')).toBeVisible();
   await expect.poll(async () => (await state(page)).agents.length).toBeGreaterThan(0);
   return (await state(page)).agents.at(-1)!.id;
+}
+
+/** Lance le faux « claude » (test/fixtures/bin, devant le PATH du daemon) et rend l'id de l'agent. */
+export async function launchClaude(page: Page): Promise<string> {
+  await node(page, '1-3.vide.lancer-claude').click();
+  await expect(node(page, '1-3.terminaux.sortie')).toBeVisible();
+  await expect.poll(async () => (await state(page)).agents.length).toBeGreaterThan(0);
+  return (await state(page)).agents.at(-1)!.id;
+}
+
+/** La carte d'un sujet sur l'Accueil, et le préfixe de ses data-node (`1-1.grille.sujet-N`). */
+export async function card(page: Page, title: string): Promise<(id: string) => Locator> {
+  await page.goto(url());
+  const article = page.locator('article.carte', { hasText: title });
+  await expect(article).toBeVisible();
+  const prefix = (await article.getAttribute('data-node'))!;
+  return (id: string) => node(page, `${prefix}.${id}`);
 }
 
 export async function typeInTerminal(page: Page, text: string): Promise<void> {

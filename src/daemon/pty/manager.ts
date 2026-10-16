@@ -1,8 +1,8 @@
-import { existsSync } from 'node:fs';
+import { closeSync, existsSync, openSync, readSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import type { IPty } from 'node-pty';
 import { monotonicFactory } from 'ulid';
-import type { Agent } from '../../shared/model.js';
+import type { Agent, PendingOption, PendingRequest } from '../../shared/model.js';
 import type { AidConfig } from '../config.js';
 import type { Db } from '../db.js';
 import { AidHttpError } from '../errors.js';
@@ -10,9 +10,10 @@ import type { EventStore } from '../events/store.js';
 import type { AidPaths } from '../paths.js';
 import { type AuthState, issueRunToken } from '../security.js';
 import { LogWriter } from './log.js';
+import { type Estimate, estimate } from './heuristic.js';
 import { TerminalMirror } from './mirror.js';
 import { getPty } from './native.js';
-import { agentCommand, agentEnv, resolveOnPath, type SpawnKind } from './spawn.js';
+import { agentCommand, agentEnv, hookEnv, resolveOnPath, type SpawnKind } from './spawn.js';
 
 const ulid = monotonicFactory();
 const INITIAL = { cols: 120, rows: 32 };
@@ -30,6 +31,13 @@ export interface LiveAgent {
   exited: boolean;
   exit: { exitCode: number | null; signal: number | null; reason: string } | null;
   stopReason?: StopReason;
+  kind: SpawnKind;
+  /** dernière sortie du terminal (ms) : le silence fonde l'estimation */
+  lastOutputAt: number;
+  /** un hook a parlé pour cet agent : on n'estime plus rien */
+  hooked: boolean;
+  estimated: Estimate | null;
+  paused: boolean;
   /** Octets bruts du terminal, dans l'ordre. Retourne la fonction de désabonnement. */
   subscribe(cb: (chunk: string) => void): () => void;
   onExitCallbacks: Set<() => void>;
@@ -51,18 +59,105 @@ interface TopicRow {
   state: string;
 }
 
+// la touche de chaque réponse : jamais fournie par l'agent (voir PendingOption)
+const KEYS: Record<string, string> = { yes: '1', always: '2', no: '\u001b' };
+
+function escapeRe(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/** L'option est-elle encore à l'écran ? Permission : « 1. Yes » (« 2. Yes » pour toujours) ; question : « n. libellé ». */
+export function screenShows(screen: string[], o: PendingOption): boolean {
+  const re =
+    o.answer === 'always'
+      ? /\b2\.\s+(Yes|Oui)\b/
+      : o.answer === 'yes' || o.answer === 'no'
+        ? /\b1\.\s+(Yes|Oui)\b/
+        : new RegExp(`\\b${o.answer}\\.\\s+${escapeRe(o.label.slice(0, 24))}`);
+  return screen.some((l) => re.test(l));
+}
+
+function signalGroup(a: LiveAgent, signal: NodeJS.Signals): void {
+  try {
+    process.kill(-a.pty.pid, signal);
+  } catch {
+    a.pty.kill(signal);
+  }
+}
+
+function readLogTail(path: string, max: number): string {
+  try {
+    const size = statSync(path).size;
+    const fd = openSync(path, 'r');
+    try {
+      const len = Math.min(size, max);
+      const buf = Buffer.alloc(len);
+      readSync(fd, buf, 0, len, size - len);
+      return buf.toString('utf8');
+    } finally {
+      closeSync(fd);
+    }
+  } catch {
+    return '';
+  }
+}
+
 export class AgentManager {
   private live = new Map<string, LiveAgent>();
+  private readonly ticker: NodeJS.Timeout;
 
   constructor(private readonly deps: ManagerDeps) {
-    // un sujet archivé n'a plus d'écran à rejouer : on libère ses miroirs
     deps.store.on(
       'event',
-      (e: { type: string; topicId?: string; data: Record<string, unknown> }) => {
+      (e: {
+        type: string;
+        source: string;
+        topicId?: string;
+        agentId?: string;
+        data: Record<string, unknown>;
+      }) => {
+        // un sujet archivé n'a plus d'écran à rejouer : on libère ses miroirs
         if (e.type === 'topic.state' && e.data.state === 'archived' && e.topicId)
           this.forgetTopic(e.topicId);
+        const a = e.agentId ? this.live.get(e.agentId) : undefined;
+        if (a && e.type === 'agent.status') {
+          if (e.source === 'hook:claude' || e.source === 'codex:json') a.hooked = true;
+          if (e.source === 'daemon' && typeof e.data.paused === 'boolean') a.paused = e.data.paused;
+        }
       },
     );
+    this.ticker = setInterval(() => this.tickHeuristic(Date.now()), 2000);
+    this.ticker.unref();
+  }
+
+  /** Estime le statut des agents sans hooks (E8). N'émet qu'aux transitions. */
+  tickHeuristic(now: number): void {
+    for (const a of this.live.values()) {
+      if (a.exited || a.hooked || a.paused || (a.kind !== 'claude' && a.kind !== 'codex')) continue;
+      const silenceMs = now - a.lastOutputAt;
+      const next = estimate(silenceMs, a.mirror.screen(), a.estimated);
+      if (!next) continue;
+      a.estimated = next.status;
+      this.deps.store.append({
+        source: 'heuristic',
+        type: 'agent.status',
+        workspaceId: a.workspaceId,
+        topicId: a.topicId,
+        runId: a.runId,
+        agentId: a.id,
+        data: {
+          status: next.status,
+          ...(next.status === 'needs_input' && { reason: 'question' }),
+          silenceMs,
+          lastLine: next.lastLine,
+          promptDetected: next.promptDetected,
+        },
+      });
+    }
+  }
+
+  dispose(): void {
+    clearInterval(this.ticker);
   }
 
   get(agentId: string): LiveAgent | undefined {
@@ -93,6 +188,8 @@ export class AgentManager {
       AID_TOPIC: topic.id,
       AID_RUN: run.id,
       AID_AGENT: agentId,
+      AID_SPOOL: paths.spool,
+      ...hookEnv(),
     });
     let pty: IPty;
     try {
@@ -119,6 +216,11 @@ export class AgentManager {
       size: { ...INITIAL },
       exited: false,
       exit: null,
+      kind: o.kind,
+      lastOutputAt: Date.now(),
+      hooked: false,
+      estimated: null,
+      paused: false,
       subscribe: (cb) => {
         subscribers.add(cb);
         return () => subscribers.delete(cb);
@@ -127,6 +229,7 @@ export class AgentManager {
     };
     const log = new LogWriter(join(paths.logs, `${agentId}.log`), config.terminal.logMaxBytes);
     pty.onData((chunk) => {
+      live.lastOutputAt = Date.now();
       log.write(chunk);
       live.mirror.write(chunk);
       for (const cb of subscribers) cb(chunk);
@@ -192,6 +295,14 @@ export class AgentManager {
       pid: pty.pid,
       exitCode: null,
       issue: null,
+      statusReason: null,
+      statusMessage: null,
+      statusSource: null,
+      statusAt: null,
+      statusDetail: null,
+      lastTool: null,
+      pending: null,
+      pausedAt: null,
       createdAt: now,
       updatedAt: now,
     };
@@ -203,6 +314,11 @@ export class AgentManager {
     const a = this.live.get(agentId);
     if (!a || a.exited) return Promise.resolve();
     a.stopReason = reason;
+    // un process stoppé ne traite aucun signal d'arrêt avant d'être relancé
+    if (a.paused) {
+      signalGroup(a, 'SIGCONT');
+      a.paused = false;
+    }
     return new Promise((resolve) => {
       const timers: NodeJS.Timeout[] = [];
       const steps: Array<[number, NodeJS.Signals]> = [
@@ -246,6 +362,98 @@ export class AgentManager {
 
   forgetTopic(topicId: string): void {
     for (const a of [...this.live.values()]) if (a.topicId === topicId) this.forget(a.id);
+  }
+
+  private liveOr409(agentId: string): LiveAgent {
+    if (!this.deps.db.prepare('SELECT 1 FROM agents WHERE id = ?').get(agentId))
+      throw new AidHttpError(404, 'agent inconnu');
+    const a = this.live.get(agentId);
+    if (!a || a.exited) throw new AidHttpError(409, 'cet agent est terminé');
+    return a;
+  }
+
+  private pendingOf(agentId: string): PendingRequest | null {
+    const row = this.deps.db.prepare('SELECT pending FROM agents WHERE id = ?').get(agentId) as
+      { pending: string | null } | undefined;
+    return row?.pending ? (JSON.parse(row.pending) as PendingRequest) : null;
+  }
+
+  /** Les dernières lignes non vides de l'écran (aperçu de la carte). Agent d'avant le redémarrage : son journal. */
+  screen(agentId: string, lines: number): string[] {
+    if (!this.deps.db.prepare('SELECT 1 FROM agents WHERE id = ?').get(agentId))
+      throw new AidHttpError(404, 'agent inconnu');
+    const n = Math.min(Math.max(1, Math.trunc(lines) || 6), 40);
+    const live = this.live.get(agentId);
+    let screen: string[];
+    if (live) screen = live.mirror.screen();
+    else {
+      const bytes = readLogTail(join(this.deps.paths.logs, `${agentId}.log`), 256 * 1024);
+      const m = TerminalMirror.fromLog(bytes, INITIAL.cols, INITIAL.rows, 0);
+      screen = m.screen();
+      m.dispose();
+    }
+    return screen
+      .map((l) => l.trimEnd())
+      .filter((l) => l.trim())
+      .slice(-n);
+  }
+
+  /** Un message tapé pour l'agent : le texte, puis Entrée. Plusieurs lignes passent en collage encadré. */
+  input(agentId: string, raw: string): void {
+    const a = this.liveOr409(agentId);
+    const text = raw.replace(/\r\n?/g, '\n');
+    // aucune séquence de contrôle : elle sortirait du collage encadré ou piloterait le terminal
+    // eslint-disable-next-line no-control-regex
+    if (/[\u0000-\u0008\u000b-\u001f\u007f]/.test(text))
+      throw new AidHttpError(422, 'caractère de contrôle refusé');
+    if (!text.trim()) throw new AidHttpError(422, 'message vide');
+    if (a.paused) throw new AidHttpError(409, 'agent en pause : le reprendre d’abord');
+    if (this.pendingOf(agentId))
+      throw new AidHttpError(409, 'répondre d’abord à la demande en cours');
+    a.pty.write(text.includes('\n') ? `\u001b[200~${text}\u001b[201~` : text);
+    // un Entrée collé au texte serait lu comme une partie du collage par certains TUI
+    setTimeout(() => !a.exited && a.pty.write('\r'), 60);
+  }
+
+  /** Répond à la demande en cours, au clavier, après avoir vérifié que l'écran la montre toujours (E4). */
+  answer(agentId: string, pendingId: string, answer: string): void {
+    const a = this.liveOr409(agentId);
+    const pending = this.pendingOf(agentId);
+    if (!pending || pending.id !== pendingId)
+      throw new AidHttpError(409, 'cette demande n’est plus en cours');
+    const option = pending.options.find((o) => o.answer === answer);
+    if (!option) throw new AidHttpError(422, 'réponse inconnue pour cette demande');
+    const screen = a.mirror.screen();
+    if (!screenShows(screen, option))
+      throw new AidHttpError(409, 'l’écran ne montre plus cette demande : ouvrir le terminal');
+    a.pty.write(KEYS[answer] ?? answer);
+    this.deps.store.append({
+      source: 'daemon',
+      type: 'approval.resolved',
+      workspaceId: a.workspaceId,
+      topicId: a.topicId,
+      runId: a.runId,
+      agentId,
+      data: { pendingId, option: answer, by: 'human' },
+    });
+  }
+
+  /** Pause : SIGSTOP du groupe (E5). La reprise envoie SIGCONT. */
+  setPaused(agentId: string, paused: boolean): void {
+    const a = this.liveOr409(agentId);
+    if (a.paused === paused)
+      throw new AidHttpError(409, paused ? 'déjà en pause' : 'cet agent n’est pas en pause');
+    signalGroup(a, paused ? 'SIGSTOP' : 'SIGCONT');
+    a.paused = paused;
+    this.deps.store.append({
+      source: 'daemon',
+      type: 'agent.status',
+      workspaceId: a.workspaceId,
+      topicId: a.topicId,
+      runId: a.runId,
+      agentId,
+      data: { paused },
+    });
   }
 
   /** Taille imposée par le client qui a la main ; une taille absurde est ignorée. */

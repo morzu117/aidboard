@@ -69,6 +69,7 @@
     "dist",
     "migrations",
     "scripts/git",
+    "scripts/hooks",
     "README.md"
   ],
   "keywords": [

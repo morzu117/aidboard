@@ -20,13 +20,16 @@ async function freePort(): Promise<number> {
 }
 
 let home = '';
+// la gate peut tourner dans un terminal A-I-D : ses AID_* viseraient le vrai daemon
+const withoutAid = (env: NodeJS.ProcessEnv) =>
+  Object.fromEntries(Object.entries(env).filter(([k]) => !k.startsWith('AID_')));
 const run = (...args: string[]) =>
   new Promise<{ code: number; out: string }>((resolve) => {
     execFile(
       process.execPath,
       [CLI, ...args],
       {
-        env: { ...process.env, AID_HOME: home, AID_NO_BROWSER: '1', SHELL: '/bin/sh' },
+        env: { ...withoutAid(process.env), AID_HOME: home, AID_NO_BROWSER: '1', SHELL: '/bin/sh' },
         timeout: 40_000,
       },
       (err, stdout, stderr) => {
@@ -164,5 +167,12 @@ describe.skipIf(!built)('aid en sous-processus', () => {
     expect((await run('nimporte')).code).toBe(1);
     expect((await run('--version')).out).toMatch(/^aidboard \d+\.\d+\.\d+/);
     expect((await run('help')).out).toContain('aid stop');
+  });
+
+  test('aid emit hors A-I-D : ses options passent, rien ne sort, code 0', async () => {
+    home = realpathSync(mkdtempSync(join(tmpdir(), 'aid-cli-')));
+    const r = await run('emit', 'agent.status', '--status', 'working', '--reason', 'x');
+    expect(r).toEqual({ code: 0, out: '' });
+    expect(existsSync(join(home, 'spool'))).toBe(false);
   });
 });

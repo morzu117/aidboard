@@ -88,7 +88,7 @@ test('un agent ne peut pas désigner l’agent d’un autre run', async () => {
   t.db.prepare("INSERT INTO runs VALUES ('run_2','tp_1','standard','open','t0')").run();
   t.db
     .prepare(
-      "INSERT INTO agents VALUES ('ag_2','run_2','shell','free','pty','starting','/w','[]',NULL,NULL,NULL,'t0','t0')",
+      "INSERT INTO agents (id, run_id, kind, role, transport, status, cwd, command, pid, exit_code, issue, created_at, updated_at) VALUES ('ag_2','run_2','shell','free','pty','starting','/w','[]',NULL,NULL,NULL,'t0','t0')",
     )
     .run();
   const h = { host: t.headers.host!, authorization: `Bearer ${issueRunToken(t.d.auth, 'run_1')}` };

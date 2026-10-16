@@ -127,11 +127,24 @@ complète l'enveloppe depuis l'environnement et la poste au daemon. Daemon absen
 écriture dans `~/.aid/spool/`, rejouée au démarrage. Hors A-I-D (`AID_AGENT` absent),
 `aid emit` ne fait rien et sort en 0.
 
+**Hooks Claude Code utilisés** (chantier 06, décision E2 du 2026-10-16) :
+`UserPromptSubmit`, `PreToolUse` et `PostToolUse` → `working` (`PreToolUse` émet aussi
+`agent.tool`, et `needs_input/question` pour `AskUserQuestion`) ; `PermissionRequest` →
+`needs_input/permission` ; `Notification` `elicitation_dialog` → `needs_input/question` ;
+`Stop` → `idle`. `SessionEnd` n'est pas utilisé : un `/clear` le déclenche sans que le
+process s'arrête, et `agent.exited` (daemon) reste la seule fin. Une demande résolue depuis
+A-I-D (`approval.resolved`) remet l'agent en `working`, ou en `idle` s'il a été refusé ; le
+hook suivant corrige. Le hook est installé par `aid hooks install`, après confirmation.
+
+**Pause** (E5) : SIGSTOP du groupe de process, reprise par SIGCONT. Ce n'est pas un statut :
+l'agent porte `pausedAt`, l'affichage « En pause » l'emporte, et le statut d'origine revient
+à la reprise. Un agent en pause ne reçoit aucune saisie.
+
 ## 5. Git et worktrees
 
 - Branche : `<type>/<slug>`, `type` ∈ `feat`, `fix`, `chore`, `spike`. Sujet né d'une issue : `<type>/<numéro>-<slug>`.
 - Worktree : `~/.aid/worktrees/<workspace>/<slug>`, hors du repo.
-- Base : toujours `origin/<baseBranch>` après `git fetch`.
+- Base : toujours `origin/<baseBranch>` après `git fetch`. Exception : un dépôt purement local (sans remote `origin`) est accepté ; sa base est une branche locale (la courante par défaut), les worktrees en partent et le nettoyage compare à elle. Décision du 2026-10-16.
 - Jamais de push sur la branche principale. Jamais de merge sans validation humaine.
 
 | Action | Effet | État du sujet |
@@ -261,6 +274,10 @@ orienter les choix, pas pour être anticipés dans le code.
 | v0.3 Git flow et kernel | Registre d'actions, lecture d'`agent.yml` et des adaptateurs, santé machine, dérive et `/sync`, phase du sujet, `sync`/`pr`/`merge`, sujet depuis une issue | Un sujet va de `draft` à `archived` sans quitter A-I-D ; un projet en retard sur le kernel est resynchronisé en un clic |
 | v0.4 Ruche Swairm | Suivi par le CLI `swairm` : sujets et vols (`status`), boîte de réception (`inbox`), journal (`events --follow`), renvoi au cockpit pour agir | Un plan à valider ou une décision de la ruche arrive dans la boîte de réception d'A-I-D sans que le cockpit soit ouvert |
 | v0.5 grokbot | PR grokbot suivies, sujets distants, `aid-inbox`, commandes `/aid` | Un arbitrage est rendu depuis le téléphone |
+
+La v0.2 (chantier 06, 2026-10-16) livre la boîte de réception, les statuts (hooks Claude
+Code et heuristique « estimé »), les notifications, et les maquettes 1.1 et 1.2. La vue diff
+et le `notify` de Codex sont reportés à un jalon ultérieur.
 
 ## 12. Contraintes de travail
 
