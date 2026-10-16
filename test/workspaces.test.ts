@@ -1,10 +1,11 @@
-import { mkdirSync, mkdtempSync, realpathSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, realpathSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, expect, test } from 'vitest';
-import { wslWarnings } from '../src/daemon/routes/workspaces.js';
+import { readConsignes, wslWarnings } from '../src/daemon/routes/workspaces.js';
 import { startTestDaemon, type TestDaemon } from './helpers/daemon.js';
 import { makeOriginAndClone, sh } from './helpers/git.js';
+import { makeTopic, setupWorkspace } from './helpers/topics.js';
 
 let t: TestDaemon;
 afterEach(async () => {
@@ -141,4 +142,66 @@ test('avertissement WSL2 seulement pour un repo sous /mnt', () => {
   expect(wslWarnings('/home/j/depot', wsl)).toEqual([]);
   expect(wslWarnings('/mnt/c/depot', 'Linux version 6.1.0-debian')).toEqual([]);
   expect(wslWarnings('/mnt/c/depot', null)).toEqual([]);
+});
+
+const remove = (id: string) =>
+  t.d.app.inject({ method: 'DELETE', url: `/api/workspaces/${id}`, headers: t.headers });
+
+test('retirer un projet sans sujet : 204, il disparaît ; inconnu : 404', async () => {
+  t = await startTestDaemon();
+  const { clone } = makeOriginAndClone(tmp());
+  const ws = (await register({ path: clone })).json();
+  expect((await remove(ws.id)).statusCode).toBe(204);
+  expect(t.db.prepare('SELECT count(*) c FROM workspaces').get()).toEqual({ c: 0 });
+  expect((await remove(ws.id)).statusCode).toBe(404);
+});
+
+test('retirer un projet : refusé tant qu’un sujet est ouvert, puis oublie les sujets archivés', async () => {
+  const c = await setupWorkspace();
+  t = c.t;
+  const { topicId } = await makeTopic(c);
+  const r = await remove(c.ws.id);
+  expect(r.statusCode).toBe(409);
+  expect(r.json().error).toContain('1 sujet ouvert');
+  t.store.append({ source: 'daemon', type: 'topic.state', topicId, data: { state: 'archived' } });
+  expect((await remove(c.ws.id)).statusCode).toBe(204);
+  for (const table of ['workspaces', 'topics', 'runs', 'actions'])
+    expect(t.db.prepare(`SELECT count(*) c FROM ${table}`).get(), table).toEqual({ c: 0 });
+  // le dépôt et le journal restent
+  expect(sh(c.clone, 'rev-parse', '--is-inside-work-tree')).toBe('true');
+  expect(t.store.since(null).some((e) => e.topicId === topicId)).toBe(true);
+});
+
+test('consignes : présence de CLAUDE.md et AGENTS.md, version du bloc et du noyau', async () => {
+  const root = tmp();
+  const kernel = tmp();
+  expect(readConsignes(root, kernel)).toEqual({
+    claudeMd: false,
+    agentsMd: false,
+    blockVersion: null,
+    kernelVersion: null,
+  });
+  writeFileSync(
+    join(root, 'AGENTS.md'),
+    '# x\n<!-- agentkit:start 0.7.1 -->\n…\n<!-- agentkit:end -->\n',
+  );
+  writeFileSync(join(root, 'CLAUDE.md'), '# Projet\n');
+  writeFileSync(join(kernel, 'VERSION'), '0.8.0\n');
+  expect(readConsignes(root, kernel)).toEqual({
+    claudeMd: true,
+    agentsMd: true,
+    blockVersion: '0.7.1',
+    kernelVersion: '0.8.0',
+  });
+  // le bloc de CLAUDE.md l'emporte sur celui d'AGENTS.md
+  writeFileSync(join(root, 'CLAUDE.md'), '<!-- agentkit:start 0.6.0 -->\n');
+  expect(readConsignes(root, kernel).blockVersion).toBe('0.6.0');
+
+  t = await startTestDaemon();
+  const { clone } = makeOriginAndClone(tmp());
+  const ws = (await register({ path: clone })).json();
+  const get = (id: string) =>
+    t.d.app.inject({ method: 'GET', url: `/api/workspaces/${id}/consignes`, headers: t.headers });
+  expect((await get(ws.id)).json()).toMatchObject({ claudeMd: false, agentsMd: false });
+  expect((await get('ws_inconnu')).statusCode).toBe(404);
 });

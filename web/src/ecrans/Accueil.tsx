@@ -63,7 +63,7 @@ function BandeauDaemon() {
 
 function Contenu() {
   const { state, daemon } = useAid();
-  const { openNewTopic, openNewWorkspace } = useLayout();
+  const { openNewTopic } = useLayout();
   const [filtre, setFiltre] = useState<string | null>(null);
   const down = daemon === 'injoignable' || daemon === 'session-expiree';
 
@@ -117,88 +117,51 @@ function Contenu() {
             {total > 1 ? 'sujets ouverts' : 'sujet ouvert'}
           </p>
         </div>
-        <div className="entete-droite">
-          <button
-            className="bouton"
-            data-action="workspace.ajouter"
-            type="button"
-            onClick={openNewWorkspace}
-          >
-            Ajouter un projet
-          </button>
-          {state.workspaces.length > 0 && (
-            <div className="filtres" data-node="1-1.filtres">
-              <div className="groupe-filtres" role="group" aria-label="Filtrer par projet">
+        {state.workspaces.length > 0 && (
+          <div className="filtres" data-node="1-1.filtres">
+            <div className="groupe-filtres" role="group" aria-label="Filtrer par projet">
+              <button
+                className={`puce-filtre${filtre === null ? ' est-actif' : ''}`}
+                data-node="1-1.filtres.workspace-tous"
+                data-action="filtre.workspace"
+                type="button"
+                aria-pressed={filtre === null}
+                onClick={() => setFiltre(null)}
+              >
+                Tous
+              </button>
+              {state.workspaces.map((w, i) => (
                 <button
-                  className={`puce-filtre${filtre === null ? ' est-actif' : ''}`}
-                  data-node="1-1.filtres.workspace-tous"
+                  key={w.id}
+                  className={`puce-filtre${filtre === w.id ? ' est-actif' : ''}`}
+                  data-node={`1-1.filtres.workspace-${i + 1}`}
                   data-action="filtre.workspace"
                   type="button"
-                  aria-pressed={filtre === null}
-                  onClick={() => setFiltre(null)}
+                  aria-pressed={filtre === w.id}
+                  onClick={() => setFiltre(w.id)}
                 >
-                  Tous
+                  <span data-node={`1-1.filtres.workspace-${i + 1}.nom`} data-bind="workspace.nom">
+                    {w.name}
+                  </span>
                 </button>
-                {state.workspaces.map((w, i) => (
-                  <button
-                    key={w.id}
-                    className={`puce-filtre${filtre === w.id ? ' est-actif' : ''}`}
-                    data-node={`1-1.filtres.workspace-${i + 1}`}
-                    data-action="filtre.workspace"
-                    type="button"
-                    aria-pressed={filtre === w.id}
-                    onClick={() => setFiltre(w.id)}
-                  >
-                    <span
-                      data-node={`1-1.filtres.workspace-${i + 1}.nom`}
-                      data-bind="workspace.nom"
-                    >
-                      {w.name}
-                    </span>
-                  </button>
-                ))}
-              </div>
+              ))}
             </div>
-          )}
-        </div>
+          </div>
+        )}
       </div>
       {down && (
         <section className="zone-erreur" data-node="1-1.erreur">
           <BandeauDaemon />
         </section>
       )}
-      {state.workspaces.length > 0 && (
-        <section className="projets" aria-label="Projets">
-          {state.workspaces.map((w) => {
-            const n = state.topics.filter((t) => t.workspaceId === w.id).length;
-            return (
-              <div key={w.id} className="projet">
-                <div className="projet-texte">
-                  <strong>{w.name}</strong>
-                  <span className="projet-chemin">{w.root}</span>
-                </div>
-                <span className="texte-faible">
-                  {n === 0 ? 'aucun sujet' : n === 1 ? '1 sujet' : `${n} sujets`}
-                </span>
-                <button
-                  className="bouton bouton--contour"
-                  type="button"
-                  aria-label={`Nouveau sujet dans ${w.name}`}
-                  onClick={() => openNewTopic(w.id)}
-                >
-                  Nouveau sujet
-                </button>
-              </div>
-            );
-          })}
-        </section>
-      )}
-      {total === 0 ? (
+      {topics.length === 0 ? (
         <section className="vide" data-node="1-1.vide">
           <p className="vide-message" data-node="1-1.vide.message">
-            {state.workspaces.length > 0
-              ? 'Aucun sujet ouvert : un projet peut attendre, crée un sujet quand tu en as un.'
-              : 'Aucun projet : ajoutes-en un, puis crée un sujet pour démarrer.'}
+            {filtre
+              ? `Aucun sujet ouvert dans ${wsOf(filtre)?.name ?? 'ce projet'}.`
+              : state.workspaces.length > 0
+                ? 'Aucun sujet ouvert : un projet peut attendre, crée un sujet quand tu en as un.'
+                : 'Aucun projet : ajoutes-en un, puis crée un sujet pour démarrer.'}
           </p>
           <p className="texte-discret" data-node="1-1.vide.aide">
             Chaque sujet aura sa branche et son worktree, créés hors du repo.
@@ -209,7 +172,7 @@ function Contenu() {
               data-node="1-1.vide.creer"
               data-action="sujet.creer"
               type="button"
-              onClick={() => openNewTopic()}
+              onClick={() => openNewTopic(filtre ?? undefined)}
             >
               Nouveau sujet
             </button>

@@ -54,6 +54,14 @@ export interface Workspace {
   createdAt: string;
 }
 
+/** Consignes d'un projet (écran Consignes) : présence des fichiers et version du bloc agentkit. */
+export interface WorkspaceConsignes {
+  claudeMd: boolean;
+  agentsMd: boolean;
+  blockVersion: string | null;
+  kernelVersion: string | null;
+}
+
 export interface Topic {
   id: string;
   workspaceId: string;
