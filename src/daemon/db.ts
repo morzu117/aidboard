@@ -1,19 +1,12 @@
-import { chmodSync, existsSync, readdirSync, readFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { chmodSync, readdirSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import Database from 'better-sqlite3';
+import { findAssetDir } from './assets.js';
 
 export type Db = Database.Database;
 
-// Le bundle tsup place ses fichiers à des profondeurs variables : on remonte jusqu'au dossier.
-export function findMigrationsDir(from = dirname(fileURLToPath(import.meta.url))): string {
-  let dir = from;
-  for (let i = 0; i < 5; i++) {
-    const candidate = join(dir, 'migrations');
-    if (existsSync(join(candidate, '001_init.sql'))) return candidate;
-    dir = dirname(dir);
-  }
-  throw new Error(`dossier migrations introuvable depuis ${from}`);
+export function findMigrationsDir(from?: string): string {
+  return findAssetDir('migrations', '001_init.sql', from);
 }
 
 export function migrate(db: Db, dir = findMigrationsDir()): void {

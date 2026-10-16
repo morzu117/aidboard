@@ -26,7 +26,12 @@ export interface DaemonHandle {
 }
 
 export async function startDaemon(
-  opts: { home?: string; config?: Partial<AidConfig>; logger?: boolean } = {},
+  opts: {
+    home?: string;
+    config?: Partial<AidConfig>;
+    logger?: boolean;
+    codegraphBin?: string;
+  } = {},
 ): Promise<DaemonHandle> {
   const paths = resolvePaths(opts.home);
   ensureHome(paths);
@@ -47,6 +52,8 @@ export async function startDaemon(
       auth,
       db: opened,
       store,
+      paths,
+      codegraphBin: opts.codegraphBin,
       devOrigin,
       logger: opts.logger,
     });

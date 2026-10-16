@@ -7,6 +7,7 @@ import WebSocket from 'ws';
 import { afterEach, expect, test } from 'vitest';
 import { DEFAULT_CONFIG } from '../src/daemon/config.js';
 import { openDb } from '../src/daemon/db.js';
+import { resolvePaths } from '../src/daemon/paths.js';
 import { EventStore } from '../src/daemon/events/store.js';
 import { type AuthState, createAuthState, issueRunToken } from '../src/daemon/security.js';
 import { buildServer } from '../src/daemon/server.js';
@@ -26,9 +27,10 @@ async function start() {
     auth,
     db,
     store: new EventStore(db),
+    paths: resolvePaths(webRoot),
     webRoot,
   });
-  app.post('/api/topics', async () => ({ ok: true }));
+  app.post('/api/probe', async () => ({ ok: true }));
   await app.listen({ host: '127.0.0.1', port: 0 });
   port = (app.server.address() as AddressInfo).port;
 }
@@ -87,7 +89,7 @@ test('POST avec cookie valide et sans Origin : 403', async () => {
   await start();
   const r = await app.inject({
     method: 'POST',
-    url: '/api/topics',
+    url: '/api/probe',
     headers: { host: host(), ...cookie() },
     payload: {},
   });
@@ -98,7 +100,7 @@ test('POST avec cookie valide et la bonne Origin : accepté', async () => {
   await start();
   const r = await app.inject({
     method: 'POST',
-    url: '/api/topics',
+    url: '/api/probe',
     headers: { host: host(), origin: origin(), ...cookie() },
     payload: {},
   });
@@ -109,7 +111,7 @@ test('appel Bearer admin sans Origin (CLI) : accepté', async () => {
   await start();
   const r = await app.inject({
     method: 'POST',
-    url: '/api/topics',
+    url: '/api/probe',
     headers: { host: host(), authorization: `Bearer ${auth.adminToken}` },
     payload: {},
   });
