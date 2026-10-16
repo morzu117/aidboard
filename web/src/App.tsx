@@ -5,10 +5,12 @@ import { Boite } from './ecrans/Boite.js';
 import { Consignes } from './ecrans/Consignes.js';
 import { Reglages } from './ecrans/Reglages.js';
 import { Sujet } from './ecrans/Sujet.js';
+import { Notifieur } from './ui/Notifieur.js';
 
 export function App() {
   return (
     <AidProvider>
+      <Notifieur />
       <Routes>
         <Route path="/" element={<Accueil />} />
         <Route path="/boite" element={<Boite />} />
