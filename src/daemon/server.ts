@@ -12,6 +12,7 @@ import type { EventStore } from './events/store.js';
 import type { AgentManager } from './pty/manager.js';
 import { AidHttpError } from './errors.js';
 import type { AidPaths } from './paths.js';
+import type { UpdateStatus } from './updateCheck.js';
 import { WorkspaceQueue } from './actions/queue.js';
 import { Indexer } from './topics/index.js';
 import { registerTopicRoutes } from './routes/topics.js';
@@ -36,6 +37,8 @@ export interface ServerDeps {
   procVersion?: () => string | null;
   codegraphBin?: string;
   requestStop?: () => void;
+  requestUpdate?: () => void;
+  updates?: () => UpdateStatus | null;
   devOrigin?: string;
   webRoot?: string | null;
   logger?: boolean;
@@ -94,7 +97,12 @@ export async function buildServer(deps: ServerDeps): Promise<FastifyInstance> {
     return reply.code(500).send({ error: 'erreur interne' });
   });
   registerStateRoutes(app, deps.db);
-  registerDaemonRoutes(app, { db: deps.db, requestStop: deps.requestStop ?? (() => undefined) });
+  registerDaemonRoutes(app, {
+    db: deps.db,
+    requestStop: deps.requestStop ?? (() => undefined),
+    requestUpdate: deps.requestUpdate,
+    updates: deps.updates,
+  });
   registerAgentRoutes(app, { db: deps.db, agents: deps.agents });
   registerWorkspaceRoutes(app, deps);
   registerFsRoutes(app);

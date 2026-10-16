@@ -135,3 +135,63 @@ test('texte d’agent ou de titre : jamais interprété comme du HTML', async ()
   expect(document.querySelector('img')).toBeNull();
   expect(document.querySelector('b')).toBeNull();
 });
+
+test('bandeau de mise à jour : affiché si le daemon signale origin/main en avance, absent sinon', async () => {
+  const h = setup(<Accueil />, snapshot({ workspaces: [ws()], topics: [topic()] }));
+  h.respond.set(
+    'GET /api/daemon/update',
+    json(200, { available: true, localSha: 'aaa', remoteSha: '1234567deadbeef' }),
+  );
+  await screen.findByText('feat/s');
+  expect(await screen.findByText('Nouvelle version d’aidboard disponible')).toBeTruthy();
+  expect(text('1-1.maj.aide')).toContain('1234567');
+});
+
+test('bandeau de mise à jour : rien si le daemon ne sait pas ou dit à jour', async () => {
+  setup(<Accueil />, snapshot({ workspaces: [ws()], topics: [topic()] }));
+  await screen.findByText('feat/s');
+  expect(node('1-1.maj')).toBeNull();
+});
+
+test('bandeau de mise à jour : le CTA « Mettre à jour » lance POST /api/daemon/update', async () => {
+  const h = setup(<Accueil />, snapshot({ workspaces: [ws()], topics: [topic()] }));
+  h.respond.set(
+    'GET /api/daemon/update',
+    json(200, { available: true, localSha: 'aaa', remoteSha: '1234567deadbeef' }),
+  );
+  h.respond.set('POST /api/daemon/update', json(202, { updating: true, agents: 0 }));
+  await screen.findByText('feat/s');
+  await screen.findByText('Nouvelle version d’aidboard disponible');
+  await userEvent.click(node('1-1.maj.lancer')!);
+  await waitFor(() =>
+    expect(h.calls.some((c) => c.method === 'POST' && c.url === '/api/daemon/update')).toBe(true),
+  );
+});
+
+test('bandeau de mise à jour : un agent vivant (409) propose de forcer, qui relance avec force: true', async () => {
+  const h = setup(<Accueil />, snapshot({ workspaces: [ws()], topics: [topic()] }));
+  h.respond.set(
+    'GET /api/daemon/update',
+    json(200, { available: true, localSha: 'aaa', remoteSha: '1234567deadbeef' }),
+  );
+  h.respond.set(
+    'POST /api/daemon/update',
+    json(409, { error: '1 agent(s) tournent encore', agents: [{ id: 'ag_1', kind: 'shell' }] }),
+  );
+  await screen.findByText('feat/s');
+  await userEvent.click(node('1-1.maj.lancer')!);
+  await waitFor(() => expect(node('1-1.maj.confirmer')).not.toBeNull());
+  expect(text('1-1.maj.confirmer')).toContain('1 agent tourne');
+  h.respond.set('POST /api/daemon/update', json(202, { updating: true, agents: 1 }));
+  await userEvent.click(node('1-1.maj.confirmer')!);
+  await waitFor(() =>
+    expect(
+      h.calls.some(
+        (c) =>
+          c.method === 'POST' &&
+          c.url === '/api/daemon/update' &&
+          (c.body as { force?: boolean } | undefined)?.force === true,
+      ),
+    ).toBe(true),
+  );
+});

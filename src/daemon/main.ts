@@ -1,5 +1,7 @@
 import { rmSync, writeFileSync } from 'node:fs';
 import type { AddressInfo } from 'node:net';
+import { dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import type { FastifyInstance } from 'fastify';
 import { type AidConfig, loadConfig, writeDefaultConfigIfAbsent } from './config.js';
 import { type Db, openDb } from './db.js';
@@ -13,6 +15,7 @@ import { ensureHome, resolvePaths } from './paths.js';
 import { reconcile } from './reconcile.js';
 import { type AuthState, createAuthState } from './security.js';
 import { buildServer } from './server.js';
+import { UpdateWatcher } from './updateWatcher.js';
 
 export class AidPortInUse extends Error {
   constructor(port: number) {
@@ -37,6 +40,9 @@ export async function startDaemon(
     logger?: boolean;
     codegraphBin?: string;
     onStopRequested?: () => void;
+    onUpdateRequested?: () => void;
+    /** `git ls-remote origin` en tâche de fond ; coupé dans les tests, pas de réseau à chaque daemon. */
+    checkUpdates?: boolean;
   } = {},
 ): Promise<DaemonHandle> {
   const paths = resolvePaths(opts.home);
@@ -70,6 +76,10 @@ export async function startDaemon(
     });
     const devOrigin = process.env.AID_DEV_ORIGIN;
     if (devOrigin) console.error(`AID_DEV_ORIGIN actif : ${devOrigin} accepté comme origine`);
+    const updates =
+      opts.checkUpdates === false
+        ? null
+        : new UpdateWatcher(dirname(fileURLToPath(import.meta.url)));
     const app = await buildServer({
       config,
       auth,
@@ -79,6 +89,8 @@ export async function startDaemon(
       paths,
       codegraphBin: opts.codegraphBin,
       requestStop: opts.onStopRequested,
+      requestUpdate: opts.onUpdateRequested,
+      updates: () => updates?.status() ?? null,
       devOrigin,
       logger: opts.logger,
     });
@@ -110,6 +122,7 @@ export async function startDaemon(
       async stop() {
         await agents.stopAll('daemon_stop', 5000);
         agents.dispose();
+        updates?.dispose();
         await app.close();
         opened.close();
         rmSync(paths.daemonJson, { force: true });

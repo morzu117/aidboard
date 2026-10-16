@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+import { realpathSync } from 'node:fs';
+import { dirname } from 'node:path';
 import { parseArgs } from 'node:util';
 import { readVersion } from './version.js';
 
@@ -49,16 +51,39 @@ async function main(): Promise<number> {
   switch (command) {
     case 'daemon': {
       const { startDaemon } = await import('../daemon/main.js');
+      const { repoRootFrom } = await import('../daemon/updateCheck.js');
+      const { pullAndBuild, spawnRespawnWatcher } = await import('../daemon/selfUpdate.js');
       let stopRequested: () => void = () => undefined;
+      let updateRequested: () => void = () => undefined;
       const handle = await startDaemon({
         logger: true,
         onStopRequested: () => stopRequested(),
+        onUpdateRequested: () => updateRequested(),
       }).catch((err: Error) => {
         console.error(err.message);
         process.exit(1);
       });
       const stop = () => void handle.stop().then(() => process.exit(0));
       stopRequested = stop;
+      // Bouton « Mettre à jour » de l'UI : pull + build pendant que ce daemon sert encore, puis
+      // seulement s'ils réussissent, relance et sort. Un échec laisse l'ancien build tourner.
+      updateRequested = () => {
+        void (async () => {
+          const entry = realpathSync(process.argv[1] ?? '');
+          const dir = repoRootFrom(dirname(entry));
+          if (!dir) {
+            console.error('mise à jour : dépôt introuvable depuis le build en cours');
+            return;
+          }
+          const result = await pullAndBuild(dir);
+          if (!result.ok) {
+            console.error(`mise à jour échouée (${result.step}) : ${result.error}`);
+            return;
+          }
+          spawnRespawnWatcher(process.pid, entry, paths.home);
+          stop();
+        })();
+      };
       process.on('SIGINT', stop);
       process.on('SIGTERM', stop);
       return -1; // reste en vie

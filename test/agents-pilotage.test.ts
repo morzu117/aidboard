@@ -72,6 +72,15 @@ test('aperçu : les dernières lignes non vides de l’écran, bornées', async 
   ).toBe(404);
 });
 
+test('aperçu : une ligne de bordure (─) n’écrase pas le vrai contenu', async () => {
+  const { live, inject } = await spawn('shell');
+  live.pty.write("echo contenu; echo '──────'\r");
+  await waitFor(() => live.mirror.screen().some((l) => l === '──────'), 5000, 'bordure');
+  const lines = (await inject('GET', 'screen?lines=6')).json().lines as string[];
+  expect(lines).not.toContain('──────');
+  expect(lines).toContain('contenu');
+});
+
 test('message : tapé puis Entrée ; plusieurs lignes en collage encadré ; contrôles refusés', async () => {
   const { inject, out, live } = await spawn('shell');
   expect((await inject('POST', 'input', { text: 'echo salut-$((40+2))' })).statusCode).toBe(202);
