@@ -5,10 +5,11 @@ import { statSync } from 'node:fs';
 import { onPath } from '../../daemon/actions/editor.js';
 import { readProcVersion } from '../../daemon/routes/workspaces.js';
 import { loadConfig } from '../../daemon/config.js';
+import type { MemoryHealth } from '../../daemon/memory/service.js';
 import type { AidPaths } from '../../daemon/paths.js';
 import { isWsl } from '../browser.js';
 import { hooksStatus } from '../../daemon/hooks/claudeSettings.js';
-import { runningDaemon } from '../daemonInfo.js';
+import { daemonFetch, runningDaemon } from '../daemonInfo.js';
 import { readVersion } from '../version.js';
 
 export type Level = 'ok' | 'warn' | 'ko';
@@ -29,6 +30,7 @@ export interface Probes {
   homeMode(): number | null; // null = ~/.aid absent
   port(): Promise<{ port: number; state: 'aid' | 'libre' | 'occupe' }>;
   claudeHooks(): boolean; // les hooks d'A-I-D sont-ils dans la configuration de Claude Code ?
+  memoryHealth(): Promise<MemoryHealth | null>; // null = daemon arrêté ou injoignable
 }
 
 export function nodeSupported(v: string): boolean {
@@ -93,6 +95,7 @@ export async function runChecks(p: Probes): Promise<Check[]> {
     ['codex', 'l’agent codex sera refusé'],
     ['codegraph', 'les sujets seront sans index : lecture directe'],
     ['gh', 'requis à partir de la v0.3 (PR et fusion)'],
+    ['ollama', 'la recherche sera FTS5 seule'],
   ] as const) {
     verify(p.has(bin), bin, { level: 'warn', label: `${bin} introuvable`, detail: effet });
   }
@@ -132,6 +135,24 @@ export async function runChecks(p: Probes): Promise<Check[]> {
       label: 'wslview introuvable',
       detail: 'le navigateur Windows ne s’ouvrira pas tout seul : sudo apt install wslu',
     });
+  }
+
+  const mem = await p.memoryHealth();
+  if (mem) {
+    const total = Object.values(mem.pages).reduce((a, b) => a + b, 0);
+    const detail = Object.entries(mem.pages)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([ns, n]) => `${ns} ${n}`)
+      .join(', ');
+    const label = `mémoire : ${total} page${total === 1 ? '' : 's'}${detail ? ` (${detail})` : ''}`;
+    const reasons: string[] = [];
+    if (mem.mirrorDirty) reasons.push('miroir non commité : aid mem reindex');
+    if (mem.failedJobs > 0) {
+      reasons.push(
+        `${mem.failedJobs} job${mem.failedJobs === 1 ? '' : 's'} d’embedding en échec : voir le journal du daemon`,
+      );
+    }
+    verify(reasons.length === 0, label, { level: 'warn', label, detail: reasons.join(' ; ') });
   }
   return c;
 }
@@ -185,6 +206,16 @@ export function realProbes(paths: AidPaths): Probes {
         s.once('error', () => resolve({ port, state: 'occupe' }));
         s.listen(port, '127.0.0.1', () => s.close(() => resolve({ port, state: 'libre' })));
       });
+    },
+    async memoryHealth() {
+      const info = await runningDaemon(paths);
+      if (!info) return null;
+      try {
+        const { status, json } = await daemonFetch(info, 'GET', '/api/memory/health');
+        return status === 200 ? (json as unknown as MemoryHealth) : null;
+      } catch {
+        return null;
+      }
     },
   };
 }

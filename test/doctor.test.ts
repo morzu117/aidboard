@@ -19,6 +19,7 @@ const good: Probes = {
   homeMode: () => 0o40700,
   port: async () => ({ port: 4870, state: 'libre' }),
   claudeHooks: () => true,
+  memoryHealth: async () => null,
 };
 
 const levels = async (over: Partial<Probes>) =>
@@ -57,7 +58,7 @@ test('node-pty en échec sous Linux : le message nomme build-essential et python
   expect(ko.detail).toContain('python3');
 });
 
-test('claude, codex, codegraph et gh absents : ⚠ seulement, avec leur conséquence', async () => {
+test('claude, codex, codegraph, gh et ollama absents : ⚠ seulement, avec leur conséquence', async () => {
   const checks = await runChecks({ ...good, has: (b) => b === 'bash' });
   const warns = checks.filter((c) => c.level === 'warn');
   expect(warns.map((c) => c.label)).toEqual([
@@ -65,8 +66,10 @@ test('claude, codex, codegraph et gh absents : ⚠ seulement, avec leur conséqu
     'codex introuvable',
     'codegraph introuvable',
     'gh introuvable',
+    'ollama introuvable',
   ]);
   expect(warns.find((c) => c.label.startsWith('codegraph'))?.detail).toContain('lecture directe');
+  expect(warns.find((c) => c.label.startsWith('ollama'))?.detail).toContain('FTS5 seule');
   expect(checks.some((c) => c.level === 'ko')).toBe(false);
 });
 
@@ -95,6 +98,60 @@ test('WSL2 : wslview absent est un ⚠ ; hors WSL2 on n’en parle pas', async (
   expect((await levels({ has: (b) => b !== 'wslview' })).some((l) => l.includes('wslview'))).toBe(
     false,
   );
+});
+
+test('mémoire : daemon arrêté ou injoignable → pas de ligne', async () => {
+  expect(
+    (await levels({ memoryHealth: async () => null })).some((l) => l.includes('mémoire')),
+  ).toBe(false);
+});
+
+test('mémoire : N pages par namespace, triées, aucune anomalie → ✓', async () => {
+  const checks = await runChecks({
+    ...good,
+    memoryHealth: async () => ({
+      pages: { aid: 1, lesson: 1 },
+      fts: true,
+      vectors: 'off',
+      pendingJobs: 0,
+      failedJobs: 0,
+      mirrorDirty: false,
+    }),
+  });
+  expect(checks).toContainEqual({ level: 'ok', label: 'mémoire : 2 pages (aid 1, lesson 1)' });
+});
+
+test('mémoire : miroir non commité ou jobs en échec → ⚠ avec la commande ou le journal', async () => {
+  const dirty = await runChecks({
+    ...good,
+    memoryHealth: async () => ({
+      pages: { aid: 1 },
+      fts: true,
+      vectors: 'ollama',
+      pendingJobs: 0,
+      failedJobs: 0,
+      mirrorDirty: true,
+    }),
+  });
+  const dirtyCheck = dirty.find((c) => c.label.startsWith('mémoire'))!;
+  expect(dirtyCheck).toMatchObject({ level: 'warn' });
+  expect(dirtyCheck.detail).toContain('aid mem reindex');
+
+  const failed = await runChecks({
+    ...good,
+    memoryHealth: async () => ({
+      pages: { aid: 1 },
+      fts: true,
+      vectors: 'ollama',
+      pendingJobs: 0,
+      failedJobs: 2,
+      mirrorDirty: false,
+    }),
+  });
+  const failedCheck = failed.find((c) => c.label.startsWith('mémoire'))!;
+  expect(failedCheck).toMatchObject({ level: 'warn' });
+  expect(failedCheck.detail).toContain('2 jobs');
+  expect(failedCheck.detail).toContain('journal');
 });
 
 test('runDoctor : code 1 s’il y a un ✗, 0 sinon, et une ligne par contrôle', async () => {
