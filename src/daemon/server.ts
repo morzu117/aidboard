@@ -37,6 +37,7 @@ export interface ServerDeps {
   procVersion?: () => string | null;
   codegraphBin?: string;
   requestStop?: () => void;
+  requestUpdate?: () => void;
   updates?: () => UpdateStatus | null;
   devOrigin?: string;
   webRoot?: string | null;
@@ -99,6 +100,7 @@ export async function buildServer(deps: ServerDeps): Promise<FastifyInstance> {
   registerDaemonRoutes(app, {
     db: deps.db,
     requestStop: deps.requestStop ?? (() => undefined),
+    requestUpdate: deps.requestUpdate,
     updates: deps.updates,
   });
   registerAgentRoutes(app, { db: deps.db, agents: deps.agents });

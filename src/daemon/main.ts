@@ -40,6 +40,7 @@ export async function startDaemon(
     logger?: boolean;
     codegraphBin?: string;
     onStopRequested?: () => void;
+    onUpdateRequested?: () => void;
     /** `git ls-remote origin` en tâche de fond ; coupé dans les tests, pas de réseau à chaque daemon. */
     checkUpdates?: boolean;
   } = {},
@@ -88,6 +89,7 @@ export async function startDaemon(
       paths,
       codegraphBin: opts.codegraphBin,
       requestStop: opts.onStopRequested,
+      requestUpdate: opts.onUpdateRequested,
       updates: () => updates?.status() ?? null,
       devOrigin,
       logger: opts.logger,

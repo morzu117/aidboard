@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { Agent } from '../../../src/shared/model.js';
+import { AidApiError } from '../data/api.js';
 import { useAid } from '../data/useAidState.js';
 import { Layout, useLayout } from '../ui/Layout.js';
 import { isAlive, Point, type Tone, topicView } from '../ui/Statut.js';
@@ -65,10 +66,15 @@ function BandeauDaemon() {
 
 const MAJ_CHECK_MS = 30 * 60_000;
 
+type EtatMaj = 'idle' | 'en-cours' | 'confirmer' | 'erreur';
+
 /** Compare au daemon : origin/main a-t-il avancé depuis le build que ce daemon sert ? */
 function BandeauMaj() {
   const { call } = useAid();
   const [remoteSha, setRemoteSha] = useState<string | null>(null);
+  const [etat, setEtat] = useState<EtatMaj>('idle');
+  const [agentsVivants, setAgentsVivants] = useState(0);
+  const [erreur, setErreur] = useState<string | null>(null);
   useEffect(() => {
     let off = false;
     const load = () =>
@@ -85,15 +91,63 @@ function BandeauMaj() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   if (remoteSha === null) return null;
+
+  const lancer = (force: boolean) => {
+    setErreur(null);
+    setEtat('en-cours');
+    call<{ updating: boolean; agents: number }>(
+      'POST',
+      '/api/daemon/update',
+      force ? { force: true } : {},
+    ).catch((err: unknown) => {
+      if (err instanceof AidApiError && err.status === 409) {
+        setAgentsVivants((err.body.agents as unknown[] | undefined)?.length ?? 0);
+        setEtat('confirmer');
+        return;
+      }
+      setEtat('erreur');
+      setErreur(err instanceof Error ? err.message : String(err));
+    });
+  };
+
   return (
     <div className="bandeau-maj" data-node="1-1.maj" role="status">
-      <p className="bandeau-titre" data-node="1-1.maj.titre">
-        Nouvelle version d’aidboard disponible
-      </p>
-      <p className="texte-discret" data-node="1-1.maj.aide">
-        origin/main a avancé{remoteSha ? ` (${remoteSha.slice(0, 7)})` : ''}. Redémarre le daemon
-        pour la charger : <code>aid stop --force && aid</code>
-      </p>
+      <div className="bandeau-texte">
+        <p className="bandeau-titre" data-node="1-1.maj.titre">
+          Nouvelle version d’aidboard disponible
+        </p>
+        <p className="texte-discret" data-node="1-1.maj.aide">
+          origin/main a avancé{remoteSha ? ` (${remoteSha.slice(0, 7)})` : ''}.
+        </p>
+        {etat === 'erreur' && erreur && (
+          <p className="texte-discret" data-node="1-1.maj.erreur" role="alert">
+            Mise à jour échouée : {erreur}
+          </p>
+        )}
+      </div>
+      {etat === 'confirmer' ? (
+        <button
+          className="bouton bouton--contour"
+          data-node="1-1.maj.confirmer"
+          data-action="daemon.maj.forcer"
+          type="button"
+          onClick={() => lancer(true)}
+        >
+          {agentsVivants} agent{agentsVivants > 1 ? 's' : ''} tourn
+          {agentsVivants > 1 ? 'ent' : 'e'} — forcer et mettre à jour
+        </button>
+      ) : (
+        <button
+          className="bouton bouton--contour"
+          data-node="1-1.maj.lancer"
+          data-action="daemon.maj"
+          type="button"
+          disabled={etat === 'en-cours'}
+          onClick={() => lancer(false)}
+        >
+          {etat === 'en-cours' ? 'Mise à jour…' : 'Mettre à jour'}
+        </button>
+      )}
     </div>
   );
 }
