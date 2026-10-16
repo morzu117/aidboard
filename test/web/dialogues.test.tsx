@@ -47,10 +47,12 @@ test('enregistrer un workspace : l’erreur du daemon est affichée telle quelle
   const h = setup(<Accueil />, snapshot());
   h.respond.set('POST /api/workspaces', json(422, { error: "/tmp/x n'est pas un dépôt git" }));
   await userEvent.click(await screen.findByRole('button', { name: 'Nouveau sujet' }));
-  await userEvent.type(screen.getByLabelText(/Chemin du dépôt/), '/tmp/x');
+  await userEvent.click(await screen.findByRole('button', { name: 'Choisir mon-depot' }));
   await userEvent.click(screen.getByRole('button', { name: 'Enregistrer' }));
   expect((await screen.findByRole('alert')).textContent).toBe("/tmp/x n'est pas un dépôt git");
-  expect(h.calls.find((c) => c.url === '/api/workspaces')?.body).toEqual({ path: '/tmp/x' });
+  expect(h.calls.find((c) => c.url === '/api/workspaces')?.body).toEqual({
+    path: '/home/moi/mon-depot',
+  });
 });
 
 test('enregistrer un workspace : la base facultative est envoyée, les avertissements sont montrés avant de continuer', async () => {
@@ -60,12 +62,12 @@ test('enregistrer un workspace : la base facultative est envoyée, les avertisse
     json(201, { ...ws(), warnings: ['repo sous /mnt : performances WSL2 dégradées'] }),
   );
   await userEvent.click(await screen.findByRole('button', { name: 'Nouveau sujet' }));
-  await userEvent.type(screen.getByLabelText(/Chemin du dépôt/), '/mnt/c/x');
+  await userEvent.click(await screen.findByRole('button', { name: 'Choisir mon-depot' }));
   await userEvent.type(screen.getByLabelText(/Branche de base/), 'develop');
   await userEvent.click(screen.getByRole('button', { name: 'Enregistrer' }));
   expect(await screen.findByText(/performances WSL2 dégradées/)).toBeTruthy();
   expect(h.calls.find((c) => c.url === '/api/workspaces')?.body).toEqual({
-    path: '/mnt/c/x',
+    path: '/home/moi/mon-depot',
     baseBranch: 'develop',
   });
   await userEvent.click(screen.getByRole('button', { name: 'Continuer' }));
@@ -217,7 +219,7 @@ test('avec un dépôt déjà enregistré, « Ajouter un workspace » ouvre l’e
   );
   await userEvent.click(await screen.findByRole('button', { name: 'Nouveau sujet' }));
   await userEvent.click(screen.getByRole('button', { name: 'Ajouter un workspace…' }));
-  await userEvent.type(screen.getByLabelText(/Chemin du dépôt/), '/tmp/autre');
+  await userEvent.click(await screen.findByRole('button', { name: 'Choisir mon-depot' }));
   await userEvent.click(screen.getByRole('button', { name: 'Enregistrer' }));
   expect(await screen.findByRole('dialog', { name: 'Nouveau sujet' })).toBeTruthy();
 });

@@ -1,5 +1,12 @@
 import { execFile } from 'node:child_process';
-import { existsSync, mkdtempSync, readdirSync, realpathSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  realpathSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
@@ -45,6 +52,9 @@ describe.skipIf(process.env.AID_PACK_TEST !== '1')('paquet', () => {
     const bin = join(app, 'node_modules', '.bin');
     expect(readdirSync(bin)).toEqual(expect.arrayContaining(['aid', 'aidboard']));
     const home = join(work, 'home');
+    // un daemon déjà lancé sur 4870 (usage réel) ne doit pas faire échouer le test : port propre
+    mkdirSync(home, { recursive: true, mode: 0o700 });
+    writeFileSync(join(home, 'config.yaml'), 'port: 4879\n');
     const env = { ...process.env, AID_HOME: home, AID_NO_BROWSER: '1' };
     const doctor = await sh(join(bin, 'aidboard'), ['doctor'], { env });
     expect(doctor.stdout).toContain('✓ node-pty : un terminal se lance');

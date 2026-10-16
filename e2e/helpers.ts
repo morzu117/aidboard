@@ -32,7 +32,11 @@ export async function registerWorkspace(page: Page, path: string): Promise<void>
   // un premier dépôt ouvre directement « Nouveau workspace » ; ensuite il faut passer par « Ajouter un workspace »
   const ajouter = page.getByRole('button', { name: 'Ajouter un workspace…' });
   if (await ajouter.isVisible({ timeout: 2000 }).catch(() => false)) await ajouter.click();
-  await page.getByLabel(/Chemin du dépôt/).fill(path);
+  // le dossier se choisit dans l'explorateur ; « Aller au dossier » évite de descendre arbre par arbre
+  await page.getByLabel('Aller au dossier').fill(path);
+  await page.getByLabel('Aller au dossier').press('Enter');
+  await expect(page.getByLabel('Aller au dossier')).toHaveValue(path);
+  await page.getByRole('button', { name: 'Choisir ce dossier' }).click();
   await page.getByRole('button', { name: 'Enregistrer' }).click();
   await expect(page.getByRole('dialog', { name: 'Nouveau sujet' })).toBeVisible();
 }

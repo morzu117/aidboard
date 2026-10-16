@@ -16,6 +16,7 @@ import { WorkspaceQueue } from './actions/queue.js';
 import { Indexer } from './topics/index.js';
 import { registerTopicRoutes } from './routes/topics.js';
 import { registerWorkspaceRoutes } from './routes/workspaces.js';
+import { registerFsRoutes } from './routes/fs.js';
 import { registerDaemonRoutes } from './routes/daemon.js';
 import { registerAgentRoutes } from './routes/agents.js';
 import { registerEventRoutes } from './routes/events.js';
@@ -95,6 +96,7 @@ export async function buildServer(deps: ServerDeps): Promise<FastifyInstance> {
   registerDaemonRoutes(app, { db: deps.db, requestStop: deps.requestStop ?? (() => undefined) });
   registerAgentRoutes(app, { db: deps.db, agents: deps.agents });
   registerWorkspaceRoutes(app, deps);
+  registerFsRoutes(app);
   const indexer = new Indexer({
     store: deps.store,
     paths: deps.paths,

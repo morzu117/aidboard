@@ -99,3 +99,62 @@ body {
 .sujet-actions {
   position: relative;
 }
+
+.selecteur-dossier {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+.selecteur-dossier__barre {
+  display: flex;
+  gap: var(--sp-2);
+}
+.selecteur-dossier__liste {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  height: 240px;
+  overflow: auto;
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-m);
+  background: var(--surface-3);
+}
+.selecteur-dossier__item {
+  display: flex;
+  align-items: center;
+  padding-right: var(--sp-2);
+}
+.selecteur-dossier__ligne {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  min-height: var(--h-controle-s);
+  padding: 0 var(--sp-3);
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.selecteur-dossier__ligne:hover,
+.selecteur-dossier__ligne:focus-visible {
+  background: var(--surface-2);
+}
+.selecteur-dossier__vide {
+  padding: var(--sp-3);
+  color: var(--text-3);
+  font-size: var(--fs-s);
+}
+.selecteur-dossier__cache {
+  flex-direction: row !important;
+  align-items: center;
+  gap: var(--sp-2);
+}
+.selecteur-dossier__choix {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  flex-wrap: wrap;
+}
