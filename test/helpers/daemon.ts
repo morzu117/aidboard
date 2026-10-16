@@ -1,0 +1,34 @@
+import { mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { type DaemonHandle, startDaemon } from '../../src/daemon/main.js';
+import type { Db } from '../../src/daemon/db.js';
+import type { EventStore } from '../../src/daemon/events/store.js';
+
+export interface TestDaemon {
+  d: DaemonHandle;
+  home: string;
+  headers: Record<string, string>;
+  db: Db;
+  store: EventStore;
+}
+
+// Vrai daemon, AID_HOME temporaire, port éphémère, authentifié en Bearer.
+export async function startTestDaemon(
+  home = mkdtempSync(join(tmpdir(), 'aid-d-')),
+): Promise<TestDaemon> {
+  const d = await startDaemon({ home, config: { port: 0 } });
+  const headers = { host: `127.0.0.1:${d.port}`, authorization: `Bearer ${d.auth.adminToken}` };
+  return { d, home, headers, db: d.db, store: d.store };
+}
+
+export function seedTopic(db: Db): void {
+  db.prepare("INSERT INTO workspaces VALUES ('ws_1','a','/a','main','/w','t0')").run();
+  db.prepare(
+    "INSERT INTO topics VALUES ('tp_1','ws_1','s','T','feat','feat/s','main','/definitely/missing','active',NULL,'disabled','t0','t0')",
+  ).run();
+  db.prepare("INSERT INTO runs VALUES ('run_1','tp_1','standard','open','t0')").run();
+  db.prepare(
+    "INSERT INTO agents VALUES ('ag_1','run_1','shell','free','pty','starting','/w/s','[\"sh\"]',NULL,NULL,NULL,'t0','t0')",
+  ).run();
+}
