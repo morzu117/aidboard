@@ -23,6 +23,7 @@ export async function startTestDaemon(
     home,
     codegraphBin: extra.codegraphBin,
     config: { port: 0, ...extra.config },
+    checkUpdates: false,
   });
   const headers = { host: `127.0.0.1:${d.port}`, authorization: `Bearer ${d.auth.adminToken}` };
   return { d, home, headers, db: d.db, store: d.store };

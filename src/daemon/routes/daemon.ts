@@ -2,6 +2,7 @@ import { Type } from '@sinclair/typebox';
 import type { FastifyInstance } from 'fastify';
 import type { Db } from '../db.js';
 import { AidHttpError } from '../errors.js';
+import type { UpdateStatus } from '../updateCheck.js';
 
 const LIVE = ['starting', 'working', 'needs_input', 'idle'];
 const Body = Type.Optional(
@@ -11,8 +12,9 @@ const Body = Type.Optional(
 // Arrêter le daemon tue ses agents (ce sont ses enfants) : sans --force, on refuse tant qu'il en reste de vivants.
 export function registerDaemonRoutes(
   app: FastifyInstance,
-  deps: { db: Db; requestStop: () => void },
+  deps: { db: Db; requestStop: () => void; updates?: () => UpdateStatus | null },
 ): void {
+  app.get('/api/daemon/update', async () => deps.updates?.() ?? { available: false });
   app.post('/api/daemon/stop', { schema: { body: Body } }, async (req, reply) => {
     const force = (req.body as { force?: boolean } | undefined)?.force === true;
     const alive = deps.db

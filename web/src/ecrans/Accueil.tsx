@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { Agent } from '../../../src/shared/model.js';
 import { useAid } from '../data/useAidState.js';
 import { Layout, useLayout } from '../ui/Layout.js';
@@ -59,6 +59,41 @@ function BandeauDaemon() {
           Réessayer
         </button>
       )}
+    </div>
+  );
+}
+
+const MAJ_CHECK_MS = 30 * 60_000;
+
+/** Compare au daemon : origin/main a-t-il avancé depuis le build que ce daemon sert ? */
+function BandeauMaj() {
+  const { call } = useAid();
+  const [remoteSha, setRemoteSha] = useState<string | null>(null);
+  useEffect(() => {
+    let off = false;
+    const load = () =>
+      call<{ available: boolean; remoteSha?: string }>('GET', '/api/daemon/update').then(
+        (r) => !off && setRemoteSha(r.available ? (r.remoteSha ?? '') : null),
+        () => {},
+      );
+    load();
+    const timer = setInterval(load, MAJ_CHECK_MS);
+    return () => {
+      off = true;
+      clearInterval(timer);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  if (remoteSha === null) return null;
+  return (
+    <div className="bandeau-maj" data-node="1-1.maj" role="status">
+      <p className="bandeau-titre" data-node="1-1.maj.titre">
+        Nouvelle version d’aidboard disponible
+      </p>
+      <p className="texte-discret" data-node="1-1.maj.aide">
+        origin/main a avancé{remoteSha ? ` (${remoteSha.slice(0, 7)})` : ''}. Redémarre le daemon
+        pour la charger : <code>aid stop --force && aid</code>
+      </p>
     </div>
   );
 }
@@ -288,6 +323,7 @@ function Contenu() {
           <BandeauDaemon />
         </section>
       )}
+      {!down && <BandeauMaj />}
       {topics.length === 0 ? (
         <section className="vide" data-node="1-1.vide">
           <p className="vide-message" data-node="1-1.vide.message">

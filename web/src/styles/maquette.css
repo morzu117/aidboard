@@ -319,6 +319,8 @@ body { background: var(--doc-bg); color: var(--text); font-family: var(--font); 
 .bandeau-erreur .icone { color: var(--s-erreur); margin-top: 2px; }
 .bandeau-texte { flex: 1 1 280px; display: flex; flex-direction: column; gap: var(--sp-1); }
 .bandeau-titre { font-size: var(--fs-l); font-weight: var(--fw-sb); color: var(--s-erreur); }
+.bandeau-maj { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-3) var(--sp-4); padding: var(--sp-3) var(--sp-5); border: 1px solid var(--s-attente-line); border-radius: var(--r-xl); background: var(--s-attente-bg); }
+.bandeau-maj .bandeau-titre { color: var(--s-attente); font-size: var(--fs-m); }
 .cas-erreur { display: flex; flex-direction: column; gap: var(--sp-3); padding: var(--sp-4); border: 1px solid var(--s-erreur-line); border-radius: var(--r-xl); background: var(--surface-2); }
 .cas-erreur-actions { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
 [data-viewport="desktop"] .cas-erreur,

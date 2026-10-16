@@ -135,3 +135,20 @@ test('texte d’agent ou de titre : jamais interprété comme du HTML', async ()
   expect(document.querySelector('img')).toBeNull();
   expect(document.querySelector('b')).toBeNull();
 });
+
+test('bandeau de mise à jour : affiché si le daemon signale origin/main en avance, absent sinon', async () => {
+  const h = setup(<Accueil />, snapshot({ workspaces: [ws()], topics: [topic()] }));
+  h.respond.set(
+    'GET /api/daemon/update',
+    json(200, { available: true, localSha: 'aaa', remoteSha: '1234567deadbeef' }),
+  );
+  await screen.findByText('feat/s');
+  expect(await screen.findByText('Nouvelle version d’aidboard disponible')).toBeTruthy();
+  expect(text('1-1.maj.aide')).toContain('1234567');
+});
+
+test('bandeau de mise à jour : rien si le daemon ne sait pas ou dit à jour', async () => {
+  setup(<Accueil />, snapshot({ workspaces: [ws()], topics: [topic()] }));
+  await screen.findByText('feat/s');
+  expect(node('1-1.maj')).toBeNull();
+});
