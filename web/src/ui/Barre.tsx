@@ -20,7 +20,25 @@ export function Barre({
   const n = (rest: string) => `${screen}.barre.${rest}`;
   return (
     <header className="barre" data-node={`${screen}.barre`}>
-      <span className="marque" data-node={n('marque')}>
+      <span
+        className="marque"
+        data-node={n('marque')}
+        style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35em' }}
+      >
+        <svg viewBox="0 0 520 490" aria-hidden="true" style={{ height: '1.1em', width: 'auto' }}>
+          <path
+            d="M70 70 245 225 70 380"
+            stroke="#FFFFFF"
+            strokeWidth="140"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            fill="none"
+            transform="translate(20 20)"
+          />
+          <circle cx="430" cy="96" r="70" fill="#00D994" />
+          <circle cx="430" cy="245" r="70" fill="#FFFFFF" />
+          <circle cx="430" cy="395" r="70" fill="#FFFFFF" />
+        </svg>
         A-I-D
       </span>
       <nav className="nav" data-node={n('nav')} aria-label="Navigation principale">

@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1660 490" fill="none">
+  <title>AID — logo arrondi</title>
+  <g transform="translate(20 20)">
+    <path d="M70 70 245 225 70 380" stroke="#151719" stroke-width="140" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="410" cy="76" r="70" fill="#00D994"/>
+    <g fill="#151719">
+      <circle cx="410" cy="225" r="70"/>
+      <circle cx="410" cy="375" r="70"/>
+    </g>
+    <g transform="translate(525 7)" fill="#151719">
+      <path fill-rule="evenodd" d="M3 356 163 42Q180 0 227 0 274 0 294 44L456 356Q480 414 427 436 377 457 350 400L322 346H132L107 401Q82 455 32 436-18 418 3 356ZM177 258H282L230 130Z"/>
+      <rect x="480" width="118" height="438" rx="59"/>
+      <path fill-rule="evenodd" d="M695 0H848C1000 0 1092 82 1092 219S1000 438 848 438H695Q648 438 648 391V47Q648 0 695 0ZM766 103V335H843C928 335 974 296 974 219S928 103 843 103Z"/>
+    </g>
+  </g>
+</svg>
