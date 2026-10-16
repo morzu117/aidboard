@@ -10,6 +10,7 @@ import type { EventStore } from '../events/store.js';
 import type { AidPaths } from '../paths.js';
 import { type AuthState, issueRunToken } from '../security.js';
 import { LogWriter } from './log.js';
+import { type Estimate, estimate } from './heuristic.js';
 import { TerminalMirror } from './mirror.js';
 import { getPty } from './native.js';
 import { agentCommand, agentEnv, hookEnv, resolveOnPath, type SpawnKind } from './spawn.js';
@@ -30,6 +31,13 @@ export interface LiveAgent {
   exited: boolean;
   exit: { exitCode: number | null; signal: number | null; reason: string } | null;
   stopReason?: StopReason;
+  kind: SpawnKind;
+  /** dernière sortie du terminal (ms) : le silence fonde l'estimation */
+  lastOutputAt: number;
+  /** un hook a parlé pour cet agent : on n'estime plus rien */
+  hooked: boolean;
+  estimated: Estimate | null;
+  paused: boolean;
   /** Octets bruts du terminal, dans l'ordre. Retourne la fonction de désabonnement. */
   subscribe(cb: (chunk: string) => void): () => void;
   onExitCallbacks: Set<() => void>;
@@ -53,16 +61,60 @@ interface TopicRow {
 
 export class AgentManager {
   private live = new Map<string, LiveAgent>();
+  private readonly ticker: NodeJS.Timeout;
 
   constructor(private readonly deps: ManagerDeps) {
-    // un sujet archivé n'a plus d'écran à rejouer : on libère ses miroirs
     deps.store.on(
       'event',
-      (e: { type: string; topicId?: string; data: Record<string, unknown> }) => {
+      (e: {
+        type: string;
+        source: string;
+        topicId?: string;
+        agentId?: string;
+        data: Record<string, unknown>;
+      }) => {
+        // un sujet archivé n'a plus d'écran à rejouer : on libère ses miroirs
         if (e.type === 'topic.state' && e.data.state === 'archived' && e.topicId)
           this.forgetTopic(e.topicId);
+        const a = e.agentId ? this.live.get(e.agentId) : undefined;
+        if (a && e.type === 'agent.status') {
+          if (e.source === 'hook:claude' || e.source === 'codex:json') a.hooked = true;
+          if (e.source === 'daemon' && typeof e.data.paused === 'boolean') a.paused = e.data.paused;
+        }
       },
     );
+    this.ticker = setInterval(() => this.tickHeuristic(Date.now()), 2000);
+    this.ticker.unref();
+  }
+
+  /** Estime le statut des agents sans hooks (E8). N'émet qu'aux transitions. */
+  tickHeuristic(now: number): void {
+    for (const a of this.live.values()) {
+      if (a.exited || a.hooked || a.paused || (a.kind !== 'claude' && a.kind !== 'codex')) continue;
+      const silenceMs = now - a.lastOutputAt;
+      const next = estimate(silenceMs, a.mirror.screen(), a.estimated);
+      if (!next) continue;
+      a.estimated = next.status;
+      this.deps.store.append({
+        source: 'heuristic',
+        type: 'agent.status',
+        workspaceId: a.workspaceId,
+        topicId: a.topicId,
+        runId: a.runId,
+        agentId: a.id,
+        data: {
+          status: next.status,
+          ...(next.status === 'needs_input' && { reason: 'question' }),
+          silenceMs,
+          lastLine: next.lastLine,
+          promptDetected: next.promptDetected,
+        },
+      });
+    }
+  }
+
+  dispose(): void {
+    clearInterval(this.ticker);
   }
 
   get(agentId: string): LiveAgent | undefined {
@@ -121,6 +173,11 @@ export class AgentManager {
       size: { ...INITIAL },
       exited: false,
       exit: null,
+      kind: o.kind,
+      lastOutputAt: Date.now(),
+      hooked: false,
+      estimated: null,
+      paused: false,
       subscribe: (cb) => {
         subscribers.add(cb);
         return () => subscribers.delete(cb);
@@ -129,6 +186,7 @@ export class AgentManager {
     };
     const log = new LogWriter(join(paths.logs, `${agentId}.log`), config.terminal.logMaxBytes);
     pty.onData((chunk) => {
+      live.lastOutputAt = Date.now();
       log.write(chunk);
       live.mirror.write(chunk);
       for (const cb of subscribers) cb(chunk);

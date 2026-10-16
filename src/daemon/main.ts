@@ -109,6 +109,7 @@ export async function startDaemon(
       agents,
       async stop() {
         await agents.stopAll('daemon_stop', 5000);
+        agents.dispose();
         await app.close();
         opened.close();
         rmSync(paths.daemonJson, { force: true });
