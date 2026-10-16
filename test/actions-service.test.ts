@@ -17,7 +17,7 @@ async function ctx(): Promise<ActionContext> {
   t = await startTestDaemon();
   t.db
     .prepare(
-      "INSERT INTO workspaces (id, name, root, base_branch, worktrees_dir, created_at) VALUES ('ws_1','a','/a','main','/w','t0')",
+      "INSERT INTO workspaces (id, name, root, base_branch, worktrees_dir, created_at, remote) VALUES ('ws_1','a','/a','main','/w','t0',NULL)",
     )
     .run();
   return { store: t.store, paths: resolvePaths(t.home), queue: new WorkspaceQueue() };
