@@ -9,6 +9,7 @@ import { Layout } from '../ui/Layout.js';
 import { Point, statusView } from '../ui/Statut.js';
 import { Cote } from './Cote.js';
 import { useNettoyage } from './useNettoyage.js';
+import { roleLabel } from '../ui/roles.js';
 
 const INDEX_LABEL: Record<IndexState, string> = {
   disabled: 'index absent : lecture directe',
@@ -314,7 +315,7 @@ function Contenu({ topicId }: { topicId: string }) {
                         data-node={`1-3.terminaux.onglet-${i + 1}.role`}
                         data-bind="agent.role"
                       >
-                        {a.role}
+                        {roleLabel(a.role)}
                       </span>
                     </button>
                     {LIVE.includes(a.status) && (

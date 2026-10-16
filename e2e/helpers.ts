@@ -26,11 +26,11 @@ export function newRepo(name: string, opts: { codegraph?: boolean } = {}): strin
   return makeOriginAndClone(dir, { name, ...opts }).clone;
 }
 
-/** Enregistre un dépôt par le dialogue « Nouveau workspace ». */
+/** Enregistre un dépôt par le dialogue « Nouveau projet ». */
 export async function registerWorkspace(page: Page, path: string): Promise<void> {
   await node(page, '1-1.barre.nouveau-sujet').click();
-  // un premier dépôt ouvre directement « Nouveau workspace » ; ensuite il faut passer par « Ajouter un workspace »
-  const ajouter = page.getByRole('button', { name: 'Ajouter un workspace…' });
+  // un premier dépôt ouvre directement « Nouveau projet » ; ensuite il faut passer par « Ajouter un projet »
+  const ajouter = page.getByRole('button', { name: 'Ajouter un projet…' });
   if (await ajouter.isVisible({ timeout: 2000 }).catch(() => false)) await ajouter.click();
   // le dossier se choisit dans l'explorateur ; « Aller au dossier » évite de descendre arbre par arbre
   await page.getByLabel('Aller au dossier').fill(path);

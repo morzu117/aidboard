@@ -92,7 +92,7 @@ test('une erreur du daemon sur la navigation est affichée', async () => {
 test('le premier affichage part du dossier qui contient le dernier dépôt enregistré', async () => {
   const h = setup(<Accueil />, snapshot({ workspaces: [ws({ root: '/home/moi/Projects/a' })] }));
   await userEvent.click(await screen.findByRole('button', { name: 'Nouveau sujet' }));
-  await userEvent.click(await screen.findByRole('button', { name: 'Ajouter un workspace…' }));
+  await userEvent.click(await screen.findByRole('button', { name: 'Ajouter un projet…' }));
   await screen.findByRole('group', { name: 'Choisir le dossier du dépôt' });
   expect(fsCalls(h)[0]).toBe('/api/fs/dirs?path=/home/moi/Projects');
 });

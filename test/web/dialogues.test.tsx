@@ -211,20 +211,20 @@ test('nettoyer un sujet sale : le refus est affiché et rien ne propose de force
   expect(screen.queryByRole('button', { name: 'Supprimer quand même' })).toBeNull();
 });
 
-test('avec un dépôt déjà enregistré, « Ajouter un workspace » ouvre l’enregistrement et revient à la création de sujet', async () => {
+test('avec un dépôt déjà enregistré, « Ajouter un projet » ouvre l’enregistrement et revient à la création de sujet', async () => {
   const h = setup(<Accueil />, snapshot({ workspaces: [ws()] }));
   h.respond.set(
     'POST /api/workspaces',
     json(201, { ...ws({ id: 'ws_2', name: 'autre' }), warnings: [] }),
   );
   await userEvent.click(await screen.findByRole('button', { name: 'Nouveau sujet' }));
-  await userEvent.click(screen.getByRole('button', { name: 'Ajouter un workspace…' }));
+  await userEvent.click(screen.getByRole('button', { name: 'Ajouter un projet…' }));
   await userEvent.click(await screen.findByRole('button', { name: 'Choisir mon-depot' }));
   await userEvent.click(screen.getByRole('button', { name: 'Enregistrer' }));
   expect(await screen.findByRole('dialog', { name: 'Nouveau sujet' })).toBeTruthy();
 });
 
-test('la création de sujet préselectionne le workspace le plus récent', async () => {
+test('la création de sujet préselectionne le projet le plus récent', async () => {
   setup(
     <Accueil />,
     snapshot({
@@ -235,5 +235,5 @@ test('la création de sujet préselectionne le workspace le plus récent', async
     }),
   );
   await userEvent.click(await screen.findByRole('button', { name: 'Nouveau sujet' }));
-  expect((screen.getByLabelText('Workspace') as HTMLSelectElement).value).toBe('ws_z');
+  expect((screen.getByLabelText('Projet') as HTMLSelectElement).value).toBe('ws_z');
 });

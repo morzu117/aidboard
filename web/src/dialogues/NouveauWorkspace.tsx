@@ -41,7 +41,7 @@ export function NouveauWorkspace({ onClose, onDone }: { onClose: () => void; onD
 
   if (warnings) {
     return (
-      <Dialogue titre="Workspace enregistré" onClose={onDone}>
+      <Dialogue titre="Projet enregistré" onClose={onDone}>
         {warnings.map((w) => (
           <p key={w} className="message-info">
             {w}
@@ -56,7 +56,7 @@ export function NouveauWorkspace({ onClose, onDone }: { onClose: () => void; onD
     );
   }
   return (
-    <Dialogue titre="Nouveau workspace" onClose={onClose}>
+    <Dialogue titre="Nouveau projet" onClose={onClose}>
       <form onSubmit={submit} className="formulaire" aria-label="Enregistrer un dépôt">
         <SelecteurDossier start={start} selected={path} onSelect={setPath} />
         <label>
