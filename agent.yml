@@ -1,0 +1,27 @@
+# Manifeste projet — résolu par /sync depuis ~/.agent-kernel
+#
+# Ne contient que les écarts. Tout le reste est détecté du repo ou hérité de
+# defaults.yml du noyau :
+#
+#   name, languages      package.json, tsconfig.json
+#   memory.source        .gbrain-source, sinon = namespace
+#   commands             scripts npm de package.json
+#   capabilities, models, guardrails, phases    defaults.yml
+
+kernel:
+  version: "0.7.1"
+
+project:
+  namespace: aid           # le brief l'impose ; détecté, ce serait « aidboard »
+
+gates:                     # détecté : « npm test » seul ; le vrai gate fait plus
+  gate: npm run gate       # typecheck + lint + test + build
+  e2e: npm run gate:e2e    # build + Playwright
+
+stack:
+  node: "Node 22 requis (engines >=22.12 <25, épinglé par mise.toml) ; le gate tourne aussi sous Node 24 avant chaque livraison de chantier."
+  natifs: "node-pty et better-sqlite3 sont en external dans tsup : jamais embarqués dans le bundle."
+  tests: "AID_HOME temporaire dans tout test, jamais le vrai ~/.aid ; jamais claude ni codex dans un test automatique (faux agent test/fixtures/fake-agent.sh)."
+  maquettes: "design/maquettes/ est lu par programme : ne jamais le reformater (Prettier l'ignore)."
+  reseau: "Le daemon n'écoute que sur 127.0.0.1."
+  plans: "docs/chantiers/ : un plan par chantier, un point = un commit."
