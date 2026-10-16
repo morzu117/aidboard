@@ -57,6 +57,45 @@ body {
   gap: var(--sp-2);
   margin-top: var(--sp-2);
 }
+/* Palette ⌘K : absente des maquettes, comme les dialogues. */
+.voile--haut {
+  align-items: flex-start;
+  padding-top: 12vh;
+}
+.palette {
+  gap: var(--sp-2);
+  padding: var(--sp-3);
+}
+.palette__liste {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 50vh;
+  overflow: auto;
+}
+.palette__item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  min-height: var(--h-controle);
+  padding: 0 var(--sp-3);
+  border-radius: var(--r-s);
+  color: var(--text);
+  cursor: pointer;
+}
+.palette__item.est-choisi {
+  background: var(--surface-3);
+}
+.palette__indice,
+.palette__vide {
+  color: var(--text-3);
+  font-size: var(--fs-s);
+}
+.palette__vide {
+  margin: 0;
+  padding: var(--sp-3);
+}
 .apercu-branche {
   font-size: var(--fs-s);
   color: var(--text-3);
