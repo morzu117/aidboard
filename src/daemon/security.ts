@@ -81,8 +81,10 @@ export function registerSecurity(
     }
 
     const path = req.url.split('?')[0] ?? '';
-    if (req.method === 'GET' && path === '/auth') {
-      const token = (req.query as { token?: string }).token;
+    const query = req.query as { token?: unknown };
+    // la spec ouvre le navigateur sur /?token=… ; /auth?token=… reste accepté
+    if (req.method === 'GET' && (path === '/auth' || (path === '/' && query.token !== undefined))) {
+      const token = query.token;
       if (typeof token !== 'string' || !safeEqual(token, auth.adminToken)) {
         return reply
           .code(401)

@@ -97,3 +97,29 @@ test('un agent ne peut pas désigner l’agent d’un autre run', async () => {
       .statusCode,
   ).toBe(403);
 });
+
+test('les types de la ruche (plan.updated, task.status) et la source relay sont ingérables par le daemon', async () => {
+  t = await startTestDaemon();
+  expect(
+    (await post({ source: 'swairm', type: 'plan.updated', data: { tasks: [] } })).statusCode,
+  ).toBe(202);
+  expect(
+    (await post({ source: 'swairm', type: 'task.status', data: { status: 'done' } })).statusCode,
+  ).toBe(202);
+  expect(
+    (await post({ source: 'relay', type: 'approval.resolved', data: { decision: 'ok' } }))
+      .statusCode,
+  ).toBe(202);
+});
+
+test('un agent ne peut pas émettre plan.updated ni instructions.updated', async () => {
+  t = await startTestDaemon();
+  seedTopic(t.db);
+  const h = { host: t.headers.host!, authorization: `Bearer ${issueRunToken(t.d.auth, 'run_1')}` };
+  expect(
+    (await post({ source: 'hook:claude', type: 'plan.updated', data: {} }, h)).statusCode,
+  ).toBe(403);
+  expect(
+    (await post({ source: 'hook:claude', type: 'instructions.updated', data: {} }, h)).statusCode,
+  ).toBe(403);
+});

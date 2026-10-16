@@ -7,7 +7,7 @@ export interface AidConfig {
   port: number;
   editor: string[];
   env: { strip: string[] };
-  terminal: { scrollback: number; logMaxBytes: number };
+  terminal: { scrollback: number; logMaxBytes: number; logRetentionDays: number };
 }
 
 export const DEFAULT_CONFIG: AidConfig = {
@@ -15,7 +15,7 @@ export const DEFAULT_CONFIG: AidConfig = {
   port: 4870,
   editor: [],
   env: { strip: ['ANTHROPIC_API_KEY', 'ANTHROPIC_AUTH_TOKEN'] },
-  terminal: { scrollback: 5000, logMaxBytes: 50 * 1024 * 1024 },
+  terminal: { scrollback: 5000, logMaxBytes: 50 * 1024 * 1024, logRetentionDays: 30 },
 };
 
 export class ConfigError extends Error {}
@@ -66,9 +66,15 @@ export function parseConfig(text: string): AidConfig {
   }
   if (doc.terminal !== undefined) {
     if (!isRecord(doc.terminal)) throw new ConfigError('config.yaml : terminal doit être un objet');
-    rejectUnknown(doc.terminal, ['scrollback', 'logMaxBytes'], 'terminal.');
+    rejectUnknown(doc.terminal, ['scrollback', 'logMaxBytes', 'logRetentionDays'], 'terminal.');
     if (doc.terminal.scrollback !== undefined) {
       cfg.terminal.scrollback = positiveInt(doc.terminal.scrollback, 'terminal.scrollback');
+    }
+    if (doc.terminal.logRetentionDays !== undefined) {
+      cfg.terminal.logRetentionDays = positiveInt(
+        doc.terminal.logRetentionDays,
+        'terminal.logRetentionDays',
+      );
     }
     if (doc.terminal.logMaxBytes !== undefined) {
       cfg.terminal.logMaxBytes = positiveInt(doc.terminal.logMaxBytes, 'terminal.logMaxBytes');
@@ -92,6 +98,7 @@ const DEFAULT_FILE = `# Configuration d'A-I-D. Tout est facultatif : ce sont les
 # terminal:
 #   scrollback: 5000
 #   logMaxBytes: 52428800
+#   logRetentionDays: 30     # les journaux plus vieux sont supprimés au démarrage
 `;
 
 export function writeDefaultConfigIfAbsent(p: AidPaths): void {

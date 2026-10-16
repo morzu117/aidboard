@@ -41,6 +41,21 @@ l'est pas encore bloque les points qui en dépendent.
 | codegraph 1.6.2, épinglé 1.6.0 | Simple avertissement. | Ne pas relancer tout `bootstrap-machine.sh` : il le redescendrait. |
 | Pas d'index `.codegraph/` dans `a-i-d` | Les agents lisent directement (repli déclaré). | `codegraph init` quand le code existera (chantier 01). |
 
+### Spec v1 révisée (lue le 2026-10-15 à 22:46, rev 89) et export « git flow »
+
+La spec est le document Claude Docs lié en tête du brief ; l'export `design/maquettes/git-flow/` (écrans 2.1 à 2.9, jalon v0.3) est arrivé en même temps. Ce qui en a été repris pendant la v0.1, et ce qui est reporté :
+
+| Point de la spec ou du design | Décision |
+| --- | --- |
+| Arrêt des agents : SIGINT puis SIGTERM | **Repris** (chantier 03.4). SIGHUP ajouté en troisième palier : un shell interactif ignore SIGTERM. SIGKILL du groupe à l'échéance. |
+| Événements `plan.updated`, `task.status`, `instructions.updated`, source `relay`, `agent.spawned` avec `role` et `cwd` | **Repris** : le schéma les accepte dès maintenant. Un agent ne peut pas les émettre. |
+| Navigateur ouvert sur `/?token=…` | **Repris** : `/auth?token=` reste accepté. |
+| Rétention configurable des journaux PTY | **Repris** : `terminal.logRetentionDays`, 30 par défaut, purge au démarrage. |
+| Redémarrer le daemon arrête les agents, sauf les runs Swairm | Sans objet en v0.1 (pas de run Swairm). À garder en v0.4 : les runs Swairm vivent dans leur propre process. |
+| Sujet `draft` « créé, pas de worktree », écrans 2.1 et 2.2 (préparation, `topic.setup`, `topic.create-existante`) | **Reporté en v0.3.** En v0.1 le sujet n'existe en base qu'après le succès du script (décision du plan 02, testée). Le design git flow suppose un sujet `draft` pendant la préparation et une commande `worktree.setup` : il faudra une migration et lever l'unicité du slug pour un brouillon abandonné. |
+| `Sujet.prUrl`, entité `Tâche` (sous-worktrees `<branche>--t<n>`) | Reportés en v0.3 et v0.4. |
+| Spec : « sur Windows, le navigateur ouvre `http://localhost:<port>` » | Le plan 05 ouvre toujours `127.0.0.1` (un `localhost` peut se résoudre en `::1`). Le daemon accepte les deux dans `Host`. |
+
 ## 2. Registre des risques anticipés
 
 Chaque risque a sa parade dans un point précis. L'exécutant ne les redécouvre pas : il les

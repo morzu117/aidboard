@@ -182,3 +182,10 @@ test('agentCommand, resolveOnPath et agentEnv', () => {
     AID_TOPIC: 't',
   });
 });
+
+test('agent.spawned porte kind, role, cwd, pid et commande (schéma d’événements de la spec)', async () => {
+  const a = await start('/bin/sh');
+  const e = c.t.store.since(null).find((x) => x.type === 'agent.spawned')!;
+  expect(e.data).toMatchObject({ kind: 'shell', role: 'free', cwd: a.topic.wt, pid: a.agent.pid });
+  expect(e.data.command).toEqual(a.agent.command);
+});

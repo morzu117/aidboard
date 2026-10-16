@@ -199,3 +199,14 @@ test('un token de longueur différente ne lève pas', async () => {
   });
   expect(r.statusCode).toBe(401);
 });
+
+test('la spec ouvre le navigateur sur /?token= : bon token 303 et cookie, mauvais token 401, sans token 401', async () => {
+  await start();
+  const ok = await app.inject({ url: `/?token=${auth.adminToken}`, headers: { host: host() } });
+  expect(ok.statusCode).toBe(303);
+  expect(String(ok.headers['set-cookie'])).toContain('aid_session=');
+  expect((await app.inject({ url: '/?token=faux', headers: { host: host() } })).statusCode).toBe(
+    401,
+  );
+  expect((await app.inject({ url: '/', headers: { host: host() } })).statusCode).toBe(401);
+});

@@ -1,33 +1,8 @@
 import { type Static, Type } from '@sinclair/typebox';
 import type { FastifyInstance } from 'fastify';
+import { EVENT_SOURCES, EVENT_TYPES } from '../../shared/events.js';
 import type { Db } from '../db.js';
 import type { EventStore } from '../events/store.js';
-
-const SOURCES = [
-  'hook:claude',
-  'codex:json',
-  'swairm',
-  'github',
-  'daemon',
-  'action',
-  'heuristic',
-] as const;
-const TYPES = [
-  'agent.spawned',
-  'agent.exited',
-  'agent.status',
-  'agent.tool',
-  'run.state',
-  'run.command',
-  'approval.requested',
-  'approval.resolved',
-  'files.changed',
-  'cost',
-  'action.started',
-  'action.finished',
-  'topic.state',
-  'topic.phase',
-] as const;
 
 // Ce qu'un agent peut dire de lui-même : jamais l'état du sujet, jamais une validation.
 const AGENT_SOURCES = new Set(['hook:claude', 'codex:json', 'heuristic']);
@@ -48,8 +23,8 @@ const EventBody = Type.Object(
     v: Type.Optional(Type.Literal(1)),
     id: Type.Optional(Type.String({ minLength: 1, maxLength: 64 })),
     ts: Type.Optional(Type.String({ minLength: 1, maxLength: 40 })),
-    source: oneOf(SOURCES),
-    type: oneOf(TYPES),
+    source: oneOf(EVENT_SOURCES),
+    type: oneOf(EVENT_TYPES),
     workspaceId: Type.Optional(Type.String()),
     topicId: Type.Optional(Type.String()),
     runId: Type.Optional(Type.String()),

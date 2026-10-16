@@ -5,6 +5,7 @@ import { type AidConfig, loadConfig, writeDefaultConfigIfAbsent } from './config
 import { type Db, openDb } from './db.js';
 import { ptyPreflight } from './pty/native.js';
 import { AgentManager } from './pty/manager.js';
+import { purgeOldLogs } from './pty/retention.js';
 import { EventStore } from './events/store.js';
 import { acquireLock } from './lock.js';
 import { ensureHome, resolvePaths } from './paths.js';
@@ -43,6 +44,7 @@ export async function startDaemon(
   try {
     writeDefaultConfigIfAbsent(paths);
     const config = { ...loadConfig(paths), ...opts.config };
+    purgeOldLogs(paths, config.terminal.logRetentionDays);
     const opened = openDb(paths.db);
     db = opened;
     const store = new EventStore(opened);

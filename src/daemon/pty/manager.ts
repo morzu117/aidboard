@@ -157,7 +157,7 @@ export class AgentManager {
           topicId: topic.id,
           runId: run.id,
           agentId,
-          data: { kind: o.kind, pid: pty.pid, command },
+          data: { kind: o.kind, role: 'free', cwd: topic.worktree, pid: pty.pid, command },
         },
         (tx) =>
           tx

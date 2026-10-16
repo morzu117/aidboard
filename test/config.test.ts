@@ -20,10 +20,7 @@ test('sans fichier, les défauts', () => {
 test('un fichier partiel est fusionné aux défauts', () => {
   const cfg = parseConfig('port: 5000\nterminal:\n  scrollback: 100\n');
   expect(cfg.port).toBe(5000);
-  expect(cfg.terminal).toEqual({
-    scrollback: 100,
-    logMaxBytes: DEFAULT_CONFIG.terminal.logMaxBytes,
-  });
+  expect(cfg.terminal).toEqual({ ...DEFAULT_CONFIG.terminal, scrollback: 100 });
   expect(cfg.env.strip).toEqual(DEFAULT_CONFIG.env.strip);
 });
 
