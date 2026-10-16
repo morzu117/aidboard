@@ -183,6 +183,33 @@ test('agentCommand, resolveOnPath et agentEnv', () => {
   });
 });
 
+test('agentEnv retire les marqueurs d’une session Claude Code héritée, pas la configuration de l’utilisateur', () => {
+  const env = agentEnv(
+    {
+      PATH: '/bin',
+      CLAUDECODE: '1',
+      CLAUDE_CODE_CHILD_SESSION: '1',
+      CLAUDE_CODE_SESSION_ID: 'abc',
+      CLAUDE_CODE_ENTRYPOINT: 'claude-vscode',
+      CLAUDE_CODE_MESSAGING_TOKEN: 'secret',
+      CLAUDE_CODE_MESSAGING_SOCKET: '/tmp/x.sock',
+      CLAUDE_PID: '12',
+      CLAUDE_AGENT_SDK_VERSION: '1',
+      CLAUDE_CONFIG_DIR: '/home/moi/.claude-pro',
+      CLAUDE_CODE_USE_BEDROCK: '1',
+    },
+    [],
+    {},
+  );
+  expect(Object.keys(env).sort()).toEqual([
+    'CLAUDE_CODE_USE_BEDROCK',
+    'CLAUDE_CONFIG_DIR',
+    'COLORTERM',
+    'PATH',
+    'TERM',
+  ]);
+});
+
 test('agent.spawned porte kind, role, cwd, pid et commande (schéma d’événements de la spec)', async () => {
   const a = await start('/bin/sh');
   const e = c.t.store.since(null).find((x) => x.type === 'agent.spawned')!;

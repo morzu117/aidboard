@@ -60,9 +60,10 @@ export function Terminal({ agentId, visible }: { agentId: string; visible: boole
         setApprox(h.replay === 'log');
         ownerRef.current = h.owner;
         setOwner(h.owner);
+        // la taille annoncée d'abord : fitAndSend() la remplace par celle mesurée, et non l'inverse
+        setSize({ cols: h.cols, rows: h.rows });
         if (h.owner) fitAndSend();
         else term.resize(h.cols, h.rows);
-        setSize({ cols: h.cols, rows: h.rows });
       },
       onOutput: (bytes) => term.write(bytes),
       onSize: (cols, rows) => {

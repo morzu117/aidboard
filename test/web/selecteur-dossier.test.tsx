@@ -96,3 +96,25 @@ test('le premier affichage part du dossier qui contient le dernier dépôt enreg
   await screen.findByRole('group', { name: 'Choisir le dossier du dépôt' });
   expect(fsCalls(h)[0]).toBe('/api/fs/dirs?path=/home/moi/Projects');
 });
+
+test('une réponse arrivée en retard n’écrase pas le dossier demandé depuis', async () => {
+  const h = setup(<Accueil />, snapshot());
+  let release!: () => void;
+  const first = new Promise<void>((r) => (release = r));
+  let n = 0;
+  h.respond.set('GET /api/fs/dirs', () => {
+    const lent = n++ === 0;
+    const body = lent ? listing() : listing({ path: '/srv/code', entries: [] });
+    return (lent ? first.then(() => body) : Promise.resolve(body)).then(
+      (b) => new Response(JSON.stringify(b), { status: 200 }),
+    ) as unknown as Response;
+  });
+  await userEvent.click(await screen.findByRole('button', { name: 'Nouveau sujet' }));
+  const champ = await screen.findByLabelText('Aller au dossier');
+  await userEvent.type(champ, '/srv/code{Enter}');
+  await waitFor(() => expect((champ as HTMLInputElement).value).toBe('/srv/code'));
+  release();
+  await new Promise((r) => setTimeout(r, 30));
+  expect((champ as HTMLInputElement).value).toBe('/srv/code');
+  expect(screen.queryByText('mon-depot')).toBeNull();
+});

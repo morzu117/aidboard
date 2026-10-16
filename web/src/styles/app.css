@@ -93,8 +93,25 @@ body {
   grid-template-columns: minmax(0, 1fr);
 }
 .sortie-xterm {
+  /* pas de flex colonne (celle de .sortie) : elle rétrécissait l'élément xterm bien en dessous du conteneur ;
+     et une hauteur franche, sinon fit() mesure le contenu au lieu de l'espace disponible */
+  display: block;
+  height: max(var(--h-terminal-sujet), calc(100dvh - 340px));
+  padding: 0;
+  overflow: hidden;
+}
+/* xterm pose la classe « terminal » sur son élément racine : la maquette y avait déjà une règle (boîte de 128 px
+   à bordure, en flex) qui écrasait le terminal et laissait la zone vide. On la neutralise ici. */
+.sortie-xterm .terminal {
+  display: block;
+  height: 100%;
+  /* le remplissage est sur l'élément xterm, pas sur son parent : fit() ne retranche que le premier */
   padding: var(--sp-2);
-  overflow: auto;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  font-size: inherit;
+  line-height: normal;
 }
 .sujet-actions {
   position: relative;

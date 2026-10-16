@@ -1,4 +1,4 @@
-import { type KeyboardEvent, useCallback, useEffect, useState } from 'react';
+import { type KeyboardEvent, useCallback, useEffect, useRef, useState } from 'react';
 import type { FsListing } from '../../../src/shared/fs.js';
 import { AidApiError } from '../data/api.js';
 import { useAid } from '../data/useAidState.js';
@@ -19,31 +19,34 @@ export function SelecteurDossier({
   const [error, setError] = useState<string | null>(null);
   const [goto, setGoto] = useState('');
 
-  const load = useCallback(
+  // Seule la dernière demande compte : une réponse arrivée en retard (le premier chargement, par exemple) ne doit pas
+  // écraser un dossier choisi ou un chemin tapé depuis.
+  const latest = useRef(0);
+  const open = useCallback(
     (path: string | undefined, showHidden: boolean) => {
+      const mine = ++latest.current;
       const qs = new URLSearchParams();
       if (path) qs.set('path', path);
       if (showHidden) qs.set('hidden', 'true');
-      return call<FsListing>('GET', `/api/fs/dirs?${qs}`);
+      call<FsListing>('GET', `/api/fs/dirs?${qs}`).then(
+        (l) => {
+          if (mine !== latest.current) return;
+          setListing(l);
+          setGoto(l.path);
+          setError(null);
+        },
+        (err: unknown) => {
+          if (mine !== latest.current) return;
+          setError(err instanceof AidApiError ? err.message : String(err));
+        },
+      );
     },
     [call],
-  );
-  const show = useCallback((l: FsListing) => {
-    setListing(l);
-    setGoto(l.path);
-    setError(null);
-  }, []);
-  const fail = useCallback((err: unknown) => {
-    setError(err instanceof AidApiError ? err.message : String(err));
-  }, []);
-  const open = useCallback(
-    (path: string | undefined, showHidden: boolean) => void load(path, showHidden).then(show, fail),
-    [load, show, fail],
   );
 
   // le premier affichage seulement : changer `start` en cours de route ne doit pas arracher l'utilisateur à son dossier
   useEffect(() => {
-    void load(start, false).then(show, fail);
+    open(start, false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
