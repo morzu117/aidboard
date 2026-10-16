@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link, useParams } from 'react-router';
+import { Link, useParams, useSearchParams } from 'react-router';
 import type { Agent, IndexState } from '../../../src/shared/model.js';
 import { AidApiError } from '../data/api.js';
 import { useAid } from '../data/useAidState.js';
@@ -28,7 +28,9 @@ const KINDS: Array<{ kind: Kind; label: string }> = [
 
 function Contenu({ topicId }: { topicId: string }) {
   const { state, daemon, retry, call } = useAid();
-  const [selected, setSelected] = useState<string | null>(null);
+  // « Ouvrir le terminal → » de la boîte de réception arrive avec ?agent= : son onglet est choisi
+  const [params] = useSearchParams();
+  const [selected, setSelected] = useState<string | null>(params.get('agent'));
   const [menu, setMenu] = useState<'aucun' | 'agent' | 'plus'>('aucun');
   const [erreur, setErreur] = useState<string | null>(null);
   const nettoyage = useNettoyage(topicId);

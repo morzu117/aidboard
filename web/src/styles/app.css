@@ -244,3 +244,8 @@ body {
 .dialogue--plein .sortie-xterm {
   height: calc(90vh - 160px);
 }
+
+/* E9 : pas de colonne « À démarrer · issues GitHub » ; la liste prend toute la largeur. */
+.cadre[data-viewport] .boite-colonnes {
+  grid-template-columns: minmax(0, 1fr);
+}
