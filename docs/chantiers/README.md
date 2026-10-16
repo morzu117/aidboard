@@ -100,6 +100,8 @@ chantiers sont exécutés en local (rien n'est poussé, aucune PR ouverte).**
 | — | Alignement sur la spec v1 révisée + maquettes git flow | `feat/aligner-spec-v1` | `feat/terminaux` | fait |
 | 04 | [Interface v0.1](04-interface.md) | `feat/interface-socle` | `feat/aligner-spec-v1` | fait |
 | 05 | [CLI, distribution et recette](05-cli-distribution-recette.md) | `feat/cli-recette` | `feat/interface-socle` | fait, recette humaine à finir : [recette-v0.1.md](../recette-v0.1.md) |
+| — | Explorateur de dossiers, terminal, projets 0..N | `feat/selecteur-dossier` | `main` | fait |
+| 06 | [Statuts réels, Accueil et Boîte de réception (v0.2)](06-maquettes-v0.2.md) | `feat/maquettes-v0.2` | `feat/selecteur-dossier` | en cours |
 
 ## 4. Correspondance avec les critères d'acceptation du brief
 
