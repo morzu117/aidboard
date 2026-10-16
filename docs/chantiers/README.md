@@ -165,3 +165,11 @@ Un seul paquet npm, sans *workspaces*, pour une publication simple.
 - Un test existant qui casse : comprendre pourquoi. Ne jamais l'adapter pour le faire
   passer si le plan ne le prévoit pas.
 - Ne jamais lancer `claude` ni `codex` dans un test automatique.
+
+## 9. Chantiers hors v0.1
+
+Indépendants de la pile v0.1 ; chacun porte son propre jalon.
+
+| N° | Chantier | Branche | Base | Dépend de | Prépare |
+| --- | --- | --- | --- | --- | --- |
+| 06 | [Mémoire locale : A-I-D porte la capacité `memory` du kernel](06-memoire-locale.md) | `feat/memoire-locale` | `feat/cli-recette` | agent-kernel 0.9.0 (`docs/chantiers/` du noyau) : le contrat `aid mem` est partagé | v0.3 (phase du sujet lue dans les pages) |
