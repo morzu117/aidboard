@@ -17,6 +17,9 @@ import { agentCommand, agentEnv, hookEnv, resolveOnPath, type SpawnKind } from '
 
 const ulid = monotonicFactory();
 const INITIAL = { cols: 120, rows: 32 };
+// Bordures que les TUI (dont claude lui-même) dessinent au-dessus du champ de saisie : une ligne
+// non vide mais sans contenu, qui écrase l'aperçu d'un agent inactif si on ne l'exclut pas.
+const DECORATIVE_LINE = /^[\s─-╿]+$/;
 
 export type StopReason = 'user' | 'daemon_stop';
 
@@ -394,7 +397,7 @@ export class AgentManager {
     }
     return screen
       .map((l) => l.trimEnd())
-      .filter((l) => l.trim())
+      .filter((l) => l.trim() && !DECORATIVE_LINE.test(l))
       .slice(-n);
   }
 
