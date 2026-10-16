@@ -35,6 +35,12 @@ async function main(): Promise<number> {
     const { runMem } = await import('./commands/mem.js');
     return runMem(process.argv.slice(3), resolvePaths());
   }
+  if (first === 'mcp') {
+    const { resolvePaths } = await import('../daemon/paths.js');
+    const { runMcp } = await import('./commands/mcp.js');
+    await runMcp(resolvePaths());
+    return -1; // vit tant que le client MCP tient stdin
+  }
   const { values, positionals } = parseArgs({
     allowPositionals: true,
     options: {
