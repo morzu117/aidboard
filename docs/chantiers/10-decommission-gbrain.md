@@ -26,7 +26,7 @@ Vérifié le 2026-10-17 (`gbrain sources list --json`, `gbrain status default --
 
 | Source    | Chemin local                        | Pages | Dernière synchro        | Nature |
 | --------- | ------------------------------------ | ----- | ------------------------ | --- |
-| `default` | `~/.gbrain/sources/default`          | 418   | **jamais** (`null`)      | orpheline, pas de dépôt git associé. Mélange `concept`/`note`/`timeline`/`transcript`/`learning` — un modèle de données plus ancien que les sources fédérées actuelles. |
+| `default` | `~/.gbrain/sources/default`          | 418   | **jamais** (`null`)      | orpheline, pas de dépôt git associé. **Traitée (10.1, 2026-10-17)** : 346 transcripts + 23 cartes swairm `verdict: périmée` + 21 dev-handoff klasso non validés + 2 pages bruit gardés au froid dans le backup ; 26 fichiers extraits en 29 pages `aid mem` (détail : `~/.aid/backups/gbrain-2026-10-17/default/TRIAGE-10.1.md`). |
 | `klasso`  | `~/Projects/myskooli`                | 1202  | 2026-09-24 (540h, severe) | projet réel (myskooli). Contient des snapshots de code (`packages/ai/...json`), des pages `dev-handoff`, `decisions`, `memoire`. |
 | `swairm`  | `~/Projects/swairm`                  | 153   | 2026-10-15 (fresh)        | projet réel. `concept` (anticipation, décisions, review, retro) et quelques `note`. |
 | `descent-wf` | `~/Projects/descent-wf`           | 152   | 2026-10-15 (fresh)        | projet réel, même profil que swairm. |
@@ -83,9 +83,11 @@ Décisions ouvertes (à valider par Julien, une par point d'exécution) :
   snapshot d'un fichier toujours présent dans le dépôt git du projet, est probablement sans
   valeur ajoutée sur ce que git donne déjà. Pas de règle générale fiable sans relire un
   échantillon par source — à trancher au moment de chaque point (10.1-10.4), pas ici.
-- **DO2 — Namespace cible dans `aid mem`.** Garder le préfixe projet tel que gbrain le portait
-  (`myskooli/…`, `swairm/…`) ou normaliser vers `lesson/<domaine>/<slug>` quand la page est
-  généralisable au-delà du projet d'origine ? Les deux cas existent dans l'échantillon lu.
+- **DO2 — Namespace cible dans `aid mem`.** Décidée (Julien, 2026-10-17) : mixte. Préfixe projet
+  (`klasso/…`, `swairm/…`) pour le contenu propre à un projet (notes, décisions, design, docs,
+  timelines) ; `lesson/<domaine>/<slug>` pour le généralisable au-delà du projet d'origine
+  (insights opérationnels, rétros de process). Appliquée pour 10.1 (voir TRIAGE-10.1.md) ; à
+  reconduire pour 10.2-10.4.
 - **DO3 — Ordre des sources.** `default` (orpheline, jamais synchronisée, le risque le plus
   ancien) d'abord, ou les projets actifs (`klasso`, plus gros volume) d'abord ? Proposé : `default`
   d'abord — c'est la seule qui n'a strictement aucune autre copie, nulle part.
@@ -109,11 +111,15 @@ closes et vérifiées.
 
 ## 6. Points
 
-### 10.1 — Source `default` (418 pages, jamais synchronisée)
+### 10.1 — Source `default` (418 pages, jamais synchronisée) — **fait (2026-10-17)**
 
-La plus ancienne, la plus à risque : aucune autre copie n'existe. Export intégral, triage par
-type (`concept`/`note`/`timeline`/`transcript`/`learning` — échantillon §2), extraction dans
-`aid mem`.
+Export réutilisé (backup déjà présent, complet et vérifié). Triage intégral page par page :
+392 pages gardées au froid dans le backup (346 transcripts, 23 cartes swairm `verdict: périmée`,
+21 dev-handoff klasso `agent_written`/non validés redondants avec git, 2 pages bruit), 26
+fichiers extraits en 29 pages `aid mem` (namespace mixte DO2 : `klasso/…`, `swairm/…`,
+`lesson/<domaine>/…`). Détail et justification page-type par page-type :
+`~/.aid/backups/gbrain-2026-10-17/default/TRIAGE-10.1.md`. Vérifié par `aid mem list`/`get`/
+`search` sur un échantillon.
 
 ### 10.2 — Source `klasso` / myskooli (1202 pages)
 
