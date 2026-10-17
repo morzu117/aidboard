@@ -40,6 +40,18 @@ function differs(a: string, b: string): boolean {
   return !readFileSync(a).equals(readFileSync(b));
 }
 
+// Piège du chantier 09 (§7) : une machine qui a encore l'ancien clone agent-kernel sous
+// ~/.agent-kernel (symlink ou dossier réel, peu importe) a un .git/ à cet endroit. Écrire/
+// retirer des fichiers par-dessus fusionnerait silencieusement les deux sources — ou, pire,
+// viderait l'arbre de travail d'un dépôt git bien réel. Refuser plutôt que deviner.
+function assertNoGitClone(targetDir: string): void {
+  if (existsSync(join(targetDir, '.git'))) {
+    throw new Error(
+      `${targetDir} contient un .git (ancien clone agent-kernel) : aid kernel install refuse d'écrire par-dessus — déplacer ou supprimer ce clone à la main avant de relancer`,
+    );
+  }
+}
+
 // Chantier 09 (DS1) : aucun clone git séparé — aid matérialise kernel/ (embarqué dans le
 // package publié) vers ~/.agent-kernel. Idempotent, et nettoie ce qu'une version plus
 // récente du contenu a retiré (un simple cp -r laisserait traîner les fichiers disparus).
@@ -47,6 +59,7 @@ export function kernelInstall(
   paths: KernelPaths,
   opts: { check?: boolean } = {},
 ): KernelInstallResult {
+  assertNoGitClone(paths.targetDir);
   const sourceFiles = listFilesRecursive(paths.sourceDir);
   const targetFiles = listFilesRecursive(paths.targetDir);
   const toWrite = sourceFiles.filter((rel) =>

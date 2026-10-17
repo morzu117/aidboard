@@ -94,6 +94,18 @@ describe('kernelInstall (chantier 09.2)', () => {
     write(join(p.sourceDir, 'defaults.yml'), 'v1');
     expect(kernelInstall(p).syncCommandWritten).toBe(false);
   });
+
+  test('cible contenant un .git (ancien clone agent-kernel) : refuse, même en --check', () => {
+    const p = paths();
+    write(join(p.sourceDir, 'defaults.yml'), 'v1');
+    mkdirSync(join(p.targetDir, '.git'), { recursive: true });
+    writeFileSync(join(p.targetDir, 'laisse-moi-tranquille.md'), 'ancien clone');
+    expect(() => kernelInstall(p)).toThrow(/\.git.*ancien clone agent-kernel/);
+    expect(() => kernelInstall(p, { check: true })).toThrow(/\.git.*ancien clone agent-kernel/);
+    // rien n'a été touché par le refus
+    expect(existsSync(join(p.targetDir, 'laisse-moi-tranquille.md'))).toBe(true);
+    expect(existsSync(join(p.targetDir, 'defaults.yml'))).toBe(false);
+  });
 });
 
 describe('runKernel (CLI aid kernel install [--check])', () => {
@@ -130,6 +142,14 @@ describe('runKernel (CLI aid kernel install [--check])', () => {
     write(join(p.sourceDir, 'defaults.yml'), 'v1');
     const { out } = lines((o) => runKernel('install', ['--check'], p, o));
     expect(out.some((l) => l.includes('à écrire'))).toBe(true);
+    expect(existsSync(join(p.targetDir, 'defaults.yml'))).toBe(false);
+  });
+
+  test('cible avec .git (ancien clone agent-kernel) : code 1, rien écrit', () => {
+    const p = paths();
+    write(join(p.sourceDir, 'defaults.yml'), 'v1');
+    mkdirSync(join(p.targetDir, '.git'), { recursive: true });
+    expect(runKernel('install', [], p, () => undefined)).toBe(1);
     expect(existsSync(join(p.targetDir, 'defaults.yml'))).toBe(false);
   });
 });
