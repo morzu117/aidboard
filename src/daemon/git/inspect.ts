@@ -1,6 +1,7 @@
 import { existsSync, readFileSync, realpathSync } from 'node:fs';
 import { join } from 'node:path';
 import { parse } from 'yaml';
+import type { GitCommitDetail, GitFileChange, GitLogCommit } from '../../shared/git.js';
 import { isValidNamespace } from '../memory/slug.js';
 import type { StructuralService } from '../structural/service.js';
 import { git } from './exec.js';
@@ -110,16 +111,6 @@ export async function gitLiveInfo(
   };
 }
 
-export interface GitLogCommit {
-  hash: string;
-  parents: string[];
-  author: string;
-  date: string;
-  message: string;
-  refs: string[];
-  inHead: boolean;
-}
-
 const LOG_FORMAT = '%H%x01%P%x01%an%x01%aI%x01%s%x01%D%x00';
 
 function parseLog(raw: string, inHead: Set<string>): GitLogCommit[] {
@@ -173,4 +164,66 @@ export async function gitLog(
     if (!commits.has(commit.hash)) commits.set(commit.hash, commit);
   }
   return [...commits.values()];
+}
+
+// 11.3 : signale le commit WIP (pointillé) dans le graphe — suivi ou non, peu importe lequel.
+export async function hasUncommittedChanges(worktree: string): Promise<boolean> {
+  const status = await git(worktree, ['status', '--porcelain']);
+  return status.ok && status.stdout.length > 0;
+}
+
+const DETAIL_FORMAT = '%H%x01%P%x01%an%x01%aI%x01%s%x01%b%x01%D%x00';
+
+// 11.3 : panneau de détail d'un commit — corps, parents, refs, et fichiers touchés avec leurs
+// compteurs. Les renommages ne sont pas détectés (`-M` omis) : un renommage apparaît comme une
+// suppression et une addition, plus simple à apparier entre numstat et name-status.
+export async function gitCommitDetail(
+  worktree: string,
+  hash: string,
+): Promise<GitCommitDetail | null> {
+  const [show, numstat, nameStatus, ancestor] = await Promise.all([
+    git(worktree, ['show', '--no-patch', `--format=${DETAIL_FORMAT}`, hash]),
+    git(worktree, ['diff-tree', '--no-commit-id', '-r', '--numstat', hash]),
+    git(worktree, ['diff-tree', '--no-commit-id', '-r', '--name-status', hash]),
+    git(worktree, ['merge-base', '--is-ancestor', hash, 'HEAD']),
+  ]);
+  if (!show.ok) return null;
+  const header = show.stdout.split('\x00')[0] ?? '';
+  const [h, parents, author, date, message, body, refs] = header.split('\x01');
+
+  const counts = new Map<string, { additions: number | null; deletions: number | null }>();
+  for (const line of numstat.ok ? numstat.stdout.split('\n').filter(Boolean) : []) {
+    const [a, d, ...rest] = line.split('\t');
+    counts.set(rest.join('\t'), {
+      additions: a === '-' ? null : Number(a),
+      deletions: d === '-' ? null : Number(d),
+    });
+  }
+  const statusByPath = new Map<string, GitFileChange['status']>();
+  for (const line of nameStatus.ok ? nameStatus.stdout.split('\n').filter(Boolean) : []) {
+    const [code, ...rest] = line.split('\t');
+    const letter = code?.[0] as GitFileChange['status'] | undefined;
+    statusByPath.set(
+      rest.join('\t'),
+      letter && ['A', 'M', 'D', 'R'].includes(letter) ? letter : '?',
+    );
+  }
+  const files: GitFileChange[] = [...counts.entries()].map(([path, c]) => ({
+    path,
+    status: statusByPath.get(path) ?? '?',
+    additions: c.additions,
+    deletions: c.deletions,
+  }));
+
+  return {
+    hash: h || hash,
+    parents: (parents ?? '').split(' ').filter(Boolean),
+    author: author ?? '',
+    date: date ?? '',
+    message: message ?? '',
+    body: (body ?? '').trim(),
+    refs: (refs ?? '').split(', ').filter(Boolean),
+    inHead: ancestor.ok,
+    files,
+  };
 }

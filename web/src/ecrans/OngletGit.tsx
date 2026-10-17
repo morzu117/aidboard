@@ -1,0 +1,364 @@
+import { useEffect, useMemo, useState } from 'react';
+import type { GitCommitDetail, GitLogCommit, GitLogResponse } from '../../../src/shared/git.js';
+import { AidApiError } from '../data/api.js';
+import { fetchCommitDetail, fetchGitLog } from '../data/git.js';
+import { useAid } from '../data/useAidState.js';
+import { depuis } from '../ui/depuis.js';
+import { findRefTip, layoutGraph, LANE_X, type GraphRow } from '../ui/gitGraph.js';
+
+type Portee = 'toutes' | 'base' | 'sujet';
+
+const PORTEES: Array<{ valeur: Portee; label: string }> = [
+  { valeur: 'toutes', label: 'Toutes' },
+  { valeur: 'base', label: 'Sujet et main' },
+  { valeur: 'sujet', label: 'Sujet seul' },
+];
+
+function CommitGraphe({ row }: { row: GraphRow }) {
+  const cx = LANE_X[row.lane];
+  return (
+    <svg className="graphe" viewBox="0 0 72 32" aria-hidden="true" focusable="false">
+      {row.paths.map((p, i) => (
+        <path
+          key={i}
+          className={`trait trait--voie-${p.lane}${p.dashed ? ' trait--pointille' : ''}`}
+          d={p.d}
+        />
+      ))}
+      {row.isHead && <circle className="anneau" cx={cx} cy={16} r={8} />}
+      <circle
+        className={row.wip ? 'noeud noeud--wip' : `noeud noeud--voie-${row.lane}`}
+        cx={cx}
+        cy={16}
+        r={row.wip ? 5 : row.isHead ? 5.5 : 4.5}
+      />
+    </svg>
+  );
+}
+
+// 11.3 (écran 3.2) : graphe + liste de commits et panneau de détail. La bannière de
+// situation (avance/retard, synchroniser/fetch/pousser) reste pour 11.4, qui apporte les
+// actions réseau correspondantes — rien n'est câblé à moitié ici.
+export function OngletGit({
+  topicId,
+  base,
+  remote,
+}: {
+  topicId: string;
+  base: string;
+  remote: string | null;
+}) {
+  const { call } = useAid();
+  const [log, setLog] = useState<GitLogResponse | null>(null);
+  const [erreur, setErreur] = useState<string | null>(null);
+  const [portee, setPortee] = useState<Portee>('toutes');
+  const [recherche, setRecherche] = useState('');
+  const [selection, setSelection] = useState<string | null>(null);
+  const [detail, setDetail] = useState<GitCommitDetail | null>(null);
+  const [detailErreur, setDetailErreur] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchGitLog(call, topicId)
+      .then((r) => {
+        if (cancelled) return;
+        setLog(r);
+        setErreur(null);
+      })
+      .catch((err) => {
+        if (!cancelled) setErreur(err instanceof AidApiError ? err.message : String(err));
+      });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [topicId]);
+
+  const baseRefs = useMemo(() => (remote ? [`${remote}/${base}`, base] : [base]), [remote, base]);
+
+  const rows = useMemo(
+    () => (log ? layoutGraph(log.commits, { baseRefs, dirty: log.dirty }) : []),
+    [log, baseRefs],
+  );
+  const commitByHash = useMemo(
+    () => new Map<string, GitLogCommit>((log?.commits ?? []).map((c) => [c.hash, c])),
+    [log],
+  );
+
+  function selectionner(hash: string) {
+    setSelection(hash);
+    setDetail(null);
+    setDetailErreur(null);
+    fetchCommitDetail(call, topicId, hash)
+      .then(setDetail)
+      .catch((err) => setDetailErreur(err instanceof AidApiError ? err.message : String(err)));
+  }
+
+  if (erreur) {
+    return (
+      <div className="sujet-grille sujet-grille--seul">
+        <section className="zone-erreur" data-node="1-3.git.erreur">
+          <div className="bandeau-erreur" role="alert">
+            <div className="bandeau-texte">
+              <p className="bandeau-titre">Impossible de lire l’historique</p>
+              <p className="texte-discret" data-bind="erreur.cause">
+                {erreur}
+              </p>
+            </div>
+          </div>
+        </section>
+      </div>
+    );
+  }
+  if (!log) {
+    return (
+      <div className="sujet-grille sujet-grille--seul">
+        <div className="squelette" data-node="1-3.git.chargement">
+          <span className="sq sq--grand-bloc" />
+        </div>
+      </div>
+    );
+  }
+  if (rows.length === 0) {
+    return (
+      <div className="sujet-grille sujet-grille--seul">
+        <section className="vide" data-node="1-3.git.vide">
+          <p className="vide-message">Aucun commit depuis la base.</p>
+        </section>
+      </div>
+    );
+  }
+
+  const baseTip = findRefTip(log.commits, baseRefs);
+  const filtered = rows.filter((row) => {
+    if (row.wip) return true;
+    if (portee === 'sujet' && row.lane !== 1) return false;
+    if (portee === 'base' && row.lane === 2) return false;
+    if (recherche) {
+      const c = commitByHash.get(row.hash);
+      const needle = recherche.toLowerCase();
+      const hay = `${c?.message ?? ''} ${c?.author ?? ''} ${row.hash}`.toLowerCase();
+      if (!hay.includes(needle)) return false;
+    }
+    return true;
+  });
+
+  return (
+    <div className="sujet-grille" data-node="1-3.git">
+      <div className="colonne">
+        <section
+          className="panneau panneau--sombre"
+          data-node="1-3.git.historique"
+          aria-label="Historique"
+        >
+          <div className="outils">
+            <div role="group" aria-label="Branches affichées">
+              {PORTEES.map(({ valeur, label }) => (
+                <button
+                  key={valeur}
+                  className={`portee${portee === valeur ? ' est-actif' : ''}`}
+                  data-node={`1-3.git.historique.portee-${valeur}`}
+                  data-action="git.portee"
+                  type="button"
+                  aria-pressed={portee === valeur}
+                  onClick={() => setPortee(valeur)}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            <input
+              className="champ"
+              data-node="1-3.git.historique.recherche"
+              data-action="git.filtrer"
+              type="text"
+              placeholder="Message, auteur ou hash"
+              aria-label="Filtrer les commits"
+              value={recherche}
+              onChange={(e) => setRecherche(e.target.value)}
+            />
+            <button
+              className="bouton"
+              data-node="1-3.git.historique.voir-base"
+              data-action="git.voir-base"
+              type="button"
+              onClick={() => baseTip && selectionner(baseTip)}
+              disabled={!baseTip}
+            >
+              Voir la base
+            </button>
+          </div>
+          <div className="colonnes" aria-hidden="true">
+            <span>Graphe</span>
+            <span>Description</span>
+            <span className="col-auteur">Auteur</span>
+            <span className="col-date">Date</span>
+            <span className="col-hash">Hash</span>
+          </div>
+          {filtered.length === 0 ? (
+            <p className="vide-message" data-node="1-3.git.historique.aucun-resultat">
+              Aucun commit ne correspond au filtre.
+            </p>
+          ) : (
+            <div className="commits" role="list" aria-label="Commits">
+              {filtered.map((row) => {
+                const c = row.wip ? null : (commitByHash.get(row.hash) ?? null);
+                return (
+                  <button
+                    key={row.hash || 'wip'}
+                    className={`commit${selection === row.hash ? ' est-selectionne' : ''}${row.absent ? ' commit--absent' : ''}`}
+                    data-node={`1-3.git.historique.commit-${row.hash || 'wip'}`}
+                    data-action="git.selectionner"
+                    type="button"
+                    role="listitem"
+                    aria-current={selection === row.hash}
+                    onClick={row.wip ? undefined : () => selectionner(row.hash)}
+                    disabled={row.wip}
+                  >
+                    <CommitGraphe row={row} />
+                    <span className="col-message">
+                      {row.wip ? (
+                        <span className="message message--wip">Modifications non commitées</span>
+                      ) : (
+                        <>
+                          {c?.refs.map((r) => (
+                            <span key={r} className="etiquette etiquette--ref">
+                              {r}
+                            </span>
+                          ))}
+                          <span className="message">{c?.message}</span>
+                        </>
+                      )}
+                    </span>
+                    <span className="col-auteur">{row.wip ? '—' : c?.author}</span>
+                    <span className="col-date">
+                      {row.wip ? 'maintenant' : c ? depuis(c.date) : ''}
+                    </span>
+                    <span className="col-hash">{row.wip ? '' : row.hash.slice(0, 7)}</span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+          <div className="panneau-pied legende" data-node="1-3.git.historique.legende">
+            <span className="legende-element">
+              <span className="point point--voie-1" /> ta branche
+            </span>
+            <span className="legende-element">
+              <span className="point point--voie-0" /> main
+            </span>
+            <span className="legende-element">
+              <span className="point point--voie-2" /> autres branches
+            </span>
+            <span className="legende-element">Atténués : commits absents de ta branche</span>
+          </div>
+        </section>
+      </div>
+      <div className="colonne">
+        <aside className="panneau" data-node="1-3.git.detail" aria-label="Détail du commit">
+          {!selection ? (
+            <p className="texte-faible" data-node="1-3.git.detail.vide">
+              Sélectionne un commit pour voir son détail.
+            </p>
+          ) : detailErreur ? (
+            <p className="message-erreur" role="alert">
+              {detailErreur}
+            </p>
+          ) : !detail ? (
+            <div className="squelette" data-node="1-3.git.detail.chargement">
+              <span className="sq sq--grand-bloc" />
+            </div>
+          ) : (
+            <div className="detail" data-node="1-3.git.detail.corps">
+              <div className="refs">
+                {detail.refs.map((r) => (
+                  <span key={r} className="etiquette etiquette--ref" data-bind="commit.ref">
+                    {r}
+                  </span>
+                ))}
+              </div>
+              <h3
+                className="detail-titre"
+                data-node="1-3.git.detail.message"
+                data-bind="commit.message"
+              >
+                {detail.message}
+              </h3>
+              {detail.body && (
+                <p
+                  className="texte-discret"
+                  data-node="1-3.git.detail.corps-texte"
+                  data-bind="commit.corps"
+                >
+                  {detail.body}
+                </p>
+              )}
+              <dl className="infos">
+                <dt>Auteur</dt>
+                <dd data-node="1-3.git.detail.auteur" data-bind="commit.auteur">
+                  {detail.author}
+                </dd>
+                <dt>Date</dt>
+                <dd data-node="1-3.git.detail.date" data-bind="commit.date">
+                  {new Date(detail.date).toLocaleString('fr-FR')}
+                </dd>
+                <dt>Parents</dt>
+                <dd
+                  className="chiffres"
+                  data-node="1-3.git.detail.parents"
+                  data-bind="commit.parents"
+                >
+                  {detail.parents.map((p) => p.slice(0, 7)).join(', ') || '—'}
+                </dd>
+                <dt>Dans ta branche</dt>
+                <dd data-node="1-3.git.detail.dans-branche" data-bind="commit.dans_head">
+                  {detail.inHead ? 'oui' : 'non'}
+                </dd>
+              </dl>
+              <div className="separation">
+                <div className="separation-titre">
+                  <span>Fichiers</span>
+                  <span className="chiffres" data-node="1-3.git.detail.fichiers-total">
+                    {detail.files.length} fichier{detail.files.length > 1 ? 's' : ''}
+                  </span>
+                </div>
+                <div className="fichiers">
+                  {detail.files.map((f) => (
+                    <div key={f.path} className="fichier" data-node="1-3.git.detail.fichier">
+                      <span
+                        className={`fichier-etat fichier-etat--${f.status.toLowerCase()}`}
+                        data-bind="fichier.etat"
+                      >
+                        {f.status}
+                      </span>
+                      <span className="fichier-chemin" data-bind="fichier.chemin">
+                        {f.path}
+                      </span>
+                      <span className="ajouts" data-bind="fichier.ajouts">
+                        {f.additions != null ? `+${f.additions}` : ''}
+                      </span>
+                      <span className="suppressions" data-bind="fichier.suppressions">
+                        {f.deletions != null ? `−${f.deletions}` : ''}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div className="separation actions">
+                <button
+                  className="bouton"
+                  data-node="1-3.git.detail.copier-hash"
+                  data-action="git.copier-hash"
+                  type="button"
+                  onClick={() => void navigator.clipboard?.writeText(detail.hash)}
+                >
+                  Copier le hash
+                </button>
+              </div>
+            </div>
+          )}
+        </aside>
+      </div>
+    </div>
+  );
+}

@@ -184,11 +184,13 @@ test('onglets de contenu (11.1) : Agents par défaut, Git et Fichiers affichent 
       runs: [run],
       agents: [agent({ id: 'ag_1', kind: 'claude', role: 'free' })],
     }),
+    'tp_1',
+    { 'GET /api/topics/tp_1/git/log': json(200, { commits: [], dirty: false }) },
   );
   await screen.findByTestId('term-ag_1');
   expect(node('1-3.onglets.agents')?.className).toContain('est-actif');
   await userEvent.click(node('1-3.onglets.git')!);
-  expect(await screen.findByText('Onglet Git : à venir.')).toBeTruthy();
+  expect(await screen.findByText('Aucun commit depuis la base.')).toBeTruthy();
   expect(node('1-3.onglets.git')?.className).toContain('est-actif');
   // le terminal reste dans le DOM (masqué), pas démonté : pas de reconnexion à la bascule.
   expect(screen.getByTestId('term-ag_1')).toBeTruthy();

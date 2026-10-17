@@ -11,7 +11,7 @@ import type { AidConfig } from '../config.js';
 import type { Db } from '../db.js';
 import { AidHttpError } from '../errors.js';
 import { git } from '../git/exec.js';
-import { gitLog } from '../git/inspect.js';
+import { gitCommitDetail, gitLog, hasUncommittedChanges } from '../git/inspect.js';
 import type { StructuralService } from '../structural/service.js';
 import type { Indexer } from '../topics/index.js';
 
@@ -220,14 +220,30 @@ export function registerTopicRoutes(app: FastifyInstance, deps: TopicRouteDeps):
     };
   });
 
-  // 11.2 : commits bruts (D24) — géométrie du graphe laissée au client.
+  // 11.2/11.3 : commits bruts (D24) — géométrie du graphe laissée au client.
   app.get('/api/topics/:id/git/log', async (req) => {
     const { id } = req.params as { id: string };
     const row = deps.db.prepare('SELECT worktree, base FROM topics WHERE id = ?').get(id) as
       { worktree: string; base: string } | undefined;
     if (!row) throw new AidHttpError(404, 'sujet inconnu');
     if (!existsSync(row.worktree)) throw new AidHttpError(409, 'worktree introuvable');
-    return { commits: await gitLog(row.worktree, row.base) };
+    const [commits, dirty] = await Promise.all([
+      gitLog(row.worktree, row.base),
+      hasUncommittedChanges(row.worktree),
+    ]);
+    return { commits, dirty };
+  });
+
+  // 11.3 : panneau de détail — un commit à la fois, jamais embarqué dans la liste (coûteux).
+  app.get('/api/topics/:id/git/commits/:hash', async (req) => {
+    const { id, hash } = req.params as { id: string; hash: string };
+    const row = deps.db.prepare('SELECT worktree FROM topics WHERE id = ?').get(id) as
+      { worktree: string } | undefined;
+    if (!row) throw new AidHttpError(404, 'sujet inconnu');
+    if (!existsSync(row.worktree)) throw new AidHttpError(409, 'worktree introuvable');
+    const commit = await gitCommitDetail(row.worktree, hash);
+    if (!commit) throw new AidHttpError(404, 'commit inconnu');
+    return commit;
   });
 
   app.post('/api/topics/:id/actions/:actionId', async (req, reply) => {
