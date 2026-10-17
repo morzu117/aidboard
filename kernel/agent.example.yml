@@ -1,0 +1,31 @@
+# Manifeste projet — agent.yml, à la racine du repo
+#
+# Tu n'écris pas ce fichier : `/sync` le propose en inspectant le repo, tu le
+# valides. Il n'est là que pour ce que le noyau ne peut ni deviner ni hériter.
+#
+# Ordre de résolution, du plus faible au plus fort :
+#   defaults.yml du noyau  <  détection du repo  <  ce fichier
+#
+# Ne redéclare ici que ce qui s'écarte des deux premiers. Un manifeste qui
+# recopie les défauts, c'est une copie de plus à maintenir.
+
+kernel:
+  version: 'main' # canari le temps que le noyau se stabilise
+
+project:
+  name: mon-projet
+  namespace: monprojet # préfixe des pages mémoire
+
+# Tout le reste est détecté ou hérité. À ne remplir qu'en cas d'écart :
+#
+# project.languages        détecté (pyproject.toml, package.json, …)
+# capabilities             hérité de defaults.yml
+# capabilities.memory.source   = namespace (résolu par /sync)
+# commands.test / lint     détectés (scripts npm, [tool.pytest], [tool.ruff])
+# gates                    détectés, une entrée par couche testable
+# models / guardrails / phases   hérités de defaults.yml
+#
+# stack : le seul champ vraiment manuel — des faits en prose qu'aucune
+# inspection ne donne. Facultatif.
+stack:
+  # supabase: true

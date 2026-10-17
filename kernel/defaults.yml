@@ -1,0 +1,36 @@
+# Défauts machine — hérités par tous les projets
+#
+# Ce qui est identique partout n'a rien à faire dans chaque agent.yml. Ces
+# valeurs concernent la machine, les comptes et les outils installés — pas un
+# projet. Un projet qui doit s'en écarter les redéclare dans son manifeste,
+# et sa valeur gagne.
+#
+# Aucun nom de projet ici. C'est toujours le noyau.
+
+capabilities:
+  structural_index: codegraph
+  memory:
+    adapter: aid
+    lessons_source: lesson # premier segment des pages lesson/<domaine>/<slug>
+    # `source` n'est PAS ici : c'est le namespace du projet, résolu par /sync.
+  dev_agent: claude-dev # Anthropic — choix opérateur 2026-09-01 (quotas Codex trop courts). Ex-codex.
+  review_agent: claude # Anthropic — MÊME fournisseur que dev_agent depuis le 2026-09-01 : review = repli assumé, instance neuve sans outil. Ex-vibe (Mistral).
+
+models:
+  trivial: claude-haiku-4-5-20251001
+  standard: claude-sonnet-5
+  complex: claude-opus-5
+
+guardrails:
+  redev_cap: 2
+  max_price: '0.50'
+
+phases: [plan, dev, review, triage, retro]
+
+stack:
+  # Faits vrais de cette machine, donc de tous ses projets. Fusionnés dans le
+  # `stack` de chaque manifeste — le projet gagne sur une clé homonyme.
+  extraits: >
+    Charge des extraits ciblés, jamais des fichiers entiers. C'est un levier
+    de coût, et sur une machine à mémoire contrainte c'est aussi ce qui
+    décide si la session tient ou se fait tuer.

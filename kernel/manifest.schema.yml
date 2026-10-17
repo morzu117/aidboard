@@ -1,0 +1,95 @@
+# Schéma du manifeste projet — agent.yml
+#
+# Ce fichier documente la structure attendue. Il n'est pas validé
+# mécaniquement : /sync le lit et résout ce qui manque.
+#
+# La plupart de ces champs ne s'écrivent jamais à la main. Ordre de
+# résolution, du plus faible au plus fort :
+#
+#     defaults.yml du noyau  <  détection du repo  <  agent.yml
+#
+# Un manifeste ne porte que les écarts. Les champs marqués [hérité] viennent
+# de defaults.yml, ceux marqués [détecté] sont déduits du repo par /sync.
+#
+# Le schéma évolue LENTEMENT. C'est l'interface stable entre un noyau qui
+# bouge vite et des projets qui ne doivent pas casser. Tout changement ici
+# est une version majeure du noyau.
+
+kernel:
+  version: string
+  # "1.2.0"  exact, le plus sûr
+  # "1.2.x"  mineures flottantes
+  # "main"   canari, encaisse tout
+
+project:
+  name: string
+  namespace: string # préfixe des pages mémoire, sans deux-points
+  languages: [string] # [détecté] informe les adaptateurs de leurs limites
+
+capabilities: # [hérité]
+  # Rôles, pas outils. Le noyau écrit la politique en termes de rôles ;
+  # c'est ici qu'on nomme l'implémentation du jour. Un adaptateur du même
+  # nom doit exister dans adapters/.
+  #
+  # Deux formes acceptées :
+  #   structural_index: codegraph              # juste l'adaptateur
+  #   memory: {adapter: gbrain, source: …}     # adaptateur + ses options
+  #
+  # Une capacité à null n'apparaît pas dans le bloc rendu.
+
+  structural_index:
+    string | null
+    # Sans lui, la table de routage retombe sur la lecture directe et la
+    # review perd le contrôle de rayon d'impact. Le déclarer null est un
+    # choix légitime ; le déclarer sans que l'outil soit installé ne l'est
+    # pas — le bloc interdirait le grep sans rien offrir à la place.
+
+  memory:
+    adapter: string | null # [hérité]
+    source: string # [résolu] = project.namespace ; premier segment des pages cycliques
+    lessons_source:
+      string # [hérité] premier segment des pages lesson/, hors de tout projet
+      # Si les deux sont identiques, les pages cycliques tombent dans l'espace transverse.
+      # Voir policy/namespace.md.
+
+  dev_agent: string | null
+  review_agent:
+    string | null
+    # Idéalement d'un fournisseur différent de dev_agent : un reviewer du
+    # même moteur partage les angles morts de l'auteur.
+
+models: # [hérité]
+  # Routage par difficulté de sous-tâche. Premier levier de coût de la
+  # chaîne. Consommé par l'adaptateur dev_agent.
+  trivial: string
+  standard: string
+  complex: string
+
+stack: # [fusionné]
+  # Le seul champ vraiment manuel : des faits en prose qu'aucune inspection
+  # ne donne. /sync le propose rempli depuis ce qu'il a lu du repo.
+  # Clés libres, valeurs booléennes ou chaînes.
+  #
+  # Seul champ FUSIONNÉ au lieu d'être écrasé : le `stack` de defaults.yml
+  # porte les faits de machine, celui du projet les faits de projet, et le
+  # bloc rendu reçoit les deux. Une clé homonyme du projet gagne.
+
+commands: # [détecté]
+  test: string
+  lint: string
+  build: string # facultatif
+
+gates: # [détecté]
+  # Une entrée par couche testable. Chacune se lance EN ENTIER — un gate
+  # partiel rate les dérives d'artefacts générés.
+  #
+  # Projet mono-couche : une seule entrée, nommée comme on veut.
+  # Projet multi-couches : une entrée par couche, l'agent lance celles
+  # qu'il a touchées.
+  <couche>: string
+
+guardrails: # [hérité]
+  redev_cap: integer # re-dev par sous-tâche avant escalade (défaut 2)
+  max_price: string # plafond budget passé au review_agent
+
+phases: [string] # [hérité] sous-ensemble de policy/phases.md, dans l'ordre
