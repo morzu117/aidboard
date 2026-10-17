@@ -70,7 +70,7 @@ réelle (DS4 : le daemon ne tombe jamais à cause du moteur).
 Un candidat au banc ne se juge pas sur les tokens consommés par réponse (`explore` rend déjà
 un texte libre, pas une réponse de modèle — DS8, pas de modèle sur le chemin de requête) : il
 se juge sur le **coût à tâche terminée**. Concrètement, sur un jeu de tâches réelles
-(plan → impact, dev → explore, review → affected, rejoué sur un sujet klasso) : temps total
+(plan → impact, dev → explore, review → affected, rejoué sur un sujet myskooli) : temps total
 agent compris, nombre d'allers-retours avant une réponse utilisable, et angles morts mesurés
 (aujourd'hui pour codegraph : pas d'arête `prisma.<modèle>.<op>`, chaîne HTTP partielle,
 homonymes fusionnés — voir le chantier 08 §5). Un moteur plus lent par appel mais qui évite un

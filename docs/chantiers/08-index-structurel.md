@@ -14,7 +14,7 @@ par un serveur MCP tiers que chaque agent installe de son côté. Le moteur est 
 produit à trois endroits différents, sans état lisible par le board ni par `aid doctor`.
 
 Le dossier conclut aussi que codegraph n'est pas définitif : Kivgraph (graphe fondé sur le
-type-checker) mérite un banc d'essai sur klasso, et les angles morts mesurés (Prisma :
+type-checker) mérite un banc d'essai sur myskooli, et les angles morts mesurés (Prisma :
 2 148 sites `prisma.<modèle>.<op>` sans arête, chaîne HTTP partielle, homonymes fusionnés)
 appellent des extracteurs maison. Tout cela n'est faisable proprement que si le daemon
 parle à un **contrat** et non à un binaire : un adaptateur par moteur, un seul point
@@ -113,10 +113,10 @@ config `structural`, la portée d'un token de run.
 Décisions ouvertes (à valider par Julien) :
 
 - **DO1 — Un index par worktree ou par workspace.** Aujourd'hui chaque sujet relance un
-  `init` complet (klasso : 106 Mo, ~1 500 fichiers). Partager l'index du dépôt principal
+  `init` complet (myskooli : 106 Mo, ~1 500 fichiers). Partager l'index du dépôt principal
   et `sync` dans le worktree serait moins coûteux mais codegraph expose un
   `worktreeMismatch` : à mesurer avant de décider. Ce chantier garde un index par worktree.
-- **DO2 — `dist/` dans l'index.** Sur klasso, `apps/api/dist/` est indexé. Si codegraph
+- **DO2 — `dist/` dans l'index.** Sur myskooli, `apps/api/dist/` est indexé. Si codegraph
   ne lit pas de liste d'exclusion, le contrat prévoit `config.structural.exclude` passé à
   l'adaptateur, qui le fera respecter comme il peut (filtre des résultats au pire).
 
@@ -302,7 +302,7 @@ Pas de test ; vérification : `npm run gate` (lint markdown inclus s'il y en a u
 - `explore` et `--json` sur `impact`/`callers` sont récents : lire la version au premier
   `status` et déclarer la capacité absente (pas `unavailable` global) sous 1.6.0, plutôt
   que de parser une erreur d'usage.
-- `status --json` peut annoncer `builtWithVersion` > version CLI (vu sur klasso : index
+- `status --json` peut annoncer `builtWithVersion` > version CLI (vu sur myskooli : index
   bâti par 1.6.2, CLI 1.6.0). Ce n'est pas une erreur, c'est à afficher.
 - Daemon codegraph orphelin (`.codegraph/daemon.pid`) : le registre de risques du README
   s'applique ; `reindex` doit d'abord tuer ce pid comme le script de nettoyage.
