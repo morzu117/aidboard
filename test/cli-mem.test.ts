@@ -68,7 +68,13 @@ const alive = (pid: number) => {
 describe.skipIf(!built)('aid mem en sous-processus', () => {
   beforeAll(async () => {
     home = realpathSync(mkdtempSync(join(tmpdir(), 'aid-cli-mem-')));
-    writeFileSync(join(home, 'config.yaml'), `port: ${await freePort()}\n`, { mode: 0o600 });
+    // Même piège que test/helpers/daemon.ts : sans ce `provider: off`, le daemon réel
+    // lancé ici détecte le vrai Ollama de ce poste et bascule en recherche hybride.
+    writeFileSync(
+      join(home, 'config.yaml'),
+      `port: ${await freePort()}\nmemory:\n  embeddings:\n    provider: off\n`,
+      { mode: 0o600 },
+    );
     expect((await run([])).code).toBe(0);
   }, 60_000);
 

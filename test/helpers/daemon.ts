@@ -41,7 +41,19 @@ export async function startTestDaemon(
     // l'autre hériterait sinon du moteur réel de config.structural (installé sur ce poste).
     structuralEngine: extra.structuralEngine ?? (extra.codegraphBin ? undefined : 'off'),
     memory: extra.memory,
-    config: { port: 0, ...extra.config },
+    config: {
+      port: 0,
+      // Même piège que structuralEngine ci-dessus, côté memory : un test qui ne précise
+      // ni embedder ni config.memory hériterait sinon du vrai Ollama, installé et lancé
+      // sur ce poste (config.ts par défaut : provider 'ollama'). 'off' tant que le test
+      // ne demande pas explicitement les vecteurs.
+      memory: {
+        embeddings: { provider: 'off', model: 'bge-m3', url: 'http://127.0.0.1:11434' },
+        maintenance: { enabled: false, model: 'qwen3:8b', window: '02:00-06:00' },
+        git: { push: false },
+      },
+      ...extra.config,
+    },
     checkUpdates: false,
   });
   const headers = { host: `127.0.0.1:${d.port}`, authorization: `Bearer ${d.auth.adminToken}` };
