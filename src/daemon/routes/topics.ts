@@ -11,6 +11,7 @@ import type { AidConfig } from '../config.js';
 import type { Db } from '../db.js';
 import { AidHttpError } from '../errors.js';
 import { git } from '../git/exec.js';
+import { gitLog } from '../git/inspect.js';
 import type { StructuralService } from '../structural/service.js';
 import type { Indexer } from '../topics/index.js';
 
@@ -217,6 +218,16 @@ export function registerTopicRoutes(app: FastifyInstance, deps: TopicRouteDeps):
       },
       events: deps.actions.store.since(null, { topicId: id }),
     };
+  });
+
+  // 11.2 : commits bruts (D24) — géométrie du graphe laissée au client.
+  app.get('/api/topics/:id/git/log', async (req) => {
+    const { id } = req.params as { id: string };
+    const row = deps.db.prepare('SELECT worktree, base FROM topics WHERE id = ?').get(id) as
+      { worktree: string; base: string } | undefined;
+    if (!row) throw new AidHttpError(404, 'sujet inconnu');
+    if (!existsSync(row.worktree)) throw new AidHttpError(409, 'worktree introuvable');
+    return { commits: await gitLog(row.worktree, row.base) };
   });
 
   app.post('/api/topics/:id/actions/:actionId', async (req, reply) => {

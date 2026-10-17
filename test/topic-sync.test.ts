@@ -70,7 +70,11 @@ test('topic.sync : rebase sans conflit, avance/retard lus en direct avant et apr
   commitFile(wt, 'depuis-le-sujet.md', 'en cours\n');
 
   const before = await gitLiveInfo(wt, 'main');
-  expect(before).toEqual({ aheadBehind: { ahead: 1, behind: 1 }, rebaseInProgress: false });
+  expect(before).toEqual({
+    aheadBehind: { ahead: 1, behind: 1 },
+    rebaseInProgress: false,
+    onTopicBranch: true,
+  });
 
   const sync = await t.d.app.inject({
     method: 'POST',
@@ -83,7 +87,11 @@ test('topic.sync : rebase sans conflit, avance/retard lus en direct avant et apr
   expect(fin.data.outcome).toBe('succeeded');
 
   const after = await gitLiveInfo(wt, 'main');
-  expect(after).toEqual({ aheadBehind: { ahead: 1, behind: 0 }, rebaseInProgress: false });
+  expect(after).toEqual({
+    aheadBehind: { ahead: 1, behind: 0 },
+    rebaseInProgress: false,
+    onTopicBranch: true,
+  });
   expect(sh(wt, 'rev-parse', 'origin/main')).toBe(sh(origin, 'rev-parse', 'main'));
   expect(sh(wt, 'log', '-1', '--format=%s')).toBe('ajout depuis-le-sujet.md');
 

@@ -74,11 +74,18 @@ export async function currentBranch(root: string): Promise<string | null> {
 export interface GitLiveInfo {
   aheadBehind: { ahead: number; behind: number } | null;
   rebaseInProgress: boolean;
+  // 11.2 (D28) : le worktree a-t-il dérivé de la branche du sujet (HEAD détachée ou
+  // switch fait à la main) ? Live, jamais stocké — même raisonnement que l'avance/retard.
+  onTopicBranch: boolean;
 }
 
 // D16 : avance/retard et rebase en cours ne sont jamais stockés — relus en direct à chaque
 // GET /api/state, comme currentBranch l'est déjà pour topic.branch.
-export async function gitLiveInfo(worktree: string, base: string): Promise<GitLiveInfo> {
+export async function gitLiveInfo(
+  worktree: string,
+  base: string,
+  topicBranch?: string,
+): Promise<GitLiveInfo> {
   const gitDir = await git(worktree, ['rev-parse', '--path-format=absolute', '--git-dir']);
   const rebaseInProgress =
     gitDir.ok &&
@@ -92,7 +99,78 @@ export async function gitLiveInfo(worktree: string, base: string): Promise<GitLi
     '--count',
     `origin/${base}...HEAD`,
   ]);
-  if (!counts.ok) return { aheadBehind: null, rebaseInProgress };
+  const onTopicBranch =
+    topicBranch === undefined ? true : (await currentBranch(worktree)) === topicBranch;
+  if (!counts.ok) return { aheadBehind: null, rebaseInProgress, onTopicBranch };
   const [behind, ahead] = counts.stdout.split(/\s+/).map(Number);
-  return { aheadBehind: { ahead: ahead ?? 0, behind: behind ?? 0 }, rebaseInProgress };
+  return {
+    aheadBehind: { ahead: ahead ?? 0, behind: behind ?? 0 },
+    rebaseInProgress,
+    onTopicBranch,
+  };
+}
+
+export interface GitLogCommit {
+  hash: string;
+  parents: string[];
+  author: string;
+  date: string;
+  message: string;
+  refs: string[];
+  inHead: boolean;
+}
+
+const LOG_FORMAT = '%H%x01%P%x01%an%x01%aI%x01%s%x01%D%x00';
+
+function parseLog(raw: string, inHead: Set<string>): GitLogCommit[] {
+  return raw
+    .split('\x00')
+    .map((record) => record.replace(/^\n/, ''))
+    .filter(Boolean)
+    .map((record) => {
+      const [hash, parents, author, date, message, refs] = record.split('\x01');
+      return {
+        hash: hash ?? '',
+        parents: (parents ?? '').split(' ').filter(Boolean),
+        author: author ?? '',
+        date: date ?? '',
+        message: message ?? '',
+        refs: (refs ?? '').split(', ').filter(Boolean),
+        inHead: inHead.has(hash ?? ''),
+      };
+    });
+}
+
+// 11.2 (D24) : commits bruts seulement — hash, parents, auteur, date, résumé, refs, et si le
+// commit est atteignable depuis HEAD. Aucune géométrie de voie n'est calculée ici : le graphe
+// se reconstruit côté client à partir de ces champs (design/aid-export-git-flow/README.md).
+// Deux passes : les commits propres au sujet (origin/<base>..HEAD, jamais tronqués — c'est
+// l'historique que le sujet doit voir en entier) puis une fenêtre bornée sur l'ensemble des
+// branches locales et distantes visibles, pour les refs décorées sur l'historique partagé.
+export async function gitLog(
+  worktree: string,
+  base: string,
+  maxCount = 200,
+): Promise<GitLogCommit[]> {
+  const [own, shared, reachable] = await Promise.all([
+    git(worktree, ['log', '--topo-order', `--format=${LOG_FORMAT}`, `origin/${base}..HEAD`]),
+    git(worktree, [
+      'log',
+      '--topo-order',
+      `--max-count=${maxCount}`,
+      `--format=${LOG_FORMAT}`,
+      '--branches',
+      '--remotes',
+    ]),
+    git(worktree, ['rev-list', 'HEAD']),
+  ]);
+  const inHead = new Set(reachable.ok ? reachable.stdout.split('\n').filter(Boolean) : []);
+  const commits = new Map<string, GitLogCommit>();
+  for (const commit of [
+    ...parseLog(own.ok ? own.stdout : '', inHead),
+    ...parseLog(shared.ok ? shared.stdout : '', inHead),
+  ]) {
+    if (!commits.has(commit.hash)) commits.set(commit.hash, commit);
+  }
+  return [...commits.values()];
 }
