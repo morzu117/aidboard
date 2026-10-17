@@ -17,6 +17,7 @@ import {
 } from '../git/inspect.js';
 import { isValidNamespace } from '../memory/slug.js';
 import type { AidPaths } from '../paths.js';
+import type { StructuralService } from '../structural/service.js';
 
 const ulid = monotonicFactory();
 
@@ -82,13 +83,18 @@ function uniqueName(db: Db, wanted: string): string {
 
 export function registerWorkspaceRoutes(
   app: FastifyInstance,
-  deps: { db: Db; paths: AidPaths; procVersion?: () => string | null },
+  deps: {
+    db: Db;
+    paths: AidPaths;
+    procVersion?: () => string | null;
+    engine: StructuralService;
+  },
 ): void {
   app.post('/api/workspaces', { schema: { body: Body } }, async (req, reply) => {
     const body = req.body as { path: string; baseBranch?: string };
     let repo;
     try {
-      repo = await inspectRepo(body.path);
+      repo = await inspectRepo(body.path, deps.engine);
     } catch (err) {
       if (err instanceof NotARepo) throw new AidHttpError(422, err.message);
       throw err;

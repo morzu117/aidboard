@@ -35,7 +35,9 @@ ou, sans installer : `npx aidboard`.
 | `aid stop --force` | arrête le daemon et tous ses agents                                                                     |
 | `aid doctor`       | vérifie la machine et dit quoi corriger                                                                 |
 | `aid mem …`        | lit, écrit et cherche dans la mémoire locale (`get`, `put`, `search`, `list`, `rm`, `export`, `import`) |
-| `aid mcp`          | serveur MCP (stdio) exposant la mémoire locale aux clients qui le supportent                            |
+| `aid mcp`          | serveur MCP « aid » (stdio) : mémoire locale et index structurel (`index_*`) pour un agent              |
+
+Enregistrement auprès de Claude Code : `claude mcp add --scope user aid -- aid mcp`.
 
 Premier pas : « Nouveau sujet » dans la barre. Sans dépôt enregistré, A-I-D demande d'abord le chemin de la racine d'un
 dépôt git (qui doit avoir un remote `origin`).

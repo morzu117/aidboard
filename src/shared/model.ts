@@ -1,8 +1,17 @@
+import type { IndexEngine } from './structural.js';
+
 export type RunMode = 'standard' | 'swairm';
 export type Phase = 'plan' | 'dev' | 'review' | 'triage' | 'retro';
 export type TopicState = 'draft' | 'active' | 'review' | 'merged' | 'archived';
 export type TopicType = 'feat' | 'fix' | 'chore' | 'spike';
 export type IndexState = 'disabled' | 'indexing' | 'ready' | 'failed';
+export interface TopicIndex {
+  engine: IndexEngine;
+  indexedAt: string | null;
+  stale: boolean;
+  pending: number;
+  languages: string[];
+}
 export type AgentStatus =
   'starting' | 'working' | 'needs_input' | 'idle' | 'done' | 'error' | 'stopped';
 export type AgentKind =
@@ -75,6 +84,8 @@ export interface Topic {
   state: TopicState;
   phase: Phase | null;
   indexState: IndexState;
+  /** relu en direct depuis le moteur à chaque instantané, jamais stocké (DS7) */
+  index: TopicIndex | null;
   worktreeMissing: boolean;
   prNumber: number | null;
   prUrl: string | null;

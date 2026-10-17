@@ -168,50 +168,56 @@ retro y écrit.
 
 ### Capacités
 
-#### `structural_index` — codegraph
+#### `structural_index` — `index_*` (serveur MCP `aid`)
 
 **Appel**
 
 ```
-codegraph_explore    (MCP, agent principal)
-codegraph explore    (CLI, sous-agents et harnais sans MCP)
+index_explore { query }               (MCP « aid », agent principal)
+codegraph explore <recherche>         (CLI, sous-agents et harnais sans MCP)
 ```
 
-Un appel rend le source verbatim des symboles pertinents groupés par fichier,
-les chemins d'appel entre eux — sauts de dispatch dynamique inclus — et un
-résumé du rayon d'impact.
+`index_explore` rend un texte libre (jamais du JSON) : le sens du code plutôt qu'un nom
+exact. Derrière, le daemon porte la capacité `structural_index` du kernel pour le worktree
+du sujet courant — un seul serveur MCP (`aid`) pour la mémoire et l'index, plus besoin
+d'installer le MCP `codegraph` tiers. Celui-ci (`codegraph_explore` et le reste de sa
+surface) reste toléré en transition, worktree par worktree, tant qu'il est déjà enregistré
+quelque part.
 
 Le reste de la surface, par ordre d'utilité :
 
-```bash
-codegraph impact <symbole>       # ce qu'un changement de ce symbole touche
-codegraph affected <fichiers…>   # les fichiers de test concernés
-codegraph callers <symbole>      # qui l'appelle
-codegraph callees <symbole>      # ce qu'il appelle
-codegraph node <symbole|fichier> # un symbole et sa trace d'appels
-codegraph query <recherche>      # trouver un symbole par son nom
-codegraph context <tâche…>       # symboles et relations pour une tâche
 ```
+index_impact { symbol, depth? }        # ce qu'un changement de ce symbole touche
+index_affected { files }               # les fichiers de test concernés
+index_callers { symbol, limit? }       # qui l'appelle
+index_symbols { query, kind?, limit? } # trouver un symbole par son nom
+index_status {}                        # moteur, fraîcheur, nombre de fichiers en retard
+```
+
+Les relations rendues portent `provenance` : `candidate` pour codegraph (tree-sitter, pas
+de type-checker — homonymes fusionnés dans `callers`), `heuristic` pour ce qu'il synthétise
+par convention. Un futur moteur fondé sur le type-checker rendra `exact`.
 
 **Par phase**
 
 | Phase | Usage |
 |---|---|
-| plan | `codegraph impact <symbole>` → le rayon d'impact va dans la page de plan |
-| dev | `codegraph_explore` pour comprendre avant de modifier |
-| review | `codegraph affected` → les tests à faire tourner ; comparaison du diff au rayon déclaré |
+| plan | `index_impact` → le rayon d'impact va dans la page de plan |
+| dev | `index_explore` pour comprendre avant de modifier |
+| review | `index_affected` → les tests à faire tourner ; comparaison du diff au rayon déclaré |
 
 **Contraintes**
 
-**Le source rendu est déjà lu.** Ne pas le re-vérifier au grep.
+**Le résultat est dérivé du code : il ne se note jamais en mémoire.** Règle du kernel,
+reprise dans la description de chaque outil `index_*`.
 
 **Ne jamais déléguer l'exploration à un sous-agent.** L'outil n'aide que
 s'il est interrogé directement.
 
-**Bannière de péremption.** Après une écriture de fichier, une fenêtre courte
-existe pendant laquelle l'index n'a pas rattrapé. Les réponses portent alors
-une bannière nommant les fichiers en attente — la lire et ouvrir le fichier
-directement quand elle apparaît.
+**Index indisponible.** Moteur coupé, binaire absent ou délai dépassé rendent tous le même
+texte, `isError` « index indisponible : lecture directe » — lire le fichier directement
+plutôt qu'insister. `index_status` porte `stale` et le nombre de fichiers en retard quand
+l'index n'a pas rattrapé une écriture récente.
 
 #### `memory` — gbrain
 

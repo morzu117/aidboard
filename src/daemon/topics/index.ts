@@ -1,13 +1,14 @@
-import { type ChildProcess, spawn } from 'node:child_process';
+import { type ChildProcess } from 'node:child_process';
 import { openSync } from 'node:fs';
 import { join } from 'node:path';
 import type { EventStore } from '../events/store.js';
 import type { AidPaths } from '../paths.js';
+import type { StructuralService } from '../structural/service.js';
 
 export interface IndexerDeps {
   store: EventStore;
   paths: AidPaths;
-  codegraphBin: string;
+  engine: StructuralService;
   timeoutMs?: number;
 }
 
@@ -18,7 +19,7 @@ export class Indexer {
   constructor(private readonly deps: IndexerDeps) {}
 
   start(topic: { id: string; workspaceId: string; worktree: string }): void {
-    const { store, paths, codegraphBin } = this.deps;
+    const { store, paths, engine } = this.deps;
     const log = openSync(join(paths.logs, `${topic.id}-index.log`), 'a', 0o600);
     const report = (indexState: 'ready' | 'failed') =>
       store.append({
@@ -30,10 +31,7 @@ export class Indexer {
       });
     let child: ChildProcess;
     try {
-      child = spawn(codegraphBin, ['init', '-y', topic.worktree], {
-        cwd: topic.worktree,
-        stdio: ['ignore', log, log],
-      });
+      child = engine.init(topic.worktree, log);
     } catch {
       report('failed');
       return;

@@ -219,6 +219,15 @@ function Agrandi({ agent, onClose }: { agent: Agent; onClose: () => void }) {
   );
 }
 
+// DS7 côté board : le même champ relu en direct, jamais la lifecycle `indexState` du sujet.
+function indexPastille(topic: Topic): string {
+  const idx = topic.index;
+  if (!idx) return 'index indisponible';
+  if (idx.stale)
+    return `${idx.engine} · ${idx.pending} fichier${idx.pending > 1 ? 's' : ''} en retard`;
+  return `${idx.engine} · à jour`;
+}
+
 function activite(agent: Agent | undefined, topic: Topic) {
   if (agent?.pausedAt && isAlive(agent)) {
     const d = depuis(agent.pausedAt);
@@ -287,6 +296,9 @@ export function CarteSujet({
           data-bind="agent.transport"
         >
           local
+        </span>
+        <span className="pastille pastille--code" data-node={id('index')} data-bind="sujet.index">
+          {indexPastille(topic)}
         </span>
         <div
           className="agents"

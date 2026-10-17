@@ -1,6 +1,7 @@
 import { mkdtempSync, realpathSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import type { IndexEngine } from '../../src/shared/structural.js';
 import { startTestDaemon, waitFor, type TestDaemon } from './daemon.js';
 import { makeOriginAndClone } from './git.js';
 
@@ -14,10 +15,17 @@ export interface Ctx {
 }
 
 export async function setupWorkspace(
-  opts: { codegraph?: boolean; bin?: string; editor?: string[]; local?: boolean } = {},
+  opts: {
+    codegraph?: boolean;
+    bin?: string;
+    engine?: IndexEngine;
+    editor?: string[];
+    local?: boolean;
+  } = {},
 ): Promise<Ctx> {
   const t = await startTestDaemon(undefined, {
     codegraphBin: opts.bin ?? FAKE_CODEGRAPH,
+    structuralEngine: opts.engine,
     config: opts.editor ? { editor: opts.editor } : undefined,
   });
   const dir = realpathSync(mkdtempSync(join(tmpdir(), 'aid-tc-')));

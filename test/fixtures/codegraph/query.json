@@ -1,0 +1,11 @@
+[
+  {
+    "node": {
+      "name": "useExample",
+      "kind": "function",
+      "filePath": "src/example.ts",
+      "startLine": 10
+    },
+    "score": 99
+  }
+]

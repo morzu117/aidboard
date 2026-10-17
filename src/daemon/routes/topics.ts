@@ -11,6 +11,7 @@ import type { AidConfig } from '../config.js';
 import type { Db } from '../db.js';
 import { AidHttpError } from '../errors.js';
 import { git } from '../git/exec.js';
+import type { StructuralService } from '../structural/service.js';
 import type { Indexer } from '../topics/index.js';
 
 const ulid = monotonicFactory();
@@ -48,7 +49,7 @@ const CreateBody = Type.Object(
 
 export interface TopicRouteDeps {
   db: Db;
-  codegraphBin: string;
+  engine: StructuralService;
   config: AidConfig;
   actions: ActionContext;
   indexer: Indexer;
@@ -102,7 +103,7 @@ export function registerTopicRoutes(app: FastifyInstance, deps: TopicRouteDeps):
     const branch = `${body.type}/${slug}`;
     const worktree = join(ws.worktrees_dir, slug);
     // D6 : on n'indexe que si le dépôt principal a déjà adopté l'index
-    const indexed = existsSync(join(ws.root, '.codegraph'));
+    const indexed = deps.engine.detect(ws.root);
     const now = new Date().toISOString();
 
     // D15 : le sujet existe en `draft` dès la requête, avant que le script ne tourne.
@@ -395,7 +396,7 @@ export function registerTopicRoutes(app: FastifyInstance, deps: TopicRouteDeps):
                 AID_BRANCH: topic.branch,
                 AID_BASE: topic.base,
                 AID_WORKTREE: topic.worktree,
-                AID_CODEGRAPH_BIN: deps.codegraphBin,
+                ...(deps.engine.bin && { AID_CODEGRAPH_BIN: deps.engine.bin }),
               }),
               afterSuccess: (out) => {
                 deps.actions.store.append({
@@ -482,7 +483,7 @@ export function registerTopicRoutes(app: FastifyInstance, deps: TopicRouteDeps):
         AID_BASE: topic.base,
         AID_REMOTE: ws.remote ?? '',
         AID_WORKTREE: topic.worktree,
-        AID_CODEGRAPH_BIN: deps.codegraphBin,
+        ...(deps.engine.bin && { AID_CODEGRAPH_BIN: deps.engine.bin }),
         ...(body.confirmUnmerged !== undefined && {
           AID_CONFIRM_UNMERGED: String(body.confirmUnmerged),
         }),
