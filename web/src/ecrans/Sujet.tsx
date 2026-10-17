@@ -61,6 +61,12 @@ function Contenu({ topicId }: { topicId: string }) {
   // « Ouvrir le terminal → » de la boîte de réception arrive avec ?agent= : son onglet est choisi
   const [params] = useSearchParams();
   const [selected, setSelected] = useState<string | null>(params.get('agent'));
+  // Barre d'onglets Agents/Git/Fichiers (11.1) : état UI pur, jamais persisté (D22). Un seul
+  // paramètre lu une fois, comme ?agent= ci-dessus ; pas de synchronisation d'URL au changement.
+  const ongletParam = params.get('onglet');
+  const [onglet, setOnglet] = useState<'agents' | 'git' | 'fichiers'>(
+    ongletParam === 'git' || ongletParam === 'fichiers' ? ongletParam : 'agents',
+  );
   const [menu, setMenu] = useState<'aucun' | 'agent' | 'plus'>('aucun');
   const [erreur, setErreur] = useState<string | null>(null);
   const [ignoring, setIgnoring] = useState(false);
@@ -329,178 +335,244 @@ function Contenu({ topicId }: { topicId: string }) {
           onConfirm={(n) => void nettoyage.start(n)}
         />
       )}
-      <div className="sujet-grille">
-        <div className="colonne">
-          {topic.state === 'draft' ? (
-            <section className="zone-erreur" data-node="1-3.preparation">
-              <div className="bandeau-erreur" data-node="1-3.preparation.bandeau">
-                <div className="bandeau-texte">
-                  <p className="bandeau-titre" data-node="1-3.preparation.bandeau.titre">
-                    Préparation du worktree…
+      {topic.state === 'draft' || topic.worktreeMissing ? (
+        <div className="sujet-grille">
+          <div className="colonne">
+            {topic.state === 'draft' ? (
+              <section className="zone-erreur" data-node="1-3.preparation">
+                <div className="bandeau-erreur" data-node="1-3.preparation.bandeau">
+                  <div className="bandeau-texte">
+                    <p className="bandeau-titre" data-node="1-3.preparation.bandeau.titre">
+                      Préparation du worktree…
+                    </p>
+                    <p
+                      className="texte-discret"
+                      data-node="1-3.preparation.bandeau.cause"
+                      data-bind="sujet.preparation.cause"
+                    >
+                      {topic.branch} depuis origin/{topic.base}
+                    </p>
+                  </div>
+                  <button
+                    className="bouton bouton--fantome"
+                    data-node="1-3.preparation.ignorer"
+                    data-action="topic.setup-ignorer"
+                    type="button"
+                    onClick={() => void ignorer()}
+                    disabled={ignoring}
+                  >
+                    Ignorer
+                  </button>
+                </div>
+                {(() => {
+                  const prepa = state.actions.find(
+                    (a) => a.topicId === topic.id && a.action === 'topic.create',
+                  );
+                  const lines = prepa ? (outputs[prepa.id] ?? []) : [];
+                  return lines.length > 0 ? (
+                    <div
+                      className="sortie-action"
+                      role="log"
+                      aria-label="Préparation du sujet"
+                      data-node="1-3.preparation.journal"
+                    >
+                      {lines.map((l, i) => (
+                        <div key={i}>{l.line}</div>
+                      ))}
+                    </div>
+                  ) : null;
+                })()}
+              </section>
+            ) : (
+              <section className="zone-erreur" data-node="1-3.erreur">
+                <div className="bandeau-erreur" data-node="1-3.erreur.bandeau" role="alert">
+                  <p className="bandeau-titre" data-node="1-3.erreur.bandeau.titre">
+                    Worktree introuvable
                   </p>
                   <p
                     className="texte-discret"
-                    data-node="1-3.preparation.bandeau.cause"
-                    data-bind="sujet.preparation.cause"
+                    data-node="1-3.erreur.bandeau.cause"
+                    data-bind="erreur.cause"
                   >
-                    {topic.branch} depuis origin/{topic.base}
+                    {topic.worktree} a été supprimé hors d’A-I-D : aucun agent ne peut y tourner.
                   </p>
                 </div>
-                <button
-                  className="bouton bouton--fantome"
-                  data-node="1-3.preparation.ignorer"
-                  data-action="topic.setup-ignorer"
-                  type="button"
-                  onClick={() => void ignorer()}
-                  disabled={ignoring}
-                >
-                  Ignorer
-                </button>
-              </div>
-              {(() => {
-                const prepa = state.actions.find(
-                  (a) => a.topicId === topic.id && a.action === 'topic.create',
-                );
-                const lines = prepa ? (outputs[prepa.id] ?? []) : [];
-                return lines.length > 0 ? (
-                  <div
-                    className="sortie-action"
-                    role="log"
-                    aria-label="Préparation du sujet"
-                    data-node="1-3.preparation.journal"
-                  >
-                    {lines.map((l, i) => (
-                      <div key={i}>{l.line}</div>
+              </section>
+            )}
+          </div>
+          <div className="colonne">
+            <Memoire
+              namespace={workspace?.namespace ?? workspace?.name ?? ''}
+              topicSlug={topic.slug}
+            />
+          </div>
+        </div>
+      ) : (
+        <>
+          <div className="onglets" data-node="1-3.onglets" role="tablist" aria-label="Vue du sujet">
+            <button
+              className={`onglet${onglet === 'agents' ? ' est-actif' : ''}`}
+              data-node="1-3.onglets.agents"
+              data-action="onglet.agents"
+              role="tab"
+              aria-selected={onglet === 'agents'}
+              type="button"
+              onClick={() => setOnglet('agents')}
+            >
+              Agents
+            </button>
+            <button
+              className={`onglet${onglet === 'git' ? ' est-actif' : ''}`}
+              data-node="1-3.onglets.git"
+              data-action="onglet.git"
+              role="tab"
+              aria-selected={onglet === 'git'}
+              type="button"
+              onClick={() => setOnglet('git')}
+            >
+              Git
+            </button>
+            <button
+              className={`onglet${onglet === 'fichiers' ? ' est-actif' : ''}`}
+              data-node="1-3.onglets.fichiers"
+              data-action="onglet.fichiers"
+              role="tab"
+              aria-selected={onglet === 'fichiers'}
+              type="button"
+              onClick={() => setOnglet('fichiers')}
+            >
+              Fichiers
+            </button>
+          </div>
+          {/* Toujours monté, juste masqué : un démontage reconnecterait les terminaux. */}
+          <div className="sujet-grille" hidden={onglet !== 'agents'}>
+            <div className="colonne">
+              {agents.length === 0 ? (
+                <section className="vide" data-node="1-3.vide">
+                  <p className="vide-message" data-node="1-3.vide.message">
+                    Aucun agent ne tourne sur ce sujet.
+                  </p>
+                  <p className="texte-discret" data-node="1-3.vide.aide">
+                    Le premier lancement de claude ou de codex dans un worktree neuf affiche son
+                    propre dialogue de confiance : c’est normal.
+                  </p>
+                  <div className="vide-actions">
+                    {KINDS.map(({ kind, label }) => (
+                      <button
+                        key={kind}
+                        className={`bouton${kind === 'claude' ? ' bouton--primaire' : ''}`}
+                        data-node={kind === 'shell' ? '1-3.vide.shell' : `1-3.vide.lancer-${kind}`}
+                        data-action="agent.lancer"
+                        data-agent={kind}
+                        type="button"
+                        onClick={() => void launch(kind)}
+                      >
+                        {label}
+                      </button>
                     ))}
                   </div>
-                ) : null;
-              })()}
-            </section>
-          ) : topic.worktreeMissing ? (
-            <section className="zone-erreur" data-node="1-3.erreur">
-              <div className="bandeau-erreur" data-node="1-3.erreur.bandeau" role="alert">
-                <p className="bandeau-titre" data-node="1-3.erreur.bandeau.titre">
-                  Worktree introuvable
-                </p>
-                <p
-                  className="texte-discret"
-                  data-node="1-3.erreur.bandeau.cause"
-                  data-bind="erreur.cause"
-                >
-                  {topic.worktree} a été supprimé hors d’A-I-D : aucun agent ne peut y tourner.
-                </p>
-              </div>
-            </section>
-          ) : agents.length === 0 ? (
-            <section className="vide" data-node="1-3.vide">
-              <p className="vide-message" data-node="1-3.vide.message">
-                Aucun agent ne tourne sur ce sujet.
-              </p>
-              <p className="texte-discret" data-node="1-3.vide.aide">
-                Le premier lancement de claude ou de codex dans un worktree neuf affiche son propre
-                dialogue de confiance : c’est normal.
-              </p>
-              <div className="vide-actions">
-                {KINDS.map(({ kind, label }) => (
-                  <button
-                    key={kind}
-                    className={`bouton${kind === 'claude' ? ' bouton--primaire' : ''}`}
-                    data-node={kind === 'shell' ? '1-3.vide.shell' : `1-3.vide.lancer-${kind}`}
-                    data-action="agent.lancer"
-                    data-agent={kind}
-                    type="button"
-                    onClick={() => void launch(kind)}
+                </section>
+              ) : (
+                <section className="terminaux" data-node="1-3.terminaux" aria-label="Terminaux">
+                  <div
+                    className="onglets"
+                    data-node="1-3.terminaux.onglets"
+                    role="tablist"
+                    aria-label="Agents du sujet"
                   >
-                    {label}
-                  </button>
-                ))}
-              </div>
-            </section>
-          ) : (
-            <section className="terminaux" data-node="1-3.terminaux" aria-label="Terminaux">
-              <div
-                className="onglets"
-                data-node="1-3.terminaux.onglets"
-                role="tablist"
-                aria-label="Agents du sujet"
-              >
-                {agents.map((a, i) => {
-                  const v = agentView(a);
-                  return (
-                    <span key={a.id} style={{ display: 'inline-flex' }}>
-                      <button
-                        className={`onglet${a.id === active?.id ? ' est-actif' : ''}`}
-                        data-node={`1-3.terminaux.onglet-${i + 1}`}
-                        data-action="onglet.choisir"
-                        role="tab"
-                        aria-selected={a.id === active?.id}
-                        type="button"
-                        onClick={() => setSelected(a.id)}
-                      >
-                        <Point tone={v.tone} label={v.label} estimated={v.estimated} />
-                        <span
-                          data-node={`1-3.terminaux.onglet-${i + 1}.type`}
-                          data-bind="agent.type"
-                        >
-                          {a.kind}
+                    {agents.map((a, i) => {
+                      const v = agentView(a);
+                      return (
+                        <span key={a.id} style={{ display: 'inline-flex' }}>
+                          <button
+                            className={`onglet${a.id === active?.id ? ' est-actif' : ''}`}
+                            data-node={`1-3.terminaux.onglet-${i + 1}`}
+                            data-action="onglet.choisir"
+                            role="tab"
+                            aria-selected={a.id === active?.id}
+                            type="button"
+                            onClick={() => setSelected(a.id)}
+                          >
+                            <Point tone={v.tone} label={v.label} estimated={v.estimated} />
+                            <span
+                              data-node={`1-3.terminaux.onglet-${i + 1}.type`}
+                              data-bind="agent.type"
+                            >
+                              {a.kind}
+                            </span>
+                            <span
+                              className="agent-role"
+                              data-node={`1-3.terminaux.onglet-${i + 1}.role`}
+                              data-bind="agent.role"
+                            >
+                              {roleLabel(a.role)}
+                            </span>
+                          </button>
+                          <button
+                            className="bouton bouton--fantome"
+                            data-node={`1-3.terminaux.onglet-${i + 1}.arreter`}
+                            data-action={LIVE.includes(a.status) ? 'agent.arreter' : 'agent.fermer'}
+                            type="button"
+                            onClick={() => void stop(a.id)}
+                          >
+                            {LIVE.includes(a.status) ? 'Arrêter' : 'Fermer'}
+                          </button>
                         </span>
-                        <span
-                          className="agent-role"
-                          data-node={`1-3.terminaux.onglet-${i + 1}.role`}
-                          data-bind="agent.role"
-                        >
-                          {roleLabel(a.role)}
-                        </span>
-                      </button>
-                      <button
-                        className="bouton bouton--fantome"
-                        data-node={`1-3.terminaux.onglet-${i + 1}.arreter`}
-                        data-action={LIVE.includes(a.status) ? 'agent.arreter' : 'agent.fermer'}
-                        type="button"
-                        onClick={() => void stop(a.id)}
-                      >
-                        {LIVE.includes(a.status) ? 'Arrêter' : 'Fermer'}
-                      </button>
-                    </span>
-                  );
-                })}
-                <button
-                  className="onglet"
-                  data-node="1-3.terminaux.ajouter-agent"
-                  data-action="agent.ajouter"
-                  type="button"
-                  aria-expanded={menu === 'agent'}
-                  onClick={() => setMenu(menu === 'agent' ? 'aucun' : 'agent')}
-                >
-                  + Agent
-                </button>
-                {menu === 'agent' &&
-                  KINDS.map(({ kind, label }) => (
+                      );
+                    })}
                     <button
-                      key={kind}
                       className="onglet"
-                      data-action="agent.lancer"
-                      data-agent={kind}
+                      data-node="1-3.terminaux.ajouter-agent"
+                      data-action="agent.ajouter"
                       type="button"
-                      onClick={() => void launch(kind)}
+                      aria-expanded={menu === 'agent'}
+                      onClick={() => setMenu(menu === 'agent' ? 'aucun' : 'agent')}
                     >
-                      {label}
+                      + Agent
                     </button>
+                    {menu === 'agent' &&
+                      KINDS.map(({ kind, label }) => (
+                        <button
+                          key={kind}
+                          className="onglet"
+                          data-action="agent.lancer"
+                          data-agent={kind}
+                          type="button"
+                          onClick={() => void launch(kind)}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                  </div>
+                  {agents.map((a) => (
+                    <Terminal key={a.id} agentId={a.id} visible={a.id === active?.id} />
                   ))}
-              </div>
-              {agents.map((a) => (
-                <Terminal key={a.id} agentId={a.id} visible={a.id === active?.id} />
-              ))}
-            </section>
+                </section>
+              )}
+            </div>
+            <div className="colonne">
+              <Memoire
+                namespace={workspace?.namespace ?? workspace?.name ?? ''}
+                topicSlug={topic.slug}
+              />
+            </div>
+          </div>
+          {onglet === 'git' && (
+            <div className="sujet-grille sujet-grille--seul">
+              <p className="texte-discret" data-node="1-3.git.a-venir">
+                Onglet Git : à venir.
+              </p>
+            </div>
           )}
-        </div>
-        <div className="colonne">
-          <Memoire
-            namespace={workspace?.namespace ?? workspace?.name ?? ''}
-            topicSlug={topic.slug}
-          />
-        </div>
-      </div>
+          {onglet === 'fichiers' && (
+            <div className="sujet-grille sujet-grille--seul">
+              <p className="texte-discret" data-node="1-3.fichiers.a-venir">
+                Onglet Fichiers : à venir.
+              </p>
+            </div>
+          )}
+        </>
+      )}
     </main>
   );
 }

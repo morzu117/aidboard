@@ -176,6 +176,28 @@ test('onglets : un terminal monté par agent, un seul visible ; « Arrêter » s
   );
 });
 
+test('onglets de contenu (11.1) : Agents par défaut, Git et Fichiers affichent un espace réservé, le terminal reste monté (masqué) en changeant d’onglet', async () => {
+  open(
+    snapshot({
+      workspaces: [ws()],
+      topics: [topic()],
+      runs: [run],
+      agents: [agent({ id: 'ag_1', kind: 'claude', role: 'free' })],
+    }),
+  );
+  await screen.findByTestId('term-ag_1');
+  expect(node('1-3.onglets.agents')?.className).toContain('est-actif');
+  await userEvent.click(node('1-3.onglets.git')!);
+  expect(await screen.findByText('Onglet Git : à venir.')).toBeTruthy();
+  expect(node('1-3.onglets.git')?.className).toContain('est-actif');
+  // le terminal reste dans le DOM (masqué), pas démonté : pas de reconnexion à la bascule.
+  expect(screen.getByTestId('term-ag_1')).toBeTruthy();
+  await userEvent.click(node('1-3.onglets.fichiers')!);
+  expect(await screen.findByText('Onglet Fichiers : à venir.')).toBeTruthy();
+  await userEvent.click(node('1-3.onglets.agents')!);
+  expect(screen.getByTestId('term-ag_1')).toBeTruthy();
+});
+
 test('« + Agent » propose les trois types et lance celui choisi', async () => {
   const h = open(
     snapshot({ workspaces: [ws()], topics: [topic()], runs: [run], agents: [agent()] }),
