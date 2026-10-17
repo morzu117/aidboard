@@ -179,6 +179,13 @@ Côté machine : `bun remove -g gbrain` (vérifié : plus dans le `PATH`), `VOYA
 `secrets.env.bak-10.5`, jamais commitée), `.gbrain-owner.json` et `.git/gbrain-managed.json`
 supprimés dans les quatre projets concernés (`agent-kernel`, `myskooli`, `swairm`, `descent-wf`).
 
+`npm run gate` (aidboard) vert (commit `29964b5`) : les 4 échecs rencontrés en premier passage
+(`test/memory-routes.test.ts`, `test/cli-mem.test.ts`) n'étaient pas une régression de ce point —
+sans `memory.embeddings.provider: off` explicite, un daemon de test détecte le vrai Ollama
+installé sur ce poste et bascule en recherche hybride au lieu de `fts`. Même classe de piège que
+`structuralEngine` (chantier 08) côté structurel, sans son équivalent côté mémoire ; corrigé dans
+`test/helpers/daemon.ts` et `test/cli-mem.test.ts`.
+
 ### 10.6 — Geste externe (Julien)
 
 Suppression du projet Supabase (`db.mlkiwejhkgkojflvvuxl.supabase.co`) et révocation de la clé
