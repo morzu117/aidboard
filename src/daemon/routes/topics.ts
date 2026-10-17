@@ -13,6 +13,7 @@ import { AidHttpError } from '../errors.js';
 import { git } from '../git/exec.js';
 import {
   branchWorktree,
+  currentBranch,
   gitBranches,
   gitCommitDetail,
   gitLiveInfo,
@@ -45,6 +46,8 @@ export const TOPIC_ACTIONS = [
   'topic.branch-changer',
   'branche.creer',
   'branche.creer-ici',
+  'branche.revenir',
+  'sujet.rattacher-branche',
 ] as const;
 
 const CreateBody = Type.Object(
@@ -236,14 +239,17 @@ export function registerTopicRoutes(app: FastifyInstance, deps: TopicRouteDeps):
   // alimente la bannière de situation (même passage, D16/D28 : pas un second appel git).
   app.get('/api/topics/:id/git/log', async (req) => {
     const { id } = req.params as { id: string };
-    const row = deps.db.prepare('SELECT worktree, base FROM topics WHERE id = ?').get(id) as
-      { worktree: string; base: string } | undefined;
+    const row = deps.db
+      .prepare('SELECT worktree, base, branch FROM topics WHERE id = ?')
+      .get(id) as { worktree: string; base: string; branch: string } | undefined;
     if (!row) throw new AidHttpError(404, 'sujet inconnu');
     if (!existsSync(row.worktree)) throw new AidHttpError(409, 'worktree introuvable');
     const [commits, dirty, live] = await Promise.all([
       gitLog(row.worktree, row.base),
       hasUncommittedChanges(row.worktree),
-      gitLiveInfo(row.worktree, row.base),
+      // 11.10 : la branche du sujet était absente de cet appel — onTopicBranch (D28) valait
+      // toujours vrai en pratique, le bandeau de dérive (3.6) ne pouvait jamais s'afficher.
+      gitLiveInfo(row.worktree, row.base, row.branch),
     ]);
     return { commits, dirty, live };
   });
@@ -460,6 +466,57 @@ export function registerTopicRoutes(app: FastifyInstance, deps: TopicRouteDeps):
         }),
       });
       return reply.code(202).send({ actionId: runId });
+    }
+
+    // 11.10 (D27) : même script que topic.branch-changer, cible toujours topic.branch — pas de
+    // paramètre côté client, contrairement à topic.branch-changer.
+    if (actionId === 'branche.revenir') {
+      if (!existsSync(topic.worktree)) throw new AidHttpError(409, 'worktree introuvable');
+      const body = (req.body ?? {}) as { dirtyAction?: 'stash' };
+      const elsewhere = await branchWorktree(ws.root, topic.branch);
+      if (elsewhere && elsewhere !== realpathSync(topic.worktree)) {
+        throw new AidHttpError(
+          409,
+          `la branche ${topic.branch} est déjà extraite dans ${elsewhere}`,
+        );
+      }
+      // topic-switch.sh no-op si AID_BRANCH === AID_TARGET_BRANCH (déjà sur la branche visée) :
+      // la vraie branche courante du worktree, jamais topic.branch, sous peine de no-op permanent
+      // en dérive (AID_BRANCH toujours égal à la cible) — '(détachée)' en HEAD détachée, une
+      // valeur qui ne collisionne jamais avec un nom de branche réel.
+      const head = await currentBranch(topic.worktree);
+      const { actionId: runId } = startAction(deps.actions, {
+        workspaceId: ws.id,
+        topicId: id,
+        action: 'branche.revenir',
+        script: join(scripts, 'topic-switch.sh'),
+        cwd: topic.worktree,
+        timeoutMs: TWO_MIN,
+        env: scriptEnv(process.env, deps.config.env.strip, {
+          AID_REPO_ROOT: ws.root,
+          AID_BRANCH: head ?? '(détachée)',
+          AID_WORKTREE: topic.worktree,
+          AID_TARGET_BRANCH: topic.branch,
+          ...(body.dirtyAction && { AID_DIRTY_ACTION: body.dirtyAction }),
+        }),
+      });
+      return reply.code(202).send({ actionId: runId });
+    }
+
+    // D27 : seule action de ce chantier qui écrit en base — synchrone, même motif que
+    // syncTopicBranches (événement topic.branch, aucune migration).
+    if (actionId === 'sujet.rattacher-branche') {
+      if (!existsSync(topic.worktree)) throw new AidHttpError(409, 'worktree introuvable');
+      const head = await currentBranch(topic.worktree);
+      if (!head) throw new AidHttpError(422, 'HEAD détachée : aucune branche à rattacher');
+      deps.actions.store.append({
+        source: 'daemon',
+        type: 'topic.branch',
+        workspaceId: ws.id,
+        topicId: id,
+        data: { branch: head },
+      });
+      return reply.code(200).send({ branch: head });
     }
 
     if (actionId === 'topic.pr') {

@@ -204,6 +204,8 @@ test('onglets de contenu (11.1) : Agents par défaut, Git et Fichiers affichent 
     },
   );
   await screen.findByTestId('term-ag_1');
+  // D28 : pas de dérive déclarée (onTopicBranch) ⇒ pas de bandeau, même hors de l'onglet Git.
+  expect(screen.queryByText(/pas sur la branche du sujet/)).toBeNull();
   expect(node('1-3.onglets.agents')?.className).toContain('est-actif');
   await userEvent.click(node('1-3.onglets.git')!);
   expect(await screen.findByText('Aucun commit depuis la base.')).toBeTruthy();
@@ -214,6 +216,53 @@ test('onglets de contenu (11.1) : Agents par défaut, Git et Fichiers affichent 
   await waitFor(() => expect(text('3-4.explorateur.compteur')).toContain('0 fichier'));
   await userEvent.click(node('1-3.onglets.agents')!);
   expect(screen.getByTestId('term-ag_1')).toBeTruthy();
+});
+
+test('dérive (D28, écran 3.6) : branche différente du sujet — bandeau, Revenir et Rattacher', async () => {
+  const h = open(snapshot({ workspaces: [ws()], topics: [topic()], runs: [run] }), 'tp_1', {
+    'GET /api/topics/tp_1/git/log': json(200, {
+      commits: [],
+      dirty: false,
+      live: {
+        aheadBehind: null,
+        rebaseInProgress: false,
+        onTopicBranch: false,
+        headBranch: 'autre',
+      },
+    }),
+    'POST /api/topics/tp_1/actions/branche.revenir': json(202, { actionId: 'ac_1' }),
+    'POST /api/topics/tp_1/actions/sujet.rattacher-branche': json(200, { branch: 'autre' }),
+  });
+  expect(await screen.findByText(/pas sur la branche du sujet/)).toBeTruthy();
+  await userEvent.click(screen.getByRole('button', { name: 'Revenir sur feat/s' }));
+  await waitFor(() =>
+    expect(
+      h.calls.some(
+        (c) => c.method === 'POST' && c.url === '/api/topics/tp_1/actions/branche.revenir',
+      ),
+    ).toBe(true),
+  );
+  await userEvent.click(screen.getByRole('button', { name: 'Rattacher le sujet à autre' }));
+  await waitFor(() =>
+    expect(
+      h.calls.some(
+        (c) => c.method === 'POST' && c.url === '/api/topics/tp_1/actions/sujet.rattacher-branche',
+      ),
+    ).toBe(true),
+  );
+});
+
+test('dérive : HEAD détachée — bandeau sans bouton Rattacher', async () => {
+  open(snapshot({ workspaces: [ws()], topics: [topic()], runs: [run] }), 'tp_1', {
+    'GET /api/topics/tp_1/git/log': json(200, {
+      commits: [],
+      dirty: false,
+      live: { aheadBehind: null, rebaseInProgress: false, onTopicBranch: false, headBranch: null },
+    }),
+  });
+  expect(await screen.findByText(/HEAD détachée/)).toBeTruthy();
+  expect(screen.queryByText(/Rattacher le sujet/)).toBeNull();
+  expect(screen.getByRole('button', { name: 'Revenir sur feat/s' })).toBeTruthy();
 });
 
 test('« + Agent » propose les trois types et lance celui choisi', async () => {

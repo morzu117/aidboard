@@ -74,6 +74,7 @@ test('topic.sync : rebase sans conflit, avance/retard lus en direct avant et apr
     aheadBehind: { ahead: 1, behind: 1 },
     rebaseInProgress: false,
     onTopicBranch: true,
+    headBranch: created.branch,
   });
 
   const sync = await t.d.app.inject({
@@ -91,6 +92,7 @@ test('topic.sync : rebase sans conflit, avance/retard lus en direct avant et apr
     aheadBehind: { ahead: 1, behind: 0 },
     rebaseInProgress: false,
     onTopicBranch: true,
+    headBranch: created.branch,
   });
   expect(sh(wt, 'rev-parse', 'origin/main')).toBe(sh(origin, 'rev-parse', 'main'));
   expect(sh(wt, 'log', '-1', '--format=%s')).toBe('ajout depuis-le-sujet.md');

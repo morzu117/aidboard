@@ -15,6 +15,9 @@ export interface GitLiveInfo {
   aheadBehind: { ahead: number; behind: number } | null;
   rebaseInProgress: boolean;
   onTopicBranch: boolean;
+  // 11.10 (D28) : branche réelle du worktree, null en HEAD détachée — alimente le bandeau de
+  // dérive (3.6) sans second appel git.
+  headBranch: string | null;
 }
 
 export interface GitLogResponse {

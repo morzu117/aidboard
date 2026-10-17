@@ -99,14 +99,17 @@ export async function gitLiveInfo(
     '--count',
     `origin/${base}...HEAD`,
   ]);
-  const onTopicBranch =
-    topicBranch === undefined ? true : (await currentBranch(worktree)) === topicBranch;
-  if (!counts.ok) return { aheadBehind: null, rebaseInProgress, onTopicBranch };
+  // 11.10 (D28) : même appel que ci-dessus réutilisé pour le bandeau de dérive (3.6) — null en
+  // HEAD détachée, jamais un second appel git juste pour l'exposer.
+  const headBranch = await currentBranch(worktree);
+  const onTopicBranch = topicBranch === undefined ? true : headBranch === topicBranch;
+  if (!counts.ok) return { aheadBehind: null, rebaseInProgress, onTopicBranch, headBranch };
   const [behind, ahead] = counts.stdout.split(/\s+/).map(Number);
   return {
     aheadBehind: { ahead: ahead ?? 0, behind: behind ?? 0 },
     rebaseInProgress,
     onTopicBranch,
+    headBranch,
   };
 }
 

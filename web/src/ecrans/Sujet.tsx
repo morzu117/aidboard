@@ -1,8 +1,10 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router';
 import type { StoredEvent } from '../../../src/shared/events.js';
+import type { GitLogResponse } from '../../../src/shared/git.js';
 import type { Agent, IndexState } from '../../../src/shared/model.js';
 import { AidApiError } from '../data/api.js';
+import { fetchGitLog } from '../data/git.js';
 import { useAid } from '../data/useAidState.js';
 import { ConfirmerNettoyage } from '../dialogues/ConfirmerNettoyage.js';
 import { SelecteurBranche } from '../dialogues/SelecteurBranche.js';
@@ -78,6 +80,76 @@ function Contenu({ topicId }: { topicId: string }) {
   const present = !!state?.topics.some((t) => t.id === topicId);
   const archive = useArchive(topicId, present);
   const down = daemon === 'injoignable' || daemon === 'session-expiree';
+
+  // 11.10 (écran 3.6, D28) : même requête que l'onglet Git (git/log), lue ici pour que le
+  // bandeau de dérive reste visible quel que soit l'onglet actif — au-dessus des retours
+  // anticipés ci-dessous, donc avant que `topic` existe (topicId suffit à la requête).
+  const [live, setLive] = useState<GitLogResponse['live'] | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    fetchGitLog(call, topicId)
+      .then((r) => {
+        if (!cancelled) setLive(r.live);
+      })
+      .catch(() => {
+        if (!cancelled) setLive(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [topicId]);
+  const [deriveActionId, setDeriveActionId] = useState<string | null>(null);
+  const [deriveRequesting, setDeriveRequesting] = useState(false);
+  const [deriveErreur, setDeriveErreur] = useState<string | null>(null);
+  const [rattaching, setRattaching] = useState(false);
+  const [rattachErreur, setRattachErreur] = useState<string | null>(null);
+  const deriveAction = state?.actions.find((a) => a.id === deriveActionId);
+  useEffect(() => {
+    if (deriveAction?.state !== 'succeeded') return;
+    fetchGitLog(call, topicId)
+      .then((r) => {
+        setDeriveActionId(null);
+        setLive(r.live);
+      })
+      .catch(() => {
+        setDeriveActionId(null);
+        setLive(null);
+      });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [deriveAction?.state]);
+
+  async function revenirSurBranche(dirtyAction?: 'stash') {
+    setDeriveErreur(null);
+    setDeriveRequesting(true);
+    setDeriveActionId(null);
+    try {
+      const r = await call<{ actionId: string }>(
+        'POST',
+        `/api/topics/${topicId}/actions/branche.revenir`,
+        dirtyAction ? { dirtyAction } : {},
+      );
+      setDeriveActionId(r.actionId);
+    } catch (err) {
+      setDeriveErreur(err instanceof AidApiError ? err.message : String(err));
+    } finally {
+      setDeriveRequesting(false);
+    }
+  }
+
+  async function rattacherBranche() {
+    setRattachErreur(null);
+    setRattaching(true);
+    try {
+      await call('POST', `/api/topics/${topicId}/actions/sujet.rattacher-branche`, {});
+      const r = await fetchGitLog(call, topicId);
+      setLive(r.live);
+    } catch (err) {
+      setRattachErreur(err instanceof AidApiError ? err.message : String(err));
+    } finally {
+      setRattaching(false);
+    }
+  }
 
   if (!state) {
     return (
@@ -230,6 +302,26 @@ function Contenu({ topicId }: { topicId: string }) {
     }
   }
 
+  // 11.10 (D27/D28) : même motif que le dialogue de changement de branche (besoinHumain,
+  // repli du message d'échec sur la dernière ligne de sortie de l'action).
+  const deriveEnCours =
+    deriveRequesting ||
+    (deriveActionId !== null && (!deriveAction || deriveAction.state === 'running'));
+  const deriveEchoue =
+    !deriveEnCours &&
+    deriveActionId !== null &&
+    deriveAction !== undefined &&
+    deriveAction.state !== 'succeeded';
+  const deriveBesoinHumain = deriveEchoue && deriveAction!.state === 'needs_human';
+  const deriveMessage =
+    deriveErreur ??
+    (deriveEchoue
+      ? (outputs[deriveActionId!]?.at(-1)?.line ??
+        (deriveBesoinHumain
+          ? 'Modifications non commitées : revenir sur la branche les écraserait.'
+          : 'Le retour sur la branche a échoué.'))
+      : null);
+
   return (
     <main className="page sujet-contenu">
       <div className="sujet-entete" data-node="1-3.entete">
@@ -332,6 +424,75 @@ function Contenu({ topicId }: { topicId: string }) {
           </span>
         </div>
       </div>
+      {live && !live.onTopicBranch && (
+        <section className="derive" data-node="1-3.derive" role="status">
+          <span className="derive-marque" aria-hidden="true">
+            !
+          </span>
+          <p className="derive-texte" data-node="1-3.derive.texte">
+            {live.headBranch ? (
+              <>
+                Le worktree est sur{' '}
+                <strong data-node="1-3.derive.head" data-bind="sujet.head">
+                  {live.headBranch}
+                </strong>
+                , pas sur la branche du sujet{' '}
+                <strong data-node="1-3.derive.branche-sujet" data-bind="sujet.branche">
+                  {topic.branch}
+                </strong>
+                .
+              </>
+            ) : (
+              'Le worktree est en HEAD détachée : les nouveaux commits n’appartiendront à aucune branche.'
+            )}
+          </p>
+          {deriveMessage && (
+            <p className="message-erreur" role="alert">
+              {deriveMessage}
+            </p>
+          )}
+          {deriveBesoinHumain ? (
+            <button
+              className="bouton bouton--contour"
+              data-node="1-3.derive.revenir"
+              data-action="branche.revenir"
+              type="button"
+              disabled={deriveEnCours}
+              onClick={() => void revenirSurBranche('stash')}
+            >
+              Mettre de côté et revenir
+            </button>
+          ) : (
+            <button
+              className="bouton bouton--contour"
+              data-node="1-3.derive.revenir"
+              data-action="branche.revenir"
+              type="button"
+              disabled={deriveEnCours}
+              onClick={() => void revenirSurBranche()}
+            >
+              Revenir sur {topic.branch}
+            </button>
+          )}
+          {live.headBranch && (
+            <button
+              className="bouton"
+              data-node="1-3.derive.rattacher"
+              data-action="sujet.rattacher-branche"
+              type="button"
+              disabled={rattaching}
+              onClick={() => void rattacherBranche()}
+            >
+              Rattacher le sujet à {live.headBranch}
+            </button>
+          )}
+          {rattachErreur && (
+            <p className="message-erreur" role="alert">
+              {rattachErreur}
+            </p>
+          )}
+        </section>
+      )}
       {(erreur || nettoyage.phase.phase === 'refuse') && (
         <p className="message-erreur" role="alert">
           {erreur ?? (nettoyage.phase.phase === 'refuse' ? nettoyage.phase.message : '')}
