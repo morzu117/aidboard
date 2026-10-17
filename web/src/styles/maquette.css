@@ -517,4 +517,43 @@ body { background: var(--doc-bg); color: var(--text); font-family: var(--font); 
 .infobulle-titre { font-weight: var(--fw-sb); }
 .infobulle-liste { display: flex; flex-direction: column; gap: var(--sp-1); color: var(--text-2); }
 .infobulle-element { display: flex; gap: var(--sp-2); }
+/* 11.8/11.9 : onglet Fichiers — arbre, visionneuse Markdown, vue source. Classes nouvelles
+   seulement : le reste réutilise .panneau/.outils/.champ/.portee/.fichiers/.fichier-etat*
+   déjà posés par 11.3. */
+.arbre { display: flex; flex-direction: column; overflow: auto; }
+.chevron { display: inline-flex; align-items: center; justify-content: center; width: var(--sp-4); flex: none; color: var(--muted); font-size: var(--fs-s); }
+.fichier-etat--u { color: var(--text-3); }
+.fichier-etat--dossier { color: var(--muted); }
+.fichier--dossier { font-weight: var(--fw-m); }
+.vide-arbre { padding: var(--sp-3); color: var(--muted); font-size: var(--fs-s); }
+.visionneuse-entete { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--sp-2); padding: var(--sp-3) var(--sp-4); border-bottom: 1px solid var(--line); }
+.visionneuse-meta { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.lecture { display: flex; align-items: flex-start; gap: var(--sp-5); padding: var(--sp-4); overflow: auto; }
+.document { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: var(--sp-3); }
+.sommaire { flex: none; width: 180px; display: flex; flex-direction: column; gap: var(--sp-1); }
+[data-viewport="phone"] .sommaire, [data-viewport="tablet"] .sommaire { display: none; }
+.sommaire-lien { color: var(--muted); font-size: var(--fs-s); }
+.md-h1 { font-size: var(--fs-xxl); font-weight: var(--fw-b); margin: 0; }
+.md-h2 { font-size: var(--fs-xl); font-weight: var(--fw-sb); margin: var(--sp-3) 0 0; }
+.md-h3 { font-size: var(--fs-l); font-weight: var(--fw-sb); margin: var(--sp-2) 0 0; }
+.md-p { font-size: var(--fs-m); line-height: 1.6; color: var(--text-2); margin: 0; }
+.md-liste { display: flex; flex-direction: column; gap: var(--sp-1); margin: 0; padding: 0; list-style: none; }
+.md-item { display: flex; gap: var(--sp-2); align-items: flex-start; }
+.md-item--faite { color: var(--muted); text-decoration: line-through; }
+.md-case { flex: none; width: var(--sp-4); }
+.md-gras { font-weight: var(--fw-sb); color: var(--text); }
+.md-code-ligne { padding: 0 4px; border-radius: var(--r-xs); background: var(--surface-3); font-family: ui-monospace, monospace; font-size: 0.9em; }
+.md-lien { color: var(--acc); }
+.md-tableau { display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: var(--r-m); overflow: hidden; }
+.md-ligne-tableau { display: grid; grid-template-columns: repeat(auto-fit, minmax(0, 1fr)); border-top: 1px solid var(--line); }
+.md-ligne-tableau:first-child { border-top: 0; background: var(--surface-3); }
+.md-cellule { padding: var(--sp-2) var(--sp-3); font-size: var(--fs-s); }
+.md-bloc-code { display: flex; flex-direction: column; border-radius: var(--r-m); overflow: hidden; background: var(--surface-term); }
+.md-bloc-entete { display: flex; align-items: center; justify-content: space-between; padding: var(--sp-1) var(--sp-3); color: var(--muted); font-size: var(--fs-s); }
+.md-pre { margin: 0; padding: var(--sp-3); overflow: auto; font-family: ui-monospace, monospace; font-size: var(--fs-s); color: var(--text-2); white-space: pre-wrap; }
+.md-citation { margin: 0; padding: var(--sp-2) var(--sp-4); border-left: 2px solid var(--acc); color: var(--text-2); }
+.source { margin: 0; padding: var(--sp-4); overflow: auto; font-family: ui-monospace, monospace; font-size: var(--fs-s); line-height: 1.6; flex: 1 1 auto; }
+.source-ligne { display: flex; gap: var(--sp-3); }
+.source-numero { flex: none; width: var(--sp-6); text-align: right; color: var(--faint); user-select: none; }
+.source-texte { white-space: pre-wrap; word-break: break-all; }
 

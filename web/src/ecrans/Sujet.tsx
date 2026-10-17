@@ -13,6 +13,7 @@ import { agentView, Point } from '../ui/Statut.js';
 import type { ArchivedTopic } from './useArchive.js';
 import { useArchive } from './useArchive.js';
 import { Cote } from './Cote.js';
+import { OngletFichiers } from './OngletFichiers.js';
 import { OngletGit } from './OngletGit.js';
 import { useNettoyage } from './useNettoyage.js';
 import { roleLabel } from '../ui/roles.js';
@@ -572,11 +573,7 @@ function Contenu({ topicId }: { topicId: string }) {
             <OngletGit topicId={topic.id} base={topic.base} remote={workspace?.remote ?? null} />
           )}
           {onglet === 'fichiers' && (
-            <div className="sujet-grille sujet-grille--seul">
-              <p className="texte-discret" data-node="1-3.fichiers.a-venir">
-                Onglet Fichiers : à venir.
-              </p>
-            </div>
+            <OngletFichiers topicId={topic.id} activeAgentId={active?.id ?? null} />
           )}
         </>
       )}

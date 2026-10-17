@@ -195,6 +195,12 @@ test('onglets de contenu (11.1) : Agents par défaut, Git et Fichiers affichent 
           onTopicBranch: true,
         },
       }),
+      'GET /api/topics/tp_1/files?scope=tout': json(200, {
+        tree: [],
+        total: 0,
+        modified: 0,
+        truncated: false,
+      }),
     },
   );
   await screen.findByTestId('term-ag_1');
@@ -205,7 +211,7 @@ test('onglets de contenu (11.1) : Agents par défaut, Git et Fichiers affichent 
   // le terminal reste dans le DOM (masqué), pas démonté : pas de reconnexion à la bascule.
   expect(screen.getByTestId('term-ag_1')).toBeTruthy();
   await userEvent.click(node('1-3.onglets.fichiers')!);
-  expect(await screen.findByText('Onglet Fichiers : à venir.')).toBeTruthy();
+  await waitFor(() => expect(text('3-4.explorateur.compteur')).toContain('0 fichier'));
   await userEvent.click(node('1-3.onglets.agents')!);
   expect(screen.getByTestId('term-ag_1')).toBeTruthy();
 });
