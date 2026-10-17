@@ -71,6 +71,7 @@
   "files": [
     "dist",
     "migrations",
+    "kernel",
     "scripts/git",
     "scripts/hooks",
     "README.md"
