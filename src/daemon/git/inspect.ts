@@ -293,6 +293,19 @@ export async function gitCommitDetail(
   };
 }
 
+// 11.11 (D32) : contenu d'un fichier à une révision donnée, pour diff.ouvrir-fichier — null
+// si le fichier n'existe pas à cette révision (ajouté ou supprimé par le commit diffé).
+// git() (exec.ts) rogne la fin de la sortie : un contenu terminé par \n revient sans lui,
+// cosmétique pour un diff ouvert dans l'éditeur, pas pour une lecture fidèle octet à octet.
+export async function fileAtRevision(
+  worktree: string,
+  rev: string,
+  path: string,
+): Promise<string | null> {
+  const r = await git(worktree, ['show', `${rev}:${path}`]);
+  return r.ok ? r.stdout : null;
+}
+
 // 11.7 (D29) : un statut par chemin (relatif au worktree), fusionné à l'arbre de fichiers.
 // `--untracked-files=all` liste chaque fichier non suivi individuellement, pas son dossier.
 export async function gitFileStatuses(worktree: string): Promise<Map<string, FileStatus>> {

@@ -103,8 +103,7 @@ function Noeud({
 }
 
 // 11.8/11.9 (écrans 3.4/3.5) : explorateur (arbre + statut git, D29) et visionneuse Markdown
-// (D30). `editeur.ouvrir-fichier` est câblé mais son backend n'arrive qu'au point 11.11 :
-// jusque-là le bouton répond « action inconnue », comme prévu par le séquencement du plan.
+// (D30). `editeur.ouvrir-fichier` est câblé ; son backend (D32) arrive au point 11.11.
 // `fichier.reveler` (révéler dans le Finder/Explorer) n'a aucun contrat backend nulle part
 // dans ce chantier (ni 11.7 ni 11.11) : omis plutôt que fabriqué, à la différence de
 // « mentionner à l'agent » qui réutilise POST /api/agents/:id/input, déjà existant.

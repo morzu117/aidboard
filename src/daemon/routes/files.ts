@@ -24,8 +24,9 @@ const ContentQuery = Type.Object(
 );
 
 // Résout `relPath` sous `worktree` et vérifie (sur le réel, symlinks compris) qu'il n'en
-// sort pas — même garde que `fs.ts` sous $HOME, appliquée ici au worktree (D29).
-function resolveUnderWorktree(worktree: string, relPath: string): string {
+// sort pas — même garde que `fs.ts` sous $HOME, appliquée ici au worktree (D29). Exportée
+// pour editeur.ouvrir-fichier (11.11) : même garde, pas de seconde implémentation.
+export function resolveUnderWorktree(worktree: string, relPath: string): string {
   const root = realpathSync(worktree);
   const target = join(root, relPath);
   let real: string;

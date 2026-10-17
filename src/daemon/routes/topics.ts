@@ -1,11 +1,12 @@
-import { existsSync, realpathSync } from 'node:fs';
-import { join } from 'node:path';
+import { existsSync, mkdirSync, mkdtempSync, realpathSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { basename, join } from 'node:path';
 import { Type } from '@sinclair/typebox';
 import type { FastifyInstance } from 'fastify';
 import { monotonicFactory } from 'ulid';
 import { isValidSlug, slugify } from '../../shared/slug.js';
 import { type ActionContext, scriptEnv, startAction } from '../actions/service.js';
-import { editorCommand, openInEditor } from '../actions/editor.js';
+import { diffCommand, editorCommand, openDiffInEditor, openInEditor } from '../actions/editor.js';
 import { findAssetDir } from '../assets.js';
 import type { AidConfig } from '../config.js';
 import type { Db } from '../db.js';
@@ -14,14 +15,23 @@ import { git } from '../git/exec.js';
 import {
   branchWorktree,
   currentBranch,
+  fileAtRevision,
   gitBranches,
   gitCommitDetail,
   gitLiveInfo,
   gitLog,
   hasUncommittedChanges,
 } from '../git/inspect.js';
+import { resolveUnderWorktree } from './files.js';
 import type { StructuralService } from '../structural/service.js';
 import type { Indexer } from '../topics/index.js';
+
+// 11.11 (D32) : garde légère pour un chemin de fichier dans un diff — le fichier peut avoir
+// disparu du worktree courant (commit historique), resolveUnderWorktree (qui exige son
+// existence réelle) ne convient donc qu'à editeur.ouvrir-fichier, jamais à diff.ouvrir-fichier.
+function isTraversal(relPath: string): boolean {
+  return relPath.split('/').some((seg) => seg === '..' || seg === '');
+}
 
 const ulid = monotonicFactory();
 const FIVE_MIN = 5 * 60_000;
@@ -48,6 +58,9 @@ export const TOPIC_ACTIONS = [
   'branche.creer-ici',
   'branche.revenir',
   'sujet.rattacher-branche',
+  'editeur.ouvrir-fichier',
+  'diff.ouvrir',
+  'diff.ouvrir-fichier',
 ] as const;
 
 const CreateBody = Type.Object(
@@ -320,6 +333,90 @@ export function registerTopicRoutes(app: FastifyInstance, deps: TopicRouteDeps):
         throw new AidHttpError(
           422,
           `impossible de lancer l'éditeur (${cmd.join(' ')}) : ${(err as Error).message}. Régler « editor » dans ~/.aid/config.yaml.`,
+        );
+      }
+      return reply.code(204).send();
+    }
+
+    // 11.11 (D32) : extension d'editor.open à un chemin de fichier précis (le patron
+    // {path} existe déjà dans openInEditor) — seule action de ce trio avec un consommateur
+    // front (OngletFichiers.tsx, 11.8), donc la seule à exiger l'existence réelle du fichier.
+    if (actionId === 'editeur.ouvrir-fichier') {
+      if (!existsSync(topic.worktree)) throw new AidHttpError(409, 'worktree introuvable');
+      const body = (req.body ?? {}) as { path?: string };
+      if (!body.path) throw new AidHttpError(422, 'chemin requis');
+      const full = resolveUnderWorktree(topic.worktree, body.path);
+      const cmd = editorCommand(deps.config.editor);
+      try {
+        await openInEditor(cmd, full);
+      } catch (err) {
+        throw new AidHttpError(
+          422,
+          `impossible de lancer l'éditeur (${cmd.join(' ')}) : ${(err as Error).message}. Régler « editor » dans ~/.aid/config.yaml.`,
+        );
+      }
+      return reply.code(204).send();
+    }
+
+    // D32 : pas de visualiseur de diff multi-fichiers en app, et aucun éditeur ne déclare de
+    // contrat générique pour differ un commit entier (seul un fichier précis en a un, cf.
+    // diff.ouvrir-fichier ci-dessous) — repli déclaré sur l'ouverture du worktree.
+    if (actionId === 'diff.ouvrir') {
+      if (!existsSync(topic.worktree)) throw new AidHttpError(409, 'worktree introuvable');
+      const cmd = editorCommand(deps.config.editor);
+      try {
+        await openInEditor(cmd, topic.worktree);
+      } catch (err) {
+        throw new AidHttpError(
+          422,
+          `impossible de lancer l'éditeur (${cmd.join(' ')}) : ${(err as Error).message}. Régler « editor » dans ~/.aid/config.yaml.`,
+        );
+      }
+      return reply.code(204).send();
+    }
+
+    // D32 : diff natif (ex. `code --diff`) quand l'éditeur configuré en déclare un (avant/après
+    // écrits dans des fichiers temporaires, le worktree courant n'a pas forcément cette
+    // version) ; sinon repli déclaré sur l'ouverture simple du fichier courant — pas un échec.
+    if (actionId === 'diff.ouvrir-fichier') {
+      if (!existsSync(topic.worktree)) throw new AidHttpError(409, 'worktree introuvable');
+      const body = (req.body ?? {}) as { hash?: string; path?: string };
+      if (!body.hash || !body.path) throw new AidHttpError(422, 'hash et chemin requis');
+      if (isTraversal(body.path)) throw new AidHttpError(422, `${body.path} sort du worktree`);
+      const cmd = editorCommand(deps.config.editor);
+      const diff = diffCommand(cmd);
+      if (!diff) {
+        const full = resolveUnderWorktree(topic.worktree, body.path);
+        try {
+          await openInEditor(cmd, full);
+        } catch (err) {
+          throw new AidHttpError(
+            422,
+            `impossible de lancer l'éditeur (${cmd.join(' ')}) : ${(err as Error).message}. Régler « editor » dans ~/.aid/config.yaml.`,
+          );
+        }
+        return reply.code(204).send();
+      }
+      const [before, after] = await Promise.all([
+        fileAtRevision(topic.worktree, `${body.hash}^`, body.path),
+        fileAtRevision(topic.worktree, body.hash, body.path),
+      ]);
+      const tmp = mkdtempSync(join(tmpdir(), 'aid-diff-'));
+      const beforeDir = join(tmp, 'avant');
+      const afterDir = join(tmp, 'apres');
+      mkdirSync(beforeDir);
+      mkdirSync(afterDir);
+      const name = basename(body.path);
+      const beforePath = join(beforeDir, name);
+      const afterPath = join(afterDir, name);
+      writeFileSync(beforePath, before ?? '');
+      writeFileSync(afterPath, after ?? '');
+      try {
+        await openDiffInEditor(diff, beforePath, afterPath);
+      } catch (err) {
+        throw new AidHttpError(
+          422,
+          `impossible de lancer l'éditeur (${diff.join(' ')}) : ${(err as Error).message}. Régler « editor » dans ~/.aid/config.yaml.`,
         );
       }
       return reply.code(204).send();
