@@ -163,15 +163,21 @@ source `swairm` elle-même. Détail : `~/.aid/backups/gbrain-2026-10-17/descent-
 Les quatre sources à risque (`default`, `klasso`, `swairm`, `descent-wf`) sont closes. Reste
 10.5 (retrait des composants) et 10.6 (geste externe, Julien).
 
-### 10.5 — Retrait des composants
+### 10.5 — Retrait des composants — **fait (2026-10-17)**
 
-Après 10.1-10.4 vérifiés : `kernel/adapters/gbrain.md` supprimé, `commands/sync.md` §2bis
-(l'avertissement « adapter: gbrain, déprécié ») retiré, `manifest.schema.yml` (gbrain comme
-valeur d'adaptateur valide) retiré, entrée `kernel/CHANGELOG.md` documentant le retrait effectif
-(distincte de l'entrée `[0.9.0]` qui ne faisait qu'annoncer la dépréciation). Côté machine :
-`bun remove -g gbrain`, retrait de `VOYAGE_API_KEY`/`GBRAIN_DATABASE_URL` de
-`~/.config/agent-kernel/secrets.env`, suppression de `.gbrain-owner.json` dans chaque projet
-concerné (agent-kernel, myskooli, swairm, descent-wf) et de `.git/gbrain-managed.json`.
+Dans `agent-kernel` (commit `bbc4cd8`, poussé sur `origin main`) : `adapters/gbrain.md`
+supprimé, `commands/sync.md` (l'avertissement « adapter: gbrain, déprécié » du §2 bis retiré —
+un manifeste qui déclarerait encore cet adaptateur tombe désormais dans la règle générale
+« capacité déclarée mais absente »), `manifest.schema.yml` (l'exemple de capacité à options
+utilise `aid`, plus `gbrain`), `CHANGELOG.md` (entrée `[1.0.0]`, distincte de `[0.9.0]` qui
+n'annonçait que la dépréciation), `VERSION` passé à `1.0.0`. Les mentions de `gbrain` restant
+dans `CHANGELOG.md` (versions passées) et `docs/chantiers/01-04` (chantiers déjà clos de la
+migration 0.9.0) sont laissées telles quelles : historique, pas prescriptif.
+
+Côté machine : `bun remove -g gbrain` (vérifié : plus dans le `PATH`), `VOYAGE_API_KEY` et
+`GBRAIN_DATABASE_URL` retirés de `~/.config/agent-kernel/secrets.env` (sauvegarde locale
+`secrets.env.bak-10.5`, jamais commitée), `.gbrain-owner.json` et `.git/gbrain-managed.json`
+supprimés dans les quatre projets concernés (`agent-kernel`, `myskooli`, `swairm`, `descent-wf`).
 
 ### 10.6 — Geste externe (Julien)
 
