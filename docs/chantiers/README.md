@@ -37,6 +37,18 @@ l'est pas encore bloque les points qui en dépendent.
 | D19 | **`topic.sync`/`topic.pr`/`topic.merge` partagent la file du workspace** | Un `fetch` touche des refs partagées du dépôt même depuis un worktree lié : même risque de verrou que `git worktree add` (section 2). | Même `WorkspaceQueue` que `topic.create`/`topic.cleanup`, pas de file plus fine par sujet. | 06 |
 | D20 | **« Lancer les tests » : commande fixe en v0.3** | La configurabilité complète du registre d'actions est un chantier à part entière, pas un détail d'un point ; aucun second cas d'usage connu ne justifie une couche de config pour un seul réglage. | `topic.test` lance `npm test` en dur. Révisable sans migration le jour où un deuxième projet a besoin d'une autre commande. | 06 |
 | D21 | **Nettoyage sur fichiers non commités (écran 2.8)** | Le script actuel refuse tout net ; la maquette prévoit « mettre de côté puis nettoyer » ou « supprimer sans garder ». | `topic-cleanup.sh` apprend `AID_DIRTY_ACTION` (`stash` ou `force`), en insertion pure sur le script existant ; `force` exige `confirmed: true` dans le corps de la requête (422 sinon). | 06 |
+| D22 | **Onglet actif de la page Sujet** | L'export (3.1-3.6) ajoute une barre Agents/Git/Fichiers que le code n'a pas. | État UI pur (React + `?onglet=`), jamais persisté, défaut `agents` (comportement actuel inchangé). | 11 |
+| D23 | **Lecture vs écriture du Git/Fichiers tab** | `git log`/`git status` sur tout le worktree à chaque tick de `/api/state` serait trop coûteux et dériverait hors d'A-I-D. | Lectures en `GET` à la demande, hors file ; écritures qui touchent les refs partagées (fetch, push, changer de branche) en file `WorkspaceQueue` comme `topic.sync` (D19 étendu). | 11 |
+| D24 | **Géométrie du graphe de commits** | Stocker ou calculer côté serveur la position des voies dupliquerait une donnée dérivable du client. | Le backend rend les commits bruts ; le graphe (voies, couleurs, SVG) se calcule côté client, algorithme du README de l'export. | 11 |
+| D25 | **Changer de branche** | Un `git switch` concurrent sur le même dépôt a le même risque de verrou que `git worktree add` (section 2). | Nouveau script `topic-switch.sh`, même file que `topic.sync` (D19), dirty-handling = vocabulaire `AID_DIRTY_ACTION` de D21. | 11 |
+| D26 | **Créer une branche** | L'export propose « ici » et « depuis la base » sans toucher au sujet. | Même script que D25 (`AID_CREATE=1`) ; ne change jamais `topics.branch` ni l'état du sujet. | 11 |
+| D27 | **« Rattacher » une branche (écran 3.6)** | L'export permet d'adopter la branche courante du worktree comme branche de référence du sujet. | Seule action du chantier 11 qui écrit en base : met à jour `topics.branch` (colonne déjà existante, aucune migration). | 11 |
+| D28 | **Détection de la dérive (écran 3.6)** | Comparer la branche courante à `topic.branch` dérive hors d'A-I-D si quelqu'un change de branche à la main. | Champ `onTopicBranch` lu en direct dans `gitLiveInfo`, jamais stocké (même raisonnement que D16). | 11 |
+| D29 | **Arbre de fichiers + statut git (écran 3.4)** | Un chemin fourni par le client pourrait sortir du worktree (traversée `../`) ; un fichier binaire ou énorme ne doit pas être lu entièrement. | `git status` fusionné à un parcours borné (`MAX_ENTRIES`), chemin toujours résolu et vérifié sous `topic.worktree`, fichier binaire/>1 Mo refusé (422). | 11 |
+| D30 | **Rendu de la visionneuse Markdown** | Le contenu d'un fichier du dépôt (potentiellement d'une branche distante) n'est pas un contenu de confiance. | Dépendance `marked` en tokenizer seul ; rendu JSX des tokens, jamais `dangerouslySetInnerHTML`. | 11 |
+| D31 | **Coloration syntaxique de la vue source** | Ajouter Shiki/Monaco pour un seul écran reviendrait sur le hors-périmètre v0.1 « diff et Monaco » (§5) sans second cas d'usage. | Numéros de ligne et police monospace seulement en v1 ; révisable sans migration. | 11 |
+| D32 | **`diff.ouvrir`/`editeur.ouvrir-fichier`** | L'export les affiche comme des actions d'ouverture, pas comme un visualiseur de diff en app. | Délèguent à l'éditeur externe déjà configuré (`editor.ts`), avec repli déclaré si l'éditeur ne connaît pas d'argument diff. | 11 |
+| D33 | **Fetch et push (écran 3.2)** | Ce sont des écritures sur les refs partagées du dépôt, pas de simples lectures. | Deux scripts minimaux, même file que `topic.sync` (D19/D23) ; « Pousser » reste désactivé sans avance, vérifié aussi côté serveur. | 11 |
 
 ### Prérequis machine (état au 2026-10-15)
 
@@ -110,6 +122,7 @@ chantiers sont exécutés en local (rien n'est poussé, aucune PR ouverte).**
 | — | Explorateur de dossiers, terminal, projets 0..N | `feat/selecteur-dossier` | `main` | fait |
 | 06 | [Statuts réels, Accueil et Boîte de réception (v0.2)](06-maquettes-v0.2.md) | `feat/maquettes-v0.2` | `feat/selecteur-dossier` | en cours |
 | 07 | [Git flow (sujet draft → sync → PR → fusion → archive)](07-git-flow.md) | `feat/git-flow` | `feat/cli-recette` | fait, recette humaine à finir : [recette-v0.3.md](../recette-v0.3.md) |
+| 11 | [Page Sujet : onglets Agents / Git / Fichiers](11-onglets-git-fichiers.md) | `feat/onglets-git-fichiers` | `main` | à faire |
 
 ## 4. Correspondance avec les critères d'acceptation du brief
 
