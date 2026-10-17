@@ -2,6 +2,7 @@ import { existsSync, readFileSync, realpathSync } from 'node:fs';
 import { join } from 'node:path';
 import { parse } from 'yaml';
 import type {
+  GitBranch,
   GitCommitDetail,
   GitFileChange,
   GitLiveInfo,
@@ -106,6 +107,69 @@ export async function gitLiveInfo(
     rebaseInProgress,
     onTopicBranch,
   };
+}
+
+// chemin de worktree -> branche locale qui y est extraite (vide si détachée).
+function parseWorktreeBranches(porcelain: string): Map<string, string> {
+  const byBranch = new Map<string, string>();
+  let path = '';
+  for (const line of porcelain.split('\n')) {
+    if (line.startsWith('worktree ')) path = line.slice('worktree '.length);
+    else if (line.startsWith('branch refs/heads/'))
+      byBranch.set(line.slice('branch refs/heads/'.length), path);
+  }
+  return byBranch;
+}
+
+// 11.5 : pour le refus net si la branche visée est déjà extraite ailleurs — avant de lancer
+// topic-switch.sh, pas après (die_human ne se traduit pas en 409 HTTP, l'action est async).
+export async function branchWorktree(repoRoot: string, branch: string): Promise<string | null> {
+  const r = await git(repoRoot, ['worktree', 'list', '--porcelain']);
+  if (!r.ok) return null;
+  return parseWorktreeBranches(r.stdout).get(branch) ?? null;
+}
+
+const BRANCH_FORMAT = '%(refname:short)%09%(objectname)%09%(committerdate:iso-strict)';
+
+// 11.5 (D25/D26) : branches locales seulement — un `git switch` ne s'applique qu'à elles ;
+// une branche distante non extraite localement n'est pas une cible de ce sélecteur.
+export async function gitBranches(
+  worktree: string,
+  base: string,
+): Promise<Array<Omit<GitBranch, 'isCurrent' | 'topicId'>>> {
+  const [refs, worktrees] = await Promise.all([
+    git(worktree, ['for-each-ref', `--format=${BRANCH_FORMAT}`, 'refs/heads']),
+    git(worktree, ['worktree', 'list', '--porcelain']),
+  ]);
+  if (!refs.ok) return [];
+  const worktreeByBranch = parseWorktreeBranches(worktrees.ok ? worktrees.stdout : '');
+  const lines = refs.stdout.split('\n').filter(Boolean);
+  return Promise.all(
+    lines.map(async (line) => {
+      const [name, hash, date] = line.split('\t');
+      const counts = await git(worktree, [
+        'rev-list',
+        '--left-right',
+        '--count',
+        `origin/${base}...${name}`,
+      ]);
+      let ahead = 0;
+      let behind = 0;
+      if (counts.ok) {
+        const [b, a] = counts.stdout.split(/\s+/).map(Number);
+        behind = b ?? 0;
+        ahead = a ?? 0;
+      }
+      return {
+        name: name ?? '',
+        hash: hash ?? '',
+        date: date ?? '',
+        ahead,
+        behind,
+        worktree: worktreeByBranch.get(name ?? '') ?? null,
+      };
+    }),
+  );
 }
 
 const LOG_FORMAT = '%H%x01%P%x01%an%x01%aI%x01%s%x01%D%x00';

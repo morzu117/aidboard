@@ -1,4 +1,4 @@
-import { existsSync } from 'node:fs';
+import { existsSync, realpathSync } from 'node:fs';
 import { join } from 'node:path';
 import { Type } from '@sinclair/typebox';
 import type { FastifyInstance } from 'fastify';
@@ -11,7 +11,14 @@ import type { AidConfig } from '../config.js';
 import type { Db } from '../db.js';
 import { AidHttpError } from '../errors.js';
 import { git } from '../git/exec.js';
-import { gitCommitDetail, gitLiveInfo, gitLog, hasUncommittedChanges } from '../git/inspect.js';
+import {
+  branchWorktree,
+  gitBranches,
+  gitCommitDetail,
+  gitLiveInfo,
+  gitLog,
+  hasUncommittedChanges,
+} from '../git/inspect.js';
 import type { StructuralService } from '../structural/service.js';
 import type { Indexer } from '../topics/index.js';
 
@@ -35,6 +42,9 @@ export const TOPIC_ACTIONS = [
   'archive.oublier-stash',
   'git.fetch',
   'git.pousser',
+  'topic.branch-changer',
+  'branche.creer',
+  'branche.creer-ici',
 ] as const;
 
 const CreateBody = Type.Object(
@@ -238,6 +248,39 @@ export function registerTopicRoutes(app: FastifyInstance, deps: TopicRouteDeps):
     return { commits, dirty, live };
   });
 
+  // 11.5 (D25/D26) : liste des branches locales — le regroupement (branche du sujet /
+  // branches liées / autres) se fait côté client à partir de isCurrent/topicId.
+  app.get('/api/topics/:id/git/branches', async (req) => {
+    const { id } = req.params as { id: string };
+    const row = deps.db
+      .prepare('SELECT worktree, base, branch, workspace_id FROM topics WHERE id = ?')
+      .get(id) as
+      { worktree: string; base: string; branch: string; workspace_id: string } | undefined;
+    if (!row) throw new AidHttpError(404, 'sujet inconnu');
+    if (!existsSync(row.worktree)) throw new AidHttpError(409, 'worktree introuvable');
+    // `git worktree list` rend des chemins résolus (symlinks macOS /tmp, /var...) : comparer
+    // au réel de row.worktree, pas à sa forme littérale telle que stockée en base.
+    const real = realpathSync(row.worktree);
+    const branches = await gitBranches(row.worktree, row.base);
+    const topicByBranch = new Map(
+      (
+        deps.db
+          .prepare(
+            "SELECT branch, id FROM topics WHERE workspace_id = ? AND id != ? AND state != 'archived'",
+          )
+          .all(row.workspace_id, id) as Array<{ branch: string; id: string }>
+      ).map((t) => [t.branch, t.id]),
+    );
+    return {
+      branches: branches.map((b) => ({
+        ...b,
+        isCurrent: b.name === row.branch,
+        worktree: b.worktree === real ? null : b.worktree,
+        topicId: topicByBranch.get(b.name) ?? null,
+      })),
+    };
+  });
+
   // 11.3 : panneau de détail — un commit à la fois, jamais embarqué dans la liste (coûteux).
   app.get('/api/topics/:id/git/commits/:hash', async (req) => {
     const { id, hash } = req.params as { id: string; hash: string };
@@ -358,6 +401,63 @@ export function registerTopicRoutes(app: FastifyInstance, deps: TopicRouteDeps):
         cwd: topic.worktree,
         timeoutMs: TWO_MIN,
         env: scriptEnv(process.env, deps.config.env.strip, { AID_BRANCH: topic.branch }),
+      });
+      return reply.code(202).send({ actionId: runId });
+    }
+
+    // D25 : même file que topic.sync, via topic-switch.sh. Le refus « déjà extraite
+    // ailleurs » est vérifié ici (409 synchrone) plutôt que laissé au script (die_human/2
+    // ne se traduit pas en HTTP, l'action tourne en file et son issue est async).
+    if (actionId === 'topic.branch-changer') {
+      if (!existsSync(topic.worktree)) throw new AidHttpError(409, 'worktree introuvable');
+      const body = (req.body ?? {}) as { targetBranch?: string; dirtyAction?: 'stash' };
+      if (!body.targetBranch) throw new AidHttpError(422, 'branche cible requise');
+      const elsewhere = await branchWorktree(ws.root, body.targetBranch);
+      if (elsewhere && elsewhere !== realpathSync(topic.worktree)) {
+        throw new AidHttpError(
+          409,
+          `la branche ${body.targetBranch} est déjà extraite dans ${elsewhere}`,
+        );
+      }
+      const { actionId: runId } = startAction(deps.actions, {
+        workspaceId: ws.id,
+        topicId: id,
+        action: 'topic.branch-changer',
+        script: join(scripts, 'topic-switch.sh'),
+        cwd: topic.worktree,
+        timeoutMs: TWO_MIN,
+        env: scriptEnv(process.env, deps.config.env.strip, {
+          AID_REPO_ROOT: ws.root,
+          AID_BRANCH: topic.branch,
+          AID_WORKTREE: topic.worktree,
+          AID_TARGET_BRANCH: body.targetBranch,
+          ...(body.dirtyAction && { AID_DIRTY_ACTION: body.dirtyAction }),
+        }),
+      });
+      return reply.code(202).send({ actionId: runId });
+    }
+
+    // D26 : même script, AID_CREATE=1 — ne change jamais topics.branch ni l'état du sujet.
+    if (actionId === 'branche.creer' || actionId === 'branche.creer-ici') {
+      if (!existsSync(topic.worktree)) throw new AidHttpError(409, 'worktree introuvable');
+      const body = (req.body ?? {}) as { targetBranch?: string; dirtyAction?: 'stash' };
+      if (!body.targetBranch) throw new AidHttpError(422, 'nom de branche requis');
+      const { actionId: runId } = startAction(deps.actions, {
+        workspaceId: ws.id,
+        topicId: id,
+        action: actionId,
+        script: join(scripts, 'topic-switch.sh'),
+        cwd: topic.worktree,
+        timeoutMs: TWO_MIN,
+        env: scriptEnv(process.env, deps.config.env.strip, {
+          AID_REPO_ROOT: ws.root,
+          AID_BRANCH: topic.branch,
+          AID_WORKTREE: topic.worktree,
+          AID_TARGET_BRANCH: body.targetBranch,
+          AID_CREATE: '1',
+          ...(actionId === 'branche.creer' && { AID_CREATE_FROM: 'base', AID_BASE: topic.base }),
+          ...(body.dirtyAction && { AID_DIRTY_ACTION: body.dirtyAction }),
+        }),
       });
       return reply.code(202).send({ actionId: runId });
     }

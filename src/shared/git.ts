@@ -43,3 +43,22 @@ export interface GitCommitDetail {
   inHead: boolean;
   files: GitFileChange[];
 }
+
+// 11.5 : une branche locale avec sa méta — le regroupement (branche du sujet / branches
+// liées / autres, design/aid-export-git-flow) se fait côté client à partir de ces champs.
+export interface GitBranch {
+  name: string;
+  hash: string;
+  date: string;
+  ahead: number;
+  behind: number;
+  // Chemin du worktree où elle est extraite, null si aucun (ou si c'est celui-ci même).
+  worktree: string | null;
+  isCurrent: boolean;
+  // Sujet A-I-D propriétaire de cette branche dans ce workspace, si ce n'est pas celui-ci.
+  topicId: string | null;
+}
+
+export interface GitBranchesResponse {
+  branches: GitBranch[];
+}
