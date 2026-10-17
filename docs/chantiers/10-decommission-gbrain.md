@@ -186,11 +186,17 @@ installé sur ce poste et bascule en recherche hybride au lieu de `fts`. Même c
 `structuralEngine` (chantier 08) côté structurel, sans son équivalent côté mémoire ; corrigé dans
 `test/helpers/daemon.ts` et `test/cli-mem.test.ts`.
 
-### 10.6 — Geste externe (Julien)
+### 10.6 — Geste externe (Julien) — **fait (2026-10-17)**
 
-Suppression du projet Supabase (`db.mlkiwejhkgkojflvvuxl.supabase.co`) et révocation de la clé
-Voyage (`dash.voyageai.com`). Décrit ici pour mémoire, pas exécuté par un agent — accès à des
-comptes externes.
+Projet Supabase (`db.mlkiwejhkgkojflvvuxl.supabase.co`) supprimé et clé Voyage
+(`dash.voyageai.com`) révoquée, par Julien — accès à des comptes externes, non automatisable.
+Une fois confirmé, `~/.config/agent-kernel/secrets.env.bak-10.5` (sauvegarde locale prise avant
+le retrait des secrets en 10.5) a été supprimé : son seul rôle était de couvrir la fenêtre entre
+le retrait des secrets et la suppression effective des comptes externes.
+
+**Chantier 10 clos.** Les quatre sources à risque sont récupérées et vérifiées dans `aid mem`,
+les composants gbrain sont retirés d'`agent-kernel`, et les deux comptes externes sont
+supprimés/révoqués.
 
 ## 7. Pièges
 
@@ -236,13 +242,16 @@ comptes externes.
 
 ## 8. Fini quand
 
-- Les quatre sources à risque (`default`, `klasso`, `swairm`, `descent-wf`) ont un export brut
+- [x] Les quatre sources à risque (`default`, `klasso`, `swairm`, `descent-wf`) ont un export brut
   sauvegardé, un triage explicite et journalisé, et leurs pages retenues sont dans `aid mem`,
   vérifiées par échantillon.
-- `kernel/adapters/gbrain.md` et toute référence à gbrain dans `kernel/` ont disparu.
-- Le binaire gbrain est désinstallé sur ce poste, les secrets retirés de
+- [x] `adapters/gbrain.md` et toute référence prescriptive à gbrain dans `agent-kernel` ont
+  disparu.
+- [x] Le binaire gbrain est désinstallé sur ce poste, les secrets retirés de
   `~/.config/agent-kernel/secrets.env`.
-- `kernel/CHANGELOG.md` porte l'entrée de retrait effectif.
-- `npm run gate` (aidboard) vert.
-- Julien a traité le geste externe (10.6) de son côté — pas une condition de clôture du chantier
-  lui-même, juste la dernière case non automatisable.
+- [x] `CHANGELOG.md` porte l'entrée de retrait effectif (`[1.0.0]`).
+- [x] `npm run gate` (aidboard) vert.
+- [x] Julien a traité le geste externe (10.6) : projet Supabase supprimé, clé Voyage révoquée,
+  sauvegarde locale des secrets supprimée.
+
+**Chantier terminé le 2026-10-17.**
