@@ -29,7 +29,7 @@ Vérifié le 2026-10-17 (`gbrain sources list --json`, `gbrain status default --
 | `default` | `~/.gbrain/sources/default`          | 418   | **jamais** (`null`)      | orpheline, pas de dépôt git associé. **Traitée (10.1, 2026-10-17)** : 346 transcripts + 23 cartes swairm `verdict: périmée` + 21 dev-handoff klasso non validés + 2 pages bruit gardés au froid dans le backup ; 26 fichiers extraits en 29 pages `aid mem` (détail : `~/.aid/backups/gbrain-2026-10-17/default/TRIAGE-10.1.md`). |
 | `klasso`  | `~/Projects/myskooli`                | 1202  | 2026-09-24 (540h, severe) | **Traitée (10.2, 2026-10-17)** : 1085 pages (`code`/`design_wf`/`docs`/`style`/`packages`/meta) redondantes avec le dépôt git, vérifiées par contenu, écartées ; 6 pages mortes ou doublons écartées ; 111 extraites en `aid mem` (dont 1 nouveau namespace `versos/`, un projet découvert en triage). Détail : `~/.aid/backups/gbrain-2026-10-17/klasso/TRIAGE-10.2.md`. |
 | `swairm`  | `~/Projects/swairm`                  | 153   | 2026-10-15 (fresh)        | **Traitée (10.3, 2026-10-17)** : 83 pages (`code`/`design`/`docs`/`morphs`/notes racine) redondantes avec le dépôt git ou doublons exacts de pages déjà extraites en 10.1, écartées ; 70 pages de cycle (`swairm/swairm/{dev-handoff,plan,review,retro}/*`) extraites sous `swairm/{dev-handoff,plan,review,retro}/*`. Détail : `~/.aid/backups/gbrain-2026-10-17/swairm/TRIAGE-10.3.md`. |
-| `descent-wf` | `~/Projects/descent-wf`           | 152   | 2026-10-15 (fresh)        | projet réel, même profil que swairm. |
+| `descent-wf` | `~/Projects/descent-wf`           | 152   | 2026-10-15 (fresh)        | **Traitée (10.4, 2026-10-17)** : 71 pages (`design`/`docs`/`ressources`/`tools`/notes racine + 1 page de test) redondantes avec le dépôt git ou sans valeur, écartées ; 81 pages extraites (`descent-wf/{dev-handoff,plan,review}/*`, 56 ; `swairm/{anticipation,decisions,reine}/*`, 25). Détail : `~/.aid/backups/gbrain-2026-10-17/descent-wf/TRIAGE-10.4.md`. |
 | `lessons` | `~/.agent-kernel` (= agent-kernel)    | 48    | 2026-10-15 (fresh)        | **déjà redondant** : vérifié page à page, c'est une réindexation du contenu déjà commité d'agent-kernel (`adapters/`, `policy/`, `roles/`, `commands/sync.md`) plus les leçons déjà présentes dans `aid mem` sous un slug légèrement différent (accents normalisés différemment). Rien d'unique à récupérer ici. |
 
 Aucun des quatre projets réels (myskooli, swairm, descent-wf — hors `default`, orpheline) n'a de
@@ -147,9 +147,21 @@ déjà présentes dans `aid mem` (vérifié avant extraction), donc rien à dupl
 seule la trace de cycle (coût, PR, findings) manquait. Détail :
 `~/.aid/backups/gbrain-2026-10-17/swairm/TRIAGE-10.3.md`.
 
-### 10.4 — Source `descent-wf` (152 pages)
+### 10.4 — Source `descent-wf` (152 pages) — **fait (2026-10-17)**
 
-Même profil que swairm (§10.3), même traitement.
+Même profil que swairm (§10.3), même traitement. Confirmé : `design` (3), `docs` (63, y compris
+`plans/01-30`, `handoffs/*`, `releves/acte-1/*`), `ressources` (1), `tools/skill_editor` (1) et
+les notes racine `agents.md`/`claude.md` (dépassées par le dépôt) — 70 pages — sont redondantes
+avec le dépôt `descent-wf` ; `swairm/preflight-test.md` (1) est une page de test triviale. Total
+écarté : 71. Le reste (81 pages) a été extrait : `descent-wf/{dev-handoff,plan,review}/*` (56,
+cycles réels du moteur de règles, aucun dossier `retro` dans cette source) et
+`swairm/{anticipation,decisions,reine}/*` (25 cartes de la ruche swairm travaillant sur ce
+dépôt — 3 anticipations **validées** cette fois, à la différence des 23 `périmée` de 10.1 ;
+10 décisions + 12 tours de reine avec PR réelles). Vérifié non dupliqué dans le backup de la
+source `swairm` elle-même. Détail : `~/.aid/backups/gbrain-2026-10-17/descent-wf/TRIAGE-10.4.md`.
+
+Les quatre sources à risque (`default`, `klasso`, `swairm`, `descent-wf`) sont closes. Reste
+10.5 (retrait des composants) et 10.6 (geste externe, Julien).
 
 ### 10.5 — Retrait des composants
 
@@ -199,6 +211,15 @@ comptes externes.
   (`readme-1.md`) peut correspondre à un fichier réel au nom mal formé côté dépôt
   (`README (1).md`, espace + parenthèse) — vérifier par contenu avant de conclure à une
   absence.
+- Toutes les cartes `anticipation` ne sont pas périmées : celles de 10.1 l'étaient (23/23,
+  `verdict: périmée`) mais celles de 10.4 étaient `verdict: validée` (proposition réalisée, PR
+  citée) — toujours lire le champ `verdict`, ne jamais présumer du statut par type de page seul.
+- Un sous-dossier `swairm/` dans une source projet (`klasso` en 10.2, `descent-wf` en 10.4) n'est
+  pas forcément une erreur d'attribution : c'est aussi la convention de la ruche pour classer ses
+  propres cartes (décisions, tours de reine, anticipations) par type d'auteur plutôt que par
+  projet, même quand leur contenu appartient bien au projet de la source. Vérifier le contenu
+  (nom du projet cité, numéros d'issue absents du backup `swairm` lui-même) avant de conclure à
+  une mauvaise attribution.
 
 ## 8. Fini quand
 
