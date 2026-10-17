@@ -28,7 +28,7 @@ Vérifié le 2026-10-17 (`gbrain sources list --json`, `gbrain status default --
 | --------- | ------------------------------------ | ----- | ------------------------ | --- |
 | `default` | `~/.gbrain/sources/default`          | 418   | **jamais** (`null`)      | orpheline, pas de dépôt git associé. **Traitée (10.1, 2026-10-17)** : 346 transcripts + 23 cartes swairm `verdict: périmée` + 21 dev-handoff klasso non validés + 2 pages bruit gardés au froid dans le backup ; 26 fichiers extraits en 29 pages `aid mem` (détail : `~/.aid/backups/gbrain-2026-10-17/default/TRIAGE-10.1.md`). |
 | `klasso`  | `~/Projects/myskooli`                | 1202  | 2026-09-24 (540h, severe) | **Traitée (10.2, 2026-10-17)** : 1085 pages (`code`/`design_wf`/`docs`/`style`/`packages`/meta) redondantes avec le dépôt git, vérifiées par contenu, écartées ; 6 pages mortes ou doublons écartées ; 111 extraites en `aid mem` (dont 1 nouveau namespace `versos/`, un projet découvert en triage). Détail : `~/.aid/backups/gbrain-2026-10-17/klasso/TRIAGE-10.2.md`. |
-| `swairm`  | `~/Projects/swairm`                  | 153   | 2026-10-15 (fresh)        | projet réel. `concept` (anticipation, décisions, review, retro) et quelques `note`. |
+| `swairm`  | `~/Projects/swairm`                  | 153   | 2026-10-15 (fresh)        | **Traitée (10.3, 2026-10-17)** : 83 pages (`code`/`design`/`docs`/`morphs`/notes racine) redondantes avec le dépôt git ou doublons exacts de pages déjà extraites en 10.1, écartées ; 70 pages de cycle (`swairm/swairm/{dev-handoff,plan,review,retro}/*`) extraites sous `swairm/{dev-handoff,plan,review,retro}/*`. Détail : `~/.aid/backups/gbrain-2026-10-17/swairm/TRIAGE-10.3.md`. |
 | `descent-wf` | `~/Projects/descent-wf`           | 152   | 2026-10-15 (fresh)        | projet réel, même profil que swairm. |
 | `lessons` | `~/.agent-kernel` (= agent-kernel)    | 48    | 2026-10-15 (fresh)        | **déjà redondant** : vérifié page à page, c'est une réindexation du contenu déjà commité d'agent-kernel (`adapters/`, `policy/`, `roles/`, `commands/sync.md`) plus les leçons déjà présentes dans `aid mem` sous un slug légèrement différent (accents normalisés différemment). Rien d'unique à récupérer ici. |
 
@@ -133,13 +133,19 @@ capturées par erreur d'attribution) a été trié page par page : 111 extraites
 triage), 6 écartées (1 page morte sur gbrain lui-même, 5 doublons vérifiés de leçons déjà
 présentes). Détail : `~/.aid/backups/gbrain-2026-10-17/klasso/TRIAGE-10.2.md`.
 
-### 10.3 — Source `swairm` (153 pages)
+### 10.3 — Source `swairm` (153 pages) — **fait (2026-10-17)**
 
-Essentiellement des pages `concept` de cycle (anticipation, décisions, review, retro). Le
-chantier 09 (fusion du noyau) a déjà établi que les pages projet-préfixées sont cycliques et
-purgent après retro (`policy/namespace.md`) — vérifier combien de ces 153 pages sont des cycles
-déjà clos (retro écrite) dont les leçons durables sont déjà extraites ailleurs, avant de décider
-quoi garder.
+Confirmé : les pages `code` (38), `design` (7/10, les 3 restantes étant des doublons exacts du
+trio déjà extrait en 10.1 sous `swairm/design/overlord-upgraded/*`), `docs` (32, y compris
+`docs/multi-agent/readme-1.md` = capture mal slugifiée de `README (1).md` du dépôt), `morphs`
+(1) et les notes racine `agents.md`/`claude.md` (dépassées par le dépôt) — 83 pages au total —
+sont redondantes avec le dépôt `swairm` ou doublons d'extractions antérieures, écartées sans
+extraction. Le reste, `swairm/swairm/{dev-handoff,plan,review,retro}/*` (70 pages, cycles réels
+des slices A-J de swairm elle-même), a été extrait tel quel sous
+`swairm/{dev-handoff,plan,review,retro}/*` : les leçons durables citées dans les rétros étaient
+déjà présentes dans `aid mem` (vérifié avant extraction), donc rien à dupliquer côté `lesson/` —
+seule la trace de cycle (coût, PR, findings) manquait. Détail :
+`~/.aid/backups/gbrain-2026-10-17/swairm/TRIAGE-10.3.md`.
 
 ### 10.4 — Source `descent-wf` (152 pages)
 
@@ -186,6 +192,13 @@ comptes externes.
 - Un titre de page `memoire`/`feedback-*` peut être tronqué par l'export gbrain (~80 caractères
   + `…`) ; le champ `description:` du frontmatter est la source fiable pour reconstituer un
   titre complet avant d'écrire dans `aid mem` — ne pas importer le titre tronqué tel quel.
+- Un même handoff peut être capturé deux fois sous deux dossiers différents (10.3 : le trio
+  `design_handoff_swairm_overlord-2/*` est un doublon exact de `overlord-upgraded/*` déjà extrait
+  en 10.1) — toujours diffuser le contenu contre les pages déjà extraites avant de conclure
+  « absent du dépôt donc à garder ». De même, un fichier au nom gbrain « propre »
+  (`readme-1.md`) peut correspondre à un fichier réel au nom mal formé côté dépôt
+  (`README (1).md`, espace + parenthèse) — vérifier par contenu avant de conclure à une
+  absence.
 
 ## 8. Fini quand
 
