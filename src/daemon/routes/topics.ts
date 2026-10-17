@@ -11,7 +11,7 @@ import type { AidConfig } from '../config.js';
 import type { Db } from '../db.js';
 import { AidHttpError } from '../errors.js';
 import { git } from '../git/exec.js';
-import { gitCommitDetail, gitLog, hasUncommittedChanges } from '../git/inspect.js';
+import { gitCommitDetail, gitLiveInfo, gitLog, hasUncommittedChanges } from '../git/inspect.js';
 import type { StructuralService } from '../structural/service.js';
 import type { Indexer } from '../topics/index.js';
 
@@ -33,6 +33,8 @@ export const TOPIC_ACTIONS = [
   'pr.rafraichir',
   'topic.merge',
   'archive.oublier-stash',
+  'git.fetch',
+  'git.pousser',
 ] as const;
 
 const CreateBody = Type.Object(
@@ -320,6 +322,40 @@ export function registerTopicRoutes(app: FastifyInstance, deps: TopicRouteDeps):
         cwd: topic.worktree,
         timeoutMs: FIVE_MIN,
         env: scriptEnv(process.env, deps.config.env.strip, {}),
+      });
+      return reply.code(202).send({ actionId: runId });
+    }
+
+    // D33 : même file que topic.sync (startAction sérialise déjà par workspace) — pas de
+    // `git fetch`/`git push` direct depuis la route.
+    if (actionId === 'git.fetch') {
+      if (!existsSync(topic.worktree)) throw new AidHttpError(409, 'worktree introuvable');
+      const { actionId: runId } = startAction(deps.actions, {
+        workspaceId: ws.id,
+        topicId: id,
+        action: 'git.fetch',
+        script: join(scripts, 'topic-fetch.sh'),
+        cwd: topic.worktree,
+        timeoutMs: TWO_MIN,
+        env: scriptEnv(process.env, deps.config.env.strip, { AID_BASE: topic.base }),
+      });
+      return reply.code(202).send({ actionId: runId });
+    }
+
+    if (actionId === 'git.pousser') {
+      if (!existsSync(topic.worktree)) throw new AidHttpError(409, 'worktree introuvable');
+      const live = await gitLiveInfo(topic.worktree, topic.base);
+      if (!live.aheadBehind || live.aheadBehind.ahead === 0) {
+        throw new AidHttpError(422, 'rien à pousser : pas d’avance sur origin/' + topic.base);
+      }
+      const { actionId: runId } = startAction(deps.actions, {
+        workspaceId: ws.id,
+        topicId: id,
+        action: 'git.pousser',
+        script: join(scripts, 'topic-push.sh'),
+        cwd: topic.worktree,
+        timeoutMs: TWO_MIN,
+        env: scriptEnv(process.env, deps.config.env.strip, { AID_BRANCH: topic.branch }),
       });
       return reply.code(202).send({ actionId: runId });
     }
