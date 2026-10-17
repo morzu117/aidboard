@@ -26,16 +26,17 @@ aid                   # lance le daemon s'il ne tourne pas, ouvre le navigateur
 
 ou, sans installer : `npx aidboard`.
 
-| Commande           | Effet                                                                                                   |
-| ------------------ | ------------------------------------------------------------------------------------------------------- |
-| `aid`              | démarre le daemon (détaché, ses agents survivent au terminal) et ouvre le navigateur                    |
-| `aid open`         | rouvre le navigateur sur le daemon qui tourne                                                           |
-| `aid status`       | pid, port, nombre de sujets et d'agents vivants                                                         |
-| `aid stop`         | arrête le daemon ; **refusé tant que des agents tournent** (code 2)                                     |
-| `aid stop --force` | arrête le daemon et tous ses agents                                                                     |
-| `aid doctor`       | vérifie la machine et dit quoi corriger                                                                 |
-| `aid mem …`        | lit, écrit et cherche dans la mémoire locale (`get`, `put`, `search`, `list`, `rm`, `export`, `import`) |
-| `aid mcp`          | serveur MCP « aid » (stdio) : mémoire locale et index structurel (`index_*`) pour un agent              |
+| Commande                       | Effet                                                                                                   |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------- |
+| `aid`                          | démarre le daemon (détaché, ses agents survivent au terminal) et ouvre le navigateur                    |
+| `aid open`                     | rouvre le navigateur sur le daemon qui tourne                                                           |
+| `aid status`                   | pid, port, nombre de sujets et d'agents vivants                                                         |
+| `aid stop`                     | arrête le daemon ; **refusé tant que des agents tournent** (code 2)                                     |
+| `aid stop --force`             | arrête le daemon et tous ses agents                                                                     |
+| `aid doctor`                   | vérifie la machine et dit quoi corriger                                                                 |
+| `aid kernel install [--check]` | matérialise le noyau multi-agents (`kernel/`) dans `~/.agent-kernel` ; `--check` ne touche rien         |
+| `aid mem …`                    | lit, écrit et cherche dans la mémoire locale (`get`, `put`, `search`, `list`, `rm`, `export`, `import`) |
+| `aid mcp`                      | serveur MCP « aid » (stdio) : mémoire locale et index structurel (`index_*`) pour un agent              |
 
 Enregistrement auprès de Claude Code : `claude mcp add --scope user aid -- aid mcp`.
 
@@ -72,6 +73,18 @@ confiance : c'est normal, A-I-D n'y touche pas.
 ```
 
 `AID_HOME` change ce dossier. Les journaux de terminaux peuvent contenir des secrets : ne pas les partager.
+
+## Le noyau multi-agents
+
+`kernel/` (adapters, policy, roles, gabarit, commande `/sync`) est la
+politique de routage de la connaissance, des phases et des rôles d'agent —
+embarquée dans ce paquet, ancien dépôt séparé `agent-kernel` (fusionné,
+chantier 09). `aid kernel install` la matérialise sur `~/.agent-kernel` et
+installe `/sync` dans `~/.claude/commands/`. Dans un projet rattaché,
+`/sync` résout le manifeste (`agent.yml`) et rend le bloc d'instructions
+entre les marqueurs `<!-- agentkit:start --> … <!-- agentkit:end -->` de
+`CLAUDE.md`/`AGENTS.md`. Le détail : `kernel/policy/routing.md`,
+`kernel/commands/sync.md`.
 
 ## Développer
 
