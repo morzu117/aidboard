@@ -565,6 +565,10 @@ body { background: var(--doc-bg); color: var(--text); font-family: var(--font); 
 .source-ligne { display: flex; gap: var(--sp-3); }
 .source-numero { flex: none; width: var(--sp-6); text-align: right; color: var(--faint); user-select: none; }
 .source-texte { white-space: pre-wrap; word-break: break-all; }
+.segmente { display: inline-flex; flex-wrap: wrap; padding: 3px; border: 1px solid var(--line); border-radius: var(--r-m); background: var(--surface-term); }
+.segment { min-height: 30px; padding: 0 var(--sp-3); border: 0; border-radius: var(--r-s); background: transparent; color: var(--muted); font-family: var(--font); font-size: var(--fs-s); cursor: pointer; }
+.segment.est-actif { background: var(--surface-3); color: var(--text); }
+[data-viewport="phone"] .segment { min-height: var(--h-tactile); }
 
 </style>
 </head>

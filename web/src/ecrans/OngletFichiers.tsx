@@ -127,6 +127,9 @@ export function OngletFichiers({
   const [contentLoading, setContentLoading] = useState(false);
   const [mentionErreur, setMentionErreur] = useState<string | null>(null);
   const [editeurErreur, setEditeurErreur] = useState<string | null>(null);
+  // D31 : la bascule aperçu/source ne vaut que pour un .md ; tout autre fichier est
+  // toujours en source, quel que soit `mode` (voir `modeEffectif`).
+  const [mode, setMode] = useState<'apercu' | 'source'>('apercu');
 
   function charger() {
     fetchFileTree(call, topicId, scope).then(
@@ -150,6 +153,7 @@ export function OngletFichiers({
     setContentLoading(true);
     setMentionErreur(null);
     setEditeurErreur(null);
+    setMode('apercu');
     fetchFileContent(call, topicId, path).then(
       (r) => {
         setContent(r.content);
@@ -206,7 +210,12 @@ export function OngletFichiers({
     : [];
   const segments = selected ? selected.split('/') : [];
   const estMarkdown = selected?.toLowerCase().endsWith('.md') ?? false;
-  const rendu = content !== null && estMarkdown ? renderMarkdown(content) : null;
+  const modeEffectif = estMarkdown ? mode : 'source';
+  const rendu =
+    content !== null && estMarkdown && modeEffectif === 'apercu' ? renderMarkdown(content) : null;
+  const estVide = content === '';
+  const lignes =
+    content !== null ? (content.endsWith('\n') ? content.slice(0, -1) : content).split('\n') : [];
 
   return (
     <div className="sujet-grille" data-node="3-4">
@@ -313,6 +322,30 @@ export function OngletFichiers({
                     {segments.join(' / ')}
                   </nav>
                 </div>
+                {estMarkdown && (
+                  <div className="segmente" role="group" aria-label="Mode d’affichage">
+                    <button
+                      type="button"
+                      className={`segment${mode === 'apercu' ? ' est-actif' : ''}`}
+                      data-action="visionneuse.mode"
+                      data-valeur="apercu"
+                      aria-pressed={mode === 'apercu'}
+                      onClick={() => setMode('apercu')}
+                    >
+                      Aperçu
+                    </button>
+                    <button
+                      type="button"
+                      className={`segment${mode === 'source' ? ' est-actif' : ''}`}
+                      data-action="visionneuse.mode"
+                      data-valeur="source"
+                      aria-pressed={mode === 'source'}
+                      onClick={() => setMode('source')}
+                    >
+                      Source
+                    </button>
+                  </div>
+                )}
                 <div className="actions">
                   <button
                     className="bouton"
@@ -362,7 +395,13 @@ export function OngletFichiers({
                   {contentError}
                 </p>
               )}
-              {content !== null && estMarkdown && rendu && (
+              {content !== null && estVide && (
+                <section className="vide" data-node="3-4.visionneuse.vide">
+                  <p className="vide-message">Fichier vide.</p>
+                  <p className="texte-discret">{selected} existe mais ne contient encore rien.</p>
+                </section>
+              )}
+              {content !== null && !estVide && modeEffectif === 'apercu' && rendu && (
                 <div className="lecture">
                   <article className="document" data-node="3-4.visionneuse.document">
                     {rendu.body}
@@ -379,7 +418,23 @@ export function OngletFichiers({
                   )}
                 </div>
               )}
-              {content !== null && !estMarkdown && <pre className="source">{content}</pre>}
+              {content !== null && !estVide && modeEffectif === 'source' && (
+                <div
+                  className="source"
+                  data-node="3-4.visionneuse.source"
+                  role="region"
+                  aria-label="Source du fichier"
+                >
+                  {lignes.map((ligne, i) => (
+                    <div key={i} className="source-ligne">
+                      <span className="source-numero" aria-hidden="true">
+                        {i + 1}
+                      </span>
+                      <span className="source-texte">{ligne}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </>
           )}
         </aside>
