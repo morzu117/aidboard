@@ -14,6 +14,7 @@ const HELP = `aidboard ${readVersion()} : cockpit local des agents de code
   aid daemon      lance le daemon au premier plan
   aid emit        publie un événement d'agent (appelé par les hooks ; sans effet hors A-I-D)
   aid hooks       état des hooks Claude Code ; install | uninstall modifient ~/.claude/settings.json
+  aid kernel install [--check]   matérialise le noyau multi-agents dans ~/.agent-kernel
   aid mem …       la mémoire des agents : get, put, search, list, rm, export, import, reindex
   aid mcp         serveur MCP « aid » (stdio) : mémoire et index structurel pour un agent
 `;
@@ -40,6 +41,10 @@ async function main(): Promise<number> {
     const { runMcp } = await import('./commands/mcp.js');
     await runMcp(resolvePaths());
     return -1; // vit tant que le client MCP tient stdin
+  }
+  if (first === 'kernel') {
+    const { runKernel } = await import('./commands/kernel.js');
+    return runKernel(process.argv[3] ?? '', process.argv.slice(4));
   }
   const { values, positionals } = parseArgs({
     allowPositionals: true,
