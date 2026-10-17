@@ -5,6 +5,7 @@ import type { Agent, IndexState } from '../../../src/shared/model.js';
 import { AidApiError } from '../data/api.js';
 import { useAid } from '../data/useAidState.js';
 import { ConfirmerNettoyage } from '../dialogues/ConfirmerNettoyage.js';
+import { SelecteurBranche } from '../dialogues/SelecteurBranche.js';
 import { Terminal } from '../terminal/Terminal.js';
 import { Layout } from '../ui/Layout.js';
 import { Memoire } from '../ui/Memoire.js';
@@ -69,6 +70,7 @@ function Contenu({ topicId }: { topicId: string }) {
     ongletParam === 'git' || ongletParam === 'fichiers' ? ongletParam : 'agents',
   );
   const [menu, setMenu] = useState<'aucun' | 'agent' | 'plus'>('aucun');
+  const [selecteurBranche, setSelecteurBranche] = useState(false);
   const [erreur, setErreur] = useState<string | null>(null);
   const [ignoring, setIgnoring] = useState(false);
   const nettoyage = useNettoyage(topicId);
@@ -295,13 +297,18 @@ function Contenu({ topicId }: { topicId: string }) {
           >
             {topic.state}
           </span>
-          <span
+          <button
             className="pastille pastille--code"
             data-node="1-3.entete.branche"
+            data-action="branche.ouvrir-selecteur"
             data-bind="sujet.branche"
+            type="button"
+            aria-haspopup="dialog"
+            aria-expanded={selecteurBranche}
+            onClick={() => setSelecteurBranche(true)}
           >
             {topic.branch}
-          </span>
+          </button>
           <span className="pastille pastille--discret" data-node="1-3.entete.base">
             base{' '}
             <span data-node="1-3.entete.base.branche" data-bind="sujet.base">
@@ -335,6 +342,9 @@ function Contenu({ topicId }: { topicId: string }) {
           onClose={nettoyage.reset}
           onConfirm={(n) => void nettoyage.start(n)}
         />
+      )}
+      {selecteurBranche && (
+        <SelecteurBranche topicId={topic.id} onClose={() => setSelecteurBranche(false)} />
       )}
       {topic.state === 'draft' || topic.worktreeMissing ? (
         <div className="sujet-grille">

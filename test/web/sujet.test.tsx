@@ -249,6 +249,33 @@ test('nettoyer : le menu appelle topic.cleanup, un refus pour travail non commit
   expect(screen.queryByText('Supprimer quand même')).toBeNull();
 });
 
+test('la pastille de branche ouvre le sélecteur (11.6), qui lit /git/branches', async () => {
+  const h = open(snapshot({ workspaces: [ws()], topics: [topic()], runs: [run] }));
+  h.respond.set(
+    'GET /api/topics/tp_1/git/branches',
+    json(200, {
+      branches: [
+        {
+          name: 'feat/s',
+          hash: 'h',
+          date: 't',
+          ahead: 0,
+          behind: 0,
+          worktree: null,
+          isCurrent: true,
+          topicId: null,
+        },
+      ],
+    }),
+  );
+  await screen.findByText('Mon sujet');
+  await userEvent.click(node('1-3.entete.branche')!);
+  expect(await screen.findByRole('dialog', { name: 'Changer de branche' })).toBeTruthy();
+  await waitFor(() =>
+    expect(h.calls.some((c) => c.url === '/api/topics/tp_1/git/branches')).toBe(true),
+  );
+});
+
 test('worktree introuvable : bandeau, aucun terminal, éditeur désactivé', async () => {
   open(
     snapshot({

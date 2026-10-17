@@ -287,3 +287,78 @@ body {
   padding-top: var(--sp-3);
   border-top: 1px solid var(--line);
 }
+
+/* 11.6 : sélecteur de branche (3.3), construit avec le même vocabulaire que .selecteur-dossier,
+   absent des maquettes comme les autres dialogues. */
+.selecteur-branche__liste {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  max-height: 50vh;
+  overflow: auto;
+}
+.selecteur-branche__groupe {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+}
+.selecteur-branche__option {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  min-height: var(--h-controle);
+  padding: 0 var(--sp-3);
+  border: 0;
+  border-radius: var(--r-s);
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.selecteur-branche__option:hover,
+.selecteur-branche__option:focus-visible {
+  background: var(--surface-3);
+}
+.selecteur-branche__option[aria-disabled='true'] {
+  color: var(--text-3);
+  cursor: not-allowed;
+}
+.selecteur-branche__option.est-courante {
+  cursor: default;
+  color: var(--text-2);
+}
+.selecteur-branche__nom {
+  font-family: ui-monospace, monospace;
+}
+.selecteur-branche__meta {
+  margin-left: auto;
+  color: var(--text-3);
+  font-size: var(--fs-s);
+}
+.selecteur-branche__vide {
+  margin: 0;
+  padding: var(--sp-3);
+  color: var(--text-3);
+  font-size: var(--fs-s);
+}
+.selecteur-branche__lien {
+  font-size: var(--fs-s);
+}
+.confirmation {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+.confirmation-titre {
+  margin: 0;
+  font-weight: var(--fw-sb);
+}
+.commande {
+  margin: 0;
+  padding: var(--sp-2) var(--sp-3);
+  border-radius: var(--r-m);
+  background: var(--surface-term);
+  font-family: ui-monospace, monospace;
+  font-size: var(--fs-s);
+}
