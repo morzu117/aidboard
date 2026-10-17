@@ -11,10 +11,18 @@ export interface GitLogCommit {
   inHead: boolean;
 }
 
+export interface GitLiveInfo {
+  aheadBehind: { ahead: number; behind: number } | null;
+  rebaseInProgress: boolean;
+  onTopicBranch: boolean;
+}
+
 export interface GitLogResponse {
   commits: GitLogCommit[];
   // Modifications non commitées (suivies ou non) : affiche le commit WIP en tête de graphe.
   dirty: boolean;
+  // 11.4 : même passage que commits/dirty — alimente la bannière de situation (fetch/pousser).
+  live: GitLiveInfo;
 }
 
 export interface GitFileChange {

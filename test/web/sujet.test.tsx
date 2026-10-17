@@ -185,7 +185,17 @@ test('onglets de contenu (11.1) : Agents par défaut, Git et Fichiers affichent 
       agents: [agent({ id: 'ag_1', kind: 'claude', role: 'free' })],
     }),
     'tp_1',
-    { 'GET /api/topics/tp_1/git/log': json(200, { commits: [], dirty: false }) },
+    {
+      'GET /api/topics/tp_1/git/log': json(200, {
+        commits: [],
+        dirty: false,
+        live: {
+          aheadBehind: { ahead: 0, behind: 0 },
+          rebaseInProgress: false,
+          onTopicBranch: true,
+        },
+      }),
+    },
   );
   await screen.findByTestId('term-ag_1');
   expect(node('1-3.onglets.agents')?.className).toContain('est-actif');

@@ -70,7 +70,12 @@ test('GET /api/topics/:id/git/log : commits du sujet et fenêtre partagée, inHe
     headers: t.headers,
   });
   expect(res.statusCode).toBe(200);
-  const { commits } = res.json<{ commits: LogCommit[] }>();
+  const { commits, live } = res.json<{
+    commits: LogCommit[];
+    live: { aheadBehind: { ahead: number; behind: number } | null };
+  }>();
+  // 11.4 : même passage que commits/dirty — alimente la bannière de situation.
+  expect(live.aheadBehind).toEqual({ ahead: 1, behind: 1 });
 
   const byHash = new Map(commits.map((c) => [c.hash, c]));
   expect(byHash.get(topicHead)).toMatchObject({

@@ -1,7 +1,12 @@
 import { existsSync, readFileSync, realpathSync } from 'node:fs';
 import { join } from 'node:path';
 import { parse } from 'yaml';
-import type { GitCommitDetail, GitFileChange, GitLogCommit } from '../../shared/git.js';
+import type {
+  GitCommitDetail,
+  GitFileChange,
+  GitLiveInfo,
+  GitLogCommit,
+} from '../../shared/git.js';
 import { isValidNamespace } from '../memory/slug.js';
 import type { StructuralService } from '../structural/service.js';
 import { git } from './exec.js';
@@ -70,14 +75,6 @@ export async function remoteBranchExists(root: string, branch: string): Promise<
 export async function currentBranch(root: string): Promise<string | null> {
   const r = await git(root, ['symbolic-ref', '--quiet', '--short', 'HEAD']);
   return r.ok ? r.stdout : null;
-}
-
-export interface GitLiveInfo {
-  aheadBehind: { ahead: number; behind: number } | null;
-  rebaseInProgress: boolean;
-  // 11.2 (D28) : le worktree a-t-il dérivé de la branche du sujet (HEAD détachée ou
-  // switch fait à la main) ? Live, jamais stocké — même raisonnement que l'avance/retard.
-  onTopicBranch: boolean;
 }
 
 // D16 : avance/retard et rebase en cours ne sont jamais stockés — relus en direct à chaque

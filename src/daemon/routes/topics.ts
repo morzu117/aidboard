@@ -222,18 +222,20 @@ export function registerTopicRoutes(app: FastifyInstance, deps: TopicRouteDeps):
     };
   });
 
-  // 11.2/11.3 : commits bruts (D24) — géométrie du graphe laissée au client.
+  // 11.2/11.3/11.4 : commits bruts (D24) — géométrie du graphe laissée au client. `live`
+  // alimente la bannière de situation (même passage, D16/D28 : pas un second appel git).
   app.get('/api/topics/:id/git/log', async (req) => {
     const { id } = req.params as { id: string };
     const row = deps.db.prepare('SELECT worktree, base FROM topics WHERE id = ?').get(id) as
       { worktree: string; base: string } | undefined;
     if (!row) throw new AidHttpError(404, 'sujet inconnu');
     if (!existsSync(row.worktree)) throw new AidHttpError(409, 'worktree introuvable');
-    const [commits, dirty] = await Promise.all([
+    const [commits, dirty, live] = await Promise.all([
       gitLog(row.worktree, row.base),
       hasUncommittedChanges(row.worktree),
+      gitLiveInfo(row.worktree, row.base),
     ]);
-    return { commits, dirty };
+    return { commits, dirty, live };
   });
 
   // 11.3 : panneau de détail — un commit à la fois, jamais embarqué dans la liste (coûteux).
