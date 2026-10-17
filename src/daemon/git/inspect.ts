@@ -8,6 +8,7 @@ import type {
   GitLiveInfo,
   GitLogCommit,
 } from '../../shared/git.js';
+import type { FileStatus } from '../../shared/files.js';
 import { isValidNamespace } from '../memory/slug.js';
 import type { StructuralService } from '../structural/service.js';
 import { git } from './exec.js';
@@ -287,4 +288,24 @@ export async function gitCommitDetail(
     inHead: ancestor.ok,
     files,
   };
+}
+
+// 11.7 (D29) : un statut par chemin (relatif au worktree), fusionné à l'arbre de fichiers.
+// `--untracked-files=all` liste chaque fichier non suivi individuellement, pas son dossier.
+export async function gitFileStatuses(worktree: string): Promise<Map<string, FileStatus>> {
+  const status = await git(worktree, ['status', '--porcelain=v1', '--untracked-files=all']);
+  const byPath = new Map<string, FileStatus>();
+  if (!status.ok) return byPath;
+  for (const line of status.stdout.split('\n').filter(Boolean)) {
+    const xy = line.slice(0, 2);
+    const rest = line.slice(3);
+    // un renommage s'écrit "ancien -> nouveau" : seul le nouveau chemin nous intéresse ici.
+    const path = rest.includes(' -> ') ? rest.split(' -> ')[1]! : rest;
+    const letter =
+      xy === '??'
+        ? 'U'
+        : ((['A', 'M', 'D', 'R'].find((c) => xy.includes(c)) as FileStatus | undefined) ?? 'M');
+    byPath.set(path, letter);
+  }
+  return byPath;
 }

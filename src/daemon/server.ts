@@ -19,6 +19,7 @@ import { Indexer } from './topics/index.js';
 import { registerTopicRoutes } from './routes/topics.js';
 import { registerWorkspaceRoutes } from './routes/workspaces.js';
 import { registerFsRoutes } from './routes/fs.js';
+import { registerFileRoutes } from './routes/files.js';
 import { registerHookRoutes } from './routes/hooks.js';
 import { registerDaemonRoutes } from './routes/daemon.js';
 import { registerAgentRoutes } from './routes/agents.js';
@@ -114,6 +115,7 @@ export async function buildServer(deps: ServerDeps): Promise<FastifyInstance> {
   registerAgentRoutes(app, { db: deps.db, agents: deps.agents });
   registerWorkspaceRoutes(app, { ...deps, engine: structural });
   registerFsRoutes(app);
+  registerFileRoutes(app, { db: deps.db });
   registerHookRoutes(app, () => process.env);
   const indexer = new Indexer({
     store: deps.store,

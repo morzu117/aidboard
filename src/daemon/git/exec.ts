@@ -21,7 +21,10 @@ export function git(cwd: string, args: string[]): Promise<GitResult> {
         resolve({
           ok: !err,
           code: typeof code === 'number' ? code : null,
-          stdout: String(stdout).trim(),
+          // Fin seulement : `status --porcelain` (11.7) commence parfois une ligne par une
+          // espace significative (colonne d'index vide) — un .trim() plein la mangeait et
+          // décalait tout le parsing en largeur fixe d'un caractère.
+          stdout: String(stdout).replace(/\s+$/, ''),
           stderr: String(stderr).trim(),
         });
       },
