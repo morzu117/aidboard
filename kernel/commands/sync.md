@@ -56,18 +56,30 @@ En pratique, un manifeste sain tient en une dizaine de lignes.
 
 ## 2. Version
 
-Compare `kernel.version` du manifeste à `~/.agent-kernel/VERSION`.
+Compare `kernel.version` du manifeste à la version du paquet `aid` installé
+(`aid --version`). Depuis la fusion (chantier 09), le noyau n'a plus de
+numéro de version propre : `kernel.version` se confond avec celui d'aidboard.
 
+- **Migration de fusion d'abord, si besoin.** Si `kernel.version` est une
+  version pré-fusion (listée dans l'entrée « Fusion » en tête de
+  `~/.agent-kernel/CHANGELOG.md` — par exemple `0.9.0`, `0.7.1`, ou toute
+  version au format de l'ancien dépôt `agent-kernel`), applique **d'abord**
+  cette migration, quel que soit l'ordre numérique apparent avec la version
+  d'aidboard : une comparaison numérique directe serait trompeuse (le pin
+  peut être numériquement plus grand que la version d'aidboard installée
+  sans que le noyau installé soit plus ancien). Une fois la migration faite,
+  réécris `kernel.version` à la version d'aidboard installée et continue
+  normalement.
 - **Identiques**, ou le pin est `main` : continue.
-- **Le noyau est en avance** : affiche les entrées du `CHANGELOG.md`
-  comprises entre les deux versions, puis demande confirmation avant de
-  continuer.
-- **La majeure a changé** : applique d'abord la migration décrite dans le
-  `CHANGELOG` pour cette version. Si elle touche `agent.yml`, montre le diff
-  du manifeste et fais valider avant d'écrire.
+- **Le noyau est en avance** : affiche les entrées de
+  `~/.agent-kernel/CHANGELOG.md` comprises entre les deux versions, puis
+  demande confirmation avant de continuer.
+- **La majeure a changé** : applique d'abord la migration décrite dans ce
+  `CHANGELOG.md` pour cette version. Si elle touche `agent.yml`, montre le
+  diff du manifeste et fais valider avant d'écrire.
 - **Le pin est en avance sur le noyau** : le noyau local est périmé.
-  Arrête-toi et dis-le — c'est un `git pull` dans `~/.agent-kernel`, pas
-  quelque chose que tu résous ici.
+  Arrête-toi et dis-le — c'est mettre à jour le paquet `aid` puis lancer
+  `aid kernel install`, pas quelque chose que tu résous ici.
 
 ## 2 bis. Capacités réellement disponibles
 
@@ -79,8 +91,8 @@ Pour `memory`, la commande est `aid --version`. Un daemon arrêté n'empêche pa
 rendu : c'est un repli déclaré à l'exécution (`adapters/aid.md`, « Repli »).
 
 Si le manifeste déclare `adapter: gbrain`, avertis : cet adaptateur est déprécié
-depuis 0.9.0 et retiré en 1.0 ; la migration est décrite dans `CHANGELOG.md`. Rends
-quand même, avec `adapters/gbrain.md`.
+depuis 0.9.0 et retiré en 1.0 ; la migration est décrite dans
+`~/.agent-kernel/CHANGELOG.md`. Rends quand même, avec `adapters/gbrain.md`.
 
 **Si elle manque, arrête-toi.** Ne rends pas le bloc. Une capacité déclarée
 mais absente est pire que `null` : la table de routage interdit le grep et
