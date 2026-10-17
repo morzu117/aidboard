@@ -27,7 +27,7 @@ Vérifié le 2026-10-17 (`gbrain sources list --json`, `gbrain status default --
 | Source    | Chemin local                        | Pages | Dernière synchro        | Nature |
 | --------- | ------------------------------------ | ----- | ------------------------ | --- |
 | `default` | `~/.gbrain/sources/default`          | 418   | **jamais** (`null`)      | orpheline, pas de dépôt git associé. **Traitée (10.1, 2026-10-17)** : 346 transcripts + 23 cartes swairm `verdict: périmée` + 21 dev-handoff klasso non validés + 2 pages bruit gardés au froid dans le backup ; 26 fichiers extraits en 29 pages `aid mem` (détail : `~/.aid/backups/gbrain-2026-10-17/default/TRIAGE-10.1.md`). |
-| `klasso`  | `~/Projects/myskooli`                | 1202  | 2026-09-24 (540h, severe) | projet réel (myskooli). Contient des snapshots de code (`packages/ai/...json`), des pages `dev-handoff`, `decisions`, `memoire`. |
+| `klasso`  | `~/Projects/myskooli`                | 1202  | 2026-09-24 (540h, severe) | **Traitée (10.2, 2026-10-17)** : 1085 pages (`code`/`design_wf`/`docs`/`style`/`packages`/meta) redondantes avec le dépôt git, vérifiées par contenu, écartées ; 6 pages mortes ou doublons écartées ; 111 extraites en `aid mem` (dont 1 nouveau namespace `versos/`, un projet découvert en triage). Détail : `~/.aid/backups/gbrain-2026-10-17/klasso/TRIAGE-10.2.md`. |
 | `swairm`  | `~/Projects/swairm`                  | 153   | 2026-10-15 (fresh)        | projet réel. `concept` (anticipation, décisions, review, retro) et quelques `note`. |
 | `descent-wf` | `~/Projects/descent-wf`           | 152   | 2026-10-15 (fresh)        | projet réel, même profil que swairm. |
 | `lessons` | `~/.agent-kernel` (= agent-kernel)    | 48    | 2026-10-15 (fresh)        | **déjà redondant** : vérifié page à page, c'est une réindexation du contenu déjà commité d'agent-kernel (`adapters/`, `policy/`, `roles/`, `commands/sync.md`) plus les leçons déjà présentes dans `aid mem` sous un slug légèrement différent (accents normalisés différemment). Rien d'unique à récupérer ici. |
@@ -121,12 +121,17 @@ fichiers extraits en 29 pages `aid mem` (namespace mixte DO2 : `klasso/…`, `sw
 `~/.aid/backups/gbrain-2026-10-17/default/TRIAGE-10.1.md`. Vérifié par `aid mem list`/`get`/
 `search` sur un échantillon.
 
-### 10.2 — Source `klasso` / myskooli (1202 pages)
+### 10.2 — Source `klasso` / myskooli (1202 pages) — **fait (2026-10-17)**
 
-Le plus gros volume. Les pages `code` (snapshots `packages/ai/...json`) : vérifier d'abord
-qu'elles correspondent à des fichiers toujours présents et à jour dans le dépôt `myskooli` —
-si oui, écartées sans extraction (git fait déjà ce travail). Le reste (`dev-handoff`,
-`decisions`, `memoire`) : triage normal.
+Confirmé : les pages `code` (920) ainsi que `design_wf`/`docs`/`style`/`packages`/les 4 fichiers
+meta racine (165 de plus, 1085 au total) correspondent à des fichiers toujours présents et à
+jour dans le dépôt `myskooli` (vérifié par contenu, pas que par chemin) — écartées sans
+extraction. Le reste (`memoire`, cycles `dev-handoff`/`plan`/`review`/`retro`, 4 pages `swairm`
+capturées par erreur d'attribution) a été trié page par page : 111 extraites dans `aid mem`
+(`klasso/memoire/*`, `lesson/<domaine>/*`, `klasso/{dev-handoff,plan,review,retro}/*`,
+`swairm/{decisions,reine}/*`, et un nouveau namespace `versos/*` pour un projet découvert en
+triage), 6 écartées (1 page morte sur gbrain lui-même, 5 doublons vérifiés de leçons déjà
+présentes). Détail : `~/.aid/backups/gbrain-2026-10-17/klasso/TRIAGE-10.2.md`.
 
 ### 10.3 — Source `swairm` (153 pages)
 
@@ -172,6 +177,15 @@ comptes externes.
 - Le décompte de `lessons` (48) contre `aid mem` (25) a un écart qui n'est **pas** une perte —
   vérifié : différence de normalisation de slug (accents), pas de contenu manquant. Ne pas
   reproduire cette confusion pour les autres sources sans la même vérification page à page.
+- Une source gbrain peut contenir des pages d'un **autre projet que celui qu'elle nomme** :
+  10.2 (source `klasso`) contenait 4 pages `swairm` (ruche qui travaillait sur ce dépôt) et 1
+  page `versos` (un projet jamais mentionné dans ce chantier, capturé par erreur
+  d'attribution). Vérifier qu'un titre/chemin correspond vraiment au projet de la source avant
+  de le classer dans son namespace — sinon il finit dans le mauvais dossier ou, pire, écarté à
+  tort comme bruit.
+- Un titre de page `memoire`/`feedback-*` peut être tronqué par l'export gbrain (~80 caractères
+  + `…`) ; le champ `description:` du frontmatter est la source fiable pour reconstituer un
+  titre complet avant d'écrire dans `aid mem` — ne pas importer le titre tronqué tel quel.
 
 ## 8. Fini quand
 
