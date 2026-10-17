@@ -1,9 +1,25 @@
 #!/usr/bin/env bash
-# Faux codegraph : « init -y <chemin> » réussit ou échoue selon FAKE_CODEGRAPH_EXIT ; les autres commandes ne font rien.
-[ "$1" = "init" ] || exit 0
-sleep 0.2
-if [ "${FAKE_CODEGRAPH_EXIT:-0}" = "0" ]; then
-  mkdir -p "$3/.codegraph"
-  : > "$3/.codegraph/codegraph.db"
+# Faux codegraph : « init -y <chemin> » réussit ou échoue selon FAKE_CODEGRAPH_EXIT (comportement
+# historique, inchangé). FAKE_CODEGRAPH_SLEEP fait attendre avant toute réponse, pour simuler un
+# délai dépassé côté adaptateur. Les autres commandes (chantier 08) répondent depuis un fichier
+# canned FAKE_CODEGRAPH_FIXTURES/<commande>.json ; explore rend un texte fixe (jamais du JSON).
+if [ -n "${FAKE_CODEGRAPH_SLEEP:-}" ]; then
+  sleep "$FAKE_CODEGRAPH_SLEEP"
 fi
-exit "${FAKE_CODEGRAPH_EXIT:-0}"
+if [ "$1" = "init" ]; then
+  sleep 0.2
+  if [ "${FAKE_CODEGRAPH_EXIT:-0}" = "0" ]; then
+    mkdir -p "$3/.codegraph"
+    : > "$3/.codegraph/codegraph.db"
+  fi
+  exit "${FAKE_CODEGRAPH_EXIT:-0}"
+fi
+if [ "$1" = "explore" ]; then
+  echo "**Exploration (fixture)** — texte fixe, jamais parsé en JSON."
+  exit 0
+fi
+if [ -n "${FAKE_CODEGRAPH_FIXTURES:-}" ] && [ -f "${FAKE_CODEGRAPH_FIXTURES}/$1.json" ]; then
+  cat "${FAKE_CODEGRAPH_FIXTURES}/$1.json"
+  exit 0
+fi
+exit 0

@@ -1,13 +1,32 @@
 import { existsSync } from 'node:fs';
-import type { ActionRun, Agent, Run, Topic, Workspace } from '../../shared/model.js';
+import type { ActionRun, Agent, Run, Topic, TopicIndex, Workspace } from '../../shared/model.js';
 import type { StateSnapshot } from '../../shared/state.js';
 import type { Db } from '../db.js';
+import type { StructuralService } from '../structural/service.js';
 
 type Row = Record<string, unknown>;
 
 const parseJson = (v: unknown): unknown => (typeof v === 'string' ? JSON.parse(v) : null);
 
-export function buildSnapshot(db: Db, all = false): StateSnapshot {
+// DS7 : jamais stocké, relu en direct (comme gitLiveInfo pour git) — `null` dès que le moteur
+// n'a rien d'exploitable (coupé, binaire absent, pas encore initialisé…), sans distinction.
+async function topicIndex(engine: StructuralService, worktree: string): Promise<TopicIndex | null> {
+  const status = await engine.status(worktree);
+  if (status.state === 'unavailable') return null;
+  return {
+    engine: status.engine,
+    indexedAt: status.indexedAt,
+    stale: status.state === 'stale',
+    pending: status.pending,
+    languages: status.languages,
+  };
+}
+
+export async function buildSnapshot(
+  db: Db,
+  engine: StructuralService,
+  all = false,
+): Promise<StateSnapshot> {
   const workspaces = (db.prepare('SELECT * FROM workspaces ORDER BY name').all() as Row[]).map(
     (r): Workspace => ({
       id: r.id as string,
@@ -20,29 +39,31 @@ export function buildSnapshot(db: Db, all = false): StateSnapshot {
       createdAt: r.created_at as string,
     }),
   );
-  const topics = (
-    db
-      .prepare("SELECT * FROM topics WHERE (? = 1 OR state != 'archived') ORDER BY created_at, id")
-      .all(all ? 1 : 0) as Row[]
-  ).map((r): Topic => ({
-    id: r.id as string,
-    workspaceId: r.workspace_id as string,
-    slug: r.slug as string,
-    title: r.title as string,
-    type: r.type as Topic['type'],
-    branch: r.branch as string,
-    base: r.base as string,
-    worktree: r.worktree as string,
-    state: r.state as Topic['state'],
-    phase: r.phase as Topic['phase'],
-    indexState: r.index_state as Topic['indexState'],
-    worktreeMissing: !existsSync(r.worktree as string),
-    prNumber: r.pr_number as number | null,
-    prUrl: r.pr_url as string | null,
-    stashRef: r.stash_ref as string | null,
-    createdAt: r.created_at as string,
-    updatedAt: r.updated_at as string,
-  }));
+  const topicRows = db
+    .prepare("SELECT * FROM topics WHERE (? = 1 OR state != 'archived') ORDER BY created_at, id")
+    .all(all ? 1 : 0) as Row[];
+  const topics = await Promise.all(
+    topicRows.map(async (r): Promise<Topic> => ({
+      id: r.id as string,
+      workspaceId: r.workspace_id as string,
+      slug: r.slug as string,
+      title: r.title as string,
+      type: r.type as Topic['type'],
+      branch: r.branch as string,
+      base: r.base as string,
+      worktree: r.worktree as string,
+      state: r.state as Topic['state'],
+      phase: r.phase as Topic['phase'],
+      indexState: r.index_state as Topic['indexState'],
+      index: await topicIndex(engine, r.worktree as string),
+      worktreeMissing: !existsSync(r.worktree as string),
+      prNumber: r.pr_number as number | null,
+      prUrl: r.pr_url as string | null,
+      stashRef: r.stash_ref as string | null,
+      createdAt: r.created_at as string,
+      updatedAt: r.updated_at as string,
+    })),
+  );
   const topicIds = new Set(topics.map((t) => t.id));
   const runs = (db.prepare('SELECT * FROM runs ORDER BY created_at, id').all() as Row[])
     .filter((r) => topicIds.has(r.topic_id as string))

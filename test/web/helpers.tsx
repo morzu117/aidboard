@@ -49,6 +49,7 @@ export const topic = (over: Partial<Topic> = {}): Topic => ({
   state: 'active',
   phase: null,
   indexState: 'disabled',
+  index: null,
   worktreeMissing: false,
   prNumber: null,
   prUrl: null,

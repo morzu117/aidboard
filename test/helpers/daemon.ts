@@ -7,6 +7,7 @@ import type { Db } from '../../src/daemon/db.js';
 import type { EventStore } from '../../src/daemon/events/store.js';
 import type { Embedder } from '../../src/daemon/memory/embed.js';
 import type { ChatModel } from '../../src/daemon/memory/maintain.js';
+import type { IndexEngine } from '../../src/shared/structural.js';
 
 export interface TestDaemon {
   d: DaemonHandle;
@@ -21,6 +22,7 @@ export async function startTestDaemon(
   home = mkdtempSync(join(tmpdir(), 'aid-d-')),
   extra: {
     codegraphBin?: string;
+    structuralEngine?: IndexEngine;
     config?: Partial<AidConfig>;
     memory?: {
       embedder?: Embedder;
@@ -34,6 +36,10 @@ export async function startTestDaemon(
   const d = await startDaemon({
     home,
     codegraphBin: extra.codegraphBin,
+    // Piège du chantier 08 : jamais le vrai codegraph en test. Depuis 08.6, /api/state
+    // interroge le moteur pour chaque sujet (DS7) ; un test qui ne précise ni l'un ni
+    // l'autre hériterait sinon du moteur réel de config.structural (installé sur ce poste).
+    structuralEngine: extra.structuralEngine ?? (extra.codegraphBin ? undefined : 'off'),
     memory: extra.memory,
     config: { port: 0, ...extra.config },
     checkUpdates: false,

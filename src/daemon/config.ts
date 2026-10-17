@@ -9,12 +9,21 @@ export interface AidConfig {
   env: { strip: string[] };
   terminal: { scrollback: number; logMaxBytes: number; logRetentionDays: number };
   memory: MemoryConfig;
+  structural: StructuralConfig;
 }
 
 export interface MemoryConfig {
   embeddings: { provider: 'off' | 'ollama'; model: string; url: string };
   maintenance: { enabled: boolean; model: string; window: string };
   git: { push: boolean };
+}
+
+export interface StructuralConfig {
+  engine: 'codegraph' | 'off';
+  bin: string;
+  timeoutMs: number;
+  /** DO2 (chantier 08) encore ouverte : le champ existe, aucun adaptateur ne le lit encore */
+  exclude: string[];
 }
 
 export const DEFAULT_CONFIG: AidConfig = {
@@ -28,6 +37,7 @@ export const DEFAULT_CONFIG: AidConfig = {
     maintenance: { enabled: false, model: 'qwen3:8b', window: '02:00-06:00' },
     git: { push: false },
   },
+  structural: { engine: 'codegraph', bin: 'codegraph', timeoutMs: 60_000, exclude: [] },
 };
 
 export class ConfigError extends Error {}
@@ -63,7 +73,7 @@ export function parseConfig(text: string): AidConfig {
   const doc: unknown = text.trim() === '' ? {} : parse(text);
   if (doc === null || doc === undefined) return structuredClone(DEFAULT_CONFIG);
   if (!isRecord(doc)) throw new ConfigError('config.yaml : un objet est attendu à la racine');
-  rejectUnknown(doc, ['host', 'port', 'editor', 'env', 'terminal', 'memory'], '');
+  rejectUnknown(doc, ['host', 'port', 'editor', 'env', 'terminal', 'memory', 'structural'], '');
 
   const cfg = structuredClone(DEFAULT_CONFIG);
   if (doc.host !== undefined && doc.host !== '127.0.0.1') {
@@ -93,6 +103,7 @@ export function parseConfig(text: string): AidConfig {
     }
   }
   if (doc.memory !== undefined) parseMemory(doc.memory, cfg.memory);
+  if (doc.structural !== undefined) parseStructural(doc.structural, cfg.structural);
   return cfg;
 }
 
@@ -147,6 +158,24 @@ function parseMemory(raw: unknown, cfg: MemoryConfig): void {
   }
 }
 
+function parseStructural(raw: unknown, cfg: StructuralConfig): void {
+  if (!isRecord(raw)) throw new ConfigError('config.yaml : structural doit être un objet');
+  rejectUnknown(raw, ['engine', 'bin', 'timeoutMs', 'exclude'], 'structural.');
+  if (raw.engine !== undefined) {
+    if (raw.engine !== 'codegraph' && raw.engine !== 'off') {
+      throw new ConfigError(
+        'config.yaml : structural.engine — moteur inconnu (disponibles : codegraph, off)',
+      );
+    }
+    cfg.engine = raw.engine;
+  }
+  if (raw.bin !== undefined) cfg.bin = str(raw.bin, 'structural.bin');
+  if (raw.timeoutMs !== undefined) {
+    cfg.timeoutMs = positiveInt(raw.timeoutMs, 'structural.timeoutMs');
+  }
+  if (raw.exclude !== undefined) cfg.exclude = stringList(raw.exclude, 'structural.exclude');
+}
+
 export function loadConfig(p: AidPaths): AidConfig {
   if (!existsSync(p.config)) return structuredClone(DEFAULT_CONFIG);
   return parseConfig(readFileSync(p.config, 'utf8'));
@@ -174,6 +203,11 @@ const DEFAULT_FILE = `# Configuration d'A-I-D. Tout est facultatif : ce sont les
 #     window: "02:00-06:00"
 #   git:
 #     push: false            # true : git push de ~/.aid/memory après chaque commit, si un remote origin existe
+# structural:
+#   engine: codegraph      # off = aucune lecture structurelle, les sujets restent "disabled"
+#   bin: codegraph         # chemin ou nom du binaire codegraph
+#   timeoutMs: 60000
+#   exclude: []            # dossiers à exclure des résultats (dist, …) — ex. ["dist"]
 `;
 
 export function writeDefaultConfigIfAbsent(p: AidPaths): void {

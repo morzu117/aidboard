@@ -1,0 +1,15 @@
+{
+  "symbol": "useExample",
+  "depth": 2,
+  "nodeCount": 2,
+  "edgeCount": 1,
+  "affected": [
+    { "name": "useExample", "kind": "function", "filePath": "src/example.ts", "startLine": 10 },
+    {
+      "name": "ExampleClient",
+      "kind": "function",
+      "filePath": "src/example-client.tsx",
+      "startLine": 5
+    }
+  ]
+}

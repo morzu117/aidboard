@@ -7,6 +7,7 @@ import {
   runDoctor,
 } from '../src/cli/commands/doctor.js';
 import { resolvePaths } from '../src/daemon/paths.js';
+import type { IndexStatus } from '../src/shared/structural.js';
 
 const good: Probes = {
   nodeVersion: 'v22.23.3',
@@ -20,6 +21,8 @@ const good: Probes = {
   port: async () => ({ port: 4870, state: 'libre' }),
   claudeHooks: () => true,
   memoryHealth: async () => null,
+  mcpRegistration: () => false,
+  structural: async () => null,
 };
 
 const levels = async (over: Partial<Probes>) =>
@@ -84,6 +87,26 @@ test('gh présent mais non authentifié : ⚠ distinct de l’absence du binaire
 test('gh absent : pas de vérification de session (rien à authentifier)', async () => {
   const checks = await levels({ has: (b) => b !== 'gh' });
   expect(checks.some((l) => l.includes('authentifié'))).toBe(false);
+});
+
+test('codegraph présent : sa version s’affiche', async () => {
+  const checks = await levels({
+    version: async (bin) => (bin === 'codegraph' ? 'codegraph 1.6.2' : 'git version 2.54.0'),
+  });
+  expect(checks).toContain('ok:codegraph codegraph 1.6.2');
+});
+
+test('codegraph présent mais --version échoue : ⚠ distinct de l’absence du binaire', async () => {
+  const checks = await levels({
+    version: async (bin) => (bin === 'codegraph' ? null : 'git version 2.54.0'),
+  });
+  expect(checks).toContain('warn:codegraph : version illisible');
+  expect(checks.some((l) => l === 'warn:codegraph introuvable')).toBe(false);
+});
+
+test('codegraph absent : pas de vérification de version (rien à sonder)', async () => {
+  const checks = await levels({ has: (b) => b !== 'codegraph' });
+  expect(checks.some((l) => l.includes('illisible'))).toBe(false);
 });
 
 test('~/.aid autre que 0700 : ✗ ; absent : rien à dire', async () => {
@@ -185,4 +208,67 @@ test('hooks Claude Code absents : un ⚠ qui dit l’effet et la commande ; sans
   });
   const sansClaude = await levels({ claudeHooks: () => false, has: (b) => b !== 'claude' });
   expect(sansClaude.some((l) => l.includes('hooks'))).toBe(false);
+});
+
+test('~/.claude.json pointe encore aid-memory : ⚠ qui nomme les deux noms ; sans claude, rien', async () => {
+  const checks = await runChecks({ ...good, mcpRegistration: () => true });
+  const warn = checks.find((c) => c.label.includes('aid-memory'))!;
+  expect(warn.level).toBe('warn');
+  expect(warn.detail).toContain('aid-memory');
+  expect(warn.detail).toContain('aid mcp');
+  const sansClaude = await levels({ mcpRegistration: () => true, has: (b) => b !== 'claude' });
+  expect(sansClaude.some((l) => l.includes('aid-memory'))).toBe(false);
+});
+
+test('~/.claude.json déjà sous aid, ou absent : rien', async () => {
+  expect(
+    (await levels({ mcpRegistration: () => false })).some((l) => l.includes('aid-memory')),
+  ).toBe(false);
+});
+
+const indexStatus: IndexStatus = {
+  engine: 'codegraph',
+  state: 'ready',
+  indexedAt: 't0',
+  files: 10,
+  symbols: 20,
+  languages: ['ts'],
+  pending: 0,
+  engineVersion: '1.6.0',
+  builtWith: '1.6.2',
+  capabilities: ['explore'],
+};
+
+test('codegraph présent, index bâti par une version différente : décalage affiché (pas une erreur)', async () => {
+  const checks = await runChecks({
+    ...good,
+    version: async (bin) => (bin === 'codegraph' ? 'codegraph 1.6.0' : 'git version 2.54.0'),
+    structural: async () => indexStatus,
+  });
+  const line = checks.find((c) => c.label === 'codegraph codegraph 1.6.0')!;
+  expect(line.level).toBe('ok');
+  expect(line.detail).toContain('CLI 1.6.0, index bâti par 1.6.2');
+  expect(line.detail).toContain('reindex conseillé');
+});
+
+test('codegraph présent, même version que l’index bâti : aucun décalage à afficher', async () => {
+  const checks = await runChecks({
+    ...good,
+    version: async (bin) => (bin === 'codegraph' ? 'codegraph 1.6.2' : 'git version 2.54.0'),
+    structural: async () => indexStatus,
+  });
+  const line = checks.find((c) => c.label === 'codegraph codegraph 1.6.2')!;
+  expect(line.level).toBe('ok');
+  expect(line.detail).toBeUndefined();
+});
+
+test('index indisponible (daemon arrêté ou moteur coupé) : la version s’affiche sans décalage, sans plantage', async () => {
+  const checks = await runChecks({
+    ...good,
+    version: async (bin) => (bin === 'codegraph' ? 'codegraph 1.6.2' : 'git version 2.54.0'),
+    structural: async () => null,
+  });
+  const line = checks.find((c) => c.label === 'codegraph codegraph 1.6.2')!;
+  expect(line.level).toBe('ok');
+  expect(line.detail).toBeUndefined();
 });

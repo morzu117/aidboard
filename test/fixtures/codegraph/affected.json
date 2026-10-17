@@ -1,0 +1,5 @@
+{
+  "changedFiles": ["src/example.ts"],
+  "affectedTests": ["src/example.test.ts"],
+  "totalDependentsTraversed": 2
+}

@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, expect, test } from 'vitest';
 import type { StateSnapshot } from '../src/shared/state.js';
+import type { IndexEngine } from '../src/shared/structural.js';
 import { startTestDaemon, waitFor, type TestDaemon } from './helpers/daemon.js';
 import { commitFile, makeOriginAndClone, sh } from './helpers/git.js';
 
@@ -15,8 +16,11 @@ afterEach(async () => {
 const tmp = () => realpathSync(mkdtempSync(join(tmpdir(), 'aid-tc-')));
 const FAKE = join(import.meta.dirname, 'fixtures/fake-codegraph.sh');
 
-async function setup(opts: { codegraph?: boolean; bin?: string } = {}) {
-  t = await startTestDaemon(undefined, { codegraphBin: opts.bin ?? FAKE });
+async function setup(opts: { codegraph?: boolean; bin?: string; engine?: IndexEngine } = {}) {
+  t = await startTestDaemon(undefined, {
+    codegraphBin: opts.bin ?? FAKE,
+    structuralEngine: opts.engine,
+  });
   const repo = makeOriginAndClone(tmp(), { codegraph: opts.codegraph });
   const ws = (
     await t.d.app.inject({
@@ -127,6 +131,14 @@ test('indexation en échec : index failed, le sujet reste actif', async () => {
     'index failed',
   );
   expect(t.db.prepare('SELECT state FROM topics').get()).toEqual({ state: 'active' });
+});
+
+test('engine off : disabled même avec .codegraph dans le dépôt, l’indexeur ne tourne jamais', async () => {
+  const { ws } = await setup({ codegraph: true, engine: 'off' });
+  const { actionId } = (await create(ws, 'Moteur coupé')).json();
+  await finished(actionId);
+  await new Promise((r) => setTimeout(r, 400));
+  expect(t.db.prepare('SELECT index_state FROM topics').get()).toEqual({ index_state: 'disabled' });
 });
 
 test('codegraph introuvable : index failed', async () => {

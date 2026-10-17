@@ -1,12 +1,15 @@
 import { execFile } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { createServer } from 'node:net';
-import { statSync } from 'node:fs';
+import { homedir } from 'node:os';
+import { join } from 'node:path';
+import { readFileSync, statSync } from 'node:fs';
 import { onPath } from '../../daemon/actions/editor.js';
 import { readProcVersion } from '../../daemon/routes/workspaces.js';
 import { loadConfig } from '../../daemon/config.js';
 import type { MemoryHealth } from '../../daemon/memory/service.js';
 import type { AidPaths } from '../../daemon/paths.js';
+import type { IndexStatus } from '../../shared/structural.js';
 import { isWsl } from '../browser.js';
 import { hooksStatus } from '../../daemon/hooks/claudeSettings.js';
 import { daemonFetch, runningDaemon } from '../daemonInfo.js';
@@ -31,6 +34,8 @@ export interface Probes {
   port(): Promise<{ port: number; state: 'aid' | 'libre' | 'occupe' }>;
   claudeHooks(): boolean; // les hooks d'A-I-D sont-ils dans la configuration de Claude Code ?
   memoryHealth(): Promise<MemoryHealth | null>; // null = daemon arrêté ou injoignable
+  mcpRegistration(): boolean; // true si `aid-memory` (06.5) est encore enregistré dans ~/.claude.json (DS10)
+  structural(): Promise<IndexStatus | null>; // état du premier workspace ; null = daemon arrêté, aucun workspace, ou index indisponible
 }
 
 export function nodeSupported(v: string): boolean {
@@ -42,6 +47,13 @@ export function gitAtLeast(output: string, major: number, minor: number): boolea
   const m = /(\d+)\.(\d+)/.exec(output);
   if (!m) return true;
   return Number(m[1]) > major || (Number(m[1]) === major && Number(m[2]) >= minor);
+}
+
+// Pas une erreur (pièges du chantier 08 : builtWith peut dépasser la CLI), juste à afficher.
+export function versionDecalage(cliLine: string, builtWith: string | null): string | undefined {
+  if (!builtWith || cliLine.includes(builtWith)) return undefined;
+  const cli = /(\d+\.\d+\.\d+)/.exec(cliLine)?.[1] ?? cliLine;
+  return `CLI ${cli}, index bâti par ${builtWith} : reindex conseillé`;
 }
 
 export async function runChecks(p: Probes): Promise<Check[]> {
@@ -111,6 +123,22 @@ export async function runChecks(p: Probes): Promise<Check[]> {
     });
   }
 
+  // Présence seule déjà couverte par la boucle ci-dessus (warn si absent) : ici, la version,
+  // pour repérer d'un coup d'œil un décalage avec l'index déjà bâti sur un dépôt (chantier 08).
+  if (p.has('codegraph')) {
+    const v = await p.version('codegraph', ['--version']);
+    if (v === null) {
+      add(
+        'warn',
+        'codegraph : version illisible',
+        '`codegraph --version` a échoué : impossible de repérer un décalage avec un index déjà bâti',
+      );
+    } else {
+      const idx = await p.structural();
+      add('ok', `codegraph ${v}`, versionDecalage(v, idx?.builtWith ?? null));
+    }
+  }
+
   const mode = p.homeMode();
   if (mode !== null) {
     const perms = mode & 0o777;
@@ -138,6 +166,14 @@ export async function runChecks(p: Probes): Promise<Check[]> {
       label: 'hooks Claude Code absents',
       detail: 'les statuts de claude seront seulement estimés : aid hooks install',
     });
+    // DS10 (chantier 08) : l'ancien nom casse une fois, puis les agents doivent se réenregistrer.
+    if (p.mcpRegistration()) {
+      add(
+        'warn',
+        'serveur MCP enregistré sous `aid-memory`',
+        'ré-enregistrer sous `aid` : claude mcp remove --scope user aid-memory && claude mcp add --scope user aid -- aid mcp',
+      );
+    }
   }
 
   if (isWsl(p.procVersion)) {
@@ -228,7 +264,42 @@ export function realProbes(paths: AidPaths): Probes {
         return null;
       }
     },
+    mcpRegistration: () => mcpServerNames(claudeJsonPath()).includes('aid-memory'),
+    async structural() {
+      const info = await runningDaemon(paths);
+      if (!info) return null;
+      try {
+        const state = await daemonFetch(info, 'GET', '/api/state');
+        const workspaces = (state.json as { workspaces?: Array<{ id: string }> }).workspaces;
+        if (state.status !== 200 || !workspaces?.length) return null;
+        const { status, json } = await daemonFetch(
+          info,
+          'GET',
+          `/api/structural/status?workspace=${workspaces[0]!.id}`,
+        );
+        return status === 200 ? (json as unknown as IndexStatus) : null;
+      } catch {
+        return null;
+      }
+    },
   };
+}
+
+function claudeJsonPath(env: NodeJS.ProcessEnv = process.env): string {
+  return join(env.HOME ?? homedir(), '.claude.json');
+}
+
+// Jamais d'écriture ici (contrairement à claudeSettings.ts) : doctor ne fait que lire et
+// conseiller. Un fichier absent ou illisible n'est pas une erreur, juste « rien d'enregistré ».
+function mcpServerNames(path: string): string[] {
+  try {
+    const parsed = JSON.parse(readFileSync(path, 'utf8')) as {
+      mcpServers?: Record<string, unknown>;
+    };
+    return Object.keys(parsed.mcpServers ?? {});
+  } catch {
+    return [];
+  }
 }
 
 const MARK: Record<Level, string> = { ok: '✓', warn: '⚠', ko: '✗' };

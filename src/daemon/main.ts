@@ -30,7 +30,9 @@ import { reconcile } from './reconcile.js';
 import { reconcileNamespaces } from './routes/workspaces.js';
 import { type AuthState, createAuthState } from './security.js';
 import { buildServer } from './server.js';
+import { StructuralService } from './structural/service.js';
 import { UpdateWatcher } from './updateWatcher.js';
+import type { IndexEngine } from '../shared/structural.js';
 
 export class AidPortInUse extends Error {
   constructor(port: number) {
@@ -55,6 +57,7 @@ export async function startDaemon(
     config?: Partial<AidConfig>;
     logger?: boolean;
     codegraphBin?: string;
+    structuralEngine?: IndexEngine;
     onStopRequested?: () => void;
     onUpdateRequested?: () => void;
     /** `git ls-remote origin` en tâche de fond ; coupé dans les tests, pas de réseau à chaque daemon. */
@@ -175,6 +178,15 @@ export async function startDaemon(
       opts.checkUpdates === false
         ? null
         : new UpdateWatcher(dirname(fileURLToPath(import.meta.url)));
+    // config.structural est la source par défaut (08.3) ; codegraphBin/structuralEngine
+    // restent des surcharges directes de startDaemon pour les tests (comme codegraphBin
+    // le faisait déjà avant que la clé de config existe).
+    const structural = new StructuralService({
+      engine: opts.structuralEngine ?? config.structural.engine,
+      bin: opts.codegraphBin ?? config.structural.bin,
+      timeoutMs: config.structural.timeoutMs,
+      exclude: config.structural.exclude,
+    });
     const app = await buildServer({
       config,
       auth,
@@ -184,7 +196,7 @@ export async function startDaemon(
       memory,
       memoryProposals: proposals,
       paths,
-      codegraphBin: opts.codegraphBin,
+      structural,
       requestStop: opts.onStopRequested,
       requestUpdate: opts.onUpdateRequested,
       updates: () => updates?.status() ?? null,

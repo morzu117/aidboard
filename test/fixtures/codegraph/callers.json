@@ -1,0 +1,11 @@
+{
+  "symbol": "useExample",
+  "callers": [
+    {
+      "name": "ExampleClient",
+      "kind": "function",
+      "filePath": "src/example-client.tsx",
+      "startLine": 5
+    }
+  ]
+}

@@ -1,0 +1,10 @@
+{
+  "initialized": true,
+  "version": "1.6.2",
+  "lastIndexed": "2026-10-17T08:00:00.000Z",
+  "fileCount": 42,
+  "nodeCount": 500,
+  "languages": ["typescript"],
+  "pendingChanges": { "added": 0, "modified": 0, "removed": 0 },
+  "index": { "builtWithVersion": "1.6.2" }
+}

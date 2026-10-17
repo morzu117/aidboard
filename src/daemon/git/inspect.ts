@@ -2,6 +2,7 @@ import { existsSync, readFileSync, realpathSync } from 'node:fs';
 import { join } from 'node:path';
 import { parse } from 'yaml';
 import { isValidNamespace } from '../memory/slug.js';
+import type { StructuralService } from '../structural/service.js';
 import { git } from './exec.js';
 
 export interface RepoInfo {
@@ -11,12 +12,12 @@ export interface RepoInfo {
   /** branche courante (dépôt sans origin : la base par défaut) */
   currentBranch: string | null;
   isLinkedWorktree: boolean;
-  hasCodegraph: boolean;
+  hasStructuralIndex: boolean;
 }
 
 export class NotARepo extends Error {}
 
-export async function inspectRepo(path: string): Promise<RepoInfo> {
+export async function inspectRepo(path: string, structural: StructuralService): Promise<RepoInfo> {
   let real: string;
   try {
     real = realpathSync(path);
@@ -39,7 +40,7 @@ export async function inspectRepo(path: string): Promise<RepoInfo> {
     hasOrigin: origin.ok,
     currentBranch: current.ok ? current.stdout : null,
     isLinkedWorktree: dir.stdout !== common.stdout,
-    hasCodegraph: existsSync(join(real, '.codegraph')),
+    hasStructuralIndex: structural.detect(real),
   };
 }
 

@@ -80,7 +80,7 @@ lit ici et dans la section « Pièges » de chaque plan.
 | `git worktree add` lancés en parallèle sur un même repo | `index.lock` ou verrous de refs en conflit, échecs aléatoires | Une file d'exécution par workspace pour toute action git qui modifie l'état | 02.2 |
 | Branche créée avec `origin/main` comme amont | `git pull` tire main, et un `push.default=upstream` pousse **sur main** | `git worktree add --no-track` | 02.3 |
 | `topic.cleanup` qui supprime des commits | Perte de travail | D7 | 02.4 |
-| Démon codegraph orphelin après la suppression du worktree | Un processus qui tourne pour rien, ou un worktree impossible à supprimer | Tuer le pid de `.codegraph/daemon.pid`, puis `codegraph uninit -f`, avant `git worktree remove` | 02.4 |
+| Démon codegraph orphelin après la suppression du worktree | Un processus qui tourne pour rien, ou un worktree impossible à supprimer | Tuer le pid de `.codegraph/daemon.pid`, puis `codegraph uninit -f`, avant `git worktree remove` ; un `reindex` admin par sujet (`POST /api/structural/reindex`) relance proprement sans attendre une suppression de worktree | 02.4, 08.4 |
 | Slug ou titre injecté dans le shell | Injection de commandes | Slug validé par `^[a-z0-9][a-z0-9-]{0,47}$`. Les scripts reçoivent leurs valeurs par variables d'environnement, et les processus se lancent avec `spawn(fichier, args)`, jamais par une chaîne shell. | 02.1 |
 | `ANTHROPIC_API_KEY` héritée par `claude` | Facturation API silencieuse | D9 | 03.1 |
 | Dialogue de confiance de `claude` ou de `codex` dans chaque nouveau worktree | Le premier lancement semble bloqué | Comportement normal à documenter. A-I-D n'écrit pas dans `~/.claude.json` (§2 : il n'injecte rien). | 04, 05 |
@@ -181,3 +181,4 @@ Indépendants de la pile v0.1 ; chacun porte son propre jalon.
 | N° | Chantier | Branche | Base | Dépend de | Prépare |
 | --- | --- | --- | --- | --- | --- |
 | 06 | [Mémoire locale : A-I-D porte la capacité `memory` du kernel](06-memoire-locale.md) | `feat/memoire-locale` | `feat/cli-recette` | agent-kernel 0.9.0 (`docs/chantiers/` du noyau) : le contrat `aid mem` est partagé | v0.3 (phase du sujet lue dans les pages) |
+| 08 | [Index structurel : A-I-D porte la capacité `structural_index` du kernel](08-index-structurel.md) | `feat/index-structurel` | `main` | 06 : même daemon, même serveur MCP `aid` | pont mémoire ↔ code (table de liens, extracteurs Prisma/HTTP), banc Kivgraph (second adaptateur) |

@@ -14,6 +14,7 @@ import { AidHttpError } from './errors.js';
 import type { AidPaths } from './paths.js';
 import type { UpdateStatus } from './updateCheck.js';
 import { WorkspaceQueue } from './actions/queue.js';
+import { StructuralService } from './structural/service.js';
 import { Indexer } from './topics/index.js';
 import { registerTopicRoutes } from './routes/topics.js';
 import { registerWorkspaceRoutes } from './routes/workspaces.js';
@@ -24,6 +25,7 @@ import { registerAgentRoutes } from './routes/agents.js';
 import { registerEventRoutes } from './routes/events.js';
 import { registerStateRoutes } from './routes/state.js';
 import { registerMemoryRoutes } from './routes/memory.js';
+import { registerStructuralRoutes } from './routes/structural.js';
 import type { MemoryProposals } from './memory/maintain.js';
 import type { MemoryService } from './memory/service.js';
 import { type AuthState, registerSecurity } from './security.js';
@@ -40,7 +42,7 @@ export interface ServerDeps {
   memoryProposals?: MemoryProposals;
   paths: AidPaths;
   procVersion?: () => string | null;
-  codegraphBin?: string;
+  structural?: StructuralService;
   requestStop?: () => void;
   requestUpdate?: () => void;
   updates?: () => UpdateStatus | null;
@@ -101,7 +103,8 @@ export async function buildServer(deps: ServerDeps): Promise<FastifyInstance> {
     app.log.error(err);
     return reply.code(500).send({ error: 'erreur interne' });
   });
-  registerStateRoutes(app, deps.db, deps.store);
+  const structural = deps.structural ?? new StructuralService({ engine: 'codegraph' });
+  registerStateRoutes(app, deps.db, deps.store, structural);
   registerDaemonRoutes(app, {
     db: deps.db,
     requestStop: deps.requestStop ?? (() => undefined),
@@ -109,22 +112,23 @@ export async function buildServer(deps: ServerDeps): Promise<FastifyInstance> {
     updates: deps.updates,
   });
   registerAgentRoutes(app, { db: deps.db, agents: deps.agents });
-  registerWorkspaceRoutes(app, deps);
+  registerWorkspaceRoutes(app, { ...deps, engine: structural });
   registerFsRoutes(app);
   registerHookRoutes(app, () => process.env);
   const indexer = new Indexer({
     store: deps.store,
     paths: deps.paths,
-    codegraphBin: deps.codegraphBin ?? 'codegraph',
+    engine: structural,
   });
   app.addHook('onClose', async () => indexer.stop());
   registerTopicRoutes(app, {
     db: deps.db,
     config: deps.config,
-    codegraphBin: deps.codegraphBin ?? 'codegraph',
+    engine: structural,
     actions: { store: deps.store, paths: deps.paths, queue: new WorkspaceQueue() },
     indexer,
   });
+  registerStructuralRoutes(app, { db: deps.db, engine: structural, store: deps.store, indexer });
   registerEventRoutes(app, deps.db, deps.store);
   if (deps.memory) {
     registerMemoryRoutes(app, {

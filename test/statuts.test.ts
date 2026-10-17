@@ -6,6 +6,7 @@ import { openDb } from '../src/daemon/db.js';
 import { isSubSession, sanitizePending } from '../src/daemon/events/status.js';
 import { EventStore } from '../src/daemon/events/store.js';
 import { buildSnapshot } from '../src/daemon/state/snapshot.js';
+import { StructuralService } from '../src/daemon/structural/service.js';
 import type { EventSource } from '../src/shared/events.js';
 
 function setup() {
@@ -23,7 +24,9 @@ function setup() {
   const store = new EventStore(db);
   const status = (source: EventSource, data: Record<string, unknown>) =>
     store.append({ source, type: 'agent.status', agentId: 'ag_1', data });
-  const agent = () => buildSnapshot(db).agents[0]!;
+  // hors sujet ici (pas de worktree valable) : le moteur reste off, l'index n'est pas testé par ce fichier.
+  const engine = new StructuralService({ engine: 'off' });
+  const agent = async () => (await buildSnapshot(db, engine)).agents[0]!;
   return { db, store, status, agent };
 }
 
@@ -37,7 +40,7 @@ const permission = {
   ],
 };
 
-test('un hook needs_input : statut, raison, message et demande arrivent dans l’instantané', () => {
+test('un hook needs_input : statut, raison, message et demande arrivent dans l’instantané', async () => {
   const { status, agent } = setup();
   status('hook:claude', {
     status: 'needs_input',
@@ -45,7 +48,7 @@ test('un hook needs_input : statut, raison, message et demande arrivent dans l�
     message: 'Claude needs your permission',
     pending: permission,
   });
-  expect(agent()).toMatchObject({
+  expect(await agent()).toMatchObject({
     status: 'needs_input',
     statusReason: 'permission',
     statusMessage: 'Claude needs your permission',
@@ -53,23 +56,27 @@ test('un hook needs_input : statut, raison, message et demande arrivent dans l�
     pending: permission,
   });
   status('hook:claude', { status: 'working' });
-  expect(agent()).toMatchObject({ status: 'working', statusReason: null, pending: null });
+  expect(await agent()).toMatchObject({ status: 'working', statusReason: null, pending: null });
 });
 
-test('l’heuristique se tait dès qu’un hook a parlé, et porte son détail sinon', () => {
+test('l’heuristique se tait dès qu’un hook a parlé, et porte son détail sinon', async () => {
   const { status, agent } = setup();
   status('heuristic', { status: 'idle', silenceMs: 31_000, lastLine: '$ ', promptDetected: false });
-  expect(agent()).toMatchObject({
+  expect(await agent()).toMatchObject({
     status: 'idle',
     statusSource: 'heuristic',
     statusDetail: { silenceMs: 31_000, lastLine: '$ ', promptDetected: false },
   });
   status('hook:claude', { status: 'working' });
   status('heuristic', { status: 'idle', silenceMs: 60_000 });
-  expect(agent()).toMatchObject({ status: 'working', statusSource: 'hook', statusDetail: null });
+  expect(await agent()).toMatchObject({
+    status: 'working',
+    statusSource: 'hook',
+    statusDetail: null,
+  });
 });
 
-test('une sous-session (claude -p lancé par l’agent) ne change pas le statut', () => {
+test('une sous-session (claude -p lancé par l’agent) ne change pas le statut', async () => {
   const { status, agent } = setup();
   status('hook:claude', { status: 'working' });
   status('hook:claude', {
@@ -81,7 +88,7 @@ test('une sous-session (claude -p lancé par l’agent) ne change pas le statut'
       { pid: 4242, comm: 'claude' },
     ],
   });
-  expect(agent().status).toBe('working');
+  expect((await agent()).status).toBe('working');
   // la session de l'agent lui-même : seuls des shells entre le hook et lui
   status('hook:claude', {
     status: 'idle',
@@ -90,10 +97,10 @@ test('une sous-session (claude -p lancé par l’agent) ne change pas le statut'
       { pid: 4242, comm: 'claude' },
     ],
   });
-  expect(agent().status).toBe('idle');
+  expect((await agent()).status).toBe('idle');
 });
 
-test('après la fin, un statut rejoué en retard ne ressuscite pas l’agent', () => {
+test('après la fin, un statut rejoué en retard ne ressuscite pas l’agent', async () => {
   const { store, status, agent } = setup();
   store.append({
     source: 'daemon',
@@ -108,22 +115,22 @@ test('après la fin, un statut rejoué en retard ne ressuscite pas l’agent', (
     agentId: 'ag_1',
     data: { label: 'x' },
   });
-  expect(agent()).toMatchObject({ status: 'done', lastTool: null });
+  expect(await agent()).toMatchObject({ status: 'done', lastTool: null });
 });
 
-test('un agent ne peut ni se dire terminé, ni se mettre en pause ; le daemon, si', () => {
+test('un agent ne peut ni se dire terminé, ni se mettre en pause ; le daemon, si', async () => {
   const { status, agent } = setup();
   status('hook:claude', { status: 'done' });
   status('hook:claude', { paused: true });
-  expect(agent()).toMatchObject({ status: 'starting', pausedAt: null });
+  expect(await agent()).toMatchObject({ status: 'starting', pausedAt: null });
   status('daemon', { paused: true });
-  expect(agent().pausedAt).not.toBeNull();
-  expect(agent().status).toBe('starting');
+  expect((await agent()).pausedAt).not.toBeNull();
+  expect((await agent()).status).toBe('starting');
   status('daemon', { paused: false });
-  expect(agent().pausedAt).toBeNull();
+  expect((await agent()).pausedAt).toBeNull();
 });
 
-test('approval.resolved ne vide que la demande qu’il nomme', () => {
+test('approval.resolved ne vide que la demande qu’il nomme', async () => {
   const { store, status, agent } = setup();
   status('hook:claude', { status: 'needs_input', reason: 'permission', pending: permission });
   const resolve = (pendingId: string) =>
@@ -134,13 +141,13 @@ test('approval.resolved ne vide que la demande qu’il nomme', () => {
       data: { pendingId, option: 'yes', by: 'human' },
     });
   resolve('autre');
-  expect(agent().pending?.id).toBe('tu_1');
-  expect(agent().status).toBe('needs_input');
+  expect((await agent()).pending?.id).toBe('tu_1');
+  expect((await agent()).status).toBe('needs_input');
   resolve('tu_1');
-  expect(agent().pending).toBeNull();
+  expect((await agent()).pending).toBeNull();
 });
 
-test('une demande résolue ne laisse pas l’agent « en attente » : répondue il repart, refusée la main revient', () => {
+test('une demande résolue ne laisse pas l’agent « en attente » : répondue il repart, refusée la main revient', async () => {
   const { store, status, agent } = setup();
   const resolve = (option: string) =>
     store.append({
@@ -151,17 +158,21 @@ test('une demande résolue ne laisse pas l’agent « en attente » : répondue 
     });
   status('hook:claude', { status: 'needs_input', reason: 'permission', pending: permission });
   resolve('yes');
-  expect(agent()).toMatchObject({ status: 'working', statusReason: null, statusSource: 'hook' });
+  expect(await agent()).toMatchObject({
+    status: 'working',
+    statusReason: null,
+    statusSource: 'hook',
+  });
   status('hook:claude', { status: 'needs_input', reason: 'permission', pending: permission });
   resolve('no');
-  expect(agent()).toMatchObject({ status: 'idle', pending: null });
+  expect(await agent()).toMatchObject({ status: 'idle', pending: null });
   // une résolution en retard, l'agent déjà reparti : rien ne bouge
   status('hook:claude', { status: 'working' });
   resolve('no');
-  expect(agent().status).toBe('working');
+  expect((await agent()).status).toBe('working');
 });
 
-test('la sortie de l’agent efface la demande et la pause', () => {
+test('la sortie de l’agent efface la demande et la pause', async () => {
   const { store, status, agent } = setup();
   status('hook:claude', { status: 'needs_input', reason: 'permission', pending: permission });
   status('daemon', { paused: true });
@@ -171,7 +182,7 @@ test('la sortie de l’agent efface la demande et la pause', () => {
     agentId: 'ag_1',
     data: { exitCode: 1, reason: 'exit' },
   });
-  expect(agent()).toMatchObject({ status: 'error', pending: null, pausedAt: null });
+  expect(await agent()).toMatchObject({ status: 'error', pending: null, pausedAt: null });
 });
 
 test('une demande est assainie : jamais de touche fournie par l’agent, tailles bornées', () => {

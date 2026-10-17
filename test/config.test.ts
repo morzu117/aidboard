@@ -81,6 +81,30 @@ test('memory : provider, window et clés inconnues sont refusés et nommés', ()
   expect(() => parseConfig('memory:\n  entretien: true\n')).toThrow('memory.entretien');
 });
 
+test('structural : les défauts', () => {
+  expect(DEFAULT_CONFIG.structural).toEqual({
+    engine: 'codegraph',
+    bin: 'codegraph',
+    timeoutMs: 60_000,
+    exclude: [],
+  });
+});
+
+test('structural : fusion partielle, le reste vient des défauts', () => {
+  const cfg = parseConfig('structural:\n  engine: off\n');
+  expect(cfg.structural).toEqual({ ...DEFAULT_CONFIG.structural, engine: 'off' });
+});
+
+test('structural : moteur inconnu, clé inconnue et champs invalides sont refusés et nommés', () => {
+  expect(() => parseConfig('structural:\n  engine: kivgraph\n')).toThrow(
+    'moteur inconnu (disponibles : codegraph, off)',
+  );
+  expect(() => parseConfig('structural:\n  foo: 1\n')).toThrow('structural.foo');
+  expect(() => parseConfig('structural:\n  bin: 1\n')).toThrow('structural.bin');
+  expect(() => parseConfig('structural:\n  timeoutMs: -1\n')).toThrow('structural.timeoutMs');
+  expect(() => parseConfig('structural:\n  exclude: [1]\n')).toThrow('structural.exclude');
+});
+
 test('ensureHome pose 0700, y compris sur un dossier déjà en 0755', () => {
   const home = tmp();
   mkdirSync(join(home, 'logs'), { mode: 0o755 });
