@@ -52,6 +52,21 @@ test('POST /api/agents : 201, l’agent apparaît dans l’état, DELETE l’arr
   expect((await del(agent.id)).statusCode).toBe(409);
 });
 
+test('fermer un agent terminé publie agent.closed : le navigateur relit l’état sans recharger', async () => {
+  const { topicId } = await boot();
+  const agent = (await post({ topicId, kind: 'shell' })).json<Agent>();
+  c.t.d.agents.get(agent.id)!.pty.write('exit\n');
+  await waitFor(() => c.t.d.agents.get(agent.id)?.exited, 8000, 'sortie');
+  const seen: string[] = [];
+  c.t.store.on('event', (e: { type: string; agentId?: string }) => {
+    if (e.agentId === agent.id) seen.push(e.type);
+  });
+  expect((await del(agent.id)).statusCode).toBe(200);
+  expect(seen).toEqual(['agent.closed']);
+  const closed = c.t.store.since(null).find((e) => e.type === 'agent.closed');
+  expect(closed).toMatchObject({ source: 'daemon', topicId, agentId: agent.id });
+});
+
 test('erreurs : sujet inconnu 404, kind invalide 400, binaire absent 422, agent inconnu 404', async () => {
   const { topicId } = await boot();
   expect((await post({ topicId: 'tp_nope', kind: 'shell' })).statusCode).toBe(404);

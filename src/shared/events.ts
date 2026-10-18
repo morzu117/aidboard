@@ -15,6 +15,7 @@ export const EVENT_TYPES = [
   'agent.exited',
   'agent.status',
   'agent.tool',
+  'agent.closed',
   'run.state',
   'run.command',
   'approval.requested',

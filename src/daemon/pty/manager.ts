@@ -365,9 +365,27 @@ export class AgentManager {
 
   /** Ferme un agent terminé : il disparaît de l'état, sans toucher à son historique d'événements. */
   close(agentId: string): void {
-    this.deps.db
-      .prepare('UPDATE agents SET closed_at = ? WHERE id = ?')
-      .run(new Date().toISOString(), agentId);
+    const row = this.deps.db
+      .prepare(
+        'SELECT a.run_id, r.topic_id, t.workspace_id FROM agents a JOIN runs r ON r.id = a.run_id JOIN topics t ON t.id = r.topic_id WHERE a.id = ?',
+      )
+      .get(agentId) as { run_id: string; topic_id: string; workspace_id: string } | undefined;
+    // passer par le store, pas un UPDATE nu : l'événement diffusé fait relire l'état au navigateur
+    this.deps.store.append(
+      {
+        source: 'daemon',
+        type: 'agent.closed',
+        workspaceId: row?.workspace_id,
+        topicId: row?.topic_id,
+        runId: row?.run_id,
+        agentId,
+        data: {},
+      },
+      (tx) =>
+        tx
+          .prepare('UPDATE agents SET closed_at = ? WHERE id = ?')
+          .run(new Date().toISOString(), agentId),
+    );
     this.forget(agentId);
   }
 
