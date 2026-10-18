@@ -28,7 +28,7 @@ import { acquireLock } from './lock.js';
 import { ensureHome, resolvePaths } from './paths.js';
 import { reconcile } from './reconcile.js';
 import { reconcileNamespaces } from './routes/workspaces.js';
-import { type AuthState, createAuthState } from './security.js';
+import { type AuthState, createAuthState, loadSessionToken } from './security.js';
 import { buildServer } from './server.js';
 import { StructuralService } from './structural/service.js';
 import { UpdateWatcher } from './updateWatcher.js';
@@ -163,7 +163,7 @@ export async function startDaemon(
       maintenanceTimer.unref();
     }
     let livePort = config.port;
-    const auth = createAuthState();
+    const auth = createAuthState(loadSessionToken(paths.sessionSecret));
     const agents = new AgentManager({
       store,
       db: opened,

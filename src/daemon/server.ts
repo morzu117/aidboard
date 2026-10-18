@@ -29,7 +29,7 @@ import { registerMemoryRoutes } from './routes/memory.js';
 import { registerStructuralRoutes } from './routes/structural.js';
 import type { MemoryProposals } from './memory/maintain.js';
 import type { MemoryService } from './memory/service.js';
-import { type AuthState, registerSecurity } from './security.js';
+import { type AuthState, registerSecurity, writeSessionToken } from './security.js';
 import { registerEventSocket } from './ws/events.js';
 import { registerPtySocket } from './ws/pty.js';
 
@@ -111,6 +111,9 @@ export async function buildServer(deps: ServerDeps): Promise<FastifyInstance> {
     requestStop: deps.requestStop ?? (() => undefined),
     requestUpdate: deps.requestUpdate,
     updates: deps.updates,
+    resetSession: () => {
+      deps.auth.sessionToken = writeSessionToken(deps.paths.sessionSecret);
+    },
   });
   registerAgentRoutes(app, { db: deps.db, agents: deps.agents });
   registerWorkspaceRoutes(app, { ...deps, engine: structural });

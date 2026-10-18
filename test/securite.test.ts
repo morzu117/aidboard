@@ -39,7 +39,7 @@ afterEach(async () => {
 
 const host = () => `127.0.0.1:${port}`;
 const origin = () => `http://127.0.0.1:${port}`;
-const cookie = () => ({ cookie: `aid_session=${auth.adminToken}` });
+const cookie = () => ({ cookie: `aid_session=${auth.sessionToken}` });
 
 test('GET /api/state sans cookie ni bearer : 401', async () => {
   await start();

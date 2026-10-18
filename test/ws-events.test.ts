@@ -16,7 +16,7 @@ function connect(query = ''): Promise<{ ws: WebSocket; got: Msg[] }> {
   const ws = new WebSocket(`ws://127.0.0.1:${t.d.port}/ws/events${query}`, {
     headers: {
       origin: `http://127.0.0.1:${t.d.port}`,
-      cookie: `aid_session=${t.d.auth.adminToken}`,
+      cookie: `aid_session=${t.d.auth.sessionToken}`,
     },
   });
   sockets.push(ws);

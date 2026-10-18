@@ -7,7 +7,8 @@ import { readVersion } from './version.js';
 const HELP = `aidboard ${readVersion()} : cockpit local des agents de code
 
   aid             lance le daemon s'il ne tourne pas, puis ouvre le navigateur
-  aid open        ouvre le navigateur sur le daemon qui tourne
+  aid open        ouvre le navigateur sur le daemon qui tourne (--reset : déconnecte d'abord
+                  tous les navigateurs, y compris une app épinglée au Dock)
   aid status      dit si le daemon tourne, et combien de sujets et d'agents
   aid stop        arrête le daemon (refusé s'il reste des agents ; --force pour tout arrêter)
   aid doctor      vérifie la machine (node-pty, git, claude, codex, codegraph…)
@@ -50,6 +51,7 @@ async function main(): Promise<number> {
     allowPositionals: true,
     options: {
       force: { type: 'boolean' },
+      reset: { type: 'boolean' },
       foreground: { type: 'boolean' },
       version: { type: 'boolean', short: 'v' },
       help: { type: 'boolean', short: 'h' },
@@ -127,6 +129,15 @@ async function main(): Promise<number> {
       if (!info) {
         console.error('daemon arrêté : lancer aid');
         return 1;
+      }
+      if (values.reset) {
+        const { daemonFetch } = await import('./daemonInfo.js');
+        const r = await daemonFetch(info, 'POST', '/api/session/reset');
+        if (r.status !== 204) {
+          console.error(`révocation refusée (${r.status}) : ${String(r.json.error ?? '')}`);
+          return 1;
+        }
+        console.log('Sessions navigateur révoquées.');
       }
       await openInBrowser(info);
       return 0;

@@ -7,6 +7,7 @@ export interface AidPaths {
   config: string;
   db: string;
   daemonJson: string;
+  sessionSecret: string;
   lock: string;
   logs: string;
   actionLogs: string;
@@ -21,6 +22,7 @@ export function resolvePaths(home = process.env.AID_HOME ?? join(homedir(), '.ai
     config: join(home, 'config.yaml'),
     db: join(home, 'state.db'),
     daemonJson: join(home, 'daemon.json'),
+    sessionSecret: join(home, 'session.secret'),
     lock: join(home, 'daemon.lock'),
     logs: join(home, 'logs'),
     actionLogs: join(home, 'logs', 'actions'),

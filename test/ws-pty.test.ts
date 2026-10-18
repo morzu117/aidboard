@@ -35,7 +35,7 @@ class Client {
     const ws = new WebSocket(`ws://127.0.0.1:${port}/ws/pty/${agentId}`, {
       headers: headers ?? {
         origin: `http://127.0.0.1:${port}`,
-        cookie: `aid_session=${c.t.d.auth.adminToken}`,
+        cookie: `aid_session=${c.t.d.auth.sessionToken}`,
       },
     });
     sockets.push(ws);
@@ -272,7 +272,7 @@ test('sans cookie ou avec une origine étrangère : refusé', async () => {
   await expect(
     Client.open(agent.id, {
       origin: 'http://evil.com',
-      cookie: `aid_session=${c.t.d.auth.adminToken}`,
+      cookie: `aid_session=${c.t.d.auth.sessionToken}`,
     }),
   ).rejects.toMatchObject({ status: 403 });
 });

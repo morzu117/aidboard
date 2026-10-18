@@ -1,10 +1,16 @@
 import { randomBytes, timingSafeEqual } from 'node:crypto';
+import { chmodSync, readFileSync, writeFileSync } from 'node:fs';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 
 export const SESSION_COOKIE = 'aid_session';
+// 400 jours : le plafond que Chrome applique de toute façon à un cookie persistant
+export const SESSION_MAX_AGE_S = 400 * 24 * 3600;
 
 export interface AuthState {
   adminToken: string;
+  // distinct du jeton admin et gardé d'un démarrage à l'autre : une app épinglée au Dock
+  // reste connectée après un redémarrage du daemon ; le jeton admin, lui, change toujours
+  sessionToken: string;
   runTokens: Map<string, string>;
 }
 
@@ -17,8 +23,26 @@ declare module 'fastify' {
   }
 }
 
-export function createAuthState(): AuthState {
-  return { adminToken: randomBytes(32).toString('base64url'), runTokens: new Map() };
+export function createAuthState(sessionToken = randomBytes(32).toString('base64url')): AuthState {
+  return { adminToken: randomBytes(32).toString('base64url'), sessionToken, runTokens: new Map() };
+}
+
+export function writeSessionToken(file: string): string {
+  const token = randomBytes(32).toString('base64url');
+  writeFileSync(file, token, { mode: 0o600 });
+  // le mode de writeFileSync ne s'applique qu'à la création
+  chmodSync(file, 0o600);
+  return token;
+}
+
+export function loadSessionToken(file: string): string {
+  try {
+    const token = readFileSync(file, 'utf8').trim();
+    if (token.length >= 32) return token;
+  } catch {
+    // absent : premier démarrage, ou secret révoqué par aid open --reset
+  }
+  return writeSessionToken(file);
 }
 
 export function issueRunToken(auth: AuthState, runId: string): string {
@@ -45,7 +69,7 @@ function bearer(req: FastifyRequest): string | null {
 
 function authenticate(req: FastifyRequest, auth: AuthState): Principal | null {
   const cookie = req.cookies[SESSION_COOKIE];
-  if (cookie && safeEqual(cookie, auth.adminToken)) return { kind: 'admin', via: 'cookie' };
+  if (cookie && safeEqual(cookie, auth.sessionToken)) return { kind: 'admin', via: 'cookie' };
   const token = bearer(req);
   if (!token) return null;
   if (safeEqual(token, auth.adminToken)) return { kind: 'admin', via: 'bearer' };
@@ -92,10 +116,11 @@ export function registerSecurity(
           .send('Lien expiré : relancer `aid open`');
       }
       return reply
-        .setCookie(SESSION_COOKIE, auth.adminToken, {
+        .setCookie(SESSION_COOKIE, auth.sessionToken, {
           httpOnly: true,
           sameSite: 'strict',
           path: '/',
+          maxAge: SESSION_MAX_AGE_S,
         })
         .redirect('/', 303);
     }

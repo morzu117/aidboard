@@ -24,9 +24,16 @@ export function registerDaemonRoutes(
     requestStop: () => void;
     requestUpdate?: () => void;
     updates?: () => UpdateStatus | null;
+    resetSession?: () => void;
   },
 ): void {
   app.get('/api/daemon/update', async () => deps.updates?.() ?? { available: false });
+  // révoque toutes les sessions navigateur (aid open --reset) ; le jeton admin n'est pas touché
+  app.post('/api/session/reset', async (_req, reply) => {
+    if (!deps.resetSession) throw new AidHttpError(501, 'révocation non disponible');
+    deps.resetSession();
+    return reply.code(204).send();
+  });
   app.post('/api/daemon/stop', { schema: { body: Body } }, async (req, reply) => {
     const force = (req.body as { force?: boolean } | undefined)?.force === true;
     const alive = aliveAgents(deps.db);
