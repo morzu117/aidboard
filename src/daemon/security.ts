@@ -160,9 +160,13 @@ export function registerSecurity(
 
   app.addHook('onSend', async (_req, reply) => {
     const port = opts.getPort();
+    // http://127.0.0.1:4871 : pont de redémarrage de l'app native Tauri (app/src-tauri/src/daemon_bridge.rs,
+    // RESTART_BRIDGE_PORT), appelé en fetch() par le CTA de la coquille hors-ligne
+    // (web/src/ecrans/Accueil.tsx) — sans cette entrée, connect-src 'self' bloque cette requête
+    // cross-origin avant même qu'elle parte, et le CTA échoue silencieusement.
     reply.header(
       'Content-Security-Policy',
-      `default-src 'self'; connect-src 'self' ws://127.0.0.1:${port} ws://localhost:${port}; ` +
+      `default-src 'self'; connect-src 'self' ws://127.0.0.1:${port} ws://localhost:${port} http://127.0.0.1:4871; ` +
         "style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'",
     );
     reply.header('X-Content-Type-Options', 'nosniff');
