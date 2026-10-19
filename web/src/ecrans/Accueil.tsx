@@ -50,15 +50,28 @@ function BandeauDaemon() {
         </p>
       </div>
       {!expired && (
-        <button
-          className="bouton bouton--contour"
-          data-node="1-1.erreur.bandeau.reessayer"
-          data-action="daemon.reconnecter"
-          type="button"
-          onClick={retry}
-        >
-          Réessayer
-        </button>
+        <>
+          {/* Le daemon est injoignable : rien ne peut le démarrer depuis cette page sans AID.app.
+              Le cookie de session survit déjà au redémarrage — cet onglet se reconnectera tout
+              seul une fois le daemon relancé, sans action supplémentaire. */}
+          <a
+            className="bouton bouton--contour"
+            data-node="1-1.erreur.bandeau.demarrer"
+            data-action="daemon.demarrer"
+            href="aid://start"
+          >
+            Démarrer le daemon
+          </a>
+          <button
+            className="bouton bouton--contour"
+            data-node="1-1.erreur.bandeau.reessayer"
+            data-action="daemon.reconnecter"
+            type="button"
+            onClick={retry}
+          >
+            Réessayer
+          </button>
+        </>
       )}
     </div>
   );

@@ -22,6 +22,14 @@ export default tseslint.config(
     },
   },
   {
+    // Service worker : son scope global n'est ni le navigateur (window) ni Node, eslint ne le
+    // connaît pas nativement.
+    files: ['web/public/sw.js'],
+    languageOptions: {
+      globals: { self: 'readonly', fetch: 'readonly', caches: 'readonly', URL: 'readonly' },
+    },
+  },
+  {
     files: ['web/**/*.{ts,tsx}'],
     plugins: { react, 'react-hooks': reactHooks },
     settings: { react: { version: 'detect' } },
