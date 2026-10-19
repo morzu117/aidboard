@@ -23,6 +23,7 @@ export function registerDaemonRoutes(
     db: Db;
     requestStop: () => void;
     requestUpdate?: () => void;
+    requestCycle?: () => void;
     updates?: () => UpdateStatus | null;
     resetSession?: () => void;
   },
@@ -60,5 +61,12 @@ export function registerDaemonRoutes(
     }
     reply.code(202).send({ updating: true, agents: alive.length });
     setImmediate(deps.requestUpdate);
+  });
+  // Troisième voie, à côté du refus (409) et du --force : interrompt proprement les agents vivants
+  // (résumé écrit avant l'arrêt) puis redémarre. Appelée par `aid` à l'ouverture d'AID.app.
+  app.post('/api/daemon/cycle', async (_req, reply) => {
+    if (!deps.requestCycle) throw new AidHttpError(501, 'cycle non disponible');
+    reply.code(202).send({ cycling: true });
+    setImmediate(deps.requestCycle);
   });
 }

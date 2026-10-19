@@ -17,7 +17,9 @@ afterEach(async () => {
   db = undefined;
 });
 
-function makeApp(opts: { requestUpdate?: () => void; withAgent?: boolean } = {}): FastifyInstance {
+function makeApp(
+  opts: { requestUpdate?: () => void; requestCycle?: () => void; withAgent?: boolean } = {},
+): FastifyInstance {
   const home = mkdtempSync(join(tmpdir(), 'aid-dr-'));
   db = openDb(join(home, 'state.db'));
   if (opts.withAgent) seedTopic(db);
@@ -27,7 +29,12 @@ function makeApp(opts: { requestUpdate?: () => void; withAgent?: boolean } = {})
       return reply.code(err.status).send({ error: err.message, ...err.extra });
     return reply.code(500).send({ error: (err as Error).message });
   });
-  registerDaemonRoutes(app, { db, requestStop: () => {}, requestUpdate: opts.requestUpdate });
+  registerDaemonRoutes(app, {
+    db,
+    requestStop: () => {},
+    requestUpdate: opts.requestUpdate,
+    requestCycle: opts.requestCycle,
+  });
   return app;
 }
 
@@ -52,6 +59,21 @@ test('POST /api/daemon/update : sans agent vivant, se déclenche directement', a
   const res = await a.inject({ method: 'POST', url: '/api/daemon/update', payload: {} });
   expect(res.statusCode).toBe(202);
   expect(res.json()).toEqual({ updating: true, agents: 0 });
+  await new Promise((r) => setImmediate(r));
+  expect(called).toBe(true);
+});
+
+test('POST /api/daemon/cycle : 501 quand aucun cycle n’est câblé', async () => {
+  const a = makeApp();
+  const res = await a.inject({ method: 'POST', url: '/api/daemon/cycle' });
+  expect(res.statusCode).toBe(501);
+});
+
+test('POST /api/daemon/cycle : se déclenche même avec un agent vivant, sans jamais refuser', async () => {
+  let called = false;
+  const a = makeApp({ requestCycle: () => (called = true), withAgent: true });
+  const res = await a.inject({ method: 'POST', url: '/api/daemon/cycle' });
+  expect(res.statusCode).toBe(202);
   await new Promise((r) => setImmediate(r));
   expect(called).toBe(true);
 });
