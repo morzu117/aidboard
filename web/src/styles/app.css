@@ -362,3 +362,12 @@ body {
   font-family: ui-monospace, monospace;
   font-size: var(--fs-s);
 }
+
+/* Onglet Git (3.2) : la maquette ne borne pas .commits (mockup à quelques lignes) ; un
+   historique réel peut compter des centaines de commits et faisait grandir toute la page
+   au lieu de défiler dans son panneau. */
+.commits {
+  overflow-y: auto;
+  max-height: calc(100dvh - 420px);
+  min-height: 240px;
+}
