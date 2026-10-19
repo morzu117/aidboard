@@ -7,6 +7,9 @@ import { readVersion } from './version.js';
 const HELP = `aidboard ${readVersion()} : cockpit local des agents de code
 
   aid             lance le daemon s'il ne tourne pas, puis ouvre le navigateur
+  aid --cycle     comme \`aid\`, mais si un daemon tourne déjà : interrompt proprement ses
+                  agents (résumé écrit, repris après coup), met à jour si possible, puis
+                  relance quand même — c'est ce qu'ouvre AID.app, pas la commande nue
   aid open        ouvre le navigateur sur le daemon qui tourne (--reset : déconnecte d'abord
                   tous les navigateurs, y compris une app épinglée au Dock)
   aid status      dit si le daemon tourne, et combien de sujets et d'agents
@@ -52,6 +55,7 @@ async function main(): Promise<number> {
     options: {
       force: { type: 'boolean' },
       reset: { type: 'boolean' },
+      cycle: { type: 'boolean' },
       foreground: { type: 'boolean' },
       version: { type: 'boolean', short: 'v' },
       help: { type: 'boolean', short: 'h' },
@@ -73,14 +77,16 @@ async function main(): Promise<number> {
   switch (command) {
     case 'daemon': {
       const { startDaemon } = await import('../daemon/main.js');
-      const { repoRootFrom } = await import('../daemon/updateCheck.js');
+      const { checkForUpdate, repoRootFrom } = await import('../daemon/updateCheck.js');
       const { pullAndBuild, spawnRespawnWatcher } = await import('../daemon/selfUpdate.js');
       let stopRequested: () => void = () => undefined;
       let updateRequested: () => void = () => undefined;
+      let cycleRequested: () => void = () => undefined;
       const handle = await startDaemon({
         logger: true,
         onStopRequested: () => stopRequested(),
         onUpdateRequested: () => updateRequested(),
+        onCycleRequested: () => cycleRequested(),
       }).catch((err: Error) => {
         console.error(err.message);
         process.exit(1);
@@ -106,13 +112,63 @@ async function main(): Promise<number> {
           stop();
         })();
       };
+      // Ouverture d'AID.app avec un daemon déjà présent : interrompt proprement les agents vivants
+      // (résumé écrit avant l'arrêt, repris au prochain démarrage via resumeFromManifest), met à
+      // jour si un nouveau commit est dispo, puis relance toujours — même sans rien de nouveau.
+      cycleRequested = () => {
+        void (async () => {
+          const { gracefulInterrupt } = await import('../daemon/pty/reprise.js');
+          const { writeFileSync } = await import('node:fs');
+          const entries = await gracefulInterrupt(handle.agents);
+          if (entries.length > 0) writeFileSync(paths.repriseJson, JSON.stringify(entries));
+          const entry = realpathSync(process.argv[1] ?? '');
+          const dir = repoRootFrom(dirname(entry));
+          if (dir) {
+            const status = await checkForUpdate(dir).catch(() => null);
+            if (status?.available) {
+              const result = await pullAndBuild(dir);
+              if (!result.ok)
+                console.error(
+                  `mise à jour échouée (${result.step}) : ${result.error} — relance sur le build actuel`,
+                );
+            }
+          }
+          spawnRespawnWatcher(process.pid, entry, paths.home);
+          stop();
+        })();
+      };
       process.on('SIGINT', stop);
       process.on('SIGTERM', stop);
       return -1; // reste en vie
     }
     case 'start': {
-      const { ensureRunning, StartFailed } = await import('./commands/start.js');
       const { openInBrowser } = await import('./commands/open.js');
+      if (values.cycle) {
+        // --cycle (AID.app) : jamais une simple réutilisation (voir /api/daemon/cycle). Sans ce
+        // drapeau, `aid` garde son comportement habituel (réutilise, ne redémarre jamais) : des
+        // scripts/hooks en dépendent.
+        const { runningDaemon, daemonFetch, pidAlive } = await import('./daemonInfo.js');
+        const existing = await runningDaemon(paths);
+        if (existing) {
+          console.log('daemon déjà présent : interruption propre des agents, puis relance…');
+          await daemonFetch(existing, 'POST', '/api/daemon/cycle');
+          const deadline = Date.now() + 30_000;
+          while (pidAlive(existing.pid) && Date.now() < deadline)
+            await new Promise((r) => setTimeout(r, 150));
+          let info = await runningDaemon(paths);
+          while (!info && Date.now() < deadline) {
+            await new Promise((r) => setTimeout(r, 150));
+            info = await runningDaemon(paths);
+          }
+          if (!info) {
+            console.error('le nouveau daemon ne répond pas après le cycle');
+            return 1;
+          }
+          await openInBrowser(info);
+          return 0;
+        }
+      }
+      const { ensureRunning, StartFailed } = await import('./commands/start.js');
       try {
         await openInBrowser(await ensureRunning(paths));
         return 0;

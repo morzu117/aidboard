@@ -1,7 +1,9 @@
 #!/bin/bash
 # Lanceur léger : ouvre un shell de connexion (zsh -i -l) pour que mise/PATH soient
-# initialisés comme dans un terminal normal (Finder ne source aucun profil shell),
-# puis lance `aid` tel quel (démarre le daemon si besoin, ouvre le navigateur).
+# initialisés comme dans un terminal normal (Finder ne source aucun profil shell), puis lance
+# `aid --cycle` : si un daemon tourne déjà, interrompt proprement ses agents (résumé écrit,
+# repris après coup) avant de relancer — seule AID.app porte ce comportement, pas `aid` nu
+# (scripts/hooks en dépendent pour sa réutilisation silencieuse habituelle).
 set -e
 
 if ! /bin/zsh -i -l -c 'command -v aid' >/dev/null 2>&1; then
@@ -9,7 +11,7 @@ if ! /bin/zsh -i -l -c 'command -v aid' >/dev/null 2>&1; then
   exit 1
 fi
 
-if ! /bin/zsh -i -l -c 'aid'; then
+if ! /bin/zsh -i -l -c 'aid --cycle'; then
   osascript -e 'display alert "AID n’a pas pu démarrer" message "Voir ~/.aid/daemon.log pour le détail." as critical' >/dev/null 2>&1
   exit 1
 fi

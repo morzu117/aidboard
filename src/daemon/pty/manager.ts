@@ -167,6 +167,11 @@ export class AgentManager {
     return this.live.get(agentId);
   }
 
+  /** Les agents vivants, non sortis (cycle de reprise propre du daemon). */
+  liveAgents(): LiveAgent[] {
+    return [...this.live.values()].filter((a) => !a.exited);
+  }
+
   spawn(o: { topicId: string; kind: SpawnKind }): Agent {
     const { db, store, paths, config, auth } = this.deps;
     const topic = db.prepare('SELECT * FROM topics WHERE id = ?').get(o.topicId) as

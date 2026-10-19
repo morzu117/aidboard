@@ -21,6 +21,11 @@ while IFS= read -r line; do
     stop)
       [ -z "${AID_HOOK:-}" ] || sh "$AID_HOOK" Stop < "$(dirname "$0")/hooks/Stop.json"
       printf 'tour fini\n' ;;
+    # cycle de reprise (daemon/pty/reprise.ts) : le prompt embarque le chemin du résumé à écrire
+    "Le daemon va redémarrer"*)
+      reprise_path=$(printf '%s' "$line" | grep -oE '/tmp/[^ ]+\.md')
+      [ -z "$reprise_path" ] || printf 'résumé de test : rien de bloquant.\n' > "$reprise_path"
+      printf 'reprise écrite\n' ;;
     *) printf '> %s\n' "$line" ;;
   esac
 done

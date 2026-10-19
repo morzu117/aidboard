@@ -8,6 +8,7 @@ import { type Db, openDb } from './db.js';
 import { ptyPreflight } from './pty/native.js';
 import { AgentManager } from './pty/manager.js';
 import { purgeOldLogs } from './pty/retention.js';
+import { resumeFromManifest } from './pty/reprise.js';
 import { replaySpool } from './events/spool.js';
 import { EventStore } from './events/store.js';
 import { WorkspaceQueue } from './actions/queue.js';
@@ -60,6 +61,7 @@ export async function startDaemon(
     structuralEngine?: IndexEngine;
     onStopRequested?: () => void;
     onUpdateRequested?: () => void;
+    onCycleRequested?: () => void;
     /** `git ls-remote origin` en tâche de fond ; coupé dans les tests, pas de réseau à chaque daemon. */
     checkUpdates?: boolean;
     // tests : un Embedder/ChatModel déterministe, des délais courts, un rythme d'entretien rapide
@@ -199,6 +201,7 @@ export async function startDaemon(
       structural,
       requestStop: opts.onStopRequested,
       requestUpdate: opts.onUpdateRequested,
+      requestCycle: opts.onCycleRequested,
       updates: () => updates?.status() ?? null,
       devOrigin,
       logger: opts.logger,
@@ -221,6 +224,8 @@ export async function startDaemon(
       }),
       { mode: 0o600 },
     );
+    // en tâche de fond : ne bloque jamais le démarrage (même esprit que UpdateWatcher ci-dessus).
+    void resumeFromManifest(agents, paths);
     return {
       app,
       port,
