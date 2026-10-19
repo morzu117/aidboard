@@ -1,0 +1,15 @@
+#!/bin/bash
+# Lanceur léger : ouvre un shell de connexion (zsh -i -l) pour que mise/PATH soient
+# initialisés comme dans un terminal normal (Finder ne source aucun profil shell),
+# puis lance `aid` tel quel (démarre le daemon si besoin, ouvre le navigateur).
+set -e
+
+if ! /bin/zsh -i -l -c 'command -v aid' >/dev/null 2>&1; then
+  osascript -e 'display alert "AID introuvable" message "La commande aid n’est pas sur le PATH (npm link manquant ou mise non initialisé)." as critical' >/dev/null 2>&1
+  exit 1
+fi
+
+if ! /bin/zsh -i -l -c 'aid'; then
+  osascript -e 'display alert "AID n’a pas pu démarrer" message "Voir ~/.aid/daemon.log pour le détail." as critical' >/dev/null 2>&1
+  exit 1
+fi
