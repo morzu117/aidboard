@@ -6,6 +6,8 @@ package-lock.json
 coverage/
 playwright-report/
 test-results/
+app/src-tauri/target/
+app/src-tauri/gen/
 docs/
 agent.yml
 CLAUDE.md

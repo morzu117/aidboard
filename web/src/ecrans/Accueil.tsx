@@ -29,9 +29,25 @@ function Squelettes() {
   );
 }
 
+// Pont de redémarrage de l'app native AID (app/src-tauri/src/daemon_bridge.rs) : port fixe,
+// documenté des deux côtés. Absent si la page est ouverte dans un navigateur ordinaire plutôt
+// que dans l'app — dans ce cas, rien ne peut démarrer le daemon depuis la page.
+const PONT_REDEMARRAGE_URL = 'http://127.0.0.1:4871/restart';
+
 function BandeauDaemon() {
   const { daemon, retry } = useAid();
   const expired = daemon === 'session-expiree';
+  const [appIndisponible, setAppIndisponible] = useState(false);
+
+  const demarrer = () => {
+    // Le cookie de session survit déjà au redémarrage du daemon — cet onglet/cette fenêtre se
+    // reconnecte tout seul une fois le daemon relancé (AidClient.retry), sans action
+    // supplémentaire ici que déclencher le redémarrage.
+    void fetch(PONT_REDEMARRAGE_URL, { method: 'POST', signal: AbortSignal.timeout(1500) }).catch(
+      () => setAppIndisponible(true),
+    );
+  };
+
   return (
     <div className="bandeau-erreur" data-node="1-1.erreur.bandeau" role="alert">
       <div className="bandeau-texte">
@@ -51,17 +67,21 @@ function BandeauDaemon() {
       </div>
       {!expired && (
         <>
-          {/* Le daemon est injoignable : rien ne peut le démarrer depuis cette page sans AID.app.
-              Le cookie de session survit déjà au redémarrage — cet onglet se reconnectera tout
-              seul une fois le daemon relancé, sans action supplémentaire. */}
-          <a
-            className="bouton bouton--contour"
-            data-node="1-1.erreur.bandeau.demarrer"
-            data-action="daemon.demarrer"
-            href="aid://start"
-          >
-            Démarrer le daemon
-          </a>
+          {appIndisponible ? (
+            <p className="texte-faible" data-node="1-1.erreur.bandeau.demarrer-indisponible">
+              Relance l’app AID pour redémarrer le daemon.
+            </p>
+          ) : (
+            <button
+              className="bouton bouton--contour"
+              data-node="1-1.erreur.bandeau.demarrer"
+              data-action="daemon.demarrer"
+              type="button"
+              onClick={demarrer}
+            >
+              Démarrer le daemon
+            </button>
+          )}
           <button
             className="bouton bouton--contour"
             data-node="1-1.erreur.bandeau.reessayer"

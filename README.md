@@ -9,13 +9,18 @@ fermer l'onglet n'arrête rien.
 
 ## Prérequis
 
-| Plateforme | À installer avant                                                                                                                                                                                                                          |
-| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| macOS      | Node 22 à 24, git                                                                                                                                                                                                                          |
-| Linux      | Node 22 à 24, git, **`sudo apt install build-essential python3`** (node-pty n'a pas de binaire précompilé pour Linux)                                                                                                                      |
-| Windows    | **WSL2 uniquement, jamais en natif.** Dans WSL2 : comme Linux, plus `sudo apt install wslu` pour que le navigateur Windows s'ouvre tout seul. Garder les dépôts dans le système de fichiers Linux (`~/…`), pas sous `/mnt/c` : c'est lent. |
+| Plateforme | À installer avant                                                                                                                                                                                                                                                                                                                                                                                             |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| macOS      | Node 22 à 24, git                                                                                                                                                                                                                                                                                                                                                                                             |
+| Linux      | Node 22 à 24, git, **`sudo apt install build-essential python3`** (node-pty n'a pas de binaire précompilé pour Linux)                                                                                                                                                                                                                                                                                         |
+| Windows    | **Le daemon reste WSL2 uniquement, jamais en natif** (node-pty n'y est pas fiable hors WSL2). Dans WSL2 : comme Linux, plus `sudo apt install wslu` pour que le navigateur Windows s'ouvre tout seul. Garder les dépôts dans le système de fichiers Linux (`~/…`), pas sous `/mnt/c` : c'est lent. L'app native (`app/`, voir ci-dessous), elle, tourne nativement sur Windows et pilote le daemon dans WSL2. |
 
 Facultatifs : `claude`, `codex` (les agents), `codegraph` (index structurel), `gh` (utile à partir de la v0.3).
+
+Pour compiler l'app native (`app/`, une vraie fenêtre sans navigateur — voir plus bas) : Rust
+(`mise install` le récupère, sinon <https://rustup.rs>), et sur Linux les paquets système de la
+WebView (`sudo apt install libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev`). Rien
+de plus sur Windows : le runtime WebView2 est déjà présent par défaut depuis Windows 10 1803+/11.
 
 ## Installation et lancement
 
