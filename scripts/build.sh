@@ -34,6 +34,12 @@ npm install
 echo "→ npm run build"
 npm run build
 
+if [ -d "macapp/AID.app" ]; then
+  echo "→ installation de AID.app dans /Applications"
+  rm -rf "/Applications/AID.app"
+  ditto "macapp/AID.app" "/Applications/AID.app"
+fi
+
 echo "✓ aidboard à jour et reconstruit ($(git log -1 --oneline))"
 if pgrep -f "dist/cli/aid.js daemon" > /dev/null; then
   echo "! le daemon tourne encore sur l'ancien build — relance-le pour prendre la mise à jour (aid stop puis aid)"
