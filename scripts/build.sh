@@ -38,6 +38,10 @@ if [ -d "macapp/AID.app" ]; then
   echo "→ installation de AID.app dans /Applications"
   rm -rf "/Applications/AID.app"
   ditto "macapp/AID.app" "/Applications/AID.app"
+  # Ce dépôt-ci peut ne pas être le seul aidboard lié globalement sur la machine (un autre
+  # checkout, lié sous une autre version de node, peut passer devant sur le PATH). Le lanceur
+  # se place dans ce chemin avant d'appeler `aid`, pour que ce soit toujours CE dépôt qui réponde.
+  pwd > "/Applications/AID.app/Contents/Resources/repo-path.txt"
 fi
 
 echo "✓ aidboard à jour et reconstruit ($(git log -1 --oneline))"
