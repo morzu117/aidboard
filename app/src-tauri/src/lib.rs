@@ -2,7 +2,8 @@ mod daemon_bridge;
 
 use tauri::{WebviewUrl, WebviewWindowBuilder};
 
-fn show_error(window: &tauri::WebviewWindow, message: &str) {
+// Texte de la page d'attente (app/loading/index.html) : étapes de spawn_cycle, puis erreur éventuelle.
+fn set_state(window: &tauri::WebviewWindow, message: &str) {
     let _ = window.eval(format!(
         "document.getElementById('etat').textContent = {}",
         serde_json::json!(message)
@@ -36,13 +37,17 @@ pub fn run() {
                     .build()?;
 
             let handle = app.handle().clone();
-            daemon_bridge::start_restart_bridge(handle.clone());
+            daemon_bridge::start_restart_bridge();
 
             std::thread::spawn(move || {
-                let info = match daemon_bridge::spawn_cycle(&handle) {
+                let progress = {
+                    let loading = loading.clone();
+                    move |step: &str| set_state(&loading, step)
+                };
+                let info = match daemon_bridge::spawn_cycle(&progress) {
                     Ok(info) => info,
                     Err(message) => {
-                        show_error(&loading, &format!("AID n'a pas pu démarrer : {message}"));
+                        set_state(&loading, &format!("AID n'a pas pu démarrer : {message}"));
                         return;
                     }
                 };
@@ -50,7 +55,7 @@ pub fn run() {
                 let parsed = match url::Url::parse(&url) {
                     Ok(u) => u,
                     Err(e) => {
-                        show_error(&loading, &format!("URL du daemon invalide : {e}"));
+                        set_state(&loading, &format!("URL du daemon invalide : {e}"));
                         return;
                     }
                 };
@@ -64,7 +69,7 @@ pub fn run() {
                         let _ = loading.close();
                     }
                     Err(e) => {
-                        show_error(&loading, &format!("AID n'a pas pu ouvrir la fenêtre : {e}"))
+                        set_state(&loading, &format!("AID n'a pas pu ouvrir la fenêtre : {e}"))
                     }
                 }
             });

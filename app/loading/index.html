@@ -21,10 +21,11 @@
     </style>
   </head>
   <body>
-    <!-- Page transitoire : affichée pendant que daemon_bridge::spawn_cycle() démarre le daemon en
-         arrière-plan. Cette fenêtre est fermée au profit d'une nouvelle fenêtre pointée sur l'URL
-         réelle du daemon dès qu'elle est connue (voir lib.rs) ; ou garde un message d'erreur ici
-         si le cycle échoue. -->
-    <div id="etat">Démarrage du daemon…</div>
+    <!-- Page transitoire : affichée pendant que daemon_bridge::spawn_cycle() résout, installe au
+         besoin (« Installation d'AID Server… », première ouverture sur une machine vierge) et
+         démarre AID Server en arrière-plan ; lib.rs remplace #etat à chaque étape. Cette fenêtre
+         est fermée au profit d'une nouvelle fenêtre pointée sur l'URL réelle du daemon dès qu'elle
+         est connue (voir lib.rs) ; ou garde un message d'erreur ici si le cycle échoue. -->
+    <div id="etat">Recherche d'AID Server…</div>
   </body>
 </html>

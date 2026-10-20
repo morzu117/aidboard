@@ -2,7 +2,3 @@
 # will have compiled files and executables
 /target/
 /gen/schemas
-
-# Écrit par scripts/build.sh à chaque build : désigne le dépôt installé, pour que daemon_bridge.rs
-# lance `aid` depuis CE checkout même si plusieurs clones aidboard existent sur la machine.
-/repo-path.txt
