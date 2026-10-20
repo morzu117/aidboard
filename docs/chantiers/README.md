@@ -104,6 +104,9 @@ lit ici et dans la section « Pièges » de chaque plan.
 | Rechargement à chaud du daemon pendant le dev | Chaque sauvegarde tue les agents de test | Le daemon ne se recharge pas à chaud. Seule l'UI passe par Vite en dev, avec un proxy vers le daemon. | 00.3 |
 | Sessions `claude` dans les tests automatiques | Consommation de quota, tests non déterministes | Les tests automatiques utilisent `shell` et un faux agent (`test/fixtures/fake-agent.sh`). `claude` ne sert qu'à la recette manuelle. | 03, 05 |
 | Nettoyage de branches fusionnées en *squash* | `git branch -d` les croit non fusionnées | Confirmation explicite (D7). La détection par `gh` viendra en v0.3. | 02.4 |
+| Archive AID Server corrompue ou tronquée au téléchargement | Un `current` qui pointe sur une installation cassée, daemon qui ne démarre plus | SHA-256 vérifié contre `SHA256SUMS` avant extraction, extraction dans `<version>.partial`, bascule atomique de `current` seulement après contrôle de `bin/aid`, `node/bin/node` et `dist/cli/aid.js` | 13.5, 13.6 |
+| Nouvelle version d'AID Server qui ne démarre pas | Board inutilisable après une mise à jour | Les deux dernières versions restent sous `~/.aid/server` ; `aid server use <précédente>` rebascule `current`, puis `aid stop` et `aid` | 13.5 |
+| Bundle AID Board non signé ou `latest.json` incomplet | L'updater refuse en silence, personne ne se met à jour | Le job `publish` vérifie une signature par plateforme dans `latest.json` avant de rendre la release publique | 13.9 |
 
 ## 3. Ordre et branches
 

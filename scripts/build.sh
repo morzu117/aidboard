@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
-# Met à jour l'app installée (aidboard, toujours sur main) et la reconstruit.
+# Outil du développeur, pas une installation : met à jour le clone (toujours sur main), le
+# reconstruit, et sur macOS reconstruit l'app locale. Les utilisateurs passent par les releases
+# (README.md, « Installation et lancement ») ; AID Board ne connaît aucun chemin de clone.
 # Ne lance rien : juste pull + build. `aid` reste la commande pour démarrer.
 set -euo pipefail
 

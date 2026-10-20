@@ -24,12 +24,23 @@ de plus sur Windows : le runtime WebView2 est déjà présent par défaut depuis
 
 ## Installation et lancement
 
+Deux produits, publiés ensemble sur la [page des releases](https://github.com/morzu117/aidboard/releases) :
+
+- **AID Board**, l'app de bureau (`.dmg` macOS, `.AppImage`/`.deb` Linux, `.msi` Windows). À la
+  première ouverture, elle installe AID Server si besoin, le lance et affiche le board. Elle se met
+  à jour toute seule. macOS : l'app n'est ni signée ni notarisée en 0.x — au premier lancement,
+  clic droit → Ouvrir (Gatekeeper refuse le double-clic).
+- **AID Server**, le daemon seul, sans Node ni git à installer :
+
 ```bash
-npm i -g aidboard     # donne les commandes `aidboard` et `aid`
-aid                   # lance le daemon s'il ne tourne pas, ouvre le navigateur
+curl -fsSL https://github.com/morzu117/aidboard/releases/latest/download/install-server.sh | sh
+~/.aid/server/current/bin/aid     # lance le daemon s'il ne tourne pas, ouvre le navigateur
 ```
 
-ou, sans installer : `npx aidboard`.
+L'installeur pose la release sous `~/.aid/server/<version>/` (Node embarqué, archive vérifiée par
+SHA-256) et fait pointer `~/.aid/server/current` dessus ; ajouter `~/.aid/server/current/bin` au
+PATH pour avoir `aid`. Sous Windows, tout ça se passe dans WSL2 (le Board s'en charge). Mise à
+jour : le bandeau du board, ou `aid server install` ; `aid server use <version>` revient en arrière.
 
 | Commande                       | Effet                                                                                                   |
 | ------------------------------ | ------------------------------------------------------------------------------------------------------- |
@@ -39,6 +50,7 @@ ou, sans installer : `npx aidboard`.
 | `aid stop`                     | arrête le daemon ; **refusé tant que des agents tournent** (code 2)                                     |
 | `aid stop --force`             | arrête le daemon et tous ses agents                                                                     |
 | `aid doctor`                   | vérifie la machine et dit quoi corriger                                                                 |
+| `aid server …`                 | l'installation AID Server : `status`, `install [version]` (depuis les releases), `use <version>`        |
 | `aid kernel install [--check]` | matérialise le noyau multi-agents (`kernel/`) dans `~/.agent-kernel` ; `--check` ne touche rien         |
 | `aid mem …`                    | lit, écrit et cherche dans la mémoire locale (`get`, `put`, `search`, `list`, `rm`, `export`, `import`) |
 | `aid mcp`                      | serveur MCP « aid » (stdio) : mémoire locale et index structurel (`index_*`) pour un agent              |
@@ -92,6 +104,10 @@ entre les marqueurs `<!-- agentkit:start --> … <!-- agentkit:end -->` de
 `kernel/commands/sync.md`.
 
 ## Développer
+
+Le mode « repo » : un clone sur `main`, `npm link` pour avoir `aid` sur le PATH, et le bandeau du
+board parle d'`origin/main` (« Mettre à jour » fait pull et build). Rien de ce qui suit ne touche
+`~/.aid/server` ; AID Board prend `aid` du PATH quand il n'y a pas d'installation release.
 
 ```bash
 mise install            # Node 22
