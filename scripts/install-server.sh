@@ -65,7 +65,7 @@ else
   rm -rf "$partial"
   mkdir -p "$partial"
   chmod 700 "$home" "$server" 2> /dev/null || true
-  echo "téléchargement de $name…"
+  echo "téléchargement de ${name}…"
   curl -fsSL -o "$partial/$name" "$base/$name"
   curl -fsSL -o "$partial/SHA256SUMS" "$base/SHA256SUMS"
   expected=$(awk -v f="$name" '$2 == f { print $1 }' "$partial/SHA256SUMS")

@@ -17,6 +17,8 @@ const run = (home: string, base: string, extra: Record<string, string> = {}) =>
       HOME: home,
       AID_HOME: home,
       AID_SERVER_BASE_URL: base,
+      // locale d'un Terminal macOS : bash 3.2 y collait le « … » de « $name… » au nom de variable (unbound variable sous set -u)
+      LANG: 'en_US.UTF-8',
       ...extra,
     },
   }).then(
