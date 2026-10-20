@@ -1,0 +1,220 @@
+# Chantier 13.9 — « Release » : un workflow_dispatch avec un numéro de version, et rien à la main
+# (DR2). Fixe la version (package.json, package-lock.json, tauri.conf.json), commite, pose le tag,
+# construit AID Server (archives autonomes, DR3/DR12) et AID Board (bundles Tauri signés pour
+# l'updater, DR10), puis publie la release v<version> — jamais en prerelease (DR16).
+#
+# Secrets attendus : TAURI_SIGNING_PRIVATE_KEY (et TAURI_SIGNING_PRIVATE_KEY_PASSWORD si la clé en
+# a un) — voir README.md, « Signature des mises à jour d'AID Board ». Aucun jeton supplémentaire :
+# GITHUB_TOKEN suffit pour pousser le commit de version, le tag et la release.
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version à publier (X.Y.Z, sans « v »)'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+# Une release à la fois ; jamais annulée en cours de route (un tag déjà poussé ne se reprend pas)
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+env:
+  VERSION: ${{ inputs.version }}
+
+jobs:
+  version:
+    name: version, tag et release brouillon
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+      - name: semver et tag libre
+        run: |
+          if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::version « $VERSION » : attendu X.Y.Z (DR16 : pas de suffixe de prerelease en 0.x)"
+            exit 1
+          fi
+          if git ls-remote --exit-code --tags origin "refs/tags/v$VERSION" > /dev/null; then
+            echo "::error::le tag v$VERSION existe déjà"
+            exit 1
+          fi
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - name: fixer la version (DR1 — package.json est la source, tauri.conf.json la recopie)
+        run: |
+          npm version "$VERSION" --no-git-tag-version
+          node -e '
+            const fs = require("node:fs");
+            const f = "app/src-tauri/tauri.conf.json";
+            const conf = JSON.parse(fs.readFileSync(f, "utf8"));
+            conf.version = process.argv[1];
+            fs.writeFileSync(f, JSON.stringify(conf, null, 2) + "\n");
+          ' "$VERSION"
+          npx prettier --write package.json app/src-tauri/tauri.conf.json
+          git --no-pager diff --stat
+      - name: commit, tag, release brouillon
+        id: tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -am "release: v$VERSION"
+          git tag "v$VERSION"
+          git push origin main "v$VERSION"
+          # Brouillon dès maintenant, notes générées par GitHub : les jobs de build y déposent leurs
+          # assets (tauri-action réutilise une release existante), publish le rend public à la fin.
+          gh release create "v$VERSION" --draft --title "v$VERSION" --generate-notes
+          echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
+
+  server:
+    name: AID Server ${{ matrix.target }}
+    needs: version
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        # DR12 : le plus vieil Ubuntu des runners pour la glibc ; macOS Intel sur macos-15-intel
+        # (macos-13 a été retiré par GitHub). L'archive embarque le Node du runner (setup-node) :
+        # package-server.sh télécharge la même version exacte depuis nodejs.org, l'ABI des natifs
+        # (node-pty, better-sqlite3) coïncide donc avec le Node embarqué.
+        include:
+          - os: macos-15
+            target: darwin-arm64
+          - os: macos-15-intel
+            target: darwin-x64
+          - os: ubuntu-22.04
+            target: linux-x64
+          - os: ubuntu-22.04-arm
+            target: linux-arm64
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.version.outputs.tag }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y build-essential python3
+      - run: npm ci
+      - run: npm run build
+      - name: empaqueter (scripts/package-server.sh)
+        run: npm run package:server
+      - name: vérifier le nom et la version de l'archive
+        run: |
+          ls -l release
+          test -f "release/aid-server-$VERSION-${{ matrix.target }}.tar.gz"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: server-${{ matrix.target }}
+          path: release/aid-server-*.tar.gz
+          if-no-files-found: error
+          retention-days: 7
+
+  board:
+    name: AID Board ${{ matrix.os }}
+    needs: version
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        # DR14 : macOS sans signature Apple ni notarisation (clic droit → Ouvrir) ; DR15 : .msi seul.
+        include:
+          - os: macos-15
+            args: '--target aarch64-apple-darwin --bundles app,dmg'
+          - os: macos-15-intel
+            args: '--target x86_64-apple-darwin --bundles app,dmg'
+          - os: ubuntu-22.04
+            args: '--bundles deb,appimage'
+          - os: windows-latest
+            args: '--bundles msi'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.version.outputs.tag }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ runner.os == 'macOS' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+      - if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf
+      # Seul @tauri-apps/cli sert ici : pas de compilation de node-pty ni de better-sqlite3
+      - run: npm ci --ignore-scripts
+      # Trouve app/src-tauri/tauri.conf.json depuis la racine (recherche récursive), lance
+      # `npm run tauri -- build …` comme scripts/build.sh, dépose les bundles, leurs .sig et
+      # latest.json (fusionné entre plateformes) sur la release brouillon posée par `version`.
+      - uses: tauri-apps/tauri-action@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          tagName: ${{ needs.version.outputs.tag }}
+          releaseName: ${{ needs.version.outputs.tag }}
+          releaseDraft: true
+          prerelease: false
+          args: ${{ matrix.args }}
+
+  publish:
+    name: publier v${{ inputs.version }}
+    needs: [version, server, board]
+    runs-on: ubuntu-22.04
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TAG: ${{ needs.version.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.version.outputs.tag }}
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: server-*
+          path: release
+          merge-multiple: true
+      - name: SHA256SUMS (format lu par install-server.sh et installRelease)
+        run: |
+          cd release
+          count=$(ls aid-server-*.tar.gz | wc -l)
+          test "$count" -eq 4 || { echo "::error::4 archives AID Server attendues, $count trouvées"; exit 1; }
+          sha256sum aid-server-*.tar.gz > SHA256SUMS
+          cat SHA256SUMS
+      - name: latest.json signé pour chaque plateforme (sinon l'updater refuse en silence)
+        run: |
+          gh release download "$TAG" --pattern latest.json --dir release
+          node -e '
+            const latest = JSON.parse(require("node:fs").readFileSync("release/latest.json", "utf8"));
+            const expected = ["darwin-aarch64", "darwin-x86_64", "linux-x86_64", "windows-x86_64"];
+            const missing = expected.filter((p) => !latest.platforms?.[p]?.signature || !latest.platforms?.[p]?.url);
+            if (latest.version !== process.env.VERSION) { console.error(`latest.json annonce ${latest.version}, attendu ${process.env.VERSION}`); process.exit(1); }
+            if (missing.length) { console.error(`latest.json sans signature pour : ${missing.join(", ")}`); process.exit(1); }
+            console.log(`latest.json ${latest.version} : ${expected.length} plateformes signées`);
+          '
+      - name: déposer les assets serveur et l'installeur
+        run: gh release upload "$TAG" release/aid-server-*.tar.gz release/SHA256SUMS scripts/install-server.sh --clobber
+      - name: publier (jamais prerelease, DR16)
+        run: |
+          gh release edit "$TAG" --draft=false --prerelease=false --latest
+          gh release view "$TAG" --json assets --jq '.assets[].name'

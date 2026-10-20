@@ -168,6 +168,9 @@ de PTY (les agents meurent au redémarrage, assumé).
 - **DR12 — Linux : construit sur le plus vieux Ubuntu supporté par les runners (22.04)**
   pour la compatibilité glibc ; `arm64` sur le runner `ubuntu-22.04-arm`. macOS : `macos-14`
   (arm64) et `macos-13` (x64). Pas d'universal : deux `.dmg`.
+  _Exécution (13.9, 2026-10-20) : `macos-13` n'existe plus chez GitHub et `macos-14` est
+  déprécié ; le workflow prend `macos-15` (arm64) et `macos-15-intel` (x64). La cible
+  minimale de l'app dépend du deployment target Tauri, pas du runner._
 - **DR13 — Les tests ne touchent jamais le réseau ni le vrai `~/.aid`.** API GitHub et
   téléchargements passent par une fonction `fetch` injectée ou un serveur HTTP local du
   test ; `AID_HOME` temporaire partout, comme pour le reste du dépôt.
