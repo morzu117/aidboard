@@ -105,6 +105,22 @@ npm run dev:web         # Vite sur 127.0.0.1:5173, proxy vers le daemon
 En dev, lancer le daemon avec `AID_DEV_ORIGIN=http://127.0.0.1:5173` : sans cela, toute écriture depuis Vite répond 403.
 Les plans de développement sont dans `docs/chantiers/`, les maquettes de référence dans `design/maquettes/`.
 
+### Signature des mises à jour d'AID Board
+
+L'app se met à jour par l'updater Tauri : chaque release publie `latest.json` et des bundles signés
+(minisign). La paire de clés se génère **une fois**, hors du dépôt :
+
+```bash
+npm run tauri -- signer generate -w ~/.tauri/aidboard.key
+```
+
+La clé **publique** (affichée par la commande, aussi dans `~/.tauri/aidboard.key.pub`) va dans
+`app/src-tauri/tauri.conf.json`, champ `plugins.updater.pubkey`. La clé **privée** ne va nulle part
+dans le dépôt : secret GitHub `TAURI_SIGNING_PRIVATE_KEY` (contenu du fichier) et, si un mot de
+passe a été choisi, `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`. Sans signature valide, l'updater refuse la
+mise à jour et le dit dans le journal de l'app ; une clé perdue impose de republier l'app à la main
+(les installations existantes ne sauront plus se mettre à jour).
+
 ## Licence
 
 [MIT](LICENSE).

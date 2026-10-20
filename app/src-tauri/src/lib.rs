@@ -1,6 +1,8 @@
 mod daemon_bridge;
 
 use tauri::{WebviewUrl, WebviewWindowBuilder};
+use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogKind};
+use tauri_plugin_updater::UpdaterExt;
 
 // Texte de la page d'attente (app/loading/index.html) : étapes de spawn_cycle, puis erreur éventuelle.
 fn set_state(window: &tauri::WebviewWindow, message: &str) {
@@ -10,9 +12,59 @@ fn set_state(window: &tauri::WebviewWindow, message: &str) {
     ));
 }
 
+// Mise à jour d'AID Board par l'updater Tauri (DR10) : `latest.json` publié avec chaque release,
+// bundle signé par la clé minisign dont la partie publique est dans tauri.conf.json. Sans
+// signature valide, le plugin refuse — c'est voulu, et ça se lit dans le journal. Lancée après
+// l'ouverture de la fenêtre principale, jamais avant : le daemon d'abord.
+fn check_board_update(app: &tauri::AppHandle) {
+    let updater = match app.updater() {
+        Ok(u) => u,
+        Err(e) => {
+            log::warn!("mise à jour d'AID Board indisponible : {e}");
+            return;
+        }
+    };
+    let update = match tauri::async_runtime::block_on(updater.check()) {
+        Ok(Some(u)) => u,
+        Ok(None) => {
+            log::info!("AID Board à jour");
+            return;
+        }
+        Err(e) => {
+            log::warn!("vérification des mises à jour d'AID Board impossible : {e}");
+            return;
+        }
+    };
+    let accepted = app
+        .dialog()
+        .message(format!(
+            "AID Board {} est disponible (installée : {}). L'installer et relancer maintenant ? \
+             Le daemon et ses agents continuent de tourner.",
+            update.version, update.current_version
+        ))
+        .title("Mise à jour d'AID Board")
+        .kind(MessageDialogKind::Info)
+        .buttons(MessageDialogButtons::OkCancelCustom(
+            "Mettre à jour".into(),
+            "Plus tard".into(),
+        ))
+        .blocking_show();
+    if !accepted {
+        return;
+    }
+    match tauri::async_runtime::block_on(update.download_and_install(|_, _| {}, || {})) {
+        // Windows : l'installateur relance lui-même l'app ; macOS et Linux : à nous.
+        Ok(()) => app.restart(),
+        Err(e) => log::warn!("mise à jour d'AID Board échouée (signature, réseau…) : {e}"),
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_process::init())
+        .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
             if cfg!(debug_assertions) {
                 app.handle().plugin(
@@ -67,6 +119,7 @@ pub fn run() {
                 match built {
                     Ok(_) => {
                         let _ = loading.close();
+                        check_board_update(&handle);
                     }
                     Err(e) => {
                         set_state(&loading, &format!("AID n'a pas pu ouvrir la fenêtre : {e}"))
