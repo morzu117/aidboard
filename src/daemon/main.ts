@@ -62,6 +62,8 @@ export async function startDaemon(
     onStopRequested?: () => void;
     onUpdateRequested?: () => void;
     onCycleRequested?: () => void;
+    /** Dernier échec d'une mise à jour déclenchée (pull ou build) : `null` si la dernière tentative a réussi ou si aucune n'a encore eu lieu. */
+    updateError?: () => string | null;
     /** `git ls-remote origin` en tâche de fond ; coupé dans les tests, pas de réseau à chaque daemon. */
     checkUpdates?: boolean;
     // tests : un Embedder/ChatModel déterministe, des délais courts, un rythme d'entretien rapide
@@ -203,6 +205,7 @@ export async function startDaemon(
       requestUpdate: opts.onUpdateRequested,
       requestCycle: opts.onCycleRequested,
       updates: () => updates?.status() ?? null,
+      updateError: opts.updateError,
       devOrigin,
       logger: opts.logger,
     });

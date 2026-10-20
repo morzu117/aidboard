@@ -18,7 +18,12 @@ afterEach(async () => {
 });
 
 function makeApp(
-  opts: { requestUpdate?: () => void; requestCycle?: () => void; withAgent?: boolean } = {},
+  opts: {
+    requestUpdate?: () => void;
+    requestCycle?: () => void;
+    withAgent?: boolean;
+    updateError?: () => string | null;
+  } = {},
 ): FastifyInstance {
   const home = mkdtempSync(join(tmpdir(), 'aid-dr-'));
   db = openDb(join(home, 'state.db'));
@@ -34,6 +39,7 @@ function makeApp(
     requestStop: () => {},
     requestUpdate: opts.requestUpdate,
     requestCycle: opts.requestCycle,
+    updateError: opts.updateError,
   });
   return app;
 }
@@ -61,6 +67,21 @@ test('POST /api/daemon/update : sans agent vivant, se déclenche directement', a
   expect(res.json()).toEqual({ updating: true, agents: 0 });
   await new Promise((r) => setImmediate(r));
   expect(called).toBe(true);
+});
+
+test('GET /api/daemon/update : porte lastError quand la dernière tentative a échoué', async () => {
+  const a = makeApp({ updateError: () => 'mise à jour échouée (pull) : divergent' });
+  const res = await a.inject({ method: 'GET', url: '/api/daemon/update' });
+  expect(res.statusCode).toBe(200);
+  expect((res.json() as { lastError: string | null }).lastError).toBe(
+    'mise à jour échouée (pull) : divergent',
+  );
+});
+
+test('GET /api/daemon/update : lastError à null sans échec connu', async () => {
+  const a = makeApp();
+  const res = await a.inject({ method: 'GET', url: '/api/daemon/update' });
+  expect((res.json() as { lastError: string | null }).lastError).toBeNull();
 });
 
 test('POST /api/daemon/cycle : 501 quand aucun cycle n’est câblé', async () => {
