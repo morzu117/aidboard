@@ -51,6 +51,8 @@ export async function fakeReleaseServer(
     const url = req.url ?? '';
     if (url === `/download/${name}`) return res.writeHead(200).end(bytes);
     if (url === '/download/SHA256SUMS') return res.writeHead(200).end(sums);
+    // install-server.sh sans AID_SERVER_VERSION : la version à installer
+    if (url === '/download/VERSION') return res.writeHead(200).end(`${version}\n`);
     if (url === '/releases/latest' || url === `/releases/tags/v${version}`)
       return res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify(api()));
     res.writeHead(404).end('{}');
