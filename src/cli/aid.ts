@@ -1,8 +1,8 @@
 #!/usr/bin/env node
-import { realpathSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { parseArgs } from 'node:util';
 import { readVersion } from './version.js';
+import type { Launch } from '../daemon/selfUpdate.js';
 
 const HELP = `aidboard ${readVersion()} : cockpit local des agents de code
 
@@ -21,6 +21,7 @@ const HELP = `aidboard ${readVersion()} : cockpit local des agents de code
   aid kernel install [--check]   matérialise le noyau multi-agents dans ~/.agent-kernel
   aid mem …       la mémoire des agents : get, put, search, list, rm, export, import, reindex
   aid mcp         serveur MCP « aid » (stdio) : mémoire et index structurel pour un agent
+  aid server      status | install [version] | use <version> : l'installation AID Server (~/.aid/server)
 `;
 
 async function main(): Promise<number> {
@@ -78,7 +79,9 @@ async function main(): Promise<number> {
     case 'daemon': {
       const { startDaemon } = await import('../daemon/main.js');
       const { checkForUpdate, repoRootFrom } = await import('../daemon/updateCheck.js');
-      const { pullAndBuild, spawnRespawnWatcher } = await import('../daemon/selfUpdate.js');
+      const { pullAndBuild, spawnRespawnWatcher, installRelease, pruneServers, currentLaunch } =
+        await import('../daemon/selfUpdate.js');
+      const { installMode } = await import('../daemon/install.js');
       let stopRequested: () => void = () => undefined;
       let updateRequested: () => void = () => undefined;
       let cycleRequested: () => void = () => undefined;
@@ -98,15 +101,49 @@ async function main(): Promise<number> {
       });
       const stop = () => void handle.stop().then(() => process.exit(0));
       stopRequested = stop;
-      // Bouton « Mettre à jour » de l'UI : pull + build pendant que ce daemon sert encore, puis
-      // seulement s'ils réussissent, relance et sort. Un échec laisse l'ancien build tourner.
+      // 13.5 : le mode d'installation décide de l'action (DR5) ; le relanceur reçoit toujours un
+      // Launch explicite — celui de la nouvelle version en mode release (DR8).
+      const launch = currentLaunch();
+      const mode = installMode(launch.entry, paths.home);
+      const relaunch = (next: Launch = launch) => {
+        spawnRespawnWatcher(process.pid, next, paths.home);
+        stop();
+      };
+      const repoDir = () => (mode === 'repo' ? repoRootFrom(dirname(launch.entry)) : null);
+      // mode release : installe la release vue par le watcher ; le Launch de la nouvelle version, ou null
+      const installLatest = async (): Promise<Launch | null> => {
+        const status = handle.updates();
+        if (!status?.available || !status.release) {
+          lastUpdateError = 'aucune release plus récente connue';
+          console.error(`mise à jour : ${lastUpdateError}`);
+          return null;
+        }
+        const result = await installRelease(status.release, paths.home, { log: console.error });
+        if (!result.ok) {
+          lastUpdateError = `mise à jour échouée (${result.step}) : ${result.error}`;
+          console.error(lastUpdateError);
+          return null;
+        }
+        pruneServers(paths.home);
+        return result.launch;
+      };
+      // Bouton « Mettre à jour » de l'UI : pull + build (repo) ou téléchargement + bascule (release)
+      // pendant que ce daemon sert encore, puis seulement en cas de succès, relance et sort. Un
+      // échec laisse l'ancien build tourner.
       updateRequested = () => {
         lastUpdateError = null;
         void (async () => {
-          const entry = realpathSync(process.argv[1] ?? '');
-          const dir = repoRootFrom(dirname(entry));
+          if (mode === 'release') {
+            const next = await installLatest();
+            if (next) relaunch(next);
+            return;
+          }
+          const dir = repoDir();
           if (!dir) {
-            lastUpdateError = 'dépôt introuvable depuis le build en cours';
+            lastUpdateError =
+              mode === 'inconnu'
+                ? 'mise à jour désactivée : ni clone git ni ~/.aid/server au-dessus du build (install-server.sh)'
+                : 'dépôt introuvable depuis le build en cours';
             console.error(`mise à jour : ${lastUpdateError}`);
             return;
           }
@@ -116,8 +153,7 @@ async function main(): Promise<number> {
             console.error(lastUpdateError);
             return;
           }
-          spawnRespawnWatcher(process.pid, entry, paths.home);
-          stop();
+          relaunch();
         })();
       };
       // Ouverture d'AID.app avec un daemon déjà présent : interrompt proprement les agents vivants
@@ -129,8 +165,25 @@ async function main(): Promise<number> {
           const { writeFileSync } = await import('node:fs');
           const entries = await gracefulInterrupt(handle.agents);
           if (entries.length > 0) writeFileSync(paths.repriseJson, JSON.stringify(entries));
-          const entry = realpathSync(process.argv[1] ?? '');
-          const dir = repoRootFrom(dirname(entry));
+          if (mode === 'release') {
+            const status = handle.updates();
+            let next = launch;
+            if (status?.available && status.release) {
+              const result = await installRelease(status.release, paths.home, {
+                log: console.error,
+              });
+              if (result.ok) {
+                pruneServers(paths.home);
+                next = result.launch;
+              } else
+                console.error(
+                  `mise à jour échouée (${result.step}) : ${result.error} — relance sur la version actuelle`,
+                );
+            }
+            relaunch(next);
+            return;
+          }
+          const dir = repoDir();
           if (dir) {
             const status = await checkForUpdate(dir).catch(() => null);
             if (status?.available) {
@@ -141,8 +194,7 @@ async function main(): Promise<number> {
                 );
             }
           }
-          spawnRespawnWatcher(process.pid, entry, paths.home);
-          stop();
+          relaunch();
         })();
       };
       process.on('SIGINT', stop);
@@ -224,6 +276,10 @@ async function main(): Promise<number> {
     case 'doctor': {
       const { runDoctor } = await import('./commands/doctor.js');
       return runDoctor(paths);
+    }
+    case 'server': {
+      const { runServer } = await import('./commands/server.js');
+      return runServer(positionals.slice(1), paths);
     }
     default:
       console.error(`commande inconnue : ${command}\n\n${HELP}`);

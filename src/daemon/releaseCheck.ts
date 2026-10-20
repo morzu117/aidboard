@@ -3,7 +3,8 @@
 // « on ne sait pas », jamais une erreur affichée. Tout passe par `fetchFn` : les tests n'ont
 // pas de réseau.
 
-export const RELEASES_LATEST_URL = 'https://api.github.com/repos/morzu117/aidboard/releases/latest';
+export const RELEASES_API_BASE = 'https://api.github.com/repos/morzu117/aidboard/releases';
+export const RELEASES_LATEST_URL = `${RELEASES_API_BASE}/latest`;
 
 export interface Release {
   version: string;
@@ -41,6 +42,19 @@ export async function latestRelease(
   fetchFn: typeof fetch = fetch,
   url = RELEASES_LATEST_URL,
 ): Promise<Release | null> {
+  return fetchRelease(url, fetchFn);
+}
+
+/** Une version précise (`aid server install 0.2.0`) : le tag est `v<version>`. */
+export async function releaseByVersion(
+  version: string,
+  fetchFn: typeof fetch = fetch,
+  base = RELEASES_API_BASE,
+): Promise<Release | null> {
+  return fetchRelease(`${base}/tags/v${version}`, fetchFn);
+}
+
+async function fetchRelease(url: string, fetchFn: typeof fetch): Promise<Release | null> {
   try {
     const res = await fetchFn(url, {
       headers: { accept: 'application/vnd.github+json', 'user-agent': 'aidboard' },

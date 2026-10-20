@@ -1,5 +1,6 @@
 import { type SpawnOptions, spawn } from 'node:child_process';
-import { closeSync, openSync, realpathSync } from 'node:fs';
+import { closeSync, openSync } from 'node:fs';
+import { currentLaunch } from '../../daemon/selfUpdate.js';
 import { ensureHome, type AidPaths } from '../../daemon/paths.js';
 import { runningDaemon, type DaemonInfo } from '../daemonInfo.js';
 
@@ -17,7 +18,9 @@ export const spawnDetachedDaemon: SpawnDaemon = (paths) => {
     stdio: ['ignore', log, log],
     env: { ...process.env, AID_HOME: paths.home },
   };
-  const child = spawn(process.execPath, [realpathSync(process.argv[1] ?? ''), 'daemon'], opts);
+  // 13.5 (DR8) : le Node et le build de ce process — en mode release, ceux de l'archive qui tourne
+  const launch = currentLaunch();
+  const child = spawn(launch.execPath, [launch.entry, 'daemon'], opts);
   child.unref();
   closeSync(log);
 };
