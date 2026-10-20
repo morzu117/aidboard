@@ -72,6 +72,15 @@ export class StructuralService {
     return this.impl.init(root, log);
   }
 
+  sync(root: string, log: number): ChildProcess {
+    if (!this.impl) {
+      throw new Error(
+        'structural.sync appelé avec engine = off : ne doit jamais arriver (detect aurait dû le filtrer)',
+      );
+    }
+    return this.impl.sync(root, log);
+  }
+
   async status(root: string): Promise<IndexStatus> {
     if (!this.impl) return OFF_STATUS;
     const cached = this.statusCache.get(root);

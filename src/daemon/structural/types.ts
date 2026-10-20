@@ -16,6 +16,9 @@ export interface StructuralIndex {
   /** lance l'indexation initiale ; stdout/stderr vers `log`, l'appelant gère le cycle de vie */
   init(root: string, log: number): ChildProcess;
 
+  /** rattrape les changements depuis la dernière indexation (08.8) ; même cycle de vie que `init` */
+  sync(root: string, log: number): ChildProcess;
+
   status(root: string): Promise<IndexStatus>;
   explore(root: string, query: string, opts?: { maxFiles?: number }): Promise<{ text: string }>;
   symbols(root: string, q: string, opts?: { kind?: string; limit?: number }): Promise<SymbolRef[]>;

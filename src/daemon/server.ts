@@ -44,6 +44,8 @@ export interface ServerDeps {
   paths: AidPaths;
   procVersion?: () => string | null;
   structural?: StructuralService;
+  /** 08.8 : main.ts le construit pour lancer le rattrapage après `listen` ; sinon un neuf */
+  indexer?: Indexer;
   requestStop?: () => void;
   requestUpdate?: () => void;
   requestCycle?: () => void;
@@ -122,11 +124,13 @@ export async function buildServer(deps: ServerDeps): Promise<FastifyInstance> {
   registerFsRoutes(app);
   registerFileRoutes(app, { db: deps.db });
   registerHookRoutes(app, () => process.env);
-  const indexer = new Indexer({
-    store: deps.store,
-    paths: deps.paths,
-    engine: structural,
-  });
+  const indexer =
+    deps.indexer ??
+    new Indexer({
+      store: deps.store,
+      paths: deps.paths,
+      engine: structural,
+    });
   app.addHook('onClose', async () => indexer.stop());
   registerTopicRoutes(app, {
     db: deps.db,
