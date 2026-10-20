@@ -7,7 +7,7 @@ import { openDb, type Db } from '../src/daemon/db.js';
 import { AidHttpError } from '../src/daemon/errors.js';
 import { registerDaemonRoutes } from '../src/daemon/routes/daemon.js';
 import { seedTopic } from './helpers/daemon.js';
-import type { UpdateStatus } from '../src/daemon/updateCheck.js';
+import type { WatchStatus } from '../src/daemon/updateWatcher.js';
 import type { InstallMode, UpdateInfo } from '../src/shared/model.js';
 
 let app: FastifyInstance | undefined;
@@ -25,7 +25,7 @@ function makeApp(
     requestCycle?: () => void;
     withAgent?: boolean;
     updateError?: () => string | null;
-    updates?: () => UpdateStatus | null;
+    updates?: () => WatchStatus | null;
     install?: () => { mode: InstallMode; version: string };
   } = {},
 ): FastifyInstance {
@@ -122,7 +122,7 @@ test('POST /api/daemon/update : --force déclenche la mise à jour malgré un ag
 test('GET /api/daemon/update (13.2) : mode, version, et latest = sha d’origin/main en mode repo', async () => {
   const a = makeApp({
     install: () => ({ mode: 'repo', version: '0.1.0' }),
-    updates: () => ({ available: true, localSha: 'aaa', remoteSha: '1234567deadbeef' }),
+    updates: () => ({ available: true, latest: '1234567deadbeef' }),
   });
   const res = await a.inject({ method: 'GET', url: '/api/daemon/update' });
   expect(res.json() as UpdateInfo).toEqual({
@@ -137,7 +137,7 @@ test('GET /api/daemon/update (13.2) : mode, version, et latest = sha d’origin/
 test('GET /api/daemon/update (13.2) : à jour → latest null ; sans câblage → inconnu, jamais disponible', async () => {
   const a = makeApp({
     install: () => ({ mode: 'release', version: '0.2.0' }),
-    updates: () => ({ available: false, localSha: 'aaa', remoteSha: 'aaa' }),
+    updates: () => ({ available: false, latest: '0.2.0' }),
   });
   const r1 = (await a.inject({ method: 'GET', url: '/api/daemon/update' })).json() as UpdateInfo;
   expect(r1).toMatchObject({ mode: 'release', version: '0.2.0', available: false, latest: null });

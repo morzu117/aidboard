@@ -2,7 +2,7 @@ import { Type } from '@sinclair/typebox';
 import type { FastifyInstance } from 'fastify';
 import type { Db } from '../db.js';
 import { AidHttpError } from '../errors.js';
-import type { UpdateStatus } from '../updateCheck.js';
+import type { WatchStatus } from '../updateWatcher.js';
 import type { InstallMode, UpdateInfo } from '../../shared/model.js';
 
 const LIVE = ['starting', 'working', 'needs_input', 'idle'];
@@ -25,7 +25,7 @@ export function registerDaemonRoutes(
     requestStop: () => void;
     requestUpdate?: () => void;
     requestCycle?: () => void;
-    updates?: () => UpdateStatus | null;
+    updates?: () => WatchStatus | null;
     updateError?: () => string | null;
     /** 13.2 : mode d'installation et version du build qui tourne (DR5) */
     install?: () => { mode: InstallMode; version: string };
@@ -42,7 +42,7 @@ export function registerDaemonRoutes(
       mode: install.mode,
       version: install.version,
       available: status?.available ?? false,
-      latest: status?.available ? status.remoteSha : null,
+      latest: status?.available ? status.latest : null,
       lastError: deps.updateError?.() ?? null,
     };
   });
