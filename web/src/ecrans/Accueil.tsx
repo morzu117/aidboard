@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import type { Agent } from '../../../src/shared/model.js';
+import type { Agent, UpdateInfo } from '../../../src/shared/model.js';
 import { AidApiError } from '../data/api.js';
 import { useAid } from '../data/useAidState.js';
 import { Layout, useLayout } from '../ui/Layout.js';
@@ -103,10 +103,13 @@ const MAJ_TIMEOUT_MS = 5 * 60_000;
 
 type EtatMaj = 'idle' | 'en-cours' | 'confirmer' | 'erreur';
 
-/** Compare au daemon : origin/main a-t-il avancé depuis le build que ce daemon sert ? */
+/**
+ * Ce que le daemon sait d'une mise à jour (13.2, DR5) : en mode repo, origin/main a avancé ;
+ * en mode release, une version plus récente est publiée. Le bouton est le même, l'effet dépend du mode.
+ */
 function BandeauMaj() {
   const { call, daemon } = useAid();
-  const [remoteSha, setRemoteSha] = useState<string | null>(null);
+  const [maj, setMaj] = useState<UpdateInfo | null>(null);
   const [etat, setEtat] = useState<EtatMaj>('idle');
   const [agentsVivants, setAgentsVivants] = useState(0);
   const [erreur, setErreur] = useState<string | null>(null);
@@ -114,8 +117,8 @@ function BandeauMaj() {
   useEffect(() => {
     let off = false;
     const load = () =>
-      call<{ available: boolean; remoteSha?: string }>('GET', '/api/daemon/update').then(
-        (r) => !off && setRemoteSha(r.available ? (r.remoteSha ?? '') : null),
+      call<UpdateInfo>('GET', '/api/daemon/update').then(
+        (r) => !off && setMaj(r.available ? r : null),
         () => {},
       );
     load();
@@ -170,7 +173,7 @@ function BandeauMaj() {
       clearInterval(timer);
     };
   }, [etat, call]);
-  if (remoteSha === null) return null;
+  if (maj === null) return null;
 
   const lancer = (force: boolean) => {
     setErreur(null);
@@ -194,10 +197,14 @@ function BandeauMaj() {
     <div className="bandeau-maj" data-node="1-1.maj" role="status">
       <div className="bandeau-texte">
         <p className="bandeau-titre" data-node="1-1.maj.titre">
-          Nouvelle version d’aidboard disponible
+          {maj.mode === 'release'
+            ? `AID Server ${maj.latest ?? ''} disponible`
+            : 'Nouvelle version d’aidboard disponible'}
         </p>
         <p className="texte-discret" data-node="1-1.maj.aide">
-          origin/main a avancé{remoteSha ? ` (${remoteSha.slice(0, 7)})` : ''}.
+          {maj.mode === 'release'
+            ? `Version installée : ${maj.version}.`
+            : `origin/main a avancé${maj.latest ? ` (${maj.latest.slice(0, 7)})` : ''}.`}
         </p>
         {etat === 'erreur' && erreur && (
           <p className="texte-discret" data-node="1-1.maj.erreur" role="alert">

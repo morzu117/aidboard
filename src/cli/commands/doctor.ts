@@ -2,7 +2,8 @@ import { execFile } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { createServer } from 'node:net';
 import { homedir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { readFileSync, statSync } from 'node:fs';
 import { onPath } from '../../daemon/actions/editor.js';
 import { readProcVersion } from '../../daemon/routes/workspaces.js';
@@ -14,6 +15,8 @@ import { isWsl } from '../browser.js';
 import { hooksStatus } from '../../daemon/hooks/claudeSettings.js';
 import { daemonFetch, runningDaemon } from '../daemonInfo.js';
 import { readVersion } from '../version.js';
+import { currentServer, installMode } from '../../daemon/install.js';
+import type { InstallMode } from '../../shared/model.js';
 
 export type Level = 'ok' | 'warn' | 'ko';
 export interface Check {
@@ -36,6 +39,7 @@ export interface Probes {
   memoryHealth(): Promise<MemoryHealth | null>; // null = daemon arrêté ou injoignable
   mcpRegistration(): boolean; // true si `aid-memory` (06.5) est encore enregistré dans ~/.claude.json (DS10)
   structural(): Promise<IndexStatus | null>; // état du premier workspace ; null = daemon arrêté, aucun workspace, ou index indisponible
+  install(): { mode: InstallMode; version: string | null }; // 13.2 : comment cette CLI est installée ; version = celle de ~/.aid/server/current (mode release)
 }
 
 export function nodeSupported(v: string): boolean {
@@ -71,6 +75,22 @@ export async function runChecks(p: Probes): Promise<Check[]> {
     level: 'ko',
     detail: 'version prise en charge : 22.12 à 24 (mise install node@22)',
   });
+
+  // 13.2 (DR5) : le mode gouverne la mise à jour ; `inconnu` = aucune (tarball installé à la main).
+  const inst = p.install();
+  if (inst.mode === 'repo')
+    add('ok', 'installation : mode repo (clone git, mise à jour par pull et build)');
+  else if (inst.mode === 'release')
+    add(
+      'ok',
+      `installation : release ${inst.version ?? '?'} (~/.aid/server, mise à jour par les releases GitHub)`,
+    );
+  else
+    add(
+      'warn',
+      'installation : mode inconnu',
+      'ni clone git ni ~/.aid/server au-dessus du build : la mise à jour est désactivée (install-server.sh)',
+    );
 
   const pty = await p.loadPty();
   const ptyHelp =
@@ -265,6 +285,13 @@ export function realProbes(paths: AidPaths): Probes {
       }
     },
     mcpRegistration: () => mcpServerNames(claudeJsonPath()).includes('aid-memory'),
+    install() {
+      const mode = installMode(dirname(fileURLToPath(import.meta.url)), paths.home);
+      return {
+        mode,
+        version: mode === 'release' ? (currentServer(paths.home)?.version ?? null) : null,
+      };
+    },
     async structural() {
       const info = await runningDaemon(paths);
       if (!info) return null;

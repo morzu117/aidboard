@@ -23,6 +23,7 @@ const good: Probes = {
   memoryHealth: async () => null,
   mcpRegistration: () => false,
   structural: async () => null,
+  install: () => ({ mode: 'repo', version: null }),
 };
 
 const levels = async (over: Partial<Probes>) =>
@@ -271,4 +272,17 @@ test('index indisponible (daemon arrêté ou moteur coupé) : la version s’aff
   const line = checks.find((c) => c.label === 'codegraph codegraph 1.6.2')!;
   expect(line.level).toBe('ok');
   expect(line.detail).toBeUndefined();
+});
+
+test('installation (13.2) : repo et release sont ✓ avec leur mode, inconnu est un ⚠', async () => {
+  expect(await levels({})).toContain(
+    'ok:installation : mode repo (clone git, mise à jour par pull et build)',
+  );
+  expect(await levels({ install: () => ({ mode: 'release', version: '0.2.0' }) })).toContain(
+    'ok:installation : release 0.2.0 (~/.aid/server, mise à jour par les releases GitHub)',
+  );
+  const checks = await runChecks({ ...good, install: () => ({ mode: 'inconnu', version: null }) });
+  const warn = checks.find((c) => c.label === 'installation : mode inconnu')!;
+  expect(warn.level).toBe('warn');
+  expect(warn.detail).toContain('install-server.sh');
 });

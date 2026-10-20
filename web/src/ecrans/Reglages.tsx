@@ -3,6 +3,7 @@ import type { Workspace } from '../../../src/shared/model.js';
 import { useAid } from '../data/useAidState.js';
 import { Dialogue } from '../dialogues/Dialogue.js';
 import { Layout, useLayout } from '../ui/Layout.js';
+import type { UpdateInfo } from '../../../src/shared/model.js';
 
 interface HooksState {
   path: string;
@@ -279,6 +280,44 @@ function Notifications() {
   );
 }
 
+const MODE_TEXTE: Record<UpdateInfo['mode'], string> = {
+  repo: 'clone git : mise à jour par pull et build',
+  release: '~/.aid/server : mise à jour par les releases GitHub',
+  inconnu: 'installation manuelle : mise à jour désactivée',
+};
+
+// 13.2 : la version du daemon qui sert cette page et son mode d'installation (DR5).
+function Version() {
+  const { call } = useAid();
+  const [info, setInfo] = useState<UpdateInfo | null>(null);
+  useEffect(() => {
+    call<Partial<UpdateInfo>>('GET', '/api/daemon/update').then(
+      (r) => r.version && r.mode && setInfo(r as UpdateInfo),
+      () => {},
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  if (!info) return null;
+  return (
+    <section className="groupe" data-node="reglages.version" aria-label="Version">
+      <div className="groupe-entete">
+        <h2 className="titre-zone">Version</h2>
+      </div>
+      <article className="element">
+        <div className="element-entete">
+          <span className="identifiant" data-node="reglages.version.serveur">
+            AID Server {info.version}
+          </span>
+        </div>
+        <p className="element-detail" data-node="reglages.version.mode">
+          {MODE_TEXTE[info.mode]}
+          {info.available && info.latest ? ` — ${info.latest} disponible` : ''}
+        </p>
+      </article>
+    </section>
+  );
+}
+
 // Les sections attendent le premier instantané : avant, le daemon n'a pas encore répondu.
 function Contenu() {
   const { state, daemon } = useAid();
@@ -297,6 +336,7 @@ function Contenu() {
           <Projets />
           <Hooks />
           <Notifications />
+          <Version />
         </div>
       ) : down ? (
         <p className="message-erreur" role="alert">

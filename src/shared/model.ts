@@ -137,3 +137,17 @@ export interface ActionRun {
   startedAt: string;
   finishedAt: string | null;
 }
+
+/** Chantier 13 (DR5) : comment le daemon a été installé — détecté sur le disque, jamais configuré. */
+export type InstallMode = 'repo' | 'release' | 'inconnu';
+
+/** GET /api/daemon/update */
+export interface UpdateInfo {
+  mode: InstallMode;
+  /** version qui tourne (package.json du build) */
+  version: string;
+  available: boolean;
+  /** ce qui est disponible : une version (mode release) ou un sha d'origin/main (mode repo) ; null sinon */
+  latest: string | null;
+  lastError: string | null;
+}

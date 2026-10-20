@@ -35,6 +35,8 @@ import { StructuralService } from './structural/service.js';
 import { Indexer } from './topics/index.js';
 import { rattraperIndex } from './topics/rattrapage.js';
 import { UpdateWatcher } from './updateWatcher.js';
+import { installMode } from './install.js';
+import { readVersion } from '../cli/version.js';
 import type { IndexEngine } from '../shared/structural.js';
 
 export class AidPortInUse extends Error {
@@ -184,6 +186,11 @@ export async function startDaemon(
       opts.checkUpdates === false
         ? null
         : new UpdateWatcher(dirname(fileURLToPath(import.meta.url)));
+    // 13.2 (DR5) : lu une fois, le build ne bouge pas sous un daemon qui tourne
+    const install = {
+      mode: installMode(dirname(fileURLToPath(import.meta.url)), paths.home),
+      version: readVersion(),
+    };
     // config.structural est la source par défaut (08.3) ; codegraphBin/structuralEngine
     // restent des surcharges directes de startDaemon pour les tests (comme codegraphBin
     // le faisait déjà avant que la clé de config existe).
@@ -211,6 +218,7 @@ export async function startDaemon(
       requestCycle: opts.onCycleRequested,
       updates: () => updates?.status() ?? null,
       updateError: opts.updateError,
+      install: () => install,
       devOrigin,
       logger: opts.logger,
     });
