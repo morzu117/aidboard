@@ -1,6 +1,6 @@
 {
   "name": "aidboard",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "A-I-D Board : cockpit local des agents de code et des sujets en cours",
   "private": true,
   "type": "module",
