@@ -165,11 +165,17 @@ describe('aid hook', () => {
       Object.entries(process.env).filter(([k]) => !k.startsWith('AID_')),
     );
     for (const env of [clean, { ...clean, AID_HOOK: SCRIPT }]) {
-      const out = execFileSync('sh', ['-c', hookCommand('Stop')], {
-        env,
-        input: '{}',
-        encoding: 'utf8',
-      });
+      // Le JSON de l'événement arrive par un tube tenu par sh, pas par l'option `input` : la
+      // commande sort sans lire, et sous charge (CI Linux, Node 24) spawnSync rend alors EPIPE
+      // au lieu de la sortie vide. Un printf coupé dans le tube n'est pas une erreur.
+      const out = execFileSync(
+        'sh',
+        ['-c', `printf '{}' 2>/dev/null | { ${hookCommand('Stop')}; }`],
+        {
+          env,
+          encoding: 'utf8',
+        },
+      );
       expect(out).toBe('');
     }
   });

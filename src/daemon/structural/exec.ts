@@ -40,6 +40,11 @@ export function run(
         });
       },
     );
+    // Un binaire qui sort avant d'avoir lu (option inconnue, index absent…) ferme son stdin le
+    // premier : l'écriture rend alors EPIPE sur le flux, et sans écouteur c'est une erreur non
+    // capturée qui fait tomber le processus (vu en CI Linux). Le verdict reste celui du rappel
+    // d'execFile : code de sortie et stderr.
+    child.stdin?.on('error', () => undefined);
     child.stdin?.end(opts.input ?? '');
   });
 }
