@@ -106,7 +106,7 @@ Cible :
 
 Hors périmètre : publication sur npm (le README cesse de la promettre) ; AID Server natif
 Windows (WSL2 reste la règle, le Board y installe `linux-x64`) ; signature et notarisation
-Apple (DO1) ; téléchargement authentifié ou dépôt privé ; canal « beta » ; migration des
+Apple (DR14) ; téléchargement authentifié ou dépôt privé ; canal « beta » ; migration des
 données `~/.aid` (inchangées, `migrations/` fait déjà ce travail) ; séparation du superviseur
 de PTY (les agents meurent au redémarrage, assumé).
 
@@ -176,15 +176,16 @@ Ce que l'exécutant ne décide pas : le format des noms d'assets ci-dessus, la l
 cibles, l'emplacement `~/.aid/server`, l'ordre de résolution DR11, le nom des clés de
 config (aucune nouvelle clé dans `config.yaml` : tout est détecté).
 
-Décisions ouvertes (à valider par Julien) :
+Décisions tranchées le 2026-10-20 (anciennes DO1 à DO3) :
 
-- **DO1 — Signature et notarisation Apple.** Sans Developer ID (99 $/an), Gatekeeper
-  affiche « application non vérifiée » à la première ouverture du `.dmg` ; le README
-  documentera le clic droit → Ouvrir. L'updater Tauri, lui, fonctionne sans Apple (il a sa
-  propre signature). Recommandation : livrer sans notarisation en 0.x.
-- **DO2 — Windows : `.msi` seul ou aussi NSIS.** Recommandation : `.msi` seul.
-- **DO3 — Préversion.** Publier chaque release en `prerelease` tant que la version est en
-  `0.x` ? Recommandation : non, `releases/latest` doit répondre quelque chose.
+- **DR14 — Pas de notarisation Apple en 0.x.** Pas de Developer ID : Gatekeeper affiche
+  « application non vérifiée » à la première ouverture du `.dmg`, le README documente le
+  clic droit → Ouvrir. L'updater Tauri a sa propre signature (DR10) et ne dépend pas
+  d'Apple. À reconsidérer quand il y aura des utilisateurs hors du cercle.
+- **DR15 — Windows : `.msi` seul.** Pas de bundle NSIS.
+- **DR16 — Les releases `0.x` ne sont pas marquées `prerelease`.** `releases/latest` doit
+  toujours répondre : c'est ce que sondent DR6 et l'updater, et ce que télécharge
+  `install-server.sh` par défaut.
 
 ## 5. Contrat
 
@@ -365,8 +366,8 @@ jobs : `version` (vérifie semver et absence du tag, bump `package.json` + `pack
 `npm ci`, `npm run build`, `npm run package:server`, upload artefacts), `board` (matrice
 macos-14, macos-13, ubuntu-22.04, windows-latest ; `tauri-apps/tauri-action` avec
 `TAURI_SIGNING_PRIVATE_KEY` ; génère `latest.json`), `publish` (concatène `SHA256SUMS`,
-ajoute `install-server.sh`, crée la release `v<version>` avec notes générées, non
-`prerelease` sauf DO3)), `docs/chantiers/README.md`.
+ajoute `install-server.sh`, crée la release `v<version>` avec notes générées, jamais
+`prerelease` (DR16))), `docs/chantiers/README.md`.
 
 Pas de test ; vérification : une release `v0.2.0` publiée depuis le workflow, avec les
 13 assets attendus ; `curl -fsSL …/install-server.sh | sh` sur une machine sans Node
@@ -376,7 +377,7 @@ installe et `aid doctor` passe.
 
 Fichiers : `README.md` (« Installation » : télécharger AID Board, ou `install-server.sh`
 seul ; retrait de `npm i -g aidboard` et `npx aidboard` ; « Développer » : mode `repo`,
-inchangé ; DO1 : ouvrir une app non notarisée), `docs/chantiers/README.md` (§9, registre
+inchangé ; DR14 : ouvrir une app non notarisée), `docs/chantiers/README.md` (§9, registre
 des risques : « archive corrompue ou tronquée » → SHA-256 avant bascule ; « nouvelle
 version qui ne démarre pas » → `aid server use <précédente>`), `scripts/build.sh`
 (en-tête : outil du développeur, pas une installation).
