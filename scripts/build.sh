@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
-# Met à jour l'app installée (aidboard, toujours sur main) et la reconstruit.
+# Outil du développeur, pas une installation : met à jour le clone (toujours sur main), le
+# reconstruit, et sur macOS reconstruit l'app locale. Les utilisateurs passent par les releases
+# (README.md, « Installation et lancement ») ; AID Board ne connaît aucun chemin de clone.
 # Ne lance rien : juste pull + build. `aid` reste la commande pour démarrer.
 set -euo pipefail
 
@@ -39,10 +41,8 @@ npm run build
 
 if [ -d "app/src-tauri" ]; then
   echo "→ build et installation de l'app"
-  # Lu par daemon_bridge.rs au runtime (bundlé comme resource Tauri, voir tauri.conf.json) :
-  # sur une machine avec plusieurs clones aidboard liés sous des versions mise différentes,
-  # sans ce fichier un autre peut répondre à la place de celui-ci sur le PATH.
-  pwd > "app/src-tauri/repo-path.txt"
+  # Depuis le chantier 13 l'app ne porte plus de chemin de clone : elle lance
+  # ~/.aid/server/current/bin/aid, ou `aid` sur le PATH (mode développeur), voir daemon_bridge.rs.
   npm run tauri -- build
   rm -rf "/Applications/AID.app"
   cp -R "app/src-tauri/target/release/bundle/macos/AID.app" "/Applications/AID.app"

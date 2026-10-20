@@ -8,6 +8,15 @@ import { agent, json, setup, snapshot, topic, ws } from './helpers.js';
 afterEach(cleanup);
 const node = (id: string) => document.querySelector(`[data-node="${id}"]`);
 const text = (id: string) => node(id)?.textContent;
+// 13.2 : la forme de GET /api/daemon/update (UpdateInfo), mode repo par défaut
+const maj = (over: Record<string, unknown> = {}) => ({
+  mode: 'repo',
+  version: '0.1.0',
+  available: true,
+  latest: '1234567deadbeef',
+  lastError: null,
+  ...over,
+});
 
 test('loading : des squelettes tant que l’instantané n’est pas arrivé', () => {
   setup(<Accueil />, snapshot());
@@ -138,10 +147,7 @@ test('texte d’agent ou de titre : jamais interprété comme du HTML', async ()
 
 test('bandeau de mise à jour : affiché si le daemon signale origin/main en avance, absent sinon', async () => {
   const h = setup(<Accueil />, snapshot({ workspaces: [ws()], topics: [topic()] }));
-  h.respond.set(
-    'GET /api/daemon/update',
-    json(200, { available: true, localSha: 'aaa', remoteSha: '1234567deadbeef' }),
-  );
+  h.respond.set('GET /api/daemon/update', json(200, maj()));
   await screen.findByText('feat/s');
   expect(await screen.findByText('Nouvelle version d’aidboard disponible')).toBeTruthy();
   expect(text('1-1.maj.aide')).toContain('1234567');
@@ -155,10 +161,7 @@ test('bandeau de mise à jour : rien si le daemon ne sait pas ou dit à jour', a
 
 test('bandeau de mise à jour : le CTA « Mettre à jour » lance POST /api/daemon/update', async () => {
   const h = setup(<Accueil />, snapshot({ workspaces: [ws()], topics: [topic()] }));
-  h.respond.set(
-    'GET /api/daemon/update',
-    json(200, { available: true, localSha: 'aaa', remoteSha: '1234567deadbeef' }),
-  );
+  h.respond.set('GET /api/daemon/update', json(200, maj()));
   h.respond.set('POST /api/daemon/update', json(202, { updating: true, agents: 0 }));
   await screen.findByText('feat/s');
   await screen.findByText('Nouvelle version d’aidboard disponible');
@@ -170,10 +173,7 @@ test('bandeau de mise à jour : le CTA « Mettre à jour » lance POST /api/daem
 
 test('bandeau de mise à jour : un échec signalé après coup (lastError) sort du blocage « Mise à jour… »', async () => {
   const h = setup(<Accueil />, snapshot({ workspaces: [ws()], topics: [topic()] }));
-  h.respond.set(
-    'GET /api/daemon/update',
-    json(200, { available: true, localSha: 'aaa', remoteSha: '1234567deadbeef' }),
-  );
+  h.respond.set('GET /api/daemon/update', json(200, maj()));
   h.respond.set('POST /api/daemon/update', json(202, { updating: true, agents: 0 }));
   await screen.findByText('feat/s');
   await screen.findByText('Nouvelle version d’aidboard disponible');
@@ -183,12 +183,7 @@ test('bandeau de mise à jour : un échec signalé après coup (lastError) sort 
   // service sur l'ancien build et ne redémarre pas — seul un nouveau GET le révèle.
   h.respond.set(
     'GET /api/daemon/update',
-    json(200, {
-      available: true,
-      localSha: 'aaa',
-      remoteSha: '1234567deadbeef',
-      lastError: 'mise à jour échouée (pull) : divergent',
-    }),
+    json(200, maj({ lastError: 'mise à jour échouée (pull) : divergent' })),
   );
   await waitFor(() => expect(text('1-1.maj.erreur')).toContain('divergent'), { timeout: 4000 });
   expect(text('1-1.maj.lancer')).toBe('Mettre à jour');
@@ -196,10 +191,7 @@ test('bandeau de mise à jour : un échec signalé après coup (lastError) sort 
 
 test('bandeau de mise à jour : un agent vivant (409) propose de forcer, qui relance avec force: true', async () => {
   const h = setup(<Accueil />, snapshot({ workspaces: [ws()], topics: [topic()] }));
-  h.respond.set(
-    'GET /api/daemon/update',
-    json(200, { available: true, localSha: 'aaa', remoteSha: '1234567deadbeef' }),
-  );
+  h.respond.set('GET /api/daemon/update', json(200, maj()));
   h.respond.set(
     'POST /api/daemon/update',
     json(409, { error: '1 agent(s) tournent encore', agents: [{ id: 'ag_1', kind: 'shell' }] }),
@@ -220,4 +212,15 @@ test('bandeau de mise à jour : un agent vivant (409) propose de forcer, qui rel
       ),
     ).toBe(true),
   );
+});
+
+test('bandeau de mise à jour (13.2) : en mode release, le titre nomme la version publiée et l’aide la version installée', async () => {
+  const h = setup(<Accueil />, snapshot({ workspaces: [ws()], topics: [topic()] }));
+  h.respond.set(
+    'GET /api/daemon/update',
+    json(200, maj({ mode: 'release', version: '0.2.0', latest: '0.3.0' })),
+  );
+  await screen.findByText('feat/s');
+  expect(await screen.findByText('AID Server 0.3.0 disponible')).toBeTruthy();
+  expect(text('1-1.maj.aide')).toBe('Version installée : 0.2.0.');
 });

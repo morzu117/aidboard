@@ -12,7 +12,8 @@ import type { EventStore } from './events/store.js';
 import type { AgentManager } from './pty/manager.js';
 import { AidHttpError } from './errors.js';
 import type { AidPaths } from './paths.js';
-import type { UpdateStatus } from './updateCheck.js';
+import type { WatchStatus } from './updateWatcher.js';
+import type { InstallMode } from '../shared/model.js';
 import { WorkspaceQueue } from './actions/queue.js';
 import { StructuralService } from './structural/service.js';
 import { Indexer } from './topics/index.js';
@@ -49,8 +50,10 @@ export interface ServerDeps {
   requestStop?: () => void;
   requestUpdate?: () => void;
   requestCycle?: () => void;
-  updates?: () => UpdateStatus | null;
+  updates?: () => WatchStatus | null;
   updateError?: () => string | null;
+  /** 13.2 : mode d'installation et version du build (DR5) ; absent dans les tests de routes */
+  install?: () => { mode: InstallMode; version: string };
   devOrigin?: string;
   webRoot?: string | null;
   logger?: boolean;
@@ -117,6 +120,7 @@ export async function buildServer(deps: ServerDeps): Promise<FastifyInstance> {
     requestCycle: deps.requestCycle,
     updates: deps.updates,
     updateError: deps.updateError,
+    install: deps.install,
     resetSession: () => {
       deps.auth.sessionToken = writeSessionToken(deps.paths.sessionSecret);
     },

@@ -154,3 +154,21 @@ test('Consignes : par projet, fichiers présents, bloc et noyau ; un bloc en ret
   );
   expect(node('consignes.projet-2.retard')).toBeNull();
 });
+
+test('Réglages (13.2) : la section Version montre AID Server, son mode et la version disponible', async () => {
+  const h = setup(<Reglages />, deux());
+  h.respond.set(
+    'GET /api/daemon/update',
+    json(200, {
+      mode: 'release',
+      version: '0.2.0',
+      available: true,
+      latest: '0.3.0',
+      lastError: null,
+    }),
+  );
+  await screen.findByText('api');
+  await waitFor(() => expect(text('reglages.version.serveur')).toBe('AID Server 0.2.0'));
+  expect(text('reglages.version.mode')).toContain('releases GitHub');
+  expect(text('reglages.version.mode')).toContain('0.3.0 disponible');
+});

@@ -2,7 +2,8 @@ import { Type } from '@sinclair/typebox';
 import type { FastifyInstance } from 'fastify';
 import type { Db } from '../db.js';
 import { AidHttpError } from '../errors.js';
-import type { UpdateStatus } from '../updateCheck.js';
+import type { WatchStatus } from '../updateWatcher.js';
+import type { InstallMode, UpdateInfo } from '../../shared/model.js';
 
 const LIVE = ['starting', 'working', 'needs_input', 'idle'];
 const Body = Type.Optional(
@@ -24,18 +25,27 @@ export function registerDaemonRoutes(
     requestStop: () => void;
     requestUpdate?: () => void;
     requestCycle?: () => void;
-    updates?: () => UpdateStatus | null;
+    updates?: () => WatchStatus | null;
     updateError?: () => string | null;
+    /** 13.2 : mode d'installation et version du build qui tourne (DR5) */
+    install?: () => { mode: InstallMode; version: string };
     resetSession?: () => void;
   },
 ): void {
   // `lastError` reflète la dernière tentative de MAJ (pull ou build), pas la comparaison git
   // d'`updates` : sans lui, un échec silencieux côté daemon laisse le bouton de l'UI bloqué sans
   // jamais dire pourquoi (constaté : `git pull --ff-only` refusé par historique divergent).
-  app.get('/api/daemon/update', async () => ({
-    ...(deps.updates?.() ?? { available: false }),
-    lastError: deps.updateError?.() ?? null,
-  }));
+  app.get('/api/daemon/update', async (): Promise<UpdateInfo> => {
+    const status = deps.updates?.() ?? null;
+    const install = deps.install?.() ?? { mode: 'inconnu' as const, version: '0.0.0' };
+    return {
+      mode: install.mode,
+      version: install.version,
+      available: status?.available ?? false,
+      latest: status?.available ? status.latest : null,
+      lastError: deps.updateError?.() ?? null,
+    };
+  });
   // révoque toutes les sessions navigateur (aid open --reset) ; le jeton admin n'est pas touché
   app.post('/api/session/reset', async (_req, reply) => {
     if (!deps.resetSession) throw new AidHttpError(501, 'révocation non disponible');

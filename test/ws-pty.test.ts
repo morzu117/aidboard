@@ -186,11 +186,14 @@ test('un client qui ne lit plus est coupé et le PTY continue pour les autres', 
   slow.ws.pause();
   const other = await Client.open(agent.id);
   await other.hello();
+  // 24 Mo : largement au-delà de SLOW_CLIENT_BYTES (4 Mio) plus ce que les tampons TCP du
+  // noyau absorbent (jusqu'à ~10 Mo sous Linux), sans parser 60 Mo deux fois par xterm (miroir
+  // du daemon et réplique du test) — c'était ce qui dépassait 8 s sous charge.
   slow.send({
     t: 'in',
-    d: 'yes xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx | head -c 60000000; echo "FIN""FLOT"\n',
+    d: 'yes xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx | head -c 24000000; echo "FIN""FLOT"\n',
   });
-  expect(await other.seen('FINFLOT')).toBe(true);
+  expect(await other.seen('FINFLOT', 20_000)).toBe(true);
   const count = () =>
     (c.t.d.app as unknown as { websocketServer: { clients: Set<unknown> } }).websocketServer.clients
       .size;
@@ -203,7 +206,9 @@ test('un client qui ne lit plus est coupé et le PTY continue pour les autres', 
   fresh.send({ t: 'claim' });
   fresh.send({ t: 'in', d: 'echo "TOUJOURS""VIVANT"\n' });
   expect(await fresh.seen('TOUJOURSVIVANT')).toBe(true);
-});
+  // Ses propres attentes vont jusqu'à 20 s : le budget du test doit les couvrir — sous charge
+  // (runner CI, machine occupée) les 5 s par défaut tombaient en timeout.
+}, 60_000);
 
 test('la sortie de l’agent est annoncée aux clients connectés et à ceux qui arrivent après', async () => {
   const { agent } = await start(FAKE_AGENT);

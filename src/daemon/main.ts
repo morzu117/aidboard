@@ -34,7 +34,9 @@ import { buildServer } from './server.js';
 import { StructuralService } from './structural/service.js';
 import { Indexer } from './topics/index.js';
 import { rattraperIndex } from './topics/rattrapage.js';
-import { UpdateWatcher } from './updateWatcher.js';
+import { UpdateWatcher, type WatchStatus } from './updateWatcher.js';
+import { installMode } from './install.js';
+import { readVersion } from '../cli/version.js';
 import type { IndexEngine } from '../shared/structural.js';
 
 export class AidPortInUse extends Error {
@@ -51,6 +53,8 @@ export interface DaemonHandle {
   store: EventStore;
   agents: AgentManager;
   memory: MemoryService;
+  /** 13.4 : ce que le watcher sait d'une mise à jour (null : rien, ou vérification coupée) */
+  updates: () => WatchStatus | null;
   stop(): Promise<void>;
 }
 
@@ -180,10 +184,20 @@ export async function startDaemon(
     });
     const devOrigin = process.env.AID_DEV_ORIGIN;
     if (devOrigin) console.error(`AID_DEV_ORIGIN actif : ${devOrigin} accepté comme origine`);
+    // 13.2 (DR5) : lu une fois, le build ne bouge pas sous un daemon qui tourne
+    const install = {
+      mode: installMode(dirname(fileURLToPath(import.meta.url)), paths.home),
+      version: readVersion(),
+    };
+    // 13.4 : la stratégie de vérification suit le mode (git ls-remote ou releases GitHub)
     const updates =
       opts.checkUpdates === false
         ? null
-        : new UpdateWatcher(dirname(fileURLToPath(import.meta.url)));
+        : new UpdateWatcher({
+            mode: install.mode,
+            from: dirname(fileURLToPath(import.meta.url)),
+            version: install.version,
+          });
     // config.structural est la source par défaut (08.3) ; codegraphBin/structuralEngine
     // restent des surcharges directes de startDaemon pour les tests (comme codegraphBin
     // le faisait déjà avant que la clé de config existe).
@@ -211,6 +225,7 @@ export async function startDaemon(
       requestCycle: opts.onCycleRequested,
       updates: () => updates?.status() ?? null,
       updateError: opts.updateError,
+      install: () => install,
       devOrigin,
       logger: opts.logger,
     });
@@ -244,6 +259,7 @@ export async function startDaemon(
       store,
       agents,
       memory,
+      updates: () => updates?.status() ?? null,
       async stop() {
         await agents.stopAll('daemon_stop', 5000);
         agents.dispose();

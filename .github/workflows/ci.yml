@@ -1,0 +1,34 @@
+# Chantier 13.1 — le gate complet sur chaque PR et sur main, sous les deux Node supportés (D4).
+# Le même `npm run gate` que la Definition of Done : typecheck, lint, build, tests.
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  gate:
+    name: gate (node ${{ matrix.node }})
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ['22', '24']
+    # Pas d'AID_HOME global : chaque test pose le sien, et pty-spawn vérifie la liste exacte des
+    # AID_* vues par l'agent — une variable ambiante la fausse (constaté sur la première CI, PR #46).
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+      # node-pty et better-sqlite3 se compilent depuis les sources quand aucun binaire prébuilt ne correspond
+      - run: sudo apt-get update && sudo apt-get install -y build-essential python3
+      - run: npm ci
+      - run: npm run gate

@@ -74,6 +74,13 @@ test('aperçu : les dernières lignes non vides de l’écran, bornées', async 
 
 test('aperçu : une ligne de bordure (─) n’écrase pas le vrai contenu', async () => {
   const { live, inject } = await spawn('shell');
+  // Attendre la première invite : un `sh -l` lent (dash sous Linux, CI) lit la commande déjà
+  // tapée après avoir affiché son invite, et « contenu » sort collé à celle-ci (« $ contenu »).
+  await waitFor(
+    () => /[$#%] ?$/.test(live.mirror.screen().filter(Boolean).at(-1) ?? ''),
+    5000,
+    'invite',
+  );
   live.pty.write("echo contenu; echo '──────'\r");
   await waitFor(() => live.mirror.screen().some((l) => l === '──────'), 5000, 'bordure');
   const lines = (await inject('GET', 'screen?lines=6')).json().lines as string[];
