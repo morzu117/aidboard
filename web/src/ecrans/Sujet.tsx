@@ -509,7 +509,7 @@ function Contenu({ topicId }: { topicId: string }) {
         <SelecteurBranche topicId={topic.id} onClose={() => setSelecteurBranche(false)} />
       )}
       {topic.state === 'draft' || topic.worktreeMissing ? (
-        <div className="sujet-grille">
+        <div className="sujet-grille sujet-grille--seul">
           <div className="colonne">
             {topic.state === 'draft' ? (
               <section className="zone-erreur" data-node="1-3.preparation">
@@ -572,8 +572,6 @@ function Contenu({ topicId }: { topicId: string }) {
                 </div>
               </section>
             )}
-          </div>
-          <div className="colonne">
             <Memoire
               namespace={workspace?.namespace ?? workspace?.name ?? ''}
               topicSlug={topic.slug}
@@ -618,7 +616,8 @@ function Contenu({ topicId }: { topicId: string }) {
             </button>
           </div>
           {/* Toujours monté, juste masqué : un démontage reconnecterait les terminaux. */}
-          <div className="sujet-grille" hidden={onglet !== 'agents'}>
+          {/* Une seule colonne : la mémoire sous les terminaux, en pleine largeur. */}
+          <div className="sujet-grille sujet-grille--seul" hidden={onglet !== 'agents'}>
             <div className="colonne">
               {agents.length === 0 ? (
                 <section className="vide" data-node="1-3.vide">
@@ -722,8 +721,6 @@ function Contenu({ topicId }: { topicId: string }) {
                   ))}
                 </section>
               )}
-            </div>
-            <div className="colonne">
               <Memoire
                 namespace={workspace?.namespace ?? workspace?.name ?? ''}
                 topicSlug={topic.slug}
