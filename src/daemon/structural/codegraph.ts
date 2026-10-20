@@ -82,6 +82,12 @@ export class CodegraphIndex implements StructuralIndex {
     return spawn(this.bin, ['init', '-y', root], { cwd: root, stdio: ['ignore', log, log] });
   }
 
+  // `sync` est, comme `status`, à chemin positionnel ; `-q` est l'option prévue pour les hooks
+  // git, elle convient aussi à un lancement sans terminal.
+  sync(root: string, log: number): ChildProcess {
+    return spawn(this.bin, ['sync', '-q', root], { cwd: root, stdio: ['ignore', log, log] });
+  }
+
   async status(root: string): Promise<IndexStatus> {
     const r = await run(this.bin, ['status', root, '-j'], { cwd: root, timeoutMs: this.timeoutMs });
     if (!r.ok) return this.unavailable(this.reasonFor(r));

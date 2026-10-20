@@ -106,6 +106,12 @@ chez les agents (il reste utilisable en parallèle le temps de la transition).
   `aid` (`McpServer({ name: 'aid' })`), et `aid doctor` avertit si la configuration Claude
   Code (`~/.claude.json`) pointe encore `aid-memory`. Les enregistrements existants cassent
   une fois ; c'est accepté (décidé le 2026-10-17).
+- **DS11 — Le daemon relance le moteur à son démarrage** (08.8, demandé le 2026-10-20). Sur
+  chaque sujet vivant (`active`, `review`) dont le worktree existe : `sync` si le worktree a
+  déjà son index, `init` s'il est `disabled` mais que le dépôt principal a adopté l'index
+  depuis (D6 appliquée après coup — c'est ce qui manquait à `a-i-d`, indexé après la création
+  de ses sujets). Un sujet à la fois, en tâche de fond après `listen`, jamais bloquant.
+  Entre deux démarrages, `sync` reste à l'initiative des hooks git du moteur (§3).
 
 Ce que l'exécutant ne décide pas : le nom des outils MCP ci-dessous, le nom de la clé de
 config `structural`, la portée d'un token de run.
@@ -292,6 +298,23 @@ tokens par réponse).
 
 Pas de test ; vérification : `npm run gate` (lint markdown inclus s'il y en a un).
 
+### 08.8 — Rattrapage de l'index au démarrage du daemon
+
+Fichiers : `src/daemon/structural/types.ts` et `codegraph.ts` (`sync(root, log)` :
+`codegraph sync -q <chemin>`, même cycle de vie que `init`), `src/daemon/structural/service.ts`
+(`sync`), `src/daemon/topics/index.ts` (`init`/`sync` rendent une promesse `ready | failed`,
+`start` reste l'appel ignoré des routes ; le descripteur du journal est fermé à la fin),
+`src/daemon/topics/rattrapage.ts` (nouveau : `rattraperIndex`, DS11), `src/daemon/main.ts`
+(construit l'`Indexer`, le passe à `buildServer`, lance le rattrapage après `listen` comme
+`resumeFromManifest`), `src/daemon/server.ts` (`deps.indexer` facultatif),
+`test/fixtures/fake-codegraph.sh` (`sync` dépose `.codegraph/synced`),
+`test/structural-rattrapage.test.ts` (nouveau).
+
+Tests : worktree indexé → `indexing` puis `ready` et marqueur déposé, sans `init` ; sujet
+`disabled` dont le dépôt principal gagne `.codegraph/` → `init` au redémarrage, `ready` ;
+`sync` en échec → `failed` ; moteur `off` → aucun événement ; sujet sans index ni dépôt
+indexé, ou worktree disparu → ignoré. Vérification : `npm run gate`.
+
 ## 7. Pièges
 
 - Le bootstrap d'agent-kernel enregistre encore l'ancien nom
@@ -325,6 +348,8 @@ Pas de test ; vérification : `npm run gate` (lint markdown inclus s'il y en a u
   et avertit si `~/.claude.json` enregistre encore `aid-memory`.
 - `GET /api/state` porte `index` par sujet ; `CarteSujet` l'affiche.
 - `config.yaml` avec `structural.engine: off` donne un daemon sans aucune trace du moteur.
+- Un daemon redémarré sur des sujets indexés les repasse `indexing → ready` sans action
+  humaine ; un sujet `disabled` d'un dépôt indexé depuis se met à jour de même (08.8).
 - `npm run gate` vert ; aucune page `aid mem` écrite par le chantier.
 - README §9 liste le chantier 08 avec sa base, sa dépendance (06) et ce qu'il prépare
   (pont mémoire ↔ code, banc Kivgraph).

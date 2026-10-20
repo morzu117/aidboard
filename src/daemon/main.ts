@@ -32,6 +32,8 @@ import { reconcileNamespaces } from './routes/workspaces.js';
 import { type AuthState, createAuthState, loadSessionToken } from './security.js';
 import { buildServer } from './server.js';
 import { StructuralService } from './structural/service.js';
+import { Indexer } from './topics/index.js';
+import { rattraperIndex } from './topics/rattrapage.js';
 import { UpdateWatcher } from './updateWatcher.js';
 import type { IndexEngine } from '../shared/structural.js';
 
@@ -191,6 +193,8 @@ export async function startDaemon(
       timeoutMs: config.structural.timeoutMs,
       exclude: config.structural.exclude,
     });
+    // 08.8 : construit ici, et non dans buildServer, pour lancer le rattrapage après `listen`
+    const indexer = new Indexer({ store, paths, engine: structural });
     const app = await buildServer({
       config,
       auth,
@@ -201,6 +205,7 @@ export async function startDaemon(
       memoryProposals: proposals,
       paths,
       structural,
+      indexer,
       requestStop: opts.onStopRequested,
       requestUpdate: opts.onUpdateRequested,
       requestCycle: opts.onCycleRequested,
@@ -229,6 +234,8 @@ export async function startDaemon(
     );
     // en tâche de fond : ne bloque jamais le démarrage (même esprit que UpdateWatcher ci-dessus).
     void resumeFromManifest(agents, paths);
+    // 08.8 : même esprit — le moteur rattrape chaque sujet en tâche de fond, un à la fois
+    void rattraperIndex({ db: opened, store, engine: structural, indexer, log });
     return {
       app,
       port,
