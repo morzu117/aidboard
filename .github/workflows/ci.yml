@@ -20,9 +20,8 @@ jobs:
       fail-fast: false
       matrix:
         node: ['22', '24']
-    env:
-      # jamais le vrai ~/.aid d'un runner ; les tests posent le leur, celui-ci couvre la CLI hors test
-      AID_HOME: ${{ github.workspace }}/.aid-ci
+    # Pas d'AID_HOME global : chaque test pose le sien, et pty-spawn vérifie la liste exacte des
+    # AID_* vues par l'agent — une variable ambiante la fausse (constaté sur la première CI, PR #46).
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
