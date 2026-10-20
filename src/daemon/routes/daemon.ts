@@ -25,10 +25,17 @@ export function registerDaemonRoutes(
     requestUpdate?: () => void;
     requestCycle?: () => void;
     updates?: () => UpdateStatus | null;
+    updateError?: () => string | null;
     resetSession?: () => void;
   },
 ): void {
-  app.get('/api/daemon/update', async () => deps.updates?.() ?? { available: false });
+  // `lastError` reflète la dernière tentative de MAJ (pull ou build), pas la comparaison git
+  // d'`updates` : sans lui, un échec silencieux côté daemon laisse le bouton de l'UI bloqué sans
+  // jamais dire pourquoi (constaté : `git pull --ff-only` refusé par historique divergent).
+  app.get('/api/daemon/update', async () => ({
+    ...(deps.updates?.() ?? { available: false }),
+    lastError: deps.updateError?.() ?? null,
+  }));
   // révoque toutes les sessions navigateur (aid open --reset) ; le jeton admin n'est pas touché
   app.post('/api/session/reset', async (_req, reply) => {
     if (!deps.resetSession) throw new AidHttpError(501, 'révocation non disponible');

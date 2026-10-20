@@ -48,6 +48,7 @@ export interface ServerDeps {
   requestUpdate?: () => void;
   requestCycle?: () => void;
   updates?: () => UpdateStatus | null;
+  updateError?: () => string | null;
   devOrigin?: string;
   webRoot?: string | null;
   logger?: boolean;
@@ -113,6 +114,7 @@ export async function buildServer(deps: ServerDeps): Promise<FastifyInstance> {
     requestUpdate: deps.requestUpdate,
     requestCycle: deps.requestCycle,
     updates: deps.updates,
+    updateError: deps.updateError,
     resetSession: () => {
       deps.auth.sessionToken = writeSessionToken(deps.paths.sessionSecret);
     },

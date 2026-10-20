@@ -168,6 +168,32 @@ test('bandeau de mise à jour : le CTA « Mettre à jour » lance POST /api/daem
   );
 });
 
+test('bandeau de mise à jour : un échec signalé après coup (lastError) sort du blocage « Mise à jour… »', async () => {
+  const h = setup(<Accueil />, snapshot({ workspaces: [ws()], topics: [topic()] }));
+  h.respond.set(
+    'GET /api/daemon/update',
+    json(200, { available: true, localSha: 'aaa', remoteSha: '1234567deadbeef' }),
+  );
+  h.respond.set('POST /api/daemon/update', json(202, { updating: true, agents: 0 }));
+  await screen.findByText('feat/s');
+  await screen.findByText('Nouvelle version d’aidboard disponible');
+  await userEvent.click(node('1-1.maj.lancer')!);
+  await waitFor(() => expect(text('1-1.maj.lancer')).toBe('Mise à jour…'));
+  // La tentative en cours échoue côté daemon (pull refusé, build qui plante…) : il reste en
+  // service sur l'ancien build et ne redémarre pas — seul un nouveau GET le révèle.
+  h.respond.set(
+    'GET /api/daemon/update',
+    json(200, {
+      available: true,
+      localSha: 'aaa',
+      remoteSha: '1234567deadbeef',
+      lastError: 'mise à jour échouée (pull) : divergent',
+    }),
+  );
+  await waitFor(() => expect(text('1-1.maj.erreur')).toContain('divergent'), { timeout: 4000 });
+  expect(text('1-1.maj.lancer')).toBe('Mettre à jour');
+}, 6000);
+
 test('bandeau de mise à jour : un agent vivant (409) propose de forcer, qui relance avec force: true', async () => {
   const h = setup(<Accueil />, snapshot({ workspaces: [ws()], topics: [topic()] }));
   h.respond.set(

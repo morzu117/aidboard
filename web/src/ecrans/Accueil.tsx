@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { Agent } from '../../../src/shared/model.js';
 import { AidApiError } from '../data/api.js';
 import { useAid } from '../data/useAidState.js';
@@ -98,16 +98,19 @@ function BandeauDaemon() {
 }
 
 const MAJ_CHECK_MS = 30 * 60_000;
+const MAJ_POLL_MS = 3_000;
+const MAJ_TIMEOUT_MS = 5 * 60_000;
 
 type EtatMaj = 'idle' | 'en-cours' | 'confirmer' | 'erreur';
 
 /** Compare au daemon : origin/main a-t-il avancé depuis le build que ce daemon sert ? */
 function BandeauMaj() {
-  const { call } = useAid();
+  const { call, daemon } = useAid();
   const [remoteSha, setRemoteSha] = useState<string | null>(null);
   const [etat, setEtat] = useState<EtatMaj>('idle');
   const [agentsVivants, setAgentsVivants] = useState(0);
   const [erreur, setErreur] = useState<string | null>(null);
+  const dejaDeconnecte = useRef(false);
   useEffect(() => {
     let off = false;
     const load = () =>
@@ -123,6 +126,50 @@ function BandeauMaj() {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+  // Le pull+build tourne sur ce daemon pendant qu'il sert encore ; il ne sort (et ne relance) que
+  // s'ils réussissent — un échec le laisse tourner. Le succès se voit donc à la connexion qui
+  // tombe puis revient (session cookie survivant au redémarrage) : on recharge la page pour
+  // prendre le nouveau build. Sans ce guet, le bouton restait bloqué sur « Mise à jour… » même
+  // une fois le nouveau daemon prêt.
+  useEffect(() => {
+    if (etat !== 'en-cours') {
+      dejaDeconnecte.current = false;
+      return;
+    }
+    if (daemon !== 'connecte') {
+      dejaDeconnecte.current = true;
+      return;
+    }
+    if (dejaDeconnecte.current) window.location.reload();
+  }, [etat, daemon]);
+  // Un échec (pull refusé, build qui plante) ne fait pas sortir le daemon : on ne l'apprend qu'en
+  // republiant l'état, qui porte `lastError` depuis la tentative en cours. Le garde-fou de temps
+  // couvre le cas où ni l'erreur ni la reconnexion n'arrivent (constaté une fois : 10 min bloqué
+  // sur un historique local divergent, invisible ailleurs que dans daemon.log).
+  useEffect(() => {
+    if (etat !== 'en-cours') return;
+    let off = false;
+    const deadline = Date.now() + MAJ_TIMEOUT_MS;
+    const poll = () =>
+      call<{ lastError?: string | null }>('GET', '/api/daemon/update').then(
+        (r) => {
+          if (off) return;
+          if (r.lastError) {
+            setEtat('erreur');
+            setErreur(r.lastError);
+          } else if (Date.now() > deadline) {
+            setEtat('erreur');
+            setErreur('la mise à jour prend trop de temps — vérifie le daemon directement.');
+          }
+        },
+        () => {},
+      );
+    const timer = setInterval(poll, MAJ_POLL_MS);
+    return () => {
+      off = true;
+      clearInterval(timer);
+    };
+  }, [etat, call]);
   if (remoteSha === null) return null;
 
   const lancer = (force: boolean) => {

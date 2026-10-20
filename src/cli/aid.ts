@@ -82,11 +82,16 @@ async function main(): Promise<number> {
       let stopRequested: () => void = () => undefined;
       let updateRequested: () => void = () => undefined;
       let cycleRequested: () => void = () => undefined;
+      // Lu par GET /api/daemon/update (champ `lastError`) : sans ça, un échec de pull ou de build
+      // n'est visible que dans daemon.log, et le bouton « Mettre à jour » de l'UI reste bloqué
+      // indéfiniment sans dire pourquoi (constaté : `git pull --ff-only` refusé, historique divergent).
+      let lastUpdateError: string | null = null;
       const handle = await startDaemon({
         logger: true,
         onStopRequested: () => stopRequested(),
         onUpdateRequested: () => updateRequested(),
         onCycleRequested: () => cycleRequested(),
+        updateError: () => lastUpdateError,
       }).catch((err: Error) => {
         console.error(err.message);
         process.exit(1);
@@ -96,16 +101,19 @@ async function main(): Promise<number> {
       // Bouton « Mettre à jour » de l'UI : pull + build pendant que ce daemon sert encore, puis
       // seulement s'ils réussissent, relance et sort. Un échec laisse l'ancien build tourner.
       updateRequested = () => {
+        lastUpdateError = null;
         void (async () => {
           const entry = realpathSync(process.argv[1] ?? '');
           const dir = repoRootFrom(dirname(entry));
           if (!dir) {
-            console.error('mise à jour : dépôt introuvable depuis le build en cours');
+            lastUpdateError = 'dépôt introuvable depuis le build en cours';
+            console.error(`mise à jour : ${lastUpdateError}`);
             return;
           }
           const result = await pullAndBuild(dir);
           if (!result.ok) {
-            console.error(`mise à jour échouée (${result.step}) : ${result.error}`);
+            lastUpdateError = `mise à jour échouée (${result.step}) : ${result.error}`;
+            console.error(lastUpdateError);
             return;
           }
           spawnRespawnWatcher(process.pid, entry, paths.home);
