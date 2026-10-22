@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { describe, expect, test } from 'vitest';
+import { describe, expect, test, vi } from 'vitest';
 import { kernelInstall, runKernel, type KernelPaths } from '../src/cli/commands/kernel.js';
 
 const tmp = () => mkdtempSync(join(tmpdir(), 'aid-kernel-'));
@@ -21,9 +21,28 @@ function write(path: string, content: string): void {
 }
 
 describe('kernelInstall (chantier 09.2)', () => {
-  test('source absente : rien à écrire, rien à retirer', () => {
+  test('source absente : refuse, et ne vide pas la cible', () => {
     const p = paths();
-    expect(kernelInstall(p)).toEqual({ written: [], removed: [], syncCommandWritten: false });
+    write(join(p.targetDir, 'defaults.yml'), 'local');
+    expect(() => kernelInstall(p)).toThrow(/absent ou vide/);
+    expect(readFileSync(join(p.targetDir, 'defaults.yml'), 'utf8')).toBe('local');
+  });
+
+  test('source vide : refuse, et ne vide pas la cible', () => {
+    const p = paths();
+    mkdirSync(p.sourceDir, { recursive: true });
+    write(join(p.targetDir, 'defaults.yml'), 'local');
+    expect(() => kernelInstall(p)).toThrow(/absent ou vide/);
+    expect(existsSync(join(p.targetDir, 'defaults.yml'))).toBe(true);
+  });
+
+  test('runKernel : source absente, code 1', () => {
+    const p = paths();
+    write(join(p.targetDir, 'defaults.yml'), 'local');
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    expect(runKernel('install', [], p, () => {})).toBe(1);
+    spy.mockRestore();
+    expect(existsSync(join(p.targetDir, 'defaults.yml'))).toBe(true);
   });
 
   test('premier install : copie tous les fichiers de la source', () => {

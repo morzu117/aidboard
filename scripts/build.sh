@@ -33,8 +33,8 @@ git pull --ff-only origin main
 echo "→ mise install"
 mise install
 
-echo "→ npm install"
-npm install
+echo "→ npm ci"
+npm ci
 
 echo "→ npm run build"
 npm run build

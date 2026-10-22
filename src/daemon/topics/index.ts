@@ -23,6 +23,7 @@ type Outcome = 'ready' | 'failed';
 // L'indexation tourne à part : le sujet est utilisable tout de suite, son état d'index change ensuite.
 export class Indexer {
   private running = new Set<ChildProcess>();
+  private stopped = false;
 
   constructor(private readonly deps: IndexerDeps) {}
 
@@ -48,6 +49,9 @@ export class Indexer {
     topic: IndexedTopic,
     spawnChild: (worktree: string, log: number) => ChildProcess,
   ): Promise<Outcome> {
+    // Après stop() (arrêt du daemon, base sur le point de se fermer) : aucun nouveau processus, il resterait
+    // orphelin. Rien n'est écrit non plus.
+    if (this.stopped) return Promise.resolve('failed');
     const { store, paths } = this.deps;
     const log = openSync(join(paths.logs, `${topic.id}-index.log`), 'a', 0o600);
     const report = (indexState: Outcome) =>
@@ -96,6 +100,7 @@ export class Indexer {
   }
 
   stop(): void {
+    this.stopped = true;
     for (const child of this.running) child.kill('SIGTERM');
     this.running.clear();
   }

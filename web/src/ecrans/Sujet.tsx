@@ -618,8 +618,8 @@ function Contenu({ topicId }: { topicId: string }) {
               Fichiers
             </button>
           </div>
-          {/* Toujours monté, juste masqué : un démontage reconnecterait les terminaux. */}
-          {/* Une seule colonne : la mémoire sous les terminaux, en pleine largeur. */}
+          {/* Toujours monté, juste masqué : un démontage reconnecterait les terminaux. Une seule colonne :
+              la mémoire sous les terminaux, en pleine largeur. */}
           <div className="sujet-grille sujet-grille--seul" hidden={onglet !== 'agents'}>
             <div className="colonne">
               {agents.length === 0 ? (

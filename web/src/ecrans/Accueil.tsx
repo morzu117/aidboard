@@ -152,7 +152,12 @@ function BandeauMaj() {
   useEffect(() => {
     if (etat !== 'en-cours') return;
     let off = false;
-    const deadline = Date.now() + MAJ_TIMEOUT_MS;
+    const trop = () => {
+      setEtat('erreur');
+      setErreur('la mise à jour prend trop de temps — vérifie le daemon directement.');
+    };
+    // L'échéance ne dépend pas du poll : si le daemon tombe et ne revient pas, le poll échoue en silence.
+    const echeance = setTimeout(() => !off && trop(), MAJ_TIMEOUT_MS);
     const poll = () =>
       call<{ lastError?: string | null }>('GET', '/api/daemon/update').then(
         (r) => {
@@ -160,9 +165,6 @@ function BandeauMaj() {
           if (r.lastError) {
             setEtat('erreur');
             setErreur(r.lastError);
-          } else if (Date.now() > deadline) {
-            setEtat('erreur');
-            setErreur('la mise à jour prend trop de temps — vérifie le daemon directement.');
           }
         },
         () => {},
@@ -170,6 +172,7 @@ function BandeauMaj() {
     const timer = setInterval(poll, MAJ_POLL_MS);
     return () => {
       off = true;
+      clearTimeout(echeance);
       clearInterval(timer);
     };
   }, [etat, call]);

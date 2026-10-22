@@ -20,8 +20,8 @@ export function NouveauWorkspace({ onClose, onDone }: { onClose: () => void; onD
   const start = last ? last.slice(0, last.lastIndexOf('/')) || '/' : undefined;
 
   async function submit(e: FormEvent) {
-    if (path === null) return;
     e.preventDefault();
+    if (path === null) return;
     setBusy(true);
     setError(null);
     try {

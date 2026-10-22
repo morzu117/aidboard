@@ -222,9 +222,10 @@ function parseMesh(raw: unknown, cfg: MeshConfig): void {
   if (raw.bin !== undefined) cfg.bin = str(raw.bin, 'mesh.bin');
   if (raw.cell !== undefined) {
     cfg.cell = strOrEmpty(raw.cell, 'mesh.cell');
-    if (!/^[A-Za-z0-9._-]*$/.test(cfg.cell)) {
+    // `.` et `..` passent le motif mais sortiraient de ~/.config/swarph une fois collés dans un chemin
+    if (!/^[A-Za-z0-9._-]*$/.test(cfg.cell) || cfg.cell === '.' || cfg.cell === '..') {
       throw new ConfigError(
-        'config.yaml : mesh.cell — lettres, chiffres, point, tiret et souligné seulement',
+        'config.yaml : mesh.cell — lettres, chiffres, point, tiret et souligné seulement (ni « . » ni « .. »)',
       );
     }
   }

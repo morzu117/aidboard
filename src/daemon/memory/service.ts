@@ -191,8 +191,9 @@ export class MemoryService {
     for (const page of this.deps.store.all()) {
       if (scope !== 'all' && page.namespace !== scope && page.namespace !== LESSON_NS) continue;
       const path = join(dir, `${page.slug}.md`);
-      mkdirSync(dirname(path), { recursive: true });
-      writeFileSync(path, renderMarkdown(page));
+      // même contrat que le miroir : une mémoire peut contenir des éléments sensibles
+      mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
+      writeFileSync(path, renderMarkdown(page), { mode: 0o600 });
       n++;
     }
     return n;

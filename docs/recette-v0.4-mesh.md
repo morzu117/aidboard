@@ -103,3 +103,8 @@ Constaté sur ce poste en lançant `npm run gate:e2e` (rien de propre au mesh, m
 - depuis une session lancée par A-I-D, les `AID_*` exportées (jeton de run limité au namespace
   `aid`) sont héritées par `aid mem put` dans `e2e/memoire.spec.ts` (« interdit : namespace … ») et
   par `test/pty-spawn.test.ts` : retirer toutes les `AID_*` de l'environnement avant le gate.
+
+**Pas de reprise automatique.** Si Tailscale ou le monitor tombe, `refresh()` passe le mesh à
+« déconnecté », arrête le suivi de `inbox.log` et le rafraîchissement périodique, et ne tente aucune
+reconnexion : il faut cliquer à nouveau sur « Rejoindre ». C'est le comportement actuel, à
+vérifier à la main en coupant Tailscale pendant une session connectée.

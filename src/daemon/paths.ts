@@ -8,6 +8,8 @@ export interface AidPaths {
   db: string;
   daemonJson: string;
   repriseJson: string;
+  /** résumés d'agents laissés avant un redémarrage (0700) : jamais dans /tmp, partagé et prévisible */
+  reprise: string;
   sessionSecret: string;
   lock: string;
   logs: string;
@@ -24,6 +26,7 @@ export function resolvePaths(home = process.env.AID_HOME ?? join(homedir(), '.ai
     db: join(home, 'state.db'),
     daemonJson: join(home, 'daemon.json'),
     repriseJson: join(home, 'reprise.json'),
+    reprise: join(home, 'reprise'),
     sessionSecret: join(home, 'session.secret'),
     lock: join(home, 'daemon.lock'),
     logs: join(home, 'logs'),
@@ -35,7 +38,7 @@ export function resolvePaths(home = process.env.AID_HOME ?? join(homedir(), '.ai
 }
 
 export function ensureHome(p: AidPaths): void {
-  for (const dir of [p.home, p.logs, p.actionLogs, p.worktrees, p.spool]) {
+  for (const dir of [p.home, p.logs, p.actionLogs, p.worktrees, p.spool, p.reprise]) {
     mkdirSync(dir, { recursive: true, mode: 0o700 });
     // mkdir ne change pas le mode d'un dossier déjà là
     chmodSync(dir, 0o700);

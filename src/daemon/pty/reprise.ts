@@ -1,5 +1,5 @@
 import { existsSync, readFileSync, rmSync } from 'node:fs';
-import { join } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 import type { AidPaths } from '../paths.js';
 import type { AgentManager } from './manager.js';
 import type { SpawnKind } from './spawn.js';
@@ -14,8 +14,8 @@ async function sleep(ms: number): Promise<void> {
   await new Promise((r) => setTimeout(r, ms));
 }
 
-function repriseMdPath(topicId: string): string {
-  return join('/tmp', `aid-reprise-${topicId}.md`);
+function repriseMdPath(dir: string, topicId: string): string {
+  return join(dir, `aid-reprise-${topicId}.md`);
 }
 
 function repriseMessage(path: string): string {
@@ -26,10 +26,11 @@ function repriseMessage(path: string): string {
  * Interrompt chaque agent vivant avant un redémarrage du daemon. Un shell, un agent en pause ou
  * avec une demande en cours ne peut pas recevoir de prompt : juste arrêté. Les autres reçoivent
  * une demande de résumé avant l'arrêt (best-effort, borné dans le temps — pas de blocage indéfini
- * si l'agent ne répond jamais).
+ * si l'agent ne répond jamais). `dir` : dossier des résumés, sous ~/.aid (0700).
  */
 export async function gracefulInterrupt(
   agents: AgentManager,
+  dir: string,
   deadlineMs = 25_000,
 ): Promise<RepriseEntry[]> {
   const live = agents.liveAgents();
@@ -39,7 +40,7 @@ export async function gracefulInterrupt(
         await agents.stop(a.id, 'daemon_stop');
         return null;
       }
-      const path = repriseMdPath(a.topicId);
+      const path = repriseMdPath(dir, a.topicId);
       try {
         rmSync(path, { force: true });
         agents.input(a.id, repriseMessage(path));
@@ -74,6 +75,12 @@ export async function resumeFromManifest(agents: AgentManager, paths: AidPaths):
   }
   await Promise.all(
     entries.map(async (entry) => {
+      // le manifeste ne doit pouvoir désigner (et supprimer) qu'un fichier de reprise de ce daemon
+      if (
+        dirname(entry.path) !== paths.reprise ||
+        !/^aid-reprise-.+\.md$/.test(basename(entry.path))
+      )
+        return;
       let content = '';
       try {
         content = readFileSync(entry.path, 'utf8').trim();

@@ -50,6 +50,8 @@ l'est pas encore bloque les points qui en dépendent.
 | D32 | **`diff.ouvrir`/`editeur.ouvrir-fichier`** | L'export les affiche comme des actions d'ouverture, pas comme un visualiseur de diff en app. | Délèguent à l'éditeur externe déjà configuré (`editor.ts`), avec repli déclaré si l'éditeur ne connaît pas d'argument diff. | 11 |
 | D33 | **Fetch et push (écran 3.2)** | Ce sont des écritures sur les refs partagées du dépôt, pas de simples lectures. | Deux scripts minimaux, même file que `topic.sync` (D19/D23) ; « Pousser » reste désactivé sans avance, vérifié aussi côté serveur. | 11 |
 
+> D11, depuis : le dépôt public est `morzu117/aidboard` (la création de `morzu117/a-i-d` n'a pas eu lieu).
+
 ### Prérequis machine (état au 2026-10-15)
 
 | Constat | Effet | Suite |

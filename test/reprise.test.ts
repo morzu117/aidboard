@@ -1,4 +1,4 @@
-import { readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { delimiter, join } from 'node:path';
 import { afterEach, expect, test } from 'vitest';
 import { resolvePaths } from '../src/daemon/paths.js';
@@ -31,9 +31,13 @@ async function spawn(kind: 'claude' | 'shell') {
 
 test('gracefulInterrupt demande un résumé à un agent claude avant de l’arrêter, et le récupère', async () => {
   const { agent, topic } = await spawn('claude');
-  const entries = await gracefulInterrupt(c!.t.d.agents, 5000);
+  const entries = await gracefulInterrupt(c!.t.d.agents, resolvePaths(c!.t.home).reprise, 5000);
   expect(entries).toEqual([
-    { topicId: topic.topicId, kind: 'claude', path: `/tmp/aid-reprise-${topic.topicId}.md` },
+    {
+      topicId: topic.topicId,
+      kind: 'claude',
+      path: join(resolvePaths(c!.t.home).reprise, `aid-reprise-${topic.topicId}.md`),
+    },
   ]);
   expect(readFileSync(entries[0]!.path, 'utf8')).toContain('résumé de test');
   expect(c!.t.d.agents.get(agent.id)!.exited).toBe(true);
@@ -41,7 +45,7 @@ test('gracefulInterrupt demande un résumé à un agent claude avant de l’arr�
 
 test('gracefulInterrupt arrête un shell directement, sans lui demander de résumé', async () => {
   const { agent } = await spawn('shell');
-  const entries = await gracefulInterrupt(c!.t.d.agents, 2000);
+  const entries = await gracefulInterrupt(c!.t.d.agents, resolvePaths(c!.t.home).reprise, 2000);
   expect(entries).toEqual([]);
   expect(c!.t.d.agents.get(agent.id)!.exited).toBe(true);
 });
@@ -49,7 +53,8 @@ test('gracefulInterrupt arrête un shell directement, sans lui demander de résu
 test('resumeFromManifest relance un sujet et lui injecte le résumé laissé par le cycle précédent', async () => {
   const { agent: previous, topic } = await spawn('claude');
   const paths = resolvePaths(c!.t.home);
-  const reprisePath = `/tmp/aid-reprise-${topic.topicId}-test.md`;
+  const reprisePath = join(paths.reprise, `aid-reprise-${topic.topicId}-test.md`);
+  mkdirSync(paths.reprise, { recursive: true });
   writeFileSync(reprisePath, 'reprendre-le-travail-en-cours\n');
   writeFileSync(
     paths.repriseJson,
@@ -67,4 +72,19 @@ test('resumeFromManifest relance un sujet et lui injecte le résumé laissé par
   let out = '';
   resumed.subscribe((chunk) => (out += chunk));
   await waitFor(() => out.includes('reprendre-le-travail-en-cours'), 5000, 'contenu repris');
+});
+
+test('resumeFromManifest ignore et ne supprime jamais un chemin hors du dossier de reprise', async () => {
+  const { topic } = await spawn('claude');
+  const paths = resolvePaths(c!.t.home);
+  const autre = join(c!.t.home, 'precieux.md');
+  writeFileSync(autre, 'ne pas toucher');
+  writeFileSync(
+    paths.repriseJson,
+    JSON.stringify([{ topicId: topic.topicId, kind: 'claude', path: autre }]),
+  );
+  const avant = c!.t.d.agents.liveAgents().length;
+  await resumeFromManifest(c!.t.d.agents, paths);
+  expect(existsSync(autre)).toBe(true);
+  expect(c!.t.d.agents.liveAgents()).toHaveLength(avant);
 });

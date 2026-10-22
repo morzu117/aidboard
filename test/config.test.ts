@@ -149,6 +149,9 @@ test('mesh (12.2) : clé inconnue et champs invalides sont refusés et nommés',
   expect(() => parseConfig('mesh:\n  token: abc\n')).toThrow('mesh.token');
   expect(() => parseConfig('mesh:\n  cell: 1\n')).toThrow('mesh.cell');
   expect(() => parseConfig('mesh:\n  cell: "a b"\n')).toThrow('mesh.cell');
+  expect(() => parseConfig('mesh:\n  cell: ".."\n')).toThrow('mesh.cell');
+  expect(() => parseConfig('mesh:\n  cell: "."\n')).toThrow('mesh.cell');
+  expect(() => parseConfig('mesh:\n  cell: "a/b"\n')).toThrow('mesh.cell');
   expect(() => parseConfig('mesh:\n  gateway: mesh-gw:8788\n')).toThrow('mesh.gateway');
   expect(() => parseConfig('mesh:\n  bin: ""\n')).toThrow('mesh.bin');
   expect(() => parseConfig('mesh:\n  tailscale: 1\n')).toThrow('mesh.tailscale');
