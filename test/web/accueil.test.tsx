@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
-import { cleanup, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { afterEach, expect, test } from 'vitest';
+import { afterEach, expect, test, vi } from 'vitest';
 import { Accueil } from '../../web/src/ecrans/Accueil.js';
 import { agent, json, setup, snapshot, topic, ws } from './helpers.js';
 
@@ -188,6 +188,42 @@ test('bandeau de mise à jour : un échec signalé après coup (lastError) sort 
   await waitFor(() => expect(text('1-1.maj.erreur')).toContain('divergent'), { timeout: 4000 });
   expect(text('1-1.maj.lancer')).toBe('Mettre à jour');
 }, 6000);
+
+test('bandeau de mise à jour : le garde-fou de 5 min joue même si le daemon ne répond plus', async () => {
+  const h = setup(<Accueil />, snapshot({ workspaces: [ws()], topics: [topic()] }));
+  h.respond.set('GET /api/daemon/update', json(200, maj()));
+  h.respond.set('POST /api/daemon/update', json(202, { updating: true, agents: 0 }));
+  await screen.findByText('feat/s');
+  await screen.findByText('Nouvelle version d’aidboard disponible');
+  // On saisit l'échéance de 5 min du bandeau au passage (setTimeout réel pour tout le reste) et on la déclenche à la main.
+  const reel = globalThis.setTimeout;
+  const echeances: Array<() => void> = [];
+  const espion = vi.spyOn(globalThis, 'setTimeout').mockImplementation(((
+    fn: () => void,
+    ms?: number,
+    ...args: unknown[]
+  ) => {
+    if (ms === 5 * 60_000) {
+      echeances.push(fn);
+      return 0 as unknown as ReturnType<typeof setTimeout>;
+    }
+    return reel(fn, ms, ...args);
+  }) as typeof setTimeout);
+  try {
+    fireEvent.click(node('1-1.maj.lancer')!);
+    await waitFor(() => expect(text('1-1.maj.lancer')).toBe('Mise à jour…'));
+    // le daemon est tombé : plus aucune réponse au poll, seule l'échéance peut sortir du blocage
+    h.respond.set('GET /api/daemon/update', () => {
+      throw new TypeError('connexion refusée');
+    });
+    expect(echeances).toHaveLength(1);
+    await act(async () => echeances[0]!());
+    await waitFor(() => expect(text('1-1.maj.erreur')).toContain('trop de temps'));
+  } finally {
+    espion.mockRestore();
+  }
+  expect(text('1-1.maj.lancer')).toBe('Mettre à jour');
+});
 
 test('bandeau de mise à jour : un agent vivant (409) propose de forcer, qui relance avec force: true', async () => {
   const h = setup(<Accueil />, snapshot({ workspaces: [ws()], topics: [topic()] }));

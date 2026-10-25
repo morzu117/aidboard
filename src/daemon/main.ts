@@ -266,7 +266,9 @@ export async function startDaemon(
     // en tâche de fond : ne bloque jamais le démarrage (même esprit que UpdateWatcher ci-dessus).
     void resumeFromManifest(agents, paths);
     // 08.8 : même esprit — le moteur rattrape chaque sujet en tâche de fond, un à la fois
-    void rattraperIndex({ db: opened, store, engine: structural, indexer, log });
+    rattraperIndex({ db: opened, store, engine: structural, indexer, log }).catch((err: unknown) =>
+      log(`index : rattrapage échoué (${err instanceof Error ? err.message : String(err)})`),
+    );
     // 12.3 : relit l'état d'un monitor détaché qui aurait survécu, sans le relancer
     void mesh?.init();
     return {

@@ -61,6 +61,12 @@ export function kernelInstall(
 ): KernelInstallResult {
   assertNoGitClone(paths.targetDir);
   const sourceFiles = listFilesRecursive(paths.sourceDir);
+  // Une source absente ou vide (paquet construit sans kernel/, mauvais packageRoot) ferait retirer toute la cible.
+  if (sourceFiles.length === 0) {
+    throw new Error(
+      `${paths.sourceDir} est absent ou vide : aid kernel install refuse de vider ${paths.targetDir} — paquet incomplet ?`,
+    );
+  }
   const targetFiles = listFilesRecursive(paths.targetDir);
   const toWrite = sourceFiles.filter((rel) =>
     differs(join(paths.sourceDir, rel), join(paths.targetDir, rel)),

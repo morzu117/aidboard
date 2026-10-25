@@ -129,15 +129,16 @@ l'index le donne à jour gratuitement.
 ### L'index structurel (codegraph)
 
 Le rôle `structural_index` est tenu aujourd'hui par [CodeGraph](https://www.npmjs.com/package/@colbymchenry/codegraph) :
-un graphe local des symboles et des appels (tree-sitter, une trentaine de langages), en
-SQLite sous `.codegraph/`. Un seul appel `explore` rend le source verbatim des symboles
-utiles, les chemins d'appel entre eux (dispatch dynamique compris) et le rayon d'impact — ce
-qu'une boucle grep + lecture reconstruirait en dizaines d'allers-retours.
+un graphe local des symboles et des appels (tree-sitter), en SQLite sous `.codegraph/`.
+Un seul appel `explore` rend le source verbatim des symboles utiles, les chemins d'appel
+entre eux et le rayon d'impact — ce qu'une boucle grep + lecture reconstruirait en dizaines
+d'allers-retours. Langages couverts et limites (dispatch dynamique compris) : voir la
+documentation de CodeGraph, qui fait foi.
 
 **Mise en place** — une fois par machine, puis une fois par dépôt :
 
 ```bash
-npm install -g @colbymchenry/codegraph
+npm install -g @colbymchenry/codegraph@1.6.0   # version épinglée comme dans scripts/bootstrap-machine.sh
 codegraph telemetry off            # active par défaut
 cd <dépôt> && codegraph init       # construit .codegraph/, à mettre dans .gitignore
 ```

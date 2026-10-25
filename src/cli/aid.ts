@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { dirname } from 'node:path';
 import { parseArgs } from 'node:util';
+import { cycleGuard } from './cycleGuard.js';
 import { readVersion } from './version.js';
 import type { Launch } from '../daemon/selfUpdate.js';
 
@@ -162,49 +163,45 @@ async function main(): Promise<number> {
       // `cycling` : un second déclenchement pendant qu'un cycle est déjà en cours (double-clic sur
       // AID.app avant que le premier ait fini) lancerait un second spawnRespawnWatcher sur CE pid —
       // les deux relances se battraient alors pour le même port, et l'une des deux reste vivante
-      // sans jamais réussir à écouter (constaté le 2026-10-19). Sans réinitialisation : ce process
-      // s'arrête de toute façon dans le cycle qui s'exécute.
-      let cycling = false;
-      cycleRequested = () => {
-        if (cycling) return;
-        cycling = true;
-        void (async () => {
-          const { gracefulInterrupt } = await import('../daemon/pty/reprise.js');
-          const { writeFileSync } = await import('node:fs');
-          const entries = await gracefulInterrupt(handle.agents);
-          if (entries.length > 0) writeFileSync(paths.repriseJson, JSON.stringify(entries));
-          if (mode === 'release') {
-            const status = handle.updates();
-            let next = launch;
-            if (status?.available && status.release) {
-              const result = await installRelease(status.release, paths.home, {
-                log: console.error,
-              });
-              if (result.ok) {
-                pruneServers(paths.home);
-                next = result.launch;
-              } else
-                console.error(
-                  `mise à jour échouée (${result.step}) : ${result.error} — relance sur la version actuelle`,
-                );
-            }
-            relaunch(next);
-            return;
+      // sans jamais réussir à écouter (constaté le 2026-10-19). Voir cycleGuard : la garde ne retombe
+      // que si le cycle lève avant la relance.
+      cycleRequested = cycleGuard(async () => {
+        const { gracefulInterrupt } = await import('../daemon/pty/reprise.js');
+        const { writeFileSync } = await import('node:fs');
+        const entries = await gracefulInterrupt(handle.agents, paths.reprise);
+        if (entries.length > 0)
+          writeFileSync(paths.repriseJson, JSON.stringify(entries), { mode: 0o600 });
+        if (mode === 'release') {
+          const status = handle.updates();
+          let next = launch;
+          if (status?.available && status.release) {
+            const result = await installRelease(status.release, paths.home, {
+              log: console.error,
+            });
+            if (result.ok) {
+              pruneServers(paths.home);
+              next = result.launch;
+            } else
+              console.error(
+                `mise à jour échouée (${result.step}) : ${result.error} — relance sur la version actuelle`,
+              );
           }
-          const dir = repoDir();
-          if (dir) {
-            const status = await checkForUpdate(dir).catch(() => null);
-            if (status?.available) {
-              const result = await pullAndBuild(dir);
-              if (!result.ok)
-                console.error(
-                  `mise à jour échouée (${result.step}) : ${result.error} — relance sur le build actuel`,
-                );
-            }
+          relaunch(next);
+          return;
+        }
+        const dir = repoDir();
+        if (dir) {
+          const status = await checkForUpdate(dir).catch(() => null);
+          if (status?.available) {
+            const result = await pullAndBuild(dir);
+            if (!result.ok)
+              console.error(
+                `mise à jour échouée (${result.step}) : ${result.error} — relance sur le build actuel`,
+              );
           }
-          relaunch();
-        })();
-      };
+        }
+        relaunch();
+      }, console.error);
       process.on('SIGINT', stop);
       process.on('SIGTERM', stop);
       return -1; // reste en vie

@@ -128,6 +128,8 @@ du kernel, `0.7.1` au moment de la rédaction), bloc `<!-- agentkit:start … --
 
 Le dépôt distant `morzu117/a-i-d` (D11) se crée à ce moment, si Julien l'accepte.
 
+> Depuis : le dépôt public est `morzu117/aidboard` ; `a-i-d` n'a jamais été créé sous ce nom.
+
 ## Pièges
 
 - `prettier --check .` sur les maquettes HTML : elles ne doivent **jamais** être reformatées

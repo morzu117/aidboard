@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, expect, test } from 'vitest';
@@ -86,4 +86,14 @@ test('import avec --namespace préfixe les slugs ; namespace invalide : 400', as
     headers: t.headers,
   });
   expect(list.json()).toEqual({ slugs: ['lesson/une-lecon'] });
+});
+
+test('export : dossiers en 0700 et fichiers en 0600, comme le miroir', async () => {
+  const a = await boot();
+  await put(a, 'aid/plan/x', 'corps x');
+  const dir = join(mkdtempSync(join(tmpdir(), 'aid-exp-')), 'sortie');
+  expect((await post(a, '/api/memory/export', { dir, scope: 'aid' })).json()).toEqual({ pages: 1 });
+  expect(statSync(join(dir, 'aid/plan/x.md')).mode & 0o777).toBe(0o600);
+  expect(statSync(join(dir, 'aid/plan')).mode & 0o777).toBe(0o700);
+  expect(statSync(dir).mode & 0o777).toBe(0o700);
 });

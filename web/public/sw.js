@@ -26,8 +26,11 @@ self.addEventListener('fetch', (event) => {
   event.respondWith(
     fetch(request)
       .then((response) => {
-        const copy = response.clone();
-        void caches.open(CACHE).then((c) => c.put(cacheKey, copy));
+        // Jamais une réponse en erreur (401 de session expirée, 500) : elle serait resservie hors ligne.
+        if (response.ok) {
+          const copy = response.clone();
+          void caches.open(CACHE).then((c) => c.put(cacheKey, copy));
+        }
         return response;
       })
       .catch(() => caches.match(cacheKey)),
