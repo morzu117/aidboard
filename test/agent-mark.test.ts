@@ -115,6 +115,34 @@ test('agent inconnu : 404 ; seq inconnu : 404 ; corps invalide : 400', async () 
   expect(bad.statusCode).toBe(400);
 });
 
+test('seq non entier ou négatif dans l’URL : 400 avant toute requête', async () => {
+  const agent = await spawnStream();
+  await waitFor(() => sessionSet(agent.id), 5000, 'session');
+  for (const seqParam of ['abc', '0', '1.5']) {
+    const r = await c!.t.d.app.inject({
+      method: 'PUT',
+      url: `/api/agents/${agent.id}/messages/${seqParam}/mark`,
+      headers: c!.t.headers,
+      payload: { marked: true },
+    });
+    expect(r.statusCode).toBe(400);
+  }
+});
+
+test('ligne dont le payload n’est pas du JSON valide : 422, pas 500', async () => {
+  const agent = await spawnStream();
+  await waitFor(() => sessionSet(agent.id), 5000, 'session');
+  c!.t.d.agents.input(agent.id, 'bonjour');
+  await waitFor(() => lastUserSeq(agent.id) > 0, 3000, 'message');
+  const seq = lastUserSeq(agent.id);
+  c!.t.db
+    .prepare("UPDATE agent_messages SET payload = 'pas du json' WHERE agent_id = ? AND seq = ?")
+    .run(agent.id, seq);
+
+  const r = await mark(agent.id, seq, true);
+  expect(r.statusCode).toBe(422);
+});
+
 test('/ws/agent : l’historique porte marked:true sur l’item marqué, absent sur les autres', async () => {
   const agent = await spawnStream();
   await waitFor(() => sessionSet(agent.id), 5000, 'session');

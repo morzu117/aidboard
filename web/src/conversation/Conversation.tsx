@@ -177,13 +177,24 @@ export function Conversation({ agent, visible }: { agent: Agent; visible: boolea
     }
   };
 
-  const closeMenu = (renvoyerFocus: boolean) => {
+  const closeMenu = useCallback((renvoyerFocus: boolean) => {
     setMenuOpen(false);
     if (renvoyerFocus) menuBtnRef.current?.focus();
-  };
+  }, []);
 
   // Raccourcis actifs seulement quand le fil a le focus (jamais le composer), sans Ctrl/Meta/Alt (décision 8).
+  // Un champ éditable descendant du fil (saisie en cours de composition incluse) n'est pas visé par les
+  // raccourcis : seuls les contrôles non éditables du fil (étoile, boutons de décision…) le sont (review A.7).
   const onThreadKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
+    if (e.nativeEvent.isComposing) return;
+    const cible = e.target as HTMLElement;
+    if (
+      cible.tagName === 'INPUT' ||
+      cible.tagName === 'TEXTAREA' ||
+      cible.tagName === 'SELECT' ||
+      cible.isContentEditable
+    )
+      return;
     if (e.ctrlKey || e.metaKey || e.altKey || questions.length === 0) return;
     const idx = active === null ? -1 : questions.findIndex((q) => q.seq === active);
     if (e.key === 'j' || e.key === 'k') {
@@ -255,10 +266,14 @@ export function Conversation({ agent, visible }: { agent: Agent; visible: boolea
           ref={threadRef}
           tabIndex={0}
           role="log"
-          aria-label="Fil de conversation. j et k : question suivante ou précédente, m : marquer, e : détail"
+          aria-label="Fil de conversation"
+          aria-describedby={`${dn}.raccourcis`}
           onScroll={onScroll}
           onKeyDown={onThreadKeyDown}
         >
+          <p className="visuellement-cache" id={`${dn}.raccourcis`}>
+            j et k : question suivante ou précédente, m : marquer, e : détail
+          </p>
           {turns.map((t) => (
             <div className="tour" key={t.id} data-node={`${dn}.tour-${t.id}`}>
               {t.blocks.map((b) => {
@@ -348,6 +363,7 @@ export function Conversation({ agent, visible }: { agent: Agent; visible: boolea
               setMenuOpen(false);
             }}
             onClose={closeMenu}
+            triggerRef={menuBtnRef}
             dataNode={`${dn}.menu`}
           />
         )}

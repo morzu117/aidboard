@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useId, useRef, type RefObject } from 'react';
 import type { QuestionRepere } from './MarkRail.js';
 
 const LONGUEUR_MAX_LIGNE = 60;
@@ -17,19 +17,26 @@ export function MarkMenu({
   active,
   onSelect,
   onClose,
+  triggerRef,
   dataNode,
 }: {
   questions: QuestionRepere[];
   active: number | null;
   onSelect: (seq: number) => void;
   onClose: (renvoyerFocus: boolean) => void;
+  triggerRef: RefObject<HTMLButtonElement | null>;
   dataNode: string;
 }) {
   const ref = useRef<HTMLDivElement>(null);
+  const titreId = useId();
 
   useEffect(() => {
+    // Un clic sur le bouton déclencheur passe par ici avant son propre onClick : l'ignorer évite
+    // de refermer puis rouvrir le menu dans la même interaction (review A.7).
     const onDown = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) onClose(false);
+      const cible = e.target as Node;
+      if (ref.current?.contains(cible) || triggerRef.current?.contains(cible)) return;
+      onClose(false);
     };
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose(true);
@@ -40,16 +47,24 @@ export function MarkMenu({
       document.removeEventListener('mousedown', onDown);
       document.removeEventListener('keydown', onKey);
     };
-  }, [onClose]);
+  }, [onClose, triggerRef]);
 
   return (
-    <div className="repere-menu" data-node={dataNode} role="menu" ref={ref}>
-      <p className="repere-menu-titre">Questions de cette discussion</p>
+    <div
+      className="repere-menu"
+      data-node={dataNode}
+      role="region"
+      aria-labelledby={titreId}
+      ref={ref}
+    >
+      <p className="repere-menu-titre" id={titreId}>
+        Questions de cette discussion
+      </p>
       {questions.map((q) => (
         <button
           key={q.seq}
           type="button"
-          role="menuitem"
+          aria-current={q.seq === active ? 'true' : undefined}
           className={`repere-menu-ligne${q.seq === active ? ' repere-menu-ligne--actif' : ''}`}
           data-node={`${dataNode}.q-${q.seq}`}
           onClick={() => onSelect(q.seq)}

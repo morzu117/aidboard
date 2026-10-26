@@ -66,6 +66,8 @@ export function registerAgentRoutes(
     { schema: { body: MarkBody } },
     async (req, reply) => {
       const { id, seq: seqParam } = req.params as { id: string; seq: string };
+      if (!/^[1-9][0-9]*$/.test(seqParam))
+        throw new AidHttpError(400, 'seq doit être un entier positif');
       const seq = Number(seqParam);
       if (!deps.db.prepare('SELECT 1 FROM agents WHERE id = ?').get(id))
         throw new AidHttpError(404, 'agent inconnu');
@@ -73,8 +75,14 @@ export function registerAgentRoutes(
         .prepare('SELECT kind, payload FROM agent_messages WHERE agent_id = ? AND seq = ?')
         .get(id, seq) as { kind: string; payload: string } | undefined;
       if (!row) throw new AidHttpError(404, 'message inconnu');
-      const role =
-        row.kind === 'message' ? (JSON.parse(row.payload) as { role?: string }).role : undefined;
+      let role: string | undefined;
+      if (row.kind === 'message') {
+        try {
+          role = (JSON.parse(row.payload) as { role?: string }).role;
+        } catch {
+          throw new AidHttpError(422, 'message illisible');
+        }
+      }
       if (role !== 'user')
         throw new AidHttpError(422, 'seul un message utilisateur peut être marqué');
       const { marked } = req.body as { marked: boolean };

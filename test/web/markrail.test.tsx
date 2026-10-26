@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import type { Agent } from '../../src/shared/model.js';
@@ -183,6 +183,10 @@ test('étoile : clic → PUT mark puis état marqué ; rien ne change si la rout
   expect(screen.getAllByRole('button', { name: 'Marquer la question' })).toHaveLength(1);
 });
 
+// La correction A.7 retire role="menu"/"menuitem" (pas de navigation clavier de menu réelle derrière) :
+// le conteneur est une région étiquetée, les lignes des boutons ordinaires.
+const nomRegion = 'Questions de cette discussion';
+
 test('menu Repères : N/M, clic sur une ligne défile et ferme, Échap ferme et rend le focus au bouton', async () => {
   mount(streamAgent());
   const ws = FakeWs.all.at(-1)!;
@@ -191,15 +195,52 @@ test('menu Repères : N/M, clic sur une ligne défile et ferme, Échap ferme et 
   await screen.findByText('Première question');
   const bouton = screen.getByRole('button', { name: /Repères · 1\/2/ });
   await userEvent.click(bouton);
-  await userEvent.click(screen.getByRole('menuitem', { name: /Seconde question/ }));
-  expect(screen.queryByRole('menu')).toBeNull();
+  const region = screen.getByRole('region', { name: nomRegion });
+  await userEvent.click(within(region).getByRole('button', { name: /Seconde question/ }));
+  expect(screen.queryByRole('region', { name: nomRegion })).toBeNull();
   expect(scrollTo).toHaveBeenCalled();
 
   await userEvent.click(bouton);
-  expect(screen.getByRole('menu')).toBeTruthy();
+  expect(screen.getByRole('region', { name: nomRegion })).toBeTruthy();
   fireEvent.keyDown(document, { key: 'Escape' });
-  expect(screen.queryByRole('menu')).toBeNull();
+  expect(screen.queryByRole('region', { name: nomRegion })).toBeNull();
   expect(document.activeElement).toBe(bouton);
+});
+
+test('clic sur le bouton Repères avec le menu ouvert referme, troisième clic rouvre', async () => {
+  mount(streamAgent());
+  const ws = FakeWs.all.at(-1)!;
+  ws.onopen?.();
+  ws.text(histoDeuxQuestions);
+  await screen.findByText('Première question');
+  const bouton = screen.getByRole('button', { name: /Repères · 1\/2/ });
+
+  await userEvent.click(bouton);
+  expect(screen.getByRole('region', { name: nomRegion })).toBeTruthy();
+  await userEvent.click(bouton);
+  expect(screen.queryByRole('region', { name: nomRegion })).toBeNull();
+  await userEvent.click(bouton);
+  expect(screen.getByRole('region', { name: nomRegion })).toBeTruthy();
+});
+
+test('menu Repères : la ligne active porte aria-current, les autres non', async () => {
+  mount(streamAgent());
+  const ws = FakeWs.all.at(-1)!;
+  ws.onopen?.();
+  ws.text(histoDeuxQuestions);
+  await screen.findByText('Première question');
+  await userEvent.click(screen.getByRole('button', { name: /Repères · 1\/2/ }));
+  const region = screen.getByRole('region', { name: nomRegion });
+  expect(
+    within(region)
+      .getByRole('button', { name: /Première question/ })
+      .getAttribute('aria-current'),
+  ).toBe('true');
+  expect(
+    within(region)
+      .getByRole('button', { name: /Seconde question/ })
+      .getAttribute('aria-current'),
+  ).toBeNull();
 });
 
 test('raccourcis j/k/m/e actifs sur le fil, inactifs dans le composer ou avec Ctrl', async () => {
@@ -244,4 +285,40 @@ test('raccourcis j/k/m/e actifs sur le fil, inactifs dans le composer ou avec Ct
   const champ = screen.getByRole('textbox', { name: /Message à claude/ });
   fireEvent.keyDown(champ, { key: 'm' });
   expect(screen.getAllByRole('button', { name: 'Marquer la question' })).toHaveLength(1);
+});
+
+test('raccourcis inactifs en composition, ou depuis un champ éditable descendant du fil', async () => {
+  mount(streamAgent());
+  const ws = FakeWs.all.at(-1)!;
+  ws.onopen?.();
+  ws.text(histoDeuxQuestions);
+  await screen.findByText('Première question');
+  const fil = screen.getByRole('log');
+
+  fireEvent.keyDown(fil, { key: 'j', isComposing: true });
+  expect(screen.getByRole('button', { name: /Repères · 1\/2/ })).toBeTruthy();
+
+  // un champ éditable à l'intérieur du fil (ex. un contrôle interne futur) : la frappe bulle
+  // jusqu'au fil mais ne doit pas déclencher le raccourci.
+  const champInterne = document.createElement('textarea');
+  fil.appendChild(champInterne);
+  fireEvent.keyDown(champInterne, { key: 'j' });
+  expect(screen.getByRole('button', { name: /Repères · 1\/2/ })).toBeTruthy();
+
+  // depuis un bouton interne au fil (l'étoile) : raccourci toujours actif, c'est voulu.
+  const etoile = screen.getAllByRole('button', { name: 'Marquer la question' })[0]!;
+  fireEvent.keyDown(etoile, { key: 'j' });
+  expect(screen.getByRole('button', { name: /Repères · 2\/2/ })).toBeTruthy();
+});
+
+test('le fil décrit ses raccourcis via aria-describedby, aria-label court', async () => {
+  mount(streamAgent());
+  const ws = FakeWs.all.at(-1)!;
+  ws.onopen?.();
+  ws.text(histoDeuxQuestions);
+  await screen.findByText('Première question');
+  const fil = screen.getByRole('log', { name: 'Fil de conversation' });
+  const id = fil.getAttribute('aria-describedby');
+  expect(id).toBeTruthy();
+  expect(document.getElementById(id!)?.textContent).toMatch(/j et k/);
 });
