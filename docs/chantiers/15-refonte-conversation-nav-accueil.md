@@ -110,12 +110,15 @@ Numérotation continue depuis D49 (chantier 14).
   `control_response` (`allow` + `updatedInput` / `deny`) : fin du `screenShows` par regex pour
   ce kind. Interruption : `control_request` `interrupt` (le tour finit en
   `error_during_execution`, le process reste utilisable).
-- **D61 — pilote codex (v1)** : **un process par tour**, `codex exec --json` puis
-  `codex exec resume <thread_id> --json`. Pas d'approbation interactive dans ce mode : la
-  politique est celle du bac à sable (`-s workspace-write`), annoncée dans l'en-tête de la
-  conversation. Interruption = arrêt du process du tour (la session survit). Le serveur
-  `codex app-server` (JSON-RPC avec approbations) est marqué expérimental par Codex :
-  écarté pour v1, candidat d'un pilote v2 sans toucher au reste (D59).
+- **D61 — pilote codex (validée par l'opérateur le 2026-10-26, après sonde réelle)** : process
+  **long-vivant** `codex app-server` en stdio (JSON-RPC ligne à ligne, protocole v2), privé à
+  l'agent — jamais le daemon app-server partagé. Approbations structurées
+  (`item/commandExecution/requestApproval`, `item/fileChange/requestApproval`) → cartes de
+  décision comme pour claude ; interruption par `turn/interrupt` ; reprise par
+  `thread/resume`. Les méthodes utilisées ne sont pas marquées expérimentales dans le schéma
+  et ne demandent aucun opt-in ; seule la commande `app-server` porte l'étiquette
+  `[experimental]`. Repli documenté : `codex exec --json` / `exec resume` (un process par
+  tour, sans approbations), à n'écrire que si app-server casse à une mise à jour de Codex.
 - **D54 (à valider)** : `Nav` (barre gauche) est un composant entièrement neuf, monté dans
   `Layout.tsx` à la place où rien n'existe aujourd'hui (ligne 106-114) — ce n'est pas une
   évolution de `Cote.tsx`, qui reste en l'état pour son seul usage actuel (vue archive) sauf si
@@ -176,9 +179,19 @@ permission_denials}` · `system/hook_started|hook_response` (les hooks utilisate
 Sans `--permission-prompt-tool stdio`, une écriture est refusée d'office
 (`permission_denied`) au lieu d'être demandée.
 
-codex (`exec --json`) : `thread.started{thread_id}` · `turn.started` ·
-`item.started|item.completed{item:{id, type: command_execution{command, aggregated_output,
-exit_code, status} | agent_message{text}}}` · `turn.completed{usage}`.
+codex (`app-server`, stdio, JSON-RPC sans champ `jsonrpc`) : `initialize{clientInfo}` puis
+notification `initialized` · `thread/start{cwd, approvalPolicy, sandbox}` → `thread.id` ·
+`turn/start{threadId, input:[{type:"text",text}]}` → `turn.id` · notifications
+`turn/started`, `item/started|item/completed{item:{type: userMessage | commandExecution{command,
+commandActions,status} | agentMessage{text,phase}}}`, `item/agentMessage/delta`,
+`turn/completed{turn:{status,durationMs,error}}` · requête serveur→client
+`item/commandExecution/requestApproval{threadId,turnId,itemId,command,cwd,availableDecisions}`
+→ réponse `{id, result:{decision: accept|acceptForSession|decline|cancel}}`, confirmée par
+`serverRequest/resolved` · `turn/interrupt{threadId,turnId}` → tour `interrupted`, process
+réutilisable · `thread/resume{threadId}` dans un process neuf retrouve le contexte. Bruit à
+ignorer : `mcpServer/startupStatus/updated`, `account/rateLimits/updated`,
+`remoteControl/status/changed`, `thread/tokenUsage/updated`, logs ANSI sur stderr. Piège :
+`approvalPolicy:"untrusted"` demande même pour `cat` ; `on-request` reste à évaluer.
 
 ### Groupe A — Conversation native (claude, codex, pilotes)
 
@@ -193,12 +206,14 @@ exit_code, status} | agent_message{text}}}` · `turn.completed{usage}`.
 - Preuve : le test pilote le faux agent — deux tours dans un process, une permission
   accordée puis une refusée, une interruption, la normalisation de chaque type d'événement.
 
-**A.2 — Pilote codex**
-- Fichiers : nouveau `src/daemon/conversation/codex.ts` (D61), `test/fixtures/fake-codex-exec.mjs`,
+**A.2 — Pilote codex (app-server)**
+- Fichiers : nouveau `src/daemon/conversation/codex.ts` (D61), `test/fixtures/fake-codex-appserver.mjs`,
   `test/conversation-codex.test.ts`.
-- Commit : `feat(conversation): pilote codex (exec --json, reprise par thread)`.
-- Preuve : deux tours = deux process, le second lancé en `exec resume <thread_id>` ;
-  `command_execution` normalisé en `tool_start`/`tool_end`.
+- Commit : `feat(conversation): pilote codex (app-server, approbations, reprise par thread)`.
+- Preuve : contre le faux serveur — poignée de main, tour, approbation acceptée puis refusée,
+  interruption puis tour suivant, `resume` → `thread/resume`, mêmes garanties de robustesse que
+  le pilote claude après sa review (erreur de spawn, EPIPE, `stop()` après signal, double
+  `start()`, purge des demandes en attente).
 
 **A.3 — Persistance et branchement dans AgentManager**
 - Fichiers : `migrations/010_agent_conversation.sql` (table `agent_messages`, colonne
@@ -345,5 +360,6 @@ Reprises du brief (§9), à trancher par le client du brief, pas par ce plan :
 
 Propres à ce plan :
 7. D52 : le niveau de détail de `agent_messages` (événements normalisés D59) convient-il ?
-8. D61 : approbations codex par politique de bac à sable en v1 — acceptable, ou faut-il
-   viser tout de suite `codex app-server` (expérimental) pour avoir des cartes de décision ?
+8. D61 : politique d'approbation par défaut pour codex — `untrusted` (demande tout, bruyant)
+   ou `on-request` (non sondé) ?
+9. Libellés des cartes de décision : « Autoriser » / « Toujours autoriser » / « Refuser » ?
