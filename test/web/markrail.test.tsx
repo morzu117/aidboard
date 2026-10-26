@@ -322,3 +322,43 @@ test('le fil décrit ses raccourcis via aria-describedby, aria-label court', asy
   expect(id).toBeTruthy();
   expect(document.getElementById(id!)?.textContent).toMatch(/j et k/);
 });
+
+// review A.7 : `dn` est une constante littérale partagée par toutes les instances ('1-3.conversation'),
+// donc l'id du rappel ne peut pas en dériver — deux Conversation montées ensemble (une par agent, D65)
+// se marchaient sur le même id et aria-describedby pouvait désigner le rappel d'une autre conversation.
+test('deux Conversation montées ensemble : ids du rappel distincts, chaque fil pointe vers le sien', async () => {
+  const fetchImpl = vi.fn(async (url: string) => {
+    if (url === '/api/state') return new Response(JSON.stringify(snapshot()), { status: 200 });
+    return new Response('{}', { status: 200 });
+  }) as unknown as typeof fetch;
+  const client = new AidClient({
+    fetchImpl,
+    socketFactory: () => ({ close() {} }) as unknown as WebSocket,
+    backoffMs: [20],
+    debounceMs: 5,
+  });
+  const a1 = streamAgent({ id: 'ag_1' });
+  const a2 = streamAgent({ id: 'ag_2' });
+  render(
+    <AidProvider client={client}>
+      <Conversation agent={a1} visible />
+      <Conversation agent={a2} visible={false} />
+    </AidProvider>,
+  );
+  const [ws1, ws2] = FakeWs.all;
+  ws1!.onopen?.();
+  ws1!.text(histoDeuxQuestions);
+  ws2!.onopen?.();
+  ws2!.text(histoDeuxQuestions);
+  await screen.findAllByText('Première question');
+
+  const fils = screen.getAllByRole('log', { name: 'Fil de conversation' });
+  expect(fils).toHaveLength(2);
+  const id1 = fils[0]!.getAttribute('aria-describedby')!;
+  const id2 = fils[1]!.getAttribute('aria-describedby')!;
+  expect(id1).toBeTruthy();
+  expect(id2).toBeTruthy();
+  expect(id1).not.toBe(id2);
+  expect(document.getElementById(id1)).toBe(fils[0]!.querySelector('.visuellement-cache'));
+  expect(document.getElementById(id2)).toBe(fils[1]!.querySelector('.visuellement-cache'));
+});

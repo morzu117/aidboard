@@ -1,4 +1,12 @@
-import { type KeyboardEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  type KeyboardEvent,
+  useCallback,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import type { Agent, AgentStatus } from '../../../src/shared/model.js';
 import type { AgentStreamItem } from '../../../src/shared/conversation.js';
 import { useAid } from '../data/useAidState.js';
@@ -36,6 +44,9 @@ export function Conversation({ agent, visible }: { agent: Agent; visible: boolea
   const sockRef = useRef<AgentSocket | null>(null);
   // pas de rendu propre (A.6) : seul un futur changement de `agent.status` doit déclencher la relance
   const exitedRef = useRef(false);
+  // id stable mais unique par instance (D65 : une Conversation par agent, montée en permanence) —
+  // `dn` est une constante littérale partagée par toutes les instances, donc impropre à un id DOM (review A.7)
+  const raccourcisId = useId();
 
   const ouvrirSocket = useCallback(
     () =>
@@ -267,11 +278,11 @@ export function Conversation({ agent, visible }: { agent: Agent; visible: boolea
           tabIndex={0}
           role="log"
           aria-label="Fil de conversation"
-          aria-describedby={`${dn}.raccourcis`}
+          aria-describedby={raccourcisId}
           onScroll={onScroll}
           onKeyDown={onThreadKeyDown}
         >
-          <p className="visuellement-cache" id={`${dn}.raccourcis`}>
+          <p className="visuellement-cache" id={raccourcisId}>
             j et k : question suivante ou précédente, m : marquer, e : détail
           </p>
           {turns.map((t) => (
