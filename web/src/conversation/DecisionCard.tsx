@@ -51,7 +51,7 @@ export function DecisionCard({
               className={`bouton${i === 0 ? ' bouton--primaire' : ''}`}
               data-node={`${dataNode}.option-${i + 1}`}
               type="button"
-              disabled={busy}
+              disabled={busy || reponse !== null}
               onClick={() => void repondre(o.answer, o.label)}
             >
               {o.label}

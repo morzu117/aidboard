@@ -154,28 +154,37 @@ test('ToolCallGroup : en cours / succès / erreur, « Voir le détail », « Tou
         at: 't6',
         event: { type: 'tool_start', toolId: 'c', name: 'cours-tool', input: null },
       },
-      { seq: 7, at: 't7', event: { type: 'turn_end', ok: true } },
-      { seq: 8, at: 't8', event: { type: 'message', role: 'user', text: 'Q2' } },
-      { seq: 9, at: 't9', event: { type: 'tool_start', toolId: 'd', name: 'autre', input: null } },
-      {
-        seq: 10,
-        at: 't10',
-        event: { type: 'tool_end', toolId: 'd', output: 'fin\nbis', isError: false },
-      },
     ],
   });
   await screen.findByText('Q1');
   expect(screen.getByText('3 commandes')).toBeTruthy();
-  expect(screen.getByText('1 commande')).toBeTruthy();
-  expect(screen.getAllByText('✓')).toHaveLength(2);
+  expect(screen.getByText('✓')).toBeTruthy();
   expect(screen.getByText('✗')).toBeTruthy();
   expect(screen.getByText('…')).toBeTruthy();
   // en condensé, seul le résultat court (première ligne) est visible, jamais le détail complet
   expect(screen.queryByText(/deuxième ligne/)).toBeNull();
   const detailBtns = screen.getAllByRole('button', { name: 'Voir le détail' });
-  expect(detailBtns).toHaveLength(2);
+  expect(detailBtns).toHaveLength(1);
   await userEvent.click(detailBtns[0]!);
   expect(screen.getByText(/deuxième ligne/)).toBeTruthy();
+  // le tour se termine : l'outil encore ouvert (« cours-tool ») bascule en « interrompu », plus de spinner
+  ws.text({ t: 'event', seq: 7, at: 't7', event: { type: 'turn_end', ok: true } });
+  ws.text({ t: 'event', seq: 8, at: 't8', event: { type: 'message', role: 'user', text: 'Q2' } });
+  ws.text({
+    t: 'event',
+    seq: 9,
+    at: 't9',
+    event: { type: 'tool_start', toolId: 'd', name: 'autre', input: null },
+  });
+  ws.text({
+    t: 'event',
+    seq: 10,
+    at: 't10',
+    event: { type: 'tool_end', toolId: 'd', output: 'fin\nbis', isError: false },
+  });
+  await screen.findByText('interrompu');
+  expect(screen.queryByText('…')).toBeNull();
+  expect(screen.getByText('1 commande')).toBeTruthy();
   expect(screen.queryByText(/bis/)).toBeNull();
   await userEvent.click(screen.getByRole('button', { name: 'Tout déplier' }));
   expect(screen.getByText(/bis/)).toBeTruthy();
@@ -278,4 +287,142 @@ test('Composer : après exit reçu sur le canal → désactivé, « Agent arrêt
   h.sock().text({ t: 'exit', exitCode: 0, signal: null, reason: 'exit' });
   expect(await screen.findByText('Agent arrêté')).toBeTruthy();
   expect(screen.queryByRole('textbox', { name: /Message à claude/ })).toBeNull();
+});
+
+test('ToolCallGroup : un outil encore ouvert à turn_end ou à exit est affiché « interrompu », jamais en cours ; un tool_end rejoué pour cet outil ne casse rien', async () => {
+  mount(streamAgent());
+  const ws = FakeWs.all.at(-1)!;
+  ws.onopen?.();
+  ws.text({
+    t: 'history',
+    truncated: false,
+    items: [
+      { seq: 1, at: 't1', event: { type: 'message', role: 'user', text: 'Q1' } },
+      {
+        seq: 2,
+        at: 't2',
+        event: { type: 'tool_start', toolId: 'a', name: 'lent-tool', input: null },
+      },
+      { seq: 3, at: 't3', event: { type: 'turn_end', ok: false, error: 'interrompu' } },
+    ],
+  });
+  await screen.findByText('Q1');
+  expect(screen.getAllByText('interrompu')).toHaveLength(1);
+  expect(screen.queryByText('…')).toBeNull();
+  // tool_end rejoué (reconnexion) pour un outil déjà clos comme interrompu : ne doit rien casser
+  ws.text({
+    t: 'event',
+    seq: 8,
+    at: 't8',
+    event: { type: 'tool_end', toolId: 'a', output: 'trop tard', isError: false },
+  });
+  expect(screen.getAllByText('interrompu')).toHaveLength(1);
+  // idem avec exit : un second tour, un outil ouvert qui reste ouvert jusqu'à l'arrêt de l'agent
+  ws.text({ t: 'event', seq: 5, at: 't5', event: { type: 'message', role: 'user', text: 'Q2' } });
+  ws.text({
+    t: 'event',
+    seq: 6,
+    at: 't6',
+    event: { type: 'tool_start', toolId: 'b', name: 'autre-tool', input: null },
+  });
+  ws.text({ t: 'event', seq: 7, at: 't7', event: { type: 'exit', message: 'stoppé' } });
+  await waitFor(() => expect(screen.getAllByText('interrompu')).toHaveLength(2));
+  expect(screen.queryByText('…')).toBeNull();
+});
+
+test('ToolCallGroup : une entrée longue est tronquée dans la ligne condensée', async () => {
+  mount(streamAgent());
+  const ws = FakeWs.all.at(-1)!;
+  ws.onopen?.();
+  const longEntree = 'x'.repeat(1000);
+  ws.text({
+    t: 'history',
+    truncated: false,
+    items: [
+      { seq: 1, at: 't1', event: { type: 'message', role: 'user', text: 'Q1' } },
+      {
+        seq: 2,
+        at: 't2',
+        event: { type: 'tool_start', toolId: 'a', name: 'long-tool', input: longEntree },
+      },
+      { seq: 3, at: 't3', event: { type: 'tool_end', toolId: 'a', output: 'ok', isError: false } },
+    ],
+  });
+  await screen.findByText('Q1');
+  expect(screen.queryByText(longEntree)).toBeNull();
+  const entree = document.querySelector('.outil-entree');
+  expect(entree?.textContent && entree.textContent.length).toBeLessThan(1000);
+  expect(entree?.textContent).toContain('…');
+});
+
+test('ToolCallGroup : aria-expanded bascule avec « Voir le détail »', async () => {
+  mount(streamAgent());
+  const ws = FakeWs.all.at(-1)!;
+  ws.onopen?.();
+  ws.text({
+    t: 'history',
+    truncated: false,
+    items: [
+      { seq: 1, at: 't1', event: { type: 'message', role: 'user', text: 'Q1' } },
+      {
+        seq: 2,
+        at: 't2',
+        event: { type: 'tool_start', toolId: 'a', name: 'ok-tool', input: null },
+      },
+      { seq: 3, at: 't3', event: { type: 'tool_end', toolId: 'a', output: 'ok', isError: false } },
+    ],
+  });
+  await screen.findByText('Q1');
+  const bouton = screen.getByRole('button', { name: 'Voir le détail' });
+  expect(bouton.getAttribute('aria-expanded')).toBe('false');
+  await userEvent.click(bouton);
+  expect(
+    screen.getByRole('button', { name: 'Replier le détail' }).getAttribute('aria-expanded'),
+  ).toBe('true');
+});
+
+test('DecisionCard : un second clic après une réponse envoyée avec succès n’envoie pas de second POST', async () => {
+  const pending: PendingRequest = {
+    id: 'req_1',
+    kind: 'question',
+    question: 'Continuer ?',
+    options: [
+      { label: 'Oui', answer: 'yes' },
+      { label: 'Non', answer: 'no' },
+    ],
+  };
+  const a = streamAgent({ status: 'needs_input', pending });
+  const h = mount(a);
+  h.respond.set('POST /api/agents/ag_1/answer', json(200, { id: 'ag_1' }));
+  const ws = h.sock();
+  ws.onopen?.();
+  ws.text({
+    t: 'history',
+    truncated: false,
+    items: [
+      { seq: 1, at: 't1', event: { type: 'message', role: 'user', text: 'Go' } },
+      { seq: 2, at: 't2', event: { type: 'request', request: pending } },
+    ],
+  });
+  await screen.findByText('Continuer ?');
+  const bouton = screen.getByRole('button', { name: 'Oui' }) as HTMLButtonElement;
+  await userEvent.click(bouton);
+  await waitFor(() =>
+    expect(h.calls.filter((c) => c.url === '/api/agents/ag_1/answer')).toHaveLength(1),
+  );
+  // agent.pending n'a pas encore changé côté store (D59) : le bouton reste affiché mais désactivé
+  expect(bouton.disabled).toBe(true);
+  await userEvent.click(bouton);
+  expect(h.calls.filter((c) => c.url === '/api/agents/ag_1/answer')).toHaveLength(1);
+});
+
+test('Composer : double clic sur « Arrêter » n’envoie qu’un seul POST interrupt', async () => {
+  const h = mount(streamAgent({ status: 'working' }));
+  h.respond.set('POST /api/agents/ag_1/interrupt', json(200, { id: 'ag_1' }));
+  const bouton = screen.getByRole('button', { name: 'Arrêter' });
+  fireEvent.click(bouton);
+  fireEvent.click(bouton);
+  await waitFor(() =>
+    expect(h.calls.filter((c) => c.url === '/api/agents/ag_1/interrupt')).toHaveLength(1),
+  );
 });

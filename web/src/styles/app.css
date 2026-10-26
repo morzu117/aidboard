@@ -547,6 +547,9 @@ body {
 .outil-statut--cours {
   color: var(--s-cours);
 }
+.outil-statut--interrompu {
+  color: var(--muted);
+}
 .outil-nom {
   color: var(--text);
 }

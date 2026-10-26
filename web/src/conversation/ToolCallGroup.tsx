@@ -10,9 +10,14 @@ const resumeEntree = (input: unknown): string => {
   }
 };
 
+const LONGUEUR_MAX_RESUME = 160;
+
+const tronquer = (s: string): string =>
+  s.length > LONGUEUR_MAX_RESUME ? `${s.slice(0, LONGUEUR_MAX_RESUME)}…` : s;
+
 const premiereLigne = (s: string | undefined): string => {
   const ligne = (s ?? '').split('\n').find((l) => l.trim().length > 0) ?? '';
-  return ligne.length > 120 ? `${ligne.slice(0, 120)}…` : ligne;
+  return tronquer(ligne);
 };
 
 export function ToolCallGroup({
@@ -36,6 +41,7 @@ export function ToolCallGroup({
           className="bouton"
           data-node={`${dataNode}.detail`}
           type="button"
+          aria-expanded={open}
           onClick={onToggle}
         >
           {open ? 'Replier le détail' : 'Voir le détail'}
@@ -45,16 +51,18 @@ export function ToolCallGroup({
         <div key={c.toolId} className="outil-ligne" data-node={`${dataNode}.ligne-${i + 1}`}>
           <div className="outil-ligne-entete">
             <span
-              className={`outil-statut${c.done ? (c.isError ? ' outil-statut--erreur' : ' outil-statut--succes') : ' outil-statut--cours'}`}
-              role="img"
-              aria-label={!c.done ? 'en cours' : c.isError ? 'erreur' : 'succès'}
+              className={`outil-statut${c.interrupted ? ' outil-statut--interrompu' : c.done ? (c.isError ? ' outil-statut--erreur' : ' outil-statut--succes') : ' outil-statut--cours'}`}
+              role={c.interrupted ? undefined : 'img'}
+              aria-label={
+                c.interrupted ? undefined : !c.done ? 'en cours' : c.isError ? 'erreur' : 'succès'
+              }
             >
-              {!c.done ? '…' : c.isError ? '✗' : '✓'}
+              {c.interrupted ? 'interrompu' : !c.done ? '…' : c.isError ? '✗' : '✓'}
             </span>
             <span className="outil-nom">
               {c.name}
               {resumeEntree(c.input) && (
-                <span className="outil-entree"> {resumeEntree(c.input)}</span>
+                <span className="outil-entree"> {tronquer(resumeEntree(c.input))}</span>
               )}
             </span>
             <span className="outil-resultat">{premiereLigne(c.output)}</span>

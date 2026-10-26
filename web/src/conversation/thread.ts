@@ -8,6 +8,7 @@ export interface ToolCall {
   output?: string;
   isError?: boolean;
   done: boolean;
+  interrupted?: boolean;
 }
 
 export type Block =
@@ -36,6 +37,10 @@ export function buildTurns(items: AgentStreamItem[]): Turn[] {
     if (openTools.length > 0 && current)
       current.blocks.push({ kind: 'tools', seq: openToolsSeq, calls: openTools });
     openTools = [];
+  };
+  // turn_end/exit ferment les outils encore ouverts : sans quoi le spinner tourne pour toujours.
+  const interrupteOutilsOuverts = () => {
+    for (const c of openTools) if (!c.done) c.interrupted = true;
   };
   const closeTurn = () => {
     closeTools();
@@ -85,6 +90,7 @@ export function buildTurns(items: AgentStreamItem[]): Turn[] {
         current!.blocks.push({ kind: 'decision', seq, request: event.request });
         break;
       case 'turn_end':
+        interrupteOutilsOuverts();
         closeTools();
         if (!event.ok) {
           ensureTurn(seq);
@@ -93,6 +99,7 @@ export function buildTurns(items: AgentStreamItem[]): Turn[] {
         closeTurn();
         break;
       case 'exit':
+        interrupteOutilsOuverts();
         closeTools();
         ensureTurn(seq);
         current!.blocks.push({ kind: 'exit', seq, message: event.message });

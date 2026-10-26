@@ -22,6 +22,7 @@ export function Composer({
   const { call } = useAid();
   const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);
+  const [arretBusy, setArretBusy] = useState(false);
   const [erreur, setErreur] = useState<string | null>(null);
   const composingRef = useRef(false);
   const taRef = useRef<HTMLTextAreaElement>(null);
@@ -46,11 +47,15 @@ export function Composer({
   };
 
   const arreter = async () => {
+    if (arretBusy) return;
+    setArretBusy(true);
     setErreur(null);
     try {
       await call('POST', `/api/agents/${agentId}/interrupt`);
     } catch (err) {
       setErreur(message(err));
+    } finally {
+      setArretBusy(false);
     }
   };
 
@@ -109,6 +114,7 @@ export function Composer({
             className="bouton"
             data-node={`${dataNode}.arreter`}
             type="button"
+            disabled={arretBusy}
             onClick={() => void arreter()}
           >
             Arrêter
