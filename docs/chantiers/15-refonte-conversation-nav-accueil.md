@@ -383,6 +383,8 @@ Reprises du brief (§9), à trancher par le client du brief, pas par ce plan :
 
 Propres à ce plan :
 7. D52 : le niveau de détail de `agent_messages` (événements normalisés D59) convient-il ?
-8. D61 : politique d'approbation par défaut pour codex — `untrusted` (demande tout, bruyant)
-   ou `on-request` (non sondé) ?
-9. Libellés des cartes de décision : « Autoriser » / « Toujours autoriser » / « Refuser » ?
+8. ~~D61 : politique d'approbation par défaut pour codex~~ — **tranché par l'opérateur
+   (2026-10-26) : `on-request`**, sondé en réel (aucune demande dans le dossier de travail,
+   une demande quand le bac à sable bloque : écriture hors dossier, réseau).
+9. ~~Libellés des cartes de décision~~ — **tranché par l'opérateur (2026-10-26) :
+   « Autoriser » / « Toujours autoriser » / « Refuser »**.
