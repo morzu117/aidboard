@@ -133,6 +133,7 @@ Numérotation continue depuis D49 (chantier 14).
   A.5 donne l'écran, mais sans A.6 un agent `stream` meurt au premier redémarrage du daemon
   alors que le chemin PTY a sa reprise par résumé. La bascule du défaut arrive avec la reprise
   transparente. Chaque commit reste utilisable.
+  Bascule faite en A.6 (commit fd64832).
 - **D64 — pause** : pas de SIGSTOP pour un agent `stream` en v1 (409 explicite) ; le geste
   équivalent est « Arrêter » = `interrupt()`, exposé par `POST /api/agents/:id/interrupt`.
 - **D65 — protocole de `/ws/agent/:agentId`** : canal en lecture seule (serveur → client) ;

@@ -66,7 +66,8 @@ async function spawnStream(kind: 'claude' | 'codex' = 'claude'): Promise<Spawned
 
 async function spawnPty(): Promise<SpawnedAgent> {
   process.env.PATH = `${PTY_BIN}${delimiter}${saved.PATH}`;
-  c = await setupWorkspace();
+  // D63/A.6 : le défaut est passé à `stream` ; ce test vise justement le 409 sur un agent PTY.
+  c = await setupWorkspace({ config: { agents: { transport: 'pty' } } });
   const topic = await makeTopic(c);
   return c.t.d.agents.spawn({ topicId: topic.topicId, kind: 'claude' });
 }

@@ -188,9 +188,9 @@ test('mesh (12.2) : fusion partielle, le reste vient des défauts', () => {
   });
 });
 
-test('agents (15, D63) : défaut pty, bascule vers stream acceptée', () => {
-  expect(DEFAULT_CONFIG.agents).toEqual({ transport: 'pty' });
-  expect(parseConfig('agents:\n  transport: stream\n').agents).toEqual({ transport: 'stream' });
+test('agents (15, D63/A.6) : défaut stream, repli vers pty accepté', () => {
+  expect(DEFAULT_CONFIG.agents).toEqual({ transport: 'stream' });
+  expect(parseConfig('agents:\n  transport: pty\n').agents).toEqual({ transport: 'pty' });
 });
 
 test('agents (15, D63) : valeur et clé inconnues refusées et nommées', () => {

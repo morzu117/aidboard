@@ -61,7 +61,7 @@ export const DEFAULT_TAILSCALE_BIN =
 
 export const DEFAULT_CONFIG: AidConfig = {
   swairm: { bin: '' },
-  agents: { transport: 'pty' },
+  agents: { transport: 'stream' },
   host: '127.0.0.1',
   port: 4870,
   editor: [],
@@ -334,7 +334,7 @@ const DEFAULT_FILE = `# Configuration d'A-I-D. Tout est facultatif : ce sont les
 #   bin: ""                # vide = désactivé ; préférer un chemin absolu, le PATH du daemon diffère du shell
 #                          # ex. /Users/vous/.local/bin/swairm
 # agents:
-#   transport: pty         # stream = claude/codex par pilote structuré (D63) ; pty = terminal (défaut)
+#   transport: stream      # stream = claude/codex par pilote structuré (D63, défaut) ; pty = terminal
 `;
 
 export function writeDefaultConfigIfAbsent(p: AidPaths): void {
