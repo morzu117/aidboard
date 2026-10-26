@@ -12,6 +12,12 @@ export interface AidConfig {
   structural: StructuralConfig;
   mesh: MeshConfig;
   swairm: SwairmConfig;
+  agents: AgentsConfig;
+}
+
+/** Bascule progressive D63 : `stream` passe `claude`/`codex` par pilote structuré plutôt que PTY. */
+export interface AgentsConfig {
+  transport: 'pty' | 'stream';
 }
 
 /** Cell Swairm (14.1, D43) : binaire vide = désactivée. */
@@ -55,6 +61,7 @@ export const DEFAULT_TAILSCALE_BIN =
 
 export const DEFAULT_CONFIG: AidConfig = {
   swairm: { bin: '' },
+  agents: { transport: 'pty' },
   host: '127.0.0.1',
   port: 4870,
   editor: [],
@@ -111,7 +118,18 @@ export function parseConfig(text: string): AidConfig {
   if (!isRecord(doc)) throw new ConfigError('config.yaml : un objet est attendu à la racine');
   rejectUnknown(
     doc,
-    ['host', 'port', 'editor', 'env', 'terminal', 'memory', 'structural', 'mesh', 'swairm'],
+    [
+      'host',
+      'port',
+      'editor',
+      'env',
+      'terminal',
+      'memory',
+      'structural',
+      'mesh',
+      'swairm',
+      'agents',
+    ],
     '',
   );
 
@@ -146,6 +164,7 @@ export function parseConfig(text: string): AidConfig {
   if (doc.structural !== undefined) parseStructural(doc.structural, cfg.structural);
   if (doc.mesh !== undefined) parseMesh(doc.mesh, cfg.mesh);
   if (doc.swairm !== undefined) parseSwairm(doc.swairm, cfg.swairm);
+  if (doc.agents !== undefined) parseAgents(doc.agents, cfg.agents);
   return cfg;
 }
 
@@ -259,6 +278,17 @@ function parseSwairm(raw: unknown, cfg: SwairmConfig): void {
   if (raw.bin !== undefined) cfg.bin = strOrEmpty(raw.bin, 'swairm.bin');
 }
 
+function parseAgents(raw: unknown, cfg: AgentsConfig): void {
+  if (!isRecord(raw)) throw new ConfigError('config.yaml : agents doit être un objet');
+  rejectUnknown(raw, ['transport'], 'agents.');
+  if (raw.transport !== undefined) {
+    if (raw.transport !== 'pty' && raw.transport !== 'stream') {
+      throw new ConfigError("config.yaml : agents.transport vaut 'pty' ou 'stream'");
+    }
+    cfg.transport = raw.transport;
+  }
+}
+
 export function loadConfig(p: AidPaths): AidConfig {
   if (!existsSync(p.config)) return structuredClone(DEFAULT_CONFIG);
   return parseConfig(readFileSync(p.config, 'utf8'));
@@ -303,6 +333,8 @@ const DEFAULT_FILE = `# Configuration d'A-I-D. Tout est facultatif : ce sont les
 # swairm:
 #   bin: ""                # vide = désactivé ; préférer un chemin absolu, le PATH du daemon diffère du shell
 #                          # ex. /Users/vous/.local/bin/swairm
+# agents:
+#   transport: pty         # stream = claude/codex par pilote structuré (D63) ; pty = terminal (défaut)
 `;
 
 export function writeDefaultConfigIfAbsent(p: AidPaths): void {

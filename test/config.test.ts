@@ -188,6 +188,19 @@ test('mesh (12.2) : fusion partielle, le reste vient des défauts', () => {
   });
 });
 
+test('agents (15, D63) : défaut pty, bascule vers stream acceptée', () => {
+  expect(DEFAULT_CONFIG.agents).toEqual({ transport: 'pty' });
+  expect(parseConfig('agents:\n  transport: stream\n').agents).toEqual({ transport: 'stream' });
+});
+
+test('agents (15, D63) : valeur et clé inconnues refusées et nommées', () => {
+  expect(() => parseConfig('agents:\n  transport: headless\n')).toThrow(
+    "agents.transport vaut 'pty' ou 'stream'",
+  );
+  expect(() => parseConfig('agents:\n  pilote: claude\n')).toThrow('agents.pilote');
+  expect(() => parseConfig('agents: []\n')).toThrow('agents doit être un objet');
+});
+
 test('mesh (12.2) : clé inconnue et champs invalides sont refusés et nommés', () => {
   expect(() => parseConfig('mesh:\n  token: abc\n')).toThrow('mesh.token');
   expect(() => parseConfig('mesh:\n  cell: 1\n')).toThrow('mesh.cell');

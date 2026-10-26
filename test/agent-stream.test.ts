@@ -1,0 +1,197 @@
+import { delimiter, join } from 'node:path';
+import { afterEach, expect, test } from 'vitest';
+import type { PendingRequest } from '../src/shared/model.js';
+import { waitFor } from './helpers/daemon.js';
+import { type Ctx, makeTopic, setupWorkspace } from './helpers/topics.js';
+
+const PTY_BIN = join(import.meta.dirname, 'fixtures/bin');
+const STREAM_BIN = join(import.meta.dirname, 'fixtures/bin-stream');
+const saved = { PATH: process.env.PATH };
+let c: Ctx | undefined;
+
+afterEach(async () => {
+  process.env.PATH = saved.PATH;
+  await c?.t.d.stop();
+  c = undefined;
+});
+
+async function spawnPty(kind: 'claude') {
+  process.env.PATH = `${PTY_BIN}${delimiter}${saved.PATH}`;
+  c = await setupWorkspace();
+  const topic = await makeTopic(c);
+  const agent = c.t.d.agents.spawn({ topicId: topic.topicId, kind });
+  return { agent, topic };
+}
+
+async function spawnStream(kind: 'claude' | 'codex') {
+  process.env.PATH = `${STREAM_BIN}${delimiter}${saved.PATH}`;
+  c = await setupWorkspace({ config: { agents: { transport: 'stream' } } });
+  const topic = await makeTopic(c);
+  const agent = c.t.d.agents.spawn({ topicId: topic.topicId, kind });
+  return { agent, topic };
+}
+
+function row(agentId: string) {
+  return c!.t.db
+    .prepare('SELECT status, pending, session_id FROM agents WHERE id = ?')
+    .get(agentId) as { status: string; pending: string | null; session_id: string | null };
+}
+
+function pendingOf(agentId: string): PendingRequest | null {
+  const p = row(agentId).pending;
+  return p ? (JSON.parse(p) as PendingRequest) : null;
+}
+
+test('transport pty (défaut) : spawn claude reste PTY, aucun changement de comportement', async () => {
+  const { agent } = await spawnPty('claude');
+  expect(agent.transport).toBe('pty');
+  expect(agent.sessionId).toBeNull();
+  const live = c!.t.d.agents.get(agent.id);
+  expect(live).toBeDefined();
+  await waitFor(() => live!.mirror.screen().some((l) => l.includes('PRÊT')), 5000, 'PRÊT');
+});
+
+test('transport stream : spawn claude → stream, session_id = l’UUID passé en --session-id', async () => {
+  const { agent } = await spawnStream('claude');
+  expect(agent.transport).toBe('stream');
+  expect(agent.pid).toBeNull();
+  expect(agent.sessionId).toBeTruthy();
+  const idx = agent.command.indexOf('--session-id');
+  expect(idx).toBeGreaterThan(0);
+  expect(agent.command[idx + 1]).toBe(agent.sessionId);
+  expect(c!.t.d.agents.get(agent.id)).toBeUndefined();
+  expect(c!.t.d.agents.getStream(agent.id)).toBeDefined();
+});
+
+test('transport stream : spawn codex → session_id = id du thread renvoyé par le faux serveur', async () => {
+  const { agent } = await spawnStream('codex');
+  expect(agent.transport).toBe('stream');
+  expect(agent.sessionId).toBeNull();
+  await waitFor(() => row(agent.id).session_id === 'thread-new-fixed', 5000, 'thread.id codex');
+});
+
+test('input : ligne stdin côté faux agent, lignes agent_messages user puis assistant, statut working puis idle', async () => {
+  const { agent } = await spawnStream('claude');
+  await waitFor(() => row(agent.id).session_id === agent.sessionId, 5000, 'session claude');
+
+  c!.t.d.agents.input(agent.id, 'bonjour');
+  expect(row(agent.id).status).toBe('working');
+
+  await waitFor(() => row(agent.id).status === 'idle', 5000, 'fin du tour');
+  const messages = c!.t.db
+    .prepare('SELECT kind, payload FROM agent_messages WHERE agent_id = ? ORDER BY seq')
+    .all(agent.id) as Array<{ kind: string; payload: string }>;
+  const parsed = messages.map((m) => JSON.parse(m.payload) as { role?: string; text?: string });
+  expect(parsed.some((p) => p.role === 'user' && p.text === 'bonjour')).toBe(true);
+  expect(parsed.some((p) => p.role === 'assistant' && p.text === 'echo: bonjour')).toBe(true);
+});
+
+test('demande de permission : statut needs_input + pending, answer(yes) → approval.resolved, id périmé → 409', async () => {
+  const { agent } = await spawnStream('claude');
+  await waitFor(() => row(agent.id).session_id === agent.sessionId, 5000, 'session claude');
+
+  c!.t.d.agents.input(agent.id, 'demande permission');
+  await waitFor(() => row(agent.id).status === 'needs_input', 5000, 'demande de permission');
+  const pending = pendingOf(agent.id)!;
+  expect(pending).toMatchObject({ kind: 'permission' });
+
+  expect(() => c!.t.d.agents.answer(agent.id, 'id-perime', 'yes')).toThrow();
+
+  c!.t.d.agents.answer(agent.id, pending.id, 'yes');
+  await waitFor(() => row(agent.id).status === 'idle', 5000, 'fin du tour');
+  const resolved = c!.t.store
+    .since(null)
+    .find((e) => e.type === 'approval.resolved' && e.agentId === agent.id);
+  expect(resolved).toMatchObject({ data: { pendingId: pending.id, option: 'yes', by: 'human' } });
+  expect(c!.t.d.agents.screen(agent.id, 6)).toContain('fait');
+});
+
+test('interrupt : tour terminé, statut idle ; setPaused → 409 ; interrupt sur un agent PTY → 409', async () => {
+  const { agent } = await spawnStream('claude');
+  await waitFor(() => row(agent.id).session_id === agent.sessionId, 5000, 'session claude');
+
+  c!.t.d.agents.input(agent.id, 'tour long');
+  await waitFor(
+    () =>
+      !!c!.t.db
+        .prepare("SELECT 1 FROM agent_messages WHERE agent_id = ? AND kind = 'session'")
+        .get(agent.id),
+    5000,
+    'tour long démarré',
+  );
+  c!.t.d.agents.interrupt(agent.id);
+  await waitFor(() => row(agent.id).status === 'idle', 5000, 'idle après interruption');
+
+  expect(() => c!.t.d.agents.setPaused(agent.id, true)).toThrow(
+    'pas de pause pour un agent conversationnel',
+  );
+
+  const { agent: ptyAgent } = await spawnPty('claude');
+  expect(() => c!.t.d.agents.interrupt(ptyAgent.id)).toThrow(
+    'interruption réservée aux agents conversationnels',
+  );
+});
+
+test('stop : agent.exited reason user, statut stopped ; stopAll arrête aussi les agents stream', async () => {
+  const { agent } = await spawnStream('claude');
+  await waitFor(() => row(agent.id).session_id === agent.sessionId, 5000, 'session claude');
+
+  await c!.t.d.agents.stop(agent.id, 'user');
+  expect(row(agent.id).status).toBe('stopped');
+  const exited = c!.t.store
+    .since(null)
+    .find((e) => e.type === 'agent.exited' && e.agentId === agent.id);
+  expect(exited).toMatchObject({ data: { reason: 'user' } });
+
+  const { agent: second } = await spawnStream('claude');
+  await c!.t.d.agents.stopAll('daemon_stop', 5000);
+  expect(row(second.id).status).toBe('stopped');
+});
+
+test('screen() d’un agent stream rend la fin du dernier message assistant', async () => {
+  const { agent } = await spawnStream('claude');
+  await waitFor(() => row(agent.id).session_id === agent.sessionId, 5000, 'session claude');
+  c!.t.d.agents.input(agent.id, 'bonjour');
+  await waitFor(() => row(agent.id).status === 'idle', 5000, 'fin du tour');
+  expect(c!.t.d.agents.screen(agent.id, 6)).toEqual(['echo: bonjour']);
+});
+
+test('route POST /api/agents/:id/interrupt', async () => {
+  process.env.PATH = `${STREAM_BIN}${delimiter}${saved.PATH}`;
+  c = await setupWorkspace({ config: { agents: { transport: 'stream' } } });
+  const topic = await makeTopic(c);
+  const spawned = await c.t.d.app.inject({
+    method: 'POST',
+    url: '/api/agents',
+    headers: c.t.headers,
+    payload: { topicId: topic.topicId, kind: 'claude' },
+  });
+  const agent = spawned.json<{ id: string; sessionId: string }>();
+  await waitFor(() => row(agent.id).session_id === agent.sessionId, 5000, 'session claude');
+  c.t.d.agents.input(agent.id, 'tour long');
+  await waitFor(
+    () =>
+      !!c!.t.db
+        .prepare("SELECT 1 FROM agent_messages WHERE agent_id = ? AND kind = 'session'")
+        .get(agent.id),
+    5000,
+    'tour long démarré',
+  );
+  const r = await c.t.d.app.inject({
+    method: 'POST',
+    url: `/api/agents/${agent.id}/interrupt`,
+    headers: c.t.headers,
+  });
+  expect(r.statusCode).toBe(202);
+  await waitFor(() => row(agent.id).status === 'idle', 5000, 'idle après interruption');
+
+  expect(
+    (
+      await c.t.d.app.inject({
+        method: 'POST',
+        url: `/api/agents/ag_nope/interrupt`,
+        headers: c.t.headers,
+      })
+    ).statusCode,
+  ).toBe(404);
+});

@@ -43,7 +43,7 @@ test('le schéma connaît la source swarph et les deux types mesh', () => {
   expect(EVENT_TYPES).toContain('mesh.dm');
   expect(EVENT_TYPES).toContain('mesh.state');
   const { db } = setup();
-  expect(db.pragma('user_version', { simple: true })).toBe(9);
+  expect(db.pragma('user_version', { simple: true })).toBe(10);
   const tables = (
     db.prepare("SELECT name FROM sqlite_master WHERE type = 'table'").all() as {
       name: string;

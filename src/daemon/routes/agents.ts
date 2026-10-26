@@ -70,6 +70,13 @@ export function registerAgentRoutes(
     });
   }
 
+  // D64 : l'équivalent de la pause pour un agent conversationnel, qui n'en a pas.
+  app.post('/api/agents/:id/interrupt', async (req, reply) => {
+    const { id } = req.params as { id: string };
+    deps.agents.interrupt(id);
+    return reply.code(202).send({ id });
+  });
+
   app.delete('/api/agents/:id', async (req, reply) => {
     const { id } = req.params as { id: string };
     const row = deps.db.prepare('SELECT closed_at FROM agents WHERE id = ?').get(id) as

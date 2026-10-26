@@ -105,7 +105,8 @@ export class ClaudeDriver implements ConversationDriver {
     this.child = child;
     child.on('error', (err) => this.handleExit(null, null, err.message));
     child.stdin.on('error', () => {
-      // EPIPE sur écriture après mort du process : géré par le check writable de write().
+      // sans ce listener, l'EPIPE d'une écriture juste après la mort du process (course avec le
+      // check `writable` de write()) ferait planter le daemon faute de gestionnaire d'erreur.
     });
     child.stdout.on('data', (chunk: Buffer) => this.onStdout(chunk));
     child.stderr.on('data', (chunk: Buffer) => {
@@ -121,13 +122,13 @@ export class ClaudeDriver implements ConversationDriver {
   ): void {
     if (this.exited) return;
     this.exited = true;
+    this.cancelPendingPermissions();
     this.emit({
       type: 'exit',
       code,
       signal,
       message: errorMessage !== undefined ? errorMessage : this.errTail.trim() || undefined,
     });
-    this.cancelPendingPermissions();
     const resolvers = this.stopResolvers;
     this.stopResolvers = [];
     for (const resolve of resolvers) resolve();

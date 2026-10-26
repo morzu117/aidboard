@@ -116,11 +116,12 @@ export interface Agent {
   runId: string;
   kind: AgentKind;
   role: 'orchestrator' | Phase | 'free';
-  transport: 'pty' | 'headless' | 'remote';
+  transport: 'pty' | 'headless' | 'remote' | 'stream';
   status: AgentStatus;
   cwd: string;
   command: string[];
   pid: number | null;
+  sessionId: string | null;
   exitCode: number | null;
   issue: number | null;
   statusReason: string | null;

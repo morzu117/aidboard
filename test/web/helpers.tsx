@@ -69,6 +69,7 @@ export const agent = (over: Partial<Agent> = {}): Agent => ({
   cwd: '/w/s',
   command: ['sh'],
   pid: 1,
+  sessionId: null,
   exitCode: null,
   issue: null,
   statusReason: null,

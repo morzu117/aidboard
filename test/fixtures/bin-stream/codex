@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+# Faux « codex » (app-server, JSON-RPC) pour test/agent-stream.test.ts : rejoue fake-codex-appserver.mjs.
+exec node "$(dirname "$0")/../fake-codex-appserver.mjs" "$@"
