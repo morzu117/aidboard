@@ -3,20 +3,16 @@ import type { AgentStatus } from '../../../src/shared/model.js';
 import { useAid } from '../data/useAidState.js';
 
 const message = (err: unknown) => (err instanceof Error ? err.message : String(err));
-const ENDED: ReadonlySet<AgentStatus> = new Set(['done', 'error', 'stopped']);
 
 export function Composer({
   agentId,
   kind,
   status,
-  exited,
   dataNode,
 }: {
   agentId: string;
   kind: string;
   status: AgentStatus;
-  /** le canal structuré a reçu `exit` : s'ajoute à `status` pour couvrir le daemon précédent (D65) */
-  exited: boolean;
   dataNode: string;
 }) {
   const { call } = useAid();
@@ -27,13 +23,12 @@ export function Composer({
   const composingRef = useRef(false);
   const taRef = useRef<HTMLTextAreaElement>(null);
 
-  const ended = exited || ENDED.has(status);
   const needsInput = status === 'needs_input';
   const working = status === 'working';
 
   const envoyer = async () => {
     const t = text.trim();
-    if (!t || ended || needsInput || busy) return;
+    if (!t || needsInput || busy) return;
     setBusy(true);
     setErreur(null);
     try {
@@ -72,15 +67,6 @@ export function Composer({
       void envoyer();
     }
   };
-
-  if (ended)
-    return (
-      <div className="composer" data-node={dataNode}>
-        <p className="composer-etat" data-node={`${dataNode}.etat`}>
-          Agent arrêté
-        </p>
-      </div>
-    );
 
   return (
     <div className="composer" data-node={dataNode}>

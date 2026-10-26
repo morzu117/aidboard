@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import type { Agent } from '../../../src/shared/model.js';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type { Agent, AgentStatus } from '../../../src/shared/model.js';
 import type { AgentStreamItem } from '../../../src/shared/conversation.js';
 import { AgentSocket } from './agentSocket.js';
 import { Composer } from './Composer.js';
@@ -9,40 +9,60 @@ import { ToolCallGroup } from './ToolCallGroup.js';
 import { buildTurns, tourInterrompu } from './thread.js';
 
 const SEUIL_BAS = 40;
+// Le canal précédent a fermé (D65) ; ces statuts disent que l'agent est reparti sous le même id (A.6).
+const REPART: ReadonlySet<AgentStatus> = new Set(['starting', 'working', 'needs_input']);
 
 // Une instance par agent, montée une fois et masquée au changement d'onglet, comme <Terminal> (D65).
 export function Conversation({ agent, visible }: { agent: Agent; visible: boolean }) {
   const [items, setItems] = useState<Map<number, AgentStreamItem>>(new Map());
   const [truncated, setTruncated] = useState(false);
   const [linked, setLinked] = useState(true);
-  const [exited, setExited] = useState(false);
   const [openGroups, setOpenGroups] = useState<Set<number>>(new Set());
   const [atBottom, setAtBottom] = useState(true);
   const [pill, setPill] = useState(false);
   const threadRef = useRef<HTMLDivElement>(null);
   const atBottomRef = useRef(true);
+  const sockRef = useRef<AgentSocket | null>(null);
+  // pas de rendu propre (A.6) : seul un futur changement de `agent.status` doit déclencher la relance
+  const exitedRef = useRef(false);
+
+  const ouvrirSocket = useCallback(
+    () =>
+      new AgentSocket(agent.id, {
+        onHello: () => {},
+        onHistory: (hist, trunc) => {
+          setItems((m) => {
+            const next = new Map(m);
+            for (const it of hist) next.set(it.seq, it);
+            return next;
+          });
+          setTruncated(trunc);
+        },
+        // réaction à un événement externe, pas une synchronisation dérivée du rendu : setState légitime ici
+        onEvent: (it) => {
+          setItems((m) => new Map(m).set(it.seq, it));
+          if (!atBottomRef.current) setPill(true);
+        },
+        onExit: () => {
+          exitedRef.current = true;
+        },
+        onLink: setLinked,
+      }),
+    [agent.id],
+  );
 
   useEffect(() => {
-    const sock = new AgentSocket(agent.id, {
-      onHello: () => {},
-      onHistory: (hist, trunc) => {
-        setItems((m) => {
-          const next = new Map(m);
-          for (const it of hist) next.set(it.seq, it);
-          return next;
-        });
-        setTruncated(trunc);
-      },
-      // réaction à un événement externe, pas une synchronisation dérivée du rendu : setState légitime ici
-      onEvent: (it) => {
-        setItems((m) => new Map(m).set(it.seq, it));
-        if (!atBottomRef.current) setPill(true);
-      },
-      onExit: () => setExited(true),
-      onLink: setLinked,
-    });
-    return () => sock.close();
-  }, [agent.id]);
+    sockRef.current = ouvrirSocket();
+    return () => sockRef.current?.close();
+  }, [ouvrirSocket]);
+
+  // reprise transparente (A.6) : le canal précédent a fermé, l'agent est reparti sous le même id
+  useEffect(() => {
+    if (!exitedRef.current || !REPART.has(agent.status)) return;
+    exitedRef.current = false;
+    sockRef.current?.close();
+    sockRef.current = ouvrirSocket();
+  }, [agent.status, ouvrirSocket]);
 
   const sorted = useMemo(() => [...items.values()].sort((a, b) => a.seq - b.seq), [items]);
   const turns = useMemo(() => buildTurns(sorted), [sorted]);
@@ -160,11 +180,12 @@ export function Conversation({ agent, visible }: { agent: Agent; visible: boolea
                       </p>
                     );
                   case 'exit':
-                    return (
+                    // sans message : relance transparente au prochain envoi, rien à montrer (A.6)
+                    return b.message ? (
                       <p className="texte-faible" key={bn} data-node={bn}>
-                        Agent arrêté{b.message ? ` : ${b.message}` : ''}
+                        Session interrompue : {b.message}. Elle reprendra au prochain message.
                       </p>
-                    );
+                    ) : null;
                 }
               })}
             </div>
@@ -190,7 +211,6 @@ export function Conversation({ agent, visible }: { agent: Agent; visible: boolea
         agentId={agent.id}
         kind={agent.kind}
         status={agent.status}
-        exited={exited}
         dataNode={`${dn}.composer`}
       />
     </div>

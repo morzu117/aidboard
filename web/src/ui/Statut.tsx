@@ -13,6 +13,10 @@ export interface StatusView {
 const ENDED = new Set<Agent['status']>(['done', 'error', 'stopped']);
 export const isAlive = (a: Agent) => !ENDED.has(a.status);
 
+/** Reprise transparente (A.6) : un agent qui peut repartir sous le même id au prochain message. */
+export const isResumable = (a: Agent): boolean =>
+  a.transport === 'stream' && (a.kind === 'claude' || a.kind === 'codex');
+
 /**
  * Le statut affiché d'un agent. La pause l'emporte sur le statut (E5) ; un shell vivant n'a pas de
  * statut suivi et s'affiche « shell » en gris ; `idle` se lit « À relire » sur une carte et « Tour
@@ -38,9 +42,13 @@ export function agentView(a: Agent, where: 'carte' | 'boite' = 'carte'): StatusV
     case 'starting':
       return { label: 'Démarrage', tone: 'cours' };
     case 'done':
-      return { label: 'Terminé', tone: 'inactif' };
+      return isResumable(a)
+        ? { label: 'En veille', tone: 'inactif' }
+        : { label: 'Terminé', tone: 'inactif' };
     case 'stopped':
-      return { label: 'Arrêté', tone: 'inactif' };
+      return isResumable(a)
+        ? { label: 'En veille', tone: 'inactif' }
+        : { label: 'Arrêté', tone: 'inactif' };
   }
 }
 

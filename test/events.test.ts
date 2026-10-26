@@ -119,6 +119,29 @@ test.each([
   expect(db.prepare("SELECT status FROM agents WHERE id='ag_1'").get()).toEqual({ status });
 });
 
+test('agent.resumed (A.6) remet la ligne vivante : statut, exit_code, pending, paused_at, pid', () => {
+  const { store, db } = setup();
+  seed(db);
+  db.prepare(
+    "UPDATE agents SET status='error', exit_code=1, pending='{}', paused_at='t0', pid=4242 WHERE id='ag_1'",
+  ).run();
+  store.append({ source: 'daemon', type: 'agent.resumed', agentId: 'ag_1', data: {} });
+  expect(
+    db
+      .prepare(
+        "SELECT status, exit_code, pending, paused_at, pid, status_source FROM agents WHERE id='ag_1'",
+      )
+      .get(),
+  ).toEqual({
+    status: 'starting',
+    exit_code: null,
+    pending: null,
+    paused_at: null,
+    pid: null,
+    status_source: 'daemon',
+  });
+});
+
 test('cycle de vie d’une action', () => {
   const { store, db } = setup();
   seed(db);

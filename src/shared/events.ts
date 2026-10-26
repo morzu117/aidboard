@@ -14,6 +14,7 @@ export type EventSource = (typeof EVENT_SOURCES)[number];
 export const EVENT_TYPES = [
   'agent.spawned',
   'agent.exited',
+  'agent.resumed',
   'agent.status',
   'agent.tool',
   'agent.closed',

@@ -399,9 +399,66 @@ export class AgentManager {
     };
   }
 
+  /** Construction partagée du pilote (D59-D62) : `spawnStream` et la relance (A.6) en ont besoin à l'identique. */
+  private createStream(o: {
+    agentId: string;
+    topic: TopicRow;
+    runId: string;
+    kind: 'claude' | 'codex';
+    sessionId: string;
+    resume: boolean;
+    seq: number;
+  }): { stream: LiveStream; command: string[] } {
+    const { paths, config, auth } = this.deps;
+    const file = resolveOnPath(o.kind, process.env.PATH ?? '');
+    if (!file) throw new AidHttpError(422, `${o.kind} introuvable dans le PATH du daemon`);
+    // pas de hookEnv() (D62) : le pilote est la seule source de statut pour un agent `stream`.
+    const env = agentEnv(process.env, config.env.strip, {
+      AID_URL: `http://127.0.0.1:${this.deps.port()}`,
+      AID_TOKEN: issueRunToken(auth, o.runId),
+      AID_TOPIC: o.topic.id,
+      AID_RUN: o.runId,
+      AID_AGENT: o.agentId,
+      AID_SPOOL: paths.spool,
+    });
+    const driverOpts = {
+      bin: file,
+      cwd: o.topic.worktree,
+      env,
+      sessionId: o.sessionId,
+      resume: o.resume,
+    };
+    const driver: ConversationDriver =
+      o.kind === 'claude' ? new ClaudeDriver(driverOpts) : new CodexDriver(driverOpts);
+    const args = o.kind === 'claude' ? buildClaudeArgs(driverOpts) : buildCodexArgs(driverOpts);
+    const command = [file, ...args];
+
+    const subscribers = new Set<(ev: ConversationEvent) => void>();
+    const stream: LiveStream = {
+      id: o.agentId,
+      topicId: o.topic.id,
+      runId: o.runId,
+      workspaceId: o.topic.workspace_id,
+      kind: o.kind,
+      driver,
+      exited: false,
+      exit: null,
+      seq: o.seq,
+      subscribe: (cb) => {
+        subscribers.add(cb);
+        return () => subscribers.delete(cb);
+      },
+    };
+    this.streamSubscribers.set(o.agentId, subscribers);
+    this.wireStream(stream);
+    this.streams.set(o.agentId, stream);
+    driver.start();
+    return { stream, command };
+  }
+
   /** Agent conversationnel (D59-D62) : même sujet/run/worktree que la voie PTY, process piloté par `ConversationDriver`. */
   private spawnStream(o: { topicId: string; kind: 'claude' | 'codex' }): Agent {
-    const { db, store, paths, config, auth } = this.deps;
+    const { db, store } = this.deps;
     const topic = db.prepare('SELECT * FROM topics WHERE id = ?').get(o.topicId) as
       TopicRow | undefined;
     if (!topic) throw new AidHttpError(404, 'sujet inconnu');
@@ -413,46 +470,19 @@ export class AgentManager {
       .get(o.topicId) as { id: string } | undefined;
     if (!run) throw new AidHttpError(409, 'ce sujet n’a pas de run');
 
-    const file = resolveOnPath(o.kind, process.env.PATH ?? '');
-    if (!file) throw new AidHttpError(422, `${o.kind} introuvable dans le PATH du daemon`);
-
     const agentId = `ag_${ulid()}`;
-    // pas de hookEnv() (D62) : le pilote est la seule source de statut pour un agent `stream`.
-    const env = agentEnv(process.env, config.env.strip, {
-      AID_URL: `http://127.0.0.1:${this.deps.port()}`,
-      AID_TOKEN: issueRunToken(auth, run.id),
-      AID_TOPIC: topic.id,
-      AID_RUN: run.id,
-      AID_AGENT: agentId,
-      AID_SPOOL: paths.spool,
-    });
     const sessionId = o.kind === 'claude' ? randomUUID() : '';
-    const driverOpts = { bin: file, cwd: topic.worktree, env, sessionId, resume: false };
-    const driver: ConversationDriver =
-      o.kind === 'claude' ? new ClaudeDriver(driverOpts) : new CodexDriver(driverOpts);
-    const args = o.kind === 'claude' ? buildClaudeArgs(driverOpts) : buildCodexArgs(driverOpts);
-    const command = [file, ...args];
+    const { command } = this.createStream({
+      agentId,
+      topic,
+      runId: run.id,
+      kind: o.kind,
+      sessionId,
+      resume: false,
+      seq: 0,
+    });
 
     const now = new Date().toISOString();
-    const subscribers = new Set<(ev: ConversationEvent) => void>();
-    const stream: LiveStream = {
-      id: agentId,
-      topicId: topic.id,
-      runId: run.id,
-      workspaceId: topic.workspace_id,
-      kind: o.kind,
-      driver,
-      exited: false,
-      exit: null,
-      seq: 0,
-      subscribe: (cb) => {
-        subscribers.add(cb);
-        return () => subscribers.delete(cb);
-      },
-    };
-    this.streamSubscribers.set(agentId, subscribers);
-    this.wireStream(stream);
-
     store.append(
       {
         source: 'daemon',
@@ -479,8 +509,6 @@ export class AgentManager {
             now,
           ),
     );
-    this.streams.set(agentId, stream);
-    driver.start();
     return {
       id: agentId,
       runId: run.id,
@@ -505,6 +533,60 @@ export class AgentManager {
       createdAt: now,
       updatedAt: now,
     };
+  }
+
+  /** Relance paresseuse (A.6, D51) : un agent `stream` en veille repart sous le même id au prochain message. */
+  private streamOrResume(agentId: string): LiveStream {
+    const existing = this.streams.get(agentId);
+    if (existing && !existing.exited) return existing;
+    const row = this.deps.db
+      .prepare('SELECT run_id, kind, transport, session_id FROM agents WHERE id = ?')
+      .get(agentId) as
+      { run_id: string; kind: SpawnKind; transport: string; session_id: string | null } | undefined;
+    if (!row) throw new AidHttpError(404, 'agent inconnu');
+    if (row.transport !== 'stream') throw new AidHttpError(409, 'cet agent est terminé');
+    return this.resumeStream(agentId, row);
+  }
+
+  /** Nouveau `LiveStream` sous le même agentId (A.6) : même construction que `spawnStream`, `resume: true` si une session existe déjà. */
+  private resumeStream(
+    agentId: string,
+    row: { run_id: string; kind: SpawnKind; session_id: string | null },
+  ): LiveStream {
+    const { db, store } = this.deps;
+    const run = db.prepare('SELECT id, topic_id FROM runs WHERE id = ?').get(row.run_id) as
+      { id: string; topic_id: string } | undefined;
+    if (!run) throw new AidHttpError(409, 'ce sujet n’a pas de run');
+    const topic = db.prepare('SELECT * FROM topics WHERE id = ?').get(run.topic_id) as
+      TopicRow | undefined;
+    if (!topic) throw new AidHttpError(404, 'sujet inconnu');
+    if (topic.state !== 'active') throw new AidHttpError(409, 'le sujet est archivé');
+    if (!existsSync(topic.worktree)) throw new AidHttpError(409, 'worktree introuvable');
+    const kind = row.kind as 'claude' | 'codex';
+    const resume = Boolean(row.session_id);
+    const sessionId = row.session_id ?? (kind === 'claude' ? randomUUID() : '');
+    const seqRow = db
+      .prepare('SELECT MAX(seq) AS maxSeq FROM agent_messages WHERE agent_id = ?')
+      .get(agentId) as { maxSeq: number | null };
+    const { stream } = this.createStream({
+      agentId,
+      topic,
+      runId: run.id,
+      kind,
+      sessionId,
+      resume,
+      seq: seqRow.maxSeq ?? 0,
+    });
+    store.append({
+      source: 'daemon',
+      type: 'agent.resumed',
+      workspaceId: topic.workspace_id,
+      topicId: topic.id,
+      runId: run.id,
+      agentId,
+      data: {},
+    });
+    return stream;
   }
 
   /** Abonnement D52/D59 : chaque événement (sauf `thinking`) devient une ligne `agent_messages`, puis le statut qu'il implique. */
@@ -765,9 +847,17 @@ export class AgentManager {
     return lines.filter((l) => l.trim()).slice(-n);
   }
 
+  /** Agent `stream` absent de la mémoire (daemon redémarré) : seul `input` le relance, jamais au démarrage (D63/A.6). */
+  private dormantStream(agentId: string): boolean {
+    if (this.live.has(agentId)) return false;
+    const row = this.deps.db.prepare('SELECT transport FROM agents WHERE id = ?').get(agentId) as
+      { transport: string } | undefined;
+    return row?.transport === 'stream';
+  }
+
   /** Un message tapé pour l'agent : le texte, puis Entrée. Plusieurs lignes passent en collage encadré. */
   input(agentId: string, raw: string): void {
-    if (this.streams.has(agentId)) {
+    if (this.streams.has(agentId) || this.dormantStream(agentId)) {
       this.inputStream(agentId, raw);
       return;
     }
@@ -788,7 +878,7 @@ export class AgentManager {
 
   /** Même message qu'au clavier (D59) : une ligne `agent_messages`, le statut `working`, puis le pilote. */
   private inputStream(agentId: string, raw: string): void {
-    const s = this.streamOr409(agentId);
+    const s = this.streamOrResume(agentId);
     const text = raw.replace(/\r\n?/g, '\n');
     // eslint-disable-next-line no-control-regex
     if (/[\u0000-\u0008\u000b-\u001f\u007f]/.test(text))

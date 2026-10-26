@@ -130,6 +130,12 @@ export function project(tx: Db, e: AidEvent): void {
       ).run(status, d.exitCode ?? null, e.ts, e.agentId);
       break;
     }
+    case 'agent.resumed':
+      // relance paresseuse (A.6) : la ligne `agents` revient vivante, puis `inputStream` suit son chemin habituel.
+      tx.prepare(
+        "UPDATE agents SET status = 'starting', exit_code = NULL, pending = NULL, paused_at = NULL, pid = NULL, status_source = 'daemon', status_at = ?, updated_at = ? WHERE id = ?",
+      ).run(e.ts, e.ts, e.agentId);
+      break;
     case 'agent.status':
       projectStatus(tx, e, d);
       break;

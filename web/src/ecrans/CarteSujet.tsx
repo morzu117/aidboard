@@ -4,7 +4,15 @@ import type { Agent, PendingRequest, Topic, Workspace } from '../../../src/share
 import { Conversation } from '../conversation/Conversation.js';
 import { useAid } from '../data/useAidState.js';
 import { Terminal } from '../terminal/Terminal.js';
-import { agentView, Badge, isAlive, mostUrgent, Point, topicView } from '../ui/Statut.js';
+import {
+  agentView,
+  Badge,
+  isAlive,
+  isResumable,
+  mostUrgent,
+  Point,
+  topicView,
+} from '../ui/Statut.js';
 import { depuis } from '../ui/depuis.js';
 import { roleLabel } from '../ui/roles.js';
 
@@ -372,7 +380,9 @@ export function CarteSujet({
           pending={asking.pending}
         />
       )}
-      {recipient && isAlive(recipient) && <Message dataNode={id('message')} agent={recipient} />}
+      {recipient && (isAlive(recipient) || isResumable(recipient)) && (
+        <Message dataNode={id('message')} agent={recipient} />
+      )}
       {erreur && (
         <p className="message-erreur" role="alert" data-node={id('actions.erreur')}>
           {erreur}

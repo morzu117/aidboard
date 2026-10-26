@@ -281,12 +281,50 @@ test('Composer : demande en cours → envoi désactivé avec indication', async 
   );
 });
 
-test('Composer : après exit reçu sur le canal → désactivé, « Agent arrêté »', async () => {
+test('Composer : après exit sans message (A.6) → pas de « Agent arrêté », le champ reste actif', async () => {
   const h = mount(streamAgent({ status: 'working' }));
   h.sock().onopen?.();
   h.sock().text({ t: 'exit', exitCode: 0, signal: null, reason: 'exit' });
-  expect(await screen.findByText('Agent arrêté')).toBeTruthy();
-  expect(screen.queryByRole('textbox', { name: /Message à claude/ })).toBeNull();
+  expect(screen.queryByText('Agent arrêté')).toBeNull();
+  expect(screen.getByRole('textbox', { name: /Message à claude/ })).toBeTruthy();
+});
+
+test('exit avec message (A.6) : « Session interrompue », le champ reste actif', async () => {
+  const h = mount(streamAgent({ status: 'working' }));
+  const ws = h.sock();
+  ws.onopen?.();
+  // le texte du diagnostic de crash arrive dans l'événement (ligne `agent_messages`), pas dans le
+  // cadre `t: 'exit'` (qui ne porte qu'exitCode/signal/reason et pilote la fermeture du canal).
+  ws.text({
+    t: 'event',
+    seq: 1,
+    at: 't1',
+    event: { type: 'exit', code: 1, signal: null, message: 'process mort' },
+  });
+  expect(
+    await screen.findByText(
+      'Session interrompue : process mort. Elle reprendra au prochain message.',
+    ),
+  ).toBeTruthy();
+  expect(screen.getByRole('textbox', { name: /Message à claude/ })).toBeTruthy();
+});
+
+test('reprise transparente (A.6) : après exit, le statut repart « working » → un nouveau canal s’ouvre', async () => {
+  const h = mount(streamAgent({ status: 'idle' }));
+  h.sock().onopen?.();
+  h.sock().text({ t: 'exit', exitCode: 0, signal: null, reason: 'exit' });
+  expect(FakeWs.all).toHaveLength(1);
+
+  h.rerenderWith(streamAgent({ status: 'working' }));
+  expect(FakeWs.all).toHaveLength(2);
+  const ws2 = FakeWs.all.at(-1)!;
+  ws2.onopen?.();
+  ws2.text({
+    t: 'history',
+    truncated: false,
+    items: [{ seq: 1, at: 't1', event: { type: 'message', role: 'user', text: 'repris' } }],
+  });
+  expect(await screen.findByText('repris')).toBeTruthy();
 });
 
 test('ToolCallGroup : un outil encore ouvert à turn_end ou à exit est affiché « interrompu », jamais en cours ; un tool_end rejoué pour cet outil ne casse rien', async () => {

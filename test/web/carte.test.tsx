@@ -89,6 +89,12 @@ test('aperçu : pas de rechargement périodique pour un agent terminé, ni de me
   expect(node(c('actions.agrandir'))).not.toBeNull();
 });
 
+test('reprise (A.6) : un agent stream terminé reste « résumable », le champ message reste affiché', async () => {
+  setup(<Accueil />, unSujet([claude({ status: 'done', transport: 'stream' })]));
+  await screen.findByText('feat/s');
+  expect(node(c('message'))).not.toBeNull();
+});
+
 test('demande : question et options ; un clic répond par /answer', async () => {
   const h = setup(<Accueil />, unSujet([claude({ status: 'needs_input', pending: permission })]));
   await screen.findByText('feat/s');
