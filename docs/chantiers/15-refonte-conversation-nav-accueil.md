@@ -119,6 +119,21 @@ Numérotation continue depuis D49 (chantier 14).
   et ne demandent aucun opt-in ; seule la commande `app-server` porte l'étiquette
   `[experimental]`. Repli documenté : `codex exec --json` / `exec resume` (un process par
   tour, sans approbations), à n'écrire que si app-server casse à une mise à jour de Codex.
+- **D62 — agents `stream` dans AgentManager** : une seconde table en mémoire
+  (`streams: Map<string, LiveStream>`) à côté de `live`, plutôt qu'un `LiveAgent` discriminé :
+  `get()`, `liveAgents()`, `attach.ts`, `ws/pty.ts` et l'heuristique ne voient que les agents
+  PTY et ne changent pas. Les entrées publiques (`input`, `answer`, `setPaused`, `stop`,
+  `stopAll`, `close`, `forget`, `screen`) aiguillent selon la table. Statut dérivé des
+  événements du pilote, publié par le store (`agent.status` source `daemon`, `agent.tool`,
+  `approval.resolved`, `agent.exited`) : mêmes projecteurs, mêmes cartes qu'aujourd'hui. Pas de
+  `hookEnv` pour un agent `stream` : le pilote est la seule source de statut (pas de doublon de
+  demandes entre hook et `control_request`).
+- **D63 — bascule progressive** : réglage `agents.transport: pty | stream` dans
+  `config.yaml`, défaut `pty` jusqu'au point A.5 (qui le passe à `stream` quand la vue
+  conversation existe). Chaque commit reste utilisable : avant A.5, un agent `stream` n'aurait
+  aucun écran.
+- **D64 — pause** : pas de SIGSTOP pour un agent `stream` en v1 (409 explicite) ; le geste
+  équivalent est « Arrêter » = `interrupt()`, exposé par `POST /api/agents/:id/interrupt`.
 - **D54 (à valider)** : `Nav` (barre gauche) est un composant entièrement neuf, monté dans
   `Layout.tsx` à la place où rien n'existe aujourd'hui (ligne 106-114) — ce n'est pas une
   évolution de `Cote.tsx`, qui reste en l'état pour son seul usage actuel (vue archive) sauf si
@@ -220,9 +235,8 @@ ignorer : `mcpServer/startupStatus/updated`, `account/rateLimits/updated`,
   `session_id` sur `agents`), `src/shared/model.ts` (`transport` accepte `'stream'`,
   `Agent.sessionId`), `src/daemon/pty/manager.ts` (spawn d'un agent `stream` via le pilote ;
   `input`/`answer`/`setPaused`/`stop` délèguent au pilote ; `LiveAgent` discriminé).
-- Bascule : `claude` et `codex` passent en `stream` par défaut. Repli : réglage
-  `agents.transport: pty` dans la config (pas d'option d'interface), pour revenir au terminal
-  si un pilote casse — à retirer dans un chantier ultérieur.
+- Bascule : D63 (réglage `agents.transport`, défaut `pty` jusqu'à A.5). Structure : D62.
+  Pause : D64.
 - Dépassement assumé : `spawn()` gagne une branche ; lignes existantes modifiées limitées au
   branchement. Commit isolé.
 - Commit : `feat(conversation): agents claude et codex lancés par pilote structuré`.
