@@ -245,7 +245,7 @@ ignorer : `mcpServer/startupStatus/updated`, `account/rateLimits/updated`,
   `session_id` sur `agents`), `src/shared/model.ts` (`transport` accepte `'stream'`,
   `Agent.sessionId`), `src/daemon/pty/manager.ts` (spawn d'un agent `stream` via le pilote ;
   `input`/`answer`/`setPaused`/`stop` délèguent au pilote ; `LiveAgent` discriminé).
-- Bascule : D63 (réglage `agents.transport`, défaut `pty` jusqu'à A.5). Structure : D62.
+- Bascule : D63 (réglage `agents.transport`, défaut `pty` jusqu'à A.6). Structure : D62.
   Pause : D64.
 - Dépassement assumé : `spawn()` gagne une branche ; lignes existantes modifiées limitées au
   branchement. Commit isolé.
