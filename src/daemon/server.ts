@@ -33,6 +33,7 @@ import type { MeshService } from './mesh/service.js';
 import type { MemoryProposals } from './memory/maintain.js';
 import type { MemoryService } from './memory/service.js';
 import { type AuthState, registerSecurity, writeSessionToken } from './security.js';
+import { registerAgentSocket } from './ws/agent.js';
 import { registerEventSocket } from './ws/events.js';
 import { registerPtySocket } from './ws/pty.js';
 
@@ -173,6 +174,7 @@ export async function buildServer(deps: ServerDeps): Promise<FastifyInstance> {
     config: deps.config,
     agents: deps.agents,
   });
+  registerAgentSocket(app, { db: deps.db, agents: deps.agents });
   const webRoot = deps.webRoot === undefined ? defaultWebRoot() : deps.webRoot;
   if (webRoot) {
     await app.register(fastifyStatic, { root: webRoot });
