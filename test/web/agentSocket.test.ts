@@ -130,3 +130,11 @@ test('après exit ou après close(), plus aucune reconnexion', async () => {
   expect(FakeWs.all).toHaveLength(1);
   expect(b.ws().closedByClient).toBe(true);
 });
+
+test('close 1000 reçu après exit (fin normale décidée par le serveur) : aucune reconnexion', async () => {
+  const t = make();
+  t.ws().text({ t: 'exit', exitCode: 0, signal: null, reason: 'exit' });
+  t.ws().drop(1000);
+  await vi.advanceTimersByTimeAsync(20_000);
+  expect(FakeWs.all).toHaveLength(1);
+});

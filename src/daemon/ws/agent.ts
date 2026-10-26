@@ -6,6 +6,7 @@ import type { AgentManager } from '../pty/manager.js';
 
 const SLOW_CLIENT_BYTES = 4 * 1024 * 1024;
 const HISTORY_LIMIT = 2000;
+const HISTORY_BYTES_LIMIT = 4 * 1024 * 1024;
 
 interface AgentRow {
   status: string;
@@ -65,20 +66,35 @@ export function registerAgentSocket(
 
       const historyRows = deps.db
         .prepare(
-          'SELECT seq, kind, payload, at FROM agent_messages WHERE agent_id = ? AND seq > ? ORDER BY seq DESC LIMIT ?',
+          'SELECT seq, payload, at FROM agent_messages WHERE agent_id = ? AND seq > ? ORDER BY seq DESC LIMIT ?',
         )
         .all(agentId, after, HISTORY_LIMIT) as MessageRow[];
-      // LIMIT seul ne distingue pas un historique pile à la limite d'une troncature réelle.
+      // Les plus récentes d'abord (ordre DESC) : on ne garde que celles qui tiennent sous la limite d'octets.
+      let historyBytes = 0;
+      let boundedCount = historyRows.length;
+      for (let i = 0; i < historyRows.length; i++) {
+        historyBytes += Buffer.byteLength(historyRows[i]!.payload, 'utf8');
+        if (historyBytes > HISTORY_BYTES_LIMIT) {
+          boundedCount = i;
+          break;
+        }
+      }
+      const boundedRows = historyRows.slice(0, boundedCount);
+      // LIMIT et la coupure en octets ratent chacune, seules, un historique pile à la limite.
       const total = (
         deps.db
           .prepare('SELECT COUNT(*) AS n FROM agent_messages WHERE agent_id = ? AND seq > ?')
           .get(agentId, after) as { n: number }
       ).n;
-      const truncated = total > historyRows.length;
-      const items = historyRows
-        .slice()
-        .reverse()
-        .map((r) => ({ seq: r.seq, at: r.at, event: JSON.parse(r.payload) as ConversationEvent }));
+      const truncated = total > boundedRows.length;
+      const items: { seq: number; at: string; event: ConversationEvent }[] = [];
+      for (const r of boundedRows.slice().reverse()) {
+        try {
+          items.push({ seq: r.seq, at: r.at, event: JSON.parse(r.payload) as ConversationEvent });
+        } catch {
+          // ligne corrompue : ignorée plutôt que de faire échouer la connexion.
+        }
+      }
 
       const stream = deps.agents.getStream(agentId);
       const alive = stream !== undefined && !stream.exited;
@@ -91,6 +107,7 @@ export function registerAgentSocket(
       if (!alive) {
         if (stream?.exited) sendExit(stream.exit!);
         else sendExit({ exitCode: row.exit_code, signal: null, reason: 'daemon_restart' });
+        socket.close(1000, 'fin');
         return;
       }
 
@@ -102,6 +119,8 @@ export function registerAgentSocket(
         // reconstruit la sortie depuis l'événement plutôt que de lire un champ pas encore écrit.
         if (ev.type === 'exit') {
           sendExit({ exitCode: ev.code, signal: ev.signal, reason: stream.stopReason ?? 'exit' });
+          unsubscribe();
+          socket.close(1000, 'fin');
         }
       });
 

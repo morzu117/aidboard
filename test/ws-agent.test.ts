@@ -200,6 +200,8 @@ test('stop() : event exit direct, puis message exit normalisé reason user', asy
     true,
   );
   expect(client.last('exit')).toMatchObject({ reason: 'user' });
+  await waitFor(() => client.closeCode !== null, 3000, 'fermeture');
+  expect(client.closeCode).toBe(1000);
 });
 
 test('connexion après la fin de l’agent : hello exited, history complet, exit, aucun direct', async () => {
@@ -223,6 +225,8 @@ test('connexion après la fin de l’agent : hello exited, history complet, exit
   expect((client.last('history') as unknown as { items: unknown[] }).items).toHaveLength(total);
   await waitFor(() => client.last('exit'), 3000, 'exit');
   expect(client.find('event')).toHaveLength(0);
+  await waitFor(() => client.closeCode !== null, 3000, 'fermeture');
+  expect(client.closeCode).toBe(1000);
 });
 
 test('truncated : au-delà de 2000 lignes, seules les 2000 dernières sont rendues', async () => {
@@ -254,6 +258,47 @@ test('truncated : au-delà de 2000 lignes, seules les 2000 dernières sont rendu
   expect(history.items).toHaveLength(2000);
   expect(history.items[0]!.seq).toBe(6);
   expect(history.items.at(-1)!.seq).toBe(2005);
+});
+
+test('truncated par taille : seules les lignes les plus récentes qui tiennent sous 4 Mo sont rendues', async () => {
+  const agent = await spawnStream('claude');
+  await waitFor(() => sessionSet(agent), 5000, 'session');
+  await c!.t.d.agents.stop(agent.id, 'user');
+
+  c!.t.db.prepare('DELETE FROM agent_messages WHERE agent_id = ?').run(agent.id);
+  const insert = c!.t.db.prepare(
+    'INSERT INTO agent_messages (agent_id, seq, kind, payload, at) VALUES (?, ?, ?, ?, ?)',
+  );
+  const big = JSON.stringify({ type: 'message', role: 'assistant', text: 'x'.repeat(1_500_000) });
+  for (let i = 1; i <= 3; i++) insert.run(agent.id, i, 'message', big, 't0');
+
+  const client = await Client.open(agent.id);
+  await waitFor(() => client.find('history').length > 0, 3000, 'history');
+  const history = client.last('history') as unknown as {
+    items: Array<{ seq: number }>;
+    truncated: boolean;
+  };
+  expect(history.truncated).toBe(true);
+  expect(history.items.map((i) => i.seq)).toEqual([2, 3]);
+});
+
+test('ligne de payload corrompue : ignorée, hello/history/exit restent fonctionnels', async () => {
+  const agent = await spawnStream('claude');
+  await waitFor(() => sessionSet(agent), 5000, 'session');
+  await c!.t.d.agents.stop(agent.id, 'user');
+
+  c!.t.db
+    .prepare(
+      "INSERT INTO agent_messages (agent_id, seq, kind, payload, at) VALUES (?, 999999, 'message', ?, ?)",
+    )
+    .run(agent.id, '{not json', 't0');
+
+  const client = await Client.open(agent.id);
+  expect(await client.hello()).toMatchObject({ exited: true });
+  await waitFor(() => client.find('history').length > 0, 3000, 'history');
+  const history = client.last('history') as unknown as { items: Array<{ seq: number }> };
+  expect(history.items.some((i) => i.seq === 999999)).toBe(false);
+  await waitFor(() => client.last('exit'), 3000, 'exit');
 });
 
 test('après fermeture du socket, plus aucun abonné pour cet agent', async () => {
