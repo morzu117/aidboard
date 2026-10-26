@@ -99,11 +99,23 @@ function Propositions({ namespace, topicSlug }: { namespace: string; topicSlug: 
   );
 }
 
-export function Memoire({ namespace, topicSlug }: { namespace: string; topicSlug: string }) {
+export function Memoire({
+  namespace,
+  topicSlug,
+  only,
+  emptyMessage,
+}: {
+  namespace: string;
+  topicSlug: string;
+  // D.2 (chantier 15) : affiche une seule phase, sans le sélecteur ni les propositions — pour
+  // le panneau contextuel, qui porte déjà ses propres onglets (Plan/Revue/Rétro/Passation).
+  only?: MemoryKind;
+  emptyMessage?: string;
+}) {
   const { state, call } = useAid();
   const [pages, setPages] = useState<Partial<Record<MemoryKind, MemoryPage>> | null>(null);
   const [erreur, setErreur] = useState<string | null>(null);
-  const [selected, setSelected] = useState<MemoryKind>('plan');
+  const [selected, setSelected] = useState<MemoryKind>(only ?? 'plan');
 
   useEffect(() => {
     let cancelled = false;
@@ -127,7 +139,37 @@ export function Memoire({ namespace, topicSlug }: { namespace: string; topicSlug
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [namespace, topicSlug, state]);
 
-  const page = pages?.[selected];
+  const page = pages?.[only ?? selected];
+
+  if (only) {
+    return (
+      <div className="memoire-page-seule" data-node="1-3.memoire.page-seule">
+        {erreur && (
+          <p className="message-erreur" role="alert" data-node="1-3.memoire.erreur">
+            {erreur}
+          </p>
+        )}
+        {!pages ? (
+          <div className="squelette" data-node="1-3.memoire.squelette">
+            <span className="sq sq--grand-bloc" />
+          </div>
+        ) : page ? (
+          <div className="memoire-page" data-node="1-3.memoire.page">
+            <p className="texte-discret" data-node="1-3.memoire.page.meta">
+              révision {page.revision} · {depuis(page.updatedAt)}
+            </p>
+            <pre className="memoire-corps" data-node="1-3.memoire.page.corps">
+              {page.body}
+            </pre>
+          </div>
+        ) : (
+          <p className="texte-faible" data-node="1-3.memoire.absente">
+            {emptyMessage ?? 'pas encore écrite'}
+          </p>
+        )}
+      </div>
+    );
+  }
 
   return (
     <section className="memoire" data-node="1-3.memoire" aria-label="Mémoire">
