@@ -9,7 +9,8 @@ export type ConversationEvent =
   | { type: 'tool_end'; toolId: string; output: string; isError: boolean }
   | { type: 'request'; request: PendingRequest }
   | { type: 'turn_end'; ok: boolean; costUsd?: number; durationMs?: number; error?: string }
-  | { type: 'exit'; code: number | null; signal: NodeJS.Signals | null; message?: string };
+  | { type: 'exit'; code: number | null; signal: NodeJS.Signals | null; message?: string }
+  | { type: 'request_cancelled'; requestId: string };
 
 export interface ConversationDriverOptions {
   bin: string;

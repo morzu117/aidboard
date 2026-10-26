@@ -28,6 +28,11 @@ const pendingControl = new Map();
 let longAbort = null;
 
 async function handleTurn(text) {
+  if (text === 'crash') {
+    process.kill(process.pid, 'SIGKILL');
+    return;
+  }
+
   emit({ type: 'system', subtype: 'init', session_id: sessionId, cwd: process.cwd() });
 
   if (text === 'tour long') {

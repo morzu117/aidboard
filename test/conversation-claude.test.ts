@@ -162,3 +162,46 @@ test('arrêt propre : événement exit', async () => {
   await d.stop();
   expect(events.some((e) => e.type === 'exit' && e.code === 0)).toBe(true);
 });
+
+test('binaire inexistant : événement exit avec message, aucun crash', async () => {
+  const sid = randomUUID();
+  const events: ConversationEvent[] = [];
+  driver = new ClaudeDriver({
+    bin: join(import.meta.dirname, 'fixtures/does-not-exist.mjs'),
+    cwd: process.cwd(),
+    env: agentEnv(process.env, [], {}),
+    sessionId: sid,
+    resume: false,
+  });
+  driver.onEvent((e) => events.push(e));
+  driver.start();
+  await waitFor(() => events.some((e) => e.type === 'exit'), 5000, 'exit après échec de spawn');
+  const exit = events.find((e) => e.type === 'exit');
+  expect(exit).toMatchObject({ code: null, signal: null });
+  expect((exit as Extract<ConversationEvent, { type: 'exit' }>).message).toBeTruthy();
+});
+
+test('écriture après mort du process : aucune exception', async () => {
+  const sid = randomUUID();
+  const { driver: d, events } = start({ sessionId: sid });
+  d.send('bonjour');
+  await waitFor(() => events.some((e) => e.type === 'turn_end'), 5000, 'premier tour');
+  await d.stop();
+  expect(() => d.send('trop tard')).not.toThrow();
+});
+
+test('stop() après sortie par signal se résout', async () => {
+  const sid = randomUUID();
+  const { driver: d, events } = start({ sessionId: sid });
+  d.send('crash');
+  await waitFor(() => events.some((e) => e.type === 'exit'), 5000, 'sortie par signal après crash');
+  const exit = events.find((e) => e.type === 'exit');
+  expect(exit).toMatchObject({ code: null, signal: 'SIGKILL' });
+  await d.stop();
+});
+
+test('double start() lève une erreur', () => {
+  const sid = randomUUID();
+  const { driver: d } = start({ sessionId: sid });
+  expect(() => d.start()).toThrow();
+});

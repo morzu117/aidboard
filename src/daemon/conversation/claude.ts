@@ -6,6 +6,7 @@ import type { ConversationDriver, ConversationDriverOptions, ConversationEvent }
 const SIGTERM_DELAY_MS = 2_000;
 const SIGKILL_DELAY_MS = 5_000;
 const STDERR_TAIL_MAX = 4_000;
+const OUT_BUFFER_MAX = 8 * 1024 * 1024;
 
 const PERMISSION_OPTIONS: PendingOption[] = [
   { label: 'Autoriser', answer: 'yes' },
@@ -71,6 +72,7 @@ export class ClaudeDriver implements ConversationDriver {
   private errTail = '';
   private pendingPermissions = new Map<string, PendingPermission>();
   private stopResolvers: Array<() => void> = [];
+  private exited = false;
 
   constructor(opts: ConversationDriverOptions) {
     this.opts = opts;
@@ -83,10 +85,17 @@ export class ClaudeDriver implements ConversationDriver {
   }
 
   private emit(event: ConversationEvent): void {
-    for (const cb of this.listeners) cb(event);
+    for (const cb of this.listeners) {
+      try {
+        cb(event);
+      } catch {
+        // un listener qui lève ne doit pas interrompre le flux stdout du process.
+      }
+    }
   }
 
   start(): void {
+    if (this.child) throw new Error('driver déjà démarré');
     const args = buildClaudeArgs(this.opts);
     const child = spawn(this.opts.bin, args, {
       cwd: this.opts.cwd,
@@ -94,16 +103,41 @@ export class ClaudeDriver implements ConversationDriver {
       stdio: ['pipe', 'pipe', 'pipe'],
     });
     this.child = child;
+    child.on('error', (err) => this.handleExit(null, null, err.message));
+    child.stdin.on('error', () => {
+      // EPIPE sur écriture après mort du process : géré par le check writable de write().
+    });
     child.stdout.on('data', (chunk: Buffer) => this.onStdout(chunk));
     child.stderr.on('data', (chunk: Buffer) => {
       this.errTail = (this.errTail + chunk.toString('utf8')).slice(-STDERR_TAIL_MAX);
     });
-    child.on('exit', (code, signal) => {
-      this.emit({ type: 'exit', code, signal, message: this.errTail.trim() || undefined });
-      const resolvers = this.stopResolvers;
-      this.stopResolvers = [];
-      for (const resolve of resolvers) resolve();
+    child.on('exit', (code, signal) => this.handleExit(code, signal));
+  }
+
+  private handleExit(
+    code: number | null,
+    signal: NodeJS.Signals | null,
+    errorMessage?: string,
+  ): void {
+    if (this.exited) return;
+    this.exited = true;
+    this.emit({
+      type: 'exit',
+      code,
+      signal,
+      message: errorMessage !== undefined ? errorMessage : this.errTail.trim() || undefined,
     });
+    this.cancelPendingPermissions();
+    const resolvers = this.stopResolvers;
+    this.stopResolvers = [];
+    for (const resolve of resolvers) resolve();
+  }
+
+  private cancelPendingPermissions(): void {
+    for (const requestId of this.pendingPermissions.keys()) {
+      this.emit({ type: 'request_cancelled', requestId });
+    }
+    this.pendingPermissions.clear();
   }
 
   private onStdout(chunk: Buffer): void {
@@ -113,6 +147,10 @@ export class ClaudeDriver implements ConversationDriver {
       const line = this.outBuffer.slice(0, idx);
       this.outBuffer = this.outBuffer.slice(idx + 1);
       if (line.trim()) this.handleLine(line);
+    }
+    // Ligne en cours pathologique (jamais de '\n') : bornée pour ne pas grossir la mémoire sans limite.
+    if (this.outBuffer.length > OUT_BUFFER_MAX) {
+      this.outBuffer = '';
     }
   }
 
@@ -175,7 +213,18 @@ export class ClaudeDriver implements ConversationDriver {
 
   private handleControlRequest(o: Record<string, unknown>): void {
     const request = o.request as Record<string, unknown> | undefined;
-    if (request?.subtype !== 'can_use_tool' || typeof o.request_id !== 'string') return;
+    if (typeof o.request_id !== 'string') return;
+    if (request?.subtype !== 'can_use_tool') {
+      this.write({
+        type: 'control_response',
+        response: {
+          subtype: 'error',
+          request_id: o.request_id,
+          error: 'subtype non pris en charge',
+        },
+      });
+      return;
+    }
     const toolName = typeof request.tool_name === 'string' ? request.tool_name : 'outil';
     const input = request.input;
     this.pendingPermissions.set(o.request_id, { input });
@@ -197,6 +246,7 @@ export class ClaudeDriver implements ConversationDriver {
       durationMs: typeof o.duration_ms === 'number' ? o.duration_ms : undefined,
       error: ok ? undefined : String(o.subtype ?? 'erreur'),
     });
+    this.cancelPendingPermissions();
   }
 
   private write(obj: unknown): void {
@@ -234,7 +284,7 @@ export class ClaudeDriver implements ConversationDriver {
   stop(): Promise<void> {
     return new Promise((resolve) => {
       const child = this.child;
-      if (!child || child.exitCode !== null) {
+      if (!child || this.exited) {
         resolve();
         return;
       }
