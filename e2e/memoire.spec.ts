@@ -25,7 +25,9 @@ test('le panneau Mémoire affiche une page écrite par le CLI, sans recharger', 
   await registerWorkspace(page, newRepo('depot-memoire'));
   const topicId = await createTopic(page, 'Sujet mémoire');
 
-  await expect(node(page, '1-3.memoire.onglet-plan')).toBeVisible();
+  // D.2 (chantier 15) : le Plan vit désormais dans PanneauContexte, sélectionné par défaut —
+  // plus besoin de cliquer, comme avant avec l'onglet « Plan » du Memoire multi-onglets.
+  await expect(node(page, '1-3.onglets.plan')).toBeVisible();
   await expect(node(page, '1-3.memoire.absente')).toBeVisible();
 
   const full: RawState = await page.evaluate(async () =>
@@ -43,7 +45,9 @@ test('le panneau Mémoire affiche une page écrite par le CLI, sans recharger', 
 
   // écrite par aid mem append : la page existante ne se remplace pas, elle se complète
   memPut(`${namespace}/dev-handoff/${topic.slug}`, '## Dev 1\n\nfait.');
-  await node(page, '1-3.memoire.onglet-dev-handoff').click();
+  // Passation (Q3 tranchée) n'apparaît dans le panneau qu'une fois sa page mémoire détectée.
+  await expect(node(page, '1-3.onglets.passation')).toBeVisible({ timeout: 15_000 });
+  await node(page, '1-3.onglets.passation').click();
   await expect
     .poll(async () => node(page, '1-3.memoire.page.corps').textContent(), { timeout: 15_000 })
     .toBe('## Dev 1\n\nfait.');

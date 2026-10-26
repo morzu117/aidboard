@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { type ReactNode, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router';
 import type { StoredEvent } from '../../../src/shared/events.js';
 import type { GitLogResponse } from '../../../src/shared/git.js';
@@ -16,8 +16,7 @@ import { agentView, Point } from '../ui/Statut.js';
 import type { ArchivedTopic } from './useArchive.js';
 import { useArchive } from './useArchive.js';
 import { Cote } from './Cote.js';
-import { OngletFichiers } from './OngletFichiers.js';
-import { OngletGit } from './OngletGit.js';
+import { PanneauContexte } from './PanneauContexte.js';
 import { useNettoyage } from './useNettoyage.js';
 import { roleLabel } from '../ui/roles.js';
 
@@ -64,18 +63,17 @@ const KINDS: Array<{ kind: Kind; label: string }> = [
 const KIND_CELL = { kind: 'swarph-cell' as const, label: 'Ouvrir la cell swarph' };
 const KIND_SWAIRM_CELL = { kind: 'swairm-cell' as const, label: 'Ouvrir la cell Swairm' };
 
-function Contenu({ topicId }: { topicId: string }) {
+function Contenu({
+  topicId,
+  selectedAgent,
+  onSelectAgent,
+}: {
+  topicId: string;
+  selectedAgent: string | null;
+  onSelectAgent: (id: string) => void;
+}) {
   const { state, outputs, daemon, retry, call } = useAid();
   const navigate = useNavigate();
-  // « Ouvrir le terminal → » de la boîte de réception arrive avec ?agent= : son onglet est choisi
-  const [params] = useSearchParams();
-  const [selected, setSelected] = useState<string | null>(params.get('agent'));
-  // Barre d'onglets Agents/Git/Fichiers (11.1) : état UI pur, jamais persisté (D22). Un seul
-  // paramètre lu une fois, comme ?agent= ci-dessus ; pas de synchronisation d'URL au changement.
-  const ongletParam = params.get('onglet');
-  const [onglet, setOnglet] = useState<'agents' | 'git' | 'fichiers'>(
-    ongletParam === 'git' || ongletParam === 'fichiers' ? ongletParam : 'agents',
-  );
   const [menu, setMenu] = useState<'aucun' | 'agent' | 'plus'>('aucun');
   const [selecteurBranche, setSelecteurBranche] = useState(false);
   const [erreur, setErreur] = useState<string | null>(null);
@@ -263,7 +261,7 @@ function Contenu({ topicId }: { topicId: string }) {
   const workspace = state.workspaces.find((w) => w.id === topic.workspaceId);
   const runIds = state.runs.filter((r) => r.topicId === topic.id).map((r) => r.id);
   const agents: Agent[] = state.agents.filter((a) => runIds.includes(a.runId));
-  const active = agents.find((a) => a.id === selected) ?? agents.at(-1);
+  const active = agents.find((a) => a.id === selectedAgent) ?? agents.at(-1);
   const kinds = [
     ...KINDS,
     ...(state.mesh ? [KIND_CELL] : []),
@@ -275,7 +273,7 @@ function Contenu({ topicId }: { topicId: string }) {
     setMenu('aucun');
     try {
       const a = await call<Agent>('POST', '/api/agents', { topicId, kind });
-      setSelected(a.id);
+      onSelectAgent(a.id);
     } catch (err) {
       setErreur(err instanceof AidApiError ? err.message : String(err));
     }
@@ -588,61 +586,98 @@ function Contenu({ topicId }: { topicId: string }) {
           </div>
         </div>
       ) : (
-        <>
-          <div className="onglets" data-node="1-3.onglets" role="tablist" aria-label="Vue du sujet">
-            <button
-              className={`onglet${onglet === 'agents' ? ' est-actif' : ''}`}
-              data-node="1-3.onglets.agents"
-              data-action="onglet.agents"
-              role="tab"
-              aria-selected={onglet === 'agents'}
-              type="button"
-              onClick={() => setOnglet('agents')}
-            >
-              Agents
-            </button>
-            <button
-              className={`onglet${onglet === 'git' ? ' est-actif' : ''}`}
-              data-node="1-3.onglets.git"
-              data-action="onglet.git"
-              role="tab"
-              aria-selected={onglet === 'git'}
-              type="button"
-              onClick={() => setOnglet('git')}
-            >
-              Git
-            </button>
-            <button
-              className={`onglet${onglet === 'fichiers' ? ' est-actif' : ''}`}
-              data-node="1-3.onglets.fichiers"
-              data-action="onglet.fichiers"
-              role="tab"
-              aria-selected={onglet === 'fichiers'}
-              type="button"
-              onClick={() => setOnglet('fichiers')}
-            >
-              Fichiers
-            </button>
-          </div>
-          {/* Toujours monté, juste masqué : un démontage reconnecterait les terminaux. */}
-          {/* Une seule colonne : la mémoire sous les terminaux, en pleine largeur. */}
-          <div className="sujet-grille sujet-grille--seul" hidden={onglet !== 'agents'}>
-            <div className="colonne">
-              {agents.length === 0 ? (
-                <section className="vide" data-node="1-3.vide">
-                  <p className="vide-message" data-node="1-3.vide.message">
-                    Aucun agent ne tourne sur ce sujet.
-                  </p>
-                  <p className="texte-discret" data-node="1-3.vide.aide">
-                    Le premier lancement de claude ou de codex dans un worktree neuf affiche son
-                    propre dialogue de confiance : c’est normal.
-                  </p>
-                  <div className="vide-actions">
-                    {kinds.map(({ kind, label }) => (
+        // D.1/D.2 (chantier 15) : les agents sont toujours visibles, plus de barre d'onglets
+        // exclusifs ; Git et Fichiers vivent désormais dans PanneauContexte (colonne de droite).
+        <div className="sujet-grille sujet-grille--seul">
+          <div className="colonne">
+            {agents.length === 0 ? (
+              <section className="vide" data-node="1-3.vide">
+                <p className="vide-message" data-node="1-3.vide.message">
+                  Aucun agent ne tourne sur ce sujet.
+                </p>
+                <p className="texte-discret" data-node="1-3.vide.aide">
+                  Le premier lancement de claude ou de codex dans un worktree neuf affiche son
+                  propre dialogue de confiance : c’est normal.
+                </p>
+                <div className="vide-actions">
+                  {kinds.map(({ kind, label }) => (
+                    <button
+                      key={kind}
+                      className={`bouton${kind === 'claude' ? ' bouton--primaire' : ''}`}
+                      data-node={kind === 'shell' ? '1-3.vide.shell' : `1-3.vide.lancer-${kind}`}
+                      data-action="agent.lancer"
+                      data-agent={kind}
+                      type="button"
+                      onClick={() => void launch(kind)}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </section>
+            ) : (
+              <section className="terminaux" data-node="1-3.terminaux" aria-label="Terminaux">
+                <div
+                  className="onglets"
+                  data-node="1-3.terminaux.onglets"
+                  role="tablist"
+                  aria-label="Agents du sujet"
+                >
+                  {agents.map((a, i) => {
+                    const v = agentView(a);
+                    return (
+                      <span key={a.id} style={{ display: 'inline-flex' }}>
+                        <button
+                          className={`onglet${a.id === active?.id ? ' est-actif' : ''}`}
+                          data-node={`1-3.terminaux.onglet-${i + 1}`}
+                          data-action="onglet.choisir"
+                          role="tab"
+                          aria-selected={a.id === active?.id}
+                          type="button"
+                          onClick={() => onSelectAgent(a.id)}
+                        >
+                          <Point tone={v.tone} label={v.label} estimated={v.estimated} />
+                          <span
+                            data-node={`1-3.terminaux.onglet-${i + 1}.type`}
+                            data-bind="agent.type"
+                          >
+                            {a.kind}
+                          </span>
+                          <span
+                            className="agent-role"
+                            data-node={`1-3.terminaux.onglet-${i + 1}.role`}
+                            data-bind="agent.role"
+                          >
+                            {roleLabel(a.role)}
+                          </span>
+                        </button>
+                        <button
+                          className="bouton bouton--fantome"
+                          data-node={`1-3.terminaux.onglet-${i + 1}.arreter`}
+                          data-action={LIVE.includes(a.status) ? 'agent.arreter' : 'agent.fermer'}
+                          type="button"
+                          onClick={() => void stop(a.id)}
+                        >
+                          {LIVE.includes(a.status) ? 'Arrêter' : 'Fermer'}
+                        </button>
+                      </span>
+                    );
+                  })}
+                  <button
+                    className="onglet"
+                    data-node="1-3.terminaux.ajouter-agent"
+                    data-action="agent.ajouter"
+                    type="button"
+                    aria-expanded={menu === 'agent'}
+                    onClick={() => setMenu(menu === 'agent' ? 'aucun' : 'agent')}
+                  >
+                    + Agent
+                  </button>
+                  {menu === 'agent' &&
+                    kinds.map(({ kind, label }) => (
                       <button
                         key={kind}
-                        className={`bouton${kind === 'claude' ? ' bouton--primaire' : ''}`}
-                        data-node={kind === 'shell' ? '1-3.vide.shell' : `1-3.vide.lancer-${kind}`}
+                        className="onglet"
                         data-action="agent.lancer"
                         data-agent={kind}
                         type="button"
@@ -651,102 +686,18 @@ function Contenu({ topicId }: { topicId: string }) {
                         {label}
                       </button>
                     ))}
-                  </div>
-                </section>
-              ) : (
-                <section className="terminaux" data-node="1-3.terminaux" aria-label="Terminaux">
-                  <div
-                    className="onglets"
-                    data-node="1-3.terminaux.onglets"
-                    role="tablist"
-                    aria-label="Agents du sujet"
-                  >
-                    {agents.map((a, i) => {
-                      const v = agentView(a);
-                      return (
-                        <span key={a.id} style={{ display: 'inline-flex' }}>
-                          <button
-                            className={`onglet${a.id === active?.id ? ' est-actif' : ''}`}
-                            data-node={`1-3.terminaux.onglet-${i + 1}`}
-                            data-action="onglet.choisir"
-                            role="tab"
-                            aria-selected={a.id === active?.id}
-                            type="button"
-                            onClick={() => setSelected(a.id)}
-                          >
-                            <Point tone={v.tone} label={v.label} estimated={v.estimated} />
-                            <span
-                              data-node={`1-3.terminaux.onglet-${i + 1}.type`}
-                              data-bind="agent.type"
-                            >
-                              {a.kind}
-                            </span>
-                            <span
-                              className="agent-role"
-                              data-node={`1-3.terminaux.onglet-${i + 1}.role`}
-                              data-bind="agent.role"
-                            >
-                              {roleLabel(a.role)}
-                            </span>
-                          </button>
-                          <button
-                            className="bouton bouton--fantome"
-                            data-node={`1-3.terminaux.onglet-${i + 1}.arreter`}
-                            data-action={LIVE.includes(a.status) ? 'agent.arreter' : 'agent.fermer'}
-                            type="button"
-                            onClick={() => void stop(a.id)}
-                          >
-                            {LIVE.includes(a.status) ? 'Arrêter' : 'Fermer'}
-                          </button>
-                        </span>
-                      );
-                    })}
-                    <button
-                      className="onglet"
-                      data-node="1-3.terminaux.ajouter-agent"
-                      data-action="agent.ajouter"
-                      type="button"
-                      aria-expanded={menu === 'agent'}
-                      onClick={() => setMenu(menu === 'agent' ? 'aucun' : 'agent')}
-                    >
-                      + Agent
-                    </button>
-                    {menu === 'agent' &&
-                      kinds.map(({ kind, label }) => (
-                        <button
-                          key={kind}
-                          className="onglet"
-                          data-action="agent.lancer"
-                          data-agent={kind}
-                          type="button"
-                          onClick={() => void launch(kind)}
-                        >
-                          {label}
-                        </button>
-                      ))}
-                  </div>
-                  {agents.map((a) =>
-                    a.transport === 'stream' ? (
-                      <Conversation key={a.id} agent={a} visible={a.id === active?.id} />
-                    ) : (
-                      <Terminal key={a.id} agentId={a.id} visible={a.id === active?.id} />
-                    ),
-                  )}
-                </section>
-              )}
-              <Memoire
-                namespace={workspace?.namespace ?? workspace?.name ?? ''}
-                topicSlug={topic.slug}
-              />
-            </div>
+                </div>
+                {agents.map((a) =>
+                  a.transport === 'stream' ? (
+                    <Conversation key={a.id} agent={a} visible={a.id === active?.id} />
+                  ) : (
+                    <Terminal key={a.id} agentId={a.id} visible={a.id === active?.id} />
+                  ),
+                )}
+              </section>
+            )}
           </div>
-          {onglet === 'git' && (
-            <OngletGit topicId={topic.id} base={topic.base} remote={workspace?.remote ?? null} />
-          )}
-          {onglet === 'fichiers' && (
-            <OngletFichiers topicId={topic.id} activeAgentId={active?.id ?? null} />
-          )}
-        </>
+        </div>
       )}
     </main>
   );
@@ -838,13 +789,187 @@ function EcranArchive({
   );
 }
 
+// Q6 tranchée (chantier 15) : même élément en permanence, jamais démonté — seule sa
+// présentation change (colonne normale ≥ 1280 px, pop-up dessous via CSS/attributs). Un
+// démontage relancerait les requêtes de Cote/PanneauContexte et perdrait l'état de leurs onglets.
+function Volet({
+  nom,
+  titre,
+  ouvert,
+  onFermer,
+  boutonRef,
+  children,
+}: {
+  nom: 'nav' | 'panneau';
+  titre: string;
+  ouvert: boolean;
+  onFermer: () => void;
+  boutonRef: { current: HTMLButtonElement | null };
+  children: ReactNode;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (ouvert) ref.current?.focus();
+  }, [ouvert]);
+  useEffect(() => {
+    if (!ouvert) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      onFermer();
+      boutonRef.current?.focus();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [ouvert, onFermer, boutonRef]);
+  return (
+    <div
+      ref={ref}
+      className={`volet volet--${nom}${ouvert ? ' est-ouvert' : ''}`}
+      data-node={`1-3.volet.${nom}`}
+      role={ouvert ? 'dialog' : undefined}
+      aria-modal={ouvert || undefined}
+      aria-label={ouvert ? titre : undefined}
+      tabIndex={ouvert ? -1 : undefined}
+    >
+      {ouvert && (
+        <button
+          className="bouton-icone volet-fermer"
+          data-node="1-3.volet.fermer"
+          type="button"
+          aria-label="Fermer"
+          onClick={() => {
+            onFermer();
+            boutonRef.current?.focus();
+          }}
+        >
+          ×
+        </button>
+      )}
+      {children}
+    </div>
+  );
+}
+
 export function Sujet() {
   const { topicId = '' } = useParams();
+  const { state } = useAid();
+  const [params] = useSearchParams();
+  // « Ouvrir le terminal → » de la boîte de réception arrive avec ?agent= : son onglet est choisi.
+  const [selectedAgent, setSelectedAgent] = useState<string | null>(params.get('agent'));
+  // D.2 : ?onglet=git|fichiers sélectionne l'onglet correspondant de PanneauContexte (déplacé
+  // depuis la barre d'onglets exclusifs, retirée au profit des agents toujours visibles).
+  const ongletParam = params.get('onglet');
+  const initialOnglet =
+    ongletParam === 'git' || ongletParam === 'fichiers' ? ongletParam : undefined;
+  const [volet, setVolet] = useState<'aucun' | 'nav' | 'panneau'>('aucun');
+  const boutonNavRef = useRef<HTMLButtonElement>(null);
+  const boutonPanneauRef = useRef<HTMLButtonElement>(null);
+  // D.1, Q6 tranchée : ≥ 1280 px, les boutons flottants disparaissent et le popup est impossible
+  // — une pop-up restée ouverte en repassant au-dessus du seuil doit se refermer.
+  useEffect(() => {
+    // comme Conversation.tsx:169 — jsdom (tests) n'implémente pas matchMedia.
+    const mq = window.matchMedia?.('(min-width: 1280px)');
+    const fermerSiLarge = () => mq?.matches && setVolet('aucun');
+    fermerSiLarge();
+    mq?.addEventListener('change', fermerSiLarge);
+    return () => mq?.removeEventListener('change', fermerSiLarge);
+  }, []);
+  const topic = state?.topics.find((t) => t.id === topicId);
+
+  // La grille trois colonnes et les volets superposables n'existent que pour la vue complète de
+  // Contenu (agents/terminaux) : jamais pendant le chargement, une erreur, une archive ou la
+  // préparation du worktree, qui restent à une colonne comme avant ce chantier.
+  if (!topic || topic.state === 'draft' || topic.worktreeMissing) {
+    return (
+      <Layout screen="1-3">
+        <div className="sujet-corps">
+          <Cote activeTopicId={topicId} />
+          <Contenu
+            topicId={topicId}
+            selectedAgent={selectedAgent}
+            onSelectAgent={setSelectedAgent}
+          />
+        </div>
+      </Layout>
+    );
+  }
+
+  const workspace = state?.workspaces.find((w) => w.id === topic.workspaceId);
+  const runIds = state?.runs.filter((r) => r.topicId === topicId).map((r) => r.id) ?? [];
+  const agents = state?.agents.filter((a) => runIds.includes(a.runId)) ?? [];
+  const active = agents.find((a) => a.id === selectedAgent) ?? agents.at(-1);
+  const namespace = workspace?.namespace ?? workspace?.name ?? '';
+
   return (
     <Layout screen="1-3">
       <div className="sujet-corps">
-        <Cote activeTopicId={topicId} />
-        <Contenu topicId={topicId} />
+        <button
+          ref={boutonNavRef}
+          className="bouton-icone bouton-volant bouton-volant--nav"
+          data-node="1-3.volet.ouvrir-nav"
+          type="button"
+          aria-label="Ouvrir la navigation"
+          aria-expanded={volet === 'nav'}
+          onClick={() => setVolet(volet === 'nav' ? 'aucun' : 'nav')}
+        >
+          <svg aria-hidden="true" viewBox="0 0 16 16" width="16" height="16">
+            <path
+              d="M2 4h12M2 8h12M2 12h12"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+            />
+          </svg>
+        </button>
+        <Volet
+          nom="nav"
+          titre="Navigation"
+          ouvert={volet === 'nav'}
+          onFermer={() => setVolet('aucun')}
+          boutonRef={boutonNavRef}
+        >
+          <Cote activeTopicId={topicId} />
+        </Volet>
+        <Contenu topicId={topicId} selectedAgent={selectedAgent} onSelectAgent={setSelectedAgent} />
+        <Volet
+          nom="panneau"
+          titre="Panneau du sujet"
+          ouvert={volet === 'panneau'}
+          onFermer={() => setVolet('aucun')}
+          boutonRef={boutonPanneauRef}
+        >
+          <PanneauContexte
+            namespace={namespace}
+            topicSlug={topic.slug}
+            topicId={topicId}
+            base={topic.base}
+            remote={workspace?.remote ?? null}
+            activeAgentId={active?.id ?? null}
+            initialOnglet={initialOnglet}
+          />
+        </Volet>
+        <button
+          ref={boutonPanneauRef}
+          className="bouton-icone bouton-volant bouton-volant--panneau"
+          data-node="1-3.volet.ouvrir-panneau"
+          type="button"
+          aria-label="Ouvrir le panneau du sujet"
+          aria-expanded={volet === 'panneau'}
+          onClick={() => setVolet(volet === 'panneau' ? 'aucun' : 'panneau')}
+        >
+          <svg aria-hidden="true" viewBox="0 0 16 16" width="16" height="16">
+            <path d="M2 5h4l1.3 1.6H14V12H2z" fill="none" stroke="currentColor" strokeWidth="1.3" />
+          </svg>
+        </button>
+        {volet !== 'aucun' && (
+          // .voile : fond déjà utilisé par Dialogue.tsx (chantier 11), réutilisé ici tel quel.
+          <div
+            className="voile"
+            data-node="1-3.volet.fond"
+            aria-hidden="true"
+            onClick={() => setVolet('aucun')}
+          />
+        )}
       </div>
     </Layout>
   );

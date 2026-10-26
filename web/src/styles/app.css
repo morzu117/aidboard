@@ -764,3 +764,85 @@ body {
   white-space: nowrap;
   border: 0;
 }
+
+/* D.1/D.2 (chantier 15) : volets Navigation/Panneau de l'écran Sujet — colonnes ≥ 1280 px,
+   pop-up dessous (Q6 tranchée). Jamais démontés : seule la présentation change via CSS. */
+.volet {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.volet-fermer {
+  display: none;
+}
+.bouton-volant {
+  position: fixed;
+  top: var(--sp-4);
+  z-index: 16;
+}
+.bouton-volant--nav {
+  left: var(--sp-4);
+}
+.bouton-volant--panneau {
+  right: var(--sp-4);
+}
+.panneau-contexte {
+  display: flex;
+  flex-direction: column;
+  background: var(--surface-2);
+  border-left: 1px solid var(--line);
+  overflow: hidden;
+}
+.panneau-contenu {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--sp-4);
+}
+
+@media (max-width: 1279.98px) {
+  .volet:not(.est-ouvert) {
+    display: none;
+  }
+  .volet.est-ouvert {
+    position: fixed;
+    inset: var(--sp-4);
+    z-index: 21;
+    border: 1px solid var(--line-2);
+    border-radius: var(--r-xl);
+    background: var(--surface-2);
+    box-shadow: 0 var(--sp-2) var(--sp-6) var(--ombre);
+    overflow: hidden;
+  }
+  .volet.est-ouvert > .cote {
+    width: 100%;
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+  }
+  .volet.est-ouvert > .panneau-contexte {
+    flex: 1 1 auto;
+    min-height: 0;
+  }
+  .volet.est-ouvert .volet-fermer {
+    display: inline-flex;
+    position: absolute;
+    top: var(--sp-2);
+    right: var(--sp-2);
+    z-index: 1;
+  }
+}
+
+@media (min-width: 1280px) {
+  .bouton-volant,
+  .voile[data-node='1-3.volet.fond'] {
+    display: none;
+  }
+  .volet {
+    display: contents;
+  }
+  .panneau-contexte {
+    flex: 0 0 320px;
+    height: max(var(--h-terminal-sujet), calc(100dvh - 340px));
+  }
+}

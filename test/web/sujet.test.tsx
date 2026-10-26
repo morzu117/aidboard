@@ -269,7 +269,11 @@ test('onglets : un terminal monté par agent, un seul visible ; « Arrêter » s
   );
 });
 
-test('onglets de contenu (11.1) : Agents par défaut, Git et Fichiers affichent un espace réservé, le terminal reste monté (masqué) en changeant d’onglet', async () => {
+test('onglets de contenu (11.1) : les agents sont toujours visibles, Git et Fichiers (dans le panneau) affichent un espace réservé, le terminal reste monté en changeant d’onglet', async () => {
+  // D.1/D.2 (chantier 15) : la barre d'onglets exclusifs Agents/Git/Fichiers a disparu — les
+  // agents sont désormais toujours visibles dans la colonne centrale, Git et Fichiers vivent
+  // dans PanneauContexte (colonne de droite), sous les mêmes data-node qu'avant (1-3.onglets.git
+  // et 1-3.onglets.fichiers) pour rester compatible avec ce test et les e2e existants.
   open(
     snapshot({
       workspaces: [ws()],
@@ -296,18 +300,17 @@ test('onglets de contenu (11.1) : Agents par défaut, Git et Fichiers affichent 
       }),
     },
   );
+  // les agents sont visibles sans aucun clic, plus d'onglet « Agents » à sélectionner.
   await screen.findByTestId('term-ag_1');
   // D28 : pas de dérive déclarée (onTopicBranch) ⇒ pas de bandeau, même hors de l'onglet Git.
   expect(screen.queryByText(/pas sur la branche du sujet/)).toBeNull();
-  expect(node('1-3.onglets.agents')?.className).toContain('est-actif');
   await userEvent.click(node('1-3.onglets.git')!);
   expect(await screen.findByText('Aucun commit depuis la base.')).toBeTruthy();
   expect(node('1-3.onglets.git')?.className).toContain('est-actif');
-  // le terminal reste dans le DOM (masqué), pas démonté : pas de reconnexion à la bascule.
+  // le terminal reste dans le DOM, pas démonté : c'est une colonne indépendante du panneau.
   expect(screen.getByTestId('term-ag_1')).toBeTruthy();
   await userEvent.click(node('1-3.onglets.fichiers')!);
   await waitFor(() => expect(text('3-4.explorateur.compteur')).toContain('0 fichier'));
-  await userEvent.click(node('1-3.onglets.agents')!);
   expect(screen.getByTestId('term-ag_1')).toBeTruthy();
 });
 
