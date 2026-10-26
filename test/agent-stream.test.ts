@@ -42,6 +42,24 @@ function pendingOf(agentId: string): PendingRequest | null {
   return p ? (JSON.parse(p) as PendingRequest) : null;
 }
 
+function messages(agentId: string, kind: string): unknown[] {
+  return (
+    c!.t.db
+      .prepare('SELECT payload FROM agent_messages WHERE agent_id = ? AND kind = ?')
+      .all(agentId, kind) as Array<{ payload: string }>
+  ).map((m) => JSON.parse(m.payload));
+}
+
+function tourLongDemarre(agentId: string): boolean {
+  return messages(agentId, 'message').some(
+    (m) => (m as { role?: string; text?: string }).text === 'tour long démarré',
+  );
+}
+
+function interrompu(agentId: string): boolean {
+  return messages(agentId, 'turn_end').some((m) => (m as { ok?: boolean }).ok === false);
+}
+
 test('transport pty (défaut) : spawn claude reste PTY, aucun changement de comportement', async () => {
   const { agent } = await spawnPty('claude');
   expect(agent.transport).toBe('pty');
@@ -112,15 +130,13 @@ test('interrupt : tour terminé, statut idle ; setPaused → 409 ; interrupt sur
 
   c!.t.d.agents.input(agent.id, 'tour long');
   await waitFor(
-    () =>
-      !!c!.t.db
-        .prepare("SELECT 1 FROM agent_messages WHERE agent_id = ? AND kind = 'session'")
-        .get(agent.id),
+    () => row(agent.id).status === 'working' && tourLongDemarre(agent.id),
     5000,
     'tour long démarré',
   );
   c!.t.d.agents.interrupt(agent.id);
   await waitFor(() => row(agent.id).status === 'idle', 5000, 'idle après interruption');
+  expect(interrompu(agent.id)).toBe(true);
 
   expect(() => c!.t.d.agents.setPaused(agent.id, true)).toThrow(
     'pas de pause pour un agent conversationnel',
@@ -170,10 +186,7 @@ test('route POST /api/agents/:id/interrupt', async () => {
   await waitFor(() => row(agent.id).session_id === agent.sessionId, 5000, 'session claude');
   c.t.d.agents.input(agent.id, 'tour long');
   await waitFor(
-    () =>
-      !!c!.t.db
-        .prepare("SELECT 1 FROM agent_messages WHERE agent_id = ? AND kind = 'session'")
-        .get(agent.id),
+    () => row(agent.id).status === 'working' && tourLongDemarre(agent.id),
     5000,
     'tour long démarré',
   );
@@ -184,6 +197,7 @@ test('route POST /api/agents/:id/interrupt', async () => {
   });
   expect(r.statusCode).toBe(202);
   await waitFor(() => row(agent.id).status === 'idle', 5000, 'idle après interruption');
+  expect(interrompu(agent.id)).toBe(true);
 
   expect(
     (
@@ -194,4 +208,45 @@ test('route POST /api/agents/:id/interrupt', async () => {
       })
     ).statusCode,
   ).toBe(404);
+});
+
+test('DELETE /api/agents/:id sur un agent stream vivant : 202 puis arrêté ; DELETE à nouveau : 200 puis libéré', async () => {
+  const { agent } = await spawnStream('claude');
+  await waitFor(() => row(agent.id).session_id === agent.sessionId, 5000, 'session claude');
+
+  const r1 = await c!.t.d.app.inject({
+    method: 'DELETE',
+    url: `/api/agents/${agent.id}`,
+    headers: c!.t.headers,
+  });
+  expect(r1.statusCode).toBe(202);
+  await waitFor(() => row(agent.id).status === 'stopped', 5000, 'arrêt');
+  expect(c!.t.d.agents.getStream(agent.id)?.exited).toBe(true);
+
+  const r2 = await c!.t.d.app.inject({
+    method: 'DELETE',
+    url: `/api/agents/${agent.id}`,
+    headers: c!.t.headers,
+  });
+  expect(r2.statusCode).toBe(200);
+  const closed = c!.t.db.prepare('SELECT closed_at FROM agents WHERE id = ?').get(agent.id) as {
+    closed_at: string | null;
+  };
+  expect(closed.closed_at).not.toBeNull();
+  expect(c!.t.d.agents.getStream(agent.id)).toBeUndefined();
+});
+
+test('archivage du sujet : un agent stream terminé de ce sujet est libéré', async () => {
+  const { agent, topic } = await spawnStream('claude');
+  await waitFor(() => row(agent.id).session_id === agent.sessionId, 5000, 'session claude');
+  await c!.t.d.agents.stop(agent.id, 'user');
+  expect(c!.t.d.agents.getStream(agent.id)?.exited).toBe(true);
+
+  c!.t.store.append({
+    source: 'daemon',
+    type: 'topic.state',
+    topicId: topic.topicId,
+    data: { state: 'archived' },
+  });
+  expect(c!.t.d.agents.getStream(agent.id)).toBeUndefined();
 });

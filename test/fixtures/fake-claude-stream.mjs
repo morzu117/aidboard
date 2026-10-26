@@ -36,6 +36,10 @@ async function handleTurn(text) {
   emit({ type: 'system', subtype: 'init', session_id: sessionId, cwd: process.cwd() });
 
   if (text === 'tour long') {
+    emit({
+      type: 'assistant',
+      message: { role: 'assistant', content: [{ type: 'text', text: 'tour long démarré' }] },
+    });
     await new Promise((resolve) => {
       longAbort = resolve;
     });

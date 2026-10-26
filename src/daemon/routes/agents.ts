@@ -83,7 +83,8 @@ export function registerAgentRoutes(
       { closed_at: string | null } | undefined;
     if (!row) throw new AidHttpError(404, 'agent inconnu');
     const live = deps.agents.get(id);
-    if (live && !live.exited) {
+    const stream = deps.agents.getStream(id);
+    if ((live && !live.exited) || (stream && !stream.exited)) {
       void deps.agents.stop(id, 'user');
       return reply.code(202).send({ id });
     }
