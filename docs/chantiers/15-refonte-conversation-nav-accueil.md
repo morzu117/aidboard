@@ -134,6 +134,15 @@ Numérotation continue depuis D49 (chantier 14).
   aucun écran.
 - **D64 — pause** : pas de SIGSTOP pour un agent `stream` en v1 (409 explicite) ; le geste
   équivalent est « Arrêter » = `interrupt()`, exposé par `POST /api/agents/:id/interrupt`.
+- **D65 — protocole de `/ws/agent/:agentId`** : canal en lecture seule (serveur → client) ;
+  les gestes passent par les routes REST existantes (`input`, `answer`, `interrupt`), déjà
+  authentifiées et validées. Messages JSON : `hello{status, exited}`, puis
+  `history{items:[{seq, at, event}], truncated}` (les 2000 dernières lignes de
+  `agent_messages` au-delà de `?after=<seq>`), puis `event{seq, at, event}` en direct et
+  `exit{exitCode, signal, reason}`. L'historique est lu et l'abonnement posé dans le même tour
+  de boucle : aucune ligne ne peut tomber entre les deux. Le client se reconnecte avec
+  `after` = dernier `seq` reçu : pas de doublon, pas de trou. Agent d'un daemon précédent :
+  `hello` + `history` + `exit`, sans direct. Agent PTY : 409.
 - **D54 (à valider)** : `Nav` (barre gauche) est un composant entièrement neuf, monté dans
   `Layout.tsx` à la place où rien n'existe aujourd'hui (ligne 106-114) — ce n'est pas une
   évolution de `Cote.tsx`, qui reste en l'état pour son seul usage actuel (vue archive) sauf si
