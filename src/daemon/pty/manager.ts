@@ -592,6 +592,8 @@ export class AgentManager {
   /** Abonnement D52/D59 : chaque événement (sauf `thinking`) devient une ligne `agent_messages`, puis le statut qu'il implique. */
   private wireStream(stream: LiveStream): void {
     stream.driver.onEvent((ev) => {
+      // pilote remplacé par une relance sous le même agentId (A.6) : l'ancien n'écrit plus rien (review A.6)
+      if (this.streams.get(stream.id) !== stream) return;
       if (ev.type !== 'thinking') this.recordStreamEvent(stream, ev);
       switch (ev.type) {
         case 'session':
@@ -878,7 +880,6 @@ export class AgentManager {
 
   /** Même message qu'au clavier (D59) : une ligne `agent_messages`, le statut `working`, puis le pilote. */
   private inputStream(agentId: string, raw: string): void {
-    const s = this.streamOrResume(agentId);
     const text = raw.replace(/\r\n?/g, '\n');
     // eslint-disable-next-line no-control-regex
     if (/[\u0000-\u0008\u000b-\u001f\u007f]/.test(text))
@@ -886,6 +887,8 @@ export class AgentManager {
     if (!text.trim()) throw new AidHttpError(422, 'message vide');
     if (this.pendingOf(agentId))
       throw new AidHttpError(409, 'répondre d’abord à la demande en cours');
+    // validé : la relance (et son éventuel 404/409) n'a lieu que pour un message qui sera effectivement envoyé (review A.6)
+    const s = this.streamOrResume(agentId);
     this.recordStreamEvent(s, { type: 'message', role: 'user', text });
     this.deps.store.append({
       source: 'daemon',

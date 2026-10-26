@@ -1,6 +1,7 @@
 import { delimiter, join } from 'node:path';
 import { afterEach, expect, test } from 'vitest';
 import { gracefulInterrupt } from '../src/daemon/pty/reprise.js';
+import type { ConversationEvent } from '../src/shared/conversation.js';
 import type { PendingRequest } from '../src/shared/model.js';
 import { startTestDaemon, waitFor } from './helpers/daemon.js';
 import { type Ctx, makeTopic, setupWorkspace } from './helpers/topics.js';
@@ -359,4 +360,68 @@ test('reprise (A.6) : gracefulInterrupt ignore les agents stream vivants — auc
   expect(entries).toEqual([]);
   expect(messages(agent.id, 'message')).toHaveLength(avant);
   expect(c!.t.d.agents.getStream(agent.id)?.exited).toBe(false);
+});
+
+test('input : message vide ou caractère de contrôle sur un agent en veille → 422, aucune relance (review A.6)', async () => {
+  const { agent } = await spawnStream('claude');
+  await waitFor(() => row(agent.id).session_id === agent.sessionId, 5000, 'session claude');
+
+  c!.t.d.agents.input(agent.id, 'crash');
+  await waitFor(() => c!.t.d.agents.getStream(agent.id)?.exited === true, 5000, 'sortie');
+  const seqAvant = (
+    c!.t.db
+      .prepare('SELECT MAX(seq) AS maxSeq FROM agent_messages WHERE agent_id = ?')
+      .get(agent.id) as { maxSeq: number }
+  ).maxSeq;
+
+  expect(() => c!.t.d.agents.input(agent.id, '   ')).toThrow('message vide');
+  expect(() => c!.t.d.agents.input(agent.id, 'bo\u0007njour')).toThrow(
+    'caractère de contrôle refusé',
+  );
+
+  // aucune relance : toujours le pilote qui a crashé, aucun `agent.resumed`, aucune ligne de plus
+  expect(c!.t.d.agents.getStream(agent.id)?.exited).toBe(true);
+  expect(
+    c!.t.store.since(null).some((e) => e.type === 'agent.resumed' && e.agentId === agent.id),
+  ).toBe(false);
+  const seqApres = (
+    c!.t.db
+      .prepare('SELECT MAX(seq) AS maxSeq FROM agent_messages WHERE agent_id = ?')
+      .get(agent.id) as { maxSeq: number }
+  ).maxSeq;
+  expect(seqApres).toBe(seqAvant);
+});
+
+test('reprise (A.6) : un événement tardif de l’ancien pilote après la relance n’écrit rien et ne change pas le statut (review A.6)', async () => {
+  const { agent } = await spawnStream('claude');
+  await waitFor(() => row(agent.id).session_id === agent.sessionId, 5000, 'session claude');
+
+  c!.t.d.agents.input(agent.id, 'crash');
+  await waitFor(() => c!.t.d.agents.getStream(agent.id)?.exited === true, 5000, 'sortie');
+  const oldStream = c!.t.d.agents.getStream(agent.id)!;
+
+  c!.t.d.agents.input(agent.id, 'bonjour');
+  await waitFor(() => row(agent.id).status === 'idle', 5000, 'fin du tour après relance');
+  expect(c!.t.d.agents.getStream(agent.id)).not.toBe(oldStream);
+  const seqAvant = (
+    c!.t.db
+      .prepare('SELECT MAX(seq) AS maxSeq FROM agent_messages WHERE agent_id = ?')
+      .get(agent.id) as { maxSeq: number }
+  ).maxSeq;
+
+  // l'ancien pilote (claude, sans garde `exited` sur son stdout) livre un événement tardif : simulé via
+  // son émetteur interne pour rester déterministe, sans toucher au pilote de production (review A.6).
+  (oldStream.driver as unknown as { emit(ev: ConversationEvent): void }).emit({
+    type: 'request',
+    request: { id: 'req-fantome', kind: 'permission', question: 'fantôme', options: [] },
+  });
+
+  expect(row(agent.id).status).toBe('idle');
+  expect(pendingOf(agent.id)).toBeNull();
+  const seqApres = (
+    c!.t.db
+      .prepare('SELECT MAX(seq) AS maxSeq FROM agent_messages WHERE agent_id = ?')
+      .get(agent.id) as { maxSeq: number }
+  ).maxSeq;
+  expect(seqApres).toBe(seqAvant);
 });
