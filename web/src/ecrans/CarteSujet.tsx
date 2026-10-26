@@ -1,6 +1,7 @@
 import { type FormEvent, useEffect, useState } from 'react';
 import { Link } from 'react-router';
 import type { Agent, PendingRequest, Topic, Workspace } from '../../../src/shared/model.js';
+import { Conversation } from '../conversation/Conversation.js';
 import { useAid } from '../data/useAidState.js';
 import { Terminal } from '../terminal/Terminal.js';
 import { agentView, Badge, isAlive, mostUrgent, Point, topicView } from '../ui/Statut.js';
@@ -213,7 +214,11 @@ function Agrandi({ agent, onClose }: { agent: Agent; onClose: () => void }) {
             Fermer
           </button>
         </div>
-        <Terminal agentId={agent.id} visible />
+        {agent.transport === 'stream' ? (
+          <Conversation agent={agent} visible />
+        ) : (
+          <Terminal agentId={agent.id} visible />
+        )}
       </div>
     </div>
   );
@@ -261,6 +266,15 @@ export function CarteSujet({
     setErreur(null);
     try {
       await call('POST', `/api/agents/${a.id}/${a.pausedAt ? 'resume' : 'pause'}`);
+    } catch (err) {
+      setErreur(message(err));
+    }
+  };
+  // D64 : pas de SIGSTOP pour un agent stream, « Interrompre » en est l'équivalent.
+  const interrompre = async (a: Agent) => {
+    setErreur(null);
+    try {
+      await call('POST', `/api/agents/${a.id}/interrupt`);
     } catch (err) {
       setErreur(message(err));
     }
@@ -376,17 +390,31 @@ export function CarteSujet({
             Agrandir le terminal
           </button>
         )}
-        {recipient && isAlive(recipient) && (
-          <button
-            className="bouton"
-            data-node={id('actions.pause')}
-            data-action={recipient.pausedAt ? 'run.reprendre' : 'run.pause'}
-            type="button"
-            onClick={() => void pause(recipient)}
-          >
-            {recipient.pausedAt ? 'Reprendre' : 'Pause'}
-          </button>
-        )}
+        {recipient &&
+          isAlive(recipient) &&
+          (recipient.transport === 'stream' ? (
+            recipient.status === 'working' && (
+              <button
+                className="bouton"
+                data-node={id('actions.pause')}
+                data-action="run.interrompre"
+                type="button"
+                onClick={() => void interrompre(recipient)}
+              >
+                Interrompre
+              </button>
+            )
+          ) : (
+            <button
+              className="bouton"
+              data-node={id('actions.pause')}
+              data-action={recipient.pausedAt ? 'run.reprendre' : 'run.pause'}
+              type="button"
+              onClick={() => void pause(recipient)}
+            >
+              {recipient.pausedAt ? 'Reprendre' : 'Pause'}
+            </button>
+          ))}
         <Link
           className="lien pousser"
           data-node={id('actions.ouvrir')}

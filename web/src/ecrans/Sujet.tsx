@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams, useSearchParams } from 'react-router';
 import type { StoredEvent } from '../../../src/shared/events.js';
 import type { GitLogResponse } from '../../../src/shared/git.js';
 import type { Agent, IndexState } from '../../../src/shared/model.js';
+import { Conversation } from '../conversation/Conversation.js';
 import { AidApiError } from '../data/api.js';
 import { fetchGitLog } from '../data/git.js';
 import { useAid } from '../data/useAidState.js';
@@ -724,9 +725,13 @@ function Contenu({ topicId }: { topicId: string }) {
                         </button>
                       ))}
                   </div>
-                  {agents.map((a) => (
-                    <Terminal key={a.id} agentId={a.id} visible={a.id === active?.id} />
-                  ))}
+                  {agents.map((a) =>
+                    a.transport === 'stream' ? (
+                      <Conversation key={a.id} agent={a} visible={a.id === active?.id} />
+                    ) : (
+                      <Terminal key={a.id} agentId={a.id} visible={a.id === active?.id} />
+                    ),
+                  )}
                 </section>
               )}
               <Memoire

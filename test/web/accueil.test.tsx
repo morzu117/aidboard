@@ -224,3 +224,25 @@ test('bandeau de mise à jour (13.2) : en mode release, le titre nomme la versio
   expect(await screen.findByText('AID Server 0.3.0 disponible')).toBeTruthy();
   expect(text('1-1.maj.aide')).toBe('Version installée : 0.2.0.');
 });
+
+test('carte (D64) : un agent stream au travail affiche « Interrompre », jamais « Pause »', async () => {
+  const h = setup(
+    <Accueil />,
+    snapshot({
+      workspaces: [ws()],
+      topics: [topic()],
+      runs: [{ id: 'run_1', topicId: 'tp_1', mode: 'standard', state: 'open', createdAt: 't' }],
+      agents: [agent({ id: 'ag_1', kind: 'claude', transport: 'stream', status: 'working' })],
+    }),
+  );
+  h.respond.set('POST /api/agents/ag_1/interrupt', json(200, { id: 'ag_1' }));
+  await screen.findByText('feat/s');
+  expect(text('1-1.grille.sujet-1.actions.pause')).toBe('Interrompre');
+  expect(screen.queryByText('Pause')).toBeNull();
+  await userEvent.click(node('1-1.grille.sujet-1.actions.pause')!);
+  await waitFor(() =>
+    expect(h.calls.some((c) => c.method === 'POST' && c.url === '/api/agents/ag_1/interrupt')).toBe(
+      true,
+    ),
+  );
+});

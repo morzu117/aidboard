@@ -26,6 +26,12 @@ vi.mock('../../web/src/terminal/Terminal.js', () => ({
   ),
 }));
 
+vi.mock('../../web/src/conversation/Conversation.js', () => ({
+  Conversation: ({ agent: a, visible }: { agent: { id: string }; visible: boolean }) => (
+    <div data-testid={`conv-${a.id}`} data-visible={String(visible)} />
+  ),
+}));
+
 afterEach(cleanup);
 const node = (id: string) => document.querySelector(`[data-node="${id}"]`) as HTMLElement | null;
 const text = (id: string) => node(id)?.textContent;
@@ -606,4 +612,22 @@ test('« Ouvrir la cell swarph » n’apparaît qu’avec un mesh configuré, et
       kind: 'swarph-cell',
     }),
   );
+});
+
+test('transport (D53) : un agent stream affiche <Conversation>, un agent pty affiche <Terminal>', async () => {
+  open(
+    snapshot({
+      workspaces: [ws()],
+      topics: [topic()],
+      runs: [run],
+      agents: [
+        agent({ id: 'ag_1', kind: 'claude', transport: 'pty' }),
+        agent({ id: 'ag_2', kind: 'claude', transport: 'stream' }),
+      ],
+    }),
+  );
+  await screen.findByTestId('term-ag_1');
+  expect(screen.getByTestId('conv-ag_2')).toBeTruthy();
+  expect(screen.queryByTestId('term-ag_2')).toBeNull();
+  expect(screen.queryByTestId('conv-ag_1')).toBeNull();
 });
