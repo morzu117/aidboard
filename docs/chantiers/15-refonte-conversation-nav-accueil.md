@@ -129,9 +129,10 @@ Numérotation continue depuis D49 (chantier 14).
   `hookEnv` pour un agent `stream` : le pilote est la seule source de statut (pas de doublon de
   demandes entre hook et `control_request`).
 - **D63 — bascule progressive** : réglage `agents.transport: pty | stream` dans
-  `config.yaml`, défaut `pty` jusqu'au point A.5 (qui le passe à `stream` quand la vue
-  conversation existe). Chaque commit reste utilisable : avant A.5, un agent `stream` n'aurait
-  aucun écran.
+  `config.yaml`, défaut `pty` jusqu'au point A.6 (révisé le 2026-10-26, initialement A.5) :
+  A.5 donne l'écran, mais sans A.6 un agent `stream` meurt au premier redémarrage du daemon
+  alors que le chemin PTY a sa reprise par résumé. La bascule du défaut arrive avec la reprise
+  transparente. Chaque commit reste utilisable.
 - **D64 — pause** : pas de SIGSTOP pour un agent `stream` en v1 (409 explicite) ; le geste
   équivalent est « Arrêter » = `interrupt()`, exposé par `POST /api/agents/:id/interrupt`.
 - **D65 — protocole de `/ws/agent/:agentId`** : canal en lecture seule (serveur → client) ;
