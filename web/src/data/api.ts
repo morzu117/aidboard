@@ -15,7 +15,7 @@ export class AidApiError extends Error {
 }
 
 export async function api<T>(
-  method: 'GET' | 'POST' | 'DELETE',
+  method: 'GET' | 'POST' | 'PUT' | 'DELETE',
   path: string,
   body?: unknown,
   fetchImpl: typeof fetch = fetch,

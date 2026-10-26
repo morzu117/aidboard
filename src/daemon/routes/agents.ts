@@ -26,6 +26,7 @@ const AnswerBody = Type.Object(
   },
   { additionalProperties: false },
 );
+const MarkBody = Type.Object({ marked: Type.Boolean() }, { additionalProperties: false });
 
 export function registerAgentRoutes(
   app: FastifyInstance,
@@ -58,6 +59,31 @@ export function registerAgentRoutes(
     deps.agents.answer(id, body.pendingId, body.answer);
     return reply.code(202).send({ id });
   });
+
+  // Repères de discussion (A.7) : marquer ou démarquer une question (un message utilisateur) du fil.
+  app.put(
+    '/api/agents/:id/messages/:seq/mark',
+    { schema: { body: MarkBody } },
+    async (req, reply) => {
+      const { id, seq: seqParam } = req.params as { id: string; seq: string };
+      const seq = Number(seqParam);
+      if (!deps.db.prepare('SELECT 1 FROM agents WHERE id = ?').get(id))
+        throw new AidHttpError(404, 'agent inconnu');
+      const row = deps.db
+        .prepare('SELECT kind, payload FROM agent_messages WHERE agent_id = ? AND seq = ?')
+        .get(id, seq) as { kind: string; payload: string } | undefined;
+      if (!row) throw new AidHttpError(404, 'message inconnu');
+      const role =
+        row.kind === 'message' ? (JSON.parse(row.payload) as { role?: string }).role : undefined;
+      if (role !== 'user')
+        throw new AidHttpError(422, 'seul un message utilisateur peut être marqué');
+      const { marked } = req.body as { marked: boolean };
+      deps.db
+        .prepare('UPDATE agent_messages SET marked = ? WHERE agent_id = ? AND seq = ?')
+        .run(marked ? 1 : 0, id, seq);
+      return reply.code(200).send({ seq, marked });
+    },
+  );
 
   for (const [path, paused] of [
     ['pause', true],

@@ -17,4 +17,6 @@ export interface AgentStreamItem {
   seq: number;
   at: string;
   event: ConversationEvent;
+  /** Question marquée (A.7) : présent et vrai seulement sur l'historique, jamais en direct. */
+  marked?: boolean;
 }

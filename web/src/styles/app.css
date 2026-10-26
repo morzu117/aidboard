@@ -472,8 +472,7 @@ body {
   background: var(--surface-4);
 }
 .message-utilisateur {
-  align-self: flex-end;
-  max-width: 80%;
+  min-width: 0;
   padding: var(--sp-3) var(--sp-4);
   border: 1px solid var(--line-2);
   border-radius: var(--r-xl) var(--r-xl) var(--r-xs) var(--r-xl);
@@ -638,4 +637,119 @@ body {
   display: flex;
   align-items: center;
   gap: var(--sp-2);
+}
+.message-utilisateur-ligne {
+  align-self: flex-end;
+  max-width: 80%;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+.etoile-marque {
+  flex-shrink: 0;
+  background: transparent;
+  border: 0;
+  padding: var(--sp-1);
+  line-height: 1;
+  font-size: var(--fs-l);
+  color: var(--muted);
+  cursor: pointer;
+}
+.etoile-marque[aria-pressed='true'] {
+  color: var(--s-attente);
+}
+.message-utilisateur--marquee {
+  border-color: var(--s-attente-line);
+}
+.repere-rail {
+  width: 30px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-3);
+  padding: var(--sp-5) 0;
+}
+.repere-trait {
+  width: 12px;
+  height: 4px;
+  border-radius: var(--r-xs);
+  background: var(--line-2);
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+}
+.repere-trait--marque {
+  width: 18px;
+  background: var(--s-attente);
+}
+.repere-trait--actif {
+  width: 26px;
+  background: var(--acc);
+}
+.repere-trait--actif.repere-trait--marque {
+  box-shadow: 0 0 0 2px var(--s-attente-line);
+}
+.repere-menu {
+  position: absolute;
+  right: 40px;
+  top: var(--sp-2);
+  width: 340px;
+  box-sizing: border-box;
+  background: var(--surface-3);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-l);
+  padding: var(--sp-2);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.55);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  z-index: 1;
+}
+.repere-menu-titre {
+  margin: 0;
+  padding: var(--sp-2) var(--sp-3);
+  font-size: var(--fs-s);
+  font-weight: var(--fw-sb);
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.repere-menu-ligne {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: var(--sp-2) var(--sp-3);
+  border-radius: var(--r-m);
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font-size: var(--fs-b);
+  text-align: left;
+  cursor: pointer;
+}
+.repere-menu-ligne--actif {
+  background: var(--surface-4);
+}
+.repere-menu-etoile {
+  flex-shrink: 0;
+  color: var(--muted);
+}
+.repere-menu-ligne--actif .repere-menu-etoile {
+  color: var(--s-attente);
+}
+.repere-menu-texte {
+  flex-grow: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.repere-menu-rappel {
+  margin: var(--sp-1) 0 0;
+  padding: var(--sp-2) var(--sp-3) 0;
+  font-size: var(--fs-s);
+  color: var(--muted);
+  border-top: 1px solid var(--line-3);
 }

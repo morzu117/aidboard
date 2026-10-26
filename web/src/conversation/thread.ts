@@ -12,7 +12,14 @@ export interface ToolCall {
 }
 
 export type Block =
-  | { kind: 'message'; seq: number; at: string; role: 'user' | 'assistant'; text: string }
+  | {
+      kind: 'message';
+      seq: number;
+      at: string;
+      role: 'user' | 'assistant';
+      text: string;
+      marked?: boolean;
+    }
   | { kind: 'tools'; seq: number; calls: ToolCall[] }
   | { kind: 'decision'; seq: number; request: PendingRequest }
   | { kind: 'turn_end'; seq: number; ok: false; error?: string }
@@ -57,7 +64,16 @@ export function buildTurns(items: AgentStreamItem[]): Turn[] {
           closeTurn();
           current = {
             id: seq,
-            blocks: [{ kind: 'message', seq, at: item.at, role: 'user', text: event.text }],
+            blocks: [
+              {
+                kind: 'message',
+                seq,
+                at: item.at,
+                role: 'user',
+                text: event.text,
+                marked: item.marked === true,
+              },
+            ],
           };
         } else {
           ensureTurn(seq);

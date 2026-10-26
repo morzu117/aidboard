@@ -17,6 +17,7 @@ interface MessageRow {
   seq: number;
   payload: string;
   at: string;
+  marked: number;
 }
 
 type Exit = { exitCode: number | null; signal: NodeJS.Signals | null; reason: string };
@@ -66,7 +67,7 @@ export function registerAgentSocket(
 
       const historyRows = deps.db
         .prepare(
-          'SELECT seq, payload, at FROM agent_messages WHERE agent_id = ? AND seq > ? ORDER BY seq DESC LIMIT ?',
+          'SELECT seq, payload, at, marked FROM agent_messages WHERE agent_id = ? AND seq > ? ORDER BY seq DESC LIMIT ?',
         )
         .all(agentId, after, HISTORY_LIMIT) as MessageRow[];
       // Les plus récentes d'abord (ordre DESC) : on ne garde que celles qui tiennent sous la limite d'octets.
@@ -87,10 +88,15 @@ export function registerAgentSocket(
           .get(agentId, after) as { n: number }
       ).n;
       const truncated = total > boundedRows.length;
-      const items: { seq: number; at: string; event: ConversationEvent }[] = [];
+      const items: { seq: number; at: string; event: ConversationEvent; marked?: boolean }[] = [];
       for (const r of boundedRows.slice().reverse()) {
         try {
-          items.push({ seq: r.seq, at: r.at, event: JSON.parse(r.payload) as ConversationEvent });
+          const event = JSON.parse(r.payload) as ConversationEvent;
+          items.push(
+            r.marked
+              ? { seq: r.seq, at: r.at, event, marked: true }
+              : { seq: r.seq, at: r.at, event },
+          );
         } catch {
           // ligne corrompue : ignorée plutôt que de faire échouer la connexion.
         }

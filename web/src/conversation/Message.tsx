@@ -9,18 +9,39 @@ export function Message({
   text,
   kind,
   at,
+  seq,
+  marked,
+  onToggleMark,
   dataNode,
 }: {
   role: 'user' | 'assistant';
   text: string;
   kind: string;
   at: string;
+  seq?: number;
+  marked?: boolean;
+  onToggleMark?: (seq: number, marked: boolean) => void;
   dataNode: string;
 }) {
   if (role === 'user')
     return (
-      <div className="message-utilisateur" data-node={dataNode}>
-        {text}
+      <div className="message-utilisateur-ligne" data-node={dataNode} data-repere={seq}>
+        <button
+          className="etoile-marque"
+          data-node={`${dataNode}.etoile`}
+          type="button"
+          aria-label={marked ? 'Démarquer la question' : 'Marquer la question'}
+          aria-pressed={marked === true}
+          onClick={() => seq !== undefined && onToggleMark?.(seq, !marked)}
+        >
+          {marked ? '★' : '☆'}
+        </button>
+        <div
+          className={`message-utilisateur${marked ? ' message-utilisateur--marquee' : ''}`}
+          data-node={`${dataNode}.bulle`}
+        >
+          {text}
+        </div>
       </div>
     );
   return (
