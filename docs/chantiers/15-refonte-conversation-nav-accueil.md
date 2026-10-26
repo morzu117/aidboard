@@ -378,10 +378,16 @@ Reprises du brief (§9), à trancher par le client du brief, pas par ce plan :
 1. Un seul bouton « Nouveau sujet » (barre gauche) ou aussi dans la barre du haut ?
 2. Où afficher l'état d'index maintenant que la colonne est retirée de la table d'accueil ?
 3. Passation dev : sixième onglet du panneau contextuel ou dans le menu « … » ?
+   — **Retenu (2026-10-26)** : onglets Revue / Rétro / Passation ajoutés au panneau seulement si
+   leur page mémoire existe pour le sujet (proposition du plan, l'opérateur n'a pas exprimé d'autre choix).
 4. Composer occupé : file d'attente du message ou bouton qui devient « Arrêter » ?
 5. Clic sur un groupe du rail réduit : popover de sujets (bloque B.4 tant que non tranché) ?
 6. Comportement sous 1280 px : la proposition du brief (barre réduite sous 1280, panneau en
    tiroir sous 1024, colonne centrale minimum 560 px) est-elle retenue ?
+   — **Tranché par l'opérateur (2026-10-26)** : sous 1280 px, la barre gauche se cache derrière
+   un bouton burger flottant en haut à gauche ; le panneau droit derrière un autre bouton
+   flottant à icône d'explorateur de dossiers. Un clic ouvre la section choisie en pop-up
+   par-dessus la conversation, qui prend alors toute la largeur.
 
 Propres à ce plan :
 7. D52 : le niveau de détail de `agent_messages` (événements normalisés D59) convient-il ?
