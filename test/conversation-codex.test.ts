@@ -168,6 +168,100 @@ test('resume: true envoie thread/resume avec l’id fourni, retrouvé dans l’�
   expect(d.sessionId).toBe(sid);
 });
 
+test('item fileChange : tool_start/tool_end normalisés avec changes et diff (review A.2)', async () => {
+  const { driver: d, events } = start({ sessionId: randomUUID() });
+
+  d.send('modification fichier');
+  await waitFor(() => events.some((e) => e.type === 'turn_end'), 5000, 'fin du tour');
+
+  const toolStart = events.find((e) => e.type === 'tool_start');
+  expect(toolStart).toMatchObject({
+    name: 'file_change',
+    input: {
+      changes: [
+        { path: 'src/a.ts', kind: 'update' },
+        { path: 'src/b.ts', kind: 'add' },
+      ],
+    },
+  });
+  const toolEnd = events.find((e) => e.type === 'tool_end');
+  expect(toolEnd).toMatchObject({ isError: false });
+  const output = (toolEnd as Extract<ConversationEvent, { type: 'tool_end' }>).output;
+  expect(output).toContain('--- a');
+  expect(output).toContain('--- /dev/null');
+});
+
+test('serverRequest/resolved : approbation purgée via request_cancelled sans réponse du client', async () => {
+  const { driver: d, events } = start({ sessionId: randomUUID() });
+
+  d.send('demande annulee par serveur');
+  await waitFor(() => events.some((e) => e.type === 'turn_end'), 5000, 'fin du tour');
+
+  expect(events.some((e) => e.type === 'request')).toBe(true);
+  expect(events.some((e) => e.type === 'request_cancelled')).toBe(true);
+  expect(events.some((e) => e.type === 'message' && e.text === 'annule par le serveur')).toBe(true);
+});
+
+test('interrupt() appelé avant la réponse à turn/start : honoré dès que activeTurnId est connu', async () => {
+  const { driver: d, events } = start({ sessionId: randomUUID() });
+
+  d.send('bonjour');
+  await waitFor(() => events.some((e) => e.type === 'turn_end'), 5000, 'premier tour');
+
+  // `send` ici déclenche `startTurn` de façon synchrone (phase déjà `ready`) : `interrupt()`
+  // s'exécute donc avant tout aller-retour avec le process, quand `activeTurnId` est encore null.
+  d.send('tour long');
+  d.interrupt();
+  await waitFor(
+    () => events.some((e) => e.type === 'turn_end' && e.ok === false),
+    5000,
+    'interruption honorée malgré l’absence de activeTurnId au moment de l’appel',
+  );
+  const interrupted = events.find((e) => e.type === 'turn_end' && e.ok === false);
+  expect(interrupted).toMatchObject({ ok: false, error: 'interrompu' });
+});
+
+test('erreur JSON-RPC au handshake (thread/start) : exit émis, process réellement tué (review A.2, bloquant)', async () => {
+  const events: ConversationEvent[] = [];
+  driver = new CodexDriver({
+    bin: FAKE_CODEX,
+    cwd: process.cwd(),
+    env: { ...agentEnv(process.env, [], {}), FAKE_CODEX_FAIL_THREAD_START: '1' },
+    sessionId: randomUUID(),
+    resume: false,
+  });
+  driver.onEvent((e) => events.push(e));
+  driver.start();
+  await waitFor(
+    () => events.some((e) => e.type === 'exit'),
+    5000,
+    'exit après erreur de handshake',
+  );
+
+  const exit = events.find((e) => e.type === 'exit') as Extract<
+    ConversationEvent,
+    { type: 'exit' }
+  >;
+  const match = /pid=(\d+)/.exec(exit.message ?? '');
+  if (!match) throw new Error('pid introuvable dans le message d’exit');
+  const pid = Number(match[1]);
+
+  await driver.stop();
+
+  await waitFor(
+    () => {
+      try {
+        process.kill(pid, 0);
+        return false;
+      } catch {
+        return true;
+      }
+    },
+    5000,
+    'process réellement terminé après échec de handshake',
+  );
+});
+
 test('requête serveur de méthode inconnue : réponse d’erreur, pas de blocage', async () => {
   const { driver: d, events } = start({ sessionId: randomUUID() });
 

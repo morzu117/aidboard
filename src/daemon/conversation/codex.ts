@@ -32,6 +32,35 @@ function summarize(value: unknown): string {
   return typeof value === 'string' ? value.slice(0, 160) : JSON.stringify(value).slice(0, 160);
 }
 
+const FILE_CHANGE_DIFF_MAX = 64 * 1024;
+
+interface FileChangeEntry {
+  path?: unknown;
+  kind?: { type?: unknown };
+  diff?: unknown;
+}
+
+function fileChangeSummary(changes: unknown): Array<{ path: string; kind: string }> {
+  if (!Array.isArray(changes)) return [];
+  return changes.map((c) => {
+    const entry = c as FileChangeEntry;
+    return {
+      path: typeof entry.path === 'string' ? entry.path : '',
+      kind: typeof entry.kind?.type === 'string' ? entry.kind.type : '',
+    };
+  });
+}
+
+function fileChangeDiffs(changes: unknown): string {
+  if (!Array.isArray(changes)) return '';
+  return changes
+    .map((c) =>
+      typeof (c as FileChangeEntry).diff === 'string' ? (c as FileChangeEntry).diff : '',
+    )
+    .join('\n')
+    .slice(0, FILE_CHANGE_DIFF_MAX);
+}
+
 function errorMessageOf(err: unknown): string {
   if (
     err &&
@@ -72,6 +101,7 @@ export class CodexDriver implements ConversationDriver {
   private phase: 'init' | 'ready' | 'turn' = 'init';
   private queue: string[] = [];
   private activeTurnId: string | null = null;
+  private interruptRequested = false;
 
   constructor(opts: CodexDriverOptions) {
     this.opts = opts;
@@ -129,7 +159,7 @@ export class CodexDriver implements ConversationDriver {
         ? await this.sendRequest('thread/resume', { threadId: this.threadId })
         : await this.sendRequest('thread/start', {
             cwd: this.opts.cwd,
-            approvalPolicy: this.opts.approvalPolicy ?? 'untrusted',
+            approvalPolicy: this.opts.approvalPolicy ?? 'on-request',
             sandbox: this.opts.sandbox ?? 'workspace-write',
           });
       if (this.exited) return;
@@ -152,17 +182,31 @@ export class CodexDriver implements ConversationDriver {
   ): void {
     if (this.exited) return;
     this.exited = true;
+    this.cancelPendingApprovals();
     this.emit({
       type: 'exit',
       code,
       signal,
       message: errorMessage !== undefined ? errorMessage : this.errTail.trim() || undefined,
     });
-    this.cancelPendingApprovals();
     this.rejectAllPending();
     const resolvers = this.stopResolvers;
     this.stopResolvers = [];
     for (const resolve of resolvers) resolve();
+    this.killIfAlive();
+  }
+
+  // Une erreur JSON-RPC au handshake entraîne ce chemin alors que le process réel tourne encore
+  // (contrairement à l'appel depuis `child.on('exit', …)`, où il est déjà mort) : sans ce kill
+  // explicite, `stop()` croit le process mort (`this.exited`) et ne lui envoie jamais de signal.
+  private killIfAlive(): void {
+    const child = this.child;
+    if (!child || child.exitCode !== null || child.signalCode !== null) return;
+    child.kill('SIGTERM');
+    const killTimer = setTimeout(() => {
+      if (child.exitCode === null && child.signalCode === null) child.kill('SIGKILL');
+    }, SIGKILL_DELAY_MS - SIGTERM_DELAY_MS);
+    child.once('exit', () => clearTimeout(killTimer));
   }
 
   private cancelPendingApprovals(): void {
@@ -180,6 +224,7 @@ export class CodexDriver implements ConversationDriver {
   }
 
   private onStdout(chunk: Buffer): void {
+    if (this.exited) return;
     this.outBuffer += chunk.toString('utf8');
     let idx: number;
     while ((idx = this.outBuffer.indexOf('\n')) >= 0) {
@@ -237,10 +282,14 @@ export class CodexDriver implements ConversationDriver {
     const item = params?.item as Record<string, unknown> | undefined;
     if (!item || typeof item.id !== 'string') return;
     const toolId = item.id;
-    if (item.type === 'commandExecution' || item.type === 'fileChange') {
-      const name = item.type === 'commandExecution' ? 'command' : 'file_change';
+    if (item.type === 'commandExecution') {
       if (method === 'item/started') {
-        this.emit({ type: 'tool_start', toolId, name, input: { command: item.command } });
+        this.emit({
+          type: 'tool_start',
+          toolId,
+          name: 'command',
+          input: { command: item.command },
+        });
       } else {
         const exitCode = item.exitCode;
         const isError =
@@ -250,6 +299,22 @@ export class CodexDriver implements ConversationDriver {
           toolId,
           output: typeof item.aggregatedOutput === 'string' ? item.aggregatedOutput : '',
           isError,
+        });
+      }
+    } else if (item.type === 'fileChange') {
+      if (method === 'item/started') {
+        this.emit({
+          type: 'tool_start',
+          toolId,
+          name: 'file_change',
+          input: { changes: fileChangeSummary(item.changes) },
+        });
+      } else {
+        this.emit({
+          type: 'tool_end',
+          toolId,
+          output: fileChangeDiffs(item.changes),
+          isError: item.status !== 'completed',
         });
       }
     } else if (item.type === 'agentMessage' && method === 'item/completed') {
@@ -345,11 +410,13 @@ export class CodexDriver implements ConversationDriver {
 
   private startTurn(text: string): void {
     this.phase = 'turn';
+    this.interruptRequested = false;
     this.sendRequest('turn/start', { threadId: this.threadId, input: [{ type: 'text', text }] })
       .then((result) => {
         if (this.exited) return;
         const turn = (result as { turn?: { id?: unknown } } | undefined)?.turn;
         if (turn && typeof turn.id === 'string') this.activeTurnId = turn.id;
+        if (this.interruptRequested && this.activeTurnId) this.sendInterrupt();
       })
       .catch((err: unknown) => {
         if (this.exited) return;
@@ -364,14 +431,25 @@ export class CodexDriver implements ConversationDriver {
     else this.queue.push(text);
   }
 
-  interrupt(): void {
-    if (this.exited || this.phase !== 'turn' || !this.activeTurnId) return;
+  private sendInterrupt(): void {
+    this.interruptRequested = false;
     this.sendRequest('turn/interrupt', {
       threadId: this.threadId,
       turnId: this.activeTurnId,
     }).catch(() => {
       // le tour est sans doute déjà terminé entre-temps : `turn/completed` a déjà été ou sera émis.
     });
+  }
+
+  interrupt(): void {
+    if (this.exited || this.phase !== 'turn') return;
+    // `turn/start` n'a pas encore répondu : `activeTurnId` arrive plus tard, dans son `.then()` —
+    // sans ce drapeau, la demande d'interruption serait perdue silencieusement.
+    if (!this.activeTurnId) {
+      this.interruptRequested = true;
+      return;
+    }
+    this.sendInterrupt();
   }
 
   answer(requestId: string, decision: 'yes' | 'always' | 'no'): void {
