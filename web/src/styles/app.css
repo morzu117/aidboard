@@ -1300,3 +1300,15 @@ body {
   background: transparent;
   color: var(--muted);
 }
+
+/* review B.4 : en rail, la colonne de droite doit rester 25 % de la fenêtre (pas 1/3 du reste
+   après un rail de 72 px) ; la colonne centrale reprend le reste. Mode plein inchangé (25/50/25). */
+@media (min-width: 1280px) {
+  .corps-ecran:has(.barre-gauche--rail) .panneau-contexte {
+    flex: none;
+    width: 25vw;
+  }
+  .corps-ecran:has(.barre-gauche--rail) .sujet-corps:has(.panneau-contexte) .sujet-contenu {
+    flex: 1 1 auto;
+  }
+}

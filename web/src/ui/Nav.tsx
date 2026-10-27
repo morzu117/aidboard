@@ -97,6 +97,8 @@ export function Nav({ screen }: { screen: EcranId }) {
   // navigateurs) ne doit jamais enregistrer ce qu'Échap vient d'annuler.
   const annulationRenommageRef = useRef(false);
   const actionsRefs = useRef<Map<string, HTMLButtonElement>>(new Map());
+  const railBasculeRef = useRef<HTMLButtonElement>(null);
+  const piedBasculeRef = useRef<HTMLButtonElement>(null);
   // Un déplacement entre groupes remonte le bouton « ··· » ailleurs dans l'arbre React (clé
   // présente dans un autre tableau d'enfants) : le focus ne peut se reposer qu'après ce rendu,
   // jamais de façon synchrone dans le gestionnaire qui déclenche le déplacement (§2.4, point 8).
@@ -162,6 +164,16 @@ export function Nav({ screen }: { screen: EcranId }) {
   const placements = nav.placements ?? [];
   const placementByTopic = new Map(placements.map((p) => [p.topicId, p]));
   const rail = large && (nav.prefs?.reduit ?? false);
+
+  // bascule rail/plein : arbres DOM disjoints, le focus ne peut se reposer qu'après ce rendu
+  // (§2.4 appliqué à la bascule elle-même, pas seulement au menu).
+  const railPrecedentRef = useRef(rail);
+  useEffect(() => {
+    if (railPrecedentRef.current === rail) return;
+    railPrecedentRef.current = rail;
+    if (rail) railBasculeRef.current?.focus();
+    else piedBasculeRef.current?.focus();
+  }, [rail]);
 
   const toggleReduit = () => {
     const suivant = !(nav.prefs?.reduit ?? false);
@@ -653,7 +665,7 @@ export function Nav({ screen }: { screen: EcranId }) {
                     className="barre-gauche-rail-case barre-gauche-rail-vue"
                     data-node={n(`rail.vue-${v.id}`)}
                     title={v.label}
-                    aria-label={c > 0 ? `${v.label} (${c})` : v.label}
+                    aria-label={`${v.label}, ${c}`}
                   >
                     <span
                       className="barre-gauche-rail-pastille"
@@ -679,30 +691,35 @@ export function Nav({ screen }: { screen: EcranId }) {
           <ul className="barre-gauche-rail-groupes" data-node={n('rail.groupes')}>
             {groups
               .filter((g) => !g.hidden)
-              .map((g) => (
-                <li key={g.id}>
-                  <span
-                    className="barre-gauche-rail-case barre-gauche-rail-groupe"
-                    style={{
-                      background: g.color,
-                      color: COULEURS_GROUPE.find((c) => c.valeur === g.color)?.ink,
-                    }}
-                    role="img"
-                    aria-label={g.name}
-                    title={g.name}
-                    data-node={n(`rail.groupe-${g.id}`)}
-                  >
-                    {initialesGroupe(g.name)}
-                  </span>
-                </li>
-              ))}
+              .map((g) => {
+                const nbVisibles = ordreSujets(g.id).filter((p) => !p.hidden).length;
+                const libelleGroupe = `${g.name}, ${nbVisibles} sujet${nbVisibles === 1 ? '' : 's'}`;
+                return (
+                  <li key={g.id}>
+                    <span
+                      className="barre-gauche-rail-case barre-gauche-rail-groupe"
+                      style={{
+                        background: g.color,
+                        color: COULEURS_GROUPE.find((c) => c.valeur === g.color)?.ink,
+                      }}
+                      role="img"
+                      aria-label={libelleGroupe}
+                      title={libelleGroupe}
+                      data-node={n(`rail.groupe-${g.id}`)}
+                    >
+                      {initialesGroupe(g.name)}
+                    </span>
+                  </li>
+                );
+              })}
           </ul>
           <button
+            ref={railBasculeRef}
             type="button"
             className="barre-gauche-rail-case barre-gauche-rail-bascule"
             data-node={n('rail.deployer')}
-            aria-label="Déployer la barre"
-            title="Déployer la barre"
+            aria-label="Déplier la barre"
+            title="Déplier la barre"
             onClick={toggleReduit}
           >
             ›
@@ -1015,6 +1032,7 @@ export function Nav({ screen }: { screen: EcranId }) {
               {meshTexte ? ` · ${meshTexte}` : ''}
             </span>
             <button
+              ref={piedBasculeRef}
               type="button"
               className="barre-gauche-rail-bascule"
               data-node={n('reduire')}

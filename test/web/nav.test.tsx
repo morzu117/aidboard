@@ -220,14 +220,17 @@ test('mode réduit (rail) : bouton +, trois vues, un carré non interactif par g
   expect(node('1-1.barre-gauche.rail.vue-agent-libre')).toBeTruthy();
   expect(node('1-1.barre-gauche.rail.vue-sans-agent')).toBeNull();
   const vueADecider = node('1-1.barre-gauche.rail.vue-a-decider')!;
-  expect(vueADecider.getAttribute('aria-label')).toBe('À décider (1)');
+  expect(vueADecider.getAttribute('aria-label')).toBe('À décider, 1');
   expect(vueADecider.querySelector('.barre-gauche-rail-compte--ambre')).toBeTruthy();
+  const vueTous = node('1-1.barre-gauche.rail.vue-tous')!;
+  expect(vueTous.getAttribute('aria-label')).toBe('Tous, 1');
   const carre = node('1-1.barre-gauche.rail.groupe-ng_1')!;
   expect(carre.getAttribute('role')).toBe('img');
-  expect(carre.getAttribute('aria-label')).toBe('aid');
+  expect(carre.getAttribute('aria-label')).toBe('aid, 1 sujet');
+  expect(carre.getAttribute('title')).toBe('aid, 1 sujet');
   expect(carre.tagName).not.toBe('BUTTON');
   expect(carre.tagName).not.toBe('A');
-  expect(screen.getByRole('button', { name: 'Déployer la barre' })).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Déplier la barre' })).toBeTruthy();
 });
 
 test('réduire puis redéployer la barre persiste via PATCH /api/nav/prefs', async () => {
@@ -245,7 +248,10 @@ test('réduire puis redéployer la barre persiste via PATCH /api/nav/prefs', asy
         (c.body as { reduit?: boolean }).reduit === true,
     ),
   ).toBe(true);
-  await userEvent.click(screen.getByRole('button', { name: 'Déployer la barre' }));
+  // review B.4 (finding 6) : la bascule change d'arbre DOM, le focus doit suivre sur l'autre bouton.
+  const boutonDeplier = screen.getByRole('button', { name: 'Déplier la barre' });
+  await waitFor(() => expect(document.activeElement).toBe(boutonDeplier));
+  await userEvent.click(boutonDeplier);
   expect(node('1-1.barre-gauche.rail')).toBeNull();
   expect(
     h.calls.some(
@@ -255,6 +261,8 @@ test('réduire puis redéployer la barre persiste via PATCH /api/nav/prefs', asy
         (c.body as { reduit?: boolean }).reduit === false,
     ),
   ).toBe(true);
+  const boutonReduire = screen.getByRole('button', { name: 'Réduire la barre' });
+  await waitFor(() => expect(document.activeElement).toBe(boutonReduire));
 });
 
 test('sous 1280 px, la barre reste complète même si « reduit » est enregistré à vrai', async () => {
