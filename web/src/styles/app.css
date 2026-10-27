@@ -1021,3 +1021,182 @@ body {
 .barre-gauche-nouveau {
   width: 100%;
 }
+
+/* B.3 (chantier 15) : mode édition de la barre gauche — poignées, menu ···, glisser-déposer. */
+.barre-gauche-groupes-entete {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: var(--sp-3) var(--sp-2) 0;
+}
+.barre-gauche-groupes-entete .titre-zone {
+  flex: 1 1 auto;
+}
+.bouton-modifier {
+  min-height: var(--h-controle-s);
+  padding: 0 var(--sp-2);
+  border: 1px solid var(--line);
+  border-radius: var(--r-s);
+  background: transparent;
+  color: var(--muted);
+  font-family: var(--font);
+  font-size: var(--fs-s);
+  cursor: pointer;
+}
+.bouton-modifier--actif {
+  border-color: var(--acc);
+  background: var(--acc);
+  color: var(--acc-ink);
+  font-weight: var(--fw-sb);
+}
+.barre-gauche-actions {
+  flex: none;
+  width: var(--sp-6);
+  height: var(--sp-6);
+  border: 1px solid var(--line);
+  border-radius: var(--r-s);
+  background: transparent;
+  color: var(--muted);
+  font-size: var(--fs-s);
+  line-height: 1;
+  cursor: pointer;
+}
+.barre-gauche-poignee {
+  flex: none;
+  color: var(--subtle);
+}
+.barre-gauche-groupe-ligne,
+.barre-gauche-sujet-ligne {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-1);
+  position: relative;
+}
+.barre-gauche-sujet-ligne {
+  padding-left: var(--sp-6);
+}
+.barre-gauche-sujet-ligne .barre-gauche-sujet {
+  flex: 1 1 auto;
+}
+.barre-gauche-groupe-ligne .barre-gauche-groupe-entete,
+.barre-gauche-groupe-ligne .barre-gauche-renommage {
+  flex: 1 1 auto;
+}
+.barre-gauche-groupe-ligne--glisse,
+.barre-gauche-sujet-ligne--glisse {
+  border: 1px solid var(--acc);
+  border-radius: var(--r-s);
+  box-shadow: 0 var(--sp-2) var(--sp-4) var(--ombre);
+}
+.barre-gauche-groupe--masque,
+.barre-gauche-sujet-ligne--masque {
+  opacity: 0.5;
+}
+.barre-gauche-repere-depot {
+  position: relative;
+  height: 2px;
+  margin: 2px var(--sp-2) 2px var(--sp-6);
+  background: var(--acc);
+}
+.barre-gauche-repere-depot::before {
+  content: '';
+  position: absolute;
+  left: -4px;
+  top: -3px;
+  width: 8px;
+  height: 8px;
+  border-radius: var(--r-pill);
+  background: var(--acc);
+}
+.barre-gauche-renommage {
+  flex: 1 1 auto;
+  min-height: var(--h-controle-s);
+  padding: 0 var(--sp-2);
+  border: 1px solid var(--acc);
+  border-radius: var(--r-s);
+  background: var(--surface-2);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: var(--fs-m);
+}
+.barre-gauche-renommage-bloc {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.barre-gauche-renommage-indice {
+  padding: 0 var(--sp-2);
+  color: var(--faint);
+  font-size: var(--fs-xs);
+}
+.barre-gauche-groupe-ajouter {
+  margin: var(--sp-2) var(--sp-2) 0;
+  min-height: var(--h-controle-s);
+  border: 1px dashed var(--line-2);
+  border-radius: var(--r-s);
+  background: transparent;
+  color: var(--muted);
+  font-family: var(--font);
+  font-size: var(--fs-m);
+  cursor: pointer;
+}
+.barre-gauche-erreur {
+  margin: 0 var(--sp-2);
+  color: var(--s-erreur);
+  font-size: var(--fs-s);
+}
+
+/* Menu contextuel (ContextMenu) : flottant, ancré sous le bouton ··· de la ligne. */
+.menu-contextuel {
+  position: absolute;
+  top: 100%;
+  right: var(--sp-2);
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  min-width: 180px;
+  padding: var(--sp-1);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-l);
+  background: var(--surface-3);
+  box-shadow: var(--ombre) 0 var(--sp-2) var(--sp-6);
+}
+.menu-contextuel-item {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  min-height: var(--h-controle-s);
+  padding: 0 var(--sp-2);
+  border: 0;
+  border-radius: var(--r-s);
+  background: transparent;
+  color: var(--text-2);
+  font-family: var(--font);
+  font-size: var(--fs-m);
+  text-align: left;
+  cursor: pointer;
+}
+.menu-contextuel-item:focus-visible {
+  outline: 2px solid var(--acc);
+  outline-offset: -2px;
+}
+.menu-contextuel-item:disabled {
+  color: var(--faint);
+  cursor: default;
+}
+.menu-contextuel-item--sous {
+  padding-left: var(--sp-4);
+}
+.menu-contextuel-item--separe {
+  margin-top: var(--sp-1);
+  padding-top: var(--sp-2);
+  border-top: 1px solid var(--line);
+}
+.menu-contextuel-pastille {
+  flex: none;
+  width: var(--sp-2);
+  height: var(--sp-2);
+  border-radius: var(--r-xs);
+}

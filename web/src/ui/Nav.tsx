@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useState } from 'react';
+import { type DragEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation, useSearchParams } from 'react-router';
 import type { Agent, NavGroup, NavPlacement, NavState, Topic } from '../../../src/shared/model.js';
 import { useAid } from '../data/useAidState.js';
 import type { EcranId } from './Barre.js';
+import { ContextMenu, type MenuItem } from './ContextMenu.js';
 import { depuis } from './depuis.js';
 import { useLayout } from './Layout.js';
 import { Badge, isAlive, Point, topicView } from './Statut.js';
@@ -18,6 +19,23 @@ const VUES: readonly { id: VueId; label: string }[] = [
   { id: 'archives', label: 'Archivés' },
 ];
 
+// Palette de couleurs de groupe (BRIEF §5.2.1, même ordre que src/daemon/routes/nav.ts).
+const COULEURS_GROUPE: readonly { nom: string; valeur: string }[] = [
+  { nom: 'Menthe', valeur: '#5de0a1' },
+  { nom: 'Violet', valeur: '#a78bfa' },
+  { nom: 'Orange', valeur: '#f59e6b' },
+  { nom: 'Bleu', valeur: '#6ea8ff' },
+  { nom: 'Rose', valeur: '#f07ab0' },
+  { nom: 'Ambre', valeur: '#f2b84b' },
+  { nom: 'Turquoise', valeur: '#4fd1d9' },
+  { nom: 'Gris', valeur: '#8d94a0' },
+];
+
+type Renommage = { kind: 'groupe' | 'sujet'; id: string; valeur: string };
+type MenuOuvert = { kind: 'groupe' | 'sujet'; id: string };
+type Glisse = { kind: 'groupe' | 'sujet'; id: string };
+type Depot = { kind: 'groupe'; index: number } | { kind: 'sujet'; groupeId: string; index: number };
+
 // Cache de module (§2.2) : affiché immédiatement au remontage de Nav (Layout la remonte à
 // chaque écran), rafraîchi ensuite en tâche de fond pour éviter le clignotement.
 let navCache: Partial<NavState> | null = null;
@@ -27,7 +45,7 @@ export function resetNavCacheForTests(): void {
   navCache = null;
 }
 
-/** Groupe B (D55) : lecture seule — ni glisser-déposer, ni renommage, ni réordonnancement (B.3). */
+/** Groupe B (D55) : barre gauche, lecture (B.2) et mode édition (B.3) — glisser-déposer, menu, renommage. */
 export function Nav({ screen }: { screen: EcranId }) {
   const { state, daemon, call } = useAid();
   const { pathname } = useLocation();
@@ -44,6 +62,47 @@ export function Nav({ screen }: { screen: EcranId }) {
       return next;
     });
   };
+
+  const [edit, setEdit] = useState(false);
+  const [renommage, setRenommage] = useState<Renommage | null>(null);
+  const [menuOuvert, setMenuOuvert] = useState<MenuOuvert | null>(null);
+  const [glisse, setGlisse] = useState<Glisse | null>(null);
+  const [depot, setDepot] = useState<Depot | null>(null);
+  const [erreur, setErreur] = useState<string | null>(null);
+  const renommageRef = useRef<HTMLInputElement>(null);
+  const actionsRefs = useRef<Map<string, HTMLButtonElement>>(new Map());
+  // Un déplacement entre groupes remonte le bouton « ··· » ailleurs dans l'arbre React (clé
+  // présente dans un autre tableau d'enfants) : le focus ne peut se reposer qu'après ce rendu,
+  // jamais de façon synchrone dans le gestionnaire qui déclenche le déplacement (§2.4, point 8).
+  const focusApresRef = useRef<string | null>(null);
+  useEffect(() => {
+    const id = focusApresRef.current;
+    if (!id) return;
+    actionsRefs.current.get(id)?.focus();
+    focusApresRef.current = null;
+  }, [nav, menuOuvert]);
+
+  const toggleEdit = () => {
+    setEdit((e) => !e);
+    setRenommage(null);
+    setMenuOuvert(null);
+    setGlisse(null);
+    setDepot(null);
+  };
+
+  useEffect(() => {
+    if (renommage) {
+      renommageRef.current?.focus();
+      renommageRef.current?.select();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [renommage?.kind, renommage?.id]);
+
+  useEffect(() => {
+    if (!erreur) return;
+    const t = setTimeout(() => setErreur(null), 4000);
+    return () => clearTimeout(t);
+  }, [erreur]);
 
   // Rafraîchit quand l'ENSEMBLE des ids de sujets/projets change, pas seulement leur nombre
   // (un sujet retiré et un autre ajouté au même instant garderait le même total).
@@ -130,6 +189,375 @@ export function Nav({ screen }: { screen: EcranId }) {
     });
   };
 
+  // Sujets d'un groupe (archivés exclus partout — B.3 ne désarchive pas, groupe C) : épinglés en
+  // tête (§5.2.2), puis par ordre manuel. Référence commune au rendu et aux calculs de déplacement.
+  const ordreSujets = (groupId: string): NavPlacement[] =>
+    placements
+      .filter((p) => p.groupId === groupId && !p.archived)
+      .sort((a, b) => Number(b.pinned) - Number(a.pinned) || a.ord - b.ord);
+
+  const patchPlacement = async (
+    topicId: string,
+    patch: Partial<Pick<NavPlacement, 'pinned' | 'archived' | 'hidden' | 'displayName'>>,
+    messageErreur: string,
+  ) => {
+    const avant = placementByTopic.get(topicId);
+    updateNav((cur) => ({
+      ...cur,
+      placements: (cur.placements ?? []).map((p) =>
+        p.topicId === topicId ? { ...p, ...patch } : p,
+      ),
+    }));
+    try {
+      await call('PATCH', `/api/nav/placements/${topicId}`, patch);
+    } catch {
+      if (avant) {
+        updateNav((cur) => ({
+          ...cur,
+          placements: (cur.placements ?? []).map((p) => (p.topicId === topicId ? avant : p)),
+        }));
+      }
+      setErreur(messageErreur);
+    }
+  };
+
+  const patchGroupe = async (
+    groupId: string,
+    patch: Partial<Pick<NavGroup, 'name' | 'color' | 'hidden'>>,
+    messageErreur: string,
+  ) => {
+    const avant = groups.find((g) => g.id === groupId);
+    updateNav((cur) => ({
+      ...cur,
+      groups: (cur.groups ?? []).map((g) => (g.id === groupId ? { ...g, ...patch } : g)),
+    }));
+    try {
+      await call('PATCH', `/api/nav/groups/${groupId}`, patch);
+    } catch {
+      if (avant) {
+        updateNav((cur) => ({
+          ...cur,
+          groups: (cur.groups ?? []).map((g) => (g.id === groupId ? avant : g)),
+        }));
+      }
+      setErreur(messageErreur);
+    }
+  };
+
+  const rafraichirApresEchec = () => {
+    call<NavState>('GET', '/api/nav')
+      .then((r) => {
+        navCache = r;
+        setNav(r);
+      })
+      .catch(() => {});
+  };
+
+  const reordonnerGroupe = async (groupId: string, topicIds: string[]) => {
+    updateNav((cur) => ({
+      ...cur,
+      placements: (cur.placements ?? []).map((p) => {
+        if (p.groupId !== groupId) return p;
+        const i = topicIds.indexOf(p.topicId);
+        return i === -1 ? p : { ...p, ord: i };
+      }),
+    }));
+    try {
+      await call('PUT', `/api/nav/groups/${groupId}/topics`, { topicIds });
+    } catch {
+      setErreur('Impossible de réordonner les sujets.');
+      rafraichirApresEchec();
+    }
+  };
+
+  const reordonnerGroupes = async (ids: string[]) => {
+    updateNav((cur) => {
+      const map = new Map((cur.groups ?? []).map((g) => [g.id, g] as const));
+      return {
+        ...cur,
+        groups: ids.map((id, i) => ({
+          ...(map.get(id) ?? groups.find((g) => g.id === id))!,
+          ord: i,
+        })),
+      };
+    });
+    try {
+      await call('PUT', '/api/nav/groups/order', { ids });
+    } catch {
+      setErreur('Impossible de réordonner les groupes.');
+      rafraichirApresEchec();
+    }
+  };
+
+  const creerGroupe = async () => {
+    try {
+      const g = await call<NavGroup>('POST', '/api/nav/groups', { name: 'Nouveau groupe' });
+      updateNav((cur) => ({ ...cur, groups: [...(cur.groups ?? []), g] }));
+      setRenommage({ kind: 'groupe', id: g.id, valeur: g.name });
+    } catch {
+      setErreur('Impossible de créer le groupe.');
+    }
+  };
+
+  const commencerRenommage = (kind: 'groupe' | 'sujet', id: string, valeurActuelle: string) => {
+    if (!edit) return;
+    setRenommage({ kind, id, valeur: valeurActuelle });
+  };
+  const annulerRenommage = () => setRenommage(null);
+  const validerRenommage = () => {
+    if (!renommage) return;
+    const { kind, id, valeur } = renommage;
+    const texte = valeur.trim();
+    setRenommage(null);
+    if (kind === 'groupe') {
+      // pour un groupe, vide = annulation (BRIEF §5.2.1, point 6) : aucune écriture.
+      if (texte.length === 0) return;
+      void patchGroupe(id, { name: texte }, 'Impossible de renommer le groupe.');
+    } else {
+      void patchPlacement(
+        id,
+        { displayName: texte.length === 0 ? null : texte },
+        'Impossible de renommer le sujet.',
+      );
+    }
+  };
+
+  const deplacerVersGroupe = async (topicId: string, groupId: string) => {
+    const avant = placementByTopic.get(topicId);
+    if (!avant || avant.groupId === groupId) return;
+    const ord = placements.filter((p) => p.groupId === groupId && !p.archived).length;
+    updateNav((cur) => ({
+      ...cur,
+      placements: (cur.placements ?? []).map((p) =>
+        p.topicId === topicId ? { ...p, groupId, ord } : p,
+      ),
+    }));
+    try {
+      await call('PATCH', `/api/nav/placements/${topicId}`, { groupId });
+    } catch {
+      updateNav((cur) => ({
+        ...cur,
+        placements: (cur.placements ?? []).map((p) => (p.topicId === topicId ? avant : p)),
+      }));
+      setErreur('Impossible de déplacer le sujet.');
+    }
+  };
+
+  const monterSujet = (topicId: string) => {
+    const p = placementByTopic.get(topicId);
+    if (!p) return;
+    const liste = ordreSujets(p.groupId).map((x) => x.topicId);
+    const i = liste.indexOf(topicId);
+    if (i <= 0) return;
+    const tmp = liste[i - 1]!;
+    liste[i - 1] = liste[i]!;
+    liste[i] = tmp;
+    void reordonnerGroupe(p.groupId, liste);
+  };
+  const descendreSujet = (topicId: string) => {
+    const p = placementByTopic.get(topicId);
+    if (!p) return;
+    const liste = ordreSujets(p.groupId).map((x) => x.topicId);
+    const i = liste.indexOf(topicId);
+    if (i === -1 || i >= liste.length - 1) return;
+    const tmp = liste[i + 1]!;
+    liste[i + 1] = liste[i]!;
+    liste[i] = tmp;
+    void reordonnerGroupe(p.groupId, liste);
+  };
+
+  const deplacerSujetVersPosition = async (topicId: string, groupId: string, index: number) => {
+    const avant = placementByTopic.get(topicId);
+    const memeGroupe = avant?.groupId === groupId;
+    const autres = ordreSujets(groupId)
+      .map((p) => p.topicId)
+      .filter((id) => id !== topicId);
+    autres.splice(index, 0, topicId);
+    updateNav((cur) => ({
+      ...cur,
+      placements: (cur.placements ?? []).map((p) => {
+        if (p.topicId === topicId) return { ...p, groupId, ord: autres.indexOf(topicId) };
+        const i = autres.indexOf(p.topicId);
+        return i === -1 ? p : { ...p, ord: i };
+      }),
+    }));
+    try {
+      if (!memeGroupe) await call('PATCH', `/api/nav/placements/${topicId}`, { groupId });
+      await call('PUT', `/api/nav/groups/${groupId}/topics`, { topicIds: autres });
+    } catch {
+      setErreur('Impossible de déplacer le sujet.');
+      rafraichirApresEchec();
+    }
+  };
+
+  const monterGroupe = (groupId: string) => {
+    const ids = groups.map((g) => g.id);
+    const i = ids.indexOf(groupId);
+    if (i <= 0) return;
+    const tmp = ids[i - 1]!;
+    ids[i - 1] = ids[i]!;
+    ids[i] = tmp;
+    void reordonnerGroupes(ids);
+  };
+  const descendreGroupe = (groupId: string) => {
+    const ids = groups.map((g) => g.id);
+    const i = ids.indexOf(groupId);
+    if (i === -1 || i >= ids.length - 1) return;
+    const tmp = ids[i + 1]!;
+    ids[i + 1] = ids[i]!;
+    ids[i] = tmp;
+    void reordonnerGroupes(ids);
+  };
+  const enHautGroupe = (groupId: string) => {
+    const ids = [groupId, ...groups.map((g) => g.id).filter((id) => id !== groupId)];
+    void reordonnerGroupes(ids);
+  };
+  const enBasGroupe = (groupId: string) => {
+    const ids = [...groups.map((g) => g.id).filter((id) => id !== groupId), groupId];
+    void reordonnerGroupes(ids);
+  };
+  const deplacerGroupeVersPosition = (groupId: string, index: number) => {
+    const autres = groups.filter((g) => g.id !== groupId).map((g) => g.id);
+    autres.splice(index, 0, groupId);
+    void reordonnerGroupes(autres);
+  };
+
+  const onDragStartSujet = (e: DragEvent, topicId: string) => {
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', topicId);
+    setGlisse({ kind: 'sujet', id: topicId });
+  };
+  const onDragStartGroupe = (e: DragEvent, groupId: string) => {
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', groupId);
+    setGlisse({ kind: 'groupe', id: groupId });
+  };
+  const onDragEnd = () => {
+    setGlisse(null);
+    setDepot(null);
+  };
+  const onDragOverSujetRow = (e: DragEvent, groupId: string, index: number) => {
+    if (glisse?.kind !== 'sujet') return;
+    e.preventDefault();
+    e.stopPropagation();
+    const rect = e.currentTarget.getBoundingClientRect();
+    const avant = e.clientY < rect.top + rect.height / 2;
+    setDepot({ kind: 'sujet', groupeId: groupId, index: avant ? index : index + 1 });
+  };
+  const onDragOverGroupeBloc = (e: DragEvent, index: number, groupId: string, nbSujets: number) => {
+    if (glisse?.kind === 'groupe') {
+      e.preventDefault();
+      e.stopPropagation();
+      const rect = e.currentTarget.getBoundingClientRect();
+      const avant = e.clientY < rect.top + rect.height / 2;
+      setDepot({ kind: 'groupe', index: avant ? index : index + 1 });
+    } else if (glisse?.kind === 'sujet') {
+      e.preventDefault();
+      e.stopPropagation();
+      setDepot({ kind: 'sujet', groupeId: groupId, index: nbSujets });
+    }
+  };
+  const onDropGroupeBloc = (e: DragEvent, groupId: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (glisse?.kind === 'groupe' && depot?.kind === 'groupe') {
+      deplacerGroupeVersPosition(glisse.id, depot.index);
+    } else if (glisse?.kind === 'sujet' && depot?.kind === 'sujet' && depot.groupeId === groupId) {
+      void deplacerSujetVersPosition(glisse.id, groupId, depot.index);
+    }
+    setGlisse(null);
+    setDepot(null);
+  };
+  const onDragOverGroupesFin = (e: DragEvent) => {
+    if (glisse?.kind !== 'groupe') return;
+    e.preventDefault();
+    setDepot({ kind: 'groupe', index: groups.length });
+  };
+  const onDropGroupesFin = (e: DragEvent) => {
+    e.preventDefault();
+    if (glisse?.kind === 'groupe' && depot?.kind === 'groupe') {
+      deplacerGroupeVersPosition(glisse.id, depot.index);
+    }
+    setGlisse(null);
+    setDepot(null);
+  };
+
+  const menuSujet = (t: Topic, p: NavPlacement): MenuItem[] => [
+    {
+      id: 'renommer',
+      label: 'Renommer',
+      onSelect: () => commencerRenommage('sujet', t.id, p.displayName ?? t.branch),
+    },
+    {
+      id: 'deplacer',
+      label: 'Déplacer vers…',
+      submenu: [
+        ...groups.map((g) => ({
+          id: `groupe-${g.id}`,
+          label: g.name,
+          disabled: g.id === p.groupId,
+          onSelect: () => void deplacerVersGroupe(t.id, g.id),
+        })),
+        { id: 'monter', label: 'Monter', onSelect: () => monterSujet(t.id) },
+        { id: 'descendre', label: 'Descendre', onSelect: () => descendreSujet(t.id) },
+      ],
+    },
+    {
+      id: 'epingler',
+      label: p.pinned ? 'Désépingler' : 'Épingler en haut',
+      onSelect: () =>
+        void patchPlacement(t.id, { pinned: !p.pinned }, 'Impossible d’épingler le sujet.'),
+    },
+    {
+      id: 'masquer',
+      label: p.hidden ? 'Afficher dans la barre' : 'Masquer de la barre',
+      onSelect: () =>
+        void patchPlacement(t.id, { hidden: !p.hidden }, 'Impossible de masquer le sujet.'),
+    },
+    {
+      id: 'archiver',
+      label: 'Archiver',
+      separatorBefore: true,
+      onSelect: () =>
+        void patchPlacement(t.id, { archived: true }, 'Impossible d’archiver le sujet.'),
+    },
+  ];
+
+  const menuGroupe = (g: NavGroup): MenuItem[] => [
+    {
+      id: 'renommer',
+      label: 'Renommer',
+      onSelect: () => commencerRenommage('groupe', g.id, g.name),
+    },
+    {
+      id: 'couleur',
+      label: 'Couleur',
+      submenu: COULEURS_GROUPE.map((c) => ({
+        id: `couleur-${c.valeur}`,
+        label: c.nom,
+        swatch: c.valeur,
+        onSelect: () =>
+          void patchGroupe(g.id, { color: c.valeur }, 'Impossible de changer la couleur.'),
+      })),
+    },
+    {
+      id: 'deplacer',
+      label: 'Déplacer vers…',
+      submenu: [
+        { id: 'monter', label: 'Monter', onSelect: () => monterGroupe(g.id) },
+        { id: 'descendre', label: 'Descendre', onSelect: () => descendreGroupe(g.id) },
+        { id: 'haut', label: 'En haut', onSelect: () => enHautGroupe(g.id) },
+        { id: 'bas', label: 'En bas', onSelect: () => enBasGroupe(g.id) },
+      ],
+    },
+    {
+      id: 'masquer',
+      label: g.hidden ? 'Afficher dans la barre' : 'Masquer de la barre',
+      onSelect: () =>
+        void patchGroupe(g.id, { hidden: !g.hidden }, 'Impossible de masquer le groupe.'),
+    },
+  ];
+
   const mesh = state?.mesh;
   const meshTexte = mesh
     ? mesh.state.connected
@@ -170,65 +598,262 @@ export function Nav({ screen }: { screen: EcranId }) {
           );
         })}
       </ul>
-      <div className="barre-gauche-groupes" data-node={n('groupes')}>
-        <h2 className="titre-zone">Groupes</h2>
+      <div
+        className="barre-gauche-groupes"
+        data-node={n('groupes')}
+        onDragOver={onDragOverGroupesFin}
+        onDrop={onDropGroupesFin}
+      >
+        <div className="barre-gauche-groupes-entete">
+          <h2 className="titre-zone">Groupes</h2>
+          <button
+            type="button"
+            className={`bouton-modifier${edit ? ' bouton-modifier--actif' : ''}`}
+            data-node={n('groupes.modifier')}
+            aria-pressed={edit}
+            onClick={toggleEdit}
+          >
+            {edit ? 'Terminer' : 'Modifier'}
+          </button>
+          <button
+            type="button"
+            className="barre-gauche-actions"
+            data-node={n('groupes.nouveau')}
+            aria-label="Nouveau groupe"
+            onClick={() => void creerGroupe()}
+          >
+            +
+          </button>
+        </div>
         {groups
-          .filter((g) => !g.hidden)
-          .map((g) => {
-            const sujetsGroupe = placements
-              .filter((p) => p.groupId === g.id && !p.hidden && !p.archived)
-              .sort((a, b) => a.ord - b.ord)
+          .filter((g) => !g.hidden || edit)
+          .map((g, i) => {
+            const sujetsGroupe = ordreSujets(g.id)
+              .filter((p) => !p.hidden || edit)
               .map((p) => ({ p, t: topics.find((t) => t.id === p.topicId) }))
               .filter((x): x is { p: NavPlacement; t: Topic } => !!x.t);
+            const renommeGroupe = renommage?.kind === 'groupe' && renommage.id === g.id;
             return (
-              <div key={g.id} className="barre-gauche-groupe" data-node={n(`groupe-${g.id}`)}>
-                <button
-                  type="button"
-                  className="barre-gauche-groupe-entete"
-                  data-node={n(`groupe-${g.id}.bascule`)}
-                  aria-expanded={!g.collapsed}
-                  onClick={() => toggleCollapse(g)}
+              <div
+                key={g.id}
+                className={`barre-gauche-groupe${edit && g.hidden ? ' barre-gauche-groupe--masque' : ''}`}
+                data-node={n(`groupe-${g.id}`)}
+                onDragOver={(e) => onDragOverGroupeBloc(e, i, g.id, sujetsGroupe.length)}
+                onDrop={(e) => onDropGroupeBloc(e, g.id)}
+              >
+                {depot?.kind === 'groupe' && depot.index === i && (
+                  <div className="barre-gauche-repere-depot" aria-hidden="true" />
+                )}
+                <div
+                  className={`barre-gauche-groupe-ligne${
+                    glisse?.kind === 'groupe' && glisse.id === g.id
+                      ? ' barre-gauche-groupe-ligne--glisse'
+                      : ''
+                  }`}
+                  draggable={edit}
+                  onDragStart={(e) => onDragStartGroupe(e, g.id)}
+                  onDragEnd={onDragEnd}
                 >
-                  <span
-                    className="barre-gauche-groupe-couleur"
-                    style={{ background: g.color }}
-                    aria-hidden="true"
-                  />
-                  <span className="barre-gauche-groupe-nom">{g.name}</span>
-                  <span className="compteur">{sujetsGroupe.length}</span>
-                </button>
+                  {edit && (
+                    <span className="barre-gauche-poignee" aria-hidden="true">
+                      ⋮⋮
+                    </span>
+                  )}
+                  {renommeGroupe ? (
+                    <input
+                      ref={renommageRef}
+                      className="barre-gauche-renommage"
+                      data-node={n(`groupe-${g.id}.renommer`)}
+                      placeholder="Nom du groupe"
+                      value={renommage!.valeur}
+                      onChange={(e) =>
+                        setRenommage({ kind: 'groupe', id: g.id, valeur: e.target.value })
+                      }
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          validerRenommage();
+                        } else if (e.key === 'Escape') {
+                          e.preventDefault();
+                          annulerRenommage();
+                        }
+                      }}
+                      onBlur={validerRenommage}
+                    />
+                  ) : (
+                    <button
+                      type="button"
+                      className="barre-gauche-groupe-entete"
+                      data-node={n(`groupe-${g.id}.bascule`)}
+                      aria-expanded={!g.collapsed}
+                      onClick={() => toggleCollapse(g)}
+                      onDoubleClick={() => commencerRenommage('groupe', g.id, g.name)}
+                    >
+                      <span
+                        className="barre-gauche-groupe-couleur"
+                        style={{ background: g.color }}
+                        aria-hidden="true"
+                      />
+                      <span className="barre-gauche-groupe-nom">{g.name}</span>
+                      <span className="compteur">{sujetsGroupe.length}</span>
+                    </button>
+                  )}
+                  {edit && (
+                    <button
+                      type="button"
+                      className="barre-gauche-actions"
+                      data-node={n(`groupe-${g.id}.actions`)}
+                      aria-label={`Actions pour ${g.name}`}
+                      ref={(el) => {
+                        if (el) actionsRefs.current.set(g.id, el);
+                        else actionsRefs.current.delete(g.id);
+                      }}
+                      onClick={() => setMenuOuvert({ kind: 'groupe', id: g.id })}
+                    >
+                      ···
+                    </button>
+                  )}
+                  {menuOuvert?.kind === 'groupe' && menuOuvert.id === g.id && (
+                    <ContextMenu
+                      items={menuGroupe(g)}
+                      label={`Actions pour ${g.name}`}
+                      onClose={() => {
+                        setMenuOuvert(null);
+                        focusApresRef.current = g.id;
+                      }}
+                    />
+                  )}
+                </div>
                 {!g.collapsed &&
-                  sujetsGroupe.map(({ p, t }) => {
+                  sujetsGroupe.map(({ p, t }, idx) => {
                     const vueStatut = topicView(agentsOf(t.id));
                     const actif = t.id === currentTopicId;
+                    const renommeSujet = renommage?.kind === 'sujet' && renommage.id === t.id;
                     return (
-                      <Link
+                      <div
                         key={t.id}
-                        to={`/sujets/${t.id}`}
-                        className={`barre-gauche-sujet${actif ? ' est-actif' : ''}`}
-                        data-node={n(`sujet-${t.id}`)}
-                        title={t.branch}
-                        aria-current={actif ? 'page' : undefined}
+                        draggable={edit}
+                        onDragStart={(e) => onDragStartSujet(e, t.id)}
+                        onDragOver={(e) => onDragOverSujetRow(e, g.id, idx)}
+                        onDragEnd={onDragEnd}
                       >
-                        <Point
-                          tone={vueStatut.tone}
-                          label={vueStatut.label}
-                          estimated={vueStatut.estimated}
-                        />
-                        <span className="barre-gauche-sujet-nom" data-bind="sujet.nom">
-                          {p.displayName ?? t.branch}
-                        </span>
-                        <Badge view={vueStatut} />
-                        <span className="barre-gauche-sujet-temps" data-bind="sujet.depuis">
-                          {depuis(t.updatedAt)}
-                        </span>
-                      </Link>
+                        {depot?.kind === 'sujet' &&
+                          depot.groupeId === g.id &&
+                          depot.index === idx && (
+                            <div className="barre-gauche-repere-depot" aria-hidden="true" />
+                          )}
+                        <div
+                          className={`barre-gauche-sujet-ligne${
+                            glisse?.kind === 'sujet' && glisse.id === t.id
+                              ? ' barre-gauche-sujet-ligne--glisse'
+                              : ''
+                          }${edit && p.hidden ? ' barre-gauche-sujet-ligne--masque' : ''}`}
+                        >
+                          {edit && (
+                            <span className="barre-gauche-poignee" aria-hidden="true">
+                              ⋮⋮
+                            </span>
+                          )}
+                          {renommeSujet ? (
+                            <div className="barre-gauche-renommage-bloc">
+                              <input
+                                ref={renommageRef}
+                                className="barre-gauche-renommage"
+                                data-node={n(`sujet-${t.id}.renommer`)}
+                                value={renommage!.valeur}
+                                onChange={(e) =>
+                                  setRenommage({ kind: 'sujet', id: t.id, valeur: e.target.value })
+                                }
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') {
+                                    e.preventDefault();
+                                    validerRenommage();
+                                  } else if (e.key === 'Escape') {
+                                    e.preventDefault();
+                                    annulerRenommage();
+                                  }
+                                }}
+                                onBlur={validerRenommage}
+                              />
+                              <span className="barre-gauche-renommage-indice">
+                                branche inchangée : {t.branch}
+                              </span>
+                            </div>
+                          ) : (
+                            <Link
+                              to={`/sujets/${t.id}`}
+                              className={`barre-gauche-sujet${actif ? ' est-actif' : ''}`}
+                              data-node={n(`sujet-${t.id}`)}
+                              title={t.branch}
+                              aria-current={actif ? 'page' : undefined}
+                              onDoubleClick={(e) => {
+                                if (!edit) return;
+                                e.preventDefault();
+                                commencerRenommage('sujet', t.id, p.displayName ?? t.branch);
+                              }}
+                            >
+                              <Point
+                                tone={vueStatut.tone}
+                                label={vueStatut.label}
+                                estimated={vueStatut.estimated}
+                              />
+                              <span className="barre-gauche-sujet-nom" data-bind="sujet.nom">
+                                {p.displayName ?? t.branch}
+                              </span>
+                              <Badge view={vueStatut} />
+                              <span className="barre-gauche-sujet-temps" data-bind="sujet.depuis">
+                                {depuis(t.updatedAt)}
+                              </span>
+                            </Link>
+                          )}
+                          {edit && (
+                            <button
+                              type="button"
+                              className="barre-gauche-actions"
+                              data-node={n(`sujet-${t.id}.actions`)}
+                              aria-label={`Actions pour ${p.displayName ?? t.branch}`}
+                              ref={(el) => {
+                                if (el) actionsRefs.current.set(t.id, el);
+                                else actionsRefs.current.delete(t.id);
+                              }}
+                              onClick={() => setMenuOuvert({ kind: 'sujet', id: t.id })}
+                            >
+                              ···
+                            </button>
+                          )}
+                          {menuOuvert?.kind === 'sujet' && menuOuvert.id === t.id && (
+                            <ContextMenu
+                              items={menuSujet(t, p)}
+                              label={`Actions pour ${p.displayName ?? t.branch}`}
+                              onClose={() => {
+                                setMenuOuvert(null);
+                                focusApresRef.current = t.id;
+                              }}
+                            />
+                          )}
+                        </div>
+                      </div>
                     );
                   })}
               </div>
             );
           })}
+        {edit && (
+          <button
+            type="button"
+            className="barre-gauche-groupe-ajouter"
+            data-node={n('groupes.nouveau-fin')}
+            onClick={() => void creerGroupe()}
+          >
+            + Nouveau groupe
+          </button>
+        )}
       </div>
+      {erreur && (
+        <p className="barre-gauche-erreur" role="status" data-node={n('erreur')}>
+          {erreur}
+        </p>
+      )}
       <div className="barre-gauche-pied" data-node={n('pied')}>
         <span
           className={`point point--${daemon === 'connecte' ? 'ok' : 'erreur'}`}
