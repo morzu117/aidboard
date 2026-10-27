@@ -97,6 +97,76 @@ test('les vues comptent chacune leurs sujets ; « Archivés » n’a pas de comp
   expect(node('1-1.barre-gauche.vue-archives.compte')).toBeNull();
 });
 
+test('compteur de vue : neutre, sauf « À décider » > 0 qui garde la pastille ambre', async () => {
+  open(
+    snapshot({
+      workspaces: [ws()],
+      topics: [topic({ id: 'tp_1' })],
+      runs: [{ id: 'run_1', topicId: 'tp_1', mode: 'standard', state: 'open', createdAt: 't' }],
+      agents: [agent({ id: 'ag_1', runId: 'run_1', status: 'needs_input', role: 'dev' })],
+    }),
+    navState(),
+  );
+  await screen.findByText('feat/s');
+  const vueTous = node('1-1.barre-gauche.vue-tous.compte')!;
+  expect(vueTous.className).not.toContain('compteur');
+  expect(vueTous.className).toContain('barre-gauche-compte');
+  const vueADecider = node('1-1.barre-gauche.vue-a-decider.compte')!;
+  expect(vueADecider.className).toContain('compteur');
+});
+
+test('badge de décisions sur la ligne de sujet : présent avec le bon nombre, absent sinon', async () => {
+  open(
+    snapshot({
+      workspaces: [ws()],
+      topics: [topic({ id: 'tp_1' }), topic({ id: 'tp_2', branch: 'feat/autre' })],
+      runs: [
+        { id: 'run_1', topicId: 'tp_1', mode: 'standard', state: 'open', createdAt: 't' },
+        { id: 'run_2', topicId: 'tp_2', mode: 'standard', state: 'open', createdAt: 't' },
+      ],
+      agents: [
+        agent({
+          id: 'ag_1',
+          runId: 'run_1',
+          status: 'needs_input',
+          pending: { id: 'pr_1', kind: 'question', question: 'Q ?', options: [] },
+        }),
+        // needs_input sans pending (ex. permission déjà résolue) : ne compte pas comme décision.
+        agent({ id: 'ag_2', runId: 'run_2', status: 'needs_input', pending: null }),
+      ],
+    }),
+    navState({
+      placements: [placement({ topicId: 'tp_1', ord: 0 }), placement({ topicId: 'tp_2', ord: 1 })],
+    }),
+  );
+  await screen.findByText('feat/s');
+  const ligne1 = node('1-1.barre-gauche.sujet-tp_1')!;
+  const badge1 = ligne1.querySelector('.barre-gauche-sujet-decisions');
+  expect(badge1?.textContent).toBe('1');
+  expect(badge1?.getAttribute('aria-label')).toBe('1 décision en attente');
+  const ligne2 = node('1-1.barre-gauche.sujet-tp_2')!;
+  expect(ligne2.querySelector('.barre-gauche-sujet-decisions')).toBeNull();
+});
+
+test('aucun texte d’état dans la ligne de sujet (reste accessible via le point de statut)', async () => {
+  open(
+    snapshot({
+      workspaces: [ws()],
+      topics: [topic({ id: 'tp_1' }), topic({ id: 'tp_2', branch: 'feat/sans-agent' })],
+      runs: [{ id: 'run_1', topicId: 'tp_1', mode: 'standard', state: 'open', createdAt: 't' }],
+      agents: [agent({ id: 'ag_1', runId: 'run_1', status: 'stopped' })],
+    }),
+    navState({
+      placements: [placement({ topicId: 'tp_1', ord: 0 }), placement({ topicId: 'tp_2', ord: 1 })],
+    }),
+  );
+  await screen.findByText('feat/s');
+  expect(node('1-1.barre-gauche.sujet-tp_1')?.textContent).not.toMatch(/Arrêté/);
+  expect(node('1-1.barre-gauche.sujet-tp_2')?.textContent).not.toMatch(/Aucun agent/);
+  expect(screen.queryByText('Arrêté')).toBeNull();
+  expect(screen.queryByText('Aucun agent')).toBeNull();
+});
+
 test('les vues sont des liens vers /?vue=<id>, aria-current sur la vue de la route courante', async () => {
   open(snapshot({ workspaces: [ws()], topics: [topic()] }), navState(), '/?vue=a-decider');
   await screen.findByText('feat/s');

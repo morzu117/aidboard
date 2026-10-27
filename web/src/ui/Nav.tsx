@@ -4,10 +4,10 @@ import type { Agent, NavGroup, NavPlacement, NavState, Topic } from '../../../sr
 import { useAid } from '../data/useAidState.js';
 import type { EcranId } from './Barre.js';
 import { ContextMenu, type MenuItem } from './ContextMenu.js';
-import { depuis } from './depuis.js';
+import { depuis, depuisCourt } from './depuis.js';
 import { useLayout } from './Layout.js';
 import { compteVue, VUES, type VueId } from './navVues.js';
-import { Badge, Point, topicView } from './Statut.js';
+import { Point, topicView } from './Statut.js';
 
 // Les trois vues principales du rail réduit (brief §5.2.3) : les trois premières de VUES.
 const VUES_RAIL = VUES.slice(0, 3);
@@ -709,6 +709,9 @@ export function Nav({ screen }: { screen: EcranId }) {
               const actif =
                 pathname === '/' &&
                 (vueCourante === v.id || (v.id === 'tous' && vueCourante === null));
+              const c = compte(v.id);
+              // Seule « À décider » garde la pastille ambre (brief §5.2) : les autres sont neutres.
+              const enAttente = v.id === 'a-decider' && c > 0;
               return (
                 <li key={v.id}>
                   <Link
@@ -717,10 +720,17 @@ export function Nav({ screen }: { screen: EcranId }) {
                     data-node={n(`vue-${v.id}`)}
                     aria-current={actif ? 'page' : undefined}
                   >
-                    <span className="barre-gauche-vue-nom">{v.label}</span>
+                    <span
+                      className={`barre-gauche-vue-nom${enAttente ? ' barre-gauche-vue-nom--attente' : ''}`}
+                    >
+                      {v.label}
+                    </span>
                     {v.id !== 'archives' && (
-                      <span className="compteur" data-node={n(`vue-${v.id}.compte`)}>
-                        {compte(v.id)}
+                      <span
+                        className={enAttente ? 'compteur' : 'barre-gauche-compte'}
+                        data-node={n(`vue-${v.id}.compte`)}
+                      >
+                        {c}
                       </span>
                     )}
                   </Link>
@@ -825,7 +835,7 @@ export function Nav({ screen }: { screen: EcranId }) {
                             aria-hidden="true"
                           />
                           <span className="barre-gauche-groupe-nom">{g.name}</span>
-                          <span className="compteur">{sujetsGroupe.length}</span>
+                          <span className="barre-gauche-compte">{sujetsGroupe.length}</span>
                         </button>
                       )}
                       {edit && (
@@ -857,6 +867,10 @@ export function Nav({ screen }: { screen: EcranId }) {
                     {!g.collapsed &&
                       sujetsGroupe.map(({ p, t }, idx) => {
                         const vueStatut = topicView(agentsOf(t.id));
+                        // Décisions en attente de ce sujet (même règle qu'Accueil.tsx, l.584).
+                        const decisions = agentsOf(t.id).filter(
+                          (a) => a.pending && a.status === 'needs_input',
+                        ).length;
                         const actif = t.id === currentTopicId;
                         const renommeSujet = renommage?.kind === 'sujet' && renommage.id === t.id;
                         return (
@@ -934,12 +948,20 @@ export function Nav({ screen }: { screen: EcranId }) {
                                   <span className="barre-gauche-sujet-nom" data-bind="sujet.nom">
                                     {p.displayName ?? t.branch}
                                   </span>
-                                  <Badge view={vueStatut} />
+                                  {decisions > 0 && (
+                                    <span
+                                      className="compteur barre-gauche-sujet-decisions"
+                                      aria-label={`${decisions} décision${decisions > 1 ? 's' : ''} en attente`}
+                                    >
+                                      {decisions}
+                                    </span>
+                                  )}
                                   <span
                                     className="barre-gauche-sujet-temps"
                                     data-bind="sujet.depuis"
+                                    title={depuis(t.updatedAt)}
                                   >
-                                    {depuis(t.updatedAt)}
+                                    {depuisCourt(t.updatedAt)}
                                   </span>
                                 </Link>
                               )}

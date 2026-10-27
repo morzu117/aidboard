@@ -937,6 +937,15 @@ body {
   color: var(--text);
   font-weight: var(--fw-m);
 }
+/* Compteurs neutres de la barre gauche (vues, groupes) : chiffre discret, sans pastille. */
+.barre-gauche-compte {
+  flex: none;
+  color: var(--muted);
+}
+/* Seule « À décider » > 0 garde un libellé en gras, à côté de sa pastille ambre (brief §5.2). */
+.barre-gauche-vue-nom--attente {
+  font-weight: var(--fw-sb);
+}
 .barre-gauche-groupes {
   display: flex;
   flex-direction: column;
@@ -976,7 +985,8 @@ body {
   align-items: center;
   gap: var(--sp-2);
   min-height: var(--h-controle-s);
-  padding: 0 var(--sp-2) 0 var(--sp-6);
+  /* retrait porté par .barre-gauche-sujet-ligne : un seul niveau, pas deux (constat recette). */
+  padding: 0 var(--sp-2);
   border-radius: var(--r-s);
   font-size: var(--fs-m);
   color: var(--text-2);
@@ -987,13 +997,19 @@ body {
 }
 .barre-gauche-sujet-nom {
   flex: 1 1 auto;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.barre-gauche-sujet-decisions {
+  flex: none;
+}
 .barre-gauche-sujet-temps {
+  flex: none;
   color: var(--faint);
   font-size: var(--fs-xs);
+  white-space: nowrap;
 }
 .barre-gauche-pied {
   display: flex;

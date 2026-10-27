@@ -106,3 +106,31 @@ test('alternative clavier (menu « Déplacer vers… ») persiste après recharg
     2,
   );
 });
+
+// Constat opérateur (recette chantier 15) : nom écrasé, temps cassé lettre par lettre sur un nom long.
+test('la ligne de sujet tient sur une seule ligne même avec un nom long, en mode normal et en édition', async ({
+  browser,
+}) => {
+  const page = await openApp(await browser.newContext({ viewport: { width: 1440, height: 900 } }));
+  await registerWorkspace(page, newRepo('depot-nav-ligne-longue'));
+  const topicId = await createTopic(
+    page,
+    'Un sujet avec un nom vraiment très long pour vérifier le débordement de la barre gauche',
+  );
+  await page.goto(url());
+
+  const verifie = async () => {
+    const lien = node(page, `1-1.barre-gauche.sujet-${topicId}`);
+    const boiteLien = await lien.boundingBox();
+    const boiteNom = await lien.locator('.barre-gauche-sujet-nom').boundingBox();
+    const boiteTemps = await lien.locator('.barre-gauche-sujet-temps').boundingBox();
+    expect(boiteLien!.height).toBeLessThanOrEqual(40);
+    const centreNom = boiteNom!.y + boiteNom!.height / 2;
+    const centreTemps = boiteTemps!.y + boiteTemps!.height / 2;
+    expect(Math.abs(centreNom - centreTemps)).toBeLessThanOrEqual(4);
+  };
+
+  await verifie();
+  await node(page, '1-1.barre-gauche.groupes.modifier').click();
+  await verifie();
+});
