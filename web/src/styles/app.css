@@ -1425,14 +1425,17 @@ body {
 }
 /* Colonne heure fixe (brief §5.4) : type et contexte en dessous, jamais de mot coupé. */
 .activite-corps {
+  flex: 1 1 auto;
   min-width: 0;
 }
 .activite-type {
+  display: block;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .activite-contexte {
+  display: block;
   color: var(--muted);
   overflow: hidden;
   text-overflow: ellipsis;
