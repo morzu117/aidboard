@@ -152,6 +152,35 @@ function Contenu({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [deriveAction?.state]);
 
+  // correctif 6 (recette) : `live` n'était relu qu'après branche.revenir/sujet.rattacher-branche —
+  // un changement de branche hors de ces deux actions (topic.branch-changer, sync…) laissait le
+  // bandeau de dérive périmé jusqu'au rechargement de la page.
+  const topicBranch = state?.topics.find((t) => t.id === topicId)?.branch;
+  const actionsSucceeded = (state?.actions ?? [])
+    .filter((a) => a.topicId === topicId && a.state === 'succeeded')
+    .map((a) => a.id)
+    .sort()
+    .join(',');
+  const vuRef = useRef<{ branch: string | undefined; actions: string } | null>(null);
+  useEffect(() => {
+    const vu = vuRef.current;
+    vuRef.current = { branch: topicBranch, actions: actionsSucceeded };
+    // au montage : seulement la référence de base, rien à relire.
+    if (vu === null || (vu.branch === topicBranch && vu.actions === actionsSucceeded)) return;
+    let cancelled = false;
+    fetchGitLog(call, topicId)
+      .then((r) => {
+        if (!cancelled) setLive(r.live);
+      })
+      .catch(() => {
+        if (!cancelled) setLive(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [topicBranch, actionsSucceeded]);
+
   async function revenirSurBranche(dirtyAction?: 'stash') {
     setDeriveErreur(null);
     setDeriveRequesting(true);

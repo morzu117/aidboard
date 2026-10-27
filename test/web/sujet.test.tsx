@@ -446,6 +446,112 @@ test('dérive : HEAD détachée — bandeau sans bouton Rattacher', async () => 
   expect(screen.getByRole('button', { name: 'Revenir sur feat/s' })).toBeTruthy();
 });
 
+test('dérive (correctif 6) : relue quand la branche du sujet change et qu’une action du sujet réussit, sans remonter', async () => {
+  const h = open(snapshot({ workspaces: [ws()], topics: [topic()], runs: [run] }), 'tp_1', {
+    'GET /api/topics/tp_1/git/log': json(200, {
+      commits: [],
+      dirty: false,
+      live: { aheadBehind: null, rebaseInProgress: false, onTopicBranch: false, headBranch: null },
+    }),
+  });
+  expect(await screen.findByText(/HEAD détachée/)).toBeTruthy();
+  const titreAvant = node('1-3.entete.titre');
+  h.respond.set(
+    'GET /api/topics/tp_1/git/log',
+    json(200, {
+      commits: [],
+      dirty: false,
+      live: {
+        aheadBehind: { ahead: 0, behind: 0 },
+        rebaseInProgress: false,
+        onTopicBranch: true,
+        headBranch: null,
+      },
+    }),
+  );
+  h.state = snapshot({
+    workspaces: [ws()],
+    topics: [topic({ branch: 'fix/irritants-aid' })],
+    runs: [run],
+    actions: [action({ id: 'ac_9', action: 'topic.branch-changer', state: 'succeeded' })],
+  });
+  await act(() => h.client.refresh());
+  await waitFor(() => expect(screen.queryByText(/HEAD détachée/)).toBeNull());
+  expect(node('1-3.entete.titre')).toBe(titreAvant);
+});
+
+test('dérive (correctif 6) : une action d’un autre sujet qui réussit ne déclenche pas de relecture', async () => {
+  const h = open(snapshot({ workspaces: [ws()], topics: [topic()], runs: [run] }), 'tp_1', {
+    'GET /api/topics/tp_1/git/log': json(200, {
+      commits: [],
+      dirty: false,
+      live: { aheadBehind: null, rebaseInProgress: false, onTopicBranch: false, headBranch: null },
+    }),
+  });
+  expect(await screen.findByText(/HEAD détachée/)).toBeTruthy();
+  const appelsAvant = h.calls.filter((c) => c.url === '/api/topics/tp_1/git/log').length;
+  h.respond.set(
+    'GET /api/topics/tp_1/git/log',
+    json(200, {
+      commits: [],
+      dirty: false,
+      live: { aheadBehind: null, rebaseInProgress: false, onTopicBranch: true, headBranch: null },
+    }),
+  );
+  h.state = snapshot({
+    workspaces: [ws()],
+    topics: [topic()],
+    runs: [run],
+    actions: [
+      action({
+        id: 'ac_autre',
+        topicId: 'tp_autre',
+        action: 'topic.branch-changer',
+        state: 'succeeded',
+      }),
+    ],
+  });
+  await act(() => h.client.refresh());
+  await act(async () => {});
+  expect(screen.getByText(/HEAD détachée/)).toBeTruthy();
+  expect(h.calls.filter((c) => c.url === '/api/topics/tp_1/git/log').length).toBe(appelsAvant);
+});
+
+test('dérive (correctif 6) : une même action succeeded reçue sur plusieurs mises à jour d’état ne relit qu’une fois', async () => {
+  const h = open(snapshot({ workspaces: [ws()], topics: [topic()], runs: [run] }), 'tp_1', {
+    'GET /api/topics/tp_1/git/log': json(200, {
+      commits: [],
+      dirty: false,
+      live: { aheadBehind: null, rebaseInProgress: false, onTopicBranch: false, headBranch: null },
+    }),
+  });
+  expect(await screen.findByText(/HEAD détachée/)).toBeTruthy();
+  const appelsAvant = h.calls.filter((c) => c.url === '/api/topics/tp_1/git/log').length;
+  const actionReussie = action({ id: 'ac_9', action: 'topic.branch-changer', state: 'succeeded' });
+  h.state = snapshot({
+    workspaces: [ws()],
+    topics: [topic()],
+    runs: [run],
+    actions: [actionReussie],
+  });
+  await act(() => h.client.refresh());
+  await waitFor(() =>
+    expect(h.calls.filter((c) => c.url === '/api/topics/tp_1/git/log').length).toBe(
+      appelsAvant + 1,
+    ),
+  );
+  // seconde mise à jour d'état portant la même action déjà succeeded : rien de neuf à relire.
+  h.state = snapshot({
+    workspaces: [ws()],
+    topics: [topic()],
+    runs: [run],
+    actions: [{ ...actionReussie }],
+  });
+  await act(() => h.client.refresh());
+  await act(async () => {});
+  expect(h.calls.filter((c) => c.url === '/api/topics/tp_1/git/log').length).toBe(appelsAvant + 1);
+});
+
 test('« + Agent » propose les trois types et lance celui choisi', async () => {
   const h = open(
     snapshot({ workspaces: [ws()], topics: [topic()], runs: [run], agents: [agent()] }),
