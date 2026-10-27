@@ -12,6 +12,25 @@ if [ "$AID_TARGET_BRANCH" = "$AID_BRANCH" ] && [ "${AID_CREATE:-}" != "1" ]; the
   exit 0
 fi
 
+# 15 : « Libérer puis prendre » — on vide d'abord le dossier qui détient déjà la branche visée,
+# avant le changement du sujet courant (ordre D25 ci-dessous inchangé). Jamais de stash là-bas :
+# ce n'est pas le sujet courant qui en est responsable.
+if [ "${AID_LIBERER:-}" = "1" ]; then
+  require_env AID_LIBERER_DOSSIER
+  gitdir_ailleurs="$(git -C "$AID_LIBERER_DOSSIER" rev-parse --path-format=absolute --git-dir)"
+  dirty_ailleurs="$(git -C "$AID_LIBERER_DOSSIER" status --porcelain)"
+  if [ -n "$dirty_ailleurs" ] \
+    || [ -e "$gitdir_ailleurs/rebase-merge" ] || [ -e "$gitdir_ailleurs/rebase-apply" ] \
+    || [ -e "$gitdir_ailleurs/MERGE_HEAD" ] || [ -e "$gitdir_ailleurs/CHERRY_PICK_HEAD" ]; then
+    die_human "$AID_LIBERER_DOSSIER a des modifications non commitées : commit ou mise de côté là-bas d'abord"
+  fi
+  if [ -n "${AID_LIBERER_VERS:-}" ]; then
+    git -C "$AID_LIBERER_DOSSIER" switch "$AID_LIBERER_VERS"
+  else
+    git -C "$AID_LIBERER_DOSSIER" switch --detach
+  fi
+fi
+
 # D25 : non-commité — vocabulaire AID_DIRTY_ACTION de D21, aucun second mécanisme.
 stash_ref=""
 dirty="$(git status --porcelain)"
@@ -49,7 +68,15 @@ else
         ;;
     esac
   done < <(git -C "$AID_REPO_ROOT" worktree list --porcelain)
-  git switch "$AID_TARGET_BRANCH"
+  if [ "${AID_LIBERER:-}" = "1" ]; then
+    # 15 : X est déjà libéré à ce stade — un échec ici ne doit pas laisser croire qu'il l'est resté.
+    if ! sortie="$(git switch "$AID_TARGET_BRANCH" 2>&1)"; then
+      echo "$sortie" >&2
+      die "$AID_LIBERER_DOSSIER a été libéré (sur ${AID_LIBERER_VERS:-détachée}) ; le changement de branche du sujet a échoué : $sortie"
+    fi
+  else
+    git switch "$AID_TARGET_BRANCH"
+  fi
 fi
 
 if [ -n "$stash_ref" ]; then

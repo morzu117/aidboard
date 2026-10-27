@@ -12,7 +12,7 @@ export interface Ctx {
   t: TestDaemon;
   clone: string;
   origin: string;
-  ws: { id: string; name: string; worktreesDir: string };
+  ws: { id: string; name: string; worktreesDir: string; root: string };
 }
 
 export async function setupWorkspace(

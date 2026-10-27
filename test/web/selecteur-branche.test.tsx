@@ -5,7 +5,7 @@ import { afterEach, expect, test, vi } from 'vitest';
 import type { ActionRun } from '../../src/shared/model.js';
 import type { GitBranch } from '../../src/shared/git.js';
 import { SelecteurBranche } from '../../web/src/dialogues/SelecteurBranche.js';
-import { json, setup, snapshot } from './helpers.js';
+import { json, setup, snapshot, topic, ws } from './helpers.js';
 
 afterEach(cleanup);
 
@@ -92,7 +92,9 @@ test('non commité : refus affiché, « mettre de côté et changer » relance a
   ).toEqual({ targetBranch: 'autre', dirtyAction: 'stash' });
 });
 
-test('branche déjà extraite ailleurs : non activable, lien vers le sujet propriétaire', async () => {
+// 15 : la ligne « déjà extraite ailleurs » devient activable (décompte adapté : 3 expects avant,
+// 3 après — non-désactivée, lien inchangé, aperçu de la commande de libération au lieu du refus).
+test('branche déjà extraite ailleurs : activable, ouvre l’écran de libération dédié', async () => {
   setup(<SelecteurBranche topicId="tp_1" onClose={vi.fn()} />, snapshot(), '/', {
     'GET /api/topics/tp_1/git/branches': json(200, {
       branches: [
@@ -101,12 +103,84 @@ test('branche déjà extraite ailleurs : non activable, lien vers le sujet propr
       ],
     }),
   });
-  const ligne = await screen.findByText('feat/ailleurs');
-  expect(ligne.closest('[role="option"]')?.getAttribute('aria-disabled')).toBe('true');
+  const bouton = await screen.findByRole('option', { name: /feat\/ailleurs/ });
+  expect(bouton.getAttribute('aria-disabled')).toBeNull();
   const lien = screen.getByRole('link', { name: 'Aller au sujet' });
   expect(lien.getAttribute('href')).toBe('/sujets/tp_2');
-  await userEvent.click(ligne);
-  expect(screen.queryByText(/git switch/)).toBeNull();
+  await userEvent.click(bouton);
+  expect(screen.getByText('git -C /w/ailleurs switch --detach')).toBeTruthy();
+});
+
+test('libérer puis prendre : deux commandes (base libre), liberer: true, lien persiste après annulation', async () => {
+  const onClose = vi.fn();
+  const h = setup(
+    <SelecteurBranche topicId="tp_1" onClose={onClose} />,
+    snapshot({
+      workspaces: [ws({ id: 'ws_1', root: '/w/ailleurs', baseBranch: 'main' })],
+      topics: [topic({ id: 'tp_1', workspaceId: 'ws_1' })],
+      actions: [action({ id: 'ac_1', state: 'succeeded', result: { branch: 'feat/ailleurs' } })],
+    }),
+    '/',
+    {
+      'GET /api/topics/tp_1/git/branches': json(200, {
+        branches: [
+          branch({ name: 'feat/sujet', isCurrent: true }),
+          branch({ name: 'feat/ailleurs', worktree: '/w/ailleurs', topicId: 'tp_2' }),
+          branch({ name: 'main', worktree: null }),
+        ],
+      }),
+      'POST /api/topics/tp_1/actions/topic.branch-changer': json(202, { actionId: 'ac_1' }),
+    },
+  );
+  await userEvent.click(await screen.findByRole('option', { name: /feat\/ailleurs/ }));
+  expect(screen.getByText(/est extraite dans \/w\/ailleurs/)).toBeTruthy();
+  expect(screen.getByText('git -C /w/ailleurs switch main')).toBeTruthy();
+  expect(screen.getByText('git switch feat/ailleurs')).toBeTruthy();
+  await userEvent.click(screen.getByRole('button', { name: 'Annuler' }));
+  expect(screen.getByRole('link', { name: 'Aller au sujet' })).toBeTruthy();
+  await userEvent.click(screen.getByRole('option', { name: /feat\/ailleurs/ }));
+  await userEvent.click(screen.getByRole('button', { name: 'Libérer et changer' }));
+  expect(
+    h.calls.find((c) => c.url === '/api/topics/tp_1/actions/topic.branch-changer')?.body,
+  ).toEqual({ targetBranch: 'feat/ailleurs', liberer: true });
+  await waitFor(() => expect(onClose).toHaveBeenCalled());
+});
+
+test('libérer puis prendre : X sale, refus affiché, « Mettre de côté et changer » renvoie liberer + stash', async () => {
+  const onClose = vi.fn();
+  const h = setup(
+    <SelecteurBranche topicId="tp_1" onClose={onClose} />,
+    snapshot({
+      actions: [
+        action({ id: 'ac_1', state: 'needs_human', exitCode: 2, result: {} }),
+        action({ id: 'ac_2', state: 'succeeded', result: { branch: 'feat/ailleurs' } }),
+      ],
+    }),
+    '/',
+    {
+      'GET /api/topics/tp_1/git/branches': json(200, {
+        branches: [
+          branch({ name: 'feat/sujet', isCurrent: true }),
+          branch({ name: 'feat/ailleurs', worktree: '/w/ailleurs', topicId: 'tp_2' }),
+        ],
+      }),
+      'POST /api/topics/tp_1/actions/topic.branch-changer': (body: unknown) =>
+        new Response(
+          JSON.stringify({
+            actionId: (body as { dirtyAction?: string }).dirtyAction === 'stash' ? 'ac_2' : 'ac_1',
+          }),
+          { status: 202 },
+        ),
+    },
+  );
+  await userEvent.click(await screen.findByRole('option', { name: /feat\/ailleurs/ }));
+  await userEvent.click(screen.getByRole('button', { name: 'Libérer et changer' }));
+  expect((await screen.findByRole('alert')).textContent).toBeTruthy();
+  await userEvent.click(screen.getByRole('button', { name: 'Mettre de côté et changer' }));
+  await waitFor(() => expect(onClose).toHaveBeenCalled());
+  expect(
+    h.calls.filter((c) => c.url === '/api/topics/tp_1/actions/topic.branch-changer').at(-1)?.body,
+  ).toEqual({ targetBranch: 'feat/ailleurs', dirtyAction: 'stash', liberer: true });
 });
 
 test('filtre sans correspondance : état vide', async () => {

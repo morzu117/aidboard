@@ -1,4 +1,4 @@
-import { existsSync, writeFileSync } from 'node:fs';
+import { existsSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterEach, expect, test } from 'vitest';
 import { commitFile, sh } from './helpers/git.js';
@@ -98,6 +98,94 @@ test('branche.creer-ici : nouvelle branche depuis HEAD, topics.branch inchangé'
     branch: string;
   };
   expect(row.branch).toBe(branch);
+});
+
+// 15 : « Libérer puis prendre » — X est le dossier qui détient déjà la branche visée.
+test('topic.branch-changer : liberer, branche à la racine et base libre → racine sur la base', async () => {
+  c = await setupWorkspace();
+  const { wt, branch, topicId } = await makeTopic(c);
+  sh(c.ws.root, 'switch', '-c', 'convoitee');
+
+  const run = await switchTo(topicId, { targetBranch: 'convoitee', liberer: true });
+  expect(run.statusCode).toBe(202);
+  const fin = await finished(c.t, run.json<{ actionId: string }>().actionId);
+  expect(fin.data.outcome).toBe('succeeded');
+  expect(currentBranch(wt)).toBe('convoitee');
+  expect(currentBranch(c.ws.root)).toBe('main');
+  expect(currentBranch(c.ws.root)).not.toBe(branch);
+});
+
+test('topic.branch-changer : liberer, branche dans le worktree d’un autre sujet → détaché au même commit', async () => {
+  c = await setupWorkspace();
+  const un = await makeTopic(c, 'Premier');
+  const deux = await makeTopic(c, 'Second');
+  const tipDeux = sh(deux.wt, 'rev-parse', 'HEAD');
+
+  const run = await switchTo(un.topicId, { targetBranch: deux.branch, liberer: true });
+  expect(run.statusCode).toBe(202);
+  const fin = await finished(c.t, run.json<{ actionId: string }>().actionId);
+  expect(fin.data.outcome).toBe('succeeded');
+  expect(currentBranch(un.wt)).toBe(deux.branch);
+  expect(currentBranch(deux.wt)).toBe('HEAD');
+  expect(sh(deux.wt, 'rev-parse', 'HEAD')).toBe(tipDeux);
+});
+
+test('topic.branch-changer : liberer, X sale → needs_human, rien ne bouge', async () => {
+  c = await setupWorkspace();
+  const un = await makeTopic(c, 'Premier');
+  const deux = await makeTopic(c, 'Second');
+  writeFileSync(join(deux.wt, 'brouillon.txt'), 'en cours\n');
+
+  const run = await switchTo(un.topicId, { targetBranch: deux.branch, liberer: true });
+  expect(run.statusCode).toBe(202);
+  const fin = await finished(c.t, run.json<{ actionId: string }>().actionId);
+  expect(fin.data).toMatchObject({ outcome: 'needs_human', exitCode: 2 });
+  expect(currentBranch(un.wt)).toBe(un.branch);
+  expect(currentBranch(deux.wt)).toBe(deux.branch);
+  expect(existsSync(join(deux.wt, 'brouillon.txt'))).toBe(true);
+});
+
+test('topic.branch-changer : liberer, agent actif dans le sujet de X → 409, rien ne bouge', async () => {
+  c = await setupWorkspace();
+  const un = await makeTopic(c, 'Premier');
+  const deux = await makeTopic(c, 'Second');
+  const run2 = c.t.db.prepare('SELECT id FROM runs WHERE topic_id = ?').get(deux.topicId) as {
+    id: string;
+  };
+  c.t.db
+    .prepare(
+      "INSERT INTO agents (id, run_id, kind, role, transport, status, cwd, command, pid, exit_code, issue, created_at, updated_at) VALUES ('ag_1', ?, 'shell', 'free', 'pty', 'starting', ?, '[]', NULL, NULL, NULL, 't', 't')",
+    )
+    .run(run2.id, deux.wt);
+
+  const run = await switchTo(un.topicId, { targetBranch: deux.branch, liberer: true });
+  expect(run.statusCode).toBe(409);
+  expect(run.json().error).toContain(deux.slug);
+  expect(currentBranch(un.wt)).toBe(un.branch);
+  expect(currentBranch(deux.wt)).toBe(deux.branch);
+});
+
+test('topic.branch-changer : sans liberer, 409 « déjà extraite » comme avant', async () => {
+  c = await setupWorkspace();
+  const un = await makeTopic(c, 'Premier');
+  const deux = await makeTopic(c, 'Second');
+
+  const run = await switchTo(un.topicId, { targetBranch: deux.branch });
+  expect(run.statusCode).toBe(409);
+  expect(run.json().error).toContain('déjà extraite');
+  expect(currentBranch(un.wt)).toBe(un.branch);
+  expect(currentBranch(deux.wt)).toBe(deux.branch);
+});
+
+test('topic.branch-changer : liberer, dossier disparu du disque (non prunné) → refus', async () => {
+  c = await setupWorkspace();
+  const un = await makeTopic(c, 'Premier');
+  const deux = await makeTopic(c, 'Second');
+  rmSync(deux.wt, { recursive: true, force: true });
+
+  const run = await switchTo(un.topicId, { targetBranch: deux.branch, liberer: true });
+  expect(run.statusCode).toBe(409);
+  expect(currentBranch(un.wt)).toBe(un.branch);
 });
 
 test('branche.creer : nouvelle branche depuis la base du sujet, pas depuis HEAD', async () => {
