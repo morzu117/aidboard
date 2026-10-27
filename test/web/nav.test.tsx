@@ -196,3 +196,71 @@ test('le sujet courant porte aria-current, les autres non', async () => {
   expect(node('1-1.barre-gauche.sujet-tp_2')?.getAttribute('aria-current')).toBeNull();
   expect(node('1-1.barre-gauche.sujet-tp_1')?.getAttribute('title')).toBe('feat/s');
 });
+
+// B.4 (chantier 15, D58) : mode réduit (rail) — vue statique, preuve de rendu seulement (Q5 non tranchée).
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
+
+test('mode réduit (rail) : bouton +, trois vues, un carré non interactif par groupe', async () => {
+  vi.stubGlobal('matchMedia', (q: string) => ({ matches: true, media: q }) as MediaQueryList);
+  open(
+    snapshot({
+      workspaces: [ws()],
+      topics: [topic({ id: 'tp_1' })],
+      runs: [{ id: 'run_1', topicId: 'tp_1', mode: 'standard', state: 'open', createdAt: 't' }],
+      agents: [agent({ id: 'ag_1', runId: 'run_1', status: 'needs_input', role: 'dev' })],
+    }),
+    navState({ prefs: { reduit: true } }),
+  );
+  await screen.findByRole('button', { name: 'Nouveau sujet' });
+  expect(node('1-1.barre-gauche.rail')).toBeTruthy();
+  expect(node('1-1.barre-gauche.vues')).toBeNull();
+  expect(node('1-1.barre-gauche.rail.vue-tous')).toBeTruthy();
+  expect(node('1-1.barre-gauche.rail.vue-agent-libre')).toBeTruthy();
+  expect(node('1-1.barre-gauche.rail.vue-sans-agent')).toBeNull();
+  const vueADecider = node('1-1.barre-gauche.rail.vue-a-decider')!;
+  expect(vueADecider.getAttribute('aria-label')).toBe('À décider (1)');
+  expect(vueADecider.querySelector('.barre-gauche-rail-compte--ambre')).toBeTruthy();
+  const carre = node('1-1.barre-gauche.rail.groupe-ng_1')!;
+  expect(carre.getAttribute('role')).toBe('img');
+  expect(carre.getAttribute('aria-label')).toBe('aid');
+  expect(carre.tagName).not.toBe('BUTTON');
+  expect(carre.tagName).not.toBe('A');
+  expect(screen.getByRole('button', { name: 'Déployer la barre' })).toBeTruthy();
+});
+
+test('réduire puis redéployer la barre persiste via PATCH /api/nav/prefs', async () => {
+  const h = open(snapshot({ workspaces: [ws()], topics: [topic()] }), navState(), '/', {
+    'PATCH /api/nav/prefs': json(200, {}),
+  });
+  await screen.findByText('feat/s');
+  await userEvent.click(screen.getByRole('button', { name: 'Réduire la barre' }));
+  expect(node('1-1.barre-gauche.rail')).toBeTruthy();
+  expect(
+    h.calls.some(
+      (c) =>
+        c.method === 'PATCH' &&
+        c.url === '/api/nav/prefs' &&
+        (c.body as { reduit?: boolean }).reduit === true,
+    ),
+  ).toBe(true);
+  await userEvent.click(screen.getByRole('button', { name: 'Déployer la barre' }));
+  expect(node('1-1.barre-gauche.rail')).toBeNull();
+  expect(
+    h.calls.some(
+      (c) =>
+        c.method === 'PATCH' &&
+        c.url === '/api/nav/prefs' &&
+        (c.body as { reduit?: boolean }).reduit === false,
+    ),
+  ).toBe(true);
+});
+
+test('sous 1280 px, la barre reste complète même si « reduit » est enregistré à vrai', async () => {
+  vi.stubGlobal('matchMedia', (q: string) => ({ matches: false, media: q }) as MediaQueryList);
+  open(snapshot({ workspaces: [ws()], topics: [topic()] }), navState({ prefs: { reduit: true } }));
+  await screen.findByText('feat/s');
+  expect(node('1-1.barre-gauche.rail')).toBeNull();
+  expect(node('1-1.barre-gauche.vues')).toBeTruthy();
+});

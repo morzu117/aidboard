@@ -1200,3 +1200,102 @@ body {
   height: var(--sp-2);
   border-radius: var(--r-xs);
 }
+
+/* B.4 (chantier 15, D58) : rail réduit, 72 px, seulement ≥ 1280 px (brief §5.2.3). */
+@media (min-width: 1280px) {
+  .barre-gauche--rail {
+    width: var(--l-graphe);
+    padding: var(--sp-4) 0;
+  }
+  .corps-ecran--sujet .barre-gauche--rail {
+    width: var(--l-graphe);
+  }
+}
+.barre-gauche-rail {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--sp-2);
+  width: 100%;
+}
+.barre-gauche-rail-case {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 34px;
+  border: 0;
+  border-radius: var(--r-m);
+  background: var(--surface-2);
+  color: var(--text-2);
+  font-family: var(--font);
+  font-size: var(--fs-s);
+  font-weight: 600;
+  cursor: pointer;
+}
+.barre-gauche-rail-nouveau {
+  background: var(--acc);
+  color: var(--acc-ink);
+  font-size: var(--fs-l);
+}
+.barre-gauche-rail-vues {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  width: 100%;
+  align-items: center;
+}
+.barre-gauche-rail-vue {
+  position: relative;
+  text-decoration: none;
+}
+.barre-gauche-rail-pastille {
+  width: var(--sp-2);
+  height: var(--sp-2);
+  border-radius: var(--r-xs);
+}
+.barre-gauche-rail-compte {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  min-width: 14px;
+  padding: 0 3px;
+  border-radius: var(--r-pill);
+  background: var(--surface-3);
+  color: var(--text-2);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  text-align: center;
+}
+.barre-gauche-rail-compte--ambre {
+  background: var(--s-attente-bg);
+  color: var(--s-attente);
+}
+.barre-gauche-rail-separateur {
+  width: 36px;
+  height: 1px;
+  background: var(--line);
+  margin: var(--sp-1) 0;
+}
+.barre-gauche-rail-groupes {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  width: 100%;
+  align-items: center;
+}
+.barre-gauche-rail-groupe {
+  width: 34px;
+  height: 34px;
+  border-radius: var(--r-s);
+  cursor: default;
+}
+.barre-gauche-rail-bascule {
+  margin-top: auto;
+  width: 26px;
+  height: 24px;
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-s);
+  background: transparent;
+  color: var(--muted);
+}
