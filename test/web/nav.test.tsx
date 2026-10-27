@@ -4,13 +4,14 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, expect, test, vi } from 'vitest';
 import type { NavGroup, NavPlacement, NavState } from '../../src/shared/model.js';
 import { LayoutCtx } from '../../web/src/ui/Layout.js';
-import { Nav } from '../../web/src/ui/Nav.js';
+import { Nav, resetNavCacheForTests } from '../../web/src/ui/Nav.js';
 import { agent, json, setup, snapshot, topic, ws } from './helpers.js';
 
 const openNewTopic = vi.fn();
 afterEach(() => {
   cleanup();
   openNewTopic.mockClear();
+  resetNavCacheForTests();
 });
 
 const node = (id: string) => document.querySelector(`[data-node="${id}"]`) as HTMLElement | null;

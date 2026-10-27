@@ -60,6 +60,9 @@ test('les autres écrans défilent toujours ; la barre gauche reste visible', as
   const page = await openApp(await browser.newContext({ viewport: { width: 1440, height: 600 } }));
   for (const nom of ['depot-reglages-un', 'depot-reglages-deux', 'depot-reglages-trois']) {
     await registerWorkspace(page, newRepo(nom));
+    // registerWorkspace laisse « Nouveau sujet » ouvert ; sans le fermer, le clic du tour suivant
+    // sur le bouton d'en-tête tombe derrière l'overlay et n'aboutit jamais (timeout du test).
+    await page.getByRole('button', { name: 'Fermer' }).click();
   }
   await page.goto(`${url()}/reglages`);
   await expect(node(page, 'reglages.barre-gauche.racine')).toBeVisible();

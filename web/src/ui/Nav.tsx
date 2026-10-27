@@ -22,6 +22,11 @@ const VUES: readonly { id: VueId; label: string }[] = [
 // chaque écran), rafraîchi ensuite en tâche de fond pour éviter le clignotement.
 let navCache: Partial<NavState> | null = null;
 
+/** Réservé aux tests : vide le cache de module entre deux cas, sinon un cas hérite du nav du précédent. */
+export function resetNavCacheForTests(): void {
+  navCache = null;
+}
+
 /** Groupe B (D55) : lecture seule — ni glisser-déposer, ni renommage, ni réordonnancement (B.3). */
 export function Nav({ screen }: { screen: EcranId }) {
   const { state, daemon, call } = useAid();
