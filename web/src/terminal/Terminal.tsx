@@ -2,6 +2,7 @@ import { FitAddon } from '@xterm/addon-fit';
 import { Terminal as XTerm } from '@xterm/xterm';
 import '@xterm/xterm/css/xterm.css';
 import { useEffect, useRef, useState } from 'react';
+import { PiedPause } from './PiedPause.js';
 import { PtySocket, type PtyExit } from './ptySocket.js';
 
 declare global {
@@ -126,6 +127,7 @@ export function Terminal({ agentId, visible }: { agentId: string; visible: boole
           {size.cols}×{size.rows}
           {owner ? '' : ' · fixé par une autre vue'}
         </span>
+        <PiedPause agentId={agentId} />
       </div>
     </div>
   );
