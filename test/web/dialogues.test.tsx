@@ -5,6 +5,7 @@ import { useLocation } from 'react-router';
 import { afterEach, expect, test } from 'vitest';
 import type { ActionRun } from '../../src/shared/model.js';
 import { Accueil } from '../../web/src/ecrans/Accueil.js';
+import { NouveauSujet } from '../../web/src/dialogues/NouveauSujet.js';
 import { FakeSocket, json, setup, snapshot, topic, ws } from './helpers.js';
 
 afterEach(cleanup);
@@ -203,4 +204,46 @@ test('la création de sujet préselectionne le projet le plus récent', async ()
   );
   await userEvent.click(await boutonNouveauSujet());
   expect((screen.getByLabelText('Projet') as HTMLSelectElement).value).toBe('ws_z');
+});
+
+// B.4 (re-dev 2/2) : le dialogue peut être monté avant l'hydratation de `state` (clic juste
+// après un rechargement) — `workspaces` est alors vide et le défaut n'est pas encore connu.
+test('nouveau sujet ouvert avant l’hydratation : le projet par défaut arrive avec l’état', async () => {
+  setup(
+    <NouveauSujet onClose={() => {}} onAddWorkspace={() => {}} />,
+    snapshot({ workspaces: [ws({ id: 'ws_1', createdAt: '2026-01-01T00:00:00Z' })] }),
+  );
+  expect((screen.getByLabelText('Projet') as HTMLSelectElement).value).toBe('');
+  await userEvent.type(screen.getByLabelText('Titre'), 'Abc');
+  await waitFor(() =>
+    expect((screen.getByLabelText('Projet') as HTMLSelectElement).value).toBe('ws_1'),
+  );
+  expect(
+    (screen.getByRole('button', { name: 'Créer le sujet' }) as HTMLButtonElement).disabled,
+  ).toBe(false);
+});
+
+test('nouveau sujet : un choix explicite de projet n’est pas écrasé par un nouvel instantané', async () => {
+  const h = setup(
+    <NouveauSujet onClose={() => {}} onAddWorkspace={() => {}} />,
+    snapshot({
+      workspaces: [
+        ws({ id: 'ws_a', name: 'ancien', createdAt: '2026-01-01T00:00:00Z' }),
+        ws({ id: 'ws_z', name: 'récent', createdAt: '2026-10-01T00:00:00Z' }),
+      ],
+    }),
+  );
+  await waitFor(() =>
+    expect((screen.getByLabelText('Projet') as HTMLSelectElement).value).toBe('ws_z'),
+  );
+  await userEvent.selectOptions(screen.getByLabelText('Projet'), 'ws_a');
+  h.state = snapshot({
+    workspaces: [
+      ws({ id: 'ws_a', name: 'ancien', createdAt: '2026-01-01T00:00:00Z' }),
+      ws({ id: 'ws_z', name: 'récent', createdAt: '2026-10-01T00:00:00Z' }),
+      ws({ id: 'ws_n', name: 'nouveau', createdAt: '2026-10-27T00:00:00Z' }),
+    ],
+  });
+  await pushEvent();
+  expect((screen.getByLabelText('Projet') as HTMLSelectElement).value).toBe('ws_a');
 });
