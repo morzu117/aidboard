@@ -1466,3 +1466,8 @@ body {
 .onglets-actions-portail {
   display: contents;
 }
+/* §5.3 : le chemin du worktree, désormais dans le menu ⋯ plutôt qu'une pastille d'en-tête. */
+.chemin-worktree {
+  font-family: ui-monospace, monospace;
+  color: var(--muted);
+}

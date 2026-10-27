@@ -85,6 +85,8 @@ function Contenu({
   const [selecteurBranche, setSelecteurBranche] = useState(false);
   const [erreur, setErreur] = useState<string | null>(null);
   const [ignoring, setIgnoring] = useState(false);
+  // §5.3 : retour discret après la copie du chemin du worktree depuis le menu ⋯.
+  const [worktreeCopie, setWorktreeCopie] = useState(false);
   // correctif 3 (recette) : emplacement DOM fourni à la Conversation active pour y porter ses
   // propres contrôles (Repères, Tout déplier) dans la rangée d'onglets — l'état reste dans Conversation.
   const [ongletsActionsEl, setOngletsActionsEl] = useState<HTMLDivElement | null>(null);
@@ -279,6 +281,7 @@ function Contenu({
     );
   }
   const workspace = state.workspaces.find((w) => w.id === topic.workspaceId);
+  const worktree = topic.worktree;
   const runIds = state.runs.filter((r) => r.topicId === topic.id).map((r) => r.id);
   const agents: Agent[] = state.agents.filter((a) => runIds.includes(a.runId));
   const active = agents.find((a) => a.id === selectedAgent) ?? agents.at(-1);
@@ -314,6 +317,17 @@ function Contenu({
       await call('POST', `/api/topics/${topicId}/actions/editor.open`, {});
     } catch (err) {
       setErreur(err instanceof AidApiError ? err.message : String(err));
+    }
+  }
+
+  // §5.3 : le chemin du worktree quitte les pastilles pour le menu ⋯, copié via le clipboard.
+  async function copierWorktree() {
+    try {
+      await navigator.clipboard.writeText(worktree);
+      setWorktreeCopie(true);
+      setTimeout(() => setWorktreeCopie(false), 2000);
+    } catch {
+      // clipboard indisponible (contexte non sécurisé, permission refusée) : pas de retour
     }
   }
 
@@ -380,7 +394,7 @@ function Contenu({
             >
               Ouvrir dans l’éditeur
             </button>
-            {topic.state !== 'draft' && (
+            {!topic.worktreeMissing && (
               <button
                 className="bouton-icone"
                 data-node="1-3.actions.plus"
@@ -393,19 +407,43 @@ function Contenu({
                 ⋯
               </button>
             )}
-            {menu === 'plus' && topic.state !== 'draft' && (
-              <button
-                className="bouton bouton--danger"
-                data-action="topic.cleanup"
-                type="button"
-                onClick={() => {
-                  setMenu('aucun');
-                  void nettoyage.start();
-                }}
-                disabled={nettoyage.phase.phase === 'en-cours'}
-              >
-                Nettoyer le sujet
-              </button>
+            {menu === 'plus' && !topic.worktreeMissing && (
+              <>
+                {topic.state !== 'draft' && (
+                  <button
+                    className="bouton bouton--danger"
+                    data-action="topic.cleanup"
+                    type="button"
+                    onClick={() => {
+                      setMenu('aucun');
+                      void nettoyage.start();
+                    }}
+                    disabled={nettoyage.phase.phase === 'en-cours'}
+                  >
+                    Nettoyer le sujet
+                  </button>
+                )}
+                <button
+                  className="bouton bouton--fantome"
+                  data-action="sujet.copier-worktree"
+                  type="button"
+                  onClick={() => void copierWorktree()}
+                >
+                  Copier le chemin du worktree{' '}
+                  <span
+                    className="chemin-worktree"
+                    data-node="1-3.entete.worktree"
+                    data-bind="sujet.worktree"
+                  >
+                    {topic.worktree}
+                  </span>
+                </button>
+                {worktreeCopie && (
+                  <span className="texte-discret" data-node="1-3.actions.worktree-copie">
+                    copié
+                  </span>
+                )}
+              </>
             )}
           </div>
         </div>
@@ -435,20 +473,15 @@ function Contenu({
               {workspace?.remote ? `${workspace.remote}/${topic.base}` : topic.base}
             </span>
           </span>
-          <span
-            className="pastille pastille--discret"
-            data-node="1-3.entete.worktree"
-            data-bind="sujet.worktree"
-          >
-            {topic.worktree}
-          </span>
-          <span
-            className="pastille pastille--discret"
-            data-node="1-3.entete.index"
-            data-bind="sujet.index"
-          >
-            {INDEX_LABEL[topic.indexState]}
-          </span>
+          {topic.indexState !== 'ready' && (
+            <span
+              className="pastille pastille--discret"
+              data-node="1-3.entete.index"
+              data-bind="sujet.index"
+            >
+              {INDEX_LABEL[topic.indexState]}
+            </span>
+          )}
         </div>
       </div>
       {live && !live.onTopicBranch && (

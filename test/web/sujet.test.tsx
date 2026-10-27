@@ -155,7 +155,7 @@ test.each([
   expect(screen.queryByTestId(/^term-/)).toBeNull();
 });
 
-test('en-tête : fil d’Ariane, titre, état, branche, base, worktree', async () => {
+test('en-tête : fil d’Ariane, titre, état, branche, base ; le worktree n’est plus en pastille', async () => {
   open(snapshot({ workspaces: [ws()], topics: [topic()], runs: [run] }));
   await screen.findByText('Mon sujet');
   expect(text('1-3.entete.workspace')).toBe('aid');
@@ -163,7 +163,31 @@ test('en-tête : fil d’Ariane, titre, état, branche, base, worktree', async (
   expect(text('1-3.entete.etat')).toBe('active');
   expect(text('1-3.entete.branche')).toBe('feat/s');
   expect(text('1-3.entete.base.branche')).toBe('origin/main');
+  // §5.3 : le chemin du worktree a quitté l'en-tête, il n'apparaît qu'au menu ⋯ ouvert.
+  expect(node('1-3.entete.worktree')).toBeNull();
+  await userEvent.click(await screen.findByLabelText('Plus d’actions'));
   expect(text('1-3.entete.worktree')).toBe('/w/s');
+});
+
+test('menu ⋯ : copier le chemin du worktree affiche un retour « copié »', async () => {
+  Object.assign(navigator, {
+    clipboard: { writeText: vi.fn().mockResolvedValue(undefined) },
+  });
+  open(snapshot({ workspaces: [ws()], topics: [topic()], runs: [run] }));
+  await screen.findByText('Mon sujet');
+  await userEvent.click(await screen.findByLabelText('Plus d’actions'));
+  expect(screen.queryByText('copié')).toBeNull();
+  await userEvent.click(screen.getByText('Copier le chemin du worktree', { exact: false }));
+  expect(navigator.clipboard.writeText).toHaveBeenCalledWith('/w/s');
+  expect(await screen.findByText('copié')).toBeTruthy();
+});
+
+test('brouillon dont le worktree existe déjà : le menu ⋯ ne propose que la copie du chemin', async () => {
+  open(snapshot({ workspaces: [ws()], topics: [topic({ state: 'draft' })], runs: [run] }));
+  await screen.findByText('Mon sujet');
+  await userEvent.click(await screen.findByLabelText('Plus d’actions'));
+  expect(screen.getByText('Copier le chemin du worktree', { exact: false })).toBeTruthy();
+  expect(screen.queryByText('Nettoyer le sujet')).toBeNull();
 });
 
 test('en-tête d’un projet sans remote : la base est la branche locale, sans « origin/ »', async () => {
@@ -175,7 +199,6 @@ test('en-tête d’un projet sans remote : la base est la branche locale, sans �
 test.each([
   ['disabled', 'index absent : lecture directe'],
   ['indexing', 'indexation en cours'],
-  ['ready', 'index prêt'],
   ['failed', 'index en échec : lecture directe'],
 ] as const)(
   'index %s : « %s » (le repli est déclaré, jamais silencieux)',
@@ -185,6 +208,12 @@ test.each([
     expect(text('1-3.entete.index')).toBe(label);
   },
 );
+
+test('index prêt : aucune pastille (rien à signaler quand tout va bien)', async () => {
+  open(snapshot({ workspaces: [ws()], topics: [topic({ indexState: 'ready' })], runs: [run] }));
+  await screen.findByText('Mon sujet');
+  expect(node('1-3.entete.index')).toBeNull();
+});
 
 test('sans agent : trois façons de démarrer, et le lancement appelle POST /api/agents', async () => {
   const h = open(snapshot({ workspaces: [ws()], topics: [topic()], runs: [run] }));

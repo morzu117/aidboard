@@ -134,8 +134,11 @@ test('un dépôt sans origin s’enregistre ; son sujet se crée, tourne et se n
     /sans remote origin : les sujets partiront de la branche locale main/,
   );
   const id = await createTopic(page, 'Sujet sans remote');
+  // §5.3 : le chemin du worktree a quitté l'en-tête pour le menu ⋯.
+  await node(page, '1-3.actions.plus').click();
   const worktree = (await node(page, '1-3.entete.worktree').textContent())!;
   expect(existsSync(worktree)).toBe(true);
+  await node(page, '1-3.actions.plus').click();
 
   const agent = await launchShell(page);
   await typeInTerminal(page, 'git rev-parse --abbrev-ref HEAD; git remote | wc -l');
