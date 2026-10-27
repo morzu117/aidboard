@@ -118,18 +118,21 @@ function Contenu({
   // bandeau de dérive reste visible quel que soit l'onglet actif — au-dessus des retours
   // anticipés ci-dessous, donc avant que `topic` existe (topicId suffit à la requête).
   const [live, setLive] = useState<GitLogResponse['live'] | null>(null);
-  useEffect(() => {
-    let cancelled = false;
-    fetchGitLog(call, topicId)
+  // review (re-dev 1/2, correctif 6) : point de vérité unique — seule la dernière lecture
+  // lancée peut écrire `live`, qu'elle vienne du montage, d'une action ou d'une branche changée.
+  const liveSeqRef = useRef(0);
+  function relireLive(): Promise<void> {
+    const seq = ++liveSeqRef.current;
+    return fetchGitLog(call, topicId)
       .then((r) => {
-        if (!cancelled) setLive(r.live);
+        if (liveSeqRef.current === seq) setLive(r.live);
       })
       .catch(() => {
-        if (!cancelled) setLive(null);
+        if (liveSeqRef.current === seq) setLive(null);
       });
-    return () => {
-      cancelled = true;
-    };
+  }
+  useEffect(() => {
+    relireLive();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [topicId]);
   const [deriveActionId, setDeriveActionId] = useState<string | null>(null);
@@ -140,15 +143,7 @@ function Contenu({
   const deriveAction = state?.actions.find((a) => a.id === deriveActionId);
   useEffect(() => {
     if (deriveAction?.state !== 'succeeded') return;
-    fetchGitLog(call, topicId)
-      .then((r) => {
-        setDeriveActionId(null);
-        setLive(r.live);
-      })
-      .catch(() => {
-        setDeriveActionId(null);
-        setLive(null);
-      });
+    relireLive().then(() => setDeriveActionId(null));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [deriveAction?.state]);
 
@@ -156,28 +151,24 @@ function Contenu({
   // un changement de branche hors de ces deux actions (topic.branch-changer, sync…) laissait le
   // bandeau de dérive périmé jusqu'au rechargement de la page.
   const topicBranch = state?.topics.find((t) => t.id === topicId)?.branch;
-  const actionsSucceeded = (state?.actions ?? [])
+  const actionsSucceededIds = (state?.actions ?? [])
     .filter((a) => a.topicId === topicId && a.state === 'succeeded')
-    .map((a) => a.id)
-    .sort()
-    .join(',');
-  const vuRef = useRef<{ branch: string | undefined; actions: string } | null>(null);
+    .map((a) => a.id);
+  const actionsSucceeded = actionsSucceededIds.slice().sort().join(',');
+  // review (re-dev 1/2) : relecture déclenchée par un id d'action succeeded jamais vu, pas par
+  // l'ensemble courant — une action purgée de state.actions ne doit pas en déclencher une inutile.
+  const brancheVueRef = useRef<string | undefined>(undefined);
+  const actionsVuesRef = useRef<Set<string> | null>(null);
   useEffect(() => {
-    const vu = vuRef.current;
-    vuRef.current = { branch: topicBranch, actions: actionsSucceeded };
+    const dejaMonte = actionsVuesRef.current !== null;
+    const brancheChangee = dejaMonte && brancheVueRef.current !== topicBranch;
+    const nouvelleAction =
+      dejaMonte && actionsSucceededIds.some((id) => !actionsVuesRef.current!.has(id));
+    brancheVueRef.current = topicBranch;
+    actionsVuesRef.current = new Set([...(actionsVuesRef.current ?? []), ...actionsSucceededIds]);
     // au montage : seulement la référence de base, rien à relire.
-    if (vu === null || (vu.branch === topicBranch && vu.actions === actionsSucceeded)) return;
-    let cancelled = false;
-    fetchGitLog(call, topicId)
-      .then((r) => {
-        if (!cancelled) setLive(r.live);
-      })
-      .catch(() => {
-        if (!cancelled) setLive(null);
-      });
-    return () => {
-      cancelled = true;
-    };
+    if (!dejaMonte || (!brancheChangee && !nouvelleAction)) return;
+    relireLive();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [topicBranch, actionsSucceeded]);
 
@@ -204,8 +195,7 @@ function Contenu({
     setRattaching(true);
     try {
       await call('POST', `/api/topics/${topicId}/actions/sujet.rattacher-branche`, {});
-      const r = await fetchGitLog(call, topicId);
-      setLive(r.live);
+      await relireLive();
     } catch (err) {
       setRattachErreur(err instanceof AidApiError ? err.message : String(err));
     } finally {

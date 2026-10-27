@@ -552,6 +552,133 @@ test('dérive (correctif 6) : une même action succeeded reçue sur plusieurs mi
   expect(h.calls.filter((c) => c.url === '/api/topics/tp_1/git/log').length).toBe(appelsAvant + 1);
 });
 
+test('dérive (correctif 6, re-dev 1/2) : relue quand seule la branche du sujet change, sans action', async () => {
+  const h = open(snapshot({ workspaces: [ws()], topics: [topic()], runs: [run] }), 'tp_1', {
+    'GET /api/topics/tp_1/git/log': json(200, {
+      commits: [],
+      dirty: false,
+      live: { aheadBehind: null, rebaseInProgress: false, onTopicBranch: false, headBranch: null },
+    }),
+  });
+  expect(await screen.findByText(/HEAD détachée/)).toBeTruthy();
+  h.respond.set(
+    'GET /api/topics/tp_1/git/log',
+    json(200, {
+      commits: [],
+      dirty: false,
+      live: {
+        aheadBehind: { ahead: 0, behind: 0 },
+        rebaseInProgress: false,
+        onTopicBranch: true,
+        headBranch: null,
+      },
+    }),
+  );
+  h.state = snapshot({
+    workspaces: [ws()],
+    topics: [topic({ branch: 'fix/irritants-aid' })],
+    runs: [run],
+  });
+  await act(() => h.client.refresh());
+  await waitFor(() => expect(screen.queryByText(/HEAD détachée/)).toBeNull());
+});
+
+// review (re-dev 1/2), point 2 : une action succeeded purgée de state.actions ne doit pas
+// déclencher de relecture — seul un id jamais vu avant, ou un changement de branche, le fait.
+test('dérive (correctif 6, re-dev 1/2) : une action succeeded purgée de l’état ne déclenche pas de relecture', async () => {
+  const actionReussie = action({ id: 'ac_9', action: 'topic.branch-changer', state: 'succeeded' });
+  const h = open(
+    snapshot({ workspaces: [ws()], topics: [topic()], runs: [run], actions: [actionReussie] }),
+    'tp_1',
+    {
+      'GET /api/topics/tp_1/git/log': json(200, {
+        commits: [],
+        dirty: false,
+        live: {
+          aheadBehind: null,
+          rebaseInProgress: false,
+          onTopicBranch: false,
+          headBranch: null,
+        },
+      }),
+    },
+  );
+  expect(await screen.findByText(/HEAD détachée/)).toBeTruthy();
+  const appelsAvant = h.calls.filter((c) => c.url === '/api/topics/tp_1/git/log').length;
+  h.respond.set(
+    'GET /api/topics/tp_1/git/log',
+    json(200, {
+      commits: [],
+      dirty: false,
+      live: { aheadBehind: null, rebaseInProgress: false, onTopicBranch: true, headBranch: null },
+    }),
+  );
+  // le noyau purge l'action succeeded de state.actions une fois le délai de rétention passé.
+  h.state = snapshot({ workspaces: [ws()], topics: [topic()], runs: [run], actions: [] });
+  await act(() => h.client.refresh());
+  await act(async () => {});
+  expect(screen.getByText(/HEAD détachée/)).toBeTruthy();
+  expect(h.calls.filter((c) => c.url === '/api/topics/tp_1/git/log').length).toBe(appelsAvant);
+});
+
+// review (re-dev 1/2), point 1 : une lecture de montage en retard sur une relecture post-action
+// plus récente ne doit pas écraser son résultat — un seul numéro de lecture fait foi.
+test('dérive (correctif 6, re-dev 1/2) : une lecture de montage résolue en retard n’écrase pas la relecture post-action', async () => {
+  let resoudreMontage!: (r: Response) => void;
+  let resoudreApresAction!: (r: Response) => void;
+  let appels = 0;
+  // écran 1-3 : `Contenu` est monté une première fois pendant le chargement de l'état (hors
+  // vueComplete), puis remonté une fois `state` chargé — seul ce second montage compte ici.
+  const h = open(snapshot({ workspaces: [ws()], topics: [topic()], runs: [run] }), 'tp_1', {
+    'GET /api/topics/tp_1/git/log': () => {
+      appels += 1;
+      if (appels === 1)
+        return json(200, {
+          commits: [],
+          dirty: false,
+          live: {
+            aheadBehind: null,
+            rebaseInProgress: false,
+            onTopicBranch: true,
+            headBranch: null,
+          },
+        })();
+      if (appels === 2)
+        return new Promise<Response>((r) => (resoudreMontage = r)) as unknown as Response;
+      return new Promise<Response>((r) => (resoudreApresAction = r)) as unknown as Response;
+    },
+  });
+  await screen.findByText('Mon sujet');
+  h.state = snapshot({
+    workspaces: [ws()],
+    topics: [topic({ branch: 'fix/irritants-aid' })],
+    runs: [run],
+  });
+  await act(() => h.client.refresh());
+  resoudreApresAction(
+    json(200, {
+      commits: [],
+      dirty: false,
+      live: {
+        aheadBehind: { ahead: 0, behind: 0 },
+        rebaseInProgress: false,
+        onTopicBranch: true,
+        headBranch: null,
+      },
+    })(),
+  );
+  await waitFor(() => expect(screen.queryByText(/HEAD détachée/)).toBeNull());
+  resoudreMontage(
+    json(200, {
+      commits: [],
+      dirty: false,
+      live: { aheadBehind: null, rebaseInProgress: false, onTopicBranch: false, headBranch: null },
+    })(),
+  );
+  await new Promise((r) => setTimeout(r, 20));
+  expect(screen.queryByText(/HEAD détachée/)).toBeNull();
+});
+
 test('« + Agent » propose les trois types et lance celui choisi', async () => {
   const h = open(
     snapshot({ workspaces: [ws()], topics: [topic()], runs: [run], agents: [agent()] }),
