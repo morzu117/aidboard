@@ -15,7 +15,7 @@ type Dialog = 'none' | 'workspace' | 'sujet';
 export const A_TRAITER = new Set<MeshDmKind>(['question', 'unblock']);
 /** B.2 (chantier 15, D55) : un seul popup à la fois sur l'écran — « panneau » appartient à Sujet. */
 type Overlay = 'aucun' | 'nav' | 'panneau';
-const LayoutCtx = createContext<{
+export const LayoutCtx = createContext<{
   openNewTopic: (workspaceId?: string) => void;
   openNewWorkspace: () => void;
   overlay: Overlay;
@@ -168,7 +168,7 @@ export function Layout({ screen, children }: { screen: EcranId; children: ReactN
           {overlay === 'nav' && (
             <div
               className="voile"
-              data-node={`${screen}.volet.fond`}
+              data-node={`${screen}.volet.nav.fond`}
               aria-hidden="true"
               onClick={() => setOverlay('aucun')}
             />

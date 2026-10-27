@@ -133,7 +133,7 @@ test('un clic sur le fond assombri referme le popup ouvert', async () => {
   await screen.findByTestId('term-ag_1');
   await userEvent.click(screen.getByRole('button', { name: 'Ouvrir le panneau du sujet' }));
   await screen.findByRole('dialog', { name: 'Panneau du sujet' });
-  await userEvent.click(node('1-3.volet.fond')!);
+  await userEvent.click(node('1-3.volet.panneau.fond')!);
   await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
 });
 

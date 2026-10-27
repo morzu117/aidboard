@@ -1,5 +1,13 @@
 import { expect, test } from '@playwright/test';
-import { createTopic, launchShell, newRepo, node, openApp, registerWorkspace } from './helpers.js';
+import {
+  createTopic,
+  launchShell,
+  newRepo,
+  node,
+  openApp,
+  registerWorkspace,
+  url,
+} from './helpers.js';
 
 // review D (findings 2/3/4, re-dev 2) : jsdom n'applique pas le CSS — seul un e2e vérifie la
 // grille 25/50/25 sans défilement de page, et le popup de navigation non vide sous 1180 px.
@@ -44,4 +52,28 @@ test('< 1180 px : le popup de navigation n’est pas vide, Échap le referme', a
 
   await page.keyboard.press('Escape');
   await expect(dialogue).not.toBeVisible();
+});
+
+// B.2 (finding 11, re-dev) : la barre gauche est désormais posée sur tous les écrans — les
+// autres écrans ne doivent pas hériter du « page ne défile pas » propre à l'écran Sujet.
+test('les autres écrans défilent toujours ; la barre gauche reste visible', async ({ browser }) => {
+  const page = await openApp(await browser.newContext({ viewport: { width: 1440, height: 600 } }));
+  for (const nom of ['depot-reglages-un', 'depot-reglages-deux', 'depot-reglages-trois']) {
+    await registerWorkspace(page, newRepo(nom));
+  }
+  await page.goto(`${url()}/reglages`);
+  await expect(node(page, 'reglages.barre-gauche.racine')).toBeVisible();
+
+  const mesures = await page.evaluate(() => {
+    const scrollable = (el: Element) => {
+      const style = getComputedStyle(el);
+      return el.scrollHeight > el.clientHeight && /auto|scroll/.test(style.overflowY);
+    };
+    const principal = document.querySelector('main');
+    return {
+      pageDefile: document.scrollingElement!.scrollHeight > window.innerHeight,
+      principalDefile: principal ? scrollable(principal) : false,
+    };
+  });
+  expect(mesures.pageDefile || mesures.principalDefile).toBe(true);
 });

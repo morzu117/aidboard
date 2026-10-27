@@ -835,7 +835,7 @@ body {
 
 @media (min-width: 1280px) {
   .bouton-volant,
-  .voile[data-node$='.volet.fond'] {
+  .voile[data-node*='.volet.'] {
     display: none;
   }
   .volet {
@@ -1011,21 +1011,13 @@ body {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-/* le bouton « ‹ » persiste nav_pref.reduit (B.1) ; masque les libellés secondaires, garde dots/icônes. */
-.barre-gauche--reduit .barre-gauche-vue-nom,
-.barre-gauche--reduit .barre-gauche-groupe-nom,
-.barre-gauche--reduit .barre-gauche-sujet-nom,
-.barre-gauche--reduit .barre-gauche-sujet-temps,
-.barre-gauche--reduit .barre-gauche-pied-texte,
-.barre-gauche--reduit .compteur,
-.barre-gauche--reduit .badge {
-  display: none;
-}
-
 @media (min-width: 1280px) {
   /* pas de sélecteur d'enfant direct : .volet est `display: contents` ici, mais reste un nœud
      du DOM entre .corps-ecran--sujet et .barre-gauche — le combinateur `>` ne matcherait jamais. */
   .corps-ecran--sujet .barre-gauche {
     width: 25%;
   }
+}
+.barre-gauche-nouveau {
+  width: 100%;
 }

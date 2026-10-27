@@ -83,7 +83,8 @@ test('« Ajouter un projet » enregistre sans enchaîner sur la création d’un
 test('sans aucun projet, « Nouveau sujet » commence par enregistrer le projet puis enchaîne', async () => {
   const h = setup(<Accueil />, snapshot());
   h.respond.set('POST /api/workspaces', json(201, { ...ws(), warnings: [] }));
-  await userEvent.click(await screen.findByRole('button', { name: 'Nouveau sujet' }));
+  // Nav pose aussi un bouton « Nouveau sujet » (B.2, finding 7) : les deux appellent openNewTopic().
+  await userEvent.click((await screen.findAllByRole('button', { name: 'Nouveau sujet' }))[0]!);
   await userEvent.click(await screen.findByRole('button', { name: 'Choisir mon-depot' }));
   await userEvent.click(screen.getByRole('button', { name: 'Enregistrer' }));
   expect(await screen.findByRole('dialog', { name: 'Nouveau sujet' })).toBeTruthy();

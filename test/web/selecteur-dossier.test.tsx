@@ -15,8 +15,14 @@ const reponse =
   () =>
     new Response(JSON.stringify(l), { status: 200 });
 
+// Nav pose aussi un bouton « Nouveau sujet » (B.2, finding 7) : findByRole serait ambigu entre
+// les deux ; les deux appellent openNewTopic(), le premier (celui de la barre du haut) suffit.
+async function boutonNouveauSujet() {
+  return (await screen.findAllByRole('button', { name: 'Nouveau sujet' }))[0]!;
+}
+
 async function ouvrir(h: H) {
-  await userEvent.click(await screen.findByRole('button', { name: 'Nouveau sujet' }));
+  await userEvent.click(await boutonNouveauSujet());
   await screen.findByRole('group', { name: 'Choisir le dossier du dépôt' });
   return h;
 }
@@ -91,7 +97,7 @@ test('une erreur du daemon sur la navigation est affichée', async () => {
 
 test('le premier affichage part du dossier qui contient le dernier dépôt enregistré', async () => {
   const h = setup(<Accueil />, snapshot({ workspaces: [ws({ root: '/home/moi/Projects/a' })] }));
-  await userEvent.click(await screen.findByRole('button', { name: 'Nouveau sujet' }));
+  await userEvent.click(await boutonNouveauSujet());
   await userEvent.click(await screen.findByRole('button', { name: 'Ajouter un projet…' }));
   await screen.findByRole('group', { name: 'Choisir le dossier du dépôt' });
   expect(fsCalls(h)[0]).toBe('/api/fs/dirs?path=/home/moi/Projects');
@@ -109,7 +115,7 @@ test('une réponse arrivée en retard n’écrase pas le dossier demandé depuis
       (b) => new Response(JSON.stringify(b), { status: 200 }),
     ) as unknown as Response;
   });
-  await userEvent.click(await screen.findByRole('button', { name: 'Nouveau sujet' }));
+  await userEvent.click(await boutonNouveauSujet());
   const champ = await screen.findByLabelText('Aller au dossier');
   await userEvent.type(champ, '/srv/code{Enter}');
   await waitFor(() => expect((champ as HTMLInputElement).value).toBe('/srv/code'));
@@ -130,7 +136,7 @@ test('un chemin tapé avant le premier chargement n’est pas écrasé par sa r�
         () => new Response(JSON.stringify(listing()), { status: 200 }),
       ) as unknown as Response,
   );
-  await userEvent.click(await screen.findByRole('button', { name: 'Nouveau sujet' }));
+  await userEvent.click(await boutonNouveauSujet());
   const champ = await screen.findByLabelText('Aller au dossier');
   await userEvent.type(champ, '/srv/code');
   release();

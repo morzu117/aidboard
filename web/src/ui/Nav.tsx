@@ -1,37 +1,60 @@
-import { useEffect, useState } from 'react';
-import { Link, useLocation } from 'react-router';
+import { useEffect, useMemo, useState } from 'react';
+import { Link, useLocation, useSearchParams } from 'react-router';
 import type { Agent, NavGroup, NavPlacement, NavState, Topic } from '../../../src/shared/model.js';
 import { useAid } from '../data/useAidState.js';
 import type { EcranId } from './Barre.js';
 import { depuis } from './depuis.js';
+import { useLayout } from './Layout.js';
 import { Badge, isAlive, Point, topicView } from './Statut.js';
 
-type VueId = 'tous' | 'decider' | 'libre' | 'sans-agent' | 'epingles' | 'archives';
+type VueId = 'tous' | 'a-decider' | 'agent-libre' | 'sans-agent' | 'epingles' | 'archives';
 
 const VUES: readonly { id: VueId; label: string }[] = [
   { id: 'tous', label: 'Tous' },
-  { id: 'decider', label: 'À décider' },
-  { id: 'libre', label: 'Agent libre' },
+  { id: 'a-decider', label: 'À décider' },
+  { id: 'agent-libre', label: 'Agent libre' },
   { id: 'sans-agent', label: 'Sans agent' },
   { id: 'epingles', label: 'Épinglés' },
   { id: 'archives', label: 'Archivés' },
 ];
 
+// Cache de module (§2.2) : affiché immédiatement au remontage de Nav (Layout la remonte à
+// chaque écran), rafraîchi ensuite en tâche de fond pour éviter le clignotement.
+let navCache: Partial<NavState> | null = null;
+
 /** Groupe B (D55) : lecture seule — ni glisser-déposer, ni renommage, ni réordonnancement (B.3). */
 export function Nav({ screen }: { screen: EcranId }) {
   const { state, daemon, call } = useAid();
   const { pathname } = useLocation();
+  const [params] = useSearchParams();
+  const { openNewTopic } = useLayout();
   const currentTopicId = pathname.startsWith('/sujets/') ? pathname.slice('/sujets/'.length) : null;
   const n = (rest: string) => `${screen}.barre-gauche.${rest}`;
 
-  // Pas de cache module : Layout remonte Nav à chaque écran, ce qui refait l'appel — acceptable,
-  // les groupes/placements ne bougent pas plus vite qu'une navigation d'écran.
-  const [nav, setNav] = useState<Partial<NavState>>({});
+  const [nav, setNav] = useState<Partial<NavState>>(() => navCache ?? {});
+  const updateNav = (updater: (cur: Partial<NavState>) => Partial<NavState>) => {
+    setNav((cur) => {
+      const next = updater(cur);
+      navCache = next;
+      return next;
+    });
+  };
+
+  // Rafraîchit quand l'ENSEMBLE des ids de sujets/projets change, pas seulement leur nombre
+  // (un sujet retiré et un autre ajouté au même instant garderait le même total).
+  const idsKey = useMemo(() => {
+    const topicIds = (state?.topics ?? []).map((t) => t.id).sort();
+    const workspaceIds = (state?.workspaces ?? []).map((w) => w.id).sort();
+    return [...topicIds, ...workspaceIds].join(',');
+  }, [state?.topics, state?.workspaces]);
+
   useEffect(() => {
     let annule = false;
     call<NavState>('GET', '/api/nav')
       .then((reponse) => {
-        if (!annule) setNav(reponse);
+        if (annule) return;
+        navCache = reponse;
+        setNav(reponse);
       })
       .catch(() => {});
     return () => {
@@ -40,9 +63,9 @@ export function Nav({ screen }: { screen: EcranId }) {
     // `call` change d'identité à chaque rendu (useAid le reconstruit à chaque fois) : le suivre
     // ici redéclencherait la lecture à l'infini (nouvel objet retourné à chaque fetch).
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state?.topics.length, state?.workspaces.length]);
+  }, [idsKey]);
 
-  const [vue, setVue] = useState<VueId>('tous');
+  const vueCourante = params.get('vue');
 
   const topics = state?.topics ?? [];
   const groups = nav.groups ?? [];
@@ -62,9 +85,9 @@ export function Nav({ screen }: { screen: EcranId }) {
     switch (v) {
       case 'tous':
         return true;
-      case 'decider':
+      case 'a-decider':
         return agents.some((a) => a.status === 'needs_input');
-      case 'libre':
+      case 'agent-libre':
         return agents.some((a) => isAlive(a) && a.role === 'free');
       case 'sans-agent':
         return agents.length === 0;
@@ -75,7 +98,7 @@ export function Nav({ screen }: { screen: EcranId }) {
 
   const compte = (v: VueId): number => {
     // « À décider » reprend la définition de Layout (agents en attente), pas un compte de sujets.
-    if (v === 'decider') {
+    if (v === 'a-decider') {
       return state?.agents.filter((a) => a.status === 'needs_input').length ?? 0;
     }
     let total = 0;
@@ -88,26 +111,17 @@ export function Nav({ screen }: { screen: EcranId }) {
 
   const toggleCollapse = (g: NavGroup) => {
     const suivant = !g.collapsed;
-    setNav((cur) => ({
+    updateNav((cur) => ({
       ...cur,
       groups: (cur.groups ?? []).map((x) => (x.id === g.id ? { ...x, collapsed: suivant } : x)),
     }));
     call('PATCH', `/api/nav/groups/${g.id}`, { collapsed: suivant }).catch(() => {
-      setNav((cur) => ({
+      updateNav((cur) => ({
         ...cur,
         groups: (cur.groups ?? []).map((x) =>
           x.id === g.id ? { ...x, collapsed: g.collapsed } : x,
         ),
       }));
-    });
-  };
-
-  const reduit = nav.prefs?.reduit ?? false;
-  const toggleReduit = () => {
-    const suivant = !reduit;
-    setNav((cur) => ({ ...cur, prefs: { reduit: suivant } }));
-    call('PATCH', '/api/nav/prefs', { reduit: suivant }).catch(() => {
-      setNav((cur) => ({ ...cur, prefs: { reduit } }));
     });
   };
 
@@ -119,30 +133,37 @@ export function Nav({ screen }: { screen: EcranId }) {
     : null;
 
   return (
-    <nav
-      className={`barre-gauche${reduit ? ' barre-gauche--reduit' : ''}`}
-      data-node={n('racine')}
-      aria-label="Navigation des sujets"
-    >
+    <nav className="barre-gauche" data-node={n('racine')} aria-label="Navigation des sujets">
+      <button
+        type="button"
+        className="bouton bouton--primaire barre-gauche-nouveau"
+        data-node="nav.nouveau-sujet"
+        onClick={() => openNewTopic()}
+      >
+        Nouveau sujet
+      </button>
       <ul className="barre-gauche-vues" data-node={n('vues')}>
-        {VUES.map((v) => (
-          <li key={v.id}>
-            <button
-              type="button"
-              className={`barre-gauche-vue${vue === v.id ? ' est-active' : ''}`}
-              data-node={n(`vue-${v.id}`)}
-              aria-pressed={vue === v.id}
-              onClick={() => setVue(v.id)}
-            >
-              <span className="barre-gauche-vue-nom">{v.label}</span>
-              {v.id !== 'archives' && (
-                <span className="compteur" data-node={n(`vue-${v.id}.compte`)}>
-                  {compte(v.id)}
-                </span>
-              )}
-            </button>
-          </li>
-        ))}
+        {VUES.map((v) => {
+          const actif =
+            pathname === '/' && (vueCourante === v.id || (v.id === 'tous' && vueCourante === null));
+          return (
+            <li key={v.id}>
+              <Link
+                to={`/?vue=${v.id}`}
+                className={`barre-gauche-vue${actif ? ' est-active' : ''}`}
+                data-node={n(`vue-${v.id}`)}
+                aria-current={actif ? 'page' : undefined}
+              >
+                <span className="barre-gauche-vue-nom">{v.label}</span>
+                {v.id !== 'archives' && (
+                  <span className="compteur" data-node={n(`vue-${v.id}.compte`)}>
+                    {compte(v.id)}
+                  </span>
+                )}
+              </Link>
+            </li>
+          );
+        })}
       </ul>
       <div className="barre-gauche-groupes" data-node={n('groupes')}>
         <h2 className="titre-zone">Groupes</h2>
@@ -150,12 +171,10 @@ export function Nav({ screen }: { screen: EcranId }) {
           .filter((g) => !g.hidden)
           .map((g) => {
             const sujetsGroupe = placements
-              .filter((p) => p.groupId === g.id)
+              .filter((p) => p.groupId === g.id && !p.hidden && !p.archived)
               .sort((a, b) => a.ord - b.ord)
               .map((p) => ({ p, t: topics.find((t) => t.id === p.topicId) }))
-              .filter(
-                (x): x is { p: NavPlacement; t: Topic } => !!x.t && correspond(x.t, x.p, vue),
-              );
+              .filter((x): x is { p: NavPlacement; t: Topic } => !!x.t);
             return (
               <div key={g.id} className="barre-gauche-groupe" data-node={n(`groupe-${g.id}`)}>
                 <button
@@ -183,6 +202,7 @@ export function Nav({ screen }: { screen: EcranId }) {
                         to={`/sujets/${t.id}`}
                         className={`barre-gauche-sujet${actif ? ' est-actif' : ''}`}
                         data-node={n(`sujet-${t.id}`)}
+                        title={t.branch}
                         aria-current={actif ? 'page' : undefined}
                       >
                         <Point
@@ -213,16 +233,6 @@ export function Nav({ screen }: { screen: EcranId }) {
           {daemon === 'connecte' ? 'daemon local' : 'daemon injoignable'}
           {meshTexte ? ` · ${meshTexte}` : ''}
         </span>
-        <button
-          type="button"
-          className="bouton-icone barre-gauche-reduire"
-          data-node={n('reduire')}
-          aria-label={reduit ? 'Déplier la navigation' : 'Réduire la navigation'}
-          aria-pressed={reduit}
-          onClick={toggleReduit}
-        >
-          {reduit ? '›' : '‹'}
-        </button>
       </div>
     </nav>
   );

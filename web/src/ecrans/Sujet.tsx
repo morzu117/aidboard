@@ -917,7 +917,7 @@ function SujetPanneau({
         // .voile : fond déjà utilisé par Dialogue.tsx (chantier 11), réutilisé ici tel quel.
         <div
           className="voile"
-          data-node="1-3.volet.fond"
+          data-node="1-3.volet.panneau.fond"
           aria-hidden="true"
           onClick={() => setOverlay('aucun')}
         />

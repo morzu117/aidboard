@@ -1,12 +1,17 @@
 // @vitest-environment jsdom
 import { cleanup, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { afterEach, expect, test } from 'vitest';
+import { afterEach, expect, test, vi } from 'vitest';
 import type { NavGroup, NavPlacement, NavState } from '../../src/shared/model.js';
+import { LayoutCtx } from '../../web/src/ui/Layout.js';
 import { Nav } from '../../web/src/ui/Nav.js';
 import { agent, json, setup, snapshot, topic, ws } from './helpers.js';
 
-afterEach(cleanup);
+const openNewTopic = vi.fn();
+afterEach(() => {
+  cleanup();
+  openNewTopic.mockClear();
+});
 
 const node = (id: string) => document.querySelector(`[data-node="${id}"]`) as HTMLElement | null;
 
@@ -44,7 +49,17 @@ const open = (
   nav: NavState,
   route = '/',
   extra: Record<string, (body: unknown) => Response> = {},
-) => setup(<Nav screen="1-1" />, snap, route, { 'GET /api/nav': json(200, nav), ...extra });
+) =>
+  setup(
+    <LayoutCtx.Provider
+      value={{ openNewTopic, openNewWorkspace: () => {}, overlay: 'aucun', setOverlay: () => {} }}
+    >
+      <Nav screen="1-1" />
+    </LayoutCtx.Provider>,
+    snap,
+    route,
+    { 'GET /api/nav': json(200, nav), ...extra },
+  );
 
 test('les vues comptent chacune leurs sujets ; « Archivés » n’a pas de compteur', async () => {
   open(
@@ -74,11 +89,51 @@ test('les vues comptent chacune leurs sujets ; « Archivés » n’a pas de comp
   );
   await screen.findByText('aid');
   expect(node('1-1.barre-gauche.vue-tous.compte')?.textContent).toBe('3');
-  expect(node('1-1.barre-gauche.vue-decider.compte')?.textContent).toBe('1');
-  expect(node('1-1.barre-gauche.vue-libre.compte')?.textContent).toBe('1');
+  expect(node('1-1.barre-gauche.vue-a-decider.compte')?.textContent).toBe('1');
+  expect(node('1-1.barre-gauche.vue-agent-libre.compte')?.textContent).toBe('1');
   expect(node('1-1.barre-gauche.vue-sans-agent.compte')?.textContent).toBe('1');
   expect(node('1-1.barre-gauche.vue-epingles.compte')?.textContent).toBe('1');
   expect(node('1-1.barre-gauche.vue-archives.compte')).toBeNull();
+});
+
+test('les vues sont des liens vers /?vue=<id>, aria-current sur la vue de la route courante', async () => {
+  open(snapshot({ workspaces: [ws()], topics: [topic()] }), navState(), '/?vue=a-decider');
+  await screen.findByText('feat/s');
+  expect(node('1-1.barre-gauche.vue-tous')?.getAttribute('href')).toBe('/?vue=tous');
+  expect(node('1-1.barre-gauche.vue-a-decider')?.getAttribute('aria-current')).toBe('page');
+  expect(node('1-1.barre-gauche.vue-tous')?.getAttribute('aria-current')).toBeNull();
+});
+
+test('sur / sans paramètre, « Tous » porte aria-current', async () => {
+  open(snapshot({ workspaces: [ws()], topics: [topic()] }), navState(), '/');
+  await screen.findByText('feat/s');
+  expect(node('1-1.barre-gauche.vue-tous')?.getAttribute('aria-current')).toBe('page');
+});
+
+test('le bouton « Nouveau sujet » appelle openNewTopic de useLayout', async () => {
+  open(snapshot({ workspaces: [ws()], topics: [topic()] }), navState());
+  await screen.findByText('feat/s');
+  await userEvent.click(node('nav.nouveau-sujet')!);
+  expect(openNewTopic).toHaveBeenCalledTimes(1);
+});
+
+test('cache de module : le contenu réapparaît au remontage avant la réponse du fetch', async () => {
+  open(snapshot({ workspaces: [ws()], topics: [topic()] }), navState());
+  await screen.findByText('feat/s');
+  cleanup();
+  // remontage (changement d'écran) : le cache de module affiche tout de suite le dernier groupe
+  // connu, sans attendre la résolution du nouveau fetch (§2.2, pas de clignotement). Le sujet,
+  // lui, dépend aussi de /api/state (non caché ici) : seul le groupe est une preuve propre au cache nav.
+  open(snapshot({ workspaces: [ws()], topics: [topic()] }), navState());
+  expect(screen.getByText('aid')).toBeTruthy();
+});
+
+test('le bouton de réduction de la navigation a été retiré (B.4 le refera avec le rail)', async () => {
+  open(snapshot({ workspaces: [ws()], topics: [topic()] }), navState());
+  await screen.findByText('feat/s');
+  expect(
+    screen.queryByRole('button', { name: /Réduire la navigation|Déplier la navigation/ }),
+  ).toBeNull();
 });
 
 test('replier un groupe masque ses sujets et persiste via PATCH', async () => {
@@ -138,4 +193,5 @@ test('le sujet courant porte aria-current, les autres non', async () => {
   await screen.findByText('feat/s');
   expect(node('1-1.barre-gauche.sujet-tp_1')?.getAttribute('aria-current')).toBe('page');
   expect(node('1-1.barre-gauche.sujet-tp_2')?.getAttribute('aria-current')).toBeNull();
+  expect(node('1-1.barre-gauche.sujet-tp_1')?.getAttribute('title')).toBe('feat/s');
 });
