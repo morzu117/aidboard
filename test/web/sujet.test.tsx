@@ -220,7 +220,7 @@ test('un binaire absent : le message du daemon est affiché', async () => {
   );
 });
 
-test('onglets : un terminal monté par agent, un seul visible ; « Arrêter » sur un agent vivant, « Fermer » sur un agent terminé', async () => {
+test('onglets : un terminal monté par agent, un seul visible ; bouton unique « Arrêter »/« Fermer » sur l’agent actif, confirmation en deux temps', async () => {
   const h = open(
     snapshot({
       workspaces: [ws()],
@@ -240,19 +240,58 @@ test('onglets : un terminal monté par agent, un seul visible ; « Arrêter » s
   expect(text('1-3.terminaux.onglet-1.type')).toBe('claude');
   // « free » n'est pas du français : l'agent lancé à la main est « libre »
   expect(text('1-3.terminaux.onglet-1.role')).toBe('libre');
-  expect(node('1-3.terminaux.onglet-1.arreter')?.textContent).toBe('Arrêter');
-  expect(node('1-3.terminaux.onglet-2.arreter')?.textContent).toBe('Fermer');
+  // plus de bouton par onglet : un seul, sur l'agent actif. ag_2 (dernier, terminé) est actif.
+  expect(node('1-3.terminaux.onglet-1.arreter')).toBeNull();
+  expect(node('1-3.terminaux.onglet-2.arreter')).toBeNull();
+  expect(node('1-3.terminaux.arreter')?.textContent).toBe('Fermer');
   await userEvent.click(node('1-3.terminaux.onglet-1')!);
   expect(screen.getByTestId('term-ag_1').getAttribute('data-visible')).toBe('true');
   expect(screen.getByTestId('term-ag_2').getAttribute('data-visible')).toBe('false');
-  await userEvent.click(node('1-3.terminaux.onglet-1.arreter')!);
+  // ag_1 est vivant : « Arrêter » demande confirmation avant d'appeler DELETE.
+  expect(node('1-3.terminaux.arreter')?.textContent).toBe('Arrêter');
+  await userEvent.click(node('1-3.terminaux.arreter')!);
+  expect(node('1-3.terminaux.arreter')?.textContent).toBe('Confirmer l’arrêt');
+  expect(h.calls.some((c) => c.method === 'DELETE')).toBe(false);
+  await userEvent.click(node('1-3.terminaux.arreter.annuler')!);
+  expect(node('1-3.terminaux.arreter')?.textContent).toBe('Arrêter');
+  expect(h.calls.some((c) => c.method === 'DELETE')).toBe(false);
+  await userEvent.click(node('1-3.terminaux.arreter')!);
+  await userEvent.click(node('1-3.terminaux.arreter')!);
   await waitFor(() =>
     expect(h.calls.some((c) => c.method === 'DELETE' && c.url === '/api/agents/ag_1')).toBe(true),
   );
-  await userEvent.click(node('1-3.terminaux.onglet-2.arreter')!);
+  // changer d'onglet vers ag_2 (terminé) : « Fermer » agit sans confirmation.
+  await userEvent.click(node('1-3.terminaux.onglet-2')!);
+  expect(node('1-3.terminaux.arreter')?.textContent).toBe('Fermer');
+  await userEvent.click(node('1-3.terminaux.arreter')!);
   await waitFor(() =>
     expect(h.calls.some((c) => c.method === 'DELETE' && c.url === '/api/agents/ag_2')).toBe(true),
   );
+});
+
+test('Arrêter : changer d’onglet ou Échap annule la confirmation en cours', async () => {
+  open(
+    snapshot({
+      workspaces: [ws()],
+      topics: [topic()],
+      runs: [run],
+      agents: [
+        agent({ id: 'ag_1', kind: 'claude', role: 'free' }),
+        agent({ id: 'ag_2', kind: 'claude', role: 'free' }),
+      ],
+    }),
+  );
+  await screen.findByTestId('term-ag_1');
+  await userEvent.click(node('1-3.terminaux.onglet-1')!);
+  await userEvent.click(node('1-3.terminaux.arreter')!);
+  expect(node('1-3.terminaux.arreter')?.textContent).toBe('Confirmer l’arrêt');
+  await userEvent.click(node('1-3.terminaux.onglet-2')!);
+  await userEvent.click(node('1-3.terminaux.onglet-1')!);
+  expect(node('1-3.terminaux.arreter')?.textContent).toBe('Arrêter');
+  await userEvent.click(node('1-3.terminaux.arreter')!);
+  expect(node('1-3.terminaux.arreter')?.textContent).toBe('Confirmer l’arrêt');
+  await userEvent.keyboard('{Escape}');
+  expect(node('1-3.terminaux.arreter')?.textContent).toBe('Arrêter');
 });
 
 test('onglets de contenu (11.1) : les agents sont toujours visibles, Git et Fichiers (dans le panneau) affichent un espace réservé, le terminal reste monté en changeant d’onglet', async () => {

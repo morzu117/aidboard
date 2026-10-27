@@ -25,7 +25,17 @@ vi.stubGlobal('WebSocket', FakeWs);
 
 const scrollTo = vi.fn();
 
-function mount(a: Agent) {
+// correctif 3 (recette) : Repères/Tout déplier sont désormais portés via createPortal dans un
+// hôte fourni par Sujet — un hôte réel attaché au document pour que `screen` les retrouve.
+let actionsHosts: HTMLDivElement[] = [];
+function nouvelHote(): HTMLDivElement {
+  const el = document.createElement('div');
+  document.body.appendChild(el);
+  actionsHosts.push(el);
+  return el;
+}
+
+function mount(a: Agent, actionsHost: HTMLDivElement = nouvelHote()) {
   const calls: Array<{ method: string; url: string; body: unknown }> = [];
   const respond = new Map<string, () => Response>();
   const fetchImpl = vi.fn(async (url: string, init?: RequestInit) => {
@@ -44,7 +54,7 @@ function mount(a: Agent) {
   });
   render(
     <AidProvider client={client}>
-      <Conversation agent={a} visible />
+      <Conversation agent={a} visible actionsHost={actionsHost} />
     </AidProvider>,
   );
   const sock = () => FakeWs.all.at(-1)!;
@@ -91,7 +101,11 @@ beforeEach(() => {
     },
   });
 });
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  for (const el of actionsHosts) el.remove();
+  actionsHosts = [];
+});
 
 test('aucune question : ni rail ni menu', async () => {
   mount(streamAgent());
@@ -339,10 +353,11 @@ test('deux Conversation montées ensemble : ids du rappel distincts, chaque fil 
   });
   const a1 = streamAgent({ id: 'ag_1' });
   const a2 = streamAgent({ id: 'ag_2' });
+  const hote = nouvelHote();
   render(
     <AidProvider client={client}>
-      <Conversation agent={a1} visible />
-      <Conversation agent={a2} visible={false} />
+      <Conversation agent={a1} visible actionsHost={hote} />
+      <Conversation agent={a2} visible={false} actionsHost={hote} />
     </AidProvider>,
   );
   const [ws1, ws2] = FakeWs.all;

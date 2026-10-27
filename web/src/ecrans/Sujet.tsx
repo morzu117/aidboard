@@ -85,6 +85,19 @@ function Contenu({
   const [selecteurBranche, setSelecteurBranche] = useState(false);
   const [erreur, setErreur] = useState<string | null>(null);
   const [ignoring, setIgnoring] = useState(false);
+  // correctif 3 (recette) : emplacement DOM fourni à la Conversation active pour y porter ses
+  // propres contrôles (Repères, Tout déplier) dans la rangée d'onglets — l'état reste dans Conversation.
+  const [ongletsActionsEl, setOngletsActionsEl] = useState<HTMLDivElement | null>(null);
+  // Arrêter en deux temps (§5.3) : l'id de l'agent dont la confirmation est affichée, ou aucun.
+  const [arretConfirm, setArretConfirm] = useState<string | null>(null);
+  useEffect(() => {
+    if (arretConfirm === null) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setArretConfirm(null);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [arretConfirm]);
   const nettoyage = useNettoyage(topicId);
   const present = !!state?.topics.some((t) => t.id === topicId);
   const archive = useArchive(topicId, present);
@@ -633,41 +646,34 @@ function Contenu({
                   {agents.map((a, i) => {
                     const v = agentView(a);
                     return (
-                      <span key={a.id} style={{ display: 'inline-flex' }}>
-                        <button
-                          className={`onglet${a.id === active?.id ? ' est-actif' : ''}`}
-                          data-node={`1-3.terminaux.onglet-${i + 1}`}
-                          data-action="onglet.choisir"
-                          role="tab"
-                          aria-selected={a.id === active?.id}
-                          type="button"
-                          onClick={() => onSelectAgent(a.id)}
+                      <button
+                        key={a.id}
+                        className={`onglet${a.id === active?.id ? ' est-actif' : ''}`}
+                        data-node={`1-3.terminaux.onglet-${i + 1}`}
+                        data-action="onglet.choisir"
+                        role="tab"
+                        aria-selected={a.id === active?.id}
+                        type="button"
+                        onClick={() => {
+                          setArretConfirm(null);
+                          onSelectAgent(a.id);
+                        }}
+                      >
+                        <Point tone={v.tone} label={v.label} estimated={v.estimated} />
+                        <span
+                          data-node={`1-3.terminaux.onglet-${i + 1}.type`}
+                          data-bind="agent.type"
                         >
-                          <Point tone={v.tone} label={v.label} estimated={v.estimated} />
-                          <span
-                            data-node={`1-3.terminaux.onglet-${i + 1}.type`}
-                            data-bind="agent.type"
-                          >
-                            {a.kind}
-                          </span>
-                          <span
-                            className="agent-role"
-                            data-node={`1-3.terminaux.onglet-${i + 1}.role`}
-                            data-bind="agent.role"
-                          >
-                            {roleLabel(a.role)}
-                          </span>
-                        </button>
-                        <button
-                          className="bouton bouton--fantome"
-                          data-node={`1-3.terminaux.onglet-${i + 1}.arreter`}
-                          data-action={LIVE.includes(a.status) ? 'agent.arreter' : 'agent.fermer'}
-                          type="button"
-                          onClick={() => void stop(a.id)}
+                          {a.kind}
+                        </span>
+                        <span
+                          className="agent-role"
+                          data-node={`1-3.terminaux.onglet-${i + 1}.role`}
+                          data-bind="agent.role"
                         >
-                          {LIVE.includes(a.status) ? 'Arrêter' : 'Fermer'}
-                        </button>
-                      </span>
+                          {roleLabel(a.role)}
+                        </span>
+                      </button>
                     );
                   })}
                   <button
@@ -693,10 +699,61 @@ function Contenu({
                         {label}
                       </button>
                     ))}
+                  <div className="onglets-actions">
+                    {/* Repères / Tout déplier : portés ici par la Conversation active (createPortal) */}
+                    <div className="onglets-actions-portail" ref={setOngletsActionsEl} />
+                    {active &&
+                      (arretConfirm === active.id ? (
+                        <>
+                          <button
+                            className="bouton bouton--danger"
+                            data-node="1-3.terminaux.arreter"
+                            data-action="agent.arreter.confirmer"
+                            type="button"
+                            onClick={() => {
+                              setArretConfirm(null);
+                              void stop(active.id);
+                            }}
+                          >
+                            Confirmer l’arrêt
+                          </button>
+                          <button
+                            className="bouton bouton--fantome"
+                            data-node="1-3.terminaux.arreter.annuler"
+                            data-action="agent.arreter.annuler"
+                            type="button"
+                            onClick={() => setArretConfirm(null)}
+                          >
+                            Annuler
+                          </button>
+                        </>
+                      ) : (
+                        <button
+                          className="bouton bouton--fantome"
+                          data-node="1-3.terminaux.arreter"
+                          data-action={
+                            LIVE.includes(active.status) ? 'agent.arreter' : 'agent.fermer'
+                          }
+                          type="button"
+                          onClick={() =>
+                            LIVE.includes(active.status)
+                              ? setArretConfirm(active.id)
+                              : void stop(active.id)
+                          }
+                        >
+                          {LIVE.includes(active.status) ? 'Arrêter' : 'Fermer'}
+                        </button>
+                      ))}
+                  </div>
                 </div>
                 {agents.map((a) =>
                   a.transport === 'stream' ? (
-                    <Conversation key={a.id} agent={a} visible={a.id === active?.id} />
+                    <Conversation
+                      key={a.id}
+                      agent={a}
+                      visible={a.id === active?.id}
+                      actionsHost={ongletsActionsEl}
+                    />
                   ) : (
                     <Terminal key={a.id} agentId={a.id} visible={a.id === active?.id} />
                   ),

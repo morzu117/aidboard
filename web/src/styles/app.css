@@ -409,14 +409,11 @@ body {
   font-size: var(--fs-m);
 }
 
-/* Conversation native (chantier 15, A.5) : même boîte que .terminaux, contenu structuré au lieu du PTY. */
+/* Conversation native (chantier 15, A.5), sans cadre depuis le correctif 3 (recette, brief §5.3). */
 .conversation {
   display: flex;
   flex-direction: column;
   height: max(var(--h-terminal-sujet), calc(100dvh - 340px));
-  border: 1px solid var(--line);
-  border-radius: var(--r-l);
-  background: var(--surface-term);
   overflow: hidden;
 }
 .conversation-bandeau {
@@ -857,11 +854,17 @@ body {
     flex: 2 1 0;
     min-height: 0;
     overflow: hidden;
+    /* correctif 3 (recette) : .page porte un padding bas de page classique (40px) qui empêchait
+       la colonne agent d'atteindre le bas de la fenêtre (brief §2.1, §5.3). */
+    padding-bottom: 0;
   }
   .sujet-corps:has(.panneau-contexte) .sujet-contenu > .sujet-grille.sujet-grille--seul {
     display: flex;
     flex: 1 1 auto;
     min-height: 0;
+    /* maquette.css pose « align-items: start » pour la grille ; en flex à un seul enfant,
+       ça l'empêche de s'étirer jusqu'au bas (correctif 3, recette, brief §2.1). */
+    align-items: stretch;
   }
   .sujet-corps:has(.panneau-contexte) .sujet-contenu .colonne {
     flex: 1 1 auto;
@@ -873,8 +876,10 @@ body {
     overflow: hidden;
   }
   /* le wrapper du Terminal n'a pas de classe propre (seule « .masque » bascule sa visibilité) ;
-     la racine de Conversation (« .conversation ») est, elle, un sibling direct au même niveau. */
-  .sujet-corps:has(.panneau-contexte) .sujet-contenu .terminaux > div:not(.onglets) {
+     la racine de Conversation (« .conversation ») est, elle, un sibling direct au même niveau.
+     Bug connu (correctif 3, recette) : sans « :not(.masque) » ce display:flex l'emportait sur
+     le display:none de .masque et laissait visible le terminal d'un onglet non actif. */
+  .sujet-corps:has(.panneau-contexte) .sujet-contenu .terminaux > div:not(.onglets):not(.masque) {
     display: flex;
     flex-direction: column;
     flex: 1 1 auto;
@@ -1432,4 +1437,32 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* Correctif 3 (recette) : espace agent sans cadre, actions dans la rangée d'onglets (brief §5.3).
+   maquette.css pose encore .terminaux/.onglets en boîte héritée de l'ancienne interface. */
+.terminaux {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+.terminaux .onglets {
+  background: transparent;
+  border-radius: 0;
+}
+.terminaux .onglet.est-actif {
+  background: transparent;
+}
+/* le fond terminal reposait sur .terminaux ; il doit survivre à son cadre pour les agents PTY. */
+.sortie-xterm {
+  background: var(--surface-term);
+}
+.onglets-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  margin-left: auto;
+}
+.onglets-actions-portail {
+  display: contents;
 }

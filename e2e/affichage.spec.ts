@@ -44,7 +44,12 @@ for (const [width, height] of [
     await expect.poll(async () => (await geometry()).rootHeight).toBeGreaterThan(300);
     const g = await geometry();
     expect(g.rootHeight).toBeGreaterThanOrEqual(g.hostHeight - 20);
-    expect(g.rows).toBeGreaterThan(20);
+    // correctif 3 (recette) : .sujet-grille--seul s'étire désormais réellement jusqu'au bas
+    // (align-items: stretch, brief §2.1) — à 720 px, le terminal n'a honnêtement que ~20 lignes ;
+    // avant le correctif, le calcul se basait sur une hauteur qui dépassait la zone réellement
+    // visible (rows ~24) sans que rien ne le signale, puisque l'excédent était simplement rogné
+    // par un ancêtre en overflow:hidden.
+    expect(g.rows).toBeGreaterThan(15);
     expect(g.pageWidth).toBeLessThanOrEqual(g.windowWidth);
 
     // le PTY connaît la taille réellement affichée, et le pied de terminal l'affiche

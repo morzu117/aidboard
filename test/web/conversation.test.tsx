@@ -25,7 +25,18 @@ vi.stubGlobal('WebSocket', FakeWs);
 
 // Harnais local : la conversation ouvre son propre AgentSocket (stub WebSocket ci-dessus) ; seul
 // `useAid().call` doit venir d'un vrai AidClient, d'où ce rendu minimal plutôt que helpers.setup().
-function mount(a: Agent) {
+function mount(a: Agent, opts: { visible?: boolean; actionsHost?: HTMLDivElement | null } = {}) {
+  const visible = opts.visible ?? true;
+  // par défaut, un hôte de portail réel attaché au document (findable par `screen`) : les tests
+  // qui ne portent pas sur le portail lui-même gardent le même comportement qu'avant son ajout.
+  let actionsHost: HTMLDivElement | null;
+  if ('actionsHost' in opts) {
+    actionsHost = opts.actionsHost ?? null;
+  } else {
+    actionsHost = document.createElement('div');
+    document.body.appendChild(actionsHost);
+    autoHosts.push(actionsHost);
+  }
   const calls: Array<{ method: string; url: string; body: unknown }> = [];
   const respond = new Map<string, () => Response>();
   const fetchImpl = vi.fn(async (url: string, init?: RequestInit) => {
@@ -44,14 +55,14 @@ function mount(a: Agent) {
   });
   const view = render(
     <AidProvider client={client}>
-      <Conversation agent={a} visible />
+      <Conversation agent={a} visible={visible} actionsHost={actionsHost} />
     </AidProvider>,
   );
   const sock = () => FakeWs.all.at(-1)!;
-  const rerenderWith = (next: Agent) =>
+  const rerenderWith = (next: Agent, nextVisible = visible) =>
     view.rerender(
       <AidProvider client={client}>
-        <Conversation agent={next} visible />
+        <Conversation agent={next} visible={nextVisible} actionsHost={actionsHost} />
       </AidProvider>,
     );
   return { calls, respond, sock, rerenderWith };
@@ -63,7 +74,13 @@ const streamAgent = (over: Partial<Agent> = {}): Agent =>
 beforeEach(() => {
   FakeWs.all = [];
 });
-afterEach(cleanup);
+// hôtes de portail créés par défaut par mount() : retirés du DOM entre les tests.
+let autoHosts: HTMLDivElement[] = [];
+afterEach(() => {
+  cleanup();
+  for (const el of autoHosts) el.remove();
+  autoHosts = [];
+});
 
 test('history puis event : bulle utilisateur, message assistant, groupe d’outils, dédoublonnage par seq ; texte jamais rendu en HTML', async () => {
   mount(streamAgent());
@@ -188,6 +205,53 @@ test('ToolCallGroup : en cours / succès / erreur, « Voir le détail », « Tou
   expect(screen.queryByText(/bis/)).toBeNull();
   await userEvent.click(screen.getByRole('button', { name: 'Tout déplier' }));
   expect(screen.getByText(/bis/)).toBeTruthy();
+});
+
+test('Repères et Tout déplier (correctif 3) : portés dans l’emplacement fourni par Sujet, pas dans la conversation', async () => {
+  const host = document.createElement('div');
+  document.body.appendChild(host);
+  const h = mount(streamAgent(), { actionsHost: host });
+  const ws = h.sock();
+  ws.onopen?.();
+  ws.text({
+    t: 'history',
+    truncated: false,
+    items: [
+      { seq: 1, at: 't1', event: { type: 'message', role: 'user', text: 'Q1' } },
+      { seq: 2, at: 't2', event: { type: 'tool_start', toolId: 'a', name: 'ls', input: null } },
+      { seq: 3, at: 't3', event: { type: 'tool_end', toolId: 'a', output: 'ok', isError: false } },
+    ],
+  });
+  await screen.findByText('Q1');
+  expect(host.querySelector('[data-node="1-3.conversation.reperes"]')).toBeTruthy();
+  expect(host.querySelector('[data-node="1-3.conversation.tout"]')).toBeTruthy();
+  // connecté dès le départ (pas de reconnexion) : la barre elle-même n'a plus de raison d'exister.
+  expect(document.querySelector('.conversation-barre')).toBeNull();
+  host.remove();
+});
+
+test('Repères et Tout déplier (correctif 3) : absents de l’emplacement fourni quand la conversation est masquée', async () => {
+  const host = document.createElement('div');
+  document.body.appendChild(host);
+  const h = mount(streamAgent(), { actionsHost: host, visible: false });
+  const ws = h.sock();
+  ws.onopen?.();
+  ws.text({
+    t: 'history',
+    truncated: false,
+    items: [
+      { seq: 1, at: 't1', event: { type: 'message', role: 'user', text: 'Q1' } },
+      { seq: 2, at: 't2', event: { type: 'tool_start', toolId: 'a', name: 'ls', input: null } },
+      { seq: 3, at: 't3', event: { type: 'tool_end', toolId: 'a', output: 'ok', isError: false } },
+    ],
+  });
+  await waitFor(() => expect(FakeWs.all.length).toBeGreaterThan(0));
+  expect(host.children.length).toBe(0);
+  h.rerenderWith(streamAgent(), true);
+  await waitFor(() =>
+    expect(host.querySelector('[data-node="1-3.conversation.reperes"]')).toBeTruthy(),
+  );
+  host.remove();
 });
 
 test('DecisionCard : options réelles, réponse → POST answer, carte résolue quand agent.pending change', async () => {

@@ -9,7 +9,8 @@ export const node = (page: Page, id: string) => page.locator(`[data-node="${id}"
 
 interface ApiState {
   topics: Array<{ id: string; branch: string }>;
-  agents: Array<{ id: string; status: string; pid: number }>;
+  runs: Array<{ id: string; topicId: string }>;
+  agents: Array<{ id: string; status: string; pid: number; runId: string }>;
 }
 
 /** Ouvre le lien d'ouverture (échangé contre le cookie) et expose les terminaux au test. */

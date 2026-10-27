@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 import {
   createTopic,
   launchShell,
@@ -6,6 +6,7 @@ import {
   node,
   openApp,
   registerWorkspace,
+  state,
   url,
 } from './helpers.js';
 
@@ -149,4 +150,97 @@ test('les autres écrans défilent toujours ; la barre gauche reste visible', as
     };
   });
   expect(mesures.pageDefile || mesures.principalDefile).toBe(true);
+});
+
+// marque le wrapper (masque/pas masque) du <Terminal> d'un agent pour pouvoir l'interroger via
+// un Locator Playwright (toBeHidden/toBeVisible) — repéré depuis window.__aidTerminals (D65).
+async function marquerWrapperTerminal(page: Page, agentId: string, marque: string): Promise<void> {
+  await page.evaluate(
+    ({ id, marque }) => {
+      const terms = (window as unknown as { __aidTerminals: Record<string, { element: Element }> })
+        .__aidTerminals;
+      const sortie = terms[id]!.element.closest('.sortie-xterm')!;
+      sortie.parentElement!.setAttribute('data-e2e-wrapper', marque);
+    },
+    { id: agentId, marque },
+  );
+}
+
+// correctif 3 (recette) : espace agent sans cadre, Arrêter sur la rangée d'onglets, PTY actif
+// jusqu'au bas de la colonne, bug .masque corrigé (brief §5.3, §2.1).
+test('≥ 1280 px, deux agents PTY : rangée d’onglets plate, Arrêter aligné, sortie jusqu’au bas, agent non actif masqué', async ({
+  browser,
+}) => {
+  const page = await openApp(await browser.newContext({ viewport: { width: 1440, height: 900 } }));
+  await registerWorkspace(page, newRepo('depot-sujet-agent-espace'));
+  const topicId = await createTopic(page, 'Espace agent');
+  // state() rend tous les agents du daemon partagé par la suite e2e (un seul worker, aucun
+  // teardown entre fichiers) : filtrer sur ce sujet via les runs plutôt que de faire confiance
+  // à `.at(-1)`, y compris pour launchShell lui-même — un autre fichier de la suite peut avoir
+  // lancé un agent juste après.
+  const agentsDuSujet = async () => {
+    const s = await state(page);
+    const runIds = new Set(s.runs.filter((r) => r.topicId === topicId).map((r) => r.id));
+    return s.agents.filter((a) => runIds.has(a.runId));
+  };
+  await launchShell(page);
+  await expect.poll(async () => (await agentsDuSujet()).length).toBe(1);
+  const first = (await agentsDuSujet())[0]!.id;
+  await node(page, '1-3.terminaux.ajouter-agent').click();
+  await page.locator('[data-action="agent.lancer"][data-agent="shell"]').click();
+  await expect.poll(async () => (await agentsDuSujet()).length).toBe(2);
+  const second = (await agentsDuSujet()).find((a) => a.id !== first)!.id;
+  expect(second).not.toBe(first);
+
+  // (b) la boîte .terminaux n'a plus de cadre : plus de bordure, héritée de l'ancien .terminaux.
+  const borderTop = await page.evaluate(
+    () => getComputedStyle(document.querySelector('.terminaux')!).borderTopWidth,
+  );
+  expect(borderTop).toBe('0px');
+
+  // (a) « Arrêter » est sur la même ligne que les onglets, à droite du dernier.
+  const geom = await page.evaluate(() => {
+    const onglets = Array.from(
+      document.querySelectorAll('.onglet[data-node^="1-3.terminaux.onglet-"]'),
+    );
+    const dernier = onglets.at(-1)!.getBoundingClientRect();
+    const arreter = document
+      .querySelector('[data-node="1-3.terminaux.arreter"]')!
+      .getBoundingClientRect();
+    return {
+      dernierCenterY: dernier.top + dernier.height / 2,
+      arreterCenterY: arreter.top + arreter.height / 2,
+      dernierRight: dernier.right,
+      arreterLeft: arreter.left,
+    };
+  });
+  expect(Math.abs(geom.dernierCenterY - geom.arreterCenterY)).toBeLessThanOrEqual(6);
+  expect(geom.arreterLeft).toBeGreaterThan(geom.dernierRight);
+
+  // (d) bug .masque : le wrapper de l'agent non actif (first) n'est pas visible, celui de
+  // l'agent actif (second, le dernier lancé) l'est. L'état serveur (state()) devance le montage
+  // côté client du second <Terminal> : attendre son inscription dans __aidTerminals avant de le marquer.
+  await page.waitForFunction(
+    (id) =>
+      !!(window as unknown as { __aidTerminals?: Record<string, unknown> }).__aidTerminals?.[id],
+    second,
+  );
+  await marquerWrapperTerminal(page, first, 'w-first');
+  await marquerWrapperTerminal(page, second, 'w-second');
+  const wFirst = page.locator('[data-e2e-wrapper="w-first"]');
+  const wSecond = page.locator('[data-e2e-wrapper="w-second"]');
+  await expect(wFirst).toBeHidden();
+  await expect(wSecond).toBeVisible();
+
+  // (c) le terminal actif (pied compris) descend jusqu'au bas du viewport, aucun scroll de page.
+  const box = (await wSecond.boundingBox())!;
+  expect(900 - box.y - box.height).toBeLessThanOrEqual(32);
+  expect(
+    await page.evaluate(() => document.scrollingElement!.scrollHeight <= window.innerHeight),
+  ).toBe(true);
+
+  // (d), suite : changer d'onglet inverse le masquage.
+  await node(page, '1-3.terminaux.onglet-1').click();
+  await expect(wFirst).toBeVisible();
+  await expect(wSecond).toBeHidden();
 });

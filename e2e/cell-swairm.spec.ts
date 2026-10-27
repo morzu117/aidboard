@@ -146,10 +146,12 @@ test('ouvrir la cell Swairm, reconnecter, redimensionner, refuser un doublon, ar
 
   // arrêt : la garde est libérée, la cell se rouvre dans le premier sujet
   await page.goto(`${process.env.AID_E2E_URL}/sujets/${topicId}`);
-  await expect(node(page, '1-3.terminaux.onglet-1.arreter')).toHaveText('Arrêter');
-  await node(page, '1-3.terminaux.onglet-1.arreter').click();
+  await expect(node(page, '1-3.terminaux.arreter')).toHaveText('Arrêter');
+  await node(page, '1-3.terminaux.arreter').click();
+  await expect(node(page, '1-3.terminaux.arreter')).toHaveText('Confirmer l’arrêt');
+  await node(page, '1-3.terminaux.arreter').click();
   await expect.poll(() => status(page, first), { timeout: 20_000 }).toMatch(/^(done|stopped)$/);
-  await expect(node(page, '1-3.terminaux.onglet-1.arreter')).toHaveText('Fermer');
+  await expect(node(page, '1-3.terminaux.arreter')).toHaveText('Fermer');
 
   await node(page, '1-3.terminaux.ajouter-agent').click();
   await page.locator('[data-action="agent.lancer"][data-agent="swairm-cell"]').click();
@@ -165,7 +167,8 @@ test('ouvrir la cell Swairm, reconnecter, redimensionner, refuser un doublon, ar
   await expect.poll(() => terminalText(page, reopened)).toContain('events: empty');
   await expect.poll(() => lines('swairm-input.log')).toEqual(['events']);
 
-  // rendre le daemon propre pour les épreuves suivantes
-  await node(page, '1-3.terminaux.onglet-2.arreter').click();
+  // rendre le daemon propre pour les épreuves suivantes (reopened est l'agent actif)
+  await node(page, '1-3.terminaux.arreter').click();
+  await node(page, '1-3.terminaux.arreter').click();
   await expect.poll(() => status(page, reopened), { timeout: 20_000 }).toMatch(/^(done|stopped)$/);
 });

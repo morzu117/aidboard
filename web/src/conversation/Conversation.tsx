@@ -7,6 +7,7 @@ import {
   useRef,
   useState,
 } from 'react';
+import { createPortal } from 'react-dom';
 import type { Agent, AgentStatus } from '../../../src/shared/model.js';
 import type { AgentStreamItem } from '../../../src/shared/conversation.js';
 import { useAid } from '../data/useAidState.js';
@@ -26,7 +27,17 @@ const SEUIL_REPERE = 40;
 const REPART: ReadonlySet<AgentStatus> = new Set(['starting', 'working', 'needs_input']);
 
 // Une instance par agent, montée une fois et masquée au changement d'onglet, comme <Terminal> (D65).
-export function Conversation({ agent, visible }: { agent: Agent; visible: boolean }) {
+export function Conversation({
+  agent,
+  visible,
+  actionsHost,
+}: {
+  agent: Agent;
+  visible: boolean;
+  // correctif 3 (recette) : emplacement fourni par Sujet dans la rangée d'onglets, porté par
+  // createPortal uniquement quand cette instance est l'agent actif — l'état reste ici.
+  actionsHost?: HTMLDivElement | null;
+}) {
   const { call } = useAid();
   const [items, setItems] = useState<Map<number, AgentStreamItem>>(new Map());
   const [truncated, setTruncated] = useState(false);
@@ -244,32 +255,38 @@ export function Conversation({ agent, visible }: { agent: Agent; visible: boolea
           Historique tronqué : les messages les plus anciens ne sont pas affichés.
         </p>
       )}
-      <div className="conversation-barre" data-node={`${dn}.barre`}>
-        {!linked && (
+      {!linked && (
+        <div className="conversation-barre" data-node={`${dn}.barre`}>
           <span className="texte-faible" data-node={`${dn}.reconnexion`}>
             reconnexion…
           </span>
+        </div>
+      )}
+      {visible &&
+        actionsHost &&
+        createPortal(
+          <>
+            {questions.length > 0 && (
+              <button
+                ref={menuBtnRef}
+                className="bouton"
+                data-node={`${dn}.reperes`}
+                type="button"
+                aria-expanded={menuOpen}
+                onClick={() => setMenuOpen((v) => !v)}
+              >
+                Repères · {active === null ? 1 : questions.findIndex((q) => q.seq === active) + 1}/
+                {questions.length} ▾
+              </button>
+            )}
+            {toolSeqs.length > 0 && (
+              <button className="bouton" data-node={`${dn}.tout`} type="button" onClick={toggleAll}>
+                {allOpen ? 'Tout replier' : 'Tout déplier'}
+              </button>
+            )}
+          </>,
+          actionsHost,
         )}
-        <div className="composer-pousser" />
-        {questions.length > 0 && (
-          <button
-            ref={menuBtnRef}
-            className="bouton"
-            data-node={`${dn}.reperes`}
-            type="button"
-            aria-expanded={menuOpen}
-            onClick={() => setMenuOpen((v) => !v)}
-          >
-            Repères · {active === null ? 1 : questions.findIndex((q) => q.seq === active) + 1}/
-            {questions.length} ▾
-          </button>
-        )}
-        {toolSeqs.length > 0 && (
-          <button className="bouton" data-node={`${dn}.tout`} type="button" onClick={toggleAll}>
-            {allOpen ? 'Tout replier' : 'Tout déplier'}
-          </button>
-        )}
-      </div>
       <div className="conversation-fil-zone">
         <div
           className="fil-conversation"
