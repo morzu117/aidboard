@@ -1023,7 +1023,9 @@ body {
 }
 
 @media (min-width: 1280px) {
-  .corps-ecran--sujet > .barre-gauche {
+  /* pas de sélecteur d'enfant direct : .volet est `display: contents` ici, mais reste un nœud
+     du DOM entre .corps-ecran--sujet et .barre-gauche — le combinateur `>` ne matcherait jamais. */
+  .corps-ecran--sujet .barre-gauche {
     width: 25%;
   }
 }
