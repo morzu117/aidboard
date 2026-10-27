@@ -155,6 +155,9 @@ Numérotation continue depuis D49 (chantier 14).
   name, color, order, collapsed, hidden}`, `placement {subjectId, groupId, order, pinned,
   archived, displayName?}`), plutôt qu'un fichier JSON, pour profiter des migrations et des
   tests déjà en place sur la base existante.
+  — **Retenu par défaut avec D54 (2026-10-27, opérateur absent, révisable)** : tables sqlite
+  `nav_group`, `nav_placement`, `nav_pref` (migration 012) ; `Nav` remplace `Cote` sur l'écran
+  Sujet (y compris la pop-up de navigation sous 1280 px, déplacée dans `Layout`, tous écrans).
 - **D56 (à valider)** : l'accueil « file de tri » remplace `Contenu()` dans `Accueil.tsx`
   (ligne 342-518) et retire `CarteSujet.tsx`, qui n'a pas d'autre appelant (vérifié). La grille
   de cartes disparaît au profit d'une table.
@@ -376,12 +379,18 @@ kinds PTY existent (ils ne disparaissent pas dans ce chantier).
 
 Reprises du brief (§9), à trancher par le client du brief, pas par ce plan :
 1. Un seul bouton « Nouveau sujet » (barre gauche) ou aussi dans la barre du haut ?
+   — **Retenu par défaut (2026-10-27, opérateur absent, révisable)** : les deux boutons restent
+   pour l'instant (aucun retrait) ; retirer celui de la barre du haut est un commit isolé, après accord.
 2. Où afficher l'état d'index maintenant que la colonne est retirée de la table d'accueil ?
+   — **Retenu par défaut (2026-10-27, opérateur absent, révisable)** : indicateur discret sous le
+   nom du sujet dans la table d'accueil (proposition du brief §5.4), libellé « index à jour / indisponible ».
 3. Passation dev : sixième onglet du panneau contextuel ou dans le menu « … » ?
    — **Retenu (2026-10-26)** : onglets Revue / Rétro / Passation ajoutés au panneau seulement si
    leur page mémoire existe pour le sujet (proposition du plan, l'opérateur n'a pas exprimé d'autre choix).
 4. Composer occupé : file d'attente du message ou bouton qui devient « Arrêter » ?
 5. Clic sur un groupe du rail réduit : popover de sujets (bloque B.4 tant que non tranché) ?
+   — **Retenu par défaut (2026-10-27, opérateur absent, révisable)** : pas de popover ; le rail
+   est livré en vue statique (D58), clic sur un groupe sans effet tant que l'opérateur n'a pas tranché.
 6. Comportement sous 1280 px : la proposition du brief (barre réduite sous 1280, panneau en
    tiroir sous 1024, colonne centrale minimum 560 px) est-elle retenue ?
    — **Tranché par l'opérateur (2026-10-26)** : sous 1280 px, la barre gauche se cache derrière
