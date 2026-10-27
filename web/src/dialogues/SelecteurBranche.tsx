@@ -97,14 +97,19 @@ export function SelecteurBranche({ topicId, onClose }: { topicId: string; onClos
     setActionId(null);
   }
 
-  // 15 : la cible de libération affichée doit suivre la même règle que le daemon (routes/topics.ts)
-  // pour ne pas montrer une commande que le backend ne jouera pas.
+  // review (5) : la cible de libération vient du daemon (liberationVers, /git/branches) — il
+  // compare des chemins résolus (realpath), ce qu'une comparaison de chaînes ici ne garantit pas.
   const topicCourant = state?.topics.find((t) => t.id === topicId);
   const workspace = state?.workspaces.find((w) => w.id === topicCourant?.workspaceId);
-  const baseAilleurs = workspace && branches?.find((b) => b.name === workspace.baseBranch);
-  const estRacine = workspace && libererCible?.worktree === workspace.root;
-  const baseLibre = !baseAilleurs || baseAilleurs.worktree === null;
-  const cibleLiberation = estRacine && baseLibre ? workspace!.baseBranch : null;
+  const cibleLiberation = libererCible?.liberationVers ?? null;
+  // review (8) : la racine détachée durablement n'est signalée que lorsque c'est bien elle qui
+  // se libère sans pouvoir basculer sur la base (sinon toute libération d'un worktree lié, qui
+  // détache normalement, afficherait la même alerte).
+  const racineDetachee =
+    cibleLiberation === null &&
+    workspace !== undefined &&
+    libererCible?.worktree === workspace.root;
+  const refusSynchrone = actionId === null && erreurAction !== null;
 
   return (
     <Dialogue titre="Changer de branche" onClose={onClose}>
@@ -120,6 +125,9 @@ export function SelecteurBranche({ topicId, onClose }: { topicId: string; onClos
           <p className="commande" data-bind="action.commande">
             git switch {libererCible.name}
           </p>
+          {racineDetachee && (
+            <p className="confirmation-note">La racine du dépôt restera en HEAD détachée.</p>
+          )}
           {messageEchec && (
             <p className="message-erreur" role="alert">
               {messageEchec}
@@ -134,7 +142,13 @@ export function SelecteurBranche({ topicId, onClose }: { topicId: string; onClos
             >
               Annuler
             </button>
-            {besoinHumain ? (
+            {refusSynchrone ? (
+              libererCible.topicId && (
+                <Link className="bouton bouton--primaire" to={`/sujets/${libererCible.topicId}`}>
+                  Aller au sujet
+                </Link>
+              )
+            ) : besoinHumain ? (
               <button
                 className="bouton bouton--primaire"
                 type="button"
@@ -242,7 +256,7 @@ export function SelecteurBranche({ topicId, onClose }: { topicId: string; onClos
                     // prendre ») — mais un <a> ne peut pas vivre dans un <button> (HTML
                     // invalide), donc le lien « Aller au sujet » reste à côté, pas dedans.
                     return (
-                      <div key={b.name} className="selecteur-branche__ligne">
+                      <div key={b.name} className="selecteur-branche__ligne" role="presentation">
                         <button
                           type="button"
                           role="option"

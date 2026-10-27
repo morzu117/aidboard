@@ -21,6 +21,8 @@ import {
   gitLiveInfo,
   gitLog,
   hasUncommittedChanges,
+  hasUncommittedOrOperationInProgress,
+  liberationTarget,
 } from '../git/inspect.js';
 import { resolveUnderWorktree } from './files.js';
 import type { StructuralService } from '../structural/service.js';
@@ -278,6 +280,11 @@ export function registerTopicRoutes(app: FastifyInstance, deps: TopicRouteDeps):
       { worktree: string; base: string; branch: string; workspace_id: string } | undefined;
     if (!row) throw new AidHttpError(404, 'sujet inconnu');
     if (!existsSync(row.worktree)) throw new AidHttpError(409, 'worktree introuvable');
+    const repoRoot = (
+      deps.db.prepare('SELECT root FROM workspaces WHERE id = ?').get(row.workspace_id) as {
+        root: string;
+      }
+    ).root;
     // `git worktree list` rend des chemins résolus (symlinks macOS /tmp, /var...) : comparer
     // au réel de row.worktree, pas à sa forme littérale telle que stockée en base.
     const real = realpathSync(row.worktree);
@@ -292,12 +299,20 @@ export function registerTopicRoutes(app: FastifyInstance, deps: TopicRouteDeps):
       ).map((t) => [t.branch, t.id]),
     );
     return {
-      branches: branches.map((b) => ({
-        ...b,
-        isCurrent: b.name === row.branch,
-        worktree: b.worktree === real ? null : b.worktree,
-        topicId: topicByBranch.get(b.name) ?? null,
-      })),
+      branches: await Promise.all(
+        branches.map(async (b) => {
+          const ailleurs = b.worktree !== null && b.worktree !== real;
+          return {
+            ...b,
+            isCurrent: b.name === row.branch,
+            worktree: b.worktree === real ? null : b.worktree,
+            topicId: topicByBranch.get(b.name) ?? null,
+            ...(ailleurs && {
+              liberationVers: await liberationTarget(repoRoot, row.base, b.worktree!),
+            }),
+          };
+        }),
+      ),
     };
   });
 
@@ -536,6 +551,14 @@ export function registerTopicRoutes(app: FastifyInstance, deps: TopicRouteDeps):
         if (!existsSync(elsewhere)) {
           throw new AidHttpError(409, `${elsewhere} est introuvable : git worktree prune`);
         }
+        // 15 (b) / review (3) : même vérification que le script (die_human), doublée ici pour
+        // un refus 409 synchrone plutôt qu'une action async qui bascule en needs_human.
+        if (await hasUncommittedOrOperationInProgress(elsewhere)) {
+          throw new AidHttpError(
+            409,
+            `${elsewhere} a des modifications non commitées : commit ou mise de côté là-bas d'abord`,
+          );
+        }
         // 15 (c) : X vivant d'un sujet A-I-D avec agent actif → refus synchrone, die_human ne
         // couvre que la propreté (b) dans le script, pas la liveness.
         const owner = (
@@ -558,11 +581,10 @@ export function registerTopicRoutes(app: FastifyInstance, deps: TopicRouteDeps):
         }
         // 15 (d) : la racine libérée bascule sur la base si celle-ci n'est extraite nulle part,
         // sinon détachée — exécuté par le script (seul maître des worktrees), décidé ici.
-        const estRacine = elsewhere === realpathSync(ws.root);
-        const baseElsewhere = await branchWorktree(ws.root, ws.base_branch);
+        const vers = await liberationTarget(ws.root, ws.base_branch, elsewhere);
         envLiberer.AID_LIBERER = '1';
         envLiberer.AID_LIBERER_DOSSIER = elsewhere;
-        if (estRacine && !baseElsewhere) envLiberer.AID_LIBERER_VERS = ws.base_branch;
+        if (vers) envLiberer.AID_LIBERER_VERS = vers;
       }
       const { actionId: runId } = startAction(deps.actions, {
         workspaceId: ws.id,

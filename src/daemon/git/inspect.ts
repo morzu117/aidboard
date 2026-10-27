@@ -133,6 +133,37 @@ export async function branchWorktree(repoRoot: string, branch: string): Promise<
   return parseWorktreeBranches(r.stdout).get(branch) ?? null;
 }
 
+// 15 (b) / review (3, 6) : X a des modifications non commitées ou une opération en cours —
+// même liste de marqueurs que topic-switch.sh, doublée ici pour un refus 409 synchrone.
+export async function hasUncommittedOrOperationInProgress(worktree: string): Promise<boolean> {
+  if (await hasUncommittedChanges(worktree)) return true;
+  const dir = await git(worktree, ['rev-parse', '--path-format=absolute', '--git-dir']);
+  if (!dir.ok) return false;
+  return [
+    'rebase-merge',
+    'rebase-apply',
+    'MERGE_HEAD',
+    'CHERRY_PICK_HEAD',
+    'REVERT_HEAD',
+    'sequencer',
+    'BISECT_LOG',
+  ].some((marker) => existsSync(join(dir.stdout, marker)));
+}
+
+// 15 (d) / review (5) : cible de la libération d'un worktree qui détient encore la branche
+// visée — la racine du dépôt bascule sur la base si elle n'est extraite nulle part ailleurs,
+// sinon reste détachée (null). Même fonction côté route d'action et côté /git/branches, pour
+// que la commande affichée à l'écran soit toujours celle que le script va réellement jouer.
+export async function liberationTarget(
+  repoRoot: string,
+  baseBranch: string,
+  worktreeAilleurs: string,
+): Promise<string | null> {
+  if (realpathSync(worktreeAilleurs) !== realpathSync(repoRoot)) return null;
+  const baseElsewhere = await branchWorktree(repoRoot, baseBranch);
+  return baseElsewhere ? null : baseBranch;
+}
+
 const BRANCH_FORMAT = '%(refname:short)%09%(objectname)%09%(committerdate:iso-strict)';
 
 // 11.5 (D25/D26) : branches locales seulement — un `git switch` ne s'applique qu'à elles ;

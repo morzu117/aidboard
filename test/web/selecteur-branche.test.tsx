@@ -125,7 +125,12 @@ test('libérer puis prendre : deux commandes (base libre), liberer: true, lien p
       'GET /api/topics/tp_1/git/branches': json(200, {
         branches: [
           branch({ name: 'feat/sujet', isCurrent: true }),
-          branch({ name: 'feat/ailleurs', worktree: '/w/ailleurs', topicId: 'tp_2' }),
+          branch({
+            name: 'feat/ailleurs',
+            worktree: '/w/ailleurs',
+            topicId: 'tp_2',
+            liberationVers: 'main',
+          }),
           branch({ name: 'main', worktree: null }),
         ],
       }),
@@ -146,41 +151,32 @@ test('libérer puis prendre : deux commandes (base libre), liberer: true, lien p
   await waitFor(() => expect(onClose).toHaveBeenCalled());
 });
 
-test('libérer puis prendre : X sale, refus affiché, « Mettre de côté et changer » renvoie liberer + stash', async () => {
-  const onClose = vi.fn();
-  const h = setup(
-    <SelecteurBranche topicId="tp_1" onClose={onClose} />,
-    snapshot({
-      actions: [
-        action({ id: 'ac_1', state: 'needs_human', exitCode: 2, result: {} }),
-        action({ id: 'ac_2', state: 'succeeded', result: { branch: 'feat/ailleurs' } }),
+// review (3) : X sale est désormais un 409 synchrone (route), plus un needs_human du script —
+// l'écran ne doit donc plus proposer « Mettre de côté et changer », qui ne s'applique qu'au
+// sujet courant et reboucle sur le même refus quand la cause est X.
+test('libérer puis prendre : X sale, 409 synchrone, message affiché, pas de « Mettre de côté »', async () => {
+  setup(<SelecteurBranche topicId="tp_1" onClose={vi.fn()} />, snapshot(), '/', {
+    'GET /api/topics/tp_1/git/branches': json(200, {
+      branches: [
+        branch({ name: 'feat/sujet', isCurrent: true }),
+        branch({ name: 'feat/ailleurs', worktree: '/w/ailleurs', topicId: 'tp_2' }),
       ],
     }),
-    '/',
-    {
-      'GET /api/topics/tp_1/git/branches': json(200, {
-        branches: [
-          branch({ name: 'feat/sujet', isCurrent: true }),
-          branch({ name: 'feat/ailleurs', worktree: '/w/ailleurs', topicId: 'tp_2' }),
-        ],
-      }),
-      'POST /api/topics/tp_1/actions/topic.branch-changer': (body: unknown) =>
-        new Response(
-          JSON.stringify({
-            actionId: (body as { dirtyAction?: string }).dirtyAction === 'stash' ? 'ac_2' : 'ac_1',
-          }),
-          { status: 202 },
-        ),
-    },
-  );
+    'POST /api/topics/tp_1/actions/topic.branch-changer': () =>
+      new Response(
+        JSON.stringify({
+          error:
+            '/w/ailleurs a des modifications non commitées : commit ou mise de côté là-bas d’abord',
+        }),
+        { status: 409 },
+      ),
+  });
   await userEvent.click(await screen.findByRole('option', { name: /feat\/ailleurs/ }));
   await userEvent.click(screen.getByRole('button', { name: 'Libérer et changer' }));
-  expect((await screen.findByRole('alert')).textContent).toBeTruthy();
-  await userEvent.click(screen.getByRole('button', { name: 'Mettre de côté et changer' }));
-  await waitFor(() => expect(onClose).toHaveBeenCalled());
-  expect(
-    h.calls.filter((c) => c.url === '/api/topics/tp_1/actions/topic.branch-changer').at(-1)?.body,
-  ).toEqual({ targetBranch: 'feat/ailleurs', dirtyAction: 'stash', liberer: true });
+  expect((await screen.findByRole('alert')).textContent).toContain('non commitées');
+  expect(screen.queryByRole('button', { name: 'Mettre de côté et changer' })).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Libérer et changer' })).toBeNull();
+  expect(screen.getByRole('link', { name: 'Aller au sujet' })).toBeTruthy();
 });
 
 test('filtre sans correspondance : état vide', async () => {

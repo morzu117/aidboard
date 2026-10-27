@@ -302,6 +302,14 @@ body {
   flex-direction: column;
   gap: var(--sp-1);
 }
+.selecteur-branche__ligne {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+.selecteur-branche__ligne .selecteur-branche__option {
+  flex: 1;
+}
 .selecteur-branche__option {
   display: flex;
   align-items: center;
@@ -353,6 +361,11 @@ body {
 .confirmation-titre {
   margin: 0;
   font-weight: var(--fw-sb);
+}
+.confirmation-note {
+  margin: 0;
+  color: var(--text-3);
+  font-size: var(--fs-s);
 }
 .commande {
   margin: 0;
