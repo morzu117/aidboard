@@ -401,13 +401,18 @@ body {
   min-width: 0;
 }
 .panneau-contexte .commit-ligne1 .etiquette {
+  /* maquette.css la met en inline-flex : sans bloc, text-overflow rogne sans « … ». */
+  display: block;
   flex: 0 1 auto;
+  min-width: 0;
   max-width: 50%;
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
 }
 .panneau-contexte .commit-ligne1 .message {
+  /* idem : un conteneur flex n'affiche jamais les points de suspension. */
+  display: block;
   flex: 1 1 auto;
   overflow: hidden;
   min-width: 0;

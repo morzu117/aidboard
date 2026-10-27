@@ -72,6 +72,9 @@ test('onglet Git du panneau à 1440 px : pas de débordement, détail à la plac
           height: d.height,
           scrollWidth: el.scrollWidth,
           clientWidth: el.clientWidth,
+          // l'ellipse n'est dessinée que sur un bloc : un conteneur flex rogne sans « … ».
+          display: getComputedStyle(el).display,
+          textOverflow: getComputedStyle(el).textOverflow,
         };
       });
       return { top: r.top, bottom: r.bottom, right: r.right, message, descendants };
@@ -83,6 +86,13 @@ test('onglet Git du panneau à 1440 px : pas de débordement, détail à la plac
   const longuesMessages = [MESSAGE_1, MESSAGE_2, MESSAGE_3];
   expect(lignes.filter((r) => longuesMessages.includes(r.message)).length).toBe(3);
 
+  // l'étiquette longue (LONG_REF) est bornée, donc tronquée (et non repoussée hors de la ligne).
+  expect(
+    lignes.some((r) =>
+      r.descendants.some((d) => d.classe.includes('etiquette') && d.scrollWidth > d.clientWidth),
+    ),
+  ).toBe(true);
+
   for (const row of lignes) {
     const messageDoitDeborder = longuesMessages.includes(row.message);
     for (const d of row.descendants) {
@@ -91,6 +101,10 @@ test('onglet Git du panneau à 1440 px : pas de débordement, détail à la plac
       expect(d.bottom).toBeLessThanOrEqual(row.bottom + 1);
       // (c) l'étiquette de ref tient sur une seule ligne.
       if (d.classe.includes('etiquette')) expect(d.height).toBeLessThanOrEqual(24);
+      if (d.classe.includes('etiquette') || d.classe === 'message') {
+        expect(d.display).not.toContain('flex');
+        expect(d.textOverflow).toBe('ellipsis');
+      }
       // (d) message long tronqué par ellipse, hash jamais rogné.
       if (d.classe === 'message' && messageDoitDeborder) {
         expect(d.scrollWidth).toBeGreaterThan(d.clientWidth);
