@@ -44,9 +44,10 @@ test('trois sujets tournent en parallèle, chacun avec son terminal dans son wor
   for (const x of sujets) expect(s.agents.find((a) => a.id === x.agent)?.status).toBe('starting');
 
   await page.goto(process.env.AID_E2E_URL!);
-  await expect(node(page, '1-1.entete.resume.sujets')).toHaveText(String(s.topics.length));
-  // un shell n'a pas de statut suivi : sa carte dit « shell », jamais « En cours »
+  // piste A (D56) : le décompte est celui de la table, plus celui du bandeau d'entête
+  await expect(node(page, '1-1.table.titre')).toContainText(String(s.topics.length));
+  // un shell n'a pas de statut suivi : son libellé accessible dit « shell », jamais « En cours »
   await expect(
-    page.locator('.badge[data-node$=".statut"]', { hasText: /^shell$/ }).first(),
+    page.locator('[data-node$=".sujet"] [role="img"][aria-label="shell"]').first(),
   ).toBeVisible();
 });
