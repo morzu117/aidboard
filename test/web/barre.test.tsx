@@ -1,15 +1,17 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, screen } from '@testing-library/react';
+import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Route, Routes } from 'react-router';
 import { afterEach, expect, test, vi } from 'vitest';
+import type { NavState, Topic } from '../../src/shared/model.js';
+import type { StateSnapshot } from '../../src/shared/state.js';
 import { Accueil } from '../../web/src/ecrans/Accueil.js';
 import { Boite } from '../../web/src/ecrans/Boite.js';
 import { Consignes } from '../../web/src/ecrans/Consignes.js';
 import { Reglages } from '../../web/src/ecrans/Reglages.js';
 import { Sujet } from '../../web/src/ecrans/Sujet.js';
 import { filterItems, isPaletteShortcut } from '../../web/src/ui/Palette.js';
-import { agent, setup, snapshot, topic, ws } from './helpers.js';
+import { agent, json, setup, snapshot, topic, ws } from './helpers.js';
 
 vi.mock('../../web/src/terminal/Terminal.js', () => ({
   Terminal: ({ agentId }: { agentId: string }) => (
@@ -38,10 +40,30 @@ const state = (over = {}) =>
     runs: [{ id: 'run_1', topicId: 'tp_1', mode: 'standard', state: 'open', createdAt: 't' }],
     ...over,
   });
+// La table de l'Accueil (D56, point 5) n'affiche un sujet que placé — comme en vrai, où
+// `ensureNavDefaults` en pose un à chaque sujet ; ici il faut le simuler explicitement.
+const navFor = (topics: Topic[]): NavState => ({
+  groups: [],
+  placements: topics.map((t, i) => ({
+    topicId: t.id,
+    groupId: 'ng_1',
+    ord: i,
+    pinned: false,
+    archived: false,
+    hidden: false,
+    displayName: null,
+  })),
+  prefs: { reduit: false },
+});
+const ouvrir = (over: Partial<StateSnapshot> = {}) => {
+  const snap = state(over);
+  return setup(app, snap, '/', { 'GET /api/nav': json(200, navFor(snap.topics)) });
+};
+const attendreTable = () => waitFor(() => expect(node('1-1.table.ligne-1')).not.toBeNull());
 
 test('liens : chacun mène à son écran, l’actif suit la route', async () => {
-  setup(app, state());
-  await screen.findByText('Mon sujet');
+  ouvrir();
+  await attendreTable();
   expect(node('1-1.barre.nav-accueil')?.getAttribute('aria-current')).toBe('page');
   expect(node('1-1.barre.nav-boite')?.getAttribute('aria-current')).toBeNull();
   for (const [lien, ecran, titre] of [
@@ -61,53 +83,57 @@ test('liens : chacun mène à son écran, l’actif suit la route', async () => 
 });
 
 test('compteur : les agents qui attendent une réponse, caché à zéro', async () => {
-  setup(app, state());
-  await screen.findByText('Mon sujet');
+  ouvrir();
+  await attendreTable();
   expect(node('1-1.barre.nav-boite.compte')).toBeNull();
   cleanup();
-  setup(
-    app,
-    state({
-      agents: [
-        agent({ status: 'needs_input' }),
-        agent({ id: 'ag_2', status: 'needs_input' }),
-        agent({ id: 'ag_3', status: 'working' }),
-      ],
-    }),
-  );
-  await screen.findByText('Mon sujet');
+  ouvrir({
+    agents: [
+      agent({ status: 'needs_input' }),
+      agent({ id: 'ag_2', status: 'needs_input' }),
+      agent({ id: 'ag_3', status: 'working' }),
+    ],
+  });
+  await attendreTable();
   expect(node('1-1.barre.nav-boite.compte')?.textContent).toBe('2');
 });
 
+// Le <select> de tri de l'Accueil (C.1) porte aussi, en ARIA, les rôles combobox/option : les
+// requêtes palette doivent être bornées à son dialogue, jamais globales au document.
+const nomPalette = 'Rechercher ou lancer une action';
+
 test('palette : ⌘K l’ouvre, la saisie filtre, les flèches et Entrée ouvrent le sujet', async () => {
-  setup(app, state());
-  await screen.findByText('Mon sujet');
+  ouvrir();
+  await attendreTable();
   fireEvent.keyDown(document.body, { key: 'k', metaKey: true });
-  const champ = await screen.findByRole('combobox');
+  const palette = await screen.findByRole('dialog', { name: nomPalette });
+  const champ = within(palette).getByRole('combobox');
   expect(document.activeElement).toBe(champ);
   expect(node('palette.sujet-tp_1')).not.toBeNull();
   expect(node('palette.ecran-reglages')).not.toBeNull();
   await userEvent.type(champ, 'feat');
-  expect(screen.getAllByRole('option').map((o) => o.textContent)).toEqual([
-    'Mon sujetaid · feat/s',
-    'Exporter en CSVaid · feat/csv',
-  ]);
+  expect(
+    within(palette)
+      .getAllByRole('option')
+      .map((o) => o.textContent),
+  ).toEqual(['Mon sujetaid · feat/s', 'Exporter en CSVaid · feat/csv']);
   await userEvent.keyboard('{ArrowDown}');
   expect(node('palette.sujet-tp_2')?.getAttribute('aria-selected')).toBe('true');
   await userEvent.keyboard('{Enter}');
-  expect(screen.queryByRole('combobox')).toBeNull();
+  expect(screen.queryByRole('dialog', { name: nomPalette })).toBeNull();
   expect(await screen.findByText('Exporter en CSV', { selector: 'h1' })).toBeTruthy();
 });
 
 test('palette : le bouton l’ouvre, Échap la ferme, « Nouveau sujet » ouvre le dialogue', async () => {
-  setup(app, state());
-  await screen.findByText('Mon sujet');
+  ouvrir();
+  await attendreTable();
   await userEvent.click(node('1-1.barre.recherche')!);
   await userEvent.keyboard('{Escape}');
-  expect(screen.queryByRole('combobox')).toBeNull();
+  expect(screen.queryByRole('dialog', { name: nomPalette })).toBeNull();
   await userEvent.click(node('1-1.barre.recherche')!);
-  await userEvent.type(screen.getByRole('combobox'), 'nouveau');
-  expect(screen.getAllByRole('option')).toHaveLength(1);
+  const palette = screen.getByRole('dialog', { name: nomPalette });
+  await userEvent.type(within(palette).getByRole('combobox'), 'nouveau');
+  expect(within(palette).getAllByRole('option')).toHaveLength(1);
   await userEvent.keyboard('{Enter}');
   expect(await screen.findByRole('dialog', { name: 'Nouveau sujet' })).toBeTruthy();
 });

@@ -1,8 +1,19 @@
 import { useState } from 'react';
 import type { PendingRequest } from '../../../src/shared/model.js';
+import type { AidApi } from '../data/useAidState.js';
 import { useAid } from '../data/useAidState.js';
 
 const message = (err: unknown) => (err instanceof Error ? err.message : String(err));
+
+/** La route de réponse à une décision, partagée avec le bandeau de décisions de l'Accueil (D56, point 4). */
+export async function answerPending(
+  call: AidApi['call'],
+  agentId: string,
+  pendingId: string,
+  answer: string,
+): Promise<void> {
+  await call('POST', `/api/agents/${agentId}/answer`, { pendingId, answer });
+}
 
 export function DecisionCard({
   agentId,
@@ -24,7 +35,7 @@ export function DecisionCard({
     setBusy(true);
     setErreur(null);
     try {
-      await call('POST', `/api/agents/${agentId}/answer`, { pendingId: request.id, answer });
+      await answerPending(call, agentId, request.id, answer);
       setReponse(label);
     } catch (err) {
       setErreur(message(err));

@@ -25,15 +25,29 @@ const deux = () =>
     ],
   });
 
-test('l’Accueil n’a plus de section Projets : un projet sans sujet y est une puce de filtre', async () => {
-  setup(<Accueil />, deux());
-  await screen.findByText('feat/x');
+// Piste A (chantier 15, D56) : la section Projets et ses puces de filtre ont été remplacées par
+// la table de sujets et les vues de Nav — un projet sans sujet n'y figure plus du tout.
+test('l’Accueil n’a plus de section Projets : la table liste les sujets avec leur projet', async () => {
+  const snap = deux();
+  // La table ne montre que les sujets placés (D56, point 5) : un placement par sujet, comme Nav.
+  const nav = {
+    groups: [],
+    placements: snap.topics.map((t, i) => ({
+      topicId: t.id,
+      groupId: null,
+      ord: i,
+      pinned: false,
+      archived: false,
+      hidden: false,
+      displayName: null,
+    })),
+    prefs: { reduit: false },
+  };
+  setup(<Accueil />, snap, '/', { 'GET /api/nav': json(200, nav) });
+  await waitFor(() => expect(node('1-1.table.ligne-1')).not.toBeNull());
   expect(screen.queryByRole('region', { name: 'Projets' })).toBeNull();
-  expect(text('1-1.filtres.workspace-1.nom')).toBe('api');
-  await userEvent.click(node('1-1.filtres.workspace-1')!);
-  expect(text('1-1.vide.message')).toBe('Aucun sujet ouvert dans api.');
-  await userEvent.click(node('1-1.vide.creer')!);
-  expect((screen.getByLabelText('Projet') as HTMLSelectElement).value).toBe('a');
+  expect(text('1-1.table.ligne-1.projet')).toBe('web');
+  expect(text('1-1.table.ligne-2.projet')).toBe('web');
 });
 
 test('Réglages : chaque projet avec chemin, base, « local » sans remote, et ses sujets ouverts', async () => {

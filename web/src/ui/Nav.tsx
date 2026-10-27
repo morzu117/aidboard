@@ -6,18 +6,9 @@ import type { EcranId } from './Barre.js';
 import { ContextMenu, type MenuItem } from './ContextMenu.js';
 import { depuis } from './depuis.js';
 import { useLayout } from './Layout.js';
-import { Badge, isAlive, Point, topicView } from './Statut.js';
+import { compteVue, VUES, type VueId } from './navVues.js';
+import { Badge, Point, topicView } from './Statut.js';
 
-type VueId = 'tous' | 'a-decider' | 'agent-libre' | 'sans-agent' | 'epingles' | 'archives';
-
-const VUES: readonly { id: VueId; label: string; railColor?: string }[] = [
-  { id: 'tous', label: 'Tous', railColor: '#5de0a1' },
-  { id: 'a-decider', label: 'À décider', railColor: '#f2b84b' },
-  { id: 'agent-libre', label: 'Agent libre', railColor: '#6ea8ff' },
-  { id: 'sans-agent', label: 'Sans agent' },
-  { id: 'epingles', label: 'Épinglés' },
-  { id: 'archives', label: 'Archivés' },
-];
 // Les trois vues principales du rail réduit (brief §5.2.3) : les trois premières de VUES.
 const VUES_RAIL = VUES.slice(0, 3);
 
@@ -53,6 +44,11 @@ let navCache: Partial<NavState> | null = null;
 /** Réservé aux tests : vide le cache de module entre deux cas, sinon un cas hérite du nav du précédent. */
 export function resetNavCacheForTests(): void {
   navCache = null;
+}
+
+/** Lecture seule du cache de module, pour l'Accueil (D56, point 5) : même instantané que Nav au premier rendu, sans second abonnement. */
+export function getNavCacheSnapshot(): Partial<NavState> | null {
+  return navCache;
 }
 
 /** Groupe B (D55) : barre gauche, lecture (B.2) et mode édition (B.3) — glisser-déposer, menu, renommage. */
@@ -196,36 +192,9 @@ export function Nav({ screen }: { screen: EcranId }) {
     return state.agents.filter((a) => runIds.includes(a.runId));
   };
 
-  const correspond = (t: Topic, p: NavPlacement, v: VueId): boolean => {
-    if (v === 'archives') return p.archived;
-    if (p.archived) return false;
-    const agents = agentsOf(t.id);
-    switch (v) {
-      case 'tous':
-        return true;
-      case 'a-decider':
-        return agents.some((a) => a.status === 'needs_input');
-      case 'agent-libre':
-        return agents.some((a) => isAlive(a) && a.role === 'free');
-      case 'sans-agent':
-        return agents.length === 0;
-      case 'epingles':
-        return p.pinned;
-    }
-  };
-
-  const compte = (v: VueId): number => {
-    // « À décider » reprend la définition de Layout (agents en attente), pas un compte de sujets.
-    if (v === 'a-decider') {
-      return state?.agents.filter((a) => a.status === 'needs_input').length ?? 0;
-    }
-    let total = 0;
-    for (const t of topics) {
-      const p = placementByTopic.get(t.id);
-      if (p && correspond(t, p, v)) total += 1;
-    }
-    return total;
-  };
+  // Définition de vue partagée avec l'Accueil (D56, point 5) : `navVues.ts`, jamais redéfinie ici.
+  const compte = (v: VueId): number =>
+    compteVue(v, topics, placementByTopic, agentsOf, state?.agents ?? []);
 
   const toggleCollapse = (g: NavGroup) => {
     const suivant = !g.collapsed;
