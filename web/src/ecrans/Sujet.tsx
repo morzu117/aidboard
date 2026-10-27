@@ -2,7 +2,7 @@ import { type ReactNode, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router';
 import type { StoredEvent } from '../../../src/shared/events.js';
 import type { GitLogResponse } from '../../../src/shared/git.js';
-import type { Agent, IndexState } from '../../../src/shared/model.js';
+import type { Agent, IndexState, Topic } from '../../../src/shared/model.js';
 import { Conversation } from '../conversation/Conversation.js';
 import { AidApiError } from '../data/api.js';
 import { fetchGitLog } from '../data/git.js';
@@ -62,6 +62,13 @@ const KINDS: Array<{ kind: Kind; label: string }> = [
 // 12.6 : la cell swarph ne se propose que si `mesh.cell` est configuré (le snapshot porte alors `mesh`)
 const KIND_CELL = { kind: 'swarph-cell' as const, label: 'Ouvrir la cell swarph' };
 const KIND_SWAIRM_CELL = { kind: 'swairm-cell' as const, label: 'Ouvrir la cell Swairm' };
+
+// review D : seule fonction qui décide si l'écran affiche la vue complète (agents toujours
+// visibles, grille trois colonnes) — partagée par Sujet() et Contenu pour qu'elles ne
+// divergent plus sur les mêmes branches (sujet introuvable, brouillon, worktree manquant).
+function vueComplete(topic: Topic | undefined): boolean {
+  return !!topic && topic.state !== 'draft' && !topic.worktreeMissing;
+}
 
 function Contenu({
   topicId,
@@ -515,7 +522,7 @@ function Contenu({
       {selecteurBranche && (
         <SelecteurBranche topicId={topic.id} onClose={() => setSelecteurBranche(false)} />
       )}
-      {topic.state === 'draft' || topic.worktreeMissing ? (
+      {!vueComplete(topic) ? (
         <div className="sujet-grille sujet-grille--seul">
           <div className="colonne">
             {topic.state === 'draft' ? (
@@ -796,6 +803,7 @@ function Volet({
   nom,
   titre,
   ouvert,
+  inert,
   onFermer,
   boutonRef,
   children,
@@ -803,6 +811,7 @@ function Volet({
   nom: 'nav' | 'panneau';
   titre: string;
   ouvert: boolean;
+  inert?: boolean;
   onFermer: () => void;
   boutonRef: { current: HTMLButtonElement | null };
   children: ReactNode;
@@ -813,13 +822,32 @@ function Volet({
   }, [ouvert]);
   useEffect(() => {
     if (!ouvert) return;
+    // Capture (pas bubble) : Échap referme la pop-up avant que les raccourcis du fil de
+    // conversation (ex. MarkMenu, en document.addEventListener) ne voient l'événement.
     const onKey = (e: KeyboardEvent) => {
-      if (e.key !== 'Escape') return;
-      onFermer();
-      boutonRef.current?.focus();
+      if (e.key === 'Escape') {
+        e.stopPropagation();
+        onFermer();
+        boutonRef.current?.focus();
+        return;
+      }
+      if (e.key !== 'Tab') return;
+      const focusables = ref.current?.querySelectorAll<HTMLElement>(
+        'a[href], button:not([disabled]), textarea, input, select, [tabindex]:not([tabindex="-1"])',
+      );
+      if (!focusables || focusables.length === 0) return;
+      const premier = focusables[0]!;
+      const dernier = focusables[focusables.length - 1]!;
+      if (e.shiftKey && document.activeElement === premier) {
+        e.preventDefault();
+        dernier.focus();
+      } else if (!e.shiftKey && document.activeElement === dernier) {
+        e.preventDefault();
+        premier.focus();
+      }
     };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    window.addEventListener('keydown', onKey, true);
+    return () => window.removeEventListener('keydown', onKey, true);
   }, [ouvert, onFermer, boutonRef]);
   return (
     <div
@@ -830,6 +858,7 @@ function Volet({
       aria-modal={ouvert || undefined}
       aria-label={ouvert ? titre : undefined}
       tabIndex={ouvert ? -1 : undefined}
+      inert={inert || undefined}
     >
       {ouvert && (
         <button
@@ -879,7 +908,7 @@ export function Sujet() {
   // La grille trois colonnes et les volets superposables n'existent que pour la vue complète de
   // Contenu (agents/terminaux) : jamais pendant le chargement, une erreur, une archive ou la
   // préparation du worktree, qui restent à une colonne comme avant ce chantier.
-  if (!topic || topic.state === 'draft' || topic.worktreeMissing) {
+  if (!topic || !vueComplete(topic)) {
     return (
       <Layout screen="1-3">
         <div className="sujet-corps">
@@ -899,6 +928,9 @@ export function Sujet() {
   const agents = state?.agents.filter((a) => runIds.includes(a.runId)) ?? [];
   const active = agents.find((a) => a.id === selectedAgent) ?? agents.at(-1);
   const namespace = workspace?.namespace ?? workspace?.name ?? '';
+  // review D (finding 2) : une pop-up ouverte rend inerte tout le reste — colonne centrale,
+  // l'autre volet, les deux boutons flottants — pour que Tab/aria-modal décrivent une vraie modale.
+  const popupOuvert = volet !== 'aucun';
 
   return (
     <Layout screen="1-3">
@@ -910,6 +942,7 @@ export function Sujet() {
           type="button"
           aria-label="Ouvrir la navigation"
           aria-expanded={volet === 'nav'}
+          inert={popupOuvert || undefined}
           onClick={() => setVolet(volet === 'nav' ? 'aucun' : 'nav')}
         >
           <svg aria-hidden="true" viewBox="0 0 16 16" width="16" height="16">
@@ -925,16 +958,24 @@ export function Sujet() {
           nom="nav"
           titre="Navigation"
           ouvert={volet === 'nav'}
+          inert={popupOuvert && volet !== 'nav'}
           onFermer={() => setVolet('aucun')}
           boutonRef={boutonNavRef}
         >
           <Cote activeTopicId={topicId} />
         </Volet>
-        <Contenu topicId={topicId} selectedAgent={selectedAgent} onSelectAgent={setSelectedAgent} />
+        <div style={{ display: 'contents' }} inert={popupOuvert || undefined}>
+          <Contenu
+            topicId={topicId}
+            selectedAgent={selectedAgent}
+            onSelectAgent={setSelectedAgent}
+          />
+        </div>
         <Volet
           nom="panneau"
           titre="Panneau du sujet"
           ouvert={volet === 'panneau'}
+          inert={popupOuvert && volet !== 'panneau'}
           onFermer={() => setVolet('aucun')}
           boutonRef={boutonPanneauRef}
         >
@@ -955,6 +996,7 @@ export function Sujet() {
           type="button"
           aria-label="Ouvrir le panneau du sujet"
           aria-expanded={volet === 'panneau'}
+          inert={popupOuvert || undefined}
           onClick={() => setVolet(volet === 'panneau' ? 'aucun' : 'panneau')}
         >
           <svg aria-hidden="true" viewBox="0 0 16 16" width="16" height="16">

@@ -3,8 +3,22 @@ import { cleanup, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Route, Routes } from 'react-router';
 import { afterEach, expect, test, vi } from 'vitest';
+import type { ActionRun } from '../../src/shared/model.js';
 import { Sujet } from '../../web/src/ecrans/Sujet.js';
 import { agent, json, setup, snapshot, topic, ws } from './helpers.js';
+
+const action = (over: Partial<ActionRun>): ActionRun => ({
+  id: 'ac_1',
+  topicId: 'tp_1',
+  workspaceId: 'ws_1',
+  action: 'topic.create',
+  state: 'running',
+  exitCode: null,
+  result: null,
+  startedAt: 't',
+  finishedAt: null,
+  ...over,
+});
 
 let montagesCote = 0;
 vi.mock('../../web/src/ecrans/Cote.js', async () => {
@@ -60,6 +74,15 @@ const open = (route = '/sujets/tp_1', routes: Record<string, (body: unknown) => 
     route,
     routes,
   );
+};
+
+// Hors vue complète (finding 1) : sujet absent de l'état (archivé ou en échec de préparation).
+const ouvrirSansVueComplete = (
+  snap: ReturnType<typeof snapshot>,
+  routes: Record<string, (body: unknown) => Response> = {},
+) => {
+  montagesCote = 0;
+  return setup(page, snap, '/sujets/tp_1', routes);
 };
 
 test('le panneau contextuel est une colonne à part : agents et Git/Fichiers coexistent, sans clic', async () => {
@@ -126,4 +149,86 @@ test('ouvrir/fermer le popup de navigation ne démonte jamais Cote', async () =>
   await userEvent.click(bouton);
   await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
   expect(montagesCote).toBe(apresChargement);
+});
+
+// review D, finding 1 : hors vue complète (sujet absent de l'état, ou préparation en échec),
+// aucun bouton flottant ni panneau — Contenu rend sa propre vue à une colonne comme avant.
+test('sujet archivé : vue à une colonne, aucun bouton flottant ni panneau', async () => {
+  ouvrirSansVueComplete(snapshot({ workspaces: [ws()], topics: [] }), {
+    'GET /api/topics/tp_1/events': json(200, {
+      topic: {
+        id: 'tp_1',
+        workspaceId: 'ws_1',
+        slug: 's',
+        title: 'Sujet clos',
+        branch: 'feat/s',
+        base: 'main',
+        worktree: '/w/s',
+        state: 'archived',
+        stashRef: null,
+        createdAt: 't',
+        updatedAt: 't',
+      },
+      events: [],
+    }),
+  });
+  await screen.findByText('Sujet clos');
+  expect(screen.queryByRole('button', { name: 'Ouvrir la navigation' })).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Ouvrir le panneau du sujet' })).toBeNull();
+  expect(node('1-3.panneau')).toBeNull();
+});
+
+test('sujet en échec de préparation : vue à une colonne, aucun bouton flottant ni panneau', async () => {
+  ouvrirSansVueComplete(
+    snapshot({
+      workspaces: [ws()],
+      topics: [],
+      actions: [action({ state: 'needs_human', exitCode: 2 })],
+    }),
+  );
+  await screen.findByText('La préparation du sujet a échoué');
+  expect(screen.queryByRole('button', { name: 'Ouvrir la navigation' })).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Ouvrir le panneau du sujet' })).toBeNull();
+  expect(node('1-3.panneau')).toBeNull();
+});
+
+// review D, finding 2 : une pop-up ouverte rend inerte le reste de l'écran (vraie modale).
+test('pop-up ouverte : colonne centrale, autre volet et boutons flottants inertes ; fermée, plus d’inert', async () => {
+  open();
+  await screen.findByTestId('term-ag_1');
+  const boutonNav = screen.getByRole('button', { name: 'Ouvrir la navigation' });
+  const boutonPanneau = screen.getByRole('button', { name: 'Ouvrir le panneau du sujet' });
+  await userEvent.click(boutonPanneau);
+  await screen.findByRole('dialog', { name: 'Panneau du sujet' });
+  expect(node('1-3.terminaux')!.closest('[inert]')).toBeTruthy();
+  expect(node('1-3.volet.nav')!.hasAttribute('inert')).toBe(true);
+  expect(boutonNav.hasAttribute('inert')).toBe(true);
+  expect(boutonPanneau.hasAttribute('inert')).toBe(true);
+  expect(node('1-3.volet.panneau')!.hasAttribute('inert')).toBe(false);
+  await userEvent.click(screen.getByRole('button', { name: 'Fermer' }));
+  await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+  expect(node('1-3.terminaux')!.closest('[inert]')).toBeNull();
+  expect(node('1-3.volet.nav')!.hasAttribute('inert')).toBe(false);
+  expect(boutonNav.hasAttribute('inert')).toBe(false);
+  expect(boutonPanneau.hasAttribute('inert')).toBe(false);
+});
+
+test('pop-up ouverte : Tab depuis le dernier élément revient au premier, Maj+Tab inverse', async () => {
+  open();
+  await screen.findByTestId('term-ag_1');
+  await userEvent.click(screen.getByRole('button', { name: 'Ouvrir le panneau du sujet' }));
+  const dialogue = await screen.findByRole('dialog', { name: 'Panneau du sujet' });
+  const focusables = Array.from(
+    dialogue.querySelectorAll<HTMLElement>(
+      'a[href], button:not([disabled]), textarea, input, select, [tabindex]:not([tabindex="-1"])',
+    ),
+  );
+  expect(focusables.length).toBeGreaterThan(1);
+  const premier = focusables[0]!;
+  const dernier = focusables[focusables.length - 1]!;
+  dernier.focus();
+  await userEvent.keyboard('{Tab}');
+  expect(document.activeElement).toBe(premier);
+  await userEvent.keyboard('{Shift>}{Tab}{/Shift}');
+  expect(document.activeElement).toBe(dernier);
 });

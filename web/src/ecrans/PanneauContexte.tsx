@@ -51,6 +51,19 @@ export function PanneauContexte({
   const [pages, setPages] = useState<Partial<Record<MemoryKind, MemoryPage>> | null>(null);
   const [onglet, setOnglet] = useState<OngletId>(initialOnglet ?? 'plan');
   const refs = useRef<Partial<Record<OngletId, HTMLButtonElement | null>>>({});
+  // review D (finding 5) : compte les replis involontaires sur Plan (onglet disparu) pour que
+  // l'effet de focus plus bas ne se déclenche que sur ceux-ci, pas sur une sélection normale.
+  const [repli, setRepli] = useState(0);
+
+  // review D (finding 4) : au changement de sujet, vider les pages pendant le rendu (avant la
+  // requête suivante) — sinon les onglets Revue/Rétro/Passation de l'ancien sujet restent
+  // affichés jusqu'à ce que la requête du nouveau sujet réponde.
+  const clePages = `${namespace}/${topicSlug}`;
+  const [cleChargee, setCleChargee] = useState(clePages);
+  if (clePages !== cleChargee) {
+    setCleChargee(clePages);
+    setPages(null);
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -74,8 +87,20 @@ export function PanneauContexte({
     ...ONGLETS_MEMOIRE.filter((o) => pages?.[o.kind] !== undefined),
   ];
   const ids = onglets.map((o) => o.id);
-  // l'onglet mémoire sélectionné peut disparaître (page retirée ailleurs) : repli sur Plan.
+  // l'onglet mémoire sélectionné peut disparaître (page retirée ailleurs) : repli sur Plan,
+  // pendant le rendu (même motif que la réinitialisation des pages plus haut).
+  if (onglet !== 'plan' && !ids.includes(onglet)) {
+    setOnglet('plan');
+    setRepli((n) => n + 1);
+  }
   const actif = ids.includes(onglet) ? onglet : 'plan';
+
+  // review D (finding 5) : le repli ci-dessus laisse le focus sur un bouton qui vient de
+  // quitter le DOM — le ramener sur Plan, mais seulement pour un repli (pas une sélection
+  // normale de l'onglet Plan, où allerVers gère déjà le focus lui-même).
+  useEffect(() => {
+    if (repli > 0) refs.current.plan?.focus();
+  }, [repli]);
 
   function allerVers(id: OngletId) {
     setOnglet(id);
@@ -97,7 +122,7 @@ export function PanneauContexte({
         className="onglets"
         data-node="1-3.onglets"
         role="tablist"
-        aria-label="Panneau du sujet"
+        aria-label="Onglets du panneau"
         onKeyDown={onTablistKeyDown}
       >
         {onglets.map(({ id, label }) => (
@@ -112,7 +137,7 @@ export function PanneauContexte({
             role="tab"
             id={`panneau-tab-${id}`}
             aria-selected={id === actif}
-            aria-controls={`panneau-tabpanel-${id}`}
+            aria-controls={id === actif ? `panneau-tabpanel-${id}` : undefined}
             tabIndex={id === actif ? 0 : -1}
             type="button"
             onClick={() => allerVers(id)}

@@ -116,7 +116,9 @@ test('ouvrir la cell Swairm, reconnecter, redimensionner, refuser un doublon, ar
       return { cols: t.cols, rows: t.rows };
     }, first);
   const avant = await size();
-  await page.setViewportSize({ width: 900, height: 700 });
+  // review D, finding 7 : reste ≥ 1280 px (Q6 tranchée, D.1) — sous ce seuil la colonne centrale
+  // passe en pleine largeur et le terminal s'élargirait au lieu de rétrécir.
+  await page.setViewportSize({ width: 1290, height: 700 });
   await expect.poll(async () => (await size()).cols).toBeLessThan(avant.cols);
   const apres = await size();
   await expect(node(page, '1-3.terminaux.pied.taille')).toContainText(
