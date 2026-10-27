@@ -11,6 +11,7 @@ import { getNavCacheSnapshot } from '../ui/Nav.js';
 import { compteVue, topicsForVue, VUES, type VueId } from '../ui/navVues.js';
 import { isAlive, mostUrgent, Point, type Tone, topicView } from '../ui/Statut.js';
 import { CasErreurWorktree } from './CasErreurWorktree.js';
+import { FilActivite } from './FilActivite.js';
 
 function Squelettes() {
   return (
@@ -829,6 +830,7 @@ function Contenu() {
           )}
         </section>
         <aside className="accueil-aside" data-node="1-1.aside" aria-label="État">
+          <FilActivite />
           <div className="panneau" data-node="1-1.aside.etat">
             <div className="panneau-entete">
               <h2 className="titre-zone" data-node="1-1.aside.etat.titre">
