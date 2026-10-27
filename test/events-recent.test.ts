@@ -78,6 +78,45 @@ test('contexte joint (branche, titre, projet) quand le sujet et le projet existe
   });
 });
 
+test('topic.state indexState seul exclu, state seul ou avec indexState conservé', async () => {
+  t = await startTestDaemon();
+  seedTopic(t.db);
+  const state = (data: Record<string, unknown>) =>
+    post({ source: 'daemon', type: 'topic.state', topicId: 'tp_1', data });
+  await state({ indexState: 'indexing' });
+  await state({ indexState: 'ready' });
+  await state({ state: 'review' });
+  // state et indexState ensemble (création d'un sujet indexé) : un vrai changement, pas du bruit.
+  await state({ state: 'draft', indexState: 'indexing' });
+
+  const body = (await recent()).json() as { events: StoredEvent[] };
+  expect(body.events.map((e) => (e.data as { state?: string }).state)).toEqual(['draft', 'review']);
+});
+
+test('limite toujours respectée après le filtre de bruit d’index', async () => {
+  t = await startTestDaemon();
+  seedTopic(t.db);
+  for (let i = 0; i < 5; i++) {
+    await post({
+      source: 'daemon',
+      type: 'topic.state',
+      topicId: 'tp_1',
+      data: { indexState: 'indexing' },
+    });
+  }
+  for (let i = 0; i < 3; i++) {
+    await post({
+      source: 'daemon',
+      type: 'topic.phase',
+      topicId: 'tp_1',
+      data: { phase: `p${i}` },
+    });
+  }
+  const r = (await recent('?limit=2')).json() as { events: StoredEvent[] };
+  expect(r.events).toHaveLength(2);
+  expect(r.events.map((e) => e.type)).toEqual(['topic.phase', 'topic.phase']);
+});
+
 test('sans cookie ni bearer : 401', async () => {
   t = await startTestDaemon();
   const r = await t.d.app.inject({

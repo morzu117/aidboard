@@ -63,14 +63,16 @@ export function FilActivite() {
                   <span className="activite-heure" data-node={`${ligneId}.heure`}>
                     {heure(ev.ts)}
                   </span>
-                  <span className="activite-type" data-node={`${ligneId}.type`}>
-                    {ev.type}
-                  </span>
-                  {ctx && (
-                    <span className="activite-contexte" data-node={`${ligneId}.contexte`}>
-                      {ctx}
+                  <div className="activite-corps">
+                    <span className="activite-type" data-node={`${ligneId}.type`}>
+                      {ev.type}
                     </span>
-                  )}
+                    {ctx && (
+                      <span className="activite-contexte" data-node={`${ligneId}.contexte`}>
+                        {ctx}
+                      </span>
+                    )}
+                  </div>
                 </Fragment>
               );
               return (

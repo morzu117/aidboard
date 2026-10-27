@@ -76,6 +76,12 @@ export function registerEventRoutes(app: FastifyInstance, db: Db, store: EventSt
          LEFT JOIN topics t ON t.id = e.topic_id
          LEFT JOIN workspaces w ON w.id = e.workspace_id
          WHERE e.type IN (${placeholders})
+           -- un topic.state dont le data ne porte qu'indexState est un changement technique, pas un changement d'état visible : exclu.
+           AND NOT (
+             e.type = 'topic.state'
+             AND json_extract(e.data, '$.indexState') IS NOT NULL
+             AND json_extract(e.data, '$.state') IS NULL
+           )
          ORDER BY e.seq DESC
          LIMIT ?`,
       )

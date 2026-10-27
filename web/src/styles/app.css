@@ -1400,7 +1400,7 @@ body {
 }
 .activite-lien {
   display: flex;
-  align-items: baseline;
+  align-items: flex-start;
   gap: var(--sp-2);
   color: var(--text);
   text-decoration: none;
@@ -1413,7 +1413,19 @@ body {
   font-family: ui-monospace, monospace;
 }
 .activite-heure {
+  flex: none;
+  width: 40px;
+  white-space: nowrap;
   color: var(--faint);
+}
+/* Colonne heure fixe (brief §5.4) : type et contexte en dessous, jamais de mot coupé. */
+.activite-corps {
+  min-width: 0;
+}
+.activite-type {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .activite-contexte {
   color: var(--muted);
