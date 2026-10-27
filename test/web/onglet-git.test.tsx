@@ -115,3 +115,69 @@ test('« Voir la base » ouvre le détail du commit de base', async () => {
   expect(await screen.findByRole('heading', { name: MESSAGE_BASE })).toBeTruthy();
   expect(screen.queryByRole('list', { name: 'Commits' })).toBeNull();
 });
+
+const routeDetail = (hash: string) =>
+  `GET /api/topics/tp_1/git/commits/${encodeURIComponent(hash)}`;
+
+// review, point 1 : une réponse de détail en retard sur un commit qui n'est plus la
+// sélection courante (Retour, puis une autre sélection) ne doit pas écraser l'affichage.
+test('une réponse de détail arrivée en retard n’écrase pas le commit actuellement affiché', async () => {
+  let resoudreA!: (r: Response) => void;
+  let resoudreB!: (r: Response) => void;
+  setup(panneau(), snapshot(), '/', {
+    ...routes,
+    [routeDetail(HASH_SUJET)]: () =>
+      new Promise<Response>((r) => (resoudreA = r)) as unknown as Response,
+    [routeDetail(HASH_BASE)]: () =>
+      new Promise<Response>((r) => (resoudreB = r)) as unknown as Response,
+  });
+  await screen.findByText(MESSAGE_SUJET);
+  await userEvent.click(screen.getByText(MESSAGE_SUJET));
+  await userEvent.click(await screen.findByRole('button', { name: '← Retour' }));
+  await screen.findByRole('list', { name: 'Commits' });
+  await userEvent.click(screen.getByRole('button', { name: 'Voir la base' }));
+  resoudreB(detailDe(HASH_BASE, MESSAGE_BASE)());
+  expect(await screen.findByRole('heading', { name: MESSAGE_BASE })).toBeTruthy();
+  resoudreA(detailDe(HASH_SUJET, MESSAGE_SUJET)());
+  await new Promise((r) => setTimeout(r, 20));
+  expect(screen.queryByRole('heading', { name: MESSAGE_SUJET })).toBeNull();
+  expect(screen.getByRole('heading', { name: MESSAGE_BASE })).toBeTruthy();
+});
+
+// review, point 1 : même garde côté erreur — une erreur périmée ne doit apparaître ni
+// dans la liste, ni se glisser sous le détail suivant.
+test('une erreur de détail arrivée après un Retour ne s’affiche ni dans la liste ni au prochain détail', async () => {
+  let rejeterA!: (e: unknown) => void;
+  setup(panneau(), snapshot(), '/', {
+    ...routes,
+    [routeDetail(HASH_SUJET)]: () =>
+      new Promise<Response>((_r, rej) => (rejeterA = rej)) as unknown as Response,
+  });
+  await screen.findByText(MESSAGE_SUJET);
+  await userEvent.click(screen.getByText(MESSAGE_SUJET));
+  await userEvent.click(await screen.findByRole('button', { name: '← Retour' }));
+  await screen.findByRole('list', { name: 'Commits' });
+  rejeterA(new Error('boom'));
+  await new Promise((r) => setTimeout(r, 20));
+  expect(screen.queryByRole('alert')).toBeNull();
+  await userEvent.click(screen.getByText(MESSAGE_BASE));
+  expect(await screen.findByRole('heading', { name: MESSAGE_BASE })).toBeTruthy();
+  expect(screen.queryByRole('alert')).toBeNull();
+});
+
+// review, point 2 : le focus revient au commit qui avait été ouvert, pas à <body>.
+test('le focus revient au bouton du commit ouvert après Retour, et après Échap', async () => {
+  setup(panneau(), snapshot(), '/', routes);
+  await screen.findByText(MESSAGE_SUJET);
+  await userEvent.click(screen.getByText(MESSAGE_SUJET));
+  await userEvent.click(await screen.findByRole('button', { name: '← Retour' }));
+  await screen.findByRole('list', { name: 'Commits' });
+  // le retour démonte le panneau détail : le bouton d'avant n'existe plus, on le requête à neuf.
+  expect(document.activeElement).toBe(screen.getByText(MESSAGE_SUJET).closest('button'));
+
+  await userEvent.click(screen.getByText(MESSAGE_SUJET));
+  await screen.findByRole('button', { name: '← Retour' });
+  await userEvent.keyboard('{Escape}');
+  await screen.findByRole('list', { name: 'Commits' });
+  expect(document.activeElement).toBe(screen.getByText(MESSAGE_SUJET).closest('button'));
+});

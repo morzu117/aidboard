@@ -135,12 +135,36 @@ export function OngletGit({
   const listeRef = useRef<HTMLDivElement | null>(null);
   const defilementListe = useRef(0);
   const retourRef = useRef<HTMLButtonElement | null>(null);
+  const rechercheRef = useRef<HTMLInputElement | null>(null);
+  const commitButtonsRef = useRef(new Map<string, HTMLButtonElement>());
+  // point 1 : hash de la sélection effectivement en vol — une réponse (succès ou erreur)
+  // dont le hash n'y correspond plus a été périmée par un Retour ou une sélection suivante.
+  const hashDemandeRef = useRef<string | null>(null);
+  const monteRef = useRef(true);
+  // point 2 : hash du commit qu'il faut refocaliser après un Retour ; posé par retour().
+  const hashARefocaliserRef = useRef<string | null>(null);
+
+  useEffect(
+    () => () => {
+      monteRef.current = false;
+    },
+    [],
+  );
 
   // point 4 : le détail remplace la liste — restaure le défilement au retour, rend le focus
   // au bouton Retour à l'ouverture (porte d'entrée de l'Échap = Retour).
   useEffect(() => {
-    if (selection) retourRef.current?.focus();
-    else if (listeRef.current) listeRef.current.scrollTop = defilementListe.current;
+    if (selection) {
+      retourRef.current?.focus();
+      return;
+    }
+    if (listeRef.current) listeRef.current.scrollTop = defilementListe.current;
+    const hash = hashARefocaliserRef.current;
+    hashARefocaliserRef.current = null;
+    if (hash === null) return;
+    const bouton = commitButtonsRef.current.get(hash);
+    if (bouton) bouton.focus();
+    else rechercheRef.current?.focus();
   }, [selection]);
 
   useEffect(() => {
@@ -189,12 +213,21 @@ export function OngletGit({
     setSelection(hash);
     setDetail(null);
     setDetailErreur(null);
+    hashDemandeRef.current = hash;
     fetchCommitDetail(call, topicId, hash)
-      .then(setDetail)
-      .catch((err) => setDetailErreur(err instanceof AidApiError ? err.message : String(err)));
+      .then((d) => {
+        if (monteRef.current && hashDemandeRef.current === hash) setDetail(d);
+      })
+      .catch((err) => {
+        if (monteRef.current && hashDemandeRef.current === hash) {
+          setDetailErreur(err instanceof AidApiError ? err.message : String(err));
+        }
+      });
   }
 
   function retour() {
+    hashDemandeRef.current = null;
+    hashARefocaliserRef.current = selection;
     setSelection(null);
   }
 
@@ -423,6 +456,7 @@ export function OngletGit({
               ))}
             </div>
             <input
+              ref={rechercheRef}
               className="champ"
               data-node="1-3.git.historique.recherche"
               data-action="git.filtrer"
@@ -466,6 +500,11 @@ export function OngletGit({
                 return (
                   <button
                     key={row.hash || 'wip'}
+                    ref={(el) => {
+                      if (row.wip) return;
+                      if (el) commitButtonsRef.current.set(row.hash, el);
+                      else commitButtonsRef.current.delete(row.hash);
+                    }}
                     className={`commit${row.absent ? ' commit--absent' : ''}`}
                     data-node={`1-3.git.historique.commit-${row.hash || 'wip'}`}
                     data-action="git.selectionner"
