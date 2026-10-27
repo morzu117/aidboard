@@ -93,6 +93,9 @@ export function Nav({ screen }: { screen: EcranId }) {
   const [depot, setDepot] = useState<Depot | null>(null);
   const [erreur, setErreur] = useState<string | null>(null);
   const renommageRef = useRef<HTMLInputElement>(null);
+  // posé par Échap, lu par validerRenommage : un blur émis par le démontage du champ (certains
+  // navigateurs) ne doit jamais enregistrer ce qu'Échap vient d'annuler.
+  const annulationRenommageRef = useRef(false);
   const actionsRefs = useRef<Map<string, HTMLButtonElement>>(new Map());
   // Un déplacement entre groupes remonte le bouton « ··· » ailleurs dans l'arbre React (clé
   // présente dans un autre tableau d'enfants) : le focus ne peut se reposer qu'après ce rendu,
@@ -340,10 +343,18 @@ export function Nav({ screen }: { screen: EcranId }) {
 
   const commencerRenommage = (kind: 'groupe' | 'sujet', id: string, valeurActuelle: string) => {
     if (!edit) return;
+    annulationRenommageRef.current = false;
     setRenommage({ kind, id, valeur: valeurActuelle });
   };
-  const annulerRenommage = () => setRenommage(null);
+  const annulerRenommage = () => {
+    annulationRenommageRef.current = true;
+    setRenommage(null);
+  };
   const validerRenommage = () => {
+    if (annulationRenommageRef.current) {
+      annulationRenommageRef.current = false;
+      return;
+    }
     if (!renommage) return;
     const { kind, id, valeur } = renommage;
     const texte = valeur.trim();
@@ -408,10 +419,14 @@ export function Nav({ screen }: { screen: EcranId }) {
   const deplacerSujetVersPosition = async (topicId: string, groupId: string, index: number) => {
     const avant = placementByTopic.get(topicId);
     const memeGroupe = avant?.groupId === groupId;
-    const autres = ordreSujets(groupId)
-      .map((p) => p.topicId)
-      .filter((id) => id !== topicId);
-    autres.splice(index, 0, topicId);
+    const ordreAvant = ordreSujets(groupId).map((p) => p.topicId);
+    const indexAvant = memeGroupe ? ordreAvant.indexOf(topicId) : -1;
+    // `index` vise la liste COMPLÈTE (élément glissé compris) : le retirer avant de la retrouver
+    // décale toute position qui le suivait, d'où le décalage d'une place à décrémenter ici.
+    const indexCible = indexAvant !== -1 && indexAvant < index ? index - 1 : index;
+    const autres = ordreAvant.filter((id) => id !== topicId);
+    autres.splice(indexCible, 0, topicId);
+    if (memeGroupe && autres.join() === ordreAvant.join()) return;
     updateNav((cur) => ({
       ...cur,
       placements: (cur.placements ?? []).map((p) => {
@@ -456,8 +471,14 @@ export function Nav({ screen }: { screen: EcranId }) {
     void reordonnerGroupes(ids);
   };
   const deplacerGroupeVersPosition = (groupId: string, index: number) => {
-    const autres = groups.filter((g) => g.id !== groupId).map((g) => g.id);
-    autres.splice(index, 0, groupId);
+    const idsAvant = groups.map((g) => g.id);
+    const indexAvant = idsAvant.indexOf(groupId);
+    // même décalage que pour les sujets (voir deplacerSujetVersPosition) : décrémenter quand le
+    // groupe glissé était avant la position visée.
+    const indexCible = indexAvant !== -1 && indexAvant < index ? index - 1 : index;
+    const autres = idsAvant.filter((id) => id !== groupId);
+    autres.splice(indexCible, 0, groupId);
+    if (autres.join() === idsAvant.join()) return;
     void reordonnerGroupes(autres);
   };
 

@@ -80,6 +80,10 @@ export function ContextMenu({
     } else if (e.key === 'Escape') {
       e.preventDefault();
       onClose();
+    } else if (e.key === 'Tab') {
+      // pattern APG menu : Tab/Shift+Tab ferment le menu plutôt que d'en faire sortir le focus.
+      e.preventDefault();
+      onClose();
     }
   };
 
@@ -95,7 +99,6 @@ export function ContextMenu({
       className={`menu-contextuel-item${sousNiveau ? ' menu-contextuel-item--sous' : ''}${
         it.separatorBefore ? ' menu-contextuel-item--separe' : ''
       }`}
-      disabled={it.disabled}
       aria-disabled={it.disabled || undefined}
       aria-haspopup={it.submenu ? 'menu' : undefined}
       aria-expanded={it.submenu ? ouvert === it.id : undefined}

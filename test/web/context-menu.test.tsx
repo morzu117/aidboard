@@ -90,6 +90,54 @@ test('un clic sur une entrée désactivée ne l’active pas', async () => {
   expect(onClose).not.toHaveBeenCalled();
 });
 
+test('flèche bas traverse un item désactivé (focalisable), Entrée sur un désactivé ne fait rien', async () => {
+  const onSelectDeux = vi.fn();
+  const onClose = vi.fn();
+  render(
+    <ContextMenu
+      items={[
+        { id: 'un', label: 'Un', onSelect: vi.fn() },
+        { id: 'deux', label: 'Deux', onSelect: onSelectDeux, disabled: true },
+        { id: 'trois', label: 'Trois', onSelect: vi.fn() },
+      ]}
+      label="Actions"
+      onClose={onClose}
+    />,
+  );
+  const [, deux, trois] = screen.getAllByRole('menuitem');
+  await userEvent.keyboard('{ArrowDown}');
+  expect(document.activeElement).toBe(deux);
+  await userEvent.keyboard('{Enter}');
+  expect(onSelectDeux).not.toHaveBeenCalled();
+  expect(onClose).not.toHaveBeenCalled();
+  await userEvent.keyboard('{ArrowDown}');
+  expect(document.activeElement).toBe(trois);
+});
+
+test('Tab ferme le menu sans activer d’entrée', async () => {
+  const onSelect = vi.fn();
+  const onClose = vi.fn();
+  render(
+    <ContextMenu items={[{ id: 'un', label: 'Un', onSelect }]} label="Actions" onClose={onClose} />,
+  );
+  await userEvent.keyboard('{Tab}');
+  expect(onSelect).not.toHaveBeenCalled();
+  expect(onClose).toHaveBeenCalledTimes(1);
+});
+
+test('Shift+Tab ferme aussi le menu', async () => {
+  const onClose = vi.fn();
+  render(
+    <ContextMenu
+      items={[{ id: 'un', label: 'Un', onSelect: vi.fn() }]}
+      label="Actions"
+      onClose={onClose}
+    />,
+  );
+  await userEvent.keyboard('{Shift>}{Tab}{/Shift}');
+  expect(onClose).toHaveBeenCalledTimes(1);
+});
+
 test('un sous-menu se déplie au clic et ses entrées sont navigables aux flèches', async () => {
   const onSelectSous = vi.fn();
   const onClose = vi.fn();

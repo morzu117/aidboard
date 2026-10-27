@@ -40,6 +40,36 @@ test('glisser-déposer un sujet vers un autre groupe persiste après rechargemen
   );
 });
 
+// review B.3 (finding 4) : un navigateur réel peut émettre un `blur` synchrone au démontage du
+// champ de renommage — Échap ne doit jamais laisser ce blur valider derrière lui.
+test('renommer un sujet, taper, Échap → recharger → nom inchangé (navigateur réel)', async ({
+  browser,
+}) => {
+  const page = await openApp(await browser.newContext({ viewport: { width: 1440, height: 900 } }));
+  await registerWorkspace(page, newRepo('depot-nav-echap'));
+  await createTopic(page, 'Sujet un');
+  await page.goto(url());
+
+  await node(page, '1-1.barre-gauche.groupes.modifier').click();
+  const nomSujet = groupe(page, 'depot-nav-echap').locator('.barre-gauche-sujet-nom');
+  const nomAvant = (await nomSujet.textContent())!;
+
+  await groupe(page, 'depot-nav-echap').locator('.barre-gauche-sujet').dblclick();
+  const champ = groupe(page, 'depot-nav-echap').locator('.barre-gauche-renommage');
+  await expect(champ).toBeVisible();
+  await champ.fill('Nom qui ne doit jamais être enregistré');
+  await champ.press('Escape');
+  await expect(champ).toBeHidden();
+
+  await page.reload();
+  await expect(groupe(page, 'depot-nav-echap').locator('.barre-gauche-sujet-nom')).toHaveText(
+    nomAvant,
+  );
+  // suite e2e à un seul worker, aucun teardown entre fichiers : fermer ce contexte
+  // pour ne pas ajouter notre poids à l'état partagé des specs suivantes (finding 9).
+  await page.context().close();
+});
+
 test('alternative clavier (menu « Déplacer vers… ») persiste après rechargement, focus rendu au ···', async ({
   browser,
 }) => {

@@ -1182,7 +1182,8 @@ body {
   outline: 2px solid var(--acc);
   outline-offset: -2px;
 }
-.menu-contextuel-item:disabled {
+.menu-contextuel-item:disabled,
+.menu-contextuel-item[aria-disabled='true'] {
   color: var(--faint);
   cursor: default;
 }

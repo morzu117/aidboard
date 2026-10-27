@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, expect, test, vi } from 'vitest';
 import type { NavGroup, NavPlacement, NavState } from '../../src/shared/model.js';
@@ -12,7 +12,24 @@ afterEach(() => {
   cleanup();
   openNewTopic.mockClear();
   resetNavCacheForTests();
+  vi.restoreAllMocks();
 });
+
+// jsdom ne pose pas de mise en page réelle : sans un rect fixe, « moitié haute/basse » (le calcul
+// derrière le dépôt du glisser-déposer) ne peut pas être exercé de façon déterministe.
+const mockRect = (hauteur = 40) =>
+  vi.spyOn(Element.prototype, 'getBoundingClientRect').mockReturnValue({
+    top: 0,
+    height: hauteur,
+    left: 0,
+    width: 0,
+    right: 0,
+    bottom: hauteur,
+    x: 0,
+    y: 0,
+    toJSON: () => {},
+  });
+const clientYHaut = 10; // < hauteur/2 (20) : moitié haute
 
 const node = (id: string) => document.querySelector(`[data-node="${id}"]`) as HTMLElement | null;
 
@@ -175,6 +192,161 @@ test('renommer un groupe : vide annule (aucun appel), un nom valide persiste', a
   });
 });
 
+// review B.3 (finding 1) : le dépôt vise la liste complète (élément glissé compris) ; le
+// décaler une fois retiré de la liste évite le décalage d'une place.
+const dataTransfer = { effectAllowed: '', setData: () => {} } as unknown as DataTransfer;
+const ligneSujet = (id: string) =>
+  node(`1-1.barre-gauche.sujet-${id}`)!.closest('[draggable]') as HTMLElement;
+// jsdom ne construit pas de vrai DragEvent pour les raccourcis fireEvent.drag* (clientY et
+// dataTransfer resteraient undefined) : l'événement est posé à la main.
+const glisserEvt = (type: 'dragstart' | 'dragover' | 'drop', clientY?: number) => {
+  const e = new Event(type, { bubbles: true, cancelable: true });
+  Object.defineProperty(e, 'dataTransfer', { value: dataTransfer, configurable: true });
+  if (clientY !== undefined)
+    Object.defineProperty(e, 'clientY', { value: clientY, configurable: true });
+  return e;
+};
+const dragStart = (el: HTMLElement) => fireEvent(el, glisserEvt('dragstart'));
+const dragOver = (el: HTMLElement, clientY: number) =>
+  fireEvent(el, glisserEvt('dragover', clientY));
+const drop = (el: HTMLElement) => fireEvent(el, glisserEvt('drop'));
+
+test('glisser un sujet vers le bas (moitié haute de la cible) : insertion juste avant, sans décalage', async () => {
+  const h = open(
+    snapshot({
+      workspaces: [ws()],
+      topics: ['a', 'b', 'c', 'd'].map((s, i) => topic({ id: `tp_${i + 1}`, branch: `feat/${s}` })),
+    }),
+    navState({
+      placements: ['tp_1', 'tp_2', 'tp_3', 'tp_4'].map((id, ord) =>
+        placement({ topicId: id, ord }),
+      ),
+    }),
+    { 'PUT /api/nav/groups/ng_1/topics': json(200, {}) },
+  );
+  await screen.findByText('feat/a');
+  await userEvent.click(node('1-1.barre-gauche.groupes.modifier')!);
+  const groupeEl = node('1-1.barre-gauche.groupe-ng_1')!;
+
+  mockRect();
+  dragStart(ligneSujet('tp_1'));
+  dragOver(ligneSujet('tp_4'), clientYHaut);
+  drop(groupeEl);
+
+  await waitFor(() =>
+    expect(h.calls.some((c) => c.url === '/api/nav/groups/ng_1/topics')).toBe(true),
+  );
+  const appel = h.calls.find((c) => c.url === '/api/nav/groups/ng_1/topics')!;
+  expect(appel.body).toEqual({ topicIds: ['tp_2', 'tp_3', 'tp_1', 'tp_4'] });
+});
+
+test('glisser un sujet vers le haut (moitié haute de la cible) : insertion juste avant', async () => {
+  const h = open(
+    snapshot({
+      workspaces: [ws()],
+      topics: ['a', 'b', 'c', 'd'].map((s, i) => topic({ id: `tp_${i + 1}`, branch: `feat/${s}` })),
+    }),
+    navState({
+      placements: ['tp_1', 'tp_2', 'tp_3', 'tp_4'].map((id, ord) =>
+        placement({ topicId: id, ord }),
+      ),
+    }),
+    { 'PUT /api/nav/groups/ng_1/topics': json(200, {}) },
+  );
+  await screen.findByText('feat/a');
+  await userEvent.click(node('1-1.barre-gauche.groupes.modifier')!);
+  const groupeEl = node('1-1.barre-gauche.groupe-ng_1')!;
+
+  mockRect();
+  dragStart(ligneSujet('tp_4'));
+  dragOver(ligneSujet('tp_1'), clientYHaut);
+  drop(groupeEl);
+
+  await waitFor(() =>
+    expect(h.calls.some((c) => c.url === '/api/nav/groups/ng_1/topics')).toBe(true),
+  );
+  const appel = h.calls.find((c) => c.url === '/api/nav/groups/ng_1/topics')!;
+  expect(appel.body).toEqual({ topicIds: ['tp_4', 'tp_1', 'tp_2', 'tp_3'] });
+});
+
+test('glisser un sujet sur sa propre place : aucun appel réseau', async () => {
+  const h = open(
+    snapshot({
+      workspaces: [ws()],
+      topics: ['a', 'b', 'c', 'd'].map((s, i) => topic({ id: `tp_${i + 1}`, branch: `feat/${s}` })),
+    }),
+    navState({
+      placements: ['tp_1', 'tp_2', 'tp_3', 'tp_4'].map((id, ord) =>
+        placement({ topicId: id, ord }),
+      ),
+    }),
+    { 'PUT /api/nav/groups/ng_1/topics': json(200, {}) },
+  );
+  await screen.findByText('feat/a');
+  await userEvent.click(node('1-1.barre-gauche.groupes.modifier')!);
+  const groupeEl = node('1-1.barre-gauche.groupe-ng_1')!;
+
+  mockRect();
+  dragStart(ligneSujet('tp_2'));
+  dragOver(ligneSujet('tp_2'), clientYHaut);
+  drop(groupeEl);
+
+  expect(h.calls.some((c) => c.url === '/api/nav/groups/ng_1/topics')).toBe(false);
+});
+
+const ligneGroupe = (id: string) =>
+  node(`1-1.barre-gauche.groupe-${id}`)!.querySelector('.barre-gauche-groupe-ligne') as HTMLElement;
+
+test('glisser un groupe vers le bas (moitié haute de la cible) : insertion juste avant, sans décalage', async () => {
+  const h = open(
+    snapshot({ workspaces: [ws()], topics: [] }),
+    navState({
+      groups: [
+        groupe({ id: 'ng_1', name: 'A', ord: 0 }),
+        groupe({ id: 'ng_2', name: 'B', ord: 1 }),
+        groupe({ id: 'ng_3', name: 'C', ord: 2 }),
+      ],
+      placements: [],
+    }),
+    { 'PUT /api/nav/groups/order': json(200, {}) },
+  );
+  await screen.findByText('A');
+  await userEvent.click(node('1-1.barre-gauche.groupes.modifier')!);
+
+  mockRect();
+  dragStart(ligneGroupe('ng_1'));
+  dragOver(node('1-1.barre-gauche.groupe-ng_3')!, clientYHaut);
+  drop(node('1-1.barre-gauche.groupe-ng_3')!);
+
+  await waitFor(() => expect(h.calls.some((c) => c.url === '/api/nav/groups/order')).toBe(true));
+  const appel = h.calls.find((c) => c.url === '/api/nav/groups/order')!;
+  expect(appel.body).toEqual({ ids: ['ng_2', 'ng_1', 'ng_3'] });
+});
+
+test('glisser un groupe sur sa propre place : aucun appel réseau', async () => {
+  const h = open(
+    snapshot({ workspaces: [ws()], topics: [] }),
+    navState({
+      groups: [
+        groupe({ id: 'ng_1', name: 'A', ord: 0 }),
+        groupe({ id: 'ng_2', name: 'B', ord: 1 }),
+        groupe({ id: 'ng_3', name: 'C', ord: 2 }),
+      ],
+      placements: [],
+    }),
+    { 'PUT /api/nav/groups/order': json(200, {}) },
+  );
+  await screen.findByText('B');
+  await userEvent.click(node('1-1.barre-gauche.groupes.modifier')!);
+
+  mockRect();
+  dragStart(ligneGroupe('ng_2'));
+  dragOver(node('1-1.barre-gauche.groupe-ng_2')!, clientYHaut);
+  drop(node('1-1.barre-gauche.groupe-ng_2')!);
+
+  expect(h.calls.some((c) => c.url === '/api/nav/groups/order')).toBe(false);
+});
+
 test('menu ··· au clavier : « Déplacer vers… » appelle PATCH placements avec le groupe choisi', async () => {
   const h = open(
     snapshot({ workspaces: [ws()], topics: [topic({ id: 'tp_1' })] }),
@@ -216,7 +388,7 @@ test('menu ··· : le groupe courant est désactivé dans « Déplacer vers… 
   await userEvent.click(node('1-1.barre-gauche.groupes.modifier')!);
   await userEvent.click(node('1-1.barre-gauche.sujet-tp_1.actions')!);
   await userEvent.click(screen.getByRole('menuitem', { name: 'Déplacer vers…' }));
-  expect(screen.getByRole('menuitem', { name: 'aid' })).toHaveProperty('disabled', true);
+  expect(screen.getByRole('menuitem', { name: 'aid' }).getAttribute('aria-disabled')).toBe('true');
 });
 
 test('épingler un sujet (PATCH pinned), masquer/afficher un sujet (PATCH hidden)', async () => {
