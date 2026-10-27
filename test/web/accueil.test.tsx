@@ -1,16 +1,27 @@
 // @vitest-environment jsdom
 import { cleanup, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { afterEach, expect, test } from 'vitest';
+import { afterEach, expect, test, vi } from 'vitest';
 import type { NavPlacement, NavState, Topic } from '../../src/shared/model.js';
 import type { StateSnapshot } from '../../src/shared/state.js';
 import { Accueil } from '../../web/src/ecrans/Accueil.js';
+import { compteVue, topicsForVue } from '../../web/src/ui/navVues.js';
 import { resetNavCacheForTests } from '../../web/src/ui/Nav.js';
 import { agent, json, setup, snapshot, topic, ws } from './helpers.js';
+
+// La ligne (point 8) navigue elle-même quand le clic n'est pas sur un lien/bouton ; le lien du nom
+// navigue aussi, par son propre mécanisme (<Link>). Les deux passent par `useNavigate` : un espion
+// dessus distingue « une seule navigation » de la double navigation corrigée (finding 5).
+const navigateSpy = vi.hoisted(() => vi.fn());
+vi.mock('react-router', async () => {
+  const actual = await vi.importActual<typeof import('react-router')>('react-router');
+  return { ...actual, useNavigate: () => navigateSpy };
+});
 
 afterEach(() => {
   cleanup();
   resetNavCacheForTests();
+  navigateSpy.mockClear();
 });
 const node = (id: string) => document.querySelector(`[data-node="${id}"]`);
 const text = (id: string) => node(id)?.textContent;
@@ -71,6 +82,8 @@ test('loading : des squelettes tant que l’instantané n’est pas arrivé', ()
   setup(<Accueil />, snapshot());
   expect(node('1-1.grille.squelette-1')).not.toBeNull();
   expect(node('1-1.grille.squelette-6')).not.toBeNull();
+  // finding 2 : le titre ne prétend plus « Rien n'attend ta réponse » avant que l'état n'arrive.
+  expect(text('1-1.entete.titre')).toBe('Accueil');
 });
 
 test('empty : aucun sujet, le bouton ouvre d’abord « Nouveau projet » quand aucun dépôt n’est enregistré', async () => {
@@ -103,13 +116,15 @@ test('default : une ligne par sujet, avec nom affiché, projet, agent et lien', 
   );
   await attendreTable();
   expect(text('1-1.table.titre')).toBe('Tous les sujets · 2');
-  expect(text('1-1.table.ligne-1.sujet.nom')).toBe('feat/s');
+  expect(text('1-1.table.ligne-1.nom')).toBe('feat/s');
   expect(text('1-1.table.ligne-1.projet')).toBe('aid');
   expect(text('1-1.table.ligne-1.agent')).toBe('shell · au travail');
   expect(text('1-1.table.ligne-2.agent')).toBe('Aucun agent');
   expect(node('1-1.table.ligne-1.sujet')?.querySelector('a')?.getAttribute('href')).toBe(
     '/sujets/tp_1',
   );
+  // finding 4 : le point de statut porte son propre data-node, avec le libellé accessible.
+  expect(node('1-1.table.ligne-1.statut')?.getAttribute('aria-label')).toBe('shell');
 });
 
 test('nom affiché : reprend le renommage du placement, pas la branche, comme Nav', async () => {
@@ -118,7 +133,7 @@ test('nom affiché : reprend le renommage du placement, pas la branche, comme Na
     placements: [placement({ displayName: 'Mon nom' })],
   });
   await attendreTable();
-  expect(text('1-1.table.ligne-1.sujet.nom')).toBe('Mon nom');
+  expect(text('1-1.table.ligne-1.nom')).toBe('Mon nom');
 });
 
 test('agent : « au travail », « libre », « arrêté » selon le statut, jamais codé par la seule couleur', async () => {
@@ -262,7 +277,7 @@ test('le filtre texte, insensible aux accents, filtre sur le nom affiché, le pr
   );
   await attendreTable();
   await userEvent.type(node('1-1.table.filtre') as HTMLElement, 'epicerie');
-  await waitFor(() => expect(text('1-1.table.ligne-1.sujet.nom')).toBe('fix/x'));
+  await waitFor(() => expect(text('1-1.table.ligne-1.nom')).toBe('fix/x'));
   expect(node('1-1.table.ligne-2')).toBeNull();
 });
 
@@ -283,7 +298,7 @@ test('vue ?vue=a-decider : ne montre que les sujets avec une décision en attent
     '/?vue=a-decider',
   );
   await attendreTable();
-  expect(text('1-1.table.ligne-1.sujet.nom')).toBe('feat/s');
+  expect(text('1-1.table.ligne-1.nom')).toBe('feat/s');
   expect(node('1-1.table.ligne-2')).toBeNull();
 });
 
@@ -310,7 +325,7 @@ test('texte de sujet : jamais interprété comme du HTML', async () => {
     }),
   );
   await attendreTable();
-  expect(text('1-1.table.ligne-1.sujet.nom')).toBe('feat/<b>gras</b>');
+  expect(text('1-1.table.ligne-1.nom')).toBe('feat/<b>gras</b>');
   expect(document.querySelector('b')).toBeNull();
 });
 
@@ -320,6 +335,8 @@ test('error : daemon injoignable, bandeau avec cause, et « Réessayer » relit 
   expect(within(band).getByText('Impossible de lire l’état des sujets')).toBeTruthy();
   expect(text('1-1.erreur.bandeau.cause')).toContain('injoignable');
   expect(document.querySelector('.resume')?.textContent).toContain('État indisponible');
+  // finding 2 : le titre lui-même dit « État indisponible », jamais « Rien n'attend ta réponse ».
+  expect(text('1-1.entete.titre')).toBe('État indisponible');
   h.state = snapshot({ workspaces: [ws()], topics: [topic()] });
   h.respond.set('GET /api/nav', json(200, navDefaut([topic()])));
   await userEvent.click(node('1-1.erreur.bandeau.reessayer')!);
@@ -338,4 +355,77 @@ test('bandeau de mise à jour : rien si le daemon ne sait pas ou dit à jour', a
   open(snapshot({ workspaces: [ws()], topics: [topic()] }));
   await attendreTable();
   expect(node('1-1.maj')).toBeNull();
+});
+
+// finding 1 : avant la réponse de /api/nav (ou pour un sujet jamais placé), `placementByTopic` ne
+// connaît pas le sujet — un sujet sans placement doit compter comme un placement par défaut
+// (visible, ni archivé ni épinglé), pas disparaître de « Tous » (navVues.ts, définition partagée
+// avec Nav).
+test('vue : un sujet sans placement compte comme visible, comme un placement par défaut', () => {
+  const t = topic();
+  expect(topicsForVue('tous', [t], new Map(), () => [])).toEqual([t]);
+  expect(compteVue('tous', [t], new Map(), () => [], [])).toBe(1);
+  expect(topicsForVue('archives', [t], new Map(), () => [])).toEqual([]);
+});
+
+test('clic de ligne : le lien du nom ne déclenche pas aussi la navigation du <tr> (finding 5)', async () => {
+  open(snapshot({ workspaces: [ws()], topics: [topic()] }));
+  await attendreTable();
+  // le lien navigue par son propre mécanisme (hors du `useNavigate` espionné ici) : le <tr> ne doit
+  // pas en plus appeler le sien — sinon la double navigation du bug.
+  await userEvent.click(node('1-1.table.ligne-1.nom')!);
+  expect(navigateSpy).not.toHaveBeenCalled();
+  // ailleurs dans la ligne (hors lien/bouton), le <tr> navigue toujours lui-même.
+  await userEvent.click(node('1-1.table.ligne-1.projet')!);
+  expect(navigateSpy).toHaveBeenCalledTimes(1);
+  expect(navigateSpy.mock.calls[0]?.[0]).toBe('/sujets/tp_1');
+});
+
+test('action de ligne : « Trancher » vise le même agent que la colonne Agent (mostUrgent), pas le premier agent en attente (finding 6)', async () => {
+  open(
+    snapshot({
+      workspaces: [ws()],
+      topics: [topic()],
+      runs: [{ id: 'run_1', topicId: 'tp_1', mode: 'standard', state: 'open', createdAt: 't' }],
+      agents: [
+        agent({
+          id: 'ag_shell',
+          status: 'needs_input',
+          pending: { id: 'pr_0', kind: 'question', question: 'Ignoré ?', options: [] },
+        }),
+        agent({
+          id: 'ag_claude',
+          kind: 'claude',
+          status: 'needs_input',
+          pending: { id: 'pr_1', kind: 'question', question: 'Continuer ?', options: [] },
+        }),
+      ],
+    }),
+  );
+  await attendreTable();
+  expect(node('1-1.table.ligne-1.action.bouton')?.getAttribute('href')).toBe(
+    '/sujets/tp_1?agent=ag_claude',
+  );
+});
+
+test('vue archivés : « Désarchiver » appelle le PATCH de Nav et retire le sujet de la vue (finding 7)', async () => {
+  const h = open(
+    snapshot({ workspaces: [ws()], topics: [topic()] }),
+    { ...navDefaut([topic()]), placements: [placement({ archived: true })] },
+    '/?vue=archives',
+  );
+  await attendreTable();
+  expect(node('1-1.table.ligne-1.action.bouton')?.textContent).toBe('Désarchiver');
+  await userEvent.click(node('1-1.table.ligne-1.action.bouton')!);
+  await waitFor(() =>
+    expect(
+      h.calls.some(
+        (c) =>
+          c.method === 'PATCH' &&
+          c.url === '/api/nav/placements/tp_1' &&
+          (c.body as { archived?: boolean })?.archived === false,
+      ),
+    ).toBe(true),
+  );
+  await waitFor(() => expect(node('1-1.table.ligne-1')).toBeNull());
 });

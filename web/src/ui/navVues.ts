@@ -31,6 +31,19 @@ export function correspondVue(p: NavPlacement, v: VueId, agents: Agent[]): boole
   }
 }
 
+// Un sujet sans placement (pas encore répondu par /api/nav, ou jamais placé) se comporte comme un
+// placement par défaut : ni archivé, ni épinglé, ni masqué — il compte comme n'importe quel sujet
+// visible plutôt que de disparaître de « Tous » et des vues d'agent tant que /api/nav n'a pas répondu.
+const placementParDefaut = (topicId: string): NavPlacement => ({
+  topicId,
+  groupId: '',
+  ord: 0,
+  pinned: false,
+  archived: false,
+  hidden: false,
+  displayName: null,
+});
+
 /** Les sujets d'une vue (Accueil, point 5) : même filtre que `compteVue`, en liste plutôt qu'en total. */
 export function topicsForVue(
   v: VueId,
@@ -39,8 +52,8 @@ export function topicsForVue(
   agentsOf: (topicId: string) => Agent[],
 ): Topic[] {
   return topics.filter((t) => {
-    const p = placementByTopic.get(t.id);
-    return p ? correspondVue(p, v, agentsOf(t.id)) : false;
+    const p = placementByTopic.get(t.id) ?? placementParDefaut(t.id);
+    return correspondVue(p, v, agentsOf(t.id));
   });
 }
 
@@ -55,8 +68,8 @@ export function compteVue(
   if (v === 'a-decider') return allAgents.filter((a) => a.status === 'needs_input').length;
   let total = 0;
   for (const t of topics) {
-    const p = placementByTopic.get(t.id);
-    if (p && correspondVue(p, v, agentsOf(t.id))) total += 1;
+    const p = placementByTopic.get(t.id) ?? placementParDefaut(t.id);
+    if (correspondVue(p, v, agentsOf(t.id))) total += 1;
   }
   return total;
 }

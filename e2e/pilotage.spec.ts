@@ -25,6 +25,8 @@ test('une permission passe du hook à l’Accueil et à la boîte, on y répond 
   const agent = await launchClaude(page);
   await expect.poll(() => terminalText(page, agent)).toContain('PRÊT');
   await typeInTerminal(page, 'perm');
+  // le prompt de permission est encore dans le terminal de l'écran Sujet avant toute réponse
+  await expect.poll(() => terminalText(page, agent)).toContain('Do you want to proceed?');
 
   // piste A (D56) : la décision se lit sur le bandeau de l'Accueil, pas sur une carte par sujet
   await page.goto(url());
@@ -32,6 +34,11 @@ test('une permission passe du hook à l’Accueil et à la boîte, on y répond 
     'autoriser Bash(npm test -- pty) ?',
   );
   await expect(node(page, '1-1.barre.nav-boite.compte')).toHaveText('1');
+  // le statut de la ligne de table reflète la même attente (Statut.tsx, Point)
+  await expect(node(page, '1-1.table.ligne-1.statut')).toHaveAttribute(
+    'aria-label',
+    'Attend une réponse',
+  );
 
   await node(page, '1-1.barre.nav-boite').click();
   await expect(page).toHaveURL(/\/boite$/);
@@ -59,7 +66,7 @@ test('un message à un shell dans son terminal, puis pause et reprise depuis l�
 }) => {
   const page = await openApp(await browser.newContext());
   await registerWorkspace(page, newRepo('depot-pilotage'));
-  await createTopic(page, 'Pilotage du shell');
+  const id = await createTopic(page, 'Pilotage du shell');
   const agent = await launchShell(page);
 
   // le statut est le libellé accessible du point, pas du texte visible (Statut.tsx, Point)
@@ -72,6 +79,12 @@ test('un message à un shell dans son terminal, puis pause et reprise depuis l�
   // l'écran Sujet depuis le point C (commit « pause et reprise »).
   await node(page, '1-3.terminaux.pied.pause').click();
   await expect(point).toHaveAttribute('aria-label', 'En pause');
+  // la ligne de table de l'Accueil montre le même statut (remplace l'ancienne assertion `activite`
+  // de la carte portée là-bas avant la table ; son champ de message désactivé pendant la pause n'a
+  // plus d'équivalent — rien d'autre à vérifier ici).
+  await page.goto(url());
+  await expect(node(page, '1-1.table.ligne-1.statut')).toHaveAttribute('aria-label', 'En pause');
+  await page.goto(`${url()}/sujets/${id}`);
   const pid = (await state(page)).agents.find((a) => a.id === agent)!.pid;
   const stat = () => execFileSync('ps', ['-o', 'stat=', '-p', String(pid)], { encoding: 'utf8' });
   expect(stat()).toMatch(/T/);

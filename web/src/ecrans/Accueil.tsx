@@ -379,17 +379,62 @@ function ActionLigne({
   topic,
   agents,
   dataNode,
+  archive,
+  onDesarchive,
 }: {
   topic: Topic;
   agents: Agent[];
   dataNode: string;
+  archive?: boolean;
+  onDesarchive?: () => void;
 }) {
   const { call } = useAid();
   const navigate = useNavigate();
   const [busy, setBusy] = useState(false);
   const [erreur, setErreur] = useState<string | null>(null);
-  const decideur = agents.find((a) => a.pending && a.status === 'needs_input');
+  // Même agent que la colonne Agent (mostUrgent) quand il est en attente, sinon on garde le find.
+  const urgent = mostUrgent(agents);
+  const decideur =
+    urgent?.pending && urgent.status === 'needs_input'
+      ? urgent
+      : agents.find((a) => a.pending && a.status === 'needs_input');
   const neRemonte = (e: { stopPropagation: () => void }) => e.stopPropagation();
+
+  if (archive) {
+    const desarchiver = async () => {
+      setBusy(true);
+      setErreur(null);
+      try {
+        await call('PATCH', `/api/nav/placements/${topic.id}`, { archived: false });
+        onDesarchive?.();
+      } catch (err) {
+        setErreur(err instanceof Error ? err.message : String(err));
+        setBusy(false);
+      }
+    };
+    return (
+      <>
+        <button
+          className="bouton"
+          data-node={dataNode}
+          data-action="sujet.desarchiver"
+          type="button"
+          disabled={busy}
+          onClick={(e) => {
+            neRemonte(e);
+            void desarchiver();
+          }}
+        >
+          {busy ? 'Désarchivage…' : 'Désarchiver'}
+        </button>
+        {erreur && (
+          <span className="texte-faible" role="alert" data-node={`${dataNode}.erreur`}>
+            {erreur}
+          </span>
+        )}
+      </>
+    );
+  }
 
   if (decideur) {
     return (
@@ -491,7 +536,7 @@ function Contenu() {
         <div className="entete" data-node="1-1.entete">
           <div className="entete-texte">
             <h1 className="titre-ecran" data-node="1-1.entete.titre">
-              Rien n’attend ta réponse
+              {down ? 'État indisponible' : 'Accueil'}
             </h1>
             {down ? (
               <p className="resume">État indisponible</p>
@@ -693,13 +738,25 @@ function Contenu() {
             <table className="table-sujets" data-node="1-1.table.lignes">
               <thead>
                 <tr>
-                  <th data-node="1-1.table.entete.sujet">Sujet</th>
-                  <th data-node="1-1.table.entete.projet">Projet</th>
-                  <th data-node="1-1.table.entete.agent">Agent</th>
-                  <th className="colonne-activite" data-node="1-1.table.entete.activite">
+                  <th scope="col" data-node="1-1.table.entete.sujet">
+                    Sujet
+                  </th>
+                  <th scope="col" data-node="1-1.table.entete.projet">
+                    Projet
+                  </th>
+                  <th scope="col" data-node="1-1.table.entete.agent">
+                    Agent
+                  </th>
+                  <th
+                    scope="col"
+                    className="colonne-activite"
+                    data-node="1-1.table.entete.activite"
+                  >
                     Activité
                   </th>
-                  <th data-node="1-1.table.entete.action">Action</th>
+                  <th scope="col" data-node="1-1.table.entete.action">
+                    Action
+                  </th>
                 </tr>
               </thead>
               <tbody>
@@ -713,7 +770,10 @@ function Contenu() {
                       key={t.id}
                       className="ligne-sujet"
                       data-node={rowId}
-                      onClick={() => navigate(`/sujets/${t.id}`)}
+                      onClick={(e) => {
+                        if ((e.target as Element).closest('a,button')) return;
+                        navigate(`/sujets/${t.id}`);
+                      }}
                     >
                       <td data-node={`${rowId}.sujet`}>
                         <Link
@@ -721,13 +781,18 @@ function Contenu() {
                           data-action="sujet.ouvrir"
                           to={`/sujets/${t.id}`}
                         >
-                          <Point tone={view.tone} label={view.label} estimated={view.estimated} />
-                          <span data-node={`${rowId}.sujet.nom`} data-bind="sujet.nom_affiche">
+                          <Point
+                            tone={view.tone}
+                            label={view.label}
+                            estimated={view.estimated}
+                            dataNode={`${rowId}.statut`}
+                          />
+                          <span data-node={`${rowId}.nom`} data-bind="sujet.nom_affiche">
                             {nomAffiche(t)}
                           </span>
                           {t.phase && <span className="md-code-ligne">{t.phase}</span>}
                         </Link>
-                        <span className="texte-faible" data-node={`${rowId}.sujet.index`}>
+                        <span className="texte-faible" data-node={`${rowId}.index`}>
                           {indexPastille(t)}
                         </span>
                       </td>
@@ -745,6 +810,15 @@ function Contenu() {
                           topic={t}
                           agents={agents}
                           dataNode={`${rowId}.action.bouton`}
+                          archive={vue === 'archives'}
+                          onDesarchive={() =>
+                            setNav((cur) => ({
+                              ...cur,
+                              placements: (cur.placements ?? []).map((p) =>
+                                p.topicId === t.id ? { ...p, archived: false } : p,
+                              ),
+                            }))
+                          }
                         />
                       </td>
                     </tr>
