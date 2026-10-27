@@ -190,6 +190,37 @@ test('brouillon dont le worktree existe déjà : le menu ⋯ ne propose que la c
   expect(screen.queryByText('Nettoyer le sujet')).toBeNull();
 });
 
+// review db76a41 : sujet actif dont le worktree a disparu, le ⋯ reste — « Nettoyer le sujet » en a besoin.
+test('sujet actif dont le worktree a disparu : le menu ⋯ garde « Nettoyer le sujet », sans la copie du chemin', async () => {
+  open(snapshot({ workspaces: [ws()], topics: [topic({ worktreeMissing: true })], runs: [run] }));
+  await screen.findByText('Mon sujet');
+  await userEvent.click(await screen.findByLabelText('Plus d’actions'));
+  expect(screen.getByText('Nettoyer le sujet')).toBeTruthy();
+  expect(screen.queryByText('Copier le chemin du worktree', { exact: false })).toBeNull();
+});
+
+// review db76a41 : le minuteur « copié » est annulé à la fermeture, pas de résidu à la réouverture.
+test('menu ⋯ : fermer le menu après avoir copié annule le minuteur « copié »', async () => {
+  vi.useFakeTimers({ shouldAdvanceTime: true });
+  try {
+    Object.assign(navigator, {
+      clipboard: { writeText: vi.fn().mockResolvedValue(undefined) },
+    });
+    open(snapshot({ workspaces: [ws()], topics: [topic()], runs: [run] }));
+    await screen.findByText('Mon sujet');
+    await userEvent.click(await screen.findByLabelText('Plus d’actions'));
+    await userEvent.click(screen.getByText('Copier le chemin du worktree', { exact: false }));
+    expect(await screen.findByText('copié')).toBeTruthy();
+    await userEvent.click(screen.getByLabelText('Plus d’actions'));
+    await userEvent.click(await screen.findByLabelText('Plus d’actions'));
+    expect(screen.queryByText('copié')).toBeNull();
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(screen.queryByText('copié')).toBeNull();
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
 test('en-tête d’un projet sans remote : la base est la branche locale, sans « origin/ »', async () => {
   open(snapshot({ workspaces: [ws({ remote: null })], topics: [topic()], runs: [run] }));
   await screen.findByText('Mon sujet');

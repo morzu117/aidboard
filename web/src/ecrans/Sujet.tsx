@@ -87,6 +87,15 @@ function Contenu({
   const [ignoring, setIgnoring] = useState(false);
   // §5.3 : retour discret après la copie du chemin du worktree depuis le menu ⋯.
   const [worktreeCopie, setWorktreeCopie] = useState(false);
+  // review db76a41 : porte le minuteur « copié » pour l'annuler à la fermeture du menu ou au démontage.
+  const worktreeCopieTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // review db76a41 : au démontage, pas de setState sur un minuteur encore en attente.
+  useEffect(
+    () => () => {
+      if (worktreeCopieTimer.current !== null) clearTimeout(worktreeCopieTimer.current);
+    },
+    [],
+  );
   // correctif 3 (recette) : emplacement DOM fourni à la Conversation active pour y porter ses
   // propres contrôles (Repères, Tout déplier) dans la rangée d'onglets — l'état reste dans Conversation.
   const [ongletsActionsEl, setOngletsActionsEl] = useState<HTMLDivElement | null>(null);
@@ -320,12 +329,21 @@ function Contenu({
     }
   }
 
+  // review db76a41 : remet « copié » à faux et annule le minuteur en attente à la fermeture du menu ⋯.
+  function fermerMenuPlus() {
+    setWorktreeCopie(false);
+    if (worktreeCopieTimer.current !== null) {
+      clearTimeout(worktreeCopieTimer.current);
+      worktreeCopieTimer.current = null;
+    }
+  }
+
   // §5.3 : le chemin du worktree quitte les pastilles pour le menu ⋯, copié via le clipboard.
   async function copierWorktree() {
     try {
       await navigator.clipboard.writeText(worktree);
       setWorktreeCopie(true);
-      setTimeout(() => setWorktreeCopie(false), 2000);
+      worktreeCopieTimer.current = setTimeout(() => setWorktreeCopie(false), 2000);
     } catch {
       // clipboard indisponible (contexte non sécurisé, permission refusée) : pas de retour
     }
@@ -394,7 +412,7 @@ function Contenu({
             >
               Ouvrir dans l’éditeur
             </button>
-            {!topic.worktreeMissing && (
+            {(topic.state !== 'draft' || !topic.worktreeMissing) && (
               <button
                 className="bouton-icone"
                 data-node="1-3.actions.plus"
@@ -402,12 +420,15 @@ function Contenu({
                 type="button"
                 aria-label="Plus d’actions"
                 aria-expanded={menu === 'plus'}
-                onClick={() => setMenu(menu === 'plus' ? 'aucun' : 'plus')}
+                onClick={() => {
+                  if (menu === 'plus') fermerMenuPlus();
+                  setMenu(menu === 'plus' ? 'aucun' : 'plus');
+                }}
               >
                 ⋯
               </button>
             )}
-            {menu === 'plus' && !topic.worktreeMissing && (
+            {menu === 'plus' && (topic.state !== 'draft' || !topic.worktreeMissing) && (
               <>
                 {topic.state !== 'draft' && (
                   <button
@@ -415,6 +436,7 @@ function Contenu({
                     data-action="topic.cleanup"
                     type="button"
                     onClick={() => {
+                      fermerMenuPlus();
                       setMenu('aucun');
                       void nettoyage.start();
                     }}
@@ -423,21 +445,23 @@ function Contenu({
                     Nettoyer le sujet
                   </button>
                 )}
-                <button
-                  className="bouton bouton--fantome"
-                  data-action="sujet.copier-worktree"
-                  type="button"
-                  onClick={() => void copierWorktree()}
-                >
-                  Copier le chemin du worktree{' '}
-                  <span
-                    className="chemin-worktree"
-                    data-node="1-3.entete.worktree"
-                    data-bind="sujet.worktree"
+                {!topic.worktreeMissing && (
+                  <button
+                    className="bouton bouton--fantome"
+                    data-action="sujet.copier-worktree"
+                    type="button"
+                    onClick={() => void copierWorktree()}
                   >
-                    {topic.worktree}
-                  </span>
-                </button>
+                    Copier le chemin du worktree{' '}
+                    <span
+                      className="chemin-worktree"
+                      data-node="1-3.entete.worktree"
+                      data-bind="sujet.worktree"
+                    >
+                      {topic.worktree}
+                    </span>
+                  </button>
+                )}
                 {worktreeCopie && (
                   <span className="texte-discret" data-node="1-3.actions.worktree-copie">
                     copié
