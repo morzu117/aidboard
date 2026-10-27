@@ -51,6 +51,8 @@ export function PanneauContexte({
   const [pages, setPages] = useState<Partial<Record<MemoryKind, MemoryPage>> | null>(null);
   const [onglet, setOnglet] = useState<OngletId>(initialOnglet ?? 'plan');
   const refs = useRef<Partial<Record<OngletId, HTMLButtonElement | null>>>({});
+  // review D (finding 1, re-dev) : savoir si le focus est dans le panneau avant d'y toucher.
+  const panneauRef = useRef<HTMLElement | null>(null);
   // review D (finding 5) : compte les replis involontaires sur Plan (onglet disparu) pour que
   // l'effet de focus plus bas ne se déclenche que sur ceux-ci, pas sur une sélection normale.
   const [repli, setRepli] = useState(0);
@@ -98,8 +100,15 @@ export function PanneauContexte({
   // review D (finding 5) : le repli ci-dessus laisse le focus sur un bouton qui vient de
   // quitter le DOM — le ramener sur Plan, mais seulement pour un repli (pas une sélection
   // normale de l'onglet Plan, où allerVers gère déjà le focus lui-même).
+  // review D (finding 1, re-dev) : un repli déclenché par un changement de sujet ne doit pas
+  // voler le focus à l'extérieur du panneau (champ de saisie, terminal) — seulement le ramener
+  // s'il est déjà perdu (body/null) ou déjà dans le panneau (motif ci-dessus).
   useEffect(() => {
-    if (repli > 0) refs.current.plan?.focus();
+    if (repli === 0) return;
+    const actif = document.activeElement;
+    const perdu = actif === null || actif === document.body;
+    const dansLePanneau = !!panneauRef.current && panneauRef.current.contains(actif);
+    if (perdu || dansLePanneau) refs.current.plan?.focus();
   }, [repli]);
 
   function allerVers(id: OngletId) {
@@ -117,7 +126,12 @@ export function PanneauContexte({
   }
 
   return (
-    <aside className="panneau-contexte" data-node="1-3.panneau" aria-label="Panneau du sujet">
+    <aside
+      className="panneau-contexte"
+      data-node="1-3.panneau"
+      aria-label="Panneau du sujet"
+      ref={panneauRef}
+    >
       <div
         className="onglets"
         data-node="1-3.onglets"

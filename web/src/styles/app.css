@@ -841,8 +841,65 @@ body {
   .volet {
     display: contents;
   }
-  .panneau-contexte {
-    flex: 0 0 320px;
-    height: max(var(--h-terminal-sujet), calc(100dvh - 340px));
+  /* review D (finding 2/3, re-dev) : grille 25/50/25 et page sans défilement — seulement
+     quand PanneauContexte existe (vue complète) ; la vue à une colonne et les autres écrans,
+     qui n'ont pas de .panneau-contexte, ne sont pas touchés par ce sélecteur. */
+  .cadre:has(.panneau-contexte) {
+    height: 100dvh;
+    overflow: hidden;
   }
+  .sujet-corps:has(.panneau-contexte) {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: hidden;
+  }
+  .sujet-corps:has(.panneau-contexte) .cote {
+    flex: 0 0 25%;
+    min-height: 0;
+    overflow-y: auto;
+  }
+  .sujet-corps:has(.panneau-contexte) .sujet-contenu {
+    flex: 0 0 50%;
+    min-height: 0;
+    overflow: hidden;
+  }
+  .sujet-corps:has(.panneau-contexte) .sujet-contenu > .sujet-grille.sujet-grille--seul {
+    display: flex;
+    flex: 1 1 auto;
+    min-height: 0;
+  }
+  .sujet-corps:has(.panneau-contexte) .sujet-contenu .colonne {
+    flex: 1 1 auto;
+    min-height: 0;
+  }
+  .sujet-corps:has(.panneau-contexte) .sujet-contenu .terminaux {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: hidden;
+  }
+  /* le wrapper du Terminal n'a pas de classe propre (seule « .masque » bascule sa visibilité) ;
+     la racine de Conversation (« .conversation ») est, elle, un sibling direct au même niveau. */
+  .sujet-corps:has(.panneau-contexte) .sujet-contenu .terminaux > div:not(.onglets) {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    min-height: 0;
+  }
+  .sujet-corps:has(.panneau-contexte) .sujet-contenu .terminaux .conversation,
+  .sujet-corps:has(.panneau-contexte) .sujet-contenu .terminaux .sortie-xterm {
+    flex: 1 1 auto;
+    min-height: 0;
+    height: auto;
+  }
+  .panneau-contexte {
+    flex: 0 0 25%;
+    min-height: 0;
+  }
+}
+
+/* review D (finding 4, re-dev) : [data-viewport="tablet|phone"] .cote { display: none; }
+   (maquette.css) s'applique aussi dans la pop-up ouverte — le burger affichait un volet vide
+   sous 1180 px. Spécificité (.volet.est-ouvert > .cote = 3 classes) suffisante sans !important. */
+.volet.est-ouvert > .cote {
+  display: flex;
 }

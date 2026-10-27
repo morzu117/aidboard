@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { useState } from 'react';
 import { afterEach, expect, test } from 'vitest';
@@ -188,4 +188,43 @@ test('repli sur Plan quand l’onglet mémoire sélectionné disparaît, et y re
   const plan = screen.getByRole('tab', { name: 'Plan' });
   expect(plan.getAttribute('aria-selected')).toBe('true');
   expect(document.activeElement).toBe(plan);
+});
+
+// review D, finding 1 (re-dev 2) : un repli déclenché par un changement de sujet (onglet
+// Revue du sujet A absent pour le sujet B) ne doit pas voler le focus à un champ extérieur.
+// Le bascule se fait via fireEvent sur un <div> : userEvent.click reproduit le comportement
+// des navigateurs qui renvoie le focus au document quand la cible n'est pas focusable — ce
+// qui rendrait le test muet sur le comportement de l'effet de repli à tester ici.
+function CommutateurSansFocus() {
+  const [second, setSecond] = useState(false);
+  return (
+    <>
+      <div data-testid="basculer-sans-focus" onClick={() => setSecond(true)} />
+      {panneau({ topicSlug: second ? 's2' : 's1' })}
+    </>
+  );
+}
+
+test('changement de sujet : le repli sur Plan ne vole pas le focus resté à l’extérieur du panneau', async () => {
+  const h = setup(<CommutateurSansFocus />, snapshot(), '/', {
+    'GET /api/memory/pages?prefix=aid%2F': json(200, { slugs: ['aid/review/s1'] }),
+    'GET /api/memory/pages/aid/review/s1': json(
+      200,
+      pageMemoire('aid/review/s1', 'Corps de la revue.'),
+    ),
+  });
+  const revue = await screen.findByRole('tab', { name: 'Revue' });
+  await userEvent.click(revue);
+  await screen.findByText('Corps de la revue.');
+  const champExterieur = document.createElement('input');
+  document.body.appendChild(champExterieur);
+  champExterieur.focus();
+  expect(document.activeElement).toBe(champExterieur);
+  h.respond.set('GET /api/memory/pages?prefix=aid%2F', json(200, { slugs: [] }));
+  fireEvent.click(screen.getByTestId('basculer-sans-focus'));
+  await waitFor(() => expect(screen.queryByRole('tab', { name: 'Revue' })).toBeNull());
+  const plan = screen.getByRole('tab', { name: 'Plan' });
+  expect(plan.getAttribute('aria-selected')).toBe('true');
+  expect(document.activeElement).toBe(champExterieur);
+  champExterieur.remove();
 });
