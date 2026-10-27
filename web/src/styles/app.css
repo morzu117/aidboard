@@ -375,15 +375,21 @@ body {
 /* Onglet Git dans le panneau contextuel (recette, correctif 4) : .commit/.outils viennent de
    la grille 5 colonnes de l'écran plein écran (3.2) — dans les ~360 px du panneau les colonnes
    Date/Hash sortaient du cadre et le message n'était plus visible. */
+/* re-dev 2/2 : --h-ligne-commit/--l-graphe locaux (deux lignes de texte, graphe à 3 voies) —
+   repris tels quels par .commit/.graphe de la maquette, sans règle de taille en plus. */
+.panneau-contexte {
+  --h-ligne-commit: 46px;
+  --l-graphe: 64px;
+}
 .panneau-contexte .commit {
   display: flex;
   align-items: center;
-  height: auto;
-  min-height: var(--h-ligne-commit);
+  overflow: hidden;
   padding: var(--sp-1) var(--sp-3);
 }
 .panneau-contexte .commit-corps {
   display: flex;
+  flex: 1 1 auto;
   flex-direction: column;
   min-width: 0;
   gap: 2px;
@@ -394,7 +400,15 @@ body {
   gap: var(--sp-2);
   min-width: 0;
 }
+.panneau-contexte .commit-ligne1 .etiquette {
+  flex: 0 1 auto;
+  max-width: 50%;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
 .panneau-contexte .commit-ligne1 .message {
+  flex: 1 1 auto;
   overflow: hidden;
   min-width: 0;
   white-space: nowrap;

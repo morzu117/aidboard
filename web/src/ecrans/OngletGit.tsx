@@ -14,10 +14,17 @@ const PORTEES: Array<{ valeur: Portee; label: string }> = [
   { valeur: 'sujet', label: 'Sujet seul' },
 ];
 
+// re-dev 2/2 : la largeur « 64 » doit rester alignée sur --l-graphe (app.css, .panneau-contexte).
 function CommitGraphe({ row }: { row: GraphRow }) {
   const cx = LANE_X[row.lane];
+  const cy = row.nodeY;
   return (
-    <svg className="graphe" viewBox="0 0 72 32" aria-hidden="true" focusable="false">
+    <svg
+      className="graphe"
+      viewBox={`0 0 64 ${row.rowHeight}`}
+      aria-hidden="true"
+      focusable="false"
+    >
       {row.paths.map((p, i) => (
         <path
           key={i}
@@ -25,11 +32,11 @@ function CommitGraphe({ row }: { row: GraphRow }) {
           d={p.d}
         />
       ))}
-      {row.isHead && <circle className="anneau" cx={cx} cy={16} r={8} />}
+      {row.isHead && <circle className="anneau" cx={cx} cy={cy} r={8} />}
       <circle
         className={row.wip ? 'noeud noeud--wip' : `noeud noeud--voie-${row.lane}`}
         cx={cx}
-        cy={16}
+        cy={cy}
         r={row.wip ? 5 : row.isHead ? 5.5 : 4.5}
       />
     </svg>
@@ -200,7 +207,10 @@ export function OngletGit({
   const baseRefs = useMemo(() => (remote ? [`${remote}/${base}`, base] : [base]), [remote, base]);
 
   const rows = useMemo(
-    () => (log ? layoutGraph(log.commits, { baseRefs, dirty: log.dirty }) : []),
+    // rowHeight/nodeY alignés sur --h-ligne-commit (app.css, .panneau-contexte) : seul endroit
+    // où ce composant s'affiche, donc pas besoin d'une valeur plein écran séparée.
+    () =>
+      log ? layoutGraph(log.commits, { baseRefs, dirty: log.dirty, rowHeight: 46, nodeY: 23 }) : [],
     [log, baseRefs],
   );
   const commitByHash = useMemo(
