@@ -29,6 +29,7 @@ import { registerStateRoutes } from './routes/state.js';
 import { registerMemoryRoutes } from './routes/memory.js';
 import { registerStructuralRoutes } from './routes/structural.js';
 import { registerMeshRoutes } from './routes/mesh.js';
+import { registerNavRoutes } from './routes/nav.js';
 import type { MeshService } from './mesh/service.js';
 import type { MemoryProposals } from './memory/maintain.js';
 import type { MemoryService } from './memory/service.js';
@@ -140,6 +141,7 @@ export async function buildServer(deps: ServerDeps): Promise<FastifyInstance> {
   });
   registerAgentRoutes(app, { db: deps.db, agents: deps.agents });
   registerWorkspaceRoutes(app, { ...deps, engine: structural });
+  registerNavRoutes(app, { db: deps.db });
   registerFsRoutes(app);
   registerFileRoutes(app, { db: deps.db });
   registerHookRoutes(app, () => process.env);

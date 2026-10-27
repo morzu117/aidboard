@@ -201,3 +201,35 @@ export interface MeshState {
   since: string | null;
   cell: string;
 }
+
+/** Chantier 15 (D55, groupe B) : un groupe de la barre gauche. `workspaceId` non nul = groupe par défaut d'un projet. */
+export interface NavGroup {
+  id: string;
+  name: string;
+  color: string;
+  ord: number;
+  collapsed: boolean;
+  hidden: boolean;
+  workspaceId: string | null;
+}
+
+/** Placement d'un sujet dans un groupe de la barre gauche ; `displayName` null = nom par défaut (la branche). */
+export interface NavPlacement {
+  topicId: string;
+  groupId: string;
+  ord: number;
+  pinned: boolean;
+  archived: boolean;
+  hidden: boolean;
+  displayName: string | null;
+}
+
+export interface NavPrefs {
+  reduit: boolean;
+}
+
+export interface NavState {
+  groups: NavGroup[];
+  placements: NavPlacement[];
+  prefs: NavPrefs;
+}
