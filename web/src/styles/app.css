@@ -372,6 +372,95 @@ body {
   min-height: 240px;
 }
 
+/* Onglet Git dans le panneau contextuel (recette, correctif 4) : .commit/.outils viennent de
+   la grille 5 colonnes de l'écran plein écran (3.2) — dans les ~360 px du panneau les colonnes
+   Date/Hash sortaient du cadre et le message n'était plus visible. */
+.panneau-contexte .commit {
+  display: flex;
+  align-items: center;
+  height: auto;
+  min-height: var(--h-ligne-commit);
+  padding: var(--sp-1) var(--sp-3);
+}
+.panneau-contexte .commit-corps {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: 2px;
+}
+.panneau-contexte .commit-ligne1 {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  min-width: 0;
+}
+.panneau-contexte .commit-ligne1 .message {
+  overflow: hidden;
+  min-width: 0;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.panneau-contexte .commit-ligne2 {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--sp-2);
+  overflow: hidden;
+  font-size: var(--fs-s);
+  color: var(--text-3);
+}
+.panneau-contexte .commit-meta {
+  overflow: hidden;
+  min-width: 0;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.panneau-contexte .commit-hash {
+  flex: none;
+  font-family: ui-monospace, monospace;
+  color: var(--muted);
+}
+/* point 2 : filtres sur une ligne, champ pleine largeur, « Voir la base »/Fetch sur une ligne. */
+.panneau-contexte .outils-git {
+  flex-direction: column;
+  align-items: stretch;
+}
+.panneau-contexte .outils-git .champ {
+  flex: 0 0 auto;
+  width: 100%;
+}
+.panneau-contexte .git-portees {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 2px;
+}
+.panneau-contexte .git-portees .portee {
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 0 var(--sp-1);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.panneau-contexte .git-actions-ligne {
+  display: flex;
+  gap: var(--sp-2);
+}
+.panneau-contexte .git-actions-ligne .bouton {
+  flex: 1 1 0;
+}
+/* point 4 : l'en-tête du détail porte le bouton Retour, au-dessus du contenu en une colonne. */
+.panneau-contexte .detail-entete {
+  padding: var(--sp-3) var(--sp-4) 0;
+}
+.panneau-contexte .detail .fichier-chemin {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
 /* Mesh swarph (12.5) : pastille de la barre et bloc de contenu d'un DM. Pas de maquette (D13) :
    les variables des maquettes seulement. Le contenu d'un pair est du texte brut, jamais rendu. */
 .bouton-mesh {

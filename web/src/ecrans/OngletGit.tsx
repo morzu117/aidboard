@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { GitCommitDetail, GitLogCommit, GitLogResponse } from '../../../src/shared/git.js';
 import { AidApiError } from '../data/api.js';
 import { fetchCommitDetail, fetchGitLog } from '../data/git.js';
@@ -132,6 +132,16 @@ export function OngletGit({
   const [detailErreur, setDetailErreur] = useState<string | null>(null);
   const [actionEnCours, setActionEnCours] = useState<string | null>(null);
   const [actionErreur, setActionErreur] = useState<string | null>(null);
+  const listeRef = useRef<HTMLDivElement | null>(null);
+  const defilementListe = useRef(0);
+  const retourRef = useRef<HTMLButtonElement | null>(null);
+
+  // point 4 : le détail remplace la liste — restaure le défilement au retour, rend le focus
+  // au bouton Retour à l'ouverture (porte d'entrée de l'Échap = Retour).
+  useEffect(() => {
+    if (selection) retourRef.current?.focus();
+    else if (listeRef.current) listeRef.current.scrollTop = defilementListe.current;
+  }, [selection]);
 
   useEffect(() => {
     let cancelled = false;
@@ -175,12 +185,17 @@ export function OngletGit({
   );
 
   function selectionner(hash: string) {
+    if (listeRef.current) defilementListe.current = listeRef.current.scrollTop;
     setSelection(hash);
     setDetail(null);
     setDetailErreur(null);
     fetchCommitDetail(call, topicId, hash)
       .then(setDetail)
       .catch((err) => setDetailErreur(err instanceof AidApiError ? err.message : String(err)));
+  }
+
+  function retour() {
+    setSelection(null);
   }
 
   if (erreur) {
@@ -242,143 +257,44 @@ export function OngletGit({
     return true;
   });
 
-  return (
-    <>
-      <SituationBanniere
-        live={log.live}
-        base={base}
-        actionEnCours={actionEnCours}
-        erreur={actionErreur}
-        onSynchroniser={() => void lancerAction('topic.sync')}
-        onPousser={() => void lancerAction('git.pousser')}
-      />
-      <div className="sujet-grille" data-node="1-3.git">
-        <div className="colonne">
-          <section
-            className="panneau panneau--sombre"
-            data-node="1-3.git.historique"
-            aria-label="Historique"
-          >
-            <div className="outils">
-              <div role="group" aria-label="Branches affichées">
-                {PORTEES.map(({ valeur, label }) => (
-                  <button
-                    key={valeur}
-                    className={`portee${portee === valeur ? ' est-actif' : ''}`}
-                    data-node={`1-3.git.historique.portee-${valeur}`}
-                    data-action="git.portee"
-                    type="button"
-                    aria-pressed={portee === valeur}
-                    onClick={() => setPortee(valeur)}
-                  >
-                    {label}
-                  </button>
-                ))}
-              </div>
-              <input
-                className="champ"
-                data-node="1-3.git.historique.recherche"
-                data-action="git.filtrer"
-                type="text"
-                placeholder="Message, auteur ou hash"
-                aria-label="Filtrer les commits"
-                value={recherche}
-                onChange={(e) => setRecherche(e.target.value)}
-              />
-              <button
-                className="bouton"
-                data-node="1-3.git.historique.voir-base"
-                data-action="git.voir-base"
-                type="button"
-                onClick={() => baseTip && selectionner(baseTip)}
-                disabled={!baseTip}
-              >
-                Voir la base
-              </button>
-              <button
-                className="bouton"
-                data-node="1-3.git.historique.fetch"
-                data-action="git.fetch"
-                type="button"
-                onClick={() => void lancerAction('git.fetch')}
-                disabled={actionEnCours !== null}
-              >
-                Fetch
-              </button>
-            </div>
-            <div className="colonnes" aria-hidden="true">
-              <span>Graphe</span>
-              <span>Description</span>
-              <span className="col-auteur">Auteur</span>
-              <span className="col-date">Date</span>
-              <span className="col-hash">Hash</span>
-            </div>
-            {filtered.length === 0 ? (
-              <p className="vide-message" data-node="1-3.git.historique.aucun-resultat">
-                Aucun commit ne correspond au filtre.
-              </p>
-            ) : (
-              <div className="commits" role="list" aria-label="Commits">
-                {filtered.map((row) => {
-                  const c = row.wip ? null : (commitByHash.get(row.hash) ?? null);
-                  return (
-                    <button
-                      key={row.hash || 'wip'}
-                      className={`commit${selection === row.hash ? ' est-selectionne' : ''}${row.absent ? ' commit--absent' : ''}`}
-                      data-node={`1-3.git.historique.commit-${row.hash || 'wip'}`}
-                      data-action="git.selectionner"
-                      type="button"
-                      role="listitem"
-                      aria-current={selection === row.hash}
-                      onClick={row.wip ? undefined : () => selectionner(row.hash)}
-                      disabled={row.wip}
-                    >
-                      <CommitGraphe row={row} />
-                      <span className="col-message">
-                        {row.wip ? (
-                          <span className="message message--wip">Modifications non commitées</span>
-                        ) : (
-                          <>
-                            {c?.refs.map((r) => (
-                              <span key={r} className="etiquette etiquette--ref">
-                                {r}
-                              </span>
-                            ))}
-                            <span className="message">{c?.message}</span>
-                          </>
-                        )}
-                      </span>
-                      <span className="col-auteur">{row.wip ? '—' : c?.author}</span>
-                      <span className="col-date">
-                        {row.wip ? 'maintenant' : c ? depuis(c.date) : ''}
-                      </span>
-                      <span className="col-hash">{row.wip ? '' : row.hash.slice(0, 7)}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-            <div className="panneau-pied legende" data-node="1-3.git.historique.legende">
-              <span className="legende-element">
-                <span className="point point--voie-1" /> ta branche
-              </span>
-              <span className="legende-element">
-                <span className="point point--voie-0" /> main
-              </span>
-              <span className="legende-element">
-                <span className="point point--voie-2" /> autres branches
-              </span>
-              <span className="legende-element">Atténués : commits absents de ta branche</span>
-            </div>
-          </section>
-        </div>
-        <div className="colonne">
+  const banniere = (
+    <SituationBanniere
+      live={log.live}
+      base={base}
+      actionEnCours={actionEnCours}
+      erreur={actionErreur}
+      onSynchroniser={() => void lancerAction('topic.sync')}
+      onPousser={() => void lancerAction('git.pousser')}
+    />
+  );
+
+  // point 4 : le détail remplace la liste dans le panneau (~360 px), au lieu de la grille
+  // liste + détail côte à côte de l'écran plein écran (3.2), qui écrasait le détail à droite.
+  if (selection) {
+    return (
+      <>
+        {banniere}
+        <div
+          className="sujet-grille sujet-grille--seul"
+          data-node="1-3.git"
+          onKeyDown={(e) => {
+            if (e.key === 'Escape') retour();
+          }}
+        >
           <aside className="panneau" data-node="1-3.git.detail" aria-label="Détail du commit">
-            {!selection ? (
-              <p className="texte-faible" data-node="1-3.git.detail.vide">
-                Sélectionne un commit pour voir son détail.
-              </p>
-            ) : detailErreur ? (
+            <div className="detail-entete">
+              <button
+                ref={retourRef}
+                className="bouton"
+                data-node="1-3.git.detail.retour"
+                data-action="git.retour"
+                type="button"
+                onClick={retour}
+              >
+                ← Retour
+              </button>
+            </div>
+            {detailErreur ? (
               <p className="message-erreur" role="alert">
                 {detailErreur}
               </p>
@@ -477,6 +393,128 @@ export function OngletGit({
             )}
           </aside>
         </div>
+      </>
+    );
+  }
+
+  return (
+    <>
+      {banniere}
+      <div className="sujet-grille sujet-grille--seul" data-node="1-3.git">
+        <section
+          className="panneau panneau--sombre"
+          data-node="1-3.git.historique"
+          aria-label="Historique"
+        >
+          <div className="outils outils-git">
+            <div className="git-portees" role="group" aria-label="Branches affichées">
+              {PORTEES.map(({ valeur, label }) => (
+                <button
+                  key={valeur}
+                  className={`portee${portee === valeur ? ' est-actif' : ''}`}
+                  data-node={`1-3.git.historique.portee-${valeur}`}
+                  data-action="git.portee"
+                  type="button"
+                  aria-pressed={portee === valeur}
+                  onClick={() => setPortee(valeur)}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            <input
+              className="champ"
+              data-node="1-3.git.historique.recherche"
+              data-action="git.filtrer"
+              type="text"
+              placeholder="Message, auteur ou hash"
+              aria-label="Filtrer les commits"
+              value={recherche}
+              onChange={(e) => setRecherche(e.target.value)}
+            />
+            <div className="git-actions-ligne">
+              <button
+                className="bouton"
+                data-node="1-3.git.historique.voir-base"
+                data-action="git.voir-base"
+                type="button"
+                onClick={() => baseTip && selectionner(baseTip)}
+                disabled={!baseTip}
+              >
+                Voir la base
+              </button>
+              <button
+                className="bouton"
+                data-node="1-3.git.historique.fetch"
+                data-action="git.fetch"
+                type="button"
+                onClick={() => void lancerAction('git.fetch')}
+                disabled={actionEnCours !== null}
+              >
+                Fetch
+              </button>
+            </div>
+          </div>
+          {filtered.length === 0 ? (
+            <p className="vide-message" data-node="1-3.git.historique.aucun-resultat">
+              Aucun commit ne correspond au filtre.
+            </p>
+          ) : (
+            <div className="commits" role="list" aria-label="Commits" ref={listeRef}>
+              {filtered.map((row) => {
+                const c = row.wip ? null : (commitByHash.get(row.hash) ?? null);
+                return (
+                  <button
+                    key={row.hash || 'wip'}
+                    className={`commit${row.absent ? ' commit--absent' : ''}`}
+                    data-node={`1-3.git.historique.commit-${row.hash || 'wip'}`}
+                    data-action="git.selectionner"
+                    type="button"
+                    role="listitem"
+                    onClick={row.wip ? undefined : () => selectionner(row.hash)}
+                    disabled={row.wip}
+                  >
+                    <CommitGraphe row={row} />
+                    <span className="commit-corps">
+                      <span className="commit-ligne1">
+                        {row.wip ? (
+                          <span className="message message--wip">Modifications non commitées</span>
+                        ) : (
+                          <>
+                            {c?.refs.map((r) => (
+                              <span key={r} className="etiquette etiquette--ref">
+                                {r}
+                              </span>
+                            ))}
+                            <span className="message">{c?.message}</span>
+                          </>
+                        )}
+                      </span>
+                      <span className="commit-ligne2">
+                        <span className="commit-meta">
+                          {row.wip ? 'maintenant' : `${c?.author} · ${c ? depuis(c.date) : ''}`}
+                        </span>
+                        {!row.wip && <span className="commit-hash">{row.hash.slice(0, 7)}</span>}
+                      </span>
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+          <div className="panneau-pied legende" data-node="1-3.git.historique.legende">
+            <span className="legende-element">
+              <span className="point point--voie-1" /> ta branche
+            </span>
+            <span className="legende-element">
+              <span className="point point--voie-0" /> main
+            </span>
+            <span className="legende-element">
+              <span className="point point--voie-2" /> autres branches
+            </span>
+            <span className="legende-element">Atténués : commits absents de ta branche</span>
+          </div>
+        </section>
       </div>
     </>
   );
