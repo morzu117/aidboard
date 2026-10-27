@@ -202,6 +202,7 @@ export function registerTopicRoutes(app: FastifyInstance, deps: TopicRouteDeps):
       afterFailure: () => {
         deps.db.transaction(() => {
           deps.db.prepare('DELETE FROM runs WHERE topic_id = ?').run(topicId);
+          deps.db.prepare('DELETE FROM nav_placement WHERE topic_id = ?').run(topicId);
           deps.db.prepare('DELETE FROM topics WHERE id = ?').run(topicId);
         })();
       },
@@ -428,6 +429,7 @@ export function registerTopicRoutes(app: FastifyInstance, deps: TopicRouteDeps):
       }
       deps.db.transaction(() => {
         deps.db.prepare('DELETE FROM runs WHERE topic_id = ?').run(id);
+        deps.db.prepare('DELETE FROM nav_placement WHERE topic_id = ?').run(id);
         deps.db.prepare('DELETE FROM topics WHERE id = ?').run(id);
       })();
       return reply.code(204).send();

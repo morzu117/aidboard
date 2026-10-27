@@ -160,16 +160,53 @@ test('retirer un projet : refusé tant qu’un sujet est ouvert, puis oublie les
   const c = await setupWorkspace();
   t = c.t;
   const { topicId } = await makeTopic(c);
+  // GET /api/nav avant l'archivage crée le groupe et le placement par défaut du projet : la
+  // suppression doit les nettoyer aussi, sinon elle viole les clés étrangères de nav_group/nav_placement.
+  await t.d.app.inject({ url: '/api/nav', headers: t.headers });
   const r = await remove(c.ws.id);
   expect(r.statusCode).toBe(409);
   expect(r.json().error).toContain('1 sujet ouvert');
   t.store.append({ source: 'daemon', type: 'topic.state', topicId, data: { state: 'archived' } });
   expect((await remove(c.ws.id)).statusCode).toBe(204);
-  for (const table of ['workspaces', 'topics', 'runs', 'actions'])
+  for (const table of ['workspaces', 'topics', 'runs', 'actions', 'nav_group', 'nav_placement'])
     expect(t.db.prepare(`SELECT count(*) c FROM ${table}`).get(), table).toEqual({ c: 0 });
   // le dépôt et le journal restent
   expect(sh(c.clone, 'rev-parse', '--is-inside-work-tree')).toBe('true');
   expect(t.store.since(null).some((e) => e.topicId === topicId)).toBe(true);
+});
+
+test('retirer un projet : un sujet d’un autre projet déplacé dans son groupe par défaut y revient', async () => {
+  const c = await setupWorkspace();
+  t = c.t;
+  const { topicId } = await makeTopic(c);
+  t.store.append({ source: 'daemon', type: 'topic.state', topicId, data: { state: 'archived' } });
+
+  const dir = realpathSync(mkdtempSync(join(tmpdir(), 'aid-ws-')));
+  const { clone: otherClone } = makeOriginAndClone(dir, { name: 'autre-depot' });
+  const other = (await register({ path: otherClone })).json<{ id: string }>();
+
+  // le premier GET /api/nav crée le groupe par défaut des DEUX projets
+  const before = (await t.d.app.inject({ url: '/api/nav', headers: t.headers })).json<{
+    groups: Array<{ id: string; workspaceId: string | null }>;
+  }>();
+  const ownGroup = before.groups.find((g) => g.workspaceId === c.ws.id)!;
+  const otherGroup = before.groups.find((g) => g.workspaceId === other.id)!;
+
+  // le sujet archivé du premier projet est déplacé dans le groupe du second projet
+  await t.d.app.inject({
+    method: 'PATCH',
+    url: `/api/nav/placements/${topicId}`,
+    headers: t.headers,
+    payload: { groupId: otherGroup.id },
+  });
+
+  expect((await remove(other.id)).statusCode).toBe(204);
+
+  const placement = t.db
+    .prepare('SELECT group_id FROM nav_placement WHERE topic_id = ?')
+    .get(topicId) as { group_id: string } | undefined;
+  expect(placement?.group_id).toBe(ownGroup.id);
+  expect(t.db.prepare('SELECT count(*) c FROM nav_group').get()).toEqual({ c: 1 });
 });
 
 test('consignes : présence de CLAUDE.md et AGENTS.md, version du bloc et du noyau', async () => {

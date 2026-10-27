@@ -73,6 +73,25 @@ test('POST /api/nav/groups : crée en dernier rang ; PATCH renomme sans toucher 
   expect((await patch(`/api/nav/groups/${group.id}`, { name: '   ' })).statusCode).toBe(400);
   expect((await patch('/api/nav/groups/ng_nope', { name: 'x' })).statusCode).toBe(404);
   expect((await post('/api/nav/groups', { name: '' })).statusCode).toBe(400);
+  expect((await post('/api/nav/groups', { name: '   ' })).statusCode).toBe(400);
+
+  // name non vide après trim, stocké trimé
+  const trimmed = await post('/api/nav/groups', { name: '  Espacé  ' });
+  expect(trimmed.statusCode).toBe(201);
+  expect(trimmed.json<NavGroup>().name).toBe('Espacé');
+
+  // color : hex strict, POST et PATCH
+  expect((await post('/api/nav/groups', { name: 'Couleur', color: 'rouge' })).statusCode).toBe(400);
+  expect((await post('/api/nav/groups', { name: 'Couleur', color: '#abc' })).statusCode).toBe(400);
+  const colored = await post('/api/nav/groups', { name: 'Couleur', color: '#AaBbCc' });
+  expect(colored.statusCode).toBe(201);
+  expect(colored.json<NavGroup>().color).toBe('#AaBbCc');
+  expect((await patch(`/api/nav/groups/${group.id}`, { color: 'not-a-color' })).statusCode).toBe(
+    400,
+  );
+  const recolored = await patch(`/api/nav/groups/${group.id}`, { color: '#112233' });
+  expect(recolored.statusCode).toBe(200);
+  expect(recolored.json<NavGroup>().color).toBe('#112233');
 
   // renommer le groupe ne touche jamais la branche du sujet
   const nav = (await get()).json<NavState>();

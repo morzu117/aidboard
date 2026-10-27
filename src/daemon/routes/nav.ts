@@ -7,6 +7,9 @@ import { AidHttpError } from '../errors.js';
 
 const ulid = monotonicFactory();
 
+// Couleur de groupe : hex strict, comme les tokens de la palette ci-dessous.
+const COLOR_RE = /^#[0-9a-fA-F]{6}$/;
+
 // Palette de groupes (BRIEF §3) : cyclée par rang de création, dans l'ordre des tokens.
 const PALETTE = [
   '#5de0a1',
@@ -70,36 +73,38 @@ function maxGroupOrd(db: Db): number {
 // BRIEF §5.2.2 : un groupe par projet, un nouveau projet apparaît en bas. Idempotente, appelée
 // en tête de chaque route (lecture comme écriture) pour rattraper un projet ou un sujet neuf.
 export function ensureNavDefaults(db: Db): void {
-  const workspaces = db
-    .prepare('SELECT id, name FROM workspaces ORDER BY created_at')
-    .all() as Array<{ id: string; name: string }>;
-  for (const w of workspaces) {
-    if (db.prepare('SELECT 1 FROM nav_group WHERE workspace_id = ?').get(w.id)) continue;
-    const ord = maxGroupOrd(db) + 1;
-    db.prepare(
-      'INSERT INTO nav_group (id, name, color, ord, collapsed, hidden, workspace_id) VALUES (?, ?, ?, ?, 0, 0, ?)',
-    ).run(`ng_${ulid()}`, w.name, PALETTE[ord % PALETTE.length], ord, w.id);
-  }
-  const orphans = db
-    .prepare(
-      'SELECT t.id AS id, t.workspace_id AS workspaceId FROM topics t LEFT JOIN nav_placement p ON p.topic_id = t.id WHERE p.topic_id IS NULL',
-    )
-    .all() as Array<{ id: string; workspaceId: string }>;
-  for (const t of orphans) {
-    const group = db
-      .prepare('SELECT id FROM nav_group WHERE workspace_id = ?')
-      .get(t.workspaceId) as { id: string } | undefined;
-    if (!group) continue;
-    const ordForGroup =
-      (
-        db
-          .prepare('SELECT COALESCE(MAX(ord), -1) AS m FROM nav_placement WHERE group_id = ?')
-          .get(group.id) as { m: number }
-      ).m + 1;
-    db.prepare(
-      'INSERT INTO nav_placement (topic_id, group_id, ord, pinned, archived, hidden, display_name) VALUES (?, ?, ?, 0, 0, 0, NULL)',
-    ).run(t.id, group.id, ordForGroup);
-  }
+  db.transaction(() => {
+    const workspaces = db
+      .prepare('SELECT id, name FROM workspaces ORDER BY created_at')
+      .all() as Array<{ id: string; name: string }>;
+    for (const w of workspaces) {
+      if (db.prepare('SELECT 1 FROM nav_group WHERE workspace_id = ?').get(w.id)) continue;
+      const ord = maxGroupOrd(db) + 1;
+      db.prepare(
+        'INSERT INTO nav_group (id, name, color, ord, collapsed, hidden, workspace_id) VALUES (?, ?, ?, ?, 0, 0, ?)',
+      ).run(`ng_${ulid()}`, w.name, PALETTE[ord % PALETTE.length], ord, w.id);
+    }
+    const orphans = db
+      .prepare(
+        'SELECT t.id AS id, t.workspace_id AS workspaceId FROM topics t LEFT JOIN nav_placement p ON p.topic_id = t.id WHERE p.topic_id IS NULL',
+      )
+      .all() as Array<{ id: string; workspaceId: string }>;
+    for (const t of orphans) {
+      const group = db
+        .prepare('SELECT id FROM nav_group WHERE workspace_id = ?')
+        .get(t.workspaceId) as { id: string } | undefined;
+      if (!group) continue;
+      const ordForGroup =
+        (
+          db
+            .prepare('SELECT COALESCE(MAX(ord), -1) AS m FROM nav_placement WHERE group_id = ?')
+            .get(group.id) as { m: number }
+        ).m + 1;
+      db.prepare(
+        'INSERT INTO nav_placement (topic_id, group_id, ord, pinned, archived, hidden, display_name) VALUES (?, ?, ?, 0, 0, 0, NULL)',
+      ).run(t.id, group.id, ordForGroup);
+    }
+  })();
 }
 
 function readState(db: Db): NavState {
@@ -158,10 +163,16 @@ export function registerNavRoutes(app: FastifyInstance, deps: { db: Db }): void 
   app.post('/api/nav/groups', { schema: { body: GroupBody } }, async (req, reply) => {
     ensureNavDefaults(db);
     const body = req.body as { name: string; color?: string };
+    if (body.name.trim().length === 0) {
+      throw new AidHttpError(400, 'name ne peut pas être vide');
+    }
+    if (body.color !== undefined && !COLOR_RE.test(body.color)) {
+      throw new AidHttpError(400, 'color doit être un hex #rrggbb');
+    }
     const ord = maxGroupOrd(db) + 1;
     const group: NavGroup = {
       id: `ng_${ulid()}`,
-      name: body.name,
+      name: body.name.trim(),
       color: body.color ?? PALETTE[ord % PALETTE.length]!,
       ord,
       collapsed: false,
@@ -187,6 +198,9 @@ export function registerNavRoutes(app: FastifyInstance, deps: { db: Db }): void 
     };
     if (body.name !== undefined && body.name.trim().length === 0) {
       throw new AidHttpError(400, 'name ne peut pas être vide');
+    }
+    if (body.color !== undefined && !COLOR_RE.test(body.color)) {
+      throw new AidHttpError(400, 'color doit être un hex #rrggbb');
     }
     const next: GroupRow = {
       ...row,

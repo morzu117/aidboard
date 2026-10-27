@@ -89,11 +89,15 @@ test('.worktreeinclude ne copie que les fichiers ignorés par le projet', async 
 test('une branche déjà là : needs_human, aucun sujet, et le slug reste utilisable', async () => {
   const { clone, ws } = await setup();
   sh(clone, 'branch', 'feat/deja');
+  // GET /api/nav avant l'échec crée le placement du brouillon (ensureNavDefaults) ; l'abandon
+  // (afterFailure) doit le nettoyer aussi, sinon DELETE FROM topics viole la clé étrangère.
+  await t.d.app.inject({ url: '/api/nav', headers: t.headers });
   const a = (await create(ws, 'Déjà')).json<{ actionId: string }>();
   const fin = await finished(a.actionId);
   expect(fin.data).toMatchObject({ outcome: 'needs_human', exitCode: 2 });
   expect((fin.data.tail as string[]).join(' ')).toContain('existe déjà');
   expect(t.db.prepare('SELECT count(*) c FROM topics').get()).toEqual({ c: 0 });
+  expect(t.db.prepare('SELECT count(*) c FROM nav_placement').get()).toEqual({ c: 0 });
   sh(clone, 'branch', '-D', 'feat/deja');
   const b = (await create(ws, 'Déjà')).json<{ actionId: string }>();
   expect((await finished(b.actionId)).data.outcome).toBe('succeeded');
@@ -203,6 +207,10 @@ test('le sujet existe en draft avant que le worktree soit créé, abandon et slu
   const topicId = before.topics[0]?.id;
   if (!topicId) throw new Error('sujet manquant');
 
+  // GET /api/nav avant l'abandon crée le placement du brouillon (ensureNavDefaults) ; sans le
+  // nettoyer, DELETE FROM topics violerait la clé étrangère de nav_placement.
+  await t.d.app.inject({ url: '/api/nav', headers: t.headers });
+
   const ignore = await t.d.app.inject({
     method: 'POST',
     url: `/api/topics/${topicId}/actions/topic.setup-ignorer`,
@@ -210,6 +218,7 @@ test('le sujet existe en draft avant que le worktree soit créé, abandon et slu
   });
   expect(ignore.statusCode).toBe(204);
   expect((await state()).topics).toEqual([]);
+  expect(t.db.prepare('SELECT count(*) c FROM nav_placement').get()).toEqual({ c: 0 });
 
   // « Slug immédiatement réutilisable » porte sur l'unicité en base (D15), pas sur l'issue
   // du script abandonné qui tourne toujours en tâche de fond : la recréation est acceptée
