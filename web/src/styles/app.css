@@ -814,7 +814,7 @@ body {
     box-shadow: 0 var(--sp-2) var(--sp-6) var(--ombre);
     overflow: hidden;
   }
-  .volet.est-ouvert > .cote {
+  .volet.est-ouvert > .barre-gauche {
     width: 100%;
     flex: 1 1 auto;
     min-height: 0;
@@ -835,7 +835,7 @@ body {
 
 @media (min-width: 1280px) {
   .bouton-volant,
-  .voile[data-node='1-3.volet.fond'] {
+  .voile[data-node$='.volet.fond'] {
     display: none;
   }
   .volet {
@@ -853,13 +853,8 @@ body {
     min-height: 0;
     overflow: hidden;
   }
-  .sujet-corps:has(.panneau-contexte) .cote {
-    flex: 0 0 25%;
-    min-height: 0;
-    overflow-y: auto;
-  }
   .sujet-corps:has(.panneau-contexte) .sujet-contenu {
-    flex: 0 0 50%;
+    flex: 2 1 0;
     min-height: 0;
     overflow: hidden;
   }
@@ -892,14 +887,143 @@ body {
     height: auto;
   }
   .panneau-contexte {
-    flex: 0 0 25%;
+    flex: 1 1 0;
     min-height: 0;
   }
 }
 
-/* review D (finding 4, re-dev) : [data-viewport="tablet|phone"] .cote { display: none; }
-   (maquette.css) s'applique aussi dans la pop-up ouverte — le burger affichait un volet vide
-   sous 1180 px. Spécificité (.volet.est-ouvert > .cote = 3 classes) suffisante sans !important. */
-.volet.est-ouvert > .cote {
+/* B.2 (chantier 15, D55) : barre gauche posée par Layout sur tous les écrans, remplace .cote. */
+.corps-ecran {
   display: flex;
+  align-items: stretch;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+.barre-gauche {
+  flex: none;
+  width: var(--l-cote);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+  padding: var(--sp-5) var(--sp-3);
+  background: var(--surface-1);
+  border-right: 1px solid var(--line);
+  overflow-y: auto;
+}
+.barre-gauche-vues {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.barre-gauche-vue {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-2);
+  width: 100%;
+  min-height: var(--h-controle-s);
+  padding: 0 var(--sp-2);
+  border: 0;
+  border-radius: var(--r-s);
+  background: transparent;
+  color: var(--text-2);
+  font-family: var(--font);
+  font-size: var(--fs-m);
+  text-align: left;
+  cursor: pointer;
+}
+.barre-gauche-vue.est-active {
+  background: var(--surface-3);
+  color: var(--text);
+  font-weight: var(--fw-m);
+}
+.barre-gauche-groupes {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+.barre-gauche-groupe {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.barre-gauche-groupe-entete {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  width: 100%;
+  min-height: var(--h-controle-s);
+  padding: 0 var(--sp-2);
+  border: 0;
+  background: transparent;
+  color: var(--text-2);
+  font-family: var(--font);
+  font-size: var(--fs-m);
+  text-align: left;
+  cursor: pointer;
+}
+.barre-gauche-groupe-couleur {
+  flex: none;
+  width: var(--sp-2);
+  height: var(--sp-2);
+  border-radius: var(--r-pill);
+}
+.barre-gauche-groupe-nom {
+  flex: 1 1 auto;
+}
+.barre-gauche-sujet {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  min-height: var(--h-controle-s);
+  padding: 0 var(--sp-2) 0 var(--sp-6);
+  border-radius: var(--r-s);
+  font-size: var(--fs-m);
+  color: var(--text-2);
+}
+.barre-gauche-sujet.est-actif {
+  background: var(--surface-3);
+  color: var(--text);
+}
+.barre-gauche-sujet-nom {
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.barre-gauche-sujet-temps {
+  color: var(--faint);
+  font-size: var(--fs-xs);
+}
+.barre-gauche-pied {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  margin-top: auto;
+  padding-top: var(--sp-3);
+  border-top: 1px solid var(--line);
+  font-size: var(--fs-s);
+  color: var(--muted);
+}
+.barre-gauche-pied-texte {
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* le bouton « ‹ » persiste nav_pref.reduit (B.1) ; masque les libellés secondaires, garde dots/icônes. */
+.barre-gauche--reduit .barre-gauche-vue-nom,
+.barre-gauche--reduit .barre-gauche-groupe-nom,
+.barre-gauche--reduit .barre-gauche-sujet-nom,
+.barre-gauche--reduit .barre-gauche-sujet-temps,
+.barre-gauche--reduit .barre-gauche-pied-texte,
+.barre-gauche--reduit .compteur,
+.barre-gauche--reduit .badge {
+  display: none;
+}
+
+@media (min-width: 1280px) {
+  .corps-ecran--sujet > .barre-gauche {
+    width: 25%;
+  }
 }

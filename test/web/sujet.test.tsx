@@ -186,20 +186,6 @@ test.each([
   },
 );
 
-test('la colonne de gauche liste les sujets par workspace et marque le sujet courant', async () => {
-  open(
-    snapshot({
-      workspaces: [ws(), ws({ id: 'ws_2', name: 'project_1' })],
-      topics: [topic(), topic({ id: 'tp_2', workspaceId: 'ws_2', branch: 'fix/y', slug: 'y' })],
-    }),
-  );
-  await screen.findByText('Mon sujet');
-  expect(text('1-3.sujets.groupe-1.nom')).toBe('aid');
-  expect(text('1-3.sujets.groupe-2.nom')).toBe('project_1');
-  expect(node('1-3.sujets.sujet-1')?.className).toContain('est-actif');
-  expect(node('1-3.sujets.sujet-2')?.getAttribute('href')).toBe('/sujets/tp_2');
-});
-
 test('sans agent : trois façons de démarrer, et le lancement appelle POST /api/agents', async () => {
   const h = open(snapshot({ workspaces: [ws()], topics: [topic()], runs: [run] }));
   h.respond.set('POST /api/agents', json(201, { ...agent({ id: 'ag_9', kind: 'claude' }) }));
@@ -563,16 +549,14 @@ test('sujet archivé : chronologie lue à part, bouton « Retirer la mention du 
   await screen.findByText('Stash supprimé.');
 });
 
-test('loading : squelettes ; error : bandeau avec « Réessayer » ; liste de gauche indisponible', async () => {
+test('loading : squelettes ; error : bandeau avec « Réessayer »', async () => {
   open(snapshot());
   expect(node('1-3.terminaux')?.className).toContain('squelette');
-  expect(node('1-3.sujets.squelette-1')).not.toBeNull();
   cleanup();
   const h = open('down');
   expect((await screen.findByRole('alert', {}, { timeout: 3000 })).textContent).toContain(
     'injoignable',
   );
-  expect(text('1-3.sujets.indisponible')).toBe('Liste indisponible');
   h.state = snapshot({ workspaces: [ws()], topics: [topic()] });
   await userEvent.click(node('1-3.erreur.bandeau.reessayer')!);
   await screen.findByText('Mon sujet');

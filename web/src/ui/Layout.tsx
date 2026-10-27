@@ -1,19 +1,25 @@
-import { createContext, type ReactNode, useContext, useEffect, useState } from 'react';
+import { createContext, type ReactNode, useContext, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import type { MeshDmKind } from '../../../src/shared/model.js';
 import { useAid } from '../data/useAidState.js';
 import { NouveauSujet } from '../dialogues/NouveauSujet.js';
 import { NouveauWorkspace } from '../dialogues/NouveauWorkspace.js';
 import { Barre, type EcranId } from './Barre.js';
+import { Nav } from './Nav.js';
 import { isPaletteShortcut, Palette, type PaletteItem } from './Palette.js';
 import { Shell } from './Shell.js';
+import { Volet } from './Volet.js';
 
 type Dialog = 'none' | 'workspace' | 'sujet';
 /** les kinds de DM qui demandent quelque chose (12.5) : partagé avec la Boîte et le Notifieur */
 export const A_TRAITER = new Set<MeshDmKind>(['question', 'unblock']);
+/** B.2 (chantier 15, D55) : un seul popup à la fois sur l'écran — « panneau » appartient à Sujet. */
+type Overlay = 'aucun' | 'nav' | 'panneau';
 const LayoutCtx = createContext<{
   openNewTopic: (workspaceId?: string) => void;
   openNewWorkspace: () => void;
+  overlay: Overlay;
+  setOverlay: (o: Overlay) => void;
 } | null>(null);
 
 export function useLayout() {
@@ -27,6 +33,16 @@ export function Layout({ screen, children }: { screen: EcranId; children: ReactN
   const navigate = useNavigate();
   const [dialog, setDialog] = useState<Dialog>('none');
   const [palette, setPalette] = useState(false);
+  const [overlay, setOverlay] = useState<Overlay>('aucun');
+  const boutonNavRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    // comme Sujet.tsx : un volet resté ouvert en repassant ≥ 1280 px (où il devient une colonne) se referme.
+    const mq = window.matchMedia?.('(min-width: 1280px)');
+    const fermerSiLarge = () => mq?.matches && setOverlay('aucun');
+    fermerSiLarge();
+    mq?.addEventListener('change', fermerSiLarge);
+    return () => mq?.removeEventListener('change', fermerSiLarge);
+  }, []);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (!isPaletteShortcut(e)) return;
@@ -102,7 +118,7 @@ export function Layout({ screen, children }: { screen: EcranId; children: ReactN
     { id: 'ecran-reglages', label: 'Réglages', hint: 'écran', run: () => navigate('/reglages') },
   ];
   return (
-    <LayoutCtx.Provider value={{ openNewTopic, openNewWorkspace }}>
+    <LayoutCtx.Provider value={{ openNewTopic, openNewWorkspace, overlay, setOverlay }}>
       <Shell>
         <Barre
           screen={screen}
@@ -112,7 +128,52 @@ export function Layout({ screen, children }: { screen: EcranId; children: ReactN
           onPalette={() => setPalette(true)}
           mesh={barreMesh}
         />
-        {children}
+        <div
+          className={`corps-ecran${screen === '1-3' ? ' corps-ecran--sujet' : ''}`}
+          data-node={`${screen}.corps`}
+        >
+          <button
+            ref={boutonNavRef}
+            className="bouton-icone bouton-volant bouton-volant--nav"
+            data-node={`${screen}.volet.ouvrir-nav`}
+            type="button"
+            aria-label="Ouvrir la navigation"
+            aria-expanded={overlay === 'nav'}
+            inert={overlay !== 'aucun' || undefined}
+            onClick={() => setOverlay(overlay === 'nav' ? 'aucun' : 'nav')}
+          >
+            <svg aria-hidden="true" viewBox="0 0 16 16" width="16" height="16">
+              <path
+                d="M2 4h12M2 8h12M2 12h12"
+                stroke="currentColor"
+                strokeWidth="1.5"
+                strokeLinecap="round"
+              />
+            </svg>
+          </button>
+          <Volet
+            screen={screen}
+            nom="nav"
+            titre="Navigation"
+            ouvert={overlay === 'nav'}
+            inert={overlay !== 'aucun' && overlay !== 'nav'}
+            onFermer={() => setOverlay('aucun')}
+            boutonRef={boutonNavRef}
+          >
+            <Nav screen={screen} />
+          </Volet>
+          <div style={{ display: 'contents' }} inert={overlay === 'nav' || undefined}>
+            {children}
+          </div>
+          {overlay === 'nav' && (
+            <div
+              className="voile"
+              data-node={`${screen}.volet.fond`}
+              aria-hidden="true"
+              onClick={() => setOverlay('aucun')}
+            />
+          )}
+        </div>
         {palette && <Palette items={items} onClose={() => setPalette(false)} />}
         {dialog === 'workspace' && (
           <NouveauWorkspace

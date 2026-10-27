@@ -13,7 +13,7 @@ test('≥ 1280 px : colonnes 25/50/25, la page ne défile pas', async ({ browser
   const mesures = await page.evaluate(() => {
     const largeur = (sel: string) => document.querySelector(sel)!.getBoundingClientRect().width;
     return {
-      cote: largeur('.cote'),
+      cote: largeur('.barre-gauche'),
       centre: largeur('.sujet-contenu'),
       panneau: largeur('.panneau-contexte'),
       scrollHeight: document.scrollingElement!.scrollHeight,
@@ -40,7 +40,7 @@ test('< 1180 px : le popup de navigation n’est pas vide, Échap le referme', a
   await node(page, '1-3.volet.ouvrir-nav').click();
   const dialogue = page.getByRole('dialog', { name: 'Navigation' });
   await expect(dialogue).toBeVisible();
-  await expect(dialogue.locator('.cote-sujet').first()).toBeVisible();
+  await expect(dialogue.locator('.barre-gauche-sujet').first()).toBeVisible();
 
   await page.keyboard.press('Escape');
   await expect(dialogue).not.toBeVisible();

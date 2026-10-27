@@ -20,17 +20,17 @@ const action = (over: Partial<ActionRun>): ActionRun => ({
   ...over,
 });
 
-let montagesCote = 0;
-vi.mock('../../web/src/ecrans/Cote.js', async () => {
+let montagesNav = 0;
+vi.mock('../../web/src/ui/Nav.js', async () => {
   const { useEffect } = await import('react');
   return {
-    // un démontage/remontage (contrairement à une simple relecture d'état) déclencherait cet
-    // effet à vide une seconde fois : c'est ce que le test « ne démonte jamais » vérifie.
-    Cote: ({ activeTopicId }: { activeTopicId: string }) => {
+    // Nav est posée une fois par Layout, qui ne démonte jamais entre les deux branches de Sujet
+    // (chargement/chargé) ni entre l'ouverture/fermeture de son propre popup : ce compteur le vérifie.
+    Nav: () => {
       useEffect(() => {
-        montagesCote += 1;
+        montagesNav += 1;
       }, []);
-      return <div data-testid="cote-stub" data-active={activeTopicId} />;
+      return <div data-testid="nav-stub" />;
     },
   };
 });
@@ -62,7 +62,7 @@ const GIT_LOG_VIDE = json(200, {
   live: { aheadBehind: { ahead: 0, behind: 0 }, rebaseInProgress: false, onTopicBranch: true },
 });
 const open = (route = '/sujets/tp_1', routes: Record<string, (body: unknown) => Response> = {}) => {
-  montagesCote = 0;
+  montagesNav = 0;
   return setup(
     page,
     snapshot({
@@ -81,7 +81,7 @@ const ouvrirSansVueComplete = (
   snap: ReturnType<typeof snapshot>,
   routes: Record<string, (body: unknown) => Response> = {},
 ) => {
-  montagesCote = 0;
+  montagesNav = 0;
   return setup(page, snap, '/sujets/tp_1', routes);
 };
 
@@ -106,7 +106,7 @@ test('le bouton flottant « Ouvrir la navigation » ouvre un popup ; Échap le r
   const bouton = screen.getByRole('button', { name: 'Ouvrir la navigation' });
   await userEvent.click(bouton);
   expect(await screen.findByRole('dialog', { name: 'Navigation' })).toBeTruthy();
-  expect(screen.getByTestId('cote-stub')).toBeTruthy();
+  expect(screen.getByTestId('nav-stub')).toBeTruthy();
   await userEvent.keyboard('{Escape}');
   await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Navigation' })).toBeNull());
   expect(document.activeElement).toBe(bouton);
@@ -137,23 +137,22 @@ test('un clic sur le fond assombri referme le popup ouvert', async () => {
   await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
 });
 
-test('ouvrir/fermer le popup de navigation ne démonte jamais Cote', async () => {
+test('Nav, posée une fois par Layout, ne démonte jamais à l’ouverture/fermeture de son popup', async () => {
   open();
   await screen.findByTestId('term-ag_1');
-  // le passage « chargement → chargé » remonte Cote une fois (deux branches de rendu
-  // distinctes) : c'est la bascule ouvert/fermé du popup qui ne doit plus en ajouter.
-  const apresChargement = montagesCote;
+  expect(montagesNav).toBe(1);
   const bouton = screen.getByRole('button', { name: 'Ouvrir la navigation' });
   await userEvent.click(bouton);
   await screen.findByRole('dialog', { name: 'Navigation' });
   await userEvent.click(bouton);
   await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
-  expect(montagesCote).toBe(apresChargement);
+  expect(montagesNav).toBe(1);
 });
 
 // review D, finding 1 : hors vue complète (sujet absent de l'état, ou préparation en échec),
-// aucun bouton flottant ni panneau — Contenu rend sa propre vue à une colonne comme avant.
-test('sujet archivé : vue à une colonne, aucun bouton flottant ni panneau', async () => {
+// aucun bouton ni panneau pour le volet du sujet — Contenu rend sa propre vue à une colonne
+// comme avant. La navigation (B.2) reste posée par Layout : elle n'est pas liée à vueComplete.
+test('sujet archivé : vue à une colonne, Nav posée, aucun bouton ni panneau de volet sujet', async () => {
   ouvrirSansVueComplete(snapshot({ workspaces: [ws()], topics: [] }), {
     'GET /api/topics/tp_1/events': json(200, {
       topic: {
@@ -173,12 +172,12 @@ test('sujet archivé : vue à une colonne, aucun bouton flottant ni panneau', as
     }),
   });
   await screen.findByText('Sujet clos');
-  expect(screen.queryByRole('button', { name: 'Ouvrir la navigation' })).toBeNull();
+  expect(screen.getByRole('button', { name: 'Ouvrir la navigation' })).toBeTruthy();
   expect(screen.queryByRole('button', { name: 'Ouvrir le panneau du sujet' })).toBeNull();
   expect(node('1-3.panneau')).toBeNull();
 });
 
-test('sujet en échec de préparation : vue à une colonne, aucun bouton flottant ni panneau', async () => {
+test('sujet en échec de préparation : vue à une colonne, Nav posée, aucun bouton ni panneau de volet sujet', async () => {
   ouvrirSansVueComplete(
     snapshot({
       workspaces: [ws()],
@@ -187,7 +186,7 @@ test('sujet en échec de préparation : vue à une colonne, aucun bouton flottan
     }),
   );
   await screen.findByText('La préparation du sujet a échoué');
-  expect(screen.queryByRole('button', { name: 'Ouvrir la navigation' })).toBeNull();
+  expect(screen.getByRole('button', { name: 'Ouvrir la navigation' })).toBeTruthy();
   expect(screen.queryByRole('button', { name: 'Ouvrir le panneau du sujet' })).toBeNull();
   expect(node('1-3.panneau')).toBeNull();
 });

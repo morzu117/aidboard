@@ -1,4 +1,4 @@
-import { type ReactNode, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router';
 import type { StoredEvent } from '../../../src/shared/events.js';
 import type { GitLogResponse } from '../../../src/shared/git.js';
@@ -10,12 +10,12 @@ import { useAid } from '../data/useAidState.js';
 import { ConfirmerNettoyage } from '../dialogues/ConfirmerNettoyage.js';
 import { SelecteurBranche } from '../dialogues/SelecteurBranche.js';
 import { Terminal } from '../terminal/Terminal.js';
-import { Layout } from '../ui/Layout.js';
+import { Layout, useLayout } from '../ui/Layout.js';
 import { Memoire } from '../ui/Memoire.js';
 import { agentView, Point } from '../ui/Statut.js';
+import { Volet } from '../ui/Volet.js';
 import type { ArchivedTopic } from './useArchive.js';
 import { useArchive } from './useArchive.js';
-import { Cote } from './Cote.js';
 import { PanneauContexte } from './PanneauContexte.js';
 import { useNettoyage } from './useNettoyage.js';
 import { roleLabel } from '../ui/roles.js';
@@ -796,89 +796,6 @@ function EcranArchive({
   );
 }
 
-// Q6 tranchée (chantier 15) : même élément en permanence, jamais démonté — seule sa
-// présentation change (colonne normale ≥ 1280 px, pop-up dessous via CSS/attributs). Un
-// démontage relancerait les requêtes de Cote/PanneauContexte et perdrait l'état de leurs onglets.
-function Volet({
-  nom,
-  titre,
-  ouvert,
-  inert,
-  onFermer,
-  boutonRef,
-  children,
-}: {
-  nom: 'nav' | 'panneau';
-  titre: string;
-  ouvert: boolean;
-  inert?: boolean;
-  onFermer: () => void;
-  boutonRef: { current: HTMLButtonElement | null };
-  children: ReactNode;
-}) {
-  const ref = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (ouvert) ref.current?.focus();
-  }, [ouvert]);
-  useEffect(() => {
-    if (!ouvert) return;
-    // Capture (pas bubble) : Échap referme la pop-up avant que les raccourcis du fil de
-    // conversation (ex. MarkMenu, en document.addEventListener) ne voient l'événement.
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        e.stopPropagation();
-        onFermer();
-        boutonRef.current?.focus();
-        return;
-      }
-      if (e.key !== 'Tab') return;
-      const focusables = ref.current?.querySelectorAll<HTMLElement>(
-        'a[href], button:not([disabled]), textarea, input, select, [tabindex]:not([tabindex="-1"])',
-      );
-      if (!focusables || focusables.length === 0) return;
-      const premier = focusables[0]!;
-      const dernier = focusables[focusables.length - 1]!;
-      if (e.shiftKey && document.activeElement === premier) {
-        e.preventDefault();
-        dernier.focus();
-      } else if (!e.shiftKey && document.activeElement === dernier) {
-        e.preventDefault();
-        premier.focus();
-      }
-    };
-    window.addEventListener('keydown', onKey, true);
-    return () => window.removeEventListener('keydown', onKey, true);
-  }, [ouvert, onFermer, boutonRef]);
-  return (
-    <div
-      ref={ref}
-      className={`volet volet--${nom}${ouvert ? ' est-ouvert' : ''}`}
-      data-node={`1-3.volet.${nom}`}
-      role={ouvert ? 'dialog' : undefined}
-      aria-modal={ouvert || undefined}
-      aria-label={ouvert ? titre : undefined}
-      tabIndex={ouvert ? -1 : undefined}
-      inert={inert || undefined}
-    >
-      {ouvert && (
-        <button
-          className="bouton-icone volet-fermer"
-          data-node="1-3.volet.fermer"
-          type="button"
-          aria-label="Fermer"
-          onClick={() => {
-            onFermer();
-            boutonRef.current?.focus();
-          }}
-        >
-          ×
-        </button>
-      )}
-      {children}
-    </div>
-  );
-}
-
 export function Sujet() {
   const { topicId = '' } = useParams();
   const { state } = useAid();
@@ -890,29 +807,16 @@ export function Sujet() {
   const ongletParam = params.get('onglet');
   const initialOnglet =
     ongletParam === 'git' || ongletParam === 'fichiers' ? ongletParam : undefined;
-  const [volet, setVolet] = useState<'aucun' | 'nav' | 'panneau'>('aucun');
-  const boutonNavRef = useRef<HTMLButtonElement>(null);
-  const boutonPanneauRef = useRef<HTMLButtonElement>(null);
-  // D.1, Q6 tranchée : ≥ 1280 px, les boutons flottants disparaissent et le popup est impossible
-  // — une pop-up restée ouverte en repassant au-dessus du seuil doit se refermer.
-  useEffect(() => {
-    // comme Conversation.tsx:169 — jsdom (tests) n'implémente pas matchMedia.
-    const mq = window.matchMedia?.('(min-width: 1280px)');
-    const fermerSiLarge = () => mq?.matches && setVolet('aucun');
-    fermerSiLarge();
-    mq?.addEventListener('change', fermerSiLarge);
-    return () => mq?.removeEventListener('change', fermerSiLarge);
-  }, []);
   const topic = state?.topics.find((t) => t.id === topicId);
 
-  // La grille trois colonnes et les volets superposables n'existent que pour la vue complète de
-  // Contenu (agents/terminaux) : jamais pendant le chargement, une erreur, une archive ou la
-  // préparation du worktree, qui restent à une colonne comme avant ce chantier.
+  // La grille trois colonnes et le volet panneau n'existent que pour la vue complète de Contenu
+  // (agents/terminaux) : jamais pendant le chargement, une erreur, une archive ou la préparation
+  // du worktree, qui restent à une colonne comme avant ce chantier. La navigation (ex-Cote) est
+  // posée par Layout sur les deux branches, B.2.
   if (!topic || !vueComplete(topic)) {
     return (
       <Layout screen="1-3">
         <div className="sujet-corps">
-          <Cote activeTopicId={topicId} />
           <Contenu
             topicId={topicId}
             selectedAgent={selectedAgent}
@@ -928,91 +832,96 @@ export function Sujet() {
   const agents = state?.agents.filter((a) => runIds.includes(a.runId)) ?? [];
   const active = agents.find((a) => a.id === selectedAgent) ?? agents.at(-1);
   const namespace = workspace?.namespace ?? workspace?.name ?? '';
-  // review D (finding 2) : une pop-up ouverte rend inerte tout le reste — colonne centrale,
-  // l'autre volet, les deux boutons flottants — pour que Tab/aria-modal décrivent une vraie modale.
-  const popupOuvert = volet !== 'aucun';
 
   return (
     <Layout screen="1-3">
-      <div className="sujet-corps">
-        <button
-          ref={boutonNavRef}
-          className="bouton-icone bouton-volant bouton-volant--nav"
-          data-node="1-3.volet.ouvrir-nav"
-          type="button"
-          aria-label="Ouvrir la navigation"
-          aria-expanded={volet === 'nav'}
-          inert={popupOuvert || undefined}
-          onClick={() => setVolet(volet === 'nav' ? 'aucun' : 'nav')}
-        >
-          <svg aria-hidden="true" viewBox="0 0 16 16" width="16" height="16">
-            <path
-              d="M2 4h12M2 8h12M2 12h12"
-              stroke="currentColor"
-              strokeWidth="1.5"
-              strokeLinecap="round"
-            />
-          </svg>
-        </button>
-        <Volet
-          nom="nav"
-          titre="Navigation"
-          ouvert={volet === 'nav'}
-          inert={popupOuvert && volet !== 'nav'}
-          onFermer={() => setVolet('aucun')}
-          boutonRef={boutonNavRef}
-        >
-          <Cote activeTopicId={topicId} />
-        </Volet>
-        <div style={{ display: 'contents' }} inert={popupOuvert || undefined}>
-          <Contenu
-            topicId={topicId}
-            selectedAgent={selectedAgent}
-            onSelectAgent={setSelectedAgent}
-          />
-        </div>
-        <Volet
-          nom="panneau"
-          titre="Panneau du sujet"
-          ouvert={volet === 'panneau'}
-          inert={popupOuvert && volet !== 'panneau'}
-          onFermer={() => setVolet('aucun')}
-          boutonRef={boutonPanneauRef}
-        >
-          <PanneauContexte
-            namespace={namespace}
-            topicSlug={topic.slug}
-            topicId={topicId}
-            base={topic.base}
-            remote={workspace?.remote ?? null}
-            activeAgentId={active?.id ?? null}
-            initialOnglet={initialOnglet}
-          />
-        </Volet>
-        <button
-          ref={boutonPanneauRef}
-          className="bouton-icone bouton-volant bouton-volant--panneau"
-          data-node="1-3.volet.ouvrir-panneau"
-          type="button"
-          aria-label="Ouvrir le panneau du sujet"
-          aria-expanded={volet === 'panneau'}
-          inert={popupOuvert || undefined}
-          onClick={() => setVolet(volet === 'panneau' ? 'aucun' : 'panneau')}
-        >
-          <svg aria-hidden="true" viewBox="0 0 16 16" width="16" height="16">
-            <path d="M2 5h4l1.3 1.6H14V12H2z" fill="none" stroke="currentColor" strokeWidth="1.3" />
-          </svg>
-        </button>
-        {volet !== 'aucun' && (
-          // .voile : fond déjà utilisé par Dialogue.tsx (chantier 11), réutilisé ici tel quel.
-          <div
-            className="voile"
-            data-node="1-3.volet.fond"
-            aria-hidden="true"
-            onClick={() => setVolet('aucun')}
-          />
-        )}
-      </div>
+      <SujetPanneau
+        topic={topic}
+        topicId={topicId}
+        namespace={namespace}
+        remote={workspace?.remote ?? null}
+        activeAgentId={active?.id ?? null}
+        initialOnglet={initialOnglet}
+        selectedAgent={selectedAgent}
+        onSelectAgent={setSelectedAgent}
+      />
     </Layout>
+  );
+}
+
+// Le panneau du sujet lit `overlay` depuis Layout (B.2) : il doit être rendu sous <Layout> pour
+// atteindre son contexte, d'où cette extraction (ne peut pas rester inline dans Sujet()).
+function SujetPanneau({
+  topic,
+  topicId,
+  namespace,
+  remote,
+  activeAgentId,
+  initialOnglet,
+  selectedAgent,
+  onSelectAgent,
+}: {
+  topic: Topic;
+  topicId: string;
+  namespace: string;
+  remote: string | null;
+  activeAgentId: string | null;
+  initialOnglet: 'git' | 'fichiers' | undefined;
+  selectedAgent: string | null;
+  onSelectAgent: (id: string | null) => void;
+}) {
+  const { overlay, setOverlay } = useLayout();
+  const boutonPanneauRef = useRef<HTMLButtonElement>(null);
+  // review D (finding 2) : une pop-up ouverte rend inerte tout le reste — colonne centrale,
+  // le bouton flottant — pour que Tab/aria-modal décrivent une vraie modale.
+  const popupOuvert = overlay !== 'aucun';
+  return (
+    <div className="sujet-corps">
+      <div style={{ display: 'contents' }} inert={popupOuvert || undefined}>
+        <Contenu topicId={topicId} selectedAgent={selectedAgent} onSelectAgent={onSelectAgent} />
+      </div>
+      <Volet
+        screen="1-3"
+        nom="panneau"
+        titre="Panneau du sujet"
+        ouvert={overlay === 'panneau'}
+        inert={popupOuvert && overlay !== 'panneau'}
+        onFermer={() => setOverlay('aucun')}
+        boutonRef={boutonPanneauRef}
+      >
+        <PanneauContexte
+          namespace={namespace}
+          topicSlug={topic.slug}
+          topicId={topicId}
+          base={topic.base}
+          remote={remote}
+          activeAgentId={activeAgentId}
+          initialOnglet={initialOnglet}
+        />
+      </Volet>
+      <button
+        ref={boutonPanneauRef}
+        className="bouton-icone bouton-volant bouton-volant--panneau"
+        data-node="1-3.volet.ouvrir-panneau"
+        type="button"
+        aria-label="Ouvrir le panneau du sujet"
+        aria-expanded={overlay === 'panneau'}
+        inert={popupOuvert || undefined}
+        onClick={() => setOverlay(overlay === 'panneau' ? 'aucun' : 'panneau')}
+      >
+        <svg aria-hidden="true" viewBox="0 0 16 16" width="16" height="16">
+          <path d="M2 5h4l1.3 1.6H14V12H2z" fill="none" stroke="currentColor" strokeWidth="1.3" />
+        </svg>
+      </button>
+      {overlay === 'panneau' && (
+        // .voile : fond déjà utilisé par Dialogue.tsx (chantier 11), réutilisé ici tel quel.
+        <div
+          className="voile"
+          data-node="1-3.volet.fond"
+          aria-hidden="true"
+          onClick={() => setOverlay('aucun')}
+        />
+      )}
+    </div>
   );
 }
