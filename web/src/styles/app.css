@@ -920,6 +920,15 @@ body {
 }
 
 @media (max-width: 1279.98px) {
+  /* recette (chantier 15, point 1) : .bouton-volant--nav est fixed sur le même coin que la
+     marque — la barre réserve sa place plutôt que de déplacer le bouton. Les variantes
+     [data-viewport="phone"/"tablet"] de maquette.css posent déjà un padding-left (même
+     spécificité, mais avant dans la feuille) : repris ici pour gagner la cascade. */
+  .barre,
+  [data-viewport='phone'] .barre,
+  [data-viewport='tablet'] .barre {
+    padding-left: calc(var(--sp-4) + var(--h-tactile) + var(--sp-3));
+  }
   .volet:not(.est-ouvert) {
     display: none;
   }
