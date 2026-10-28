@@ -973,7 +973,7 @@ body {
     overflow: hidden;
   }
   .sujet-corps:has(.panneau-contexte) .sujet-contenu {
-    flex: 2.5 1 0; /* barre gauche réduite à 12,5 % : le centre reprend la place (12,5/62,5/25) */
+    flex: 2.32 1 0; /* panneau à largeur flexible (pas fixe) : grow 58/25 pour tenir 17/58/25 */
     min-height: 0;
     overflow: hidden;
     /* correctif 3 (recette) : .page porte un padding bas de page classique (40px) qui empêchait
@@ -1163,7 +1163,7 @@ body {
   /* pas de sélecteur d'enfant direct : .volet est `display: contents` ici, mais reste un nœud
      du DOM entre .corps-ecran--sujet et .barre-gauche — le combinateur `>` ne matcherait jamais. */
   .corps-ecran--sujet .barre-gauche {
-    width: 12.5%; /* barre gauche réduite de moitié (demande opérateur, chantier 15) */
+    width: 17%; /* 12,5 % faisait revenir les textes à la ligne (constat recette, chantier 15) */
   }
 }
 .barre-gauche-nouveau {
@@ -1179,8 +1179,13 @@ body {
 }
 .barre-gauche-groupes-entete .titre-zone {
   flex: 1 1 auto;
+  /* .cadre * pose overflow-wrap: anywhere (maquette.css) : sans nowrap, « GROUPES » coupe en deux lignes. */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .bouton-modifier {
+  flex: none;
   min-height: var(--h-controle-s);
   padding: 0 var(--sp-2);
   border: 1px solid var(--line);
@@ -1189,6 +1194,7 @@ body {
   color: var(--muted);
   font-family: var(--font);
   font-size: var(--fs-s);
+  white-space: nowrap;
   cursor: pointer;
 }
 .bouton-modifier--actif {

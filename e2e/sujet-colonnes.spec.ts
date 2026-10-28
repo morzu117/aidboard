@@ -11,11 +11,11 @@ import {
 } from './helpers.js';
 
 // review D (findings 2/3/4, re-dev 2) : jsdom n'applique pas le CSS — seul un e2e vérifie la
-// grille 12,5/62,5/25 sans défilement de page, et le popup de navigation non vide sous 1180 px.
-// recette (point 2) : barre gauche réduite de moitié (12,5 %), le centre reprend la place
-// (62,5 %), le panneau de droite inchangé (25 %) — décision opérateur, chantier 15.
+// grille 17/58/25 sans défilement de page, et le popup de navigation non vide sous 1180 px.
+// recette (point 2) : à 12,5 % les textes de la barre gauche revenaient à la ligne (constat
+// opérateur) — largeur relevée à 17 %, le centre à 58 %, le panneau de droite inchangé (25 %).
 
-test('≥ 1280 px : colonnes 12,5/62,5/25, la page ne défile pas, la barre gauche ne déborde pas', async ({
+test('≥ 1280 px : colonnes 17/58/25, la page ne défile pas, la barre gauche ne déborde pas', async ({
   browser,
 }) => {
   const page = await openApp(await browser.newContext({ viewport: { width: 1440, height: 900 } }));
@@ -38,17 +38,101 @@ test('≥ 1280 px : colonnes 12,5/62,5/25, la page ne défile pas, la barre gauc
   });
   const total = mesures.cote + mesures.centre + mesures.panneau;
   const part = (w: number) => w / total;
-  expect(part(mesures.cote)).toBeGreaterThan(0.11);
-  expect(part(mesures.cote)).toBeLessThan(0.14);
-  expect(part(mesures.centre)).toBeGreaterThan(0.6);
-  expect(part(mesures.centre)).toBeLessThan(0.65);
+  expect(part(mesures.cote)).toBeGreaterThan(0.15);
+  expect(part(mesures.cote)).toBeLessThan(0.19);
+  expect(part(mesures.centre)).toBeGreaterThan(0.56);
+  expect(part(mesures.centre)).toBeLessThan(0.6);
   expect(part(mesures.panneau)).toBeGreaterThan(0.23);
   expect(part(mesures.panneau)).toBeLessThan(0.27);
   expect(mesures.scrollHeight).toBeLessThanOrEqual(mesures.innerHeight);
-  // barre gauche réduite à 12,5 % : le contenu (bouton, vues, groupes, noms de sujet) doit se
+  // barre gauche à 17 % : le contenu (bouton, vues, groupes, noms de sujet) doit se
   // tronquer plutôt que déborder horizontalement de la colonne.
   expect(mesures.bgScrollWidth).toBeLessThanOrEqual(mesures.bgClientWidth + 1);
 });
+
+// recette (point 1, chantier 15) : à 12,5 % « GROUPES » et « Modifier » revenaient à la ligne
+// (overflow-wrap: anywhere posé par .cadre * dans maquette.css, sans nowrap pour s'y opposer) ;
+// relevée à 17 %, le nom de groupe et la branche du sujet, eux, se tronquaient déjà par ellipse.
+for (const largeur of [1280, 1440]) {
+  test(`${largeur}px : en-tête, bouton Modifier, nom de groupe et branche longs tiennent sur une ligne et se tronquent`, async ({
+    browser,
+  }) => {
+    const page = await openApp(
+      await browser.newContext({ viewport: { width: largeur, height: 900 } }),
+    );
+    // daemon partagé par toute la suite e2e (un seul worker) : d'autres groupes/sujets des tests
+    // précédents sont déjà dans le DOM — cibler nos éléments par nom/topicId, pas par simple classe.
+    const nomGroupe = `depot-colonnes-${largeur}-nom-de-groupe-vraiment-tres-long-pour-la-recette`;
+    await registerWorkspace(page, newRepo(nomGroupe));
+    const topicId = await createTopic(
+      page,
+      'Un sujet avec une branche vraiment très longue pour vérifier la troncature de la barre',
+    );
+    await launchShell(page);
+
+    const titreLoc = page.locator('.barre-gauche-groupes-entete .titre-zone');
+    const boutonLoc = page.locator('.barre-gauche-groupes-entete .bouton-modifier');
+    const sujetLoc = node(page, `1-3.barre-gauche.sujet-${topicId}`);
+    // le nom de groupe est tronqué à l'affichage : filtrer sur le texte complet ne matcherait
+    // jamais — on remonte plutôt au groupe qui contient notre sujet.
+    const groupeNomLoc = page
+      .locator('.barre-gauche-groupe')
+      .filter({ has: sujetLoc })
+      .locator('.barre-gauche-groupe-nom');
+    const sujetNomLoc = sujetLoc.locator('.barre-gauche-sujet-nom');
+    const sujetTempsLoc = sujetLoc.locator('.barre-gauche-sujet-temps');
+    const bgLoc = page.locator('.barre-gauche');
+
+    // ni rects.length (text-overflow: ellipsis fragmente le Range en plusieurs rects à la même
+    // position même sur une seule ligne visuelle, constat) ni la hauteur de boîte (min-height
+    // fixe du contrôle, constat sur .bouton-modifier) ne sont fiables seuls : une vraie césure
+    // empile ses fragments à des Y différents, l'ellipse les superpose au même Y.
+    const uneLigne = async (loc: typeof titreLoc) => {
+      const lignes = await loc.evaluate((el) => {
+        const plage = document.createRange();
+        plage.selectNodeContents(el);
+        const y = Array.from(plage.getClientRects()).map((r) => Math.round(r.y));
+        return new Set(y).size;
+      });
+      expect(lignes).toBe(1);
+    };
+    const tronque = async (loc: typeof titreLoc) => {
+      const info = await loc.evaluate((el) => {
+        const style = getComputedStyle(el);
+        return {
+          scrollWidth: el.scrollWidth,
+          clientWidth: el.clientWidth,
+          textOverflow: style.textOverflow,
+          display: style.display,
+        };
+      });
+      expect(info.scrollWidth).toBeGreaterThan(info.clientWidth);
+      expect(info.textOverflow).toBe('ellipsis');
+      expect(info.display).not.toContain('flex');
+    };
+
+    // (a) une seule ligne chacun.
+    await uneLigne(titreLoc);
+    await uneLigne(boutonLoc);
+    await uneLigne(groupeNomLoc);
+    await uneLigne(sujetNomLoc);
+    // (b) nom de groupe et branche tronqués (ellipse), pas une mise en page flex qui absorberait le débordement.
+    await tronque(groupeNomLoc);
+    await tronque(sujetNomLoc);
+    // (c) l'horodatage reste entièrement visible, jamais tronqué.
+    const temps = await sujetTempsLoc.evaluate((el) => ({
+      scrollWidth: el.scrollWidth,
+      clientWidth: el.clientWidth,
+    }));
+    expect(temps.scrollWidth).toBeLessThanOrEqual(temps.clientWidth);
+    // (d) la barre ne déborde toujours pas.
+    const bg = await bgLoc.evaluate((el) => ({
+      scrollWidth: el.scrollWidth,
+      clientWidth: el.clientWidth,
+    }));
+    expect(bg.scrollWidth).toBeLessThanOrEqual(bg.clientWidth + 1);
+  });
+}
 
 test('< 1180 px : le popup de navigation n’est pas vide, Échap le referme', async ({ browser }) => {
   const page = await openApp(await browser.newContext({ viewport: { width: 1000, height: 800 } }));
@@ -110,9 +194,9 @@ test('rail : colonne de droite à 25 % de la fenêtre, persiste, pop-up complèt
   await page.getByRole('button', { name: 'Déplier la barre' }).click();
   mesures = await mesurer();
   const total = mesures.cote + mesures.centre + mesures.panneau;
-  // barre gauche déployée à 12,5 % désormais (recette, point 2) ; le panneau reste à 25 %.
-  expect(mesures.cote / total).toBeGreaterThan(0.11);
-  expect(mesures.cote / total).toBeLessThan(0.14);
+  // barre gauche déployée à 17 % désormais (recette, point 2) ; le panneau reste à 25 %.
+  expect(mesures.cote / total).toBeGreaterThan(0.15);
+  expect(mesures.cote / total).toBeLessThan(0.19);
   expect(mesures.panneau / total).toBeGreaterThan(0.23);
   expect(mesures.panneau / total).toBeLessThan(0.27);
 
