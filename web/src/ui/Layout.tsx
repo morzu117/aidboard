@@ -13,7 +13,7 @@ import { Volet } from './Volet.js';
 type Dialog = 'none' | 'workspace' | 'sujet';
 /** les kinds de DM qui demandent quelque chose (12.5) : partagé avec la Boîte et le Notifieur */
 export const A_TRAITER = new Set<MeshDmKind>(['question', 'unblock']);
-/** B.2 (chantier 15, D55) : un seul popup à la fois sur l'écran — « panneau » appartient à Sujet. */
+/** B.2 (chantier 15, D55) : un seul popup à la fois sur l'écran — « panneau » appartient à l'écran qui le rend (Sujet, puis Accueil). */
 type Overlay = 'aucun' | 'nav' | 'panneau';
 export const LayoutCtx = createContext<{
   openNewTopic: (workspaceId?: string) => void;

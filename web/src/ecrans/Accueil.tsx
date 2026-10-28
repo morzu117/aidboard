@@ -10,6 +10,7 @@ import { A_TRAITER, Layout, useLayout } from '../ui/Layout.js';
 import { getNavCacheSnapshot } from '../ui/Nav.js';
 import { compteVue, topicsForVue, VUES, type VueId } from '../ui/navVues.js';
 import { isAlive, mostUrgent, Point, type Tone, topicView } from '../ui/Statut.js';
+import { Volet } from '../ui/Volet.js';
 import { CasErreurWorktree } from './CasErreurWorktree.js';
 import { FilActivite } from './FilActivite.js';
 
@@ -500,7 +501,8 @@ function ActionLigne({
 
 function Contenu() {
   const { state, daemon, call } = useAid();
-  const { openNewTopic } = useLayout();
+  const { openNewTopic, overlay, setOverlay } = useLayout();
+  const boutonPanneauRef = useRef<HTMLButtonElement>(null);
   const navigate = useNavigate();
   const [params] = useSearchParams();
   const vueParam = params.get('vue');
@@ -736,125 +738,159 @@ function Contenu() {
               Aucun sujet ne correspond.
             </p>
           ) : (
-            <table className="table-sujets" data-node="1-1.table.lignes">
-              <thead>
-                <tr>
-                  <th scope="col" data-node="1-1.table.entete.sujet">
-                    Sujet
-                  </th>
-                  <th scope="col" data-node="1-1.table.entete.projet">
-                    Projet
-                  </th>
-                  <th scope="col" data-node="1-1.table.entete.agent">
-                    Agent
-                  </th>
-                  <th
-                    scope="col"
-                    className="colonne-activite"
-                    data-node="1-1.table.entete.activite"
-                  >
-                    Activité
-                  </th>
-                  <th scope="col" data-node="1-1.table.entete.action">
-                    Action
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {sains.map((t, i) => {
-                  const agents = agentsOf(t.id);
-                  const view = topicView(agents);
-                  const urgent = mostUrgent(agents);
-                  const rowId = `1-1.table.ligne-${i + 1}`;
-                  return (
-                    <tr
-                      key={t.id}
-                      className="ligne-sujet"
-                      data-node={rowId}
-                      onClick={(e) => {
-                        if ((e.target as Element).closest('a,button')) return;
-                        navigate(`/sujets/${t.id}`);
-                      }}
+            <div className="accueil-table-scroll">
+              <table className="table-sujets" data-node="1-1.table.lignes">
+                <thead>
+                  <tr>
+                    <th scope="col" data-node="1-1.table.entete.sujet">
+                      Sujet
+                    </th>
+                    <th scope="col" data-node="1-1.table.entete.projet">
+                      Projet
+                    </th>
+                    <th scope="col" data-node="1-1.table.entete.agent">
+                      Agent
+                    </th>
+                    <th
+                      scope="col"
+                      className="colonne-activite"
+                      data-node="1-1.table.entete.activite"
                     >
-                      <td data-node={`${rowId}.sujet`}>
-                        <Link
-                          className="ligne-sujet-lien"
-                          data-action="sujet.ouvrir"
-                          to={`/sujets/${t.id}`}
-                        >
-                          <Point
-                            tone={view.tone}
-                            label={view.label}
-                            estimated={view.estimated}
-                            dataNode={`${rowId}.statut`}
-                          />
-                          <span data-node={`${rowId}.nom`} data-bind="sujet.nom_affiche">
-                            {nomAffiche(t)}
+                      Activité
+                    </th>
+                    <th scope="col" data-node="1-1.table.entete.action">
+                      Action
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {sains.map((t, i) => {
+                    const agents = agentsOf(t.id);
+                    const view = topicView(agents);
+                    const urgent = mostUrgent(agents);
+                    const rowId = `1-1.table.ligne-${i + 1}`;
+                    return (
+                      <tr
+                        key={t.id}
+                        className="ligne-sujet"
+                        data-node={rowId}
+                        onClick={(e) => {
+                          if ((e.target as Element).closest('a,button')) return;
+                          navigate(`/sujets/${t.id}`);
+                        }}
+                      >
+                        <td data-node={`${rowId}.sujet`}>
+                          <Link
+                            className="ligne-sujet-lien"
+                            data-action="sujet.ouvrir"
+                            to={`/sujets/${t.id}`}
+                          >
+                            <Point
+                              tone={view.tone}
+                              label={view.label}
+                              estimated={view.estimated}
+                              dataNode={`${rowId}.statut`}
+                            />
+                            <span data-node={`${rowId}.nom`} data-bind="sujet.nom_affiche">
+                              {nomAffiche(t)}
+                            </span>
+                            {t.phase && <span className="md-code-ligne">{t.phase}</span>}
+                          </Link>
+                          <span className="texte-faible" data-node={`${rowId}.index`}>
+                            {indexPastille(t)}
                           </span>
-                          {t.phase && <span className="md-code-ligne">{t.phase}</span>}
-                        </Link>
-                        <span className="texte-faible" data-node={`${rowId}.index`}>
-                          {indexPastille(t)}
-                        </span>
-                      </td>
-                      <td data-node={`${rowId}.projet`} data-bind="workspace.nom">
-                        {wsOf(t.workspaceId)?.name ?? '?'}
-                      </td>
-                      <td data-node={`${rowId}.agent`}>
-                        {urgent ? `${urgent.kind} · ${etatAgent(agents)}` : 'Aucun agent'}
-                      </td>
-                      <td className="colonne-activite" data-node={`${rowId}.activite`}>
-                        {activite(urgent, t)}
-                      </td>
-                      <td data-node={`${rowId}.action`}>
-                        <ActionLigne
-                          topic={t}
-                          agents={agents}
-                          dataNode={`${rowId}.action.bouton`}
-                          archive={vue === 'archives'}
-                          onDesarchive={() =>
-                            setNav((cur) => ({
-                              ...cur,
-                              placements: (cur.placements ?? []).map((p) =>
-                                p.topicId === t.id ? { ...p, archived: false } : p,
-                              ),
-                            }))
-                          }
-                        />
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+                        </td>
+                        <td data-node={`${rowId}.projet`} data-bind="workspace.nom">
+                          {wsOf(t.workspaceId)?.name ?? '?'}
+                        </td>
+                        <td data-node={`${rowId}.agent`}>
+                          {urgent ? `${urgent.kind} · ${etatAgent(agents)}` : 'Aucun agent'}
+                        </td>
+                        <td className="colonne-activite" data-node={`${rowId}.activite`}>
+                          {activite(urgent, t)}
+                        </td>
+                        <td data-node={`${rowId}.action`}>
+                          <ActionLigne
+                            topic={t}
+                            agents={agents}
+                            dataNode={`${rowId}.action.bouton`}
+                            archive={vue === 'archives'}
+                            onDesarchive={() =>
+                              setNav((cur) => ({
+                                ...cur,
+                                placements: (cur.placements ?? []).map((p) =>
+                                  p.topicId === t.id ? { ...p, archived: false } : p,
+                                ),
+                              }))
+                            }
+                          />
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           )}
         </section>
-        <aside className="accueil-aside" data-node="1-1.aside" aria-label="État">
-          <FilActivite />
-          <div className="panneau" data-node="1-1.aside.etat">
-            <div className="panneau-entete">
-              <h2 className="titre-zone" data-node="1-1.aside.etat.titre">
-                État
-              </h2>
-            </div>
-            <div className="panneau-corps">
-              <p className="texte-discret" data-node="1-1.aside.etat.daemon">
-                {daemon === 'connecte' ? 'daemon joignable' : 'daemon injoignable'}
-              </p>
-              {mesh && (
-                <p className="texte-discret" data-node="1-1.aside.etat.mesh">
-                  {meshTexte({
-                    state: mesh.state,
-                    aTraiter: mesh.inbox.filter((d) => !d.seenAt && A_TRAITER.has(d.kind)).length,
-                    tailscaleManage: mesh.tailscaleManage,
-                    enCours: false,
-                    onToggle: () => {},
-                  })}
+        <Volet
+          screen="1-1"
+          nom="panneau"
+          titre="Activité"
+          ouvert={overlay === 'panneau'}
+          inert={overlay !== 'aucun' && overlay !== 'panneau'}
+          onFermer={() => setOverlay('aucun')}
+          boutonRef={boutonPanneauRef}
+        >
+          <aside className="accueil-aside" data-node="1-1.aside" aria-label="État">
+            <FilActivite />
+            <div className="panneau" data-node="1-1.aside.etat">
+              <div className="panneau-entete">
+                <h2 className="titre-zone" data-node="1-1.aside.etat.titre">
+                  État
+                </h2>
+              </div>
+              <div className="panneau-corps">
+                <p className="texte-discret" data-node="1-1.aside.etat.daemon">
+                  {daemon === 'connecte' ? 'daemon joignable' : 'daemon injoignable'}
                 </p>
-              )}
+                {mesh && (
+                  <p className="texte-discret" data-node="1-1.aside.etat.mesh">
+                    {meshTexte({
+                      state: mesh.state,
+                      aTraiter: mesh.inbox.filter((d) => !d.seenAt && A_TRAITER.has(d.kind)).length,
+                      tailscaleManage: mesh.tailscaleManage,
+                      enCours: false,
+                      onToggle: () => {},
+                    })}
+                  </p>
+                )}
+              </div>
             </div>
-          </div>
-        </aside>
+          </aside>
+        </Volet>
+        <button
+          ref={boutonPanneauRef}
+          className="bouton-icone bouton-volant bouton-volant--panneau"
+          data-node="1-1.volet.ouvrir-panneau"
+          type="button"
+          aria-label="Ouvrir l'activité"
+          aria-expanded={overlay === 'panneau'}
+          inert={(overlay !== 'aucun' && overlay !== 'panneau') || undefined}
+          onClick={() => setOverlay(overlay === 'panneau' ? 'aucun' : 'panneau')}
+        >
+          <svg aria-hidden="true" viewBox="0 0 16 16" width="16" height="16">
+            <path d="M2 5h4l1.3 1.6H14V12H2z" fill="none" stroke="currentColor" strokeWidth="1.3" />
+          </svg>
+        </button>
+        {overlay === 'panneau' && (
+          <div
+            className="voile"
+            data-node="1-1.volet.panneau.fond"
+            aria-hidden="true"
+            onClick={() => setOverlay('aucun')}
+          />
+        )}
       </div>
       {casses.length > 0 && (
         <section

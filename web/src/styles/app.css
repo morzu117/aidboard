@@ -942,15 +942,13 @@ body {
     box-shadow: 0 var(--sp-2) var(--sp-6) var(--ombre);
     overflow: hidden;
   }
-  .volet.est-ouvert > .barre-gauche {
+  /* généralisé (recette, point 2) : un seul contenu par volet (barre-gauche, panneau-contexte,
+     ou l'aside de l'Accueil) — toujours celui qui doit remplir et défiler dans la pop-up. */
+  .volet.est-ouvert > :not(.volet-fermer) {
     width: 100%;
     flex: 1 1 auto;
     min-height: 0;
     overflow-y: auto;
-  }
-  .volet.est-ouvert > .panneau-contexte {
-    flex: 1 1 auto;
-    min-height: 0;
   }
   .volet.est-ouvert .volet-fermer {
     display: inline-flex;
@@ -1496,10 +1494,32 @@ body {
   flex-direction: column;
   gap: var(--sp-4);
 }
+/* recette (chantier 15, point 2) : sous 1280 px, la table seule — une ligne par cellule (sinon
+   `.cadre * { overflow-wrap: anywhere }` de maquette.css coupe les noms lettre par lettre),
+   noms longs tronqués ; si elle dépasse malgré tout, elle défile dans son propre conteneur. */
+.accueil-table-scroll {
+  overflow-x: auto;
+}
 .table-sujets {
   width: 100%;
   border-collapse: collapse;
   font-size: var(--fs-m);
+}
+.table-sujets th,
+.table-sujets td {
+  white-space: nowrap;
+}
+.table-sujets [data-bind='sujet.nom_affiche'] {
+  display: inline-block;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: bottom;
+}
+.table-sujets [data-bind='workspace.nom'] {
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .table-sujets th {
   padding: var(--sp-2) var(--sp-3);
