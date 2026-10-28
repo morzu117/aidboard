@@ -11,9 +11,13 @@ import {
 } from './helpers.js';
 
 // review D (findings 2/3/4, re-dev 2) : jsdom n'applique pas le CSS — seul un e2e vérifie la
-// grille 25/50/25 sans défilement de page, et le popup de navigation non vide sous 1180 px.
+// grille 12,5/62,5/25 sans défilement de page, et le popup de navigation non vide sous 1180 px.
+// recette (point 2) : barre gauche réduite de moitié (12,5 %), le centre reprend la place
+// (62,5 %), le panneau de droite inchangé (25 %) — décision opérateur, chantier 15.
 
-test('≥ 1280 px : colonnes 25/50/25, la page ne défile pas', async ({ browser }) => {
+test('≥ 1280 px : colonnes 12,5/62,5/25, la page ne défile pas, la barre gauche ne déborde pas', async ({
+  browser,
+}) => {
   const page = await openApp(await browser.newContext({ viewport: { width: 1440, height: 900 } }));
   await registerWorkspace(page, newRepo('depot-sujet-colonnes-large'));
   await createTopic(page, 'Colonnes larges');
@@ -21,23 +25,29 @@ test('≥ 1280 px : colonnes 25/50/25, la page ne défile pas', async ({ browser
 
   const mesures = await page.evaluate(() => {
     const largeur = (sel: string) => document.querySelector(sel)!.getBoundingClientRect().width;
+    const bg = document.querySelector('.barre-gauche')!;
     return {
       cote: largeur('.barre-gauche'),
       centre: largeur('.sujet-contenu'),
       panneau: largeur('.panneau-contexte'),
       scrollHeight: document.scrollingElement!.scrollHeight,
       innerHeight: window.innerHeight,
+      bgScrollWidth: bg.scrollWidth,
+      bgClientWidth: bg.clientWidth,
     };
   });
   const total = mesures.cote + mesures.centre + mesures.panneau;
   const part = (w: number) => w / total;
-  expect(part(mesures.cote)).toBeGreaterThan(0.23);
-  expect(part(mesures.cote)).toBeLessThan(0.27);
-  expect(part(mesures.centre)).toBeGreaterThan(0.48);
-  expect(part(mesures.centre)).toBeLessThan(0.52);
+  expect(part(mesures.cote)).toBeGreaterThan(0.11);
+  expect(part(mesures.cote)).toBeLessThan(0.14);
+  expect(part(mesures.centre)).toBeGreaterThan(0.6);
+  expect(part(mesures.centre)).toBeLessThan(0.65);
   expect(part(mesures.panneau)).toBeGreaterThan(0.23);
   expect(part(mesures.panneau)).toBeLessThan(0.27);
   expect(mesures.scrollHeight).toBeLessThanOrEqual(mesures.innerHeight);
+  // barre gauche réduite à 12,5 % : le contenu (bouton, vues, groupes, noms de sujet) doit se
+  // tronquer plutôt que déborder horizontalement de la colonne.
+  expect(mesures.bgScrollWidth).toBeLessThanOrEqual(mesures.bgClientWidth + 1);
 });
 
 test('< 1180 px : le popup de navigation n’est pas vide, Échap le referme', async ({ browser }) => {
@@ -100,8 +110,9 @@ test('rail : colonne de droite à 25 % de la fenêtre, persiste, pop-up complèt
   await page.getByRole('button', { name: 'Déplier la barre' }).click();
   mesures = await mesurer();
   const total = mesures.cote + mesures.centre + mesures.panneau;
-  expect(mesures.cote / total).toBeGreaterThan(0.23);
-  expect(mesures.cote / total).toBeLessThan(0.27);
+  // barre gauche déployée à 12,5 % désormais (recette, point 2) ; le panneau reste à 25 %.
+  expect(mesures.cote / total).toBeGreaterThan(0.11);
+  expect(mesures.cote / total).toBeLessThan(0.14);
   expect(mesures.panneau / total).toBeGreaterThan(0.23);
   expect(mesures.panneau / total).toBeLessThan(0.27);
 
