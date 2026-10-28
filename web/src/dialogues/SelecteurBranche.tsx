@@ -21,6 +21,11 @@ export function SelecteurBranche({ topicId, onClose }: { topicId: string; onClos
   const [actionId, setActionId] = useState<string | null>(null);
   const [requesting, setRequesting] = useState(false);
   const [erreurAction, setErreurAction] = useState<string | null>(null);
+  // branches-libres : création d'une branche depuis la base, suivie en parallèle du changement.
+  const [nouveauNom, setNouveauNom] = useState('');
+  const [creerActionId, setCreerActionId] = useState<string | null>(null);
+  const [creerRequesting, setCreerRequesting] = useState(false);
+  const [erreurCreer, setErreurCreer] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -41,6 +46,12 @@ export function SelecteurBranche({ topicId, onClose }: { topicId: string; onClos
   useEffect(() => {
     if (action?.state === 'succeeded') onClose();
   }, [action?.state, onClose]);
+
+  const topic = state?.topics.find((t) => t.id === topicId);
+  const creerAction = state?.actions.find((a) => a.id === creerActionId);
+  useEffect(() => {
+    if (creerAction?.state === 'succeeded') onClose();
+  }, [creerAction?.state, onClose]);
 
   async function changer(
     branch: GitBranch,
@@ -67,6 +78,27 @@ export function SelecteurBranche({ topicId, onClose }: { topicId: string; onClos
     }
   }
 
+  async function creer(opts: { dirtyAction?: 'stash' } = {}) {
+    setErreurCreer(null);
+    setCreerRequesting(true);
+    setCreerActionId(null);
+    try {
+      const r = await call<{ actionId: string }>(
+        'POST',
+        `/api/topics/${topicId}/actions/branche.creer`,
+        {
+          targetBranch: nouveauNom.trim(),
+          ...(opts.dirtyAction && { dirtyAction: opts.dirtyAction }),
+        },
+      );
+      setCreerActionId(r.actionId);
+    } catch (err) {
+      setErreurCreer(err instanceof AidApiError ? err.message : String(err));
+    } finally {
+      setCreerRequesting(false);
+    }
+  }
+
   const mots = fold(filtre).split(/\s+/).filter(Boolean);
   const correspond = (b: GitBranch) => mots.every((m) => fold(b.name).includes(m));
   const mienne = branches?.find((b) => b.isCurrent);
@@ -84,6 +116,28 @@ export function SelecteurBranche({ topicId, onClose }: { topicId: string; onClos
           ? 'Modifications non commitées : le changement de branche les écraserait.'
           : 'Le changement de branche a échoué.'))
       : null);
+
+  const creerEnCours =
+    creerRequesting ||
+    (creerActionId !== null && (!creerAction || creerAction.state === 'running'));
+  const creerEchoue =
+    !creerEnCours &&
+    creerActionId !== null &&
+    creerAction !== undefined &&
+    creerAction.state !== 'succeeded';
+  const creerBesoinHumain = creerEchoue && creerAction!.state === 'needs_human';
+  const messageEchecCreer =
+    erreurCreer ??
+    (creerEchoue
+      ? (outputs[creerActionId!]?.at(-1)?.line ??
+        (creerBesoinHumain
+          ? 'Modifications non commitées : la création les écraserait.'
+          : 'La création a échoué.'))
+      : null);
+  const nomNouvelleBranche = nouveauNom.trim();
+  // nom déjà pris par une branche locale : refus web, aucun appel au daemon.
+  const nomExisteDeja =
+    nomNouvelleBranche !== '' && (branches ?? []).some((b) => b.name === nomNouvelleBranche);
 
   function annulerConfirmation() {
     setCible(null);
@@ -277,6 +331,53 @@ export function SelecteurBranche({ topicId, onClose }: { topicId: string; onClos
                   })
                 )}
               </div>
+              {topic && (
+                <div
+                  className="selecteur-branche__groupe"
+                  role="group"
+                  aria-label="Nouvelle branche"
+                >
+                  <h3 className="titre-zone">Nouvelle branche depuis {topic.base}</h3>
+                  <div className="selecteur-branche__ligne" role="presentation">
+                    <input
+                      className="champ"
+                      type="text"
+                      placeholder="nom de la nouvelle branche…"
+                      aria-label="Nom de la nouvelle branche"
+                      value={nouveauNom}
+                      onChange={(e) => setNouveauNom(e.target.value)}
+                    />
+                    <button
+                      className="bouton bouton--primaire"
+                      type="button"
+                      disabled={nomNouvelleBranche === '' || nomExisteDeja || creerEnCours}
+                      onClick={() => void creer()}
+                    >
+                      Créer
+                    </button>
+                  </div>
+                  {nomExisteDeja && (
+                    <p className="message-erreur" role="alert">
+                      La branche {nomNouvelleBranche} existe déjà.
+                    </p>
+                  )}
+                  {messageEchecCreer && (
+                    <p className="message-erreur" role="alert">
+                      {messageEchecCreer}
+                    </p>
+                  )}
+                  {creerBesoinHumain && (
+                    <button
+                      className="bouton bouton--primaire"
+                      type="button"
+                      disabled={creerEnCours}
+                      onClick={() => void creer({ dirtyAction: 'stash' })}
+                    >
+                      Mettre de côté et créer
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
           )}
         </>

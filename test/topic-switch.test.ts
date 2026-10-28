@@ -446,3 +446,16 @@ test('branche.creer : nouvelle branche depuis la base du sujet, pas depuis HEAD'
   expect(currentBranch(wt)).toBe('feat/depuis-base');
   expect(sh(wt, 'rev-parse', 'HEAD')).toBe(baseTip);
 });
+
+// branches-libres : un nom invalide pour git est déjà refusé proprement par le script (git
+// switch -c échoue lui-même) — échec nommé, pas un 500 ni un état incohérent.
+test('branche.creer : nom invalide pour git, échec nommé', async () => {
+  c = await setupWorkspace();
+  const { topicId } = await makeTopic(c);
+
+  const run = await postAction(c, topicId, 'branche.creer', { targetBranch: 'a b' });
+  expect(run.statusCode).toBe(202);
+  const fin = await finished(c.t, run.json<{ actionId: string }>().actionId);
+  expect(fin.data.outcome).toBe('failed');
+  expect((fin.data.tail as string[]).some((l) => l.includes('not a valid branch name'))).toBe(true);
+});
