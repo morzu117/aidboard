@@ -22,5 +22,6 @@ for (const viewport of [
     expect(chevauchent).toBe(false);
     expect(l.x).toBeGreaterThanOrEqual(0);
     expect(l.x + l.width).toBeLessThanOrEqual(viewport.width);
+    await page.context().close();
   });
 }

@@ -49,6 +49,7 @@ test("< 1280 px : l'aside est masqué, le bouton « Ouvrir l'activité » ouvre 
 
   await page.keyboard.press('Escape');
   await expect(dialogue).not.toBeVisible();
+  await page.context().close();
 });
 
 for (const viewport of [
@@ -92,6 +93,7 @@ for (const viewport of [
       () => document.scrollingElement!.scrollWidth > window.innerWidth,
     );
     expect(defilePage).toBe(false);
+    await page.context().close();
   });
 }
 
@@ -108,4 +110,5 @@ test('≥ 1280 px (1440x900) : aside à côté de la table (~280 px), bouton flo
   expect(largeur).toBeLessThan(290);
 
   await expect(page.getByRole('button', { name: "Ouvrir l'activité" })).toBeHidden();
+  await page.context().close();
 });
