@@ -116,11 +116,12 @@ export interface Agent {
   runId: string;
   kind: AgentKind;
   role: 'orchestrator' | Phase | 'free';
-  transport: 'pty' | 'headless' | 'remote';
+  transport: 'pty' | 'headless' | 'remote' | 'stream';
   status: AgentStatus;
   cwd: string;
   command: string[];
   pid: number | null;
+  sessionId: string | null;
   exitCode: number | null;
   issue: number | null;
   statusReason: string | null;
@@ -199,4 +200,36 @@ export interface MeshState {
   /** depuis quand l'état `connected` courant tient (D41 : « hors mesh depuis <durée> ») */
   since: string | null;
   cell: string;
+}
+
+/** Chantier 15 (D55, groupe B) : un groupe de la barre gauche. `workspaceId` non nul = groupe par défaut d'un projet. */
+export interface NavGroup {
+  id: string;
+  name: string;
+  color: string;
+  ord: number;
+  collapsed: boolean;
+  hidden: boolean;
+  workspaceId: string | null;
+}
+
+/** Placement d'un sujet dans un groupe de la barre gauche ; `displayName` null = nom par défaut (la branche). */
+export interface NavPlacement {
+  topicId: string;
+  groupId: string;
+  ord: number;
+  pinned: boolean;
+  archived: boolean;
+  hidden: boolean;
+  displayName: string | null;
+}
+
+export interface NavPrefs {
+  reduit: boolean;
+}
+
+export interface NavState {
+  groups: NavGroup[];
+  placements: NavPlacement[];
+  prefs: NavPrefs;
 }

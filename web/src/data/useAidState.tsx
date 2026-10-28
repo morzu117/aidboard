@@ -22,7 +22,11 @@ export function AidProvider({ client, children }: { client?: AidClient; children
 export interface AidApi {
   retry: () => void;
   refresh: () => Promise<void>;
-  call: <T>(method: 'GET' | 'POST' | 'DELETE', path: string, body?: unknown) => Promise<T>;
+  call: <T>(
+    method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE',
+    path: string,
+    body?: unknown,
+  ) => Promise<T>;
 }
 
 export function useAid(): ClientSnapshot & AidApi {

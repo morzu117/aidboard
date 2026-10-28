@@ -191,9 +191,43 @@ export function registerWorkspaceRoutes(
       .get(id) as { n: number };
     if (live.n > 0) throw new AidHttpError(409, 'un agent tourne encore pour ce projet');
     db.transaction(() => {
+      // Le groupe par défaut du projet disparaît avec lui ; un sujet d'un autre projet qui
+      // y avait été déplacé (nav/placements) revient dans le groupe de son propre projet.
+      const navGroup = db.prepare('SELECT id FROM nav_group WHERE workspace_id = ?').get(id) as
+        { id: string } | undefined;
+      if (navGroup) {
+        const elsewhere = db
+          .prepare(
+            'SELECT p.topic_id AS topicId, t.workspace_id AS workspaceId FROM nav_placement p ' +
+              'JOIN topics t ON t.id = p.topic_id WHERE p.group_id = ? AND t.workspace_id != ?',
+          )
+          .all(navGroup.id, id) as Array<{ topicId: string; workspaceId: string }>;
+        for (const p of elsewhere) {
+          const home = db
+            .prepare('SELECT id FROM nav_group WHERE workspace_id = ?')
+            .get(p.workspaceId) as { id: string } | undefined;
+          if (!home) continue;
+          const ord =
+            (
+              db
+                .prepare('SELECT COALESCE(MAX(ord), -1) AS m FROM nav_placement WHERE group_id = ?')
+                .get(home.id) as { m: number }
+            ).m + 1;
+          db.prepare('UPDATE nav_placement SET group_id = ?, ord = ? WHERE topic_id = ?').run(
+            home.id,
+            ord,
+            p.topicId,
+          );
+        }
+        db.prepare('DELETE FROM nav_placement WHERE group_id = ?').run(navGroup.id);
+        db.prepare('DELETE FROM nav_group WHERE id = ?').run(navGroup.id);
+      }
       db.prepare(`DELETE FROM agents WHERE run_id IN (${runs})`).run(id);
       db.prepare(
         'DELETE FROM runs WHERE topic_id IN (SELECT id FROM topics WHERE workspace_id = ?)',
+      ).run(id);
+      db.prepare(
+        'DELETE FROM nav_placement WHERE topic_id IN (SELECT id FROM topics WHERE workspace_id = ?)',
       ).run(id);
       db.prepare('DELETE FROM topics WHERE workspace_id = ?').run(id);
       db.prepare('DELETE FROM actions WHERE workspace_id = ?').run(id);

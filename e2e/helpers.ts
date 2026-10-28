@@ -1,7 +1,7 @@
 import { mkdtempSync, realpathSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { expect, type BrowserContext, type Locator, type Page } from '@playwright/test';
+import { expect, type BrowserContext, type Page } from '@playwright/test';
 import { makeOriginAndClone } from '../test/helpers/git.js';
 
 export const url = () => process.env.AID_E2E_URL!;
@@ -9,7 +9,8 @@ export const node = (page: Page, id: string) => page.locator(`[data-node="${id}"
 
 interface ApiState {
   topics: Array<{ id: string; branch: string }>;
-  agents: Array<{ id: string; status: string; pid: number }>;
+  runs: Array<{ id: string; topicId: string }>;
+  agents: Array<{ id: string; status: string; pid: number; runId: string }>;
 }
 
 /** Ouvre le lien d'ouverture (échangé contre le cookie) et expose les terminaux au test. */
@@ -92,15 +93,6 @@ export async function launchClaude(page: Page): Promise<string> {
   await expect(node(page, '1-3.terminaux.sortie')).toBeVisible();
   await expect.poll(async () => (await state(page)).agents.length).toBeGreaterThan(0);
   return (await state(page)).agents.at(-1)!.id;
-}
-
-/** La carte d'un sujet sur l'Accueil, et le préfixe de ses data-node (`1-1.grille.sujet-N`). */
-export async function card(page: Page, title: string): Promise<(id: string) => Locator> {
-  await page.goto(url());
-  const article = page.locator('article.carte', { hasText: title });
-  await expect(article).toBeVisible();
-  const prefix = (await article.getAttribute('data-node'))!;
-  return (id: string) => node(page, `${prefix}.${id}`);
 }
 
 export async function typeInTerminal(page: Page, text: string): Promise<void> {

@@ -94,6 +94,7 @@ export async function buildSnapshot(
       cwd: r.cwd as string,
       command: JSON.parse(r.command as string) as string[],
       pid: r.pid as number | null,
+      sessionId: (r.session_id as string | null) ?? null,
       exitCode: r.exit_code as number | null,
       issue: r.issue as number | null,
       statusReason: (r.status_reason as string | null) ?? null,

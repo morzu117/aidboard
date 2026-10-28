@@ -26,7 +26,11 @@ export default async function globalSetup() {
   ].join('\n');
   // 14.6 : la cell Swairm sur le faux CLI (D48) — chemin absolu, jamais le vrai swairm ni le ~/.aid réel
   const swairm = ['swairm:', `  bin: ${join(fixtures, 'fake-swairm.sh')}`].join('\n');
-  writeFileSync(join(home, 'config.yaml'), `port: ${PORT}\n${mesh}\n${swairm}\n`, { mode: 0o600 });
+  // D63/A.6 : le défaut est passé à `stream`, mais les fixtures e2e jouent le faux claude PTY — jamais structuré.
+  const agents = ['agents:', '  transport: pty'].join('\n');
+  writeFileSync(join(home, 'config.yaml'), `port: ${PORT}\n${mesh}\n${swairm}\n${agents}\n`, {
+    mode: 0o600,
+  });
   const PATH = `${join(import.meta.dirname, '../test/fixtures/bin')}${delimiter}${process.env.PATH}`;
   const env = {
     ...process.env,

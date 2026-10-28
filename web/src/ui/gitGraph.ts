@@ -23,6 +23,8 @@ export interface GraphRow {
   wip: boolean;
   absent: boolean;
   paths: GraphPath[];
+  rowHeight: number;
+  nodeY: number;
 }
 
 // Le commit dont les refs portent `origin/<base>` (ou `<base>` sans remote) : départ du fil
@@ -84,12 +86,17 @@ interface Node {
 // Construit les tracés SVG : parcourt chaque arête commit → parent et ajoute un segment à
 // chaque ligne traversée (y compris les lignes intermédiaires, qui appartiennent souvent à une
 // autre voie — c'est ce qui donne les traits qui « passent au travers » dans l'export).
-function buildPaths(nodes: Node[], dashedFrom: Set<string>): GraphPath[][] {
+function buildPaths(
+  nodes: Node[],
+  dashedFrom: Set<string>,
+  rowHeight: number,
+  nodeY: number,
+): GraphPath[][] {
   const index = new Map(nodes.map((n, i) => [n.hash, i]));
   const rows: GraphPath[][] = nodes.map(() => []);
-  const mid = (lane: Lane) => `${LANE_X[lane]} ${NODE_Y}`;
+  const mid = (lane: Lane) => `${LANE_X[lane]} ${nodeY}`;
   const top = (lane: Lane) => `${LANE_X[lane]} 0`;
-  const bottom = (lane: Lane) => `${LANE_X[lane]} ${ROW_HEIGHT}`;
+  const bottom = (lane: Lane) => `${LANE_X[lane]} ${rowHeight}`;
   const add = (row: number, d: string, lane: Lane, dashed: boolean) =>
     rows[row]!.push({ d, lane, dashed });
 
@@ -111,7 +118,7 @@ function buildPaths(nodes: Node[], dashedFrom: Set<string>): GraphPath[][] {
       } else if (mergeSecondParent) {
         add(
           i,
-          `M ${mid(commit.lane)} C ${LANE_X[commit.lane]} ${ROW_HEIGHT} ${LANE_X[parentLane]} ${NODE_Y} ${bottom(parentLane)}`,
+          `M ${mid(commit.lane)} C ${LANE_X[commit.lane]} ${rowHeight} ${LANE_X[parentLane]} ${nodeY} ${bottom(parentLane)}`,
           parentLane,
           false,
         );
@@ -127,7 +134,7 @@ function buildPaths(nodes: Node[], dashedFrom: Set<string>): GraphPath[][] {
         }
         add(
           j,
-          `M ${top(commit.lane)} C ${LANE_X[commit.lane]} ${NODE_Y} ${LANE_X[parentLane]} 0 ${mid(parentLane)}`,
+          `M ${top(commit.lane)} C ${LANE_X[commit.lane]} ${nodeY} ${LANE_X[parentLane]} 0 ${mid(parentLane)}`,
           commit.lane,
           false,
         );
@@ -139,8 +146,10 @@ function buildPaths(nodes: Node[], dashedFrom: Set<string>): GraphPath[][] {
 
 export function layoutGraph(
   commits: GitLogCommit[],
-  opts: { baseRefs: string[]; dirty: boolean },
+  opts: { baseRefs: string[]; dirty: boolean; rowHeight?: number; nodeY?: number },
 ): GraphRow[] {
+  const rowHeight = opts.rowHeight ?? ROW_HEIGHT;
+  const nodeY = opts.nodeY ?? NODE_Y;
   const lanes = assignLanes(commits, findRefTip(commits, opts.baseRefs));
   const headHash = findRefTip(commits, ['HEAD']);
   const nodes: Node[] = commits.map((c) => ({
@@ -153,7 +162,7 @@ export function layoutGraph(
     nodes.unshift({ hash: '', lane: lanes.get(headHash) ?? 1, parents: [headHash] });
     dashedFrom.add('');
   }
-  const paths = buildPaths(nodes, dashedFrom);
+  const paths = buildPaths(nodes, dashedFrom, rowHeight, nodeY);
   const byHash = new Map(commits.map((c) => [c.hash, c]));
   return nodes.map((n, i) => ({
     hash: n.hash,
@@ -162,5 +171,7 @@ export function layoutGraph(
     wip: n.hash === '',
     absent: n.hash === '' ? false : !(byHash.get(n.hash)?.inHead ?? false),
     paths: paths[i]!,
+    rowHeight,
+    nodeY,
   }));
 }

@@ -60,6 +60,12 @@ export interface GitBranch {
   isCurrent: boolean;
   // Sujet A-I-D propriétaire de cette branche dans ce workspace, si ce n'est pas celui-ci.
   topicId: string | null;
+  // 15 (review 5) : cible de la libération de `worktree` si on la prend — null = détacher ;
+  // absent quand `worktree` est null (branche courante ou non extraite ailleurs).
+  liberationVers?: string | null;
+  // re-dev (C5) : `worktree` est la racine du dépôt (realpath) — calculé par la même fonction
+  // que liberationVers, évite toute comparaison de chemin côté web.
+  liberationRacine?: boolean;
 }
 
 export interface GitBranchesResponse {

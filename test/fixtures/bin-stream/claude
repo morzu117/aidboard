@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+# Faux « claude » en mode structuré (stream-json) pour test/agent-stream.test.ts : rejoue fake-claude-stream.mjs.
+exec node "$(dirname "$0")/../fake-claude-stream.mjs" "$@"

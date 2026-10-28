@@ -20,7 +20,8 @@ afterEach(async () => {
 async function spawn(kind: 'claude' | 'shell') {
   process.env.PATH = `${BIN}${delimiter}${saved.PATH}`;
   process.env.SHELL = '/bin/sh';
-  c = await setupWorkspace();
+  // D63/A.6 : le défaut est passé à `stream` ; ce fichier vise le chemin PTY (résumé, manifeste).
+  c = await setupWorkspace({ config: { agents: { transport: 'pty' } } });
   const topic = await makeTopic(c);
   const agent = c.t.d.agents.spawn({ topicId: topic.topicId, kind });
   const live = c.t.d.agents.get(agent.id)!;

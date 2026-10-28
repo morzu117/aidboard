@@ -5,6 +5,7 @@ import { useLocation } from 'react-router';
 import { afterEach, expect, test } from 'vitest';
 import type { ActionRun } from '../../src/shared/model.js';
 import { Accueil } from '../../web/src/ecrans/Accueil.js';
+import { NouveauSujet } from '../../web/src/dialogues/NouveauSujet.js';
 import { FakeSocket, json, setup, snapshot, topic, ws } from './helpers.js';
 
 afterEach(cleanup);
@@ -32,6 +33,12 @@ const action = (over: Partial<ActionRun>): ActionRun => ({
   ...over,
 });
 
+// Nav pose aussi un bouton « Nouveau sujet » (B.2, finding 7) : findByRole serait ambigu entre
+// les deux ; les deux appellent openNewTopic(), le premier (celui de la barre du haut) suffit.
+async function boutonNouveauSujet() {
+  return (await screen.findAllByRole('button', { name: 'Nouveau sujet' }))[0]!;
+}
+
 async function pushEvent() {
   await act(async () => {
     FakeSocket.all[0]!.open();
@@ -46,7 +53,7 @@ async function pushEvent() {
 test('enregistrer un workspace : l’erreur du daemon est affichée telle quelle', async () => {
   const h = setup(<Accueil />, snapshot());
   h.respond.set('POST /api/workspaces', json(422, { error: "/tmp/x n'est pas un dépôt git" }));
-  await userEvent.click(await screen.findByRole('button', { name: 'Nouveau sujet' }));
+  await userEvent.click(await boutonNouveauSujet());
   await userEvent.click(await screen.findByRole('button', { name: 'Choisir mon-depot' }));
   await userEvent.click(screen.getByRole('button', { name: 'Enregistrer' }));
   expect((await screen.findByRole('alert')).textContent).toBe("/tmp/x n'est pas un dépôt git");
@@ -61,7 +68,7 @@ test('enregistrer un workspace : la base facultative est envoyée, les avertisse
     'POST /api/workspaces',
     json(201, { ...ws(), warnings: ['repo sous /mnt : performances WSL2 dégradées'] }),
   );
-  await userEvent.click(await screen.findByRole('button', { name: 'Nouveau sujet' }));
+  await userEvent.click(await boutonNouveauSujet());
   await userEvent.click(await screen.findByRole('button', { name: 'Choisir mon-depot' }));
   await userEvent.type(screen.getByLabelText(/Branche de base/), 'develop');
   await userEvent.click(screen.getByRole('button', { name: 'Enregistrer' }));
@@ -76,7 +83,7 @@ test('enregistrer un workspace : la base facultative est envoyée, les avertisse
 
 test('nouveau sujet : l’aperçu suit le titre et le type, sans jamais interpréter le titre', async () => {
   setup(<Accueil />, snapshot({ workspaces: [ws()] }));
-  await userEvent.click(await screen.findByRole('button', { name: 'Nouveau sujet' }));
+  await userEvent.click(await boutonNouveauSujet());
   const preview = () => document.querySelector('.apercu-branche')!.textContent;
   expect(preview()).toContain('titre à saisir');
   expect(
@@ -94,7 +101,7 @@ test('créer un sujet : navigation immédiate vers le brouillon (D15), sans atte
     'POST /api/topics',
     json(202, { actionId: 'ac_1', slug: 'abc', branch: 'feat/abc', topicId: 'tp_9' }),
   );
-  await userEvent.click(await screen.findByRole('button', { name: 'Nouveau sujet' }));
+  await userEvent.click(await boutonNouveauSujet());
   await userEvent.type(screen.getByLabelText('Titre'), 'Abc');
   await userEvent.click(screen.getByRole('button', { name: 'Créer le sujet' }));
   expect(h.calls.find((c) => c.url === '/api/topics')?.body).toEqual({
@@ -178,7 +185,7 @@ test('avec un dépôt déjà enregistré, « Ajouter un projet » ouvre l’enre
     'POST /api/workspaces',
     json(201, { ...ws({ id: 'ws_2', name: 'autre' }), warnings: [] }),
   );
-  await userEvent.click(await screen.findByRole('button', { name: 'Nouveau sujet' }));
+  await userEvent.click(await boutonNouveauSujet());
   await userEvent.click(screen.getByRole('button', { name: 'Ajouter un projet…' }));
   await userEvent.click(await screen.findByRole('button', { name: 'Choisir mon-depot' }));
   await userEvent.click(screen.getByRole('button', { name: 'Enregistrer' }));
@@ -195,6 +202,48 @@ test('la création de sujet préselectionne le projet le plus récent', async ()
       ],
     }),
   );
-  await userEvent.click(await screen.findByRole('button', { name: 'Nouveau sujet' }));
+  await userEvent.click(await boutonNouveauSujet());
   expect((screen.getByLabelText('Projet') as HTMLSelectElement).value).toBe('ws_z');
+});
+
+// B.4 (re-dev 2/2) : le dialogue peut être monté avant l'hydratation de `state` (clic juste
+// après un rechargement) — `workspaces` est alors vide et le défaut n'est pas encore connu.
+test('nouveau sujet ouvert avant l’hydratation : le projet par défaut arrive avec l’état', async () => {
+  setup(
+    <NouveauSujet onClose={() => {}} onAddWorkspace={() => {}} />,
+    snapshot({ workspaces: [ws({ id: 'ws_1', createdAt: '2026-01-01T00:00:00Z' })] }),
+  );
+  expect((screen.getByLabelText('Projet') as HTMLSelectElement).value).toBe('');
+  await userEvent.type(screen.getByLabelText('Titre'), 'Abc');
+  await waitFor(() =>
+    expect((screen.getByLabelText('Projet') as HTMLSelectElement).value).toBe('ws_1'),
+  );
+  expect(
+    (screen.getByRole('button', { name: 'Créer le sujet' }) as HTMLButtonElement).disabled,
+  ).toBe(false);
+});
+
+test('nouveau sujet : un choix explicite de projet n’est pas écrasé par un nouvel instantané', async () => {
+  const h = setup(
+    <NouveauSujet onClose={() => {}} onAddWorkspace={() => {}} />,
+    snapshot({
+      workspaces: [
+        ws({ id: 'ws_a', name: 'ancien', createdAt: '2026-01-01T00:00:00Z' }),
+        ws({ id: 'ws_z', name: 'récent', createdAt: '2026-10-01T00:00:00Z' }),
+      ],
+    }),
+  );
+  await waitFor(() =>
+    expect((screen.getByLabelText('Projet') as HTMLSelectElement).value).toBe('ws_z'),
+  );
+  await userEvent.selectOptions(screen.getByLabelText('Projet'), 'ws_a');
+  h.state = snapshot({
+    workspaces: [
+      ws({ id: 'ws_a', name: 'ancien', createdAt: '2026-01-01T00:00:00Z' }),
+      ws({ id: 'ws_z', name: 'récent', createdAt: '2026-10-01T00:00:00Z' }),
+      ws({ id: 'ws_n', name: 'nouveau', createdAt: '2026-10-27T00:00:00Z' }),
+    ],
+  });
+  await pushEvent();
+  expect((screen.getByLabelText('Projet') as HTMLSelectElement).value).toBe('ws_a');
 });

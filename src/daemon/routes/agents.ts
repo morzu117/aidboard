@@ -26,6 +26,7 @@ const AnswerBody = Type.Object(
   },
   { additionalProperties: false },
 );
+const MarkBody = Type.Object({ marked: Type.Boolean() }, { additionalProperties: false });
 
 export function registerAgentRoutes(
   app: FastifyInstance,
@@ -59,6 +60,39 @@ export function registerAgentRoutes(
     return reply.code(202).send({ id });
   });
 
+  // Repères de discussion (A.7) : marquer ou démarquer une question (un message utilisateur) du fil.
+  app.put(
+    '/api/agents/:id/messages/:seq/mark',
+    { schema: { body: MarkBody } },
+    async (req, reply) => {
+      const { id, seq: seqParam } = req.params as { id: string; seq: string };
+      if (!/^[1-9][0-9]*$/.test(seqParam))
+        throw new AidHttpError(400, 'seq doit être un entier positif');
+      const seq = Number(seqParam);
+      if (!deps.db.prepare('SELECT 1 FROM agents WHERE id = ?').get(id))
+        throw new AidHttpError(404, 'agent inconnu');
+      const row = deps.db
+        .prepare('SELECT kind, payload FROM agent_messages WHERE agent_id = ? AND seq = ?')
+        .get(id, seq) as { kind: string; payload: string } | undefined;
+      if (!row) throw new AidHttpError(404, 'message inconnu');
+      let role: string | undefined;
+      if (row.kind === 'message') {
+        try {
+          role = (JSON.parse(row.payload) as { role?: string }).role;
+        } catch {
+          throw new AidHttpError(422, 'message illisible');
+        }
+      }
+      if (role !== 'user')
+        throw new AidHttpError(422, 'seul un message utilisateur peut être marqué');
+      const { marked } = req.body as { marked: boolean };
+      deps.db
+        .prepare('UPDATE agent_messages SET marked = ? WHERE agent_id = ? AND seq = ?')
+        .run(marked ? 1 : 0, id, seq);
+      return reply.code(200).send({ seq, marked });
+    },
+  );
+
   for (const [path, paused] of [
     ['pause', true],
     ['resume', false],
@@ -70,13 +104,21 @@ export function registerAgentRoutes(
     });
   }
 
+  // D64 : l'équivalent de la pause pour un agent conversationnel, qui n'en a pas.
+  app.post('/api/agents/:id/interrupt', async (req, reply) => {
+    const { id } = req.params as { id: string };
+    deps.agents.interrupt(id);
+    return reply.code(202).send({ id });
+  });
+
   app.delete('/api/agents/:id', async (req, reply) => {
     const { id } = req.params as { id: string };
     const row = deps.db.prepare('SELECT closed_at FROM agents WHERE id = ?').get(id) as
       { closed_at: string | null } | undefined;
     if (!row) throw new AidHttpError(404, 'agent inconnu');
     const live = deps.agents.get(id);
-    if (live && !live.exited) {
+    const stream = deps.agents.getStream(id);
+    if ((live && !live.exited) || (stream && !stream.exited)) {
       void deps.agents.stop(id, 'user');
       return reply.code(202).send({ id });
     }

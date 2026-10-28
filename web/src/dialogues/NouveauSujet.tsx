@@ -20,9 +20,12 @@ export function NouveauSujet({
   const workspaces = state?.workspaces ?? [];
   // le dernier enregistré : on vient en général de l'ajouter
   const latest = [...workspaces].sort((a, b) => a.createdAt.localeCompare(b.createdAt)).at(-1);
-  const [workspaceId, setWorkspaceId] = useState(
-    workspaces.find((w) => w.id === initialWorkspaceId)?.id ?? latest?.id ?? '',
-  );
+  // le dialogue peut s'ouvrir avant l'hydratation de `state` (clic juste après un rechargement) :
+  // tant qu'aucun choix explicite n'a été fait, le défaut se recalcule au rendu avec les projets.
+  const [choixExplicite, setChoixExplicite] = useState<string | null>(null);
+  const defaut = workspaces.find((w) => w.id === initialWorkspaceId)?.id ?? latest?.id ?? '';
+  const workspaceId =
+    choixExplicite && workspaces.some((w) => w.id === choixExplicite) ? choixExplicite : defaut;
   const [title, setTitle] = useState('');
   const [type, setType] = useState<TopicType>('feat');
   const [error, setError] = useState<string | null>(null);
@@ -65,7 +68,7 @@ export function NouveauSujet({
           <select
             className="selecteur"
             value={workspaceId}
-            onChange={(e) => setWorkspaceId(e.target.value)}
+            onChange={(e) => setChoixExplicite(e.target.value)}
             disabled={running}
           >
             {workspaces.map((w) => (

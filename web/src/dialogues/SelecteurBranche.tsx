@@ -8,15 +8,16 @@ import { Dialogue } from './Dialogue.js';
 const fold = (s: string) => s.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
 
 // 11.6 (écran 3.3) : liste des branches locales (11.5), filtre, confirmation avant le
-// changement effectif. « branche.recreer » (branche extraite ailleurs) n'a pas de contrat
-// backend dans ce chantier : l'option mène au sujet propriétaire quand il est connu (data
-// déjà là via topicId), sinon reste un texte descriptif non activable.
+// changement effectif. Une branche extraite ailleurs (15, « Libérer puis prendre ») mène à
+// un écran de confirmation dédié ; le lien vers le sujet propriétaire reste affiché quand il
+// est connu (data déjà là via topicId).
 export function SelecteurBranche({ topicId, onClose }: { topicId: string; onClose: () => void }) {
   const { state, outputs, call } = useAid();
   const [branches, setBranches] = useState<GitBranch[] | null>(null);
   const [erreurChargement, setErreurChargement] = useState<string | null>(null);
   const [filtre, setFiltre] = useState('');
   const [cible, setCible] = useState<GitBranch | null>(null);
+  const [libererCible, setLibererCible] = useState<GitBranch | null>(null);
   const [actionId, setActionId] = useState<string | null>(null);
   const [requesting, setRequesting] = useState(false);
   const [erreurAction, setErreurAction] = useState<string | null>(null);
@@ -41,7 +42,10 @@ export function SelecteurBranche({ topicId, onClose }: { topicId: string; onClos
     if (action?.state === 'succeeded') onClose();
   }, [action?.state, onClose]);
 
-  async function changer(branch: GitBranch, dirtyAction?: 'stash') {
+  async function changer(
+    branch: GitBranch,
+    opts: { dirtyAction?: 'stash'; liberer?: boolean } = {},
+  ) {
     setErreurAction(null);
     setRequesting(true);
     setActionId(null);
@@ -49,7 +53,11 @@ export function SelecteurBranche({ topicId, onClose }: { topicId: string; onClos
       const r = await call<{ actionId: string }>(
         'POST',
         `/api/topics/${topicId}/actions/topic.branch-changer`,
-        { targetBranch: branch.name, ...(dirtyAction && { dirtyAction }) },
+        {
+          targetBranch: branch.name,
+          ...(opts.dirtyAction && { dirtyAction: opts.dirtyAction }),
+          ...(opts.liberer && { liberer: true }),
+        },
       );
       setActionId(r.actionId);
     } catch (err) {
@@ -83,9 +91,81 @@ export function SelecteurBranche({ topicId, onClose }: { topicId: string; onClos
     setActionId(null);
   }
 
+  function annulerLiberation() {
+    setLibererCible(null);
+    setErreurAction(null);
+    setActionId(null);
+  }
+
+  // review (5) : la cible de libération vient du daemon (liberationVers, /git/branches) — il
+  // compare des chemins résolus (realpath), ce qu'une comparaison de chaînes ici ne garantit pas.
+  const cibleLiberation = libererCible?.liberationVers ?? null;
+  // review (8) / C5 : la racine détachée durablement n'est signalée que lorsque c'est bien elle
+  // qui se libère sans pouvoir basculer sur la base — liberationRacine vient du daemon
+  // (même fonction que liberationVers), plus aucune comparaison de chemin côté web.
+  const racineDetachee = cibleLiberation === null && (libererCible?.liberationRacine ?? false);
+  const refusSynchrone = actionId === null && erreurAction !== null;
+
   return (
     <Dialogue titre="Changer de branche" onClose={onClose}>
-      {cible ? (
+      {libererCible ? (
+        <div className="confirmation" data-node="1-3.selecteur.confirmation-liberer">
+          <p className="confirmation-titre">
+            {libererCible.name} est extraite dans {libererCible.worktree}. A-I-D va d’abord libérer
+            ce dossier, puis passer ce sujet dessus.
+          </p>
+          <p className="commande" data-bind="action.commande-liberer">
+            git -C {libererCible.worktree} switch {cibleLiberation ?? '--detach'}
+          </p>
+          <p className="commande" data-bind="action.commande">
+            git switch {libererCible.name}
+          </p>
+          {racineDetachee && (
+            <p className="confirmation-note">La racine du dépôt restera en HEAD détachée.</p>
+          )}
+          {messageEchec && (
+            <p className="message-erreur" role="alert">
+              {messageEchec}
+            </p>
+          )}
+          <div className="dialogue-actions">
+            <button
+              className="bouton bouton--fantome"
+              type="button"
+              disabled={enCours}
+              onClick={annulerLiberation}
+            >
+              Annuler
+            </button>
+            {refusSynchrone && libererCible.topicId && (
+              // C7 : le refus synchrone n'empêche plus de réessayer — l'opérateur peut nettoyer
+              // X ailleurs puis relancer sans rouvrir le dialogue, bouton toujours actif plus bas.
+              <Link className="bouton bouton--fantome" to={`/sujets/${libererCible.topicId}`}>
+                Aller au sujet
+              </Link>
+            )}
+            {besoinHumain ? (
+              <button
+                className="bouton bouton--primaire"
+                type="button"
+                disabled={enCours}
+                onClick={() => void changer(libererCible, { dirtyAction: 'stash', liberer: true })}
+              >
+                Mettre de côté et changer
+              </button>
+            ) : (
+              <button
+                className="bouton bouton--primaire"
+                type="button"
+                disabled={enCours}
+                onClick={() => void changer(libererCible, { liberer: true })}
+              >
+                Libérer et changer
+              </button>
+            )}
+          </div>
+        </div>
+      ) : cible ? (
         <div className="confirmation" data-node="1-3.selecteur.confirmation">
           <p className="confirmation-titre">Passer le worktree sur {cible.name} ?</p>
           <p className="commande" data-bind="action.commande">
@@ -110,7 +190,7 @@ export function SelecteurBranche({ topicId, onClose }: { topicId: string; onClos
                 className="bouton bouton--primaire"
                 type="button"
                 disabled={enCours}
-                onClick={() => void changer(cible, 'stash')}
+                onClick={() => void changer(cible, { dirtyAction: 'stash' })}
               >
                 Mettre de côté et changer
               </button>
@@ -168,41 +248,31 @@ export function SelecteurBranche({ topicId, onClose }: { topicId: string; onClos
                 ) : (
                   autres.map((b) => {
                     const ailleurs = b.worktree !== null;
-                    // Un <a> ne peut pas vivre dans un <button> (HTML invalide) : la ligne
-                    // extraite ailleurs n'est pas activable, donc pas un bouton — un simple
-                    // conteneur role="option" avec son lien « Aller au sujet » à côté.
-                    return ailleurs ? (
-                      <div
-                        key={b.name}
-                        role="option"
-                        aria-selected="false"
-                        aria-disabled="true"
-                        className="selecteur-branche__option"
-                      >
-                        <span className="selecteur-branche__nom">{b.name}</span>
-                        <span className="selecteur-branche__meta">
-                          déjà extraite dans {b.worktree}
-                        </span>
-                        {b.topicId && (
+                    // 15 : la ligne extraite ailleurs devient activable (« Libérer puis
+                    // prendre ») — mais un <a> ne peut pas vivre dans un <button> (HTML
+                    // invalide), donc le lien « Aller au sujet » reste à côté, pas dedans.
+                    return (
+                      <div key={b.name} className="selecteur-branche__ligne" role="presentation">
+                        <button
+                          type="button"
+                          role="option"
+                          aria-selected="false"
+                          className="selecteur-branche__option"
+                          onClick={() => (ailleurs ? setLibererCible(b) : setCible(b))}
+                        >
+                          <span className="selecteur-branche__nom">{b.name}</span>
+                          <span className="selecteur-branche__meta">
+                            {ailleurs
+                              ? `déjà extraite dans ${b.worktree}`
+                              : `↑${b.ahead} ↓${b.behind}`}
+                          </span>
+                        </button>
+                        {ailleurs && b.topicId && (
                           <Link className="selecteur-branche__lien" to={`/sujets/${b.topicId}`}>
                             Aller au sujet
                           </Link>
                         )}
                       </div>
-                    ) : (
-                      <button
-                        key={b.name}
-                        type="button"
-                        role="option"
-                        aria-selected="false"
-                        className="selecteur-branche__option"
-                        onClick={() => setCible(b)}
-                      >
-                        <span className="selecteur-branche__nom">{b.name}</span>
-                        <span className="selecteur-branche__meta">
-                          ↑{b.ahead} ↓{b.behind}
-                        </span>
-                      </button>
                     );
                   })
                 )}

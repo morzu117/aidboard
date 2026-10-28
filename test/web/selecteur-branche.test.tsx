@@ -5,7 +5,7 @@ import { afterEach, expect, test, vi } from 'vitest';
 import type { ActionRun } from '../../src/shared/model.js';
 import type { GitBranch } from '../../src/shared/git.js';
 import { SelecteurBranche } from '../../web/src/dialogues/SelecteurBranche.js';
-import { json, setup, snapshot } from './helpers.js';
+import { json, setup, snapshot, topic, ws } from './helpers.js';
 
 afterEach(cleanup);
 
@@ -92,7 +92,9 @@ test('non commité : refus affiché, « mettre de côté et changer » relance a
   ).toEqual({ targetBranch: 'autre', dirtyAction: 'stash' });
 });
 
-test('branche déjà extraite ailleurs : non activable, lien vers le sujet propriétaire', async () => {
+// 15 : la ligne « déjà extraite ailleurs » devient activable (décompte adapté : 3 expects avant,
+// 3 après — non-désactivée, lien inchangé, aperçu de la commande de libération au lieu du refus).
+test('branche déjà extraite ailleurs : activable, ouvre l’écran de libération dédié', async () => {
   setup(<SelecteurBranche topicId="tp_1" onClose={vi.fn()} />, snapshot(), '/', {
     'GET /api/topics/tp_1/git/branches': json(200, {
       branches: [
@@ -101,12 +103,102 @@ test('branche déjà extraite ailleurs : non activable, lien vers le sujet propr
       ],
     }),
   });
-  const ligne = await screen.findByText('feat/ailleurs');
-  expect(ligne.closest('[role="option"]')?.getAttribute('aria-disabled')).toBe('true');
+  const bouton = await screen.findByRole('option', { name: /feat\/ailleurs/ });
+  expect(bouton.getAttribute('aria-disabled')).toBeNull();
   const lien = screen.getByRole('link', { name: 'Aller au sujet' });
   expect(lien.getAttribute('href')).toBe('/sujets/tp_2');
-  await userEvent.click(ligne);
-  expect(screen.queryByText(/git switch/)).toBeNull();
+  await userEvent.click(bouton);
+  expect(screen.getByText('git -C /w/ailleurs switch --detach')).toBeTruthy();
+});
+
+test('libérer puis prendre : deux commandes (base libre), liberer: true, lien persiste après annulation', async () => {
+  const onClose = vi.fn();
+  const h = setup(
+    <SelecteurBranche topicId="tp_1" onClose={onClose} />,
+    snapshot({
+      workspaces: [ws({ id: 'ws_1', root: '/w/ailleurs', baseBranch: 'main' })],
+      topics: [topic({ id: 'tp_1', workspaceId: 'ws_1' })],
+      actions: [action({ id: 'ac_1', state: 'succeeded', result: { branch: 'feat/ailleurs' } })],
+    }),
+    '/',
+    {
+      'GET /api/topics/tp_1/git/branches': json(200, {
+        branches: [
+          branch({ name: 'feat/sujet', isCurrent: true }),
+          branch({
+            name: 'feat/ailleurs',
+            worktree: '/w/ailleurs',
+            topicId: 'tp_2',
+            liberationVers: 'main',
+          }),
+          branch({ name: 'main', worktree: null }),
+        ],
+      }),
+      'POST /api/topics/tp_1/actions/topic.branch-changer': json(202, { actionId: 'ac_1' }),
+    },
+  );
+  await userEvent.click(await screen.findByRole('option', { name: /feat\/ailleurs/ }));
+  expect(screen.getByText(/est extraite dans \/w\/ailleurs/)).toBeTruthy();
+  expect(screen.getByText('git -C /w/ailleurs switch main')).toBeTruthy();
+  expect(screen.getByText('git switch feat/ailleurs')).toBeTruthy();
+  await userEvent.click(screen.getByRole('button', { name: 'Annuler' }));
+  expect(screen.getByRole('link', { name: 'Aller au sujet' })).toBeTruthy();
+  await userEvent.click(screen.getByRole('option', { name: /feat\/ailleurs/ }));
+  await userEvent.click(screen.getByRole('button', { name: 'Libérer et changer' }));
+  expect(
+    h.calls.find((c) => c.url === '/api/topics/tp_1/actions/topic.branch-changer')?.body,
+  ).toEqual({ targetBranch: 'feat/ailleurs', liberer: true });
+  await waitFor(() => expect(onClose).toHaveBeenCalled());
+});
+
+// review (3) : X sale est désormais un 409 synchrone (route), plus un needs_human du script —
+// l'écran ne doit donc plus proposer « Mettre de côté et changer », qui ne s'applique qu'au
+// sujet courant et reboucle sur le même refus quand la cause est X.
+// C7 : « Libérer et changer » reste actif après le refus — l'opérateur peut nettoyer X ailleurs
+// puis réessayer sans rouvrir le dialogue.
+test('libérer puis prendre : X sale, 409 synchrone, message affiché, « Libérer et changer » reste actif', async () => {
+  const onClose = vi.fn();
+  let appel = 0;
+  const h = setup(
+    <SelecteurBranche topicId="tp_1" onClose={onClose} />,
+    snapshot({
+      actions: [action({ id: 'ac_1', state: 'succeeded', result: { branch: 'feat/ailleurs' } })],
+    }),
+    '/',
+    {
+      'GET /api/topics/tp_1/git/branches': json(200, {
+        branches: [
+          branch({ name: 'feat/sujet', isCurrent: true }),
+          branch({ name: 'feat/ailleurs', worktree: '/w/ailleurs', topicId: 'tp_2' }),
+        ],
+      }),
+      'POST /api/topics/tp_1/actions/topic.branch-changer': () => {
+        appel += 1;
+        if (appel === 1) {
+          return new Response(
+            JSON.stringify({
+              error:
+                '/w/ailleurs a des modifications non commitées : commit ou mise de côté là-bas d’abord',
+            }),
+            { status: 409 },
+          );
+        }
+        return new Response(JSON.stringify({ actionId: 'ac_1' }), { status: 202 });
+      },
+    },
+  );
+  await userEvent.click(await screen.findByRole('option', { name: /feat\/ailleurs/ }));
+  await userEvent.click(screen.getByRole('button', { name: 'Libérer et changer' }));
+  expect((await screen.findByRole('alert')).textContent).toContain('non commitées');
+  expect(screen.queryByRole('button', { name: 'Mettre de côté et changer' })).toBeNull();
+  expect(screen.getByRole('link', { name: 'Aller au sujet' })).toBeTruthy();
+  const reessayer = screen.getByRole('button', { name: 'Libérer et changer' });
+  expect(reessayer.hasAttribute('disabled')).toBe(false);
+  await userEvent.click(reessayer);
+  expect(
+    h.calls.filter((c) => c.url === '/api/topics/tp_1/actions/topic.branch-changer').length,
+  ).toBe(2);
+  await waitFor(() => expect(onClose).toHaveBeenCalled());
 });
 
 test('filtre sans correspondance : état vide', async () => {

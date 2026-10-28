@@ -55,7 +55,8 @@ test('motifs d’invite reconnus, et pas sur une ligne ordinaire', () => {
 
 async function spawnFakeClaude() {
   process.env.PATH = `${BIN}${delimiter}${saved.PATH}`;
-  c = await setupWorkspace();
+  // D63/A.6 : le défaut est passé à `stream` ; ce fichier vise l'heuristique sur le miroir PTY.
+  c = await setupWorkspace({ config: { agents: { transport: 'pty' } } });
   const topic = await makeTopic(c);
   const agent = c.t.d.agents.spawn({ topicId: topic.topicId, kind: 'claude' });
   const live = c.t.d.agents.get(agent.id)!;

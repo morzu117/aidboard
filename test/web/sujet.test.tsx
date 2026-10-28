@@ -26,6 +26,12 @@ vi.mock('../../web/src/terminal/Terminal.js', () => ({
   ),
 }));
 
+vi.mock('../../web/src/conversation/Conversation.js', () => ({
+  Conversation: ({ agent: a, visible }: { agent: { id: string }; visible: boolean }) => (
+    <div data-testid={`conv-${a.id}`} data-visible={String(visible)} />
+  ),
+}));
+
 afterEach(cleanup);
 const node = (id: string) => document.querySelector(`[data-node="${id}"]`) as HTMLElement | null;
 const text = (id: string) => node(id)?.textContent;
@@ -149,7 +155,7 @@ test.each([
   expect(screen.queryByTestId(/^term-/)).toBeNull();
 });
 
-test('en-tête : fil d’Ariane, titre, état, branche, base, worktree', async () => {
+test('en-tête : fil d’Ariane, titre, état, branche, base ; le worktree n’est plus en pastille', async () => {
   open(snapshot({ workspaces: [ws()], topics: [topic()], runs: [run] }));
   await screen.findByText('Mon sujet');
   expect(text('1-3.entete.workspace')).toBe('aid');
@@ -157,7 +163,62 @@ test('en-tête : fil d’Ariane, titre, état, branche, base, worktree', async (
   expect(text('1-3.entete.etat')).toBe('active');
   expect(text('1-3.entete.branche')).toBe('feat/s');
   expect(text('1-3.entete.base.branche')).toBe('origin/main');
+  // §5.3 : le chemin du worktree a quitté l'en-tête, il n'apparaît qu'au menu ⋯ ouvert.
+  expect(node('1-3.entete.worktree')).toBeNull();
+  await userEvent.click(await screen.findByLabelText('Plus d’actions'));
   expect(text('1-3.entete.worktree')).toBe('/w/s');
+});
+
+test('menu ⋯ : copier le chemin du worktree affiche un retour « copié »', async () => {
+  Object.assign(navigator, {
+    clipboard: { writeText: vi.fn().mockResolvedValue(undefined) },
+  });
+  open(snapshot({ workspaces: [ws()], topics: [topic()], runs: [run] }));
+  await screen.findByText('Mon sujet');
+  await userEvent.click(await screen.findByLabelText('Plus d’actions'));
+  expect(screen.queryByText('copié')).toBeNull();
+  await userEvent.click(screen.getByText('Copier le chemin du worktree', { exact: false }));
+  expect(navigator.clipboard.writeText).toHaveBeenCalledWith('/w/s');
+  expect(await screen.findByText('copié')).toBeTruthy();
+});
+
+test('brouillon dont le worktree existe déjà : le menu ⋯ ne propose que la copie du chemin', async () => {
+  open(snapshot({ workspaces: [ws()], topics: [topic({ state: 'draft' })], runs: [run] }));
+  await screen.findByText('Mon sujet');
+  await userEvent.click(await screen.findByLabelText('Plus d’actions'));
+  expect(screen.getByText('Copier le chemin du worktree', { exact: false })).toBeTruthy();
+  expect(screen.queryByText('Nettoyer le sujet')).toBeNull();
+});
+
+// review db76a41 : sujet actif dont le worktree a disparu, le ⋯ reste — « Nettoyer le sujet » en a besoin.
+test('sujet actif dont le worktree a disparu : le menu ⋯ garde « Nettoyer le sujet », sans la copie du chemin', async () => {
+  open(snapshot({ workspaces: [ws()], topics: [topic({ worktreeMissing: true })], runs: [run] }));
+  await screen.findByText('Mon sujet');
+  await userEvent.click(await screen.findByLabelText('Plus d’actions'));
+  expect(screen.getByText('Nettoyer le sujet')).toBeTruthy();
+  expect(screen.queryByText('Copier le chemin du worktree', { exact: false })).toBeNull();
+});
+
+// review db76a41 : le minuteur « copié » est annulé à la fermeture, pas de résidu à la réouverture.
+test('menu ⋯ : fermer le menu après avoir copié annule le minuteur « copié »', async () => {
+  vi.useFakeTimers({ shouldAdvanceTime: true });
+  try {
+    Object.assign(navigator, {
+      clipboard: { writeText: vi.fn().mockResolvedValue(undefined) },
+    });
+    open(snapshot({ workspaces: [ws()], topics: [topic()], runs: [run] }));
+    await screen.findByText('Mon sujet');
+    await userEvent.click(await screen.findByLabelText('Plus d’actions'));
+    await userEvent.click(screen.getByText('Copier le chemin du worktree', { exact: false }));
+    expect(await screen.findByText('copié')).toBeTruthy();
+    await userEvent.click(screen.getByLabelText('Plus d’actions'));
+    await userEvent.click(await screen.findByLabelText('Plus d’actions'));
+    expect(screen.queryByText('copié')).toBeNull();
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(screen.queryByText('copié')).toBeNull();
+  } finally {
+    vi.useRealTimers();
+  }
 });
 
 test('en-tête d’un projet sans remote : la base est la branche locale, sans « origin/ »', async () => {
@@ -169,7 +230,6 @@ test('en-tête d’un projet sans remote : la base est la branche locale, sans �
 test.each([
   ['disabled', 'index absent : lecture directe'],
   ['indexing', 'indexation en cours'],
-  ['ready', 'index prêt'],
   ['failed', 'index en échec : lecture directe'],
 ] as const)(
   'index %s : « %s » (le repli est déclaré, jamais silencieux)',
@@ -180,18 +240,10 @@ test.each([
   },
 );
 
-test('la colonne de gauche liste les sujets par workspace et marque le sujet courant', async () => {
-  open(
-    snapshot({
-      workspaces: [ws(), ws({ id: 'ws_2', name: 'project_1' })],
-      topics: [topic(), topic({ id: 'tp_2', workspaceId: 'ws_2', branch: 'fix/y', slug: 'y' })],
-    }),
-  );
+test('index prêt : aucune pastille (rien à signaler quand tout va bien)', async () => {
+  open(snapshot({ workspaces: [ws()], topics: [topic({ indexState: 'ready' })], runs: [run] }));
   await screen.findByText('Mon sujet');
-  expect(text('1-3.sujets.groupe-1.nom')).toBe('aid');
-  expect(text('1-3.sujets.groupe-2.nom')).toBe('project_1');
-  expect(node('1-3.sujets.sujet-1')?.className).toContain('est-actif');
-  expect(node('1-3.sujets.sujet-2')?.getAttribute('href')).toBe('/sujets/tp_2');
+  expect(node('1-3.entete.index')).toBeNull();
 });
 
 test('sans agent : trois façons de démarrer, et le lancement appelle POST /api/agents', async () => {
@@ -228,7 +280,7 @@ test('un binaire absent : le message du daemon est affiché', async () => {
   );
 });
 
-test('onglets : un terminal monté par agent, un seul visible ; « Arrêter » sur un agent vivant, « Fermer » sur un agent terminé', async () => {
+test('onglets : un terminal monté par agent, un seul visible ; bouton unique « Arrêter »/« Fermer » sur l’agent actif, confirmation en deux temps', async () => {
   const h = open(
     snapshot({
       workspaces: [ws()],
@@ -248,22 +300,65 @@ test('onglets : un terminal monté par agent, un seul visible ; « Arrêter » s
   expect(text('1-3.terminaux.onglet-1.type')).toBe('claude');
   // « free » n'est pas du français : l'agent lancé à la main est « libre »
   expect(text('1-3.terminaux.onglet-1.role')).toBe('libre');
-  expect(node('1-3.terminaux.onglet-1.arreter')?.textContent).toBe('Arrêter');
-  expect(node('1-3.terminaux.onglet-2.arreter')?.textContent).toBe('Fermer');
+  // plus de bouton par onglet : un seul, sur l'agent actif. ag_2 (dernier, terminé) est actif.
+  expect(node('1-3.terminaux.onglet-1.arreter')).toBeNull();
+  expect(node('1-3.terminaux.onglet-2.arreter')).toBeNull();
+  expect(node('1-3.terminaux.arreter')?.textContent).toBe('Fermer');
   await userEvent.click(node('1-3.terminaux.onglet-1')!);
   expect(screen.getByTestId('term-ag_1').getAttribute('data-visible')).toBe('true');
   expect(screen.getByTestId('term-ag_2').getAttribute('data-visible')).toBe('false');
-  await userEvent.click(node('1-3.terminaux.onglet-1.arreter')!);
+  // ag_1 est vivant : « Arrêter » demande confirmation avant d'appeler DELETE.
+  expect(node('1-3.terminaux.arreter')?.textContent).toBe('Arrêter');
+  await userEvent.click(node('1-3.terminaux.arreter')!);
+  expect(node('1-3.terminaux.arreter')?.textContent).toBe('Confirmer l’arrêt');
+  expect(h.calls.some((c) => c.method === 'DELETE')).toBe(false);
+  await userEvent.click(node('1-3.terminaux.arreter.annuler')!);
+  expect(node('1-3.terminaux.arreter')?.textContent).toBe('Arrêter');
+  expect(h.calls.some((c) => c.method === 'DELETE')).toBe(false);
+  await userEvent.click(node('1-3.terminaux.arreter')!);
+  await userEvent.click(node('1-3.terminaux.arreter')!);
   await waitFor(() =>
     expect(h.calls.some((c) => c.method === 'DELETE' && c.url === '/api/agents/ag_1')).toBe(true),
   );
-  await userEvent.click(node('1-3.terminaux.onglet-2.arreter')!);
+  // changer d'onglet vers ag_2 (terminé) : « Fermer » agit sans confirmation.
+  await userEvent.click(node('1-3.terminaux.onglet-2')!);
+  expect(node('1-3.terminaux.arreter')?.textContent).toBe('Fermer');
+  await userEvent.click(node('1-3.terminaux.arreter')!);
   await waitFor(() =>
     expect(h.calls.some((c) => c.method === 'DELETE' && c.url === '/api/agents/ag_2')).toBe(true),
   );
 });
 
-test('onglets de contenu (11.1) : Agents par défaut, Git et Fichiers affichent un espace réservé, le terminal reste monté (masqué) en changeant d’onglet', async () => {
+test('Arrêter : changer d’onglet ou Échap annule la confirmation en cours', async () => {
+  open(
+    snapshot({
+      workspaces: [ws()],
+      topics: [topic()],
+      runs: [run],
+      agents: [
+        agent({ id: 'ag_1', kind: 'claude', role: 'free' }),
+        agent({ id: 'ag_2', kind: 'claude', role: 'free' }),
+      ],
+    }),
+  );
+  await screen.findByTestId('term-ag_1');
+  await userEvent.click(node('1-3.terminaux.onglet-1')!);
+  await userEvent.click(node('1-3.terminaux.arreter')!);
+  expect(node('1-3.terminaux.arreter')?.textContent).toBe('Confirmer l’arrêt');
+  await userEvent.click(node('1-3.terminaux.onglet-2')!);
+  await userEvent.click(node('1-3.terminaux.onglet-1')!);
+  expect(node('1-3.terminaux.arreter')?.textContent).toBe('Arrêter');
+  await userEvent.click(node('1-3.terminaux.arreter')!);
+  expect(node('1-3.terminaux.arreter')?.textContent).toBe('Confirmer l’arrêt');
+  await userEvent.keyboard('{Escape}');
+  expect(node('1-3.terminaux.arreter')?.textContent).toBe('Arrêter');
+});
+
+test('onglets de contenu (11.1) : les agents sont toujours visibles, Git et Fichiers (dans le panneau) affichent un espace réservé, le terminal reste monté en changeant d’onglet', async () => {
+  // D.1/D.2 (chantier 15) : la barre d'onglets exclusifs Agents/Git/Fichiers a disparu — les
+  // agents sont désormais toujours visibles dans la colonne centrale, Git et Fichiers vivent
+  // dans PanneauContexte (colonne de droite), sous les mêmes data-node qu'avant (1-3.onglets.git
+  // et 1-3.onglets.fichiers) pour rester compatible avec ce test et les e2e existants.
   open(
     snapshot({
       workspaces: [ws()],
@@ -290,18 +385,17 @@ test('onglets de contenu (11.1) : Agents par défaut, Git et Fichiers affichent 
       }),
     },
   );
+  // les agents sont visibles sans aucun clic, plus d'onglet « Agents » à sélectionner.
   await screen.findByTestId('term-ag_1');
   // D28 : pas de dérive déclarée (onTopicBranch) ⇒ pas de bandeau, même hors de l'onglet Git.
   expect(screen.queryByText(/pas sur la branche du sujet/)).toBeNull();
-  expect(node('1-3.onglets.agents')?.className).toContain('est-actif');
   await userEvent.click(node('1-3.onglets.git')!);
   expect(await screen.findByText('Aucun commit depuis la base.')).toBeTruthy();
   expect(node('1-3.onglets.git')?.className).toContain('est-actif');
-  // le terminal reste dans le DOM (masqué), pas démonté : pas de reconnexion à la bascule.
+  // le terminal reste dans le DOM, pas démonté : c'est une colonne indépendante du panneau.
   expect(screen.getByTestId('term-ag_1')).toBeTruthy();
   await userEvent.click(node('1-3.onglets.fichiers')!);
   await waitFor(() => expect(text('3-4.explorateur.compteur')).toContain('0 fichier'));
-  await userEvent.click(node('1-3.onglets.agents')!);
   expect(screen.getByTestId('term-ag_1')).toBeTruthy();
 });
 
@@ -350,6 +444,239 @@ test('dérive : HEAD détachée — bandeau sans bouton Rattacher', async () => 
   expect(await screen.findByText(/HEAD détachée/)).toBeTruthy();
   expect(screen.queryByText(/Rattacher le sujet/)).toBeNull();
   expect(screen.getByRole('button', { name: 'Revenir sur feat/s' })).toBeTruthy();
+});
+
+test('dérive (correctif 6) : relue quand la branche du sujet change et qu’une action du sujet réussit, sans remonter', async () => {
+  const h = open(snapshot({ workspaces: [ws()], topics: [topic()], runs: [run] }), 'tp_1', {
+    'GET /api/topics/tp_1/git/log': json(200, {
+      commits: [],
+      dirty: false,
+      live: { aheadBehind: null, rebaseInProgress: false, onTopicBranch: false, headBranch: null },
+    }),
+  });
+  expect(await screen.findByText(/HEAD détachée/)).toBeTruthy();
+  const titreAvant = node('1-3.entete.titre');
+  h.respond.set(
+    'GET /api/topics/tp_1/git/log',
+    json(200, {
+      commits: [],
+      dirty: false,
+      live: {
+        aheadBehind: { ahead: 0, behind: 0 },
+        rebaseInProgress: false,
+        onTopicBranch: true,
+        headBranch: null,
+      },
+    }),
+  );
+  h.state = snapshot({
+    workspaces: [ws()],
+    topics: [topic({ branch: 'fix/irritants-aid' })],
+    runs: [run],
+    actions: [action({ id: 'ac_9', action: 'topic.branch-changer', state: 'succeeded' })],
+  });
+  await act(() => h.client.refresh());
+  await waitFor(() => expect(screen.queryByText(/HEAD détachée/)).toBeNull());
+  expect(node('1-3.entete.titre')).toBe(titreAvant);
+});
+
+test('dérive (correctif 6) : une action d’un autre sujet qui réussit ne déclenche pas de relecture', async () => {
+  const h = open(snapshot({ workspaces: [ws()], topics: [topic()], runs: [run] }), 'tp_1', {
+    'GET /api/topics/tp_1/git/log': json(200, {
+      commits: [],
+      dirty: false,
+      live: { aheadBehind: null, rebaseInProgress: false, onTopicBranch: false, headBranch: null },
+    }),
+  });
+  expect(await screen.findByText(/HEAD détachée/)).toBeTruthy();
+  const appelsAvant = h.calls.filter((c) => c.url === '/api/topics/tp_1/git/log').length;
+  h.respond.set(
+    'GET /api/topics/tp_1/git/log',
+    json(200, {
+      commits: [],
+      dirty: false,
+      live: { aheadBehind: null, rebaseInProgress: false, onTopicBranch: true, headBranch: null },
+    }),
+  );
+  h.state = snapshot({
+    workspaces: [ws()],
+    topics: [topic()],
+    runs: [run],
+    actions: [
+      action({
+        id: 'ac_autre',
+        topicId: 'tp_autre',
+        action: 'topic.branch-changer',
+        state: 'succeeded',
+      }),
+    ],
+  });
+  await act(() => h.client.refresh());
+  await act(async () => {});
+  expect(screen.getByText(/HEAD détachée/)).toBeTruthy();
+  expect(h.calls.filter((c) => c.url === '/api/topics/tp_1/git/log').length).toBe(appelsAvant);
+});
+
+test('dérive (correctif 6) : une même action succeeded reçue sur plusieurs mises à jour d’état ne relit qu’une fois', async () => {
+  const h = open(snapshot({ workspaces: [ws()], topics: [topic()], runs: [run] }), 'tp_1', {
+    'GET /api/topics/tp_1/git/log': json(200, {
+      commits: [],
+      dirty: false,
+      live: { aheadBehind: null, rebaseInProgress: false, onTopicBranch: false, headBranch: null },
+    }),
+  });
+  expect(await screen.findByText(/HEAD détachée/)).toBeTruthy();
+  const appelsAvant = h.calls.filter((c) => c.url === '/api/topics/tp_1/git/log').length;
+  const actionReussie = action({ id: 'ac_9', action: 'topic.branch-changer', state: 'succeeded' });
+  h.state = snapshot({
+    workspaces: [ws()],
+    topics: [topic()],
+    runs: [run],
+    actions: [actionReussie],
+  });
+  await act(() => h.client.refresh());
+  await waitFor(() =>
+    expect(h.calls.filter((c) => c.url === '/api/topics/tp_1/git/log').length).toBe(
+      appelsAvant + 1,
+    ),
+  );
+  // seconde mise à jour d'état portant la même action déjà succeeded : rien de neuf à relire.
+  h.state = snapshot({
+    workspaces: [ws()],
+    topics: [topic()],
+    runs: [run],
+    actions: [{ ...actionReussie }],
+  });
+  await act(() => h.client.refresh());
+  await act(async () => {});
+  expect(h.calls.filter((c) => c.url === '/api/topics/tp_1/git/log').length).toBe(appelsAvant + 1);
+});
+
+test('dérive (correctif 6, re-dev 1/2) : relue quand seule la branche du sujet change, sans action', async () => {
+  const h = open(snapshot({ workspaces: [ws()], topics: [topic()], runs: [run] }), 'tp_1', {
+    'GET /api/topics/tp_1/git/log': json(200, {
+      commits: [],
+      dirty: false,
+      live: { aheadBehind: null, rebaseInProgress: false, onTopicBranch: false, headBranch: null },
+    }),
+  });
+  expect(await screen.findByText(/HEAD détachée/)).toBeTruthy();
+  h.respond.set(
+    'GET /api/topics/tp_1/git/log',
+    json(200, {
+      commits: [],
+      dirty: false,
+      live: {
+        aheadBehind: { ahead: 0, behind: 0 },
+        rebaseInProgress: false,
+        onTopicBranch: true,
+        headBranch: null,
+      },
+    }),
+  );
+  h.state = snapshot({
+    workspaces: [ws()],
+    topics: [topic({ branch: 'fix/irritants-aid' })],
+    runs: [run],
+  });
+  await act(() => h.client.refresh());
+  await waitFor(() => expect(screen.queryByText(/HEAD détachée/)).toBeNull());
+});
+
+// review (re-dev 1/2), point 2 : une action succeeded purgée de state.actions ne doit pas
+// déclencher de relecture — seul un id jamais vu avant, ou un changement de branche, le fait.
+test('dérive (correctif 6, re-dev 1/2) : une action succeeded purgée de l’état ne déclenche pas de relecture', async () => {
+  const actionReussie = action({ id: 'ac_9', action: 'topic.branch-changer', state: 'succeeded' });
+  const h = open(
+    snapshot({ workspaces: [ws()], topics: [topic()], runs: [run], actions: [actionReussie] }),
+    'tp_1',
+    {
+      'GET /api/topics/tp_1/git/log': json(200, {
+        commits: [],
+        dirty: false,
+        live: {
+          aheadBehind: null,
+          rebaseInProgress: false,
+          onTopicBranch: false,
+          headBranch: null,
+        },
+      }),
+    },
+  );
+  expect(await screen.findByText(/HEAD détachée/)).toBeTruthy();
+  const appelsAvant = h.calls.filter((c) => c.url === '/api/topics/tp_1/git/log').length;
+  h.respond.set(
+    'GET /api/topics/tp_1/git/log',
+    json(200, {
+      commits: [],
+      dirty: false,
+      live: { aheadBehind: null, rebaseInProgress: false, onTopicBranch: true, headBranch: null },
+    }),
+  );
+  // le noyau purge l'action succeeded de state.actions une fois le délai de rétention passé.
+  h.state = snapshot({ workspaces: [ws()], topics: [topic()], runs: [run], actions: [] });
+  await act(() => h.client.refresh());
+  await act(async () => {});
+  expect(screen.getByText(/HEAD détachée/)).toBeTruthy();
+  expect(h.calls.filter((c) => c.url === '/api/topics/tp_1/git/log').length).toBe(appelsAvant);
+});
+
+// review (re-dev 1/2), point 1 : une lecture de montage en retard sur une relecture post-action
+// plus récente ne doit pas écraser son résultat — un seul numéro de lecture fait foi.
+test('dérive (correctif 6, re-dev 1/2) : une lecture de montage résolue en retard n’écrase pas la relecture post-action', async () => {
+  let resoudreMontage!: (r: Response) => void;
+  let resoudreApresAction!: (r: Response) => void;
+  let appels = 0;
+  // écran 1-3 : `Contenu` est monté une première fois pendant le chargement de l'état (hors
+  // vueComplete), puis remonté une fois `state` chargé — seul ce second montage compte ici.
+  const h = open(snapshot({ workspaces: [ws()], topics: [topic()], runs: [run] }), 'tp_1', {
+    'GET /api/topics/tp_1/git/log': () => {
+      appels += 1;
+      if (appels === 1)
+        return json(200, {
+          commits: [],
+          dirty: false,
+          live: {
+            aheadBehind: null,
+            rebaseInProgress: false,
+            onTopicBranch: true,
+            headBranch: null,
+          },
+        })();
+      if (appels === 2)
+        return new Promise<Response>((r) => (resoudreMontage = r)) as unknown as Response;
+      return new Promise<Response>((r) => (resoudreApresAction = r)) as unknown as Response;
+    },
+  });
+  await screen.findByText('Mon sujet');
+  h.state = snapshot({
+    workspaces: [ws()],
+    topics: [topic({ branch: 'fix/irritants-aid' })],
+    runs: [run],
+  });
+  await act(() => h.client.refresh());
+  resoudreApresAction(
+    json(200, {
+      commits: [],
+      dirty: false,
+      live: {
+        aheadBehind: { ahead: 0, behind: 0 },
+        rebaseInProgress: false,
+        onTopicBranch: true,
+        headBranch: null,
+      },
+    })(),
+  );
+  await waitFor(() => expect(screen.queryByText(/HEAD détachée/)).toBeNull());
+  resoudreMontage(
+    json(200, {
+      commits: [],
+      dirty: false,
+      live: { aheadBehind: null, rebaseInProgress: false, onTopicBranch: false, headBranch: null },
+    })(),
+  );
+  await new Promise((r) => setTimeout(r, 20));
+  expect(screen.queryByText(/HEAD détachée/)).toBeNull();
 });
 
 test('« + Agent » propose les trois types et lance celui choisi', async () => {
@@ -554,16 +881,14 @@ test('sujet archivé : chronologie lue à part, bouton « Retirer la mention du 
   await screen.findByText('Stash supprimé.');
 });
 
-test('loading : squelettes ; error : bandeau avec « Réessayer » ; liste de gauche indisponible', async () => {
+test('loading : squelettes ; error : bandeau avec « Réessayer »', async () => {
   open(snapshot());
   expect(node('1-3.terminaux')?.className).toContain('squelette');
-  expect(node('1-3.sujets.squelette-1')).not.toBeNull();
   cleanup();
   const h = open('down');
   expect((await screen.findByRole('alert', {}, { timeout: 3000 })).textContent).toContain(
     'injoignable',
   );
-  expect(text('1-3.sujets.indisponible')).toBe('Liste indisponible');
   h.state = snapshot({ workspaces: [ws()], topics: [topic()] });
   await userEvent.click(node('1-3.erreur.bandeau.reessayer')!);
   await screen.findByText('Mon sujet');
@@ -606,4 +931,22 @@ test('« Ouvrir la cell swarph » n’apparaît qu’avec un mesh configuré, et
       kind: 'swarph-cell',
     }),
   );
+});
+
+test('transport (D53) : un agent stream affiche <Conversation>, un agent pty affiche <Terminal>', async () => {
+  open(
+    snapshot({
+      workspaces: [ws()],
+      topics: [topic()],
+      runs: [run],
+      agents: [
+        agent({ id: 'ag_1', kind: 'claude', transport: 'pty' }),
+        agent({ id: 'ag_2', kind: 'claude', transport: 'stream' }),
+      ],
+    }),
+  );
+  await screen.findByTestId('term-ag_1');
+  expect(screen.getByTestId('conv-ag_2')).toBeTruthy();
+  expect(screen.queryByTestId('term-ag_2')).toBeNull();
+  expect(screen.queryByTestId('conv-ag_1')).toBeNull();
 });

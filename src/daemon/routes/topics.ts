@@ -21,6 +21,8 @@ import {
   gitLiveInfo,
   gitLog,
   hasUncommittedChanges,
+  hasUncommittedOrOperationInProgress,
+  liberationTarget,
 } from '../git/inspect.js';
 import { resolveUnderWorktree } from './files.js';
 import type { StructuralService } from '../structural/service.js';
@@ -202,6 +204,7 @@ export function registerTopicRoutes(app: FastifyInstance, deps: TopicRouteDeps):
       afterFailure: () => {
         deps.db.transaction(() => {
           deps.db.prepare('DELETE FROM runs WHERE topic_id = ?').run(topicId);
+          deps.db.prepare('DELETE FROM nav_placement WHERE topic_id = ?').run(topicId);
           deps.db.prepare('DELETE FROM topics WHERE id = ?').run(topicId);
         })();
       },
@@ -290,13 +293,36 @@ export function registerTopicRoutes(app: FastifyInstance, deps: TopicRouteDeps):
           .all(row.workspace_id, id) as Array<{ branch: string; id: string }>
       ).map((t) => [t.branch, t.id]),
     );
+    // C9 : la requête workspaces ne sert qu'à liberationTarget — inutile si aucune branche
+    // n'est extraite ailleurs ; cast non gardé remplacé par une erreur explicite si absente.
+    const uneAilleurs = branches.some((b) => b.worktree !== null && b.worktree !== real);
+    let ws: { root: string; base_branch: string } | undefined;
+    if (uneAilleurs) {
+      ws = deps.db
+        .prepare('SELECT root, base_branch FROM workspaces WHERE id = ?')
+        .get(row.workspace_id) as { root: string; base_branch: string } | undefined;
+      if (!ws) throw new AidHttpError(404, 'workspace inconnu');
+    }
     return {
-      branches: branches.map((b) => ({
-        ...b,
-        isCurrent: b.name === row.branch,
-        worktree: b.worktree === real ? null : b.worktree,
-        topicId: topicByBranch.get(b.name) ?? null,
-      })),
+      branches: await Promise.all(
+        branches.map(async (b) => {
+          const ailleurs = b.worktree !== null && b.worktree !== real;
+          // C3 : la base du WORKSPACE partout, jamais celle (possiblement différente) du sujet.
+          const liberation = ailleurs
+            ? await liberationTarget(ws!.root, ws!.base_branch, b.worktree!)
+            : null;
+          return {
+            ...b,
+            isCurrent: b.name === row.branch,
+            worktree: b.worktree === real ? null : b.worktree,
+            topicId: topicByBranch.get(b.name) ?? null,
+            ...(liberation && {
+              liberationVers: liberation.vers,
+              liberationRacine: liberation.racine,
+            }),
+          };
+        }),
+      ),
     };
   });
 
@@ -428,6 +454,7 @@ export function registerTopicRoutes(app: FastifyInstance, deps: TopicRouteDeps):
       }
       deps.db.transaction(() => {
         deps.db.prepare('DELETE FROM runs WHERE topic_id = ?').run(id);
+        deps.db.prepare('DELETE FROM nav_placement WHERE topic_id = ?').run(id);
         deps.db.prepare('DELETE FROM topics WHERE id = ?').run(id);
       })();
       return reply.code(204).send();
@@ -513,14 +540,63 @@ export function registerTopicRoutes(app: FastifyInstance, deps: TopicRouteDeps):
     // ne se traduit pas en HTTP, l'action tourne en file et son issue est async).
     if (actionId === 'topic.branch-changer') {
       if (!existsSync(topic.worktree)) throw new AidHttpError(409, 'worktree introuvable');
-      const body = (req.body ?? {}) as { targetBranch?: string; dirtyAction?: 'stash' };
+      const body = (req.body ?? {}) as {
+        targetBranch?: string;
+        dirtyAction?: 'stash';
+        liberer?: boolean;
+      };
       if (!body.targetBranch) throw new AidHttpError(422, 'branche cible requise');
       const elsewhere = await branchWorktree(ws.root, body.targetBranch);
+      const envLiberer: Record<string, string> = {};
       if (elsewhere && elsewhere !== realpathSync(topic.worktree)) {
-        throw new AidHttpError(
-          409,
-          `la branche ${body.targetBranch} est déjà extraite dans ${elsewhere}`,
-        );
+        if (!body.liberer) {
+          throw new AidHttpError(
+            409,
+            `la branche ${body.targetBranch} est déjà extraite dans ${elsewhere}`,
+          );
+        }
+        // 15 : « a » (X appartient au même dépôt) tient par construction — elsewhere vient de
+        // `git worktree list` sur ws.root ; seule son existence réelle reste à vérifier (worktree
+        // enregistré par git mais dossier disparu hors A-I-D, jamais pruné).
+        if (!existsSync(elsewhere)) {
+          throw new AidHttpError(409, `${elsewhere} est introuvable : git worktree prune`);
+        }
+        // C8 : (c) avant (b) — un agent qui écrit dans X rend le conseil « commit ou mise de
+        // côté là-bas » de (b) inapplicable, donc le refus le plus actionnable doit sortir en premier.
+        // 15 (c) : X vivant d'un sujet A-I-D avec agent actif → refus synchrone, die_human ne
+        // couvre que la propreté (b) dans le script, pas la liveness.
+        const owner = (
+          deps.db
+            .prepare(
+              "SELECT id, slug, worktree FROM topics WHERE workspace_id = ? AND id != ? AND state != 'archived'",
+            )
+            .all(ws.id, id) as Array<{ id: string; slug: string; worktree: string }>
+        ).find((t) => existsSync(t.worktree) && realpathSync(t.worktree) === elsewhere);
+        if (owner) {
+          const alive = deps.db
+            .prepare(
+              `SELECT a.id FROM agents a JOIN runs r ON r.id = a.run_id
+               WHERE r.topic_id = ? AND a.status IN (${LIVE.map(() => '?').join(',')})`,
+            )
+            .all(owner.id, ...LIVE) as Array<{ id: string }>;
+          if (alive.length > 0) {
+            throw new AidHttpError(409, `un agent tourne dans le sujet ${owner.slug}`);
+          }
+        }
+        // 15 (b) / review (3) : même vérification que le script (die_human), doublée ici pour
+        // un refus 409 synchrone plutôt qu'une action async qui bascule en needs_human.
+        if (await hasUncommittedOrOperationInProgress(elsewhere)) {
+          throw new AidHttpError(
+            409,
+            `${elsewhere} a des modifications non commitées : commit ou mise de côté là-bas d'abord`,
+          );
+        }
+        // 15 (d) : la racine libérée bascule sur la base si celle-ci n'est extraite nulle part,
+        // sinon détachée — exécuté par le script (seul maître des worktrees), décidé ici.
+        const liberation = await liberationTarget(ws.root, ws.base_branch, elsewhere);
+        envLiberer.AID_LIBERER = '1';
+        envLiberer.AID_LIBERER_DOSSIER = elsewhere;
+        if (liberation.vers) envLiberer.AID_LIBERER_VERS = liberation.vers;
       }
       const { actionId: runId } = startAction(deps.actions, {
         workspaceId: ws.id,
@@ -535,6 +611,7 @@ export function registerTopicRoutes(app: FastifyInstance, deps: TopicRouteDeps):
           AID_WORKTREE: topic.worktree,
           AID_TARGET_BRANCH: body.targetBranch,
           ...(body.dirtyAction && { AID_DIRTY_ACTION: body.dirtyAction }),
+          ...envLiberer,
         }),
       });
       return reply.code(202).send({ actionId: runId });

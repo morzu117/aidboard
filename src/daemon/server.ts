@@ -29,10 +29,12 @@ import { registerStateRoutes } from './routes/state.js';
 import { registerMemoryRoutes } from './routes/memory.js';
 import { registerStructuralRoutes } from './routes/structural.js';
 import { registerMeshRoutes } from './routes/mesh.js';
+import { registerNavRoutes } from './routes/nav.js';
 import type { MeshService } from './mesh/service.js';
 import type { MemoryProposals } from './memory/maintain.js';
 import type { MemoryService } from './memory/service.js';
 import { type AuthState, registerSecurity, writeSessionToken } from './security.js';
+import { registerAgentSocket } from './ws/agent.js';
 import { registerEventSocket } from './ws/events.js';
 import { registerPtySocket } from './ws/pty.js';
 
@@ -139,6 +141,7 @@ export async function buildServer(deps: ServerDeps): Promise<FastifyInstance> {
   });
   registerAgentRoutes(app, { db: deps.db, agents: deps.agents });
   registerWorkspaceRoutes(app, { ...deps, engine: structural });
+  registerNavRoutes(app, { db: deps.db });
   registerFsRoutes(app);
   registerFileRoutes(app, { db: deps.db });
   registerHookRoutes(app, () => process.env);
@@ -173,6 +176,7 @@ export async function buildServer(deps: ServerDeps): Promise<FastifyInstance> {
     config: deps.config,
     agents: deps.agents,
   });
+  registerAgentSocket(app, { db: deps.db, agents: deps.agents });
   const webRoot = deps.webRoot === undefined ? defaultWebRoot() : deps.webRoot;
   if (webRoot) {
     await app.register(fastifyStatic, { root: webRoot });

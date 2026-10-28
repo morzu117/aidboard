@@ -1,22 +1,22 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router';
 import type { StoredEvent } from '../../../src/shared/events.js';
 import type { GitLogResponse } from '../../../src/shared/git.js';
-import type { Agent, IndexState } from '../../../src/shared/model.js';
+import type { Agent, IndexState, Topic } from '../../../src/shared/model.js';
+import { Conversation } from '../conversation/Conversation.js';
 import { AidApiError } from '../data/api.js';
 import { fetchGitLog } from '../data/git.js';
 import { useAid } from '../data/useAidState.js';
 import { ConfirmerNettoyage } from '../dialogues/ConfirmerNettoyage.js';
 import { SelecteurBranche } from '../dialogues/SelecteurBranche.js';
 import { Terminal } from '../terminal/Terminal.js';
-import { Layout } from '../ui/Layout.js';
+import { Layout, useLayout } from '../ui/Layout.js';
 import { Memoire } from '../ui/Memoire.js';
 import { agentView, Point } from '../ui/Statut.js';
+import { Volet } from '../ui/Volet.js';
 import type { ArchivedTopic } from './useArchive.js';
 import { useArchive } from './useArchive.js';
-import { Cote } from './Cote.js';
-import { OngletFichiers } from './OngletFichiers.js';
-import { OngletGit } from './OngletGit.js';
+import { PanneauContexte } from './PanneauContexte.js';
 import { useNettoyage } from './useNettoyage.js';
 import { roleLabel } from '../ui/roles.js';
 
@@ -63,22 +63,52 @@ const KINDS: Array<{ kind: Kind; label: string }> = [
 const KIND_CELL = { kind: 'swarph-cell' as const, label: 'Ouvrir la cell swarph' };
 const KIND_SWAIRM_CELL = { kind: 'swairm-cell' as const, label: 'Ouvrir la cell Swairm' };
 
-function Contenu({ topicId }: { topicId: string }) {
+// review D : seule fonction qui décide si l'écran affiche la vue complète (agents toujours
+// visibles, grille trois colonnes) — partagée par Sujet() et Contenu pour qu'elles ne
+// divergent plus sur les mêmes branches (sujet introuvable, brouillon, worktree manquant).
+function vueComplete(topic: Topic | undefined): boolean {
+  return !!topic && topic.state !== 'draft' && !topic.worktreeMissing;
+}
+
+function Contenu({
+  topicId,
+  selectedAgent,
+  onSelectAgent,
+}: {
+  topicId: string;
+  selectedAgent: string | null;
+  onSelectAgent: (id: string) => void;
+}) {
   const { state, outputs, daemon, retry, call } = useAid();
   const navigate = useNavigate();
-  // « Ouvrir le terminal → » de la boîte de réception arrive avec ?agent= : son onglet est choisi
-  const [params] = useSearchParams();
-  const [selected, setSelected] = useState<string | null>(params.get('agent'));
-  // Barre d'onglets Agents/Git/Fichiers (11.1) : état UI pur, jamais persisté (D22). Un seul
-  // paramètre lu une fois, comme ?agent= ci-dessus ; pas de synchronisation d'URL au changement.
-  const ongletParam = params.get('onglet');
-  const [onglet, setOnglet] = useState<'agents' | 'git' | 'fichiers'>(
-    ongletParam === 'git' || ongletParam === 'fichiers' ? ongletParam : 'agents',
-  );
   const [menu, setMenu] = useState<'aucun' | 'agent' | 'plus'>('aucun');
   const [selecteurBranche, setSelecteurBranche] = useState(false);
   const [erreur, setErreur] = useState<string | null>(null);
   const [ignoring, setIgnoring] = useState(false);
+  // §5.3 : retour discret après la copie du chemin du worktree depuis le menu ⋯.
+  const [worktreeCopie, setWorktreeCopie] = useState(false);
+  // review db76a41 : porte le minuteur « copié » pour l'annuler à la fermeture du menu ou au démontage.
+  const worktreeCopieTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // review db76a41 : au démontage, pas de setState sur un minuteur encore en attente.
+  useEffect(
+    () => () => {
+      if (worktreeCopieTimer.current !== null) clearTimeout(worktreeCopieTimer.current);
+    },
+    [],
+  );
+  // correctif 3 (recette) : emplacement DOM fourni à la Conversation active pour y porter ses
+  // propres contrôles (Repères, Tout déplier) dans la rangée d'onglets — l'état reste dans Conversation.
+  const [ongletsActionsEl, setOngletsActionsEl] = useState<HTMLDivElement | null>(null);
+  // Arrêter en deux temps (§5.3) : l'id de l'agent dont la confirmation est affichée, ou aucun.
+  const [arretConfirm, setArretConfirm] = useState<string | null>(null);
+  useEffect(() => {
+    if (arretConfirm === null) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setArretConfirm(null);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [arretConfirm]);
   const nettoyage = useNettoyage(topicId);
   const present = !!state?.topics.some((t) => t.id === topicId);
   const archive = useArchive(topicId, present);
@@ -88,18 +118,21 @@ function Contenu({ topicId }: { topicId: string }) {
   // bandeau de dérive reste visible quel que soit l'onglet actif — au-dessus des retours
   // anticipés ci-dessous, donc avant que `topic` existe (topicId suffit à la requête).
   const [live, setLive] = useState<GitLogResponse['live'] | null>(null);
-  useEffect(() => {
-    let cancelled = false;
-    fetchGitLog(call, topicId)
+  // review (re-dev 1/2, correctif 6) : point de vérité unique — seule la dernière lecture
+  // lancée peut écrire `live`, qu'elle vienne du montage, d'une action ou d'une branche changée.
+  const liveSeqRef = useRef(0);
+  function relireLive(): Promise<void> {
+    const seq = ++liveSeqRef.current;
+    return fetchGitLog(call, topicId)
       .then((r) => {
-        if (!cancelled) setLive(r.live);
+        if (liveSeqRef.current === seq) setLive(r.live);
       })
       .catch(() => {
-        if (!cancelled) setLive(null);
+        if (liveSeqRef.current === seq) setLive(null);
       });
-    return () => {
-      cancelled = true;
-    };
+  }
+  useEffect(() => {
+    relireLive();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [topicId]);
   const [deriveActionId, setDeriveActionId] = useState<string | null>(null);
@@ -110,17 +143,34 @@ function Contenu({ topicId }: { topicId: string }) {
   const deriveAction = state?.actions.find((a) => a.id === deriveActionId);
   useEffect(() => {
     if (deriveAction?.state !== 'succeeded') return;
-    fetchGitLog(call, topicId)
-      .then((r) => {
-        setDeriveActionId(null);
-        setLive(r.live);
-      })
-      .catch(() => {
-        setDeriveActionId(null);
-        setLive(null);
-      });
+    relireLive().then(() => setDeriveActionId(null));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [deriveAction?.state]);
+
+  // correctif 6 (recette) : `live` n'était relu qu'après branche.revenir/sujet.rattacher-branche —
+  // un changement de branche hors de ces deux actions (topic.branch-changer, sync…) laissait le
+  // bandeau de dérive périmé jusqu'au rechargement de la page.
+  const topicBranch = state?.topics.find((t) => t.id === topicId)?.branch;
+  const actionsSucceededIds = (state?.actions ?? [])
+    .filter((a) => a.topicId === topicId && a.state === 'succeeded')
+    .map((a) => a.id);
+  const actionsSucceeded = actionsSucceededIds.slice().sort().join(',');
+  // review (re-dev 1/2) : relecture déclenchée par un id d'action succeeded jamais vu, pas par
+  // l'ensemble courant — une action purgée de state.actions ne doit pas en déclencher une inutile.
+  const brancheVueRef = useRef<string | undefined>(undefined);
+  const actionsVuesRef = useRef<Set<string> | null>(null);
+  useEffect(() => {
+    const dejaMonte = actionsVuesRef.current !== null;
+    const brancheChangee = dejaMonte && brancheVueRef.current !== topicBranch;
+    const nouvelleAction =
+      dejaMonte && actionsSucceededIds.some((id) => !actionsVuesRef.current!.has(id));
+    brancheVueRef.current = topicBranch;
+    actionsVuesRef.current = new Set([...(actionsVuesRef.current ?? []), ...actionsSucceededIds]);
+    // au montage : seulement la référence de base, rien à relire.
+    if (!dejaMonte || (!brancheChangee && !nouvelleAction)) return;
+    relireLive();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [topicBranch, actionsSucceeded]);
 
   async function revenirSurBranche(dirtyAction?: 'stash') {
     setDeriveErreur(null);
@@ -145,8 +195,7 @@ function Contenu({ topicId }: { topicId: string }) {
     setRattaching(true);
     try {
       await call('POST', `/api/topics/${topicId}/actions/sujet.rattacher-branche`, {});
-      const r = await fetchGitLog(call, topicId);
-      setLive(r.live);
+      await relireLive();
     } catch (err) {
       setRattachErreur(err instanceof AidApiError ? err.message : String(err));
     } finally {
@@ -260,9 +309,10 @@ function Contenu({ topicId }: { topicId: string }) {
     );
   }
   const workspace = state.workspaces.find((w) => w.id === topic.workspaceId);
+  const worktree = topic.worktree;
   const runIds = state.runs.filter((r) => r.topicId === topic.id).map((r) => r.id);
   const agents: Agent[] = state.agents.filter((a) => runIds.includes(a.runId));
-  const active = agents.find((a) => a.id === selected) ?? agents.at(-1);
+  const active = agents.find((a) => a.id === selectedAgent) ?? agents.at(-1);
   const kinds = [
     ...KINDS,
     ...(state.mesh ? [KIND_CELL] : []),
@@ -274,7 +324,7 @@ function Contenu({ topicId }: { topicId: string }) {
     setMenu('aucun');
     try {
       const a = await call<Agent>('POST', '/api/agents', { topicId, kind });
-      setSelected(a.id);
+      onSelectAgent(a.id);
     } catch (err) {
       setErreur(err instanceof AidApiError ? err.message : String(err));
     }
@@ -295,6 +345,26 @@ function Contenu({ topicId }: { topicId: string }) {
       await call('POST', `/api/topics/${topicId}/actions/editor.open`, {});
     } catch (err) {
       setErreur(err instanceof AidApiError ? err.message : String(err));
+    }
+  }
+
+  // review db76a41 : remet « copié » à faux et annule le minuteur en attente à la fermeture du menu ⋯.
+  function fermerMenuPlus() {
+    setWorktreeCopie(false);
+    if (worktreeCopieTimer.current !== null) {
+      clearTimeout(worktreeCopieTimer.current);
+      worktreeCopieTimer.current = null;
+    }
+  }
+
+  // §5.3 : le chemin du worktree quitte les pastilles pour le menu ⋯, copié via le clipboard.
+  async function copierWorktree() {
+    try {
+      await navigator.clipboard.writeText(worktree);
+      setWorktreeCopie(true);
+      worktreeCopieTimer.current = setTimeout(() => setWorktreeCopie(false), 2000);
+    } catch {
+      // clipboard indisponible (contexte non sécurisé, permission refusée) : pas de retour
     }
   }
 
@@ -361,7 +431,7 @@ function Contenu({ topicId }: { topicId: string }) {
             >
               Ouvrir dans l’éditeur
             </button>
-            {topic.state !== 'draft' && (
+            {(topic.state !== 'draft' || !topic.worktreeMissing) && (
               <button
                 className="bouton-icone"
                 data-node="1-3.actions.plus"
@@ -369,24 +439,54 @@ function Contenu({ topicId }: { topicId: string }) {
                 type="button"
                 aria-label="Plus d’actions"
                 aria-expanded={menu === 'plus'}
-                onClick={() => setMenu(menu === 'plus' ? 'aucun' : 'plus')}
+                onClick={() => {
+                  if (menu === 'plus') fermerMenuPlus();
+                  setMenu(menu === 'plus' ? 'aucun' : 'plus');
+                }}
               >
                 ⋯
               </button>
             )}
-            {menu === 'plus' && topic.state !== 'draft' && (
-              <button
-                className="bouton bouton--danger"
-                data-action="topic.cleanup"
-                type="button"
-                onClick={() => {
-                  setMenu('aucun');
-                  void nettoyage.start();
-                }}
-                disabled={nettoyage.phase.phase === 'en-cours'}
-              >
-                Nettoyer le sujet
-              </button>
+            {menu === 'plus' && (topic.state !== 'draft' || !topic.worktreeMissing) && (
+              <>
+                {topic.state !== 'draft' && (
+                  <button
+                    className="bouton bouton--danger"
+                    data-action="topic.cleanup"
+                    type="button"
+                    onClick={() => {
+                      fermerMenuPlus();
+                      setMenu('aucun');
+                      void nettoyage.start();
+                    }}
+                    disabled={nettoyage.phase.phase === 'en-cours'}
+                  >
+                    Nettoyer le sujet
+                  </button>
+                )}
+                {!topic.worktreeMissing && (
+                  <button
+                    className="bouton bouton--fantome"
+                    data-action="sujet.copier-worktree"
+                    type="button"
+                    onClick={() => void copierWorktree()}
+                  >
+                    Copier le chemin du worktree{' '}
+                    <span
+                      className="chemin-worktree"
+                      data-node="1-3.entete.worktree"
+                      data-bind="sujet.worktree"
+                    >
+                      {topic.worktree}
+                    </span>
+                  </button>
+                )}
+                {worktreeCopie && (
+                  <span className="texte-discret" data-node="1-3.actions.worktree-copie">
+                    copié
+                  </span>
+                )}
+              </>
             )}
           </div>
         </div>
@@ -416,20 +516,15 @@ function Contenu({ topicId }: { topicId: string }) {
               {workspace?.remote ? `${workspace.remote}/${topic.base}` : topic.base}
             </span>
           </span>
-          <span
-            className="pastille pastille--discret"
-            data-node="1-3.entete.worktree"
-            data-bind="sujet.worktree"
-          >
-            {topic.worktree}
-          </span>
-          <span
-            className="pastille pastille--discret"
-            data-node="1-3.entete.index"
-            data-bind="sujet.index"
-          >
-            {INDEX_LABEL[topic.indexState]}
-          </span>
+          {topic.indexState !== 'ready' && (
+            <span
+              className="pastille pastille--discret"
+              data-node="1-3.entete.index"
+              data-bind="sujet.index"
+            >
+              {INDEX_LABEL[topic.indexState]}
+            </span>
+          )}
         </div>
       </div>
       {live && !live.onTopicBranch && (
@@ -516,7 +611,7 @@ function Contenu({ topicId }: { topicId: string }) {
       {selecteurBranche && (
         <SelecteurBranche topicId={topic.id} onClose={() => setSelecteurBranche(false)} />
       )}
-      {topic.state === 'draft' || topic.worktreeMissing ? (
+      {!vueComplete(topic) ? (
         <div className="sujet-grille sujet-grille--seul">
           <div className="colonne">
             {topic.state === 'draft' ? (
@@ -587,61 +682,91 @@ function Contenu({ topicId }: { topicId: string }) {
           </div>
         </div>
       ) : (
-        <>
-          <div className="onglets" data-node="1-3.onglets" role="tablist" aria-label="Vue du sujet">
-            <button
-              className={`onglet${onglet === 'agents' ? ' est-actif' : ''}`}
-              data-node="1-3.onglets.agents"
-              data-action="onglet.agents"
-              role="tab"
-              aria-selected={onglet === 'agents'}
-              type="button"
-              onClick={() => setOnglet('agents')}
-            >
-              Agents
-            </button>
-            <button
-              className={`onglet${onglet === 'git' ? ' est-actif' : ''}`}
-              data-node="1-3.onglets.git"
-              data-action="onglet.git"
-              role="tab"
-              aria-selected={onglet === 'git'}
-              type="button"
-              onClick={() => setOnglet('git')}
-            >
-              Git
-            </button>
-            <button
-              className={`onglet${onglet === 'fichiers' ? ' est-actif' : ''}`}
-              data-node="1-3.onglets.fichiers"
-              data-action="onglet.fichiers"
-              role="tab"
-              aria-selected={onglet === 'fichiers'}
-              type="button"
-              onClick={() => setOnglet('fichiers')}
-            >
-              Fichiers
-            </button>
-          </div>
-          {/* Toujours monté, juste masqué : un démontage reconnecterait les terminaux. */}
-          {/* Une seule colonne : la mémoire sous les terminaux, en pleine largeur. */}
-          <div className="sujet-grille sujet-grille--seul" hidden={onglet !== 'agents'}>
-            <div className="colonne">
-              {agents.length === 0 ? (
-                <section className="vide" data-node="1-3.vide">
-                  <p className="vide-message" data-node="1-3.vide.message">
-                    Aucun agent ne tourne sur ce sujet.
-                  </p>
-                  <p className="texte-discret" data-node="1-3.vide.aide">
-                    Le premier lancement de claude ou de codex dans un worktree neuf affiche son
-                    propre dialogue de confiance : c’est normal.
-                  </p>
-                  <div className="vide-actions">
-                    {kinds.map(({ kind, label }) => (
+        // D.1/D.2 (chantier 15) : les agents sont toujours visibles, plus de barre d'onglets
+        // exclusifs ; Git et Fichiers vivent désormais dans PanneauContexte (colonne de droite).
+        <div className="sujet-grille sujet-grille--seul">
+          <div className="colonne">
+            {agents.length === 0 ? (
+              <section className="vide" data-node="1-3.vide">
+                <p className="vide-message" data-node="1-3.vide.message">
+                  Aucun agent ne tourne sur ce sujet.
+                </p>
+                <p className="texte-discret" data-node="1-3.vide.aide">
+                  Le premier lancement de claude ou de codex dans un worktree neuf affiche son
+                  propre dialogue de confiance : c’est normal.
+                </p>
+                <div className="vide-actions">
+                  {kinds.map(({ kind, label }) => (
+                    <button
+                      key={kind}
+                      className={`bouton${kind === 'claude' ? ' bouton--primaire' : ''}`}
+                      data-node={kind === 'shell' ? '1-3.vide.shell' : `1-3.vide.lancer-${kind}`}
+                      data-action="agent.lancer"
+                      data-agent={kind}
+                      type="button"
+                      onClick={() => void launch(kind)}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </section>
+            ) : (
+              <section className="terminaux" data-node="1-3.terminaux" aria-label="Terminaux">
+                <div
+                  className="onglets"
+                  data-node="1-3.terminaux.onglets"
+                  role="tablist"
+                  aria-label="Agents du sujet"
+                >
+                  {agents.map((a, i) => {
+                    const v = agentView(a);
+                    return (
+                      <button
+                        key={a.id}
+                        className={`onglet${a.id === active?.id ? ' est-actif' : ''}`}
+                        data-node={`1-3.terminaux.onglet-${i + 1}`}
+                        data-action="onglet.choisir"
+                        role="tab"
+                        aria-selected={a.id === active?.id}
+                        type="button"
+                        onClick={() => {
+                          setArretConfirm(null);
+                          onSelectAgent(a.id);
+                        }}
+                      >
+                        <Point tone={v.tone} label={v.label} estimated={v.estimated} />
+                        <span
+                          data-node={`1-3.terminaux.onglet-${i + 1}.type`}
+                          data-bind="agent.type"
+                        >
+                          {a.kind}
+                        </span>
+                        <span
+                          className="agent-role"
+                          data-node={`1-3.terminaux.onglet-${i + 1}.role`}
+                          data-bind="agent.role"
+                        >
+                          {roleLabel(a.role)}
+                        </span>
+                      </button>
+                    );
+                  })}
+                  <button
+                    className="onglet"
+                    data-node="1-3.terminaux.ajouter-agent"
+                    data-action="agent.ajouter"
+                    type="button"
+                    aria-expanded={menu === 'agent'}
+                    onClick={() => setMenu(menu === 'agent' ? 'aucun' : 'agent')}
+                  >
+                    + Agent
+                  </button>
+                  {menu === 'agent' &&
+                    kinds.map(({ kind, label }) => (
                       <button
                         key={kind}
-                        className={`bouton${kind === 'claude' ? ' bouton--primaire' : ''}`}
-                        data-node={kind === 'shell' ? '1-3.vide.shell' : `1-3.vide.lancer-${kind}`}
+                        className="onglet"
                         data-action="agent.lancer"
                         data-agent={kind}
                         type="button"
@@ -650,98 +775,69 @@ function Contenu({ topicId }: { topicId: string }) {
                         {label}
                       </button>
                     ))}
-                  </div>
-                </section>
-              ) : (
-                <section className="terminaux" data-node="1-3.terminaux" aria-label="Terminaux">
-                  <div
-                    className="onglets"
-                    data-node="1-3.terminaux.onglets"
-                    role="tablist"
-                    aria-label="Agents du sujet"
-                  >
-                    {agents.map((a, i) => {
-                      const v = agentView(a);
-                      return (
-                        <span key={a.id} style={{ display: 'inline-flex' }}>
+                  <div className="onglets-actions">
+                    {/* Repères / Tout déplier : portés ici par la Conversation active (createPortal) */}
+                    <div className="onglets-actions-portail" ref={setOngletsActionsEl} />
+                    {active &&
+                      (arretConfirm === active.id ? (
+                        <>
                           <button
-                            className={`onglet${a.id === active?.id ? ' est-actif' : ''}`}
-                            data-node={`1-3.terminaux.onglet-${i + 1}`}
-                            data-action="onglet.choisir"
-                            role="tab"
-                            aria-selected={a.id === active?.id}
+                            className="bouton bouton--danger"
+                            data-node="1-3.terminaux.arreter"
+                            data-action="agent.arreter.confirmer"
                             type="button"
-                            onClick={() => setSelected(a.id)}
+                            onClick={() => {
+                              setArretConfirm(null);
+                              void stop(active.id);
+                            }}
                           >
-                            <Point tone={v.tone} label={v.label} estimated={v.estimated} />
-                            <span
-                              data-node={`1-3.terminaux.onglet-${i + 1}.type`}
-                              data-bind="agent.type"
-                            >
-                              {a.kind}
-                            </span>
-                            <span
-                              className="agent-role"
-                              data-node={`1-3.terminaux.onglet-${i + 1}.role`}
-                              data-bind="agent.role"
-                            >
-                              {roleLabel(a.role)}
-                            </span>
+                            Confirmer l’arrêt
                           </button>
                           <button
                             className="bouton bouton--fantome"
-                            data-node={`1-3.terminaux.onglet-${i + 1}.arreter`}
-                            data-action={LIVE.includes(a.status) ? 'agent.arreter' : 'agent.fermer'}
+                            data-node="1-3.terminaux.arreter.annuler"
+                            data-action="agent.arreter.annuler"
                             type="button"
-                            onClick={() => void stop(a.id)}
+                            onClick={() => setArretConfirm(null)}
                           >
-                            {LIVE.includes(a.status) ? 'Arrêter' : 'Fermer'}
+                            Annuler
                           </button>
-                        </span>
-                      );
-                    })}
-                    <button
-                      className="onglet"
-                      data-node="1-3.terminaux.ajouter-agent"
-                      data-action="agent.ajouter"
-                      type="button"
-                      aria-expanded={menu === 'agent'}
-                      onClick={() => setMenu(menu === 'agent' ? 'aucun' : 'agent')}
-                    >
-                      + Agent
-                    </button>
-                    {menu === 'agent' &&
-                      kinds.map(({ kind, label }) => (
+                        </>
+                      ) : (
                         <button
-                          key={kind}
-                          className="onglet"
-                          data-action="agent.lancer"
-                          data-agent={kind}
+                          className="bouton bouton--fantome"
+                          data-node="1-3.terminaux.arreter"
+                          data-action={
+                            LIVE.includes(active.status) ? 'agent.arreter' : 'agent.fermer'
+                          }
                           type="button"
-                          onClick={() => void launch(kind)}
+                          onClick={() =>
+                            LIVE.includes(active.status)
+                              ? setArretConfirm(active.id)
+                              : void stop(active.id)
+                          }
                         >
-                          {label}
+                          {LIVE.includes(active.status) ? 'Arrêter' : 'Fermer'}
                         </button>
                       ))}
                   </div>
-                  {agents.map((a) => (
+                </div>
+                {agents.map((a) =>
+                  a.transport === 'stream' ? (
+                    <Conversation
+                      key={a.id}
+                      agent={a}
+                      visible={a.id === active?.id}
+                      actionsHost={ongletsActionsEl}
+                    />
+                  ) : (
                     <Terminal key={a.id} agentId={a.id} visible={a.id === active?.id} />
-                  ))}
-                </section>
-              )}
-              <Memoire
-                namespace={workspace?.namespace ?? workspace?.name ?? ''}
-                topicSlug={topic.slug}
-              />
-            </div>
+                  ),
+                )}
+              </section>
+            )}
           </div>
-          {onglet === 'git' && (
-            <OngletGit topicId={topic.id} base={topic.base} remote={workspace?.remote ?? null} />
-          )}
-          {onglet === 'fichiers' && (
-            <OngletFichiers topicId={topic.id} activeAgentId={active?.id ?? null} />
-          )}
-        </>
+        </div>
       )}
     </main>
   );
@@ -835,12 +931,130 @@ function EcranArchive({
 
 export function Sujet() {
   const { topicId = '' } = useParams();
+  const { state } = useAid();
+  const [params] = useSearchParams();
+  // « Ouvrir le terminal → » de la boîte de réception arrive avec ?agent= : son onglet est choisi.
+  const [selectedAgent, setSelectedAgent] = useState<string | null>(params.get('agent'));
+  // D.2 : ?onglet=git|fichiers sélectionne l'onglet correspondant de PanneauContexte (déplacé
+  // depuis la barre d'onglets exclusifs, retirée au profit des agents toujours visibles).
+  const ongletParam = params.get('onglet');
+  const initialOnglet =
+    ongletParam === 'git' || ongletParam === 'fichiers' ? ongletParam : undefined;
+  const topic = state?.topics.find((t) => t.id === topicId);
+
+  // La grille trois colonnes et le volet panneau n'existent que pour la vue complète de Contenu
+  // (agents/terminaux) : jamais pendant le chargement, une erreur, une archive ou la préparation
+  // du worktree, qui restent à une colonne comme avant ce chantier. La navigation (ex-Cote) est
+  // posée par Layout sur les deux branches, B.2.
+  if (!topic || !vueComplete(topic)) {
+    return (
+      <Layout screen="1-3">
+        <div className="sujet-corps">
+          <Contenu
+            topicId={topicId}
+            selectedAgent={selectedAgent}
+            onSelectAgent={setSelectedAgent}
+          />
+        </div>
+      </Layout>
+    );
+  }
+
+  const workspace = state?.workspaces.find((w) => w.id === topic.workspaceId);
+  const runIds = state?.runs.filter((r) => r.topicId === topicId).map((r) => r.id) ?? [];
+  const agents = state?.agents.filter((a) => runIds.includes(a.runId)) ?? [];
+  const active = agents.find((a) => a.id === selectedAgent) ?? agents.at(-1);
+  const namespace = workspace?.namespace ?? workspace?.name ?? '';
+
   return (
     <Layout screen="1-3">
-      <div className="sujet-corps">
-        <Cote activeTopicId={topicId} />
-        <Contenu topicId={topicId} />
-      </div>
+      <SujetPanneau
+        topic={topic}
+        topicId={topicId}
+        namespace={namespace}
+        remote={workspace?.remote ?? null}
+        activeAgentId={active?.id ?? null}
+        initialOnglet={initialOnglet}
+        selectedAgent={selectedAgent}
+        onSelectAgent={setSelectedAgent}
+      />
     </Layout>
+  );
+}
+
+// Le panneau du sujet lit `overlay` depuis Layout (B.2) : il doit être rendu sous <Layout> pour
+// atteindre son contexte, d'où cette extraction (ne peut pas rester inline dans Sujet()).
+function SujetPanneau({
+  topic,
+  topicId,
+  namespace,
+  remote,
+  activeAgentId,
+  initialOnglet,
+  selectedAgent,
+  onSelectAgent,
+}: {
+  topic: Topic;
+  topicId: string;
+  namespace: string;
+  remote: string | null;
+  activeAgentId: string | null;
+  initialOnglet: 'git' | 'fichiers' | undefined;
+  selectedAgent: string | null;
+  onSelectAgent: (id: string | null) => void;
+}) {
+  const { overlay, setOverlay } = useLayout();
+  const boutonPanneauRef = useRef<HTMLButtonElement>(null);
+  // review D (finding 2) : une pop-up ouverte rend inerte tout le reste — colonne centrale,
+  // le bouton flottant — pour que Tab/aria-modal décrivent une vraie modale.
+  const popupOuvert = overlay !== 'aucun';
+  return (
+    <div className="sujet-corps">
+      <div style={{ display: 'contents' }} inert={popupOuvert || undefined}>
+        <Contenu topicId={topicId} selectedAgent={selectedAgent} onSelectAgent={onSelectAgent} />
+      </div>
+      <Volet
+        screen="1-3"
+        nom="panneau"
+        titre="Panneau du sujet"
+        ouvert={overlay === 'panneau'}
+        inert={popupOuvert && overlay !== 'panneau'}
+        onFermer={() => setOverlay('aucun')}
+        boutonRef={boutonPanneauRef}
+      >
+        <PanneauContexte
+          namespace={namespace}
+          topicSlug={topic.slug}
+          topicId={topicId}
+          base={topic.base}
+          remote={remote}
+          activeAgentId={activeAgentId}
+          initialOnglet={initialOnglet}
+        />
+      </Volet>
+      <button
+        ref={boutonPanneauRef}
+        className="bouton-icone bouton-volant bouton-volant--panneau"
+        data-node="1-3.volet.ouvrir-panneau"
+        type="button"
+        aria-label="Ouvrir le panneau du sujet"
+        aria-expanded={overlay === 'panneau'}
+        inert={popupOuvert || undefined}
+        onClick={() => setOverlay(overlay === 'panneau' ? 'aucun' : 'panneau')}
+      >
+        <svg aria-hidden="true" viewBox="0 0 16 16" width="16" height="16">
+          <path d="M2 5h4l1.3 1.6H14V12H2z" fill="none" stroke="currentColor" strokeWidth="1.3" />
+        </svg>
+      </button>
+      {overlay === 'panneau' && (
+        // .voile : fond déjà utilisé par Dialogue.tsx (chantier 11), réutilisé ici tel quel.
+        <div
+          className="voile"
+          data-node="1-3.volet.panneau.fond"
+          aria-hidden="true"
+          onClick={() => setOverlay('aucun')}
+        />
+      )}
+    </div>
   );
 }
