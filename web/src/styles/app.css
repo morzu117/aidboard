@@ -399,6 +399,7 @@ body {
   align-items: center;
   overflow: hidden;
   padding: var(--sp-1) var(--sp-3);
+  flex: none; /* sinon le flex item se comprime à 0 dans .commits à hauteur bornée */
 }
 .panneau-contexte .commit-corps {
   display: flex;

@@ -131,3 +131,41 @@ test('onglet Git du panneau à 1440 px : pas de débordement, détail à la plac
   await page.locator('.panneau-contexte [data-node="1-3.git.detail.retour"]').click();
   await expect(page.locator('.panneau-contexte [role="list"][aria-label="Commits"]')).toBeVisible();
 });
+
+// recette (point 1) : sur un historique long, les lignes de .panneau-contexte .commit s'écrasaient
+// à 8 px au lieu de 46 (flex item compressé par .commits à hauteur bornée) — l'ancienne assertion
+// « height ≤ 56 » n'avait pas de borne basse, donc le bug passait inaperçu.
+test('onglet Git du panneau à 1440 px, historique long : lignes à hauteur fixe, liste défile', async ({
+  browser,
+}) => {
+  const page = await openApp(await browser.newContext({ viewport: { width: 1440, height: 900 } }));
+  await registerWorkspace(page, newRepo('depot-onglet-git-historique-long'));
+  await createTopic(page, 'Onglet Git historique long');
+
+  await node(page, '1-3.actions.plus').click();
+  const worktree = (await node(page, '1-3.entete.worktree').textContent())!;
+  await node(page, '1-3.actions.plus').click();
+  for (let i = 0; i < 80; i++) {
+    commitFile(worktree, `note${i}.txt`, `contenu ${i}\n`, `commit numéro ${i}`);
+  }
+
+  await page.getByRole('tab', { name: 'Git' }).click();
+  await expect(page.locator('.panneau-contexte .commit').first()).toBeVisible();
+
+  const hauteurs = await page.evaluate(() =>
+    Array.from(document.querySelectorAll<HTMLElement>('.panneau-contexte .commit')).map(
+      (el) => el.getBoundingClientRect().height,
+    ),
+  );
+  expect(hauteurs.length).toBeGreaterThan(0);
+  for (const h of hauteurs) {
+    expect(h).toBeGreaterThanOrEqual(45);
+    expect(h).toBeLessThanOrEqual(47);
+  }
+
+  const defile = await page.evaluate(() => {
+    const el = document.querySelector<HTMLElement>('.commits')!;
+    return el.scrollHeight > el.clientHeight;
+  });
+  expect(defile).toBe(true);
+});
