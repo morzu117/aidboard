@@ -18,7 +18,8 @@ if [ "${AID_LIBERER:-}" = "1" ]; then
   require_env AID_LIBERER_DOSSIER
   gitdir_ailleurs="$(git -C "$AID_LIBERER_DOSSIER" rev-parse --path-format=absolute --git-dir 2>/dev/null)" \
     || die_human "$AID_LIBERER_DOSSIER n'est plus un worktree git valide"
-  dirty_ailleurs="$(git -C "$AID_LIBERER_DOSSIER" status --porcelain)"
+  # branches-libres : les non-suivis ne bloquent plus un changement de branche.
+  dirty_ailleurs="$(git -C "$AID_LIBERER_DOSSIER" status --porcelain --untracked-files=no)"
   if [ -n "$dirty_ailleurs" ] \
     || [ -e "$gitdir_ailleurs/rebase-merge" ] || [ -e "$gitdir_ailleurs/rebase-apply" ] \
     || [ -e "$gitdir_ailleurs/MERGE_HEAD" ] || [ -e "$gitdir_ailleurs/CHERRY_PICK_HEAD" ] \
@@ -30,7 +31,9 @@ fi
 
 # D25 : non-commité — vocabulaire AID_DIRTY_ACTION de D21, aucun second mécanisme. Juste la
 # vérification ici (refus possible) ; le stash lui-même n'a lieu qu'une fois X touché, plus bas.
-dirty="$(git status --porcelain)"
+# branches-libres : les non-suivis ne bloquent plus un changement de branche (un `git switch`
+# refusera lui-même si l'un d'eux entre en conflit avec un fichier suivi de la branche cible).
+dirty="$(git status --porcelain --untracked-files=no)"
 if [ -n "$dirty" ] && [ "${AID_DIRTY_ACTION:-}" != "stash" ]; then
   echo "$dirty" >&2
   die_human "modifications non commitées : changer de branche les écraserait"

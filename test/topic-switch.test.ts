@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { chmodSync, existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, expect, test } from 'vitest';
@@ -41,6 +41,8 @@ test('topic.branch-changer : non commité sans dirtyAction, refus net, rien ne b
   c = await setupWorkspace();
   const { wt, branch, topicId } = await makeTopic(c);
   sh(wt, 'branch', 'autre');
+  // branches-libres : un fichier suivi modifié, pas un non-suivi (qui ne bloque plus).
+  commitFile(wt, 'brouillon.txt', 'stable\n');
   writeFileSync(join(wt, 'brouillon.txt'), 'en cours\n');
 
   const run = await switchTo(topicId, { targetBranch: 'autre' });
@@ -51,10 +53,47 @@ test('topic.branch-changer : non commité sans dirtyAction, refus net, rien ne b
   expect(existsSync(join(wt, 'brouillon.txt'))).toBe(true);
 });
 
+// branches-libres (b) : des non-suivis dans le worktree du sujet lui-même ne bloquent plus un
+// changement de branche direct — échoue sur b22f3fc (needs_human) avant le correctif.
+test('topic.branch-changer : sujet n’a que des non-suivis, changement direct réussit, fichier intact', async () => {
+  c = await setupWorkspace();
+  const { wt, topicId } = await makeTopic(c);
+  sh(wt, 'branch', 'autre');
+  writeFileSync(join(wt, 'brouillon.txt'), 'en cours\n');
+
+  const run = await switchTo(topicId, { targetBranch: 'autre' });
+  expect(run.statusCode).toBe(202);
+  const fin = await finished(c.t, run.json<{ actionId: string }>().actionId);
+  expect(fin.data.outcome).toBe('succeeded');
+  expect(currentBranch(wt)).toBe('autre');
+  expect(existsSync(join(wt, 'brouillon.txt'))).toBe(true);
+});
+
+// branches-libres (d) : un non-suivi en conflit avec un fichier de la branche cible reste un
+// échec propre — c'est `git switch` lui-même qui refuse, le fichier n'est jamais perdu.
+test('topic.branch-changer : non-suivi en conflit avec la branche cible, échec propre, fichier intact', async () => {
+  c = await setupWorkspace();
+  const { wt, branch, topicId } = await makeTopic(c);
+  sh(wt, 'switch', '-c', 'autre');
+  commitFile(wt, 'conflit.txt', 'preexistant\n');
+  sh(wt, 'switch', branch);
+  writeFileSync(join(wt, 'conflit.txt'), 'non suivi\n');
+
+  const run = await switchTo(topicId, { targetBranch: 'autre' });
+  expect(run.statusCode).toBe(202);
+  const fin = await finished(c.t, run.json<{ actionId: string }>().actionId);
+  expect(fin.data.outcome).toBe('failed');
+  expect(currentBranch(wt)).toBe(branch);
+  expect(existsSync(join(wt, 'conflit.txt'))).toBe(true);
+  expect(readFileSync(join(wt, 'conflit.txt'), 'utf8')).toBe('non suivi\n');
+});
+
 test('topic.branch-changer : dirtyAction stash, remise de côté puis bascule', async () => {
   c = await setupWorkspace();
   const { wt, topicId } = await makeTopic(c);
   sh(wt, 'branch', 'autre');
+  // branches-libres : un fichier suivi modifié, pas un non-suivi (qui ne bloque plus).
+  commitFile(wt, 'brouillon.txt', 'stable\n');
   writeFileSync(join(wt, 'brouillon.txt'), 'en cours\n');
 
   const run = await switchTo(topicId, { targetBranch: 'autre', dirtyAction: 'stash' });
@@ -119,6 +158,23 @@ test('topic.branch-changer : liberer, branche à la racine et base libre → rac
   expect(sh(c.ws.root, 'rev-parse', 'HEAD')).toBe(tipAvant);
 });
 
+// branches-libres (a) : la racine à libérer n'a que des non-suivis — ils ne doivent plus
+// bloquer la libération, et doivent survivre au basculement. Échoue sur b22f3fc (409).
+test('topic.branch-changer : liberer, racine n’a que des non-suivis, libération et changement réussissent, fichier intact', async () => {
+  c = await setupWorkspace();
+  const { wt, topicId } = await makeTopic(c);
+  sh(c.ws.root, 'switch', '-c', 'convoitee');
+  writeFileSync(join(c.ws.root, 'brouillon.txt'), 'en cours\n');
+
+  const run = await switchTo(topicId, { targetBranch: 'convoitee', liberer: true });
+  expect(run.statusCode).toBe(202);
+  const fin = await finished(c.t, run.json<{ actionId: string }>().actionId);
+  expect(fin.data.outcome).toBe('succeeded');
+  expect(currentBranch(wt)).toBe('convoitee');
+  expect(currentBranch(c.ws.root)).toBe('main');
+  expect(existsSync(join(c.ws.root, 'brouillon.txt'))).toBe(true);
+});
+
 test('topic.branch-changer : liberer, branche dans le worktree d’un autre sujet → détaché au même commit', async () => {
   c = await setupWorkspace();
   const un = await makeTopic(c, 'Premier');
@@ -140,6 +196,8 @@ test('topic.branch-changer : liberer, X sale → 409 synchrone, rien ne bouge', 
   c = await setupWorkspace();
   const un = await makeTopic(c, 'Premier');
   const deux = await makeTopic(c, 'Second');
+  // branches-libres : un fichier suivi modifié, pas un non-suivi (qui ne bloque plus).
+  commitFile(deux.wt, 'brouillon.txt', 'stable\n');
   writeFileSync(join(deux.wt, 'brouillon.txt'), 'en cours\n');
 
   const run = await switchTo(un.topicId, { targetBranch: deux.branch, liberer: true });
@@ -156,6 +214,8 @@ test('topic.branch-changer : liberer, sujet courant sale sans stash → needs_hu
   c = await setupWorkspace();
   const un = await makeTopic(c, 'Premier');
   const deux = await makeTopic(c, 'Second');
+  // branches-libres : un fichier suivi modifié, pas un non-suivi (qui ne bloque plus).
+  commitFile(un.wt, 'brouillon.txt', 'stable\n');
   writeFileSync(join(un.wt, 'brouillon.txt'), 'en cours\n');
 
   const run = await switchTo(un.topicId, { targetBranch: deux.branch, liberer: true });
@@ -227,6 +287,8 @@ test('topic.branch-changer : X libéré, mise de côté du sujet échoue → mes
   c = await setupWorkspace();
   const un = await makeTopic(c, 'Premier');
   const deux = await makeTopic(c, 'Second');
+  // branches-libres : un fichier suivi modifié, pas un non-suivi (qui ne bloque plus).
+  commitFile(un.wt, 'brouillon.txt', 'stable\n');
   writeFileSync(join(un.wt, 'brouillon.txt'), 'en cours\n');
 
   const shim = installGitShim(`stash push -u -m aid/branche/${deux.branch}`);
@@ -253,6 +315,9 @@ test('topic.branch-changer : X libéré, le switch du sujet échoue → stash re
   c = await setupWorkspace();
   const un = await makeTopic(c, 'Premier');
   const deux = await makeTopic(c, 'Second');
+  // branches-libres : un fichier suivi modifié, pas un non-suivi (qui ne bloque plus) — sinon
+  // rien n'est stashé et ce test n'exerce plus la restitution qu'il prétend couvrir.
+  commitFile(un.wt, 'brouillon.txt', 'stable\n');
   writeFileSync(join(un.wt, 'brouillon.txt'), 'en cours\n');
 
   const shim = installGitShim(`switch ${deux.branch}`);

@@ -133,10 +133,21 @@ export async function branchWorktree(repoRoot: string, branch: string): Promise<
   return parseWorktreeBranches(r.stdout).get(branch) ?? null;
 }
 
+// branches-libres : variante de hasUncommittedChanges qui ignore les non-suivis — un fichier
+// non suivi ne bloque jamais un changement de branche, seul son propre `git switch` en décide
+// s'il y a conflit avec un fichier de la branche cible.
+export async function hasUncommittedTrackedChanges(worktree: string): Promise<boolean> {
+  const status = await git(worktree, ['status', '--porcelain', '--untracked-files=no']);
+  return status.ok && status.stdout.length > 0;
+}
+
 // 15 (b) / review (3, 6) : X a des modifications non commitées ou une opération en cours —
 // même liste de marqueurs que topic-switch.sh, doublée ici pour un refus 409 synchrone.
+// branches-libres : seules les modifications suivies comptent ici, cette fonction ne sert qu'au
+// refus de changement de branche — pas la pastille WIP (11.3) qui appelle hasUncommittedChanges
+// directement et doit continuer à compter les non-suivis.
 export async function hasUncommittedOrOperationInProgress(worktree: string): Promise<boolean> {
-  if (await hasUncommittedChanges(worktree)) return true;
+  if (await hasUncommittedTrackedChanges(worktree)) return true;
   const dir = await git(worktree, ['rev-parse', '--path-format=absolute', '--git-dir']);
   if (!dir.ok) return false;
   return [
