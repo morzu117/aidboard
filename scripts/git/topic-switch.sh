@@ -56,6 +56,7 @@ fi
 
 # Plus de refus possible à partir d'ici : on touche à X, puis au sujet courant.
 libere=0
+libere_annonce=0
 if [ "${AID_LIBERER:-}" = "1" ]; then
   if [ -n "${AID_LIBERER_VERS:-}" ]; then
     git -C "$AID_LIBERER_DOSSIER" switch "$AID_LIBERER_VERS"
@@ -63,16 +64,36 @@ if [ "${AID_LIBERER:-}" = "1" ]; then
     git -C "$AID_LIBERER_DOSSIER" switch --detach
   fi
   libere=1
+  # review (B2) : seules deux sorties passent par fail_apres_liberation ; sous `set -e`, tout
+  # autre échec après ce point (AID_CREATE, git fetch…) sortirait sans le dire — ce trap couvre
+  # le reste, sans dupliquer le message si fail_apres_liberation l'a déjà écrit.
+  trap '
+    code=$?
+    if [ "$code" -ne 0 ] && [ "$libere_annonce" != "1" ]; then
+      echo "$AID_LIBERER_DOSSIER a été libéré (sur ${AID_LIBERER_VERS:-détachée}) ; le script a échoué avant la fin" >&2
+    fi
+    exit "$code"
+  ' EXIT
 fi
 
 # 15 : X est déjà libéré à ce stade — tout échec qui suit doit le dire, pour ne pas laisser
 # croire que rien n'a bougé.
 fail_apres_liberation() {
   if [ "$libere" = "1" ]; then
+    libere_annonce=1
     die "$AID_LIBERER_DOSSIER a été libéré (sur ${AID_LIBERER_VERS:-détachée}) ; $1"
   else
     die "$1"
   fi
+}
+
+# review (B1) : `stash pop <sha>` échoue toujours (git veut stash@{n}) — l'entrée se retrouve par
+# son SHA dans `stash list`, apply puis drop pour ne pas la perdre si apply échoue.
+restituer_stash() {
+  local sha="$1" entry
+  entry="$(git stash list --format='%gd %H' | awk -v s="$sha" '$2 == s { print $1; exit }')"
+  [ -n "$entry" ] || return 1
+  git stash apply "$entry" && git stash drop "$entry"
 }
 
 stash_ref=""
@@ -98,7 +119,7 @@ else
     echo "$sortie" >&2
     # review (2) : un stash créé ici reste rattaché au sujet, jamais à X — sa restitution ne
     # dépend donc que de ce switch, pas de la libération.
-    if [ -n "$stash_ref" ] && git stash pop "$stash_ref"; then
+    if [ -n "$stash_ref" ] && restituer_stash "$stash_ref"; then
       fail_apres_liberation "le changement de branche du sujet a échoué : $sortie"
     elif [ -n "$stash_ref" ]; then
       fail_apres_liberation "le changement de branche du sujet a échoué, la mise de côté n'a pas pu être restituée (${stash_ref}) : $sortie"

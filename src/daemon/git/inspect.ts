@@ -150,18 +150,29 @@ export async function hasUncommittedOrOperationInProgress(worktree: string): Pro
   ].some((marker) => existsSync(join(dir.stdout, marker)));
 }
 
+export interface LiberationTarget {
+  // null = détacher. Absent de toute pertinence si `racine` est faux (jamais utilisé alors).
+  vers: string | null;
+  // X (`worktreeAilleurs`) est la racine du dépôt, comparaison realpath.
+  racine: boolean;
+}
+
 // 15 (d) / review (5) : cible de la libération d'un worktree qui détient encore la branche
 // visée — la racine du dépôt bascule sur la base si elle n'est extraite nulle part ailleurs,
 // sinon reste détachée (null). Même fonction côté route d'action et côté /git/branches, pour
 // que la commande affichée à l'écran soit toujours celle que le script va réellement jouer.
+// C4 : `worktreeAilleurs` peut être un worktree listé par git mais supprimé du disque
+// (prunable) — realpathSync y lèverait, existsSync l'écarte en amont plutôt que de planter.
 export async function liberationTarget(
   repoRoot: string,
   baseBranch: string,
   worktreeAilleurs: string,
-): Promise<string | null> {
-  if (realpathSync(worktreeAilleurs) !== realpathSync(repoRoot)) return null;
+): Promise<LiberationTarget> {
+  if (!existsSync(worktreeAilleurs) || realpathSync(worktreeAilleurs) !== realpathSync(repoRoot)) {
+    return { vers: null, racine: false };
+  }
   const baseElsewhere = await branchWorktree(repoRoot, baseBranch);
-  return baseElsewhere ? null : baseBranch;
+  return { vers: baseElsewhere ? null : baseBranch, racine: true };
 }
 
 const BRANCH_FORMAT = '%(refname:short)%09%(objectname)%09%(committerdate:iso-strict)';

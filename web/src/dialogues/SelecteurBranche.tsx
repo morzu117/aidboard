@@ -99,16 +99,11 @@ export function SelecteurBranche({ topicId, onClose }: { topicId: string; onClos
 
   // review (5) : la cible de libération vient du daemon (liberationVers, /git/branches) — il
   // compare des chemins résolus (realpath), ce qu'une comparaison de chaînes ici ne garantit pas.
-  const topicCourant = state?.topics.find((t) => t.id === topicId);
-  const workspace = state?.workspaces.find((w) => w.id === topicCourant?.workspaceId);
   const cibleLiberation = libererCible?.liberationVers ?? null;
-  // review (8) : la racine détachée durablement n'est signalée que lorsque c'est bien elle qui
-  // se libère sans pouvoir basculer sur la base (sinon toute libération d'un worktree lié, qui
-  // détache normalement, afficherait la même alerte).
-  const racineDetachee =
-    cibleLiberation === null &&
-    workspace !== undefined &&
-    libererCible?.worktree === workspace.root;
+  // review (8) / C5 : la racine détachée durablement n'est signalée que lorsque c'est bien elle
+  // qui se libère sans pouvoir basculer sur la base — liberationRacine vient du daemon
+  // (même fonction que liberationVers), plus aucune comparaison de chemin côté web.
+  const racineDetachee = cibleLiberation === null && (libererCible?.liberationRacine ?? false);
   const refusSynchrone = actionId === null && erreurAction !== null;
 
   return (
@@ -142,13 +137,14 @@ export function SelecteurBranche({ topicId, onClose }: { topicId: string; onClos
             >
               Annuler
             </button>
-            {refusSynchrone ? (
-              libererCible.topicId && (
-                <Link className="bouton bouton--primaire" to={`/sujets/${libererCible.topicId}`}>
-                  Aller au sujet
-                </Link>
-              )
-            ) : besoinHumain ? (
+            {refusSynchrone && libererCible.topicId && (
+              // C7 : le refus synchrone n'empêche plus de réessayer — l'opérateur peut nettoyer
+              // X ailleurs puis relancer sans rouvrir le dialogue, bouton toujours actif plus bas.
+              <Link className="bouton bouton--fantome" to={`/sujets/${libererCible.topicId}`}>
+                Aller au sujet
+              </Link>
+            )}
+            {besoinHumain ? (
               <button
                 className="bouton bouton--primaire"
                 type="button"

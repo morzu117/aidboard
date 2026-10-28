@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process';
 import { chmodSync, existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -175,28 +176,60 @@ test('topic.branch-changer : liberer, racine détient la cible, base extraite ai
   const ailleurs = mkdtempSync(join(tmpdir(), 'aid-base-'));
   sh(c.ws.root, 'worktree', 'add', ailleurs, 'main');
 
-  const run = await switchTo(topicId, { targetBranch: 'convoitee', liberer: true });
-  expect(run.statusCode).toBe(202);
-  const fin = await finished(c.t, run.json<{ actionId: string }>().actionId);
-  expect(fin.data.outcome).toBe('succeeded');
-  expect(currentBranch(wt)).toBe('convoitee');
-  expect(currentBranch(c.ws.root)).toBe('HEAD');
+  try {
+    const run = await switchTo(topicId, { targetBranch: 'convoitee', liberer: true });
+    expect(run.statusCode).toBe(202);
+    const fin = await finished(c.t, run.json<{ actionId: string }>().actionId);
+    expect(fin.data.outcome).toBe('succeeded');
+    expect(currentBranch(wt)).toBe('convoitee');
+    expect(currentBranch(c.ws.root)).toBe('HEAD');
+  } finally {
+    // C10 : worktree de test retiré — un `prune` oublié ici fausserait les tests suivants.
+    sh(c.ws.root, 'worktree', 'remove', '--force', ailleurs);
+    rmSync(ailleurs, { recursive: true, force: true });
+  }
 });
 
+// C6(iii)/(iv) : shim `git` placé en tête de PATH, qui ne fait échouer qu'une commande précise
+// et délègue tout le reste au vrai git — déterministe, indépendant des permissions (chmod 000
+// n'a aucun effet sous root, cas fréquent en CI).
+function installGitShim(failArgs: string): { dir: string; restore: () => void } {
+  const realGit = execFileSync('which', ['git'], { encoding: 'utf8' }).trim();
+  const dir = mkdtempSync(join(tmpdir(), 'aid-git-shim-'));
+  writeFileSync(
+    join(dir, 'git'),
+    [
+      '#!/usr/bin/env bash',
+      `if [ "$*" = ${JSON.stringify(failArgs)} ]; then`,
+      '  echo "git: échec simulé (test shim)" >&2',
+      '  exit 1',
+      'fi',
+      `exec ${JSON.stringify(realGit)} "$@"`,
+      '',
+    ].join('\n'),
+  );
+  chmodSync(join(dir, 'git'), 0o755);
+  const oldPath = process.env.PATH;
+  process.env.PATH = `${dir}:${oldPath}`;
+  return {
+    dir,
+    restore: () => {
+      process.env.PATH = oldPath;
+      rmSync(dir, { recursive: true, force: true });
+    },
+  };
+}
+
 // review (1, 4c) : une fois X libéré, tout échec qui suit doit le dire (préfixe « a été
-// libéré »). Provocation retenue : un fichier non lisible fait échouer `git stash push -u`
-// lui-même (exit non nul, vérifié empiriquement) — pas le `git switch` suivant. Un fichier non
-// suivi qui collisionne avec la branche cible, lui, ne fait jamais échouer le switch dans ce
-// scénario : la même mise de côté (`-u`, sans pathspec) l'emporte toujours avant, donc le
-// switch qui suit retrouve un arbre propre et réussit — vérifié empiriquement, ce n'est pas une
-// omission du script.
+// libéré »). C6(iv) : remplace l'ancienne provocation par chmod 000 (sans effet sous root) par
+// le shim — fait échouer `git stash push` lui-même, pas le `git switch` suivant.
 test('topic.branch-changer : X libéré, mise de côté du sujet échoue → message nommé', async () => {
   c = await setupWorkspace();
   const un = await makeTopic(c, 'Premier');
   const deux = await makeTopic(c, 'Second');
-  writeFileSync(join(un.wt, 'illisible.txt'), 'x');
-  chmodSync(join(un.wt, 'illisible.txt'), 0o000);
+  writeFileSync(join(un.wt, 'brouillon.txt'), 'en cours\n');
 
+  const shim = installGitShim(`stash push -u -m aid/branche/${deux.branch}`);
   try {
     const run = await switchTo(un.topicId, {
       targetBranch: deux.branch,
@@ -210,8 +243,87 @@ test('topic.branch-changer : X libéré, mise de côté du sujet échoue → mes
     expect(currentBranch(un.wt)).toBe(un.branch);
     expect(currentBranch(deux.wt)).toBe('HEAD');
   } finally {
-    chmodSync(join(un.wt, 'illisible.txt'), 0o644);
+    shim.restore();
   }
+});
+
+// C6(iii) : le switch du sujet échoue sous X déjà libéré — le stash doit être restitué
+// (B1 : `git stash pop <sha>` échoue toujours, c'est du code mort sur 66aae1d, ce test y échoue).
+test('topic.branch-changer : X libéré, le switch du sujet échoue → stash restitué, message nommé', async () => {
+  c = await setupWorkspace();
+  const un = await makeTopic(c, 'Premier');
+  const deux = await makeTopic(c, 'Second');
+  writeFileSync(join(un.wt, 'brouillon.txt'), 'en cours\n');
+
+  const shim = installGitShim(`switch ${deux.branch}`);
+  try {
+    const run = await switchTo(un.topicId, {
+      targetBranch: deux.branch,
+      liberer: true,
+      dirtyAction: 'stash',
+    });
+    expect(run.statusCode).toBe(202);
+    const fin = await finished(c.t, run.json<{ actionId: string }>().actionId);
+    expect(fin.data.outcome).toBe('failed');
+    expect((fin.data.tail as string[]).some((l) => l.includes('a été libéré'))).toBe(true);
+    expect(currentBranch(un.wt)).toBe(un.branch);
+    expect(existsSync(join(un.wt, 'brouillon.txt'))).toBe(true);
+    expect(sh(un.wt, 'stash', 'list')).toBe('');
+  } finally {
+    shim.restore();
+  }
+});
+
+// C6(ii) : marqueur d'opération en cours dans X (hors modification non commitée) → même refus
+// synchrone 409 que X sale, vérifié via la route.
+test('topic.branch-changer : liberer, marqueur REVERT_HEAD dans X → 409 synchrone, rien ne bouge', async () => {
+  c = await setupWorkspace();
+  const un = await makeTopic(c, 'Premier');
+  const deux = await makeTopic(c, 'Second');
+  const gitDir = sh(deux.wt, 'rev-parse', '--path-format=absolute', '--git-dir');
+  writeFileSync(join(gitDir, 'REVERT_HEAD'), `${sh(deux.wt, 'rev-parse', 'HEAD')}\n`);
+
+  const run = await switchTo(un.topicId, { targetBranch: deux.branch, liberer: true });
+  expect(run.statusCode).toBe(409);
+  expect(run.json().error).toContain(deux.wt);
+  expect(currentBranch(un.wt)).toBe(un.branch);
+  expect(currentBranch(deux.wt)).toBe(deux.branch);
+});
+
+// C6(ii) : le script lui-même refuse aussi un marqueur d'opération en cours dans X, appelé
+// directement (sans passer par la route, qui ne fait que doubler cette défense).
+test('topic-switch.sh (appel direct) : marqueur BISECT_LOG dans X → die_human, rien ne bouge', async () => {
+  c = await setupWorkspace();
+  const un = await makeTopic(c, 'Premier');
+  const deux = await makeTopic(c, 'Second');
+  const gitDir = sh(deux.wt, 'rev-parse', '--path-format=absolute', '--git-dir');
+  writeFileSync(join(gitDir, 'BISECT_LOG'), 'test\n');
+
+  const script = join(import.meta.dirname, '..', 'scripts', 'git', 'topic-switch.sh');
+  let threw = false;
+  try {
+    execFileSync('bash', [script], {
+      cwd: un.wt,
+      env: {
+        ...process.env,
+        AID_REPO_ROOT: c.ws.root,
+        AID_BRANCH: un.branch,
+        AID_WORKTREE: un.wt,
+        AID_TARGET_BRANCH: deux.branch,
+        AID_LIBERER: '1',
+        AID_LIBERER_DOSSIER: deux.wt,
+      },
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+  } catch (err) {
+    threw = true;
+    const e = err as { status: number | null; stderr: Buffer };
+    expect(e.status).toBe(2);
+    expect(e.stderr.toString()).toContain('modifications non commitées');
+  }
+  expect(threw).toBe(true);
+  expect(currentBranch(un.wt)).toBe(un.branch);
+  expect(currentBranch(deux.wt)).toBe(deux.branch);
 });
 
 test('topic.branch-changer : liberer, agent actif dans le sujet de X → 409, rien ne bouge', async () => {

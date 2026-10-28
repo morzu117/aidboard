@@ -154,29 +154,51 @@ test('libérer puis prendre : deux commandes (base libre), liberer: true, lien p
 // review (3) : X sale est désormais un 409 synchrone (route), plus un needs_human du script —
 // l'écran ne doit donc plus proposer « Mettre de côté et changer », qui ne s'applique qu'au
 // sujet courant et reboucle sur le même refus quand la cause est X.
-test('libérer puis prendre : X sale, 409 synchrone, message affiché, pas de « Mettre de côté »', async () => {
-  setup(<SelecteurBranche topicId="tp_1" onClose={vi.fn()} />, snapshot(), '/', {
-    'GET /api/topics/tp_1/git/branches': json(200, {
-      branches: [
-        branch({ name: 'feat/sujet', isCurrent: true }),
-        branch({ name: 'feat/ailleurs', worktree: '/w/ailleurs', topicId: 'tp_2' }),
-      ],
+// C7 : « Libérer et changer » reste actif après le refus — l'opérateur peut nettoyer X ailleurs
+// puis réessayer sans rouvrir le dialogue.
+test('libérer puis prendre : X sale, 409 synchrone, message affiché, « Libérer et changer » reste actif', async () => {
+  const onClose = vi.fn();
+  let appel = 0;
+  const h = setup(
+    <SelecteurBranche topicId="tp_1" onClose={onClose} />,
+    snapshot({
+      actions: [action({ id: 'ac_1', state: 'succeeded', result: { branch: 'feat/ailleurs' } })],
     }),
-    'POST /api/topics/tp_1/actions/topic.branch-changer': () =>
-      new Response(
-        JSON.stringify({
-          error:
-            '/w/ailleurs a des modifications non commitées : commit ou mise de côté là-bas d’abord',
-        }),
-        { status: 409 },
-      ),
-  });
+    '/',
+    {
+      'GET /api/topics/tp_1/git/branches': json(200, {
+        branches: [
+          branch({ name: 'feat/sujet', isCurrent: true }),
+          branch({ name: 'feat/ailleurs', worktree: '/w/ailleurs', topicId: 'tp_2' }),
+        ],
+      }),
+      'POST /api/topics/tp_1/actions/topic.branch-changer': () => {
+        appel += 1;
+        if (appel === 1) {
+          return new Response(
+            JSON.stringify({
+              error:
+                '/w/ailleurs a des modifications non commitées : commit ou mise de côté là-bas d’abord',
+            }),
+            { status: 409 },
+          );
+        }
+        return new Response(JSON.stringify({ actionId: 'ac_1' }), { status: 202 });
+      },
+    },
+  );
   await userEvent.click(await screen.findByRole('option', { name: /feat\/ailleurs/ }));
   await userEvent.click(screen.getByRole('button', { name: 'Libérer et changer' }));
   expect((await screen.findByRole('alert')).textContent).toContain('non commitées');
   expect(screen.queryByRole('button', { name: 'Mettre de côté et changer' })).toBeNull();
-  expect(screen.queryByRole('button', { name: 'Libérer et changer' })).toBeNull();
   expect(screen.getByRole('link', { name: 'Aller au sujet' })).toBeTruthy();
+  const reessayer = screen.getByRole('button', { name: 'Libérer et changer' });
+  expect(reessayer.hasAttribute('disabled')).toBe(false);
+  await userEvent.click(reessayer);
+  expect(
+    h.calls.filter((c) => c.url === '/api/topics/tp_1/actions/topic.branch-changer').length,
+  ).toBe(2);
+  await waitFor(() => expect(onClose).toHaveBeenCalled());
 });
 
 test('filtre sans correspondance : état vide', async () => {
