@@ -275,9 +275,7 @@ test('topic.branch-changer : liberer, non-suivi avec un chemin à espace en conf
   expect(run.statusCode).toBe(202);
   const fin = await finished(c.t, run.json<{ actionId: string }>().actionId);
   expect(fin.data).toMatchObject({ outcome: 'needs_human', exitCode: 2 });
-  expect((fin.data.tail as string[]).some((l) => l.includes('fichier avec espace.txt'))).toBe(
-    true,
-  );
+  expect((fin.data.tail as string[]).some((l) => l.includes('fichier avec espace.txt'))).toBe(true);
   expect(currentBranch(un.wt)).toBe(un.branch);
   expect(currentBranch(deux.wt)).toBe(deux.branch);
   expect(existsSync(join(un.wt, 'fichier avec espace.txt'))).toBe(true);
