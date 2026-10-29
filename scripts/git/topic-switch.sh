@@ -18,7 +18,8 @@ if [ "${AID_LIBERER:-}" = "1" ]; then
   require_env AID_LIBERER_DOSSIER
   gitdir_ailleurs="$(git -C "$AID_LIBERER_DOSSIER" rev-parse --path-format=absolute --git-dir 2>/dev/null)" \
     || die_human "$AID_LIBERER_DOSSIER n'est plus un worktree git valide"
-  dirty_ailleurs="$(git -C "$AID_LIBERER_DOSSIER" status --porcelain)"
+  # branches-libres : les non-suivis ne bloquent plus un changement de branche.
+  dirty_ailleurs="$(git -C "$AID_LIBERER_DOSSIER" status --porcelain --untracked-files=no)"
   if [ -n "$dirty_ailleurs" ] \
     || [ -e "$gitdir_ailleurs/rebase-merge" ] || [ -e "$gitdir_ailleurs/rebase-apply" ] \
     || [ -e "$gitdir_ailleurs/MERGE_HEAD" ] || [ -e "$gitdir_ailleurs/CHERRY_PICK_HEAD" ] \
@@ -30,7 +31,9 @@ fi
 
 # D25 : non-commité — vocabulaire AID_DIRTY_ACTION de D21, aucun second mécanisme. Juste la
 # vérification ici (refus possible) ; le stash lui-même n'a lieu qu'une fois X touché, plus bas.
-dirty="$(git status --porcelain)"
+# branches-libres : les non-suivis ne bloquent plus un changement de branche (un `git switch`
+# refusera lui-même si l'un d'eux entre en conflit avec un fichier suivi de la branche cible).
+dirty="$(git status --porcelain --untracked-files=no)"
 if [ -n "$dirty" ] && [ "${AID_DIRTY_ACTION:-}" != "stash" ]; then
   echo "$dirty" >&2
   die_human "modifications non commitées : changer de branche les écraserait"
@@ -52,6 +55,53 @@ if [ "${AID_CREATE:-}" != "1" ]; then
         ;;
     esac
   done < <(git -C "$AID_REPO_ROOT" worktree list --porcelain)
+fi
+
+# branches-libres (review) : avec AID_LIBERER=1, X est touché avant le switch du sujet. Si le
+# switch du sujet échoue plus bas parce qu'un de ses non-suivis serait écrasé, X a déjà été
+# libéré pour rien. Détecté ici, avant tout changement — sans liberer, le refus natif de
+# `git switch` est déjà propre (rien n'a bougé non plus), pas besoin de ce détour.
+if [ "${AID_LIBERER:-}" = "1" ]; then
+  fichiers_ecrases_par() {
+    local dossier="$1" cible="$2" chemin
+    while IFS= read -r -d '' chemin; do
+      if git -C "$dossier" cat-file -e "$cible:$chemin" 2>/dev/null; then
+        printf '%s\n' "$chemin"
+      fi
+    done < <(git -C "$dossier" ls-files --others --exclude-standard -z)
+    return 0
+  }
+
+  message_conflit() {
+    local dossier="$1" cible="$2" fichiers="$3" total apercu reste
+    total="$(printf '%s\n' "$fichiers" | grep -c .)"
+    apercu="$(printf '%s\n' "$fichiers" | head -5 | paste -sd, -)"
+    apercu="${apercu//,/, }"
+    if [ "$total" -gt 5 ]; then
+      reste=$((total - 5))
+      apercu="$apercu et $reste autres"
+    fi
+    printf "%s : fichiers non suivis qui seraient écrasés par %s : %s — déplace-les ou supprime-les d'abord" \
+      "$dossier" "$cible" "$apercu"
+  }
+
+  cible_sujet=""
+  if [ "${AID_CREATE:-}" != "1" ]; then
+    cible_sujet="$AID_TARGET_BRANCH"
+  elif [ "${AID_CREATE_FROM:-}" = "base" ]; then
+    require_env AID_BASE
+    git fetch --quiet origin "$AID_BASE"
+    cible_sujet="origin/$AID_BASE"
+  fi
+  if [ -n "$cible_sujet" ]; then
+    conflits_sujet="$(fichiers_ecrases_par "$AID_WORKTREE" "$cible_sujet")"
+    [ -z "$conflits_sujet" ] || die_human "$(message_conflit "$AID_WORKTREE" "$cible_sujet" "$conflits_sujet")"
+  fi
+
+  if [ -n "${AID_LIBERER_VERS:-}" ]; then
+    conflits_ailleurs="$(fichiers_ecrases_par "$AID_LIBERER_DOSSIER" "$AID_LIBERER_VERS")"
+    [ -z "$conflits_ailleurs" ] || die_human "$(message_conflit "$AID_LIBERER_DOSSIER" "$AID_LIBERER_VERS" "$conflits_ailleurs")"
+  fi
 fi
 
 # Plus de refus possible à partir d'ici : on touche à X, puis au sujet courant.

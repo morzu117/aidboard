@@ -211,3 +211,90 @@ test('filtre sans correspondance : état vide', async () => {
   await userEvent.type(screen.getByLabelText('Filtrer les branches'), 'zzz');
   expect(await screen.findByText('Aucune branche ne correspond au filtre.')).toBeTruthy();
 });
+
+// branches-libres : la zone de création affiche la base du sujet et appelle branche.creer.
+test('nouvelle branche depuis la base : affiche la base, appelle branche.creer, ferme au succès', async () => {
+  const onClose = vi.fn();
+  const h = setup(
+    <SelecteurBranche topicId="tp_1" onClose={onClose} />,
+    snapshot({
+      topics: [topic({ id: 'tp_1', base: 'main' })],
+      actions: [action({ id: 'ac_1', action: 'branche.creer', state: 'succeeded', result: {} })],
+    }),
+    '/',
+    {
+      'GET /api/topics/tp_1/git/branches': json(200, {
+        branches: [branch({ name: 'feat/sujet', isCurrent: true })],
+      }),
+      'POST /api/topics/tp_1/actions/branche.creer': json(202, { actionId: 'ac_1' }),
+    },
+  );
+  expect(await screen.findByText('Nouvelle branche depuis main')).toBeTruthy();
+  await userEvent.type(
+    screen.getByLabelText('Nom de la nouvelle branche'),
+    'feat/nouvelle-depuis-main',
+  );
+  await userEvent.click(screen.getByRole('button', { name: 'Créer' }));
+  expect(h.calls.find((c) => c.url === '/api/topics/tp_1/actions/branche.creer')?.body).toEqual({
+    targetBranch: 'feat/nouvelle-depuis-main',
+  });
+  await waitFor(() => expect(onClose).toHaveBeenCalled());
+});
+
+test('nouvelle branche depuis la base : non commité, « mettre de côté et créer » relance avec le stash', async () => {
+  const onClose = vi.fn();
+  const h = setup(
+    <SelecteurBranche topicId="tp_1" onClose={onClose} />,
+    snapshot({
+      topics: [topic({ id: 'tp_1', base: 'main' })],
+      actions: [
+        action({
+          id: 'ac_1',
+          action: 'branche.creer',
+          state: 'needs_human',
+          exitCode: 2,
+          result: {},
+        }),
+        action({ id: 'ac_2', action: 'branche.creer', state: 'succeeded', result: {} }),
+      ],
+    }),
+    '/',
+    {
+      'GET /api/topics/tp_1/git/branches': json(200, {
+        branches: [branch({ name: 'feat/sujet', isCurrent: true })],
+      }),
+      'POST /api/topics/tp_1/actions/branche.creer': (body: unknown) =>
+        new Response(
+          JSON.stringify({
+            actionId: (body as { dirtyAction?: string }).dirtyAction === 'stash' ? 'ac_2' : 'ac_1',
+          }),
+          { status: 202 },
+        ),
+    },
+  );
+  await userEvent.type(await screen.findByLabelText('Nom de la nouvelle branche'), 'feat/nouvelle');
+  await userEvent.click(screen.getByRole('button', { name: 'Créer' }));
+  expect((await screen.findByRole('alert')).textContent).toContain('non commitées');
+  await userEvent.click(screen.getByRole('button', { name: 'Mettre de côté et créer' }));
+  await waitFor(() => expect(onClose).toHaveBeenCalled());
+  expect(
+    h.calls.filter((c) => c.url === '/api/topics/tp_1/actions/branche.creer').at(-1)?.body,
+  ).toEqual({ targetBranch: 'feat/nouvelle', dirtyAction: 'stash' });
+});
+
+test('nouvelle branche depuis la base : nom déjà pris par une branche locale, refusé sans appel', async () => {
+  const h = setup(
+    <SelecteurBranche topicId="tp_1" onClose={vi.fn()} />,
+    snapshot({ topics: [topic({ id: 'tp_1', base: 'main' })] }),
+    '/',
+    {
+      'GET /api/topics/tp_1/git/branches': json(200, {
+        branches: [branch({ name: 'feat/sujet', isCurrent: true }), branch({ name: 'autre' })],
+      }),
+    },
+  );
+  await userEvent.type(await screen.findByLabelText('Nom de la nouvelle branche'), 'autre');
+  expect(await screen.findByText('La branche autre existe déjà.')).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Créer' }).hasAttribute('disabled')).toBe(true);
+  expect(h.calls.some((c) => c.url === '/api/topics/tp_1/actions/branche.creer')).toBe(false);
+});
