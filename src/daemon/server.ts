@@ -6,6 +6,7 @@ import fastifyCookie from '@fastify/cookie';
 import fastifyStatic from '@fastify/static';
 import fastifyWebsocket from '@fastify/websocket';
 import Fastify, { type FastifyInstance } from 'fastify';
+import { LogController } from 'fastify';
 import type { AidConfig } from './config.js';
 import type { Db } from './db.js';
 import type { EventStore } from './events/store.js';
@@ -99,8 +100,18 @@ export async function buildServer(deps: ServerDeps): Promise<FastifyInstance> {
           },
         }
       : false,
+    // deux lignes par requête, dont le sondage de /api/state chaque seconde : daemon.log avait atteint
+    // 378 Mo (2026-10-29). Seules les requêtes en échec restent journalisées (hook onResponse ci-dessous).
+    logController: new LogController({ disableRequestLogging: true }),
     // refuser un champ inconnu plutôt que de le retirer sans rien dire
     ajv: { customOptions: { removeAdditional: false } },
+  });
+  app.addHook('onResponse', async (req, reply) => {
+    if (reply.statusCode >= 400)
+      req.log.warn(
+        { req, statusCode: reply.statusCode, responseTime: reply.elapsedTime },
+        'request failed',
+      );
   });
   await app.register(fastifyCookie);
   await app.register(fastifyWebsocket);

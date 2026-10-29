@@ -1,6 +1,7 @@
 import { type SpawnOptions, spawn } from 'node:child_process';
 import { closeSync, openSync } from 'node:fs';
 import { currentLaunch } from '../../daemon/selfUpdate.js';
+import { rotateDaemonLog } from '../../daemon/selfUpdate.js';
 import { ensureHome, type AidPaths } from '../../daemon/paths.js';
 import { runningDaemon, type DaemonInfo } from '../daemonInfo.js';
 
@@ -12,6 +13,7 @@ export type SpawnDaemon = (paths: AidPaths) => void;
 // Le daemon se lance détaché : ses agents doivent survivre au terminal qui l'a démarré.
 export const spawnDetachedDaemon: SpawnDaemon = (paths) => {
   ensureHome(paths);
+  rotateDaemonLog(paths.home);
   const log = openSync(`${paths.home}/daemon.log`, 'a', 0o600);
   const opts: SpawnOptions = {
     detached: true,
