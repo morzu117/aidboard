@@ -57,6 +57,53 @@ if [ "${AID_CREATE:-}" != "1" ]; then
   done < <(git -C "$AID_REPO_ROOT" worktree list --porcelain)
 fi
 
+# branches-libres (review) : avec AID_LIBERER=1, X est touché avant le switch du sujet. Si le
+# switch du sujet échoue plus bas parce qu'un de ses non-suivis serait écrasé, X a déjà été
+# libéré pour rien. Détecté ici, avant tout changement — sans liberer, le refus natif de
+# `git switch` est déjà propre (rien n'a bougé non plus), pas besoin de ce détour.
+if [ "${AID_LIBERER:-}" = "1" ]; then
+  fichiers_ecrases_par() {
+    local dossier="$1" cible="$2" chemin
+    while IFS= read -r -d '' chemin; do
+      if git -C "$dossier" cat-file -e "$cible:$chemin" 2>/dev/null; then
+        printf '%s\n' "$chemin"
+      fi
+    done < <(git -C "$dossier" ls-files --others --exclude-standard -z)
+    return 0
+  }
+
+  message_conflit() {
+    local dossier="$1" cible="$2" fichiers="$3" total apercu reste
+    total="$(printf '%s\n' "$fichiers" | grep -c .)"
+    apercu="$(printf '%s\n' "$fichiers" | head -5 | paste -sd, -)"
+    apercu="${apercu//,/, }"
+    if [ "$total" -gt 5 ]; then
+      reste=$((total - 5))
+      apercu="$apercu et $reste autres"
+    fi
+    printf "%s : fichiers non suivis qui seraient écrasés par %s : %s — déplace-les ou supprime-les d'abord" \
+      "$dossier" "$cible" "$apercu"
+  }
+
+  cible_sujet=""
+  if [ "${AID_CREATE:-}" != "1" ]; then
+    cible_sujet="$AID_TARGET_BRANCH"
+  elif [ "${AID_CREATE_FROM:-}" = "base" ]; then
+    require_env AID_BASE
+    git fetch --quiet origin "$AID_BASE"
+    cible_sujet="origin/$AID_BASE"
+  fi
+  if [ -n "$cible_sujet" ]; then
+    conflits_sujet="$(fichiers_ecrases_par "$AID_WORKTREE" "$cible_sujet")"
+    [ -z "$conflits_sujet" ] || die_human "$(message_conflit "$AID_WORKTREE" "$cible_sujet" "$conflits_sujet")"
+  fi
+
+  if [ -n "${AID_LIBERER_VERS:-}" ]; then
+    conflits_ailleurs="$(fichiers_ecrases_par "$AID_LIBERER_DOSSIER" "$AID_LIBERER_VERS")"
+    [ -z "$conflits_ailleurs" ] || die_human "$(message_conflit "$AID_LIBERER_DOSSIER" "$AID_LIBERER_VERS" "$conflits_ailleurs")"
+  fi
+fi
+
 # Plus de refus possible à partir d'ici : on touche à X, puis au sujet courant.
 libere=0
 libere_annonce=0

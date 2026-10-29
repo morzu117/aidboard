@@ -1,5 +1,13 @@
 import { execFileSync } from 'node:child_process';
-import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, expect, test } from 'vitest';
@@ -188,6 +196,91 @@ test('topic.branch-changer : liberer, branche dans le worktree d’un autre suje
   expect(currentBranch(un.wt)).toBe(deux.branch);
   expect(currentBranch(deux.wt)).toBe('HEAD');
   expect(sh(deux.wt, 'rev-parse', 'HEAD')).toBe(tipDeux);
+});
+
+// branches-libres (review, e) : le non-suivi en conflit est dans le worktree du SUJET, pas dans
+// X — sans détection préalable, X serait libéré (détaché) avant que le switch du sujet échoue.
+// Échoue sur fbf47c4 (X détaché avant le refus natif de `git switch`).
+test('topic.branch-changer : liberer, non-suivi du sujet en conflit avec la cible → needs_human avant de libérer X', async () => {
+  c = await setupWorkspace();
+  const un = await makeTopic(c, 'Premier');
+  const deux = await makeTopic(c, 'Second');
+  commitFile(deux.wt, 'conflit.txt', 'preexistant\n');
+  writeFileSync(join(un.wt, 'conflit.txt'), 'non suivi\n');
+
+  const run = await switchTo(un.topicId, { targetBranch: deux.branch, liberer: true });
+  expect(run.statusCode).toBe(202);
+  const fin = await finished(c.t, run.json<{ actionId: string }>().actionId);
+  expect(fin.data).toMatchObject({ outcome: 'needs_human', exitCode: 2 });
+  expect((fin.data.tail as string[]).some((l) => l.includes('conflit.txt'))).toBe(true);
+  expect(currentBranch(un.wt)).toBe(un.branch);
+  expect(currentBranch(deux.wt)).toBe(deux.branch);
+  expect(existsSync(join(un.wt, 'conflit.txt'))).toBe(true);
+  expect(readFileSync(join(un.wt, 'conflit.txt'), 'utf8')).toBe('non suivi\n');
+});
+
+// branches-libres (review, f) : cette fois le conflit est dans X lui-même, confronté à
+// AID_LIBERER_VERS (la racine libérée bascule sur la base, pas un détachement). Échoue sur
+// fbf47c4 (racine basculée sur la base, fichier écrasé, avant que le script ne s'en aperçoive).
+test('topic.branch-changer : liberer, non-suivi de X en conflit avec AID_LIBERER_VERS → refus avant tout changement', async () => {
+  c = await setupWorkspace();
+  const { wt, branch, topicId } = await makeTopic(c);
+  sh(c.ws.root, 'switch', '-c', 'convoitee');
+  sh(c.ws.root, 'switch', 'main');
+  commitFile(c.ws.root, 'sur-main.txt', 'depuis main\n');
+  sh(c.ws.root, 'switch', 'convoitee');
+  writeFileSync(join(c.ws.root, 'sur-main.txt'), 'non suivi\n');
+
+  const run = await switchTo(topicId, { targetBranch: 'convoitee', liberer: true });
+  expect(run.statusCode).toBe(202);
+  const fin = await finished(c.t, run.json<{ actionId: string }>().actionId);
+  expect(fin.data).toMatchObject({ outcome: 'needs_human', exitCode: 2 });
+  expect((fin.data.tail as string[]).some((l) => l.includes('sur-main.txt'))).toBe(true);
+  expect(currentBranch(wt)).toBe(branch);
+  expect(currentBranch(c.ws.root)).toBe('convoitee');
+  expect(existsSync(join(c.ws.root, 'sur-main.txt'))).toBe(true);
+  expect(readFileSync(join(c.ws.root, 'sur-main.txt'), 'utf8')).toBe('non suivi\n');
+});
+
+// branches-libres (review, g) : un non-suivi ignoré qui existe aussi dans la cible ne doit pas
+// bloquer — c'est le comportement normal de `git switch`, voulu.
+test('topic.branch-changer : liberer, non-suivi ignoré en conflit avec la cible, ne bloque pas', async () => {
+  c = await setupWorkspace();
+  const un = await makeTopic(c, 'Premier');
+  const deux = await makeTopic(c, 'Second');
+  mkdirSync(join(deux.wt, 'build'), { recursive: true });
+  commitFile(deux.wt, 'build/sortie.txt', 'preexistant\n');
+  writeFileSync(join(un.wt, '.gitignore'), 'build/sortie.txt\n');
+  mkdirSync(join(un.wt, 'build'), { recursive: true });
+  writeFileSync(join(un.wt, 'build', 'sortie.txt'), 'ignoré\n');
+
+  const run = await switchTo(un.topicId, { targetBranch: deux.branch, liberer: true });
+  expect(run.statusCode).toBe(202);
+  const fin = await finished(c.t, run.json<{ actionId: string }>().actionId);
+  expect(fin.data.outcome).toBe('succeeded');
+  expect(currentBranch(un.wt)).toBe(deux.branch);
+  expect(currentBranch(deux.wt)).toBe('HEAD');
+});
+
+// branches-libres (review, h) : chemin avec espace — le message doit le nommer correctement,
+// pas tronqué ni éclaté par un découpage naïf sur l'espace.
+test('topic.branch-changer : liberer, non-suivi avec un chemin à espace en conflit, nommé correctement', async () => {
+  c = await setupWorkspace();
+  const un = await makeTopic(c, 'Premier');
+  const deux = await makeTopic(c, 'Second');
+  commitFile(deux.wt, 'fichier avec espace.txt', 'preexistant\n');
+  writeFileSync(join(un.wt, 'fichier avec espace.txt'), 'non suivi\n');
+
+  const run = await switchTo(un.topicId, { targetBranch: deux.branch, liberer: true });
+  expect(run.statusCode).toBe(202);
+  const fin = await finished(c.t, run.json<{ actionId: string }>().actionId);
+  expect(fin.data).toMatchObject({ outcome: 'needs_human', exitCode: 2 });
+  expect((fin.data.tail as string[]).some((l) => l.includes('fichier avec espace.txt'))).toBe(
+    true,
+  );
+  expect(currentBranch(un.wt)).toBe(un.branch);
+  expect(currentBranch(deux.wt)).toBe(deux.branch);
+  expect(existsSync(join(un.wt, 'fichier avec espace.txt'))).toBe(true);
 });
 
 // review (3, 4d) : X sale est désormais un refus synchrone (409) côté route — remplace l'ancien
