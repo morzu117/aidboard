@@ -4,6 +4,7 @@ import {
   mkdtempSync,
   readFileSync,
   readlinkSync,
+  truncateSync,
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -15,6 +16,8 @@ import {
   installRelease,
   pruneServers,
   pullAndBuild,
+  DAEMON_LOG_MAX,
+  rotateDaemonLog,
   spawnRespawnWatcher,
   switchCurrent,
 } from '../src/daemon/selfUpdate.js';
@@ -97,6 +100,40 @@ test('spawnRespawnWatcher (13.5, DR8) : relance avec l’execPath donné, pas ce
   spawnRespawnWatcher(dying.pid!, { execPath: fakeNode, entry: '/x/dist/cli/aid.js' }, tmp);
   await waitFor(() => existsSync(marker) || undefined, 5000, 'respawn');
   expect(readFileSync(marker, 'utf8').trim()).toBe('node:/x/dist/cli/aid.js daemon');
+  dying.kill();
+}, 10_000);
+
+test('rotateDaemonLog : au-delà du seuil, daemon.log devient daemon.log.1 ; en deçà ou absent, rien ne bouge', () => {
+  const tmp = mkdtempSync(join(tmpdir(), 'aid-log-'));
+  const log = join(tmp, 'daemon.log');
+  rotateDaemonLog(tmp, 10);
+  expect(existsSync(log)).toBe(false);
+
+  writeFileSync(log, 'court');
+  rotateDaemonLog(tmp, 10);
+  expect(readFileSync(log, 'utf8')).toBe('court');
+
+  writeFileSync(log, 'nettement trop long');
+  rotateDaemonLog(tmp, 10);
+  expect(existsSync(log)).toBe(false);
+  expect(readFileSync(`${log}.1`, 'utf8')).toBe('nettement trop long');
+});
+
+test('spawnRespawnWatcher : un daemon.log trop gros est mis de côté avant la relance', async () => {
+  const tmp = mkdtempSync(join(tmpdir(), 'aid-watch-'));
+  const log = join(tmp, 'daemon.log');
+  writeFileSync(log, '');
+  // fichier creux : la taille dépasse le seuil sans écrire 10 Mo
+  truncateSync(log, DAEMON_LOG_MAX + 1);
+  const marker = join(tmp, 'marker.txt');
+  const fakeNode = join(tmp, 'node');
+  writeFileSync(fakeNode, `#!/bin/sh\necho relance > "${marker}"\n`);
+  chmodSync(fakeNode, 0o755);
+  const dying = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 300)']);
+  spawnRespawnWatcher(dying.pid!, { execPath: fakeNode, entry: '/x/dist/cli/aid.js' }, tmp);
+  await waitFor(() => existsSync(marker) || undefined, 5000, 'respawn');
+  expect(existsSync(`${log}.1`)).toBe(true);
+  expect(readFileSync(log, 'utf8')).toBe('');
   dying.kill();
 }, 10_000);
 

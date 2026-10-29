@@ -73,6 +73,8 @@ export interface LiveStream {
   stopReason?: StopReason;
   /** numéro de ligne croissant dans `agent_messages`, propre à cet agent. */
   seq: number;
+  /** demandes arrivées pendant qu'une autre est en cours (outils lancés en parallèle) : affichées une à une. */
+  queued: PendingRequest[];
   subscribe(cb: (ev: ConversationEvent) => void): () => void;
 }
 
@@ -444,6 +446,7 @@ export class AgentManager {
       exited: false,
       exit: null,
       seq: o.seq,
+      queued: [],
       subscribe: (cb) => {
         subscribers.add(cb);
         return () => subscribers.delete(cb);
@@ -613,6 +616,11 @@ export class AgentManager {
           });
           break;
         case 'request':
+          // une seule demande en cours (`agents.pending`) : l'écraser rendrait la première sans réponse possible
+          if (this.pendingOf(stream.id)) {
+            stream.queued.push(ev.request);
+            break;
+          }
           this.deps.store.append({
             source: 'daemon',
             type: 'agent.status',
@@ -624,7 +632,9 @@ export class AgentManager {
           });
           break;
         case 'request_cancelled':
+          stream.queued = stream.queued.filter((r) => r.id !== ev.requestId);
           if (this.pendingOf(stream.id)?.id === ev.requestId) {
+            if (this.showNextPending(stream)) break;
             this.deps.store.append({
               source: 'daemon',
               type: 'agent.status',
@@ -947,6 +957,23 @@ export class AgentManager {
       agentId,
       data: { pendingId, option: answer, by: 'human' },
     });
+    this.showNextPending(s);
+  }
+
+  /** La demande suivante en file devient la demande en cours ; false si la file est vide. */
+  private showNextPending(s: LiveStream): boolean {
+    const next = s.queued.shift();
+    if (!next) return false;
+    this.deps.store.append({
+      source: 'daemon',
+      type: 'agent.status',
+      workspaceId: s.workspaceId,
+      topicId: s.topicId,
+      runId: s.runId,
+      agentId: s.id,
+      data: { status: 'needs_input', reason: 'permission', pending: next },
+    });
+    return true;
   }
 
   /** Pause : SIGSTOP du groupe (E5). La reprise envoie SIGCONT. */

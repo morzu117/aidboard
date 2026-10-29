@@ -10,6 +10,7 @@ import {
   realpathSync,
   renameSync,
   rmSync,
+  statSync,
   symlinkSync,
 } from 'node:fs';
 import { join } from 'node:path';
@@ -71,6 +72,19 @@ export function currentLaunch(): Launch {
   return { execPath: process.execPath, entry: realpathSync(process.argv[1] ?? '') };
 }
 
+/** Au-delà, `daemon.log` est mis de côté en `daemon.log.1` au lancement suivant : un seul ancien journal gardé. */
+export const DAEMON_LOG_MAX = 10 * 1024 * 1024;
+
+/** À appeler avant d'ouvrir `daemon.log` pour un nouveau daemon : le fichier n'est jamais tronqué en cours d'écriture. */
+export function rotateDaemonLog(home: string, max = DAEMON_LOG_MAX): void {
+  const file = join(home, 'daemon.log');
+  try {
+    if (statSync(file).size > max) renameSync(file, `${file}.1`);
+  } catch {
+    // pas encore de journal : rien à mettre de côté
+  }
+}
+
 /**
  * Processus détaché, indépendant du daemon courant : attend que `pid` meure puis relance
  * `launch.entry daemon` avec `launch.execPath` — jamais `process.execPath` implicite : après
@@ -92,6 +106,8 @@ export function spawnRespawnWatcher(pid: number, launch: Launch, home: string): 
     }
     const { spawn } = require('node:child_process');
     const { openSync, closeSync } = require('node:fs');
+    // rotateDaemonLog, recopiée : ce code tourne en \`node -e\`, hors du bundle
+    try { const f = ${JSON.stringify(home)} + '/daemon.log'; if (require('node:fs').statSync(f).size > ${DAEMON_LOG_MAX}) require('node:fs').renameSync(f, f + '.1'); } catch {}
     const log = openSync(${JSON.stringify(home)} + '/daemon.log', 'a', 0o600);
     const child = spawn(${JSON.stringify(launch.execPath)}, [${JSON.stringify(launch.entry)}, 'daemon'], {
       detached: true,

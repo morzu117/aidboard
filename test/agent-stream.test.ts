@@ -127,6 +127,31 @@ test('demande de permission : statut needs_input + pending, answer(yes) → appr
   expect(c!.t.d.agents.screen(agent.id, 6)).toContain('fait');
 });
 
+test('deux permissions dans le même tour : la seconde attend la première au lieu de l’écraser, puis s’affiche', async () => {
+  const { agent } = await spawnStream('claude');
+  await waitFor(() => row(agent.id).session_id === agent.sessionId, 5000, 'session claude');
+
+  c!.t.d.agents.input(agent.id, 'deux permissions');
+  await waitFor(
+    () => messages(agent.id, 'request').length === 2,
+    5000,
+    'les deux demandes de permission',
+  );
+  const first = pendingOf(agent.id)!;
+  expect(first.question).toMatch(/^Read/);
+  expect(row(agent.id).status).toBe('needs_input');
+
+  c!.t.d.agents.answer(agent.id, first.id, 'yes');
+  const second = pendingOf(agent.id)!;
+  expect(second.question).toMatch(/^Bash/);
+  expect(row(agent.id).status).toBe('needs_input');
+
+  c!.t.d.agents.answer(agent.id, second.id, 'always');
+  await waitFor(() => row(agent.id).status === 'idle', 5000, 'fin du tour');
+  expect(messages(agent.id, 'tool_end')).toHaveLength(2);
+  expect(c!.t.d.agents.screen(agent.id, 6)).toContain('les deux faits');
+});
+
 test('interrupt : tour terminé, statut idle ; setPaused → 409 ; interrupt sur un agent PTY → 409', async () => {
   const { agent } = await spawnStream('claude');
   await waitFor(() => row(agent.id).session_id === agent.sessionId, 5000, 'session claude');
