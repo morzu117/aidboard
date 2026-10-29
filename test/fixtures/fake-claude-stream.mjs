@@ -109,6 +109,59 @@ async function handleTurn(text) {
     return;
   }
 
+  // Deux outils dans la même réponse (Read puis Bash) : claude envoie les deux can_use_tool sans attendre.
+  if (text === 'deux permissions') {
+    const tools = [
+      { name: 'Read', input: { file_path: '/tmp/x' } },
+      { name: 'Bash', input: { command: 'echo hi' } },
+    ].map((t) => ({ ...t, requestId: `req-${++reqCounter}`, toolUseId: `tool-${reqCounter}` }));
+    const responses = tools.map((t) => {
+      emit({
+        type: 'assistant',
+        message: {
+          role: 'assistant',
+          content: [{ type: 'tool_use', id: t.toolUseId, name: t.name, input: t.input }],
+        },
+      });
+      const response = new Promise((resolve) => pendingControl.set(t.requestId, resolve));
+      emit({
+        type: 'control_request',
+        request_id: t.requestId,
+        request: { subtype: 'can_use_tool', tool_name: t.name, input: t.input },
+      });
+      return response;
+    });
+    const answered = await Promise.all(responses);
+    tools.forEach((t, i) =>
+      emit({
+        type: 'user',
+        message: {
+          role: 'user',
+          content: [
+            {
+              type: 'tool_result',
+              tool_use_id: t.toolUseId,
+              content: answered[i].behavior === 'allow' ? 'ok' : 'refusé',
+              is_error: answered[i].behavior !== 'allow',
+            },
+          ],
+        },
+      }),
+    );
+    emit({
+      type: 'assistant',
+      message: { role: 'assistant', content: [{ type: 'text', text: 'les deux faits' }] },
+    });
+    emit({
+      type: 'result',
+      subtype: 'success',
+      session_id: sessionId,
+      total_cost_usd: 0.001,
+      duration_ms: 10,
+    });
+    return;
+  }
+
   emit({
     type: 'assistant',
     message: { role: 'assistant', content: [{ type: 'text', text: `echo: ${text}` }] },
