@@ -5,6 +5,7 @@ import { afterEach, expect, test } from 'vitest';
 import { buildClaudeArgs, ClaudeDriver } from '../src/daemon/conversation/claude.js';
 import type { ConversationEvent } from '../src/daemon/conversation/driver.js';
 import { agentEnv } from '../src/daemon/pty/spawn.js';
+import type { AgentSettings } from '../src/shared/agentSettings.js';
 import type { PendingRequest } from '../src/shared/model.js';
 import { waitFor } from './helpers/daemon.js';
 
@@ -25,7 +26,7 @@ afterEach(async () => {
   driver = undefined;
 });
 
-function start(opts: { sessionId: string; resume?: boolean }) {
+function start(opts: { sessionId: string; resume?: boolean; settings?: AgentSettings }) {
   const events: ConversationEvent[] = [];
   driver = new ClaudeDriver({
     bin: FAKE_CLAUDE,
@@ -33,6 +34,7 @@ function start(opts: { sessionId: string; resume?: boolean }) {
     env: agentEnv(process.env, [], {}),
     sessionId: opts.sessionId,
     resume: opts.resume ?? false,
+    settings: opts.settings,
   });
   driver.onEvent((e) => events.push(e));
   driver.start();
@@ -204,4 +206,47 @@ test('double start() lève une erreur', () => {
   const sid = randomUUID();
   const { driver: d } = start({ sessionId: sid });
   expect(() => d.start()).toThrow();
+});
+
+const reglagesVus = (events: ConversationEvent[]) => {
+  const m = events.findLast(
+    (e) => e.type === 'message' && e.role === 'assistant' && e.text.startsWith('echo: reglages '),
+  ) as Extract<ConversationEvent, { type: 'message' }> | undefined;
+  return m ? JSON.parse(m.text.slice('echo: reglages '.length)) : undefined;
+};
+
+test('buildClaudeArgs (D67) : mode, modèle, effort et dossier des pièces jointes au lancement', () => {
+  const base = { bin: 'claude', cwd: '/w', env: {}, sessionId: 's1', resume: false };
+  expect(buildClaudeArgs(base)).not.toContain('--permission-mode');
+  expect(
+    buildClaudeArgs({ ...base, settings: { mode: 'default', model: null, effort: null } }),
+  ).not.toContain('--permission-mode');
+  const args = buildClaudeArgs({
+    ...base,
+    settings: { mode: 'auto', model: 'opus', effort: 'high' },
+    attachmentsDir: '/aid/attachments/ag_1',
+  });
+  expect(args.join(' ')).toContain(
+    '--permission-mode auto --model opus --effort high --add-dir /aid/attachments/ag_1',
+  );
+});
+
+test('réglages à chaud (D68) : configure() change mode, modèle et effort sans relancer', async () => {
+  const { driver: d, events } = start({
+    sessionId: randomUUID(),
+    settings: { mode: 'auto', model: 'opus', effort: null },
+  });
+  d.send('reglages');
+  await waitFor(() => reglagesVus(events) !== undefined, 5000, 'réglages du lancement');
+  expect(reglagesVus(events)).toEqual({ mode: 'auto', model: 'opus', effort: null });
+
+  d.configure({ mode: 'plan', model: null, effort: 'max' });
+  const before = events.length;
+  d.send('reglages');
+  await waitFor(
+    () => events.length > before && reglagesVus(events.slice(before)) !== undefined,
+    5000,
+    'réglages changés',
+  );
+  expect(reglagesVus(events.slice(before))).toEqual({ mode: 'plan', model: null, effort: 'max' });
 });

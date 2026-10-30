@@ -1,4 +1,9 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
+import {
+  type AgentSettings,
+  DEFAULT_SETTINGS,
+  type ModelOption,
+} from '../../shared/agentSettings.js';
 import type { PendingOption, PendingRequest } from '../../shared/model.js';
 import type { ConversationDriver, ConversationDriverOptions, ConversationEvent } from './driver.js';
 
@@ -102,10 +107,13 @@ export class CodexDriver implements ConversationDriver {
   private queue: string[] = [];
   private activeTurnId: string | null = null;
   private interruptRequested = false;
+  private settings: AgentSettings;
+  private models: ModelOption[] = [];
 
   constructor(opts: CodexDriverOptions) {
     this.opts = opts;
     this.threadId = opts.sessionId;
+    this.settings = opts.settings ?? DEFAULT_SETTINGS;
   }
 
   get sessionId(): string {
@@ -168,6 +176,7 @@ export class CodexDriver implements ConversationDriver {
         if (thread && typeof thread.id === 'string') this.threadId = thread.id;
       }
       this.emit({ type: 'session', sessionId: this.threadId });
+      this.loadCatalog();
       this.advanceQueue();
     } catch (err) {
       if (this.exited) return;
@@ -411,7 +420,11 @@ export class CodexDriver implements ConversationDriver {
   private startTurn(text: string): void {
     this.phase = 'turn';
     this.interruptRequested = false;
-    this.sendRequest('turn/start', { threadId: this.threadId, input: [{ type: 'text', text }] })
+    this.sendRequest('turn/start', {
+      threadId: this.threadId,
+      input: [{ type: 'text', text }],
+      ...this.turnSettings(),
+    })
       .then((result) => {
         if (this.exited) return;
         const turn = (result as { turn?: { id?: unknown } } | undefined)?.turn;
@@ -423,6 +436,49 @@ export class CodexDriver implements ConversationDriver {
         this.emit({ type: 'turn_end', ok: false, error: errorMessageOf(err) });
         this.advanceQueue();
       });
+  }
+
+  /** D68 : `turn/start` porte le réglage courant, valable pour ce tour et les suivants. */
+  private turnSettings(): Record<string, unknown> {
+    const s = this.settings;
+    // jamais le `isDefault` du catalogue : il passerait devant le modèle de ~/.codex/config.toml
+    return {
+      approvalPolicy: s.mode === 'auto' ? 'never' : (this.opts.approvalPolicy ?? 'on-request'),
+      ...(s.model && { model: s.model }),
+      ...(s.effort && { effort: s.effort }),
+    };
+  }
+
+  /** D71 : catalogue annoncé par `model/list` ; une CLI qui ne répond pas laisse « Par défaut » seul. */
+  private loadCatalog(): void {
+    this.sendRequest('model/list', {})
+      .then((result) => {
+        const data = (result as { data?: unknown } | undefined)?.data;
+        if (!Array.isArray(data)) return;
+        const visible = (data as Record<string, unknown>[]).filter(
+          (m) => m && typeof m.id === 'string' && m.hidden !== true,
+        );
+        this.models = visible.map((m) => ({
+          id: m.id as string,
+          label: typeof m.displayName === 'string' ? m.displayName : (m.id as string),
+          efforts: Array.isArray(m.supportedReasoningEfforts)
+            ? (m.supportedReasoningEfforts as { reasoningEffort?: unknown }[])
+                .map((e) => e.reasoningEffort)
+                .filter((e): e is string => typeof e === 'string')
+            : [],
+        }));
+      })
+      .catch(() => {
+        // pas de `model/list` sur cette version : rien à proposer de plus que le défaut
+      });
+  }
+
+  catalog(): ModelOption[] {
+    return this.models;
+  }
+
+  configure(settings: AgentSettings): void {
+    this.settings = settings;
   }
 
   send(text: string): void {

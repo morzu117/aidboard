@@ -291,8 +291,37 @@ rl.on('line', (line) => {
     return;
   }
 
+  // chantier 16 (D71) : un modèle visible par défaut, un modèle caché que le pilote doit écarter.
+  if (msg.method === 'model/list') {
+    const efforts = [
+      { reasoningEffort: 'low', description: '' },
+      { reasoningEffort: 'high', description: '' },
+    ];
+    const model = (id, hidden) => ({
+      id,
+      model: id,
+      displayName: id.toUpperCase(),
+      description: '',
+      hidden,
+      isDefault: !hidden,
+      defaultReasoningEffort: 'low',
+      supportedReasoningEfforts: efforts,
+    });
+    emit({
+      id: msg.id,
+      result: { data: [model('gpt-fake', false), model('gpt-cache', true)], nextCursor: null },
+    });
+    return;
+  }
+
   if (msg.method === 'turn/start') {
     const text = msg.params?.input?.[0]?.text;
+    if (text === 'reglages') {
+      const { approvalPolicy, model, effort } = msg.params;
+      const vus = JSON.stringify({ approvalPolicy, model, effort });
+      void runTurn(msg.id, msg.params.threadId, `reglages ${vus}`);
+      return;
+    }
     if (text === 'crash') {
       process.kill(process.pid, 'SIGKILL');
       return;

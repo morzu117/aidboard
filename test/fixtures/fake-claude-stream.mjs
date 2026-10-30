@@ -11,6 +11,12 @@ const argAfter = (flag) => {
 };
 const resume = args.includes('--resume');
 const sessionId = resume ? argAfter('--resume') : argAfter('--session-id');
+// Réglages (chantier 16) : ceux du lancement, puis ceux des `control_request` reçus ; « reglages » les renvoie.
+const settings = {
+  mode: argAfter('--permission-mode') ?? 'default',
+  model: argAfter('--model') ?? null,
+  effort: argAfter('--effort') ?? null,
+};
 
 const emit = (obj) => process.stdout.write(JSON.stringify(obj) + '\n');
 
@@ -32,6 +38,7 @@ async function handleTurn(text) {
     process.kill(process.pid, 'SIGKILL');
     return;
   }
+  if (text === 'reglages') text = `reglages ${JSON.stringify(settings)}`;
 
   emit({ type: 'system', subtype: 'init', session_id: sessionId, cwd: process.cwd() });
 
@@ -190,6 +197,18 @@ rl.on('line', (line) => {
       pendingControl.delete(msg.response.request_id);
       resolve(msg.response.response);
     }
+    return;
+  }
+  const reglage = msg.type === 'control_request' ? msg.request : undefined;
+  if (['set_permission_mode', 'set_model', 'apply_flag_settings'].includes(reglage?.subtype)) {
+    if (reglage.subtype === 'set_permission_mode') settings.mode = reglage.mode;
+    if (reglage.subtype === 'set_model') settings.model = reglage.model ?? null;
+    if (reglage.subtype === 'apply_flag_settings')
+      settings.effort = reglage.settings?.effortLevel ?? null;
+    emit({
+      type: 'control_response',
+      response: { subtype: 'success', request_id: msg.request_id },
+    });
     return;
   }
   if (msg.type === 'control_request' && msg.request?.subtype === 'interrupt') {
