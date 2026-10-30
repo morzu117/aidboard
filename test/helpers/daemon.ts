@@ -1,6 +1,6 @@
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { type DaemonHandle, startDaemon } from '../../src/daemon/main.js';
 import type { AidConfig } from '../../src/daemon/config.js';
 import type { Db } from '../../src/daemon/db.js';
@@ -8,6 +8,10 @@ import type { EventStore } from '../../src/daemon/events/store.js';
 import type { Embedder } from '../../src/daemon/memory/embed.js';
 import type { ChatModel } from '../../src/daemon/memory/maintain.js';
 import type { IndexEngine } from '../../src/shared/structural.js';
+import type { TransportOptions } from '../../src/daemon/remote/transport.js';
+
+/** Chantier 17 (D79) : le faux ssh, jamais le vrai — un serveur `vps` de test n'ouvre aucune connexion. */
+export const FAKE_SSH = resolve(__dirname, '../fixtures/fake-ssh.sh');
 
 export interface TestDaemon {
   d: DaemonHandle;
@@ -24,6 +28,8 @@ export async function startTestDaemon(
     codegraphBin?: string;
     structuralEngine?: IndexEngine;
     config?: Partial<AidConfig>;
+    /** Transport distant : faux ssh par défaut, HOME distant = le AID_HOME temporaire. */
+    remote?: TransportOptions;
     memory?: {
       embedder?: Embedder;
       backoffMs?: number[];
@@ -55,6 +61,10 @@ export async function startTestDaemon(
       ...extra.config,
     },
     checkUpdates: false,
+    remote: extra.remote ?? {
+      ssh: FAKE_SSH,
+      env: { ...process.env, FAKE_SSH_HOME: home },
+    },
   });
   const headers = { host: `127.0.0.1:${d.port}`, authorization: `Bearer ${d.auth.adminToken}` };
   return { d, home, headers, db: d.db, store: d.store };

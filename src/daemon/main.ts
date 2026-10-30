@@ -40,6 +40,7 @@ import { UpdateWatcher, type WatchStatus } from './updateWatcher.js';
 import { installMode } from './install.js';
 import { readVersion } from '../cli/version.js';
 import type { IndexEngine } from '../shared/structural.js';
+import type { TransportOptions } from './remote/transport.js';
 
 export class AidPortInUse extends Error {
   constructor(port: number) {
@@ -76,6 +77,8 @@ export async function startDaemon(
     updateError?: () => string | null;
     /** `git ls-remote origin` en tâche de fond ; coupé dans les tests, pas de réseau à chaque daemon. */
     checkUpdates?: boolean;
+    /** Chantier 17 : `ssh` et environnement du transport distant ; les tests passent un faux ssh (D79). */
+    remote?: TransportOptions;
     // tests : un Embedder/ChatModel déterministe, des délais courts, un rythme d'entretien rapide
     memory?: {
       embedder?: Embedder;
@@ -243,6 +246,7 @@ export async function startDaemon(
       updateError: opts.updateError,
       install: () => install,
       devOrigin,
+      remote: opts.remote,
       logger: opts.logger,
     });
     try {

@@ -280,3 +280,40 @@ export interface Server {
   createdAt: string;
   updatedAt: string;
 }
+
+/** Chantier 17 (S.3) : état de connexion d'un serveur, tenu en mémoire par le daemon (§11.1, pastille d'état). */
+export type ServerState = 'unknown' | 'connecting' | 'connected' | 'unreachable' | 'error';
+
+export interface ServerStatus {
+  serverId: string;
+  state: ServerState;
+  /** Durée d'un aller-retour `ssh` complet (connexion comprise), mesurée au dernier contrôle. */
+  latencyMs: number | null;
+  checkedAt: string | null;
+  /** Cause lisible d'un état `unreachable` ou `error`. */
+  reason: string | null;
+}
+
+export type ServerTestStepId = 'command' | 'shell' | 'workdir' | 'agents' | 'session';
+export type ServerTestStepState = 'pending' | 'running' | 'ok' | 'failed' | 'skipped';
+
+export interface ServerTestStep {
+  id: ServerTestStepId;
+  label: string;
+  state: ServerTestStepState;
+  durationMs: number | null;
+  detail: string | null;
+}
+
+/** Test de connexion (§11.2, colonne de droite) : étapes séquentielles, conclusion, sortie brute dépliable. */
+export interface ServerTest {
+  serverId: string;
+  startedAt: string;
+  finishedAt: string | null;
+  /** `null` tant que le test tourne. */
+  ok: boolean | null;
+  /** Message de l'étape en échec. */
+  error: string | null;
+  steps: ServerTestStep[];
+  raw: string;
+}
