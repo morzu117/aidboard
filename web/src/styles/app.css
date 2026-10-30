@@ -791,6 +791,48 @@ body {
 .composer-trombone:hover {
   color: var(--text);
 }
+.composer-pieces {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-1);
+}
+.composer-piece {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1);
+  max-width: 100%;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: var(--r-s);
+  padding: 2px 4px 2px 8px;
+  color: var(--text-2);
+  font-size: var(--fs-s);
+}
+.composer-piece-nom {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.composer-piece-retirer {
+  background: transparent;
+  border: 0;
+  color: var(--muted);
+  padding: 0 4px;
+  cursor: pointer;
+}
+.composer-piece-retirer:hover {
+  color: var(--text);
+}
+.message-pieces {
+  list-style: none;
+  margin: var(--sp-1) 0 0;
+  padding: 0;
+  font-size: var(--fs-s);
+  color: var(--text-3);
+}
 .composer-menu {
   position: absolute;
   bottom: calc(100% + var(--sp-2));

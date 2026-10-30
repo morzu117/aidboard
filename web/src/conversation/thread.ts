@@ -1,4 +1,4 @@
-import type { AgentStreamItem } from '../../../src/shared/conversation.js';
+import type { AgentStreamItem, AttachmentInfo } from '../../../src/shared/conversation.js';
 import type { PendingRequest } from '../../../src/shared/model.js';
 
 export interface ToolCall {
@@ -19,6 +19,7 @@ export type Block =
       role: 'user' | 'assistant';
       text: string;
       marked?: boolean;
+      attachments?: AttachmentInfo[];
     }
   | { kind: 'tools'; seq: number; calls: ToolCall[] }
   | { kind: 'decision'; seq: number; request: PendingRequest }
@@ -72,6 +73,7 @@ export function buildTurns(items: AgentStreamItem[]): Turn[] {
                 role: 'user',
                 text: event.text,
                 marked: item.marked === true,
+                ...(event.attachments?.length ? { attachments: event.attachments } : {}),
               },
             ],
           };

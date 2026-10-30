@@ -635,3 +635,93 @@ test('Échap ferme le menu de réglage', async () => {
   await userEvent.keyboard('{Escape}');
   expect(screen.queryByRole('menu')).toBeNull();
 });
+
+const fichier = (name: string, type: string, contenu = 'abc') =>
+  new File([contenu], name, { type });
+
+test('pièces jointes (16.6) : le trombone ajoute des puces retirables, l’envoi porte nom, type et base64', async () => {
+  const { calls } = mountReglages();
+  const input = document.querySelector<HTMLInputElement>('[data-node$=".composer.fichiers"]')!;
+  expect(screen.getByRole('button', { name: 'Joindre des fichiers' })).toBeTruthy();
+  await userEvent.upload(input, [
+    fichier('capture.png', 'image/png', 'png!'),
+    fichier('notes.txt', 'text/plain', 'salut'),
+    fichier('brut', ''),
+  ]);
+  const liste = screen.getByRole('list', { name: 'Pièces jointes' });
+  expect(liste.textContent).toContain('capture.png');
+  await userEvent.click(screen.getByRole('button', { name: 'Retirer brut' }));
+  expect(liste.textContent).not.toContain('brut');
+
+  // texte vide permis dès qu'une pièce est jointe
+  const envoyer = screen.getByRole('button', { name: 'Envoyer' }) as HTMLButtonElement;
+  expect(envoyer.disabled).toBe(false);
+  await userEvent.click(envoyer);
+  await waitFor(() =>
+    expect(calls.find((c) => c.method === 'POST' && c.url.endsWith('/input'))?.body).toEqual({
+      text: '',
+      attachments: [
+        { name: 'capture.png', type: 'image/png', data: btoa('png!') },
+        { name: 'notes.txt', type: 'text/plain', data: btoa('salut') },
+      ],
+    }),
+  );
+  await waitFor(() => expect(screen.queryByRole('list', { name: 'Pièces jointes' })).toBeNull());
+});
+
+test('pièces jointes : collage d’image et glisser-déposer ; bornes de nombre et de taille', async () => {
+  mountReglages();
+  const champ = screen.getByRole('textbox');
+  fireEvent.paste(champ, {
+    clipboardData: { files: [fichier('colle.png', 'image/png')], getData: () => '' },
+  });
+  expect(screen.getByRole('list', { name: 'Pièces jointes' }).textContent).toContain('colle.png');
+
+  const zone = document.querySelector('[data-node$=".composer"]')!;
+  fireEvent.drop(zone, {
+    dataTransfer: { files: [fichier('a.txt', 'text/plain'), fichier('b.txt', 'text/plain')] },
+  });
+  expect(screen.getAllByRole('listitem')).toHaveLength(3);
+
+  fireEvent.drop(zone, {
+    dataTransfer: {
+      files: [fichier('c', 'text/plain'), fichier('d', 'text/plain'), fichier('e', 'text/plain')],
+    },
+  });
+  expect((await screen.findByRole('alert')).textContent).toContain('5 pièces jointes au plus');
+  expect(screen.getAllByRole('listitem')).toHaveLength(3);
+
+  const gros = fichier('gros.bin', 'application/octet-stream');
+  Object.defineProperty(gros, 'size', { value: 10 * 1024 * 1024 + 1 });
+  fireEvent.drop(zone, { dataTransfer: { files: [gros] } });
+  expect((await screen.findByRole('alert')).textContent).toContain('gros.bin dépasse 10 Mio');
+});
+
+test('pièces jointes : pas de trombone pour un agent PTY', () => {
+  mount(agent({ id: 'ag_1', kind: 'claude', transport: 'pty', status: 'idle' }));
+  expect(screen.queryByRole('button', { name: 'Joindre des fichiers' })).toBeNull();
+});
+
+test('bulle utilisateur : liste les noms des pièces jointes', async () => {
+  mount(streamAgent());
+  const ws = FakeWs.all.at(-1)!;
+  ws.onopen?.();
+  ws.text({
+    t: 'history',
+    truncated: false,
+    items: [
+      {
+        seq: 1,
+        at: '2026-10-30T09:00:00.000Z',
+        event: {
+          type: 'message',
+          role: 'user',
+          text: 'regarde',
+          attachments: [{ name: 'capture.png', type: 'image/png', size: 4 }],
+        },
+      },
+    ],
+  });
+  await screen.findByText('regarde');
+  expect(screen.getByRole('list', { name: 'Pièces jointes' }).textContent).toContain('capture.png');
+});

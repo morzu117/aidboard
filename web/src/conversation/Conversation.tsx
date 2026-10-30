@@ -323,6 +323,7 @@ export function Conversation({
                         at={b.at}
                         seq={b.seq}
                         marked={b.marked}
+                        attachments={b.attachments}
                         onToggleMark={(seq, m) => void toggleMark(seq, m)}
                         dataNode={bn}
                       />
