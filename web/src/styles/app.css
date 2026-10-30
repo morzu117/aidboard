@@ -629,6 +629,47 @@ body {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
+/* texte d'agent en markdown : les retours à la ligne simples d'un paragraphe restent des retours à la ligne */
+.message-agent-texte.md-message {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  white-space: normal;
+}
+.md-message .md-p,
+.md-message .md-texte {
+  font-size: inherit;
+  color: inherit;
+  white-space: pre-line;
+}
+.carte-md {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  padding: var(--sp-3) var(--sp-4);
+  border: 1px solid var(--line);
+  border-radius: var(--r-l);
+  background: var(--surface-1);
+}
+.carte-md--question {
+  border-color: var(--s-attente-line);
+  background: var(--s-attente-bg);
+}
+.carte-md-titre .md-p {
+  font-weight: var(--fw-sb);
+  color: var(--text);
+}
+.md-question {
+  padding-left: var(--sp-3);
+  border-left: 2px solid var(--acc);
+}
+.message-agent-question {
+  padding: 1px var(--sp-2);
+  border: 1px solid var(--s-attente-line);
+  border-radius: var(--r-s);
+  background: var(--s-attente-bg);
+  font-weight: var(--fw-m);
+}
 .outil-groupe {
   border: 1px solid var(--line);
   border-radius: var(--r-l);
