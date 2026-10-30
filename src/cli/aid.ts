@@ -205,6 +205,16 @@ async function main(): Promise<number> {
           relaunch();
         })();
       };
+      // Un arrêt par signal était muet : le daemon s'arrêtait à chaque fermeture d'AID.app sans une
+      // ligne dans daemon.log (constaté le 2026-10-29). Posé avant `stop`, il passe en premier ;
+      // Node ne dit pas qui envoie le signal, mais l'heure et le signal orientent l'enquête.
+      for (const signal of ['SIGINT', 'SIGTERM'] as const)
+        process.on(signal, () =>
+          console.error(`${new Date().toISOString()} signal ${signal} reçu : arrêt du daemon`),
+        );
+      process.on('exit', (code) =>
+        console.error(`${new Date().toISOString()} daemon arrêté (code ${code})`),
+      );
       process.on('SIGINT', stop);
       process.on('SIGTERM', stop);
       return -1; // reste en vie
