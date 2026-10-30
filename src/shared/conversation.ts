@@ -1,4 +1,4 @@
-import type { PendingRequest } from './model.js';
+import type { PendingOption, PendingRequest } from './model.js';
 
 /** Pièce jointe d'un message utilisateur (D70) : ce que le fil affiche, jamais le contenu. */
 export interface AttachmentInfo {
@@ -22,6 +22,8 @@ export type ConversationEvent =
   | { type: 'connection_lost'; at: string }
   | { type: 'connection_resumed'; at: string; afterMs: number; sessionFound: boolean }
   | { type: 'resume_failed'; reason: string }
+  // Chantier 17 (R.5) : la réponse donnée à une demande ; `auto` : par une règle du serveur, sans l'opérateur.
+  | { type: 'request_answered'; requestId: string; answer: PendingOption['answer']; auto?: boolean }
   | { type: 'request_cancelled'; requestId: string };
 
 /** Une ligne `agent_messages` telle que rendue par `/ws/agent/:agentId` (D65). */

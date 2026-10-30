@@ -429,3 +429,73 @@ Reprises du brief §11.6, plus celles nées de l'état des lieux :
 - **À reprendre** : un `fake-line-agent.sh` orphelin (parent 1) a été trouvé après les tests, lancé
   ~1 h 35 plus tôt, donc par un test du relais (R.2/R.3) et non de R.4. Arrêté à la main ; la fuite n'a
   pas été reproduite (aucun process restant après les trois gates de R.4).
+- **R.5 — observation préalable (D77), 2026-10-30.** Sur le VPS (alias `vps`, lecture seule, dossier
+  jetable, rien installé) : `claude` n'est dans le PATH **que dans un bash interactif** (mise activé dans
+  `.bashrc`, que le `.bashrc` Debian quitte d'entrée hors interactif) — `bash -lc` ne le trouve pas, et
+  `bash -ic` sans tty bruite stderr ; sa session OAuth y est expirée ; `codex` n'y est pas installé.
+  Observation faite **en local** à la place (choix de l'opérateur), mêmes versions de CLI, dossier jetable,
+  toutes les demandes refusées :
+  - **claude 2.1.308** : `--settings '{"permissions":{"ask":["Bash(rm:*)","Bash(sudo:*)"]}}'` force la
+    demande en `auto` comme en `acceptEdits` — `control_request` `can_use_tool`, `tool_name: "Bash"`,
+    `input: {command, description}`, `decision_reason_type: "rule"`, `decision_reason_rule_source:
+    "flagSettings"`, `tool_use_id`. Rattrape `sudo -n true` et une commande composée (`echo debut && rm -f x`).
+    Sans la règle, `rm` passe sans demande en `auto`. Une demande ordinaire (mode `default`) n'a pas de
+    `decision_reason_type` et porte `blocked_path` / `permission_suggestions`. Refus :
+    `control_response` `behavior: "deny"` ; le `result` porte alors `permission_denials` ;
+  - **codex 0.157.0** (`app-server`) : `approvalPolicy: "untrusted"` + `sandbox: "workspace-write"` soumet
+    **toute** commande, `ls` compris. `item/commandExecution/requestApproval` : `kind: "command"`,
+    `command` **enveloppée** (`/bin/zsh -lc 'rm -f …'`), `cwd`, `commandActions: [{type, command}]` (la
+    commande telle qu'écrite), `proposedExecpolicyAmendment`, `availableDecisions: ["accept",
+    {acceptWithExecpolicyAmendment}, "cancel"]`. `decline` reste accepté (item `declined`).
+    **`acceptForSession` n'est pas dans `availableDecisions`** : le « Toujours autoriser » d'un agent codex
+    **local** (`CodexDriver.answer`, antérieur au chantier) l'envoie — non vérifié s'il est refusé, à
+    signaler ;
+  - non observé : la réaction de claude à une interruption pendant une demande (cas du rattachement
+    `needs_input` de R.4) — reste à observer.
+- **R.5**, deux reviews comprises — `src/daemon/remote/confirm.ts` (préfixes destructifs, règles `ask` de
+  claude, tri `isDestructive`, motif de règle), insertions dans `RemoteAgentManager` (`screen`, `addRule`,
+  événement `request_answered`), champs facultatifs `command` / `byRule` / `confirm` de `PendingRequest`
+  (remplis par `ClaudeDriver` et `CodexDriver`, sans effet sur les agents locaux), `ConfirmCard` + styles
+  (maquette `ServerChat`). Décisions prises en cours de point :
+  - **fixé au lancement** : `confirmDestructive` est lu quand l'agent est (re)lancé ; le changer ne vaut
+    qu'à la relance suivante ;
+  - claude : une règle `ask` par préfixe (`Bash(<préfixe>:*)`) ; une demande forcée par **nos** règles
+    (`decision_reason_rule_source: "flagSettings"`) ou dont la commande est destructive devient une carte de
+    confirmation. Une règle `ask` de l'utilisateur distant reste une carte ordinaire ;
+  - codex : lancé en `untrusted`. **En mode auto**, le daemon accepte seul une commande non destructive (le
+    fil en garde l'exécution, `tool_start`) ; une demande sans commande (fichiers) n'est jamais acceptée
+    d'office. **En mode default**, tout est soumis — le non destructif en carte ordinaire (plus de demandes
+    qu'avant, assumé : accepter seul ferait passer une sortie de sandbox sans demande) ;
+  - commande montrée et règle comparée **telles qu'exécutées** (codex : enveloppe `sh -lc '…'` ouverte, à
+    défaut `command` brute, les `commandActions` en dernier) ; une règle couvre la **commande exacte**
+    (espaces de bord retirés) à l'échelle du serveur, pas un préfixe ;
+  - tri du daemon **penché vers la demande** : analyse hors guillemets, mots-clés du shell, lanceurs
+    (`env`, `xargs`, `timeout`…), `sh -c` relu, shell lisant son entrée (`curl … | sh`) et code en ligne
+    (`python -c`) demandés par principe, options globales de git et docker, `find -delete` / `-exec` ;
+  - une demande couverte par une règle reste au fil (carte + `request_answered{auto: true}`) ; un échec de
+    lecture des règles ou de réponse présente la carte, rien ne passe en silence ;
+  - « Toujours autoriser » sur une carte de confirmation : règle écrite d'abord (`INSERT OR IGNORE`,
+    contrainte `UNIQUE`), puis la demande autorisée, puis celles **de la file** que la règle couvre. Sur une
+    carte ordinaire, comportement local inchangé ;
+  - règles appliquées **seulement** quand la confirmation est active sur le serveur ;
+  - deux lignes existantes modifiées (assumé) : l'import de `src/shared/conversation.ts` et les options du
+    pilote dans `mount` (`...confirmOpts`).
+- **Review R.5** : la première a relevé l'enveloppe codex non ouverte, l'acceptation d'office des demandes
+  sans commande, un tri contournable (mots-clés, guillemets, lanceurs, interpréteurs), l'ordre règle /
+  réponse, la file après « Toujours autoriser », la règle `ask` de l'utilisateur prise pour la nôtre ; la
+  seconde, une récursion exponentielle sur les substitutions (bloquant : un message de commit plein de
+  backticks gelait le daemon), l'ordre dans la boucle de file, les options de git et docker. Tous corrigés et
+  testés. Écartés : un `extraArgs` de `RemoteDriver` écrasé (il n'en passe pas) ; `bypassPermissions` (pas
+  proposé pour un serveur : `default`, `acceptEdits`, `auto`, `plan`).
+- **Limite connue (R.5)** : la liste est un garde-fou par préfixes, pas un bac à sable. Échappent : un
+  script (`bash deploy.sh`), `mv`, `sed -i`, une redirection qui écrase un fichier. **Côté claude en auto**,
+  seul ce que ses règles `ask` rattrapent lui est soumis : une forme que le tri du daemon jugerait
+  destructive mais que l'analyseur de claude ne relie pas au préfixe (`/usr/bin/rm`, `git -C d push`,
+  `bash -c 'rm …'`) passe sans demande — non observé sur le vrai claude, à vérifier. Codex en auto : une
+  modification de fichiers hors de l'espace de travail devient une carte (avant : jamais demandée).
+- **Gate pendant R.5** : `test/web/accueil.test.tsx:119` (« expected 'fix/x' to be 'feat/s' ») rouge sur
+  2 gates de suite avec le diff, vert seul (3/3 avec, 3/3 sur la base `2769a3b`), vert sur le gate de la
+  base et sur les 2 derniers gates avec le diff ; même échec déjà vu en R.3 et R.4, avant ce code. Antériorité
+  au chantier **non prouvée**. e2e : `e2e/nav-edition.spec.ts:45`, comme en R.4.
+- **À trancher par l'opérateur (VPS)** : claude introuvable hors shell interactif — le relais et la
+  détection échoueraient sur ce serveur tel quel.

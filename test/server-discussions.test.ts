@@ -527,3 +527,172 @@ test('/ws/server-agent : codex en veille après un redémarrage — même répon
   expect(c.find('history')).toHaveLength(1);
   expect(c.find('exit')[0]).toMatchObject({ reason: 'daemon_restart' });
 });
+
+// ---- R.5 (D77) : confirmations des commandes destructives
+
+async function reglerServeur(m: Monte, id: string, patch: Partial<Server>): Promise<void> {
+  const r = await m.req('PATCH', `/api/servers/${id}`, patch);
+  expect(r.statusCode).toBe(200);
+}
+
+/** Envoie une commande au faux agent, attend la carte : la vue de l'agent avec sa demande en cours. */
+async function carte(m: Monte, agentId: string, command: string): Promise<ServerAgentView> {
+  await envoyer(m, agentId, `commande: ${command}`);
+  await waitFor(() => ligne(m, agentId)?.status === 'needs_input', 15_000, `carte ${command}`);
+  const view = (await m.req('GET', `/api/server-agents/${agentId}`)).json<ServerAgentView>();
+  expect(view.pending).not.toBeNull();
+  return view;
+}
+
+async function repondre(m: Monte, view: ServerAgentView, answer: string): Promise<void> {
+  const r = await m.req('POST', `/api/server-agents/${view.id}/answer`, {
+    pendingId: view.pending!.id,
+    answer,
+  });
+  expect(r.statusCode).toBe(202);
+}
+
+const evenements = (m: Monte, agentId: string, type: string) =>
+  fil(m, agentId).filter((e) => (e as { type?: string }).type === type) as unknown as Record<
+    string,
+    unknown
+  >[];
+
+const CONFIRMATION = ['Autoriser', 'Refuser', 'Toujours autoriser sur ce serveur'];
+
+test('claude en auto : le destructif demande confirmation, « Toujours autoriser » écrit une règle du serveur', async () => {
+  const m = await daemon(serveur());
+  const s = await creerServeur(m);
+  await reglerServeur(m, s.id, { permissionMode: 'auto' });
+  const a = (await creerDiscussion(m, s.id)).agents[0]!;
+
+  // non destructif : l'agent en auto ne demande rien
+  await envoyer(m, a.id, 'commande: ls -la');
+  await waitFor(() => assistant(m, a.id, 'exécutée sans demande: ls -la') === 1, 15_000, 'ls');
+  await waitFor(() => ligne(m, a.id)?.status === 'idle', 15_000, 'idle');
+
+  // commande composée : la règle `ask` passée en `--settings` la rattrape, la carte porte la commande
+  const v1 = await carte(m, a.id, 'echo debut && rm -f x');
+  expect(v1.pending).toMatchObject({
+    command: 'echo debut && rm -f x',
+    byRule: true,
+    confirm: { server: 'vps-test' },
+  });
+  expect(v1.pending!.options.map((o) => o.label)).toEqual(CONFIRMATION);
+  await repondre(m, v1, 'no');
+  await waitFor(() => assistant(m, a.id, 'refusée: echo debut && rm -f x') === 1, 15_000, 'refus');
+  await waitFor(() => ligne(m, a.id)?.status === 'idle', 15_000, 'idle');
+
+  const v2 = await carte(m, a.id, 'sudo -n true');
+  await repondre(m, v2, 'always');
+  await waitFor(() => assistant(m, a.id, 'exécutée: sudo -n true') === 1, 15_000, 'toujours');
+  await waitFor(() => ligne(m, a.id)?.status === 'idle', 15_000, 'idle');
+  const regles = (await m.req('GET', `/api/servers/${s.id}`)).json<Server>().rules;
+  expect(regles.map((r) => r.pattern)).toEqual(['sudo -n true']);
+
+  // même commande : la règle répond seule, la carte reste au fil comme autorisée d'office
+  await envoyer(m, a.id, 'commande: sudo -n true');
+  await waitFor(() => assistant(m, a.id, 'exécutée: sudo -n true') === 2, 15_000, 'par règle');
+  await waitFor(() => ligne(m, a.id)?.status === 'idle', 15_000, 'idle');
+  expect(evenements(m, a.id, 'request_answered').map((e) => [e.answer, e.auto])).toEqual([
+    ['no', undefined],
+    ['always', undefined],
+    ['yes', true],
+  ]);
+  expect(evenements(m, a.id, 'request')).toHaveLength(3);
+
+  // la règle vaut pour la commande exacte, pas pour une voisine
+  const v3 = await carte(m, a.id, 'sudo true');
+  expect(v3.pending!.confirm).toEqual({ server: 'vps-test' });
+  await repondre(m, v3, 'yes');
+  await waitFor(() => assistant(m, a.id, 'exécutée: sudo true') === 1, 15_000, 'autorisée');
+});
+
+test('confirmation désactivée sur le serveur : claude en auto exécute le destructif sans demander', async () => {
+  const m = await daemon(serveur());
+  const s = await creerServeur(m);
+  await reglerServeur(m, s.id, { permissionMode: 'auto', confirmDestructive: false });
+  const a = (await creerDiscussion(m, s.id)).agents[0]!;
+  await envoyer(m, a.id, 'commande: rm -f x');
+  await waitFor(() => assistant(m, a.id, 'exécutée sans demande: rm -f x') === 1, 15_000, 'rm');
+  expect(evenements(m, a.id, 'request')).toHaveLength(0);
+});
+
+test('claude en default : une demande ordinaire reste une carte ordinaire', async () => {
+  const m = await daemon(serveur());
+  const s = await creerServeur(m);
+  const a = (await creerDiscussion(m, s.id)).agents[0]!;
+  const v = await carte(m, a.id, 'ls');
+  expect(v.pending!.confirm).toBeUndefined();
+  expect(v.pending!.command).toBe('ls');
+  expect(v.pending!.options.map((o) => o.answer)).toEqual(['yes', 'always', 'no']);
+  await repondre(m, v, 'yes');
+  await waitFor(() => assistant(m, a.id, 'exécutée: ls') === 1, 15_000, 'ls');
+  expect(m.t.db.prepare('SELECT COUNT(*) AS n FROM server_rules').get()).toEqual({ n: 0 });
+});
+
+test('codex en auto : lancé en untrusted, le non destructif passe seul, le destructif demande confirmation', async () => {
+  const m = await daemon(serveur());
+  const s = await creerServeur(m);
+  await reglerServeur(m, s.id, { permissionMode: 'auto' });
+  const a = (await creerDiscussion(m, s.id, 'codex')).agents[0]!;
+
+  await envoyer(m, a.id, 'commande: ls');
+  // soumise par codex (untrusted) puis acceptée par le daemon : rien au fil
+  await waitFor(() => assistant(m, a.id, 'exécutée: ls') === 1, 15_000, 'ls');
+  await waitFor(() => ligne(m, a.id)?.status === 'idle', 15_000, 'idle');
+  expect(evenements(m, a.id, 'request')).toHaveLength(0);
+
+  // la commande telle qu'écrite (`commandActions`), pas l'enveloppe `/bin/zsh -lc`
+  const v1 = await carte(m, a.id, 'rm -f x');
+  expect(v1.pending).toMatchObject({ command: 'rm -f x', confirm: { server: 'vps-test' } });
+  expect(v1.pending!.options.map((o) => o.label)).toEqual(CONFIRMATION);
+  await repondre(m, v1, 'always');
+  await waitFor(() => assistant(m, a.id, 'exécutée: rm -f x') === 1, 15_000, 'toujours');
+  await waitFor(() => ligne(m, a.id)?.status === 'idle', 15_000, 'idle');
+
+  await envoyer(m, a.id, 'commande: rm -f x');
+  await waitFor(() => assistant(m, a.id, 'exécutée: rm -f x') === 2, 15_000, 'par règle');
+  expect(evenements(m, a.id, 'request_answered').map((e) => [e.answer, e.auto])).toEqual([
+    ['always', undefined],
+    ['yes', true],
+  ]);
+
+  const v2 = await carte(m, a.id, 'git push --force');
+  await repondre(m, v2, 'no');
+  await waitFor(() => assistant(m, a.id, 'refusée: git push --force') === 1, 15_000, 'refus');
+});
+
+test('codex en default avec confirmation : untrusted soumet tout, le non destructif en carte ordinaire', async () => {
+  const m = await daemon(serveur());
+  const s = await creerServeur(m);
+  const a = (await creerDiscussion(m, s.id, 'codex')).agents[0]!;
+  const v = await carte(m, a.id, 'ls');
+  expect(v.pending!.confirm).toBeUndefined();
+  expect(v.pending!.command).toBe('ls');
+  await repondre(m, v, 'yes');
+  await waitFor(() => assistant(m, a.id, 'exécutée: ls') === 1, 15_000, 'ls');
+});
+
+test('« Toujours autoriser » répond aussi aux demandes en file que la nouvelle règle couvre', async () => {
+  const m = await daemon(serveur());
+  const s = await creerServeur(m);
+  await reglerServeur(m, s.id, { permissionMode: 'auto' });
+  const a = (await creerDiscussion(m, s.id)).agents[0]!;
+  await envoyer(m, a.id, 'commandes: rm -f x ;; rm -f x ;; rm -f y');
+  await waitFor(() => evenements(m, a.id, 'request').length === 3, 15_000, 'trois demandes');
+  const v = (await m.req('GET', `/api/server-agents/${a.id}`)).json<ServerAgentView>();
+  expect(v.pending!.command).toBe('rm -f x');
+  await repondre(m, v, 'always');
+  // la seconde `rm -f x` est passée par la règle ; reste `rm -f y`, en carte
+  await waitFor(() => evenements(m, a.id, 'request_answered').length === 2, 15_000, 'file');
+  const v2 = (await m.req('GET', `/api/server-agents/${a.id}`)).json<ServerAgentView>();
+  expect(v2.pending!.command).toBe('rm -f y');
+  expect(evenements(m, a.id, 'request_answered').map((e) => [e.answer, e.auto])).toEqual([
+    ['always', undefined],
+    ['yes', true],
+  ]);
+  await repondre(m, v2, 'no');
+  await waitFor(() => assistant(m, a.id, 'refusée: rm -f y') === 1, 15_000, 'fin');
+  expect(assistant(m, a.id, 'exécutée: rm -f x')).toBe(2);
+});

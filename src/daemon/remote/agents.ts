@@ -13,6 +13,7 @@ import { CodexDriver } from '../conversation/codex.js';
 import type { ConversationDriver, ConversationEvent } from '../conversation/driver.js';
 import type { Db } from '../db.js';
 import { AidHttpError } from '../errors.js';
+import { CONFIRM_OPTIONS, claudeConfirmSettings, isDestructive, rulePattern } from './confirm.js';
 import { RemoteDriver } from './driver.js';
 import { relayStop } from './relay.js';
 import { getServer } from './servers.js';
@@ -65,7 +66,15 @@ export interface LiveRemote {
   pending: PendingRequest | null;
   /** demandes arrivées pendant qu'une autre est en cours : présentées une à une */
   queued: PendingRequest[];
+  /** R.5 (D77) : confirmation des commandes destructives, fixée au lancement ; nulle si le serveur ne la demande pas */
+  confirm: Confirm | null;
   subscribe(cb: (ev: ConversationEvent) => void): () => void;
+}
+
+/** `autoApprove` : codex en mode auto, lancé en `untrusted` ; le daemon laisse passer ce qui n'est pas destructif. */
+interface Confirm {
+  server: string;
+  autoApprove: boolean;
 }
 
 export type ServerAgentView = ServerAgent & { pending: PendingRequest | null };
@@ -337,8 +346,45 @@ export class RemoteAgentManager {
       throw new AidHttpError(409, 'cette demande n’est plus en cours');
     const option = pending.options.find((o) => o.answer === answer);
     if (!option) throw new AidHttpError(422, 'réponse inconnue pour cette demande');
+    if (pending.confirm && pending.command && option.answer === 'always') {
+      // « Toujours autoriser sur ce serveur » : la règle d'abord (une écriture en échec n'a rien autorisé), puis
+      // cette demande, puis celles de la file que la règle couvre déjà
+      this.addRule(live, pending.command);
+      live.driver.answer(pendingId, 'yes');
+      this.record(live, { type: 'request_answered', requestId: pendingId, answer: 'always' });
+      const pattern = rulePattern(pending.command);
+      try {
+        for (const q of live.queued) {
+          if (!q.confirm || !q.command || rulePattern(q.command) !== pattern) continue;
+          // répondue d'abord, retirée ensuite : une réponse impossible la laisse en file, présentée plus tard
+          live.driver.answer(q.id, 'yes');
+          live.queued = live.queued.filter((r) => r !== q);
+          this.record(live, {
+            type: 'request_answered',
+            requestId: q.id,
+            answer: 'yes',
+            auto: true,
+          });
+        }
+      } catch {
+        // lien perdu : les demandes restantes suivent leur cours (annulées par le pilote, ou présentées)
+      }
+      this.nextPending(live);
+      return;
+    }
     live.driver.answer(pendingId, option.answer);
+    this.record(live, { type: 'request_answered', requestId: pendingId, answer: option.answer });
     this.nextPending(live);
+  }
+
+  private addRule(live: LiveRemote, command: string): void {
+    const server = this.serverOf(this.agentRow(live.id));
+    // déjà là (deux cartes pour la même commande) : la contrainte UNIQUE la garde une fois
+    this.deps.db
+      .prepare(
+        'INSERT OR IGNORE INTO server_rules (id, server_id, pattern, created_at) VALUES (?, ?, ?, ?)',
+      )
+      .run(`sr_${ulid()}`, server.id, rulePattern(command), new Date().toISOString());
   }
 
   private liveOr409(agentId: string): LiveRemote {
@@ -465,6 +511,16 @@ export class RemoteAgentManager {
       model: row.model,
       effort: row.effort,
     };
+    const confirm: Confirm | null = server.confirmDestructive
+      ? { server: server.name, autoApprove: row.kind === 'codex' && settings.mode === 'auto' }
+      : null;
+    // codex en auto passerait en `never` : plus rien ne serait demandé, destructif compris
+    if (confirm?.autoApprove) settings.mode = 'default';
+    const confirmOpts = !confirm
+      ? {}
+      : row.kind === 'claude'
+        ? { extraArgs: ['--settings', claudeConfirmSettings()] }
+        : { approvalPolicy: 'untrusted' };
     const driver = new RemoteDriver({
       server,
       transport: this.deps.transport,
@@ -476,7 +532,7 @@ export class RemoteAgentManager {
       delaysMs: this.deps.delaysMs,
       create: (c): ConversationDriver => {
         // `cwd` est celui du serveur ; l'environnement du daemon n'y part pas (D76)
-        const opts = { bin, cwd: discussion.cwd, env: {}, ...c };
+        const opts = { bin, cwd: discussion.cwd, env: {}, ...c, ...confirmOpts };
         return row.kind === 'claude' ? new ClaudeDriver(opts) : new CodexDriver(opts);
       },
     });
@@ -494,6 +550,7 @@ export class RemoteAgentManager {
       exit: null,
       pending: null,
       queued: [],
+      confirm,
       subscribe: (cb) => {
         const set = this.subscribers.get(row.id) ?? new Set();
         set.add(cb);
@@ -522,6 +579,13 @@ export class RemoteAgentManager {
   }
 
   private onEvent(live: LiveRemote, ev: ConversationEvent): void {
+    if (ev.type === 'request' && live.confirm && !ev.request.confirm) {
+      const screened = this.screen(live, live.confirm, ev.request);
+      if (screened !== ev.request) {
+        if (screened) this.onEvent(live, { type: 'request', request: screened });
+        return;
+      }
+    }
     if (ev.type !== 'thinking') this.record(live, ev);
     switch (ev.type) {
       case 'session':
@@ -555,6 +619,51 @@ export class RemoteAgentManager {
       default:
         break;
     }
+  }
+
+  /**
+   * R.5 (D77) : une demande destructive devient une carte de confirmation, ou passe seule si une règle du serveur
+   * la couvre (commande exacte). Rend la demande à présenter, ou `null` quand le daemon a déjà répondu.
+   */
+  private screen(
+    live: LiveRemote,
+    confirm: Confirm,
+    request: PendingRequest,
+  ): PendingRequest | null {
+    const command = request.command;
+    // sans commande (fichiers…) : jamais acceptée d'office, l'opérateur la voit (revue R.5)
+    if (!command) return request;
+    if (!(request.byRule || isDestructive(command))) {
+      if (!confirm.autoApprove) return request;
+      try {
+        // codex en auto : ce que `never` aurait laissé passer ; le fil en garde l'exécution (`tool_start`)
+        live.driver.answer(request.id, 'yes');
+        return null;
+      } catch {
+        return request;
+      }
+    }
+    const shown: PendingRequest = {
+      ...request,
+      options: CONFIRM_OPTIONS,
+      confirm: { server: confirm.server },
+    };
+    // règle illisible ou réponse impossible : la carte est présentée, rien ne passe en silence
+    try {
+      const server = this.serverOf(this.agentRow(live.id));
+      if (!server.rules.some((r) => r.pattern === rulePattern(command))) return shown;
+      live.driver.answer(request.id, 'yes');
+    } catch {
+      return shown;
+    }
+    this.record(live, { type: 'request', request: shown });
+    this.record(live, {
+      type: 'request_answered',
+      requestId: request.id,
+      answer: 'yes',
+      auto: true,
+    });
+    return null;
   }
 
   private nextPending(live: LiveRemote): void {
