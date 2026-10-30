@@ -538,6 +538,11 @@ body {
   height: max(var(--h-terminal-sujet), calc(100dvh - 340px));
   overflow: hidden;
 }
+/* `.conversation` (display:flex) est déclarée après `.masque` à spécificité égale et l'emportait :
+   la conversation d'un onglet non actif restait affichée, deux agents montraient le même fil. */
+.conversation.masque {
+  display: none;
+}
 .conversation-bandeau {
   margin: 0;
   padding: var(--sp-2) var(--sp-4);
