@@ -696,3 +696,129 @@ test('« Toujours autoriser » répond aussi aux demandes en file que la nouvell
   await waitFor(() => assistant(m, a.id, 'refusée: rm -f y') === 1, 15_000, 'fin');
   expect(assistant(m, a.id, 'exécutée: rm -f x')).toBe(2);
 });
+
+/** Chantier 17 (R.6) : le composer d'une discussion — repères, options, réglages. */
+test('repères : seul un message utilisateur du fil se marque ; seq, agent et message vérifiés', async () => {
+  const m = await daemon(serveur());
+  const s = await creerServeur(m);
+  const a = (await creerDiscussion(m, s.id)).agents[0]!;
+  await envoyer(m, a.id, 'bonjour');
+  await waitFor(() => ligne(m, a.id)?.status === 'idle', 15_000, 'idle');
+  const rows = m.t.db
+    .prepare('SELECT seq, payload FROM server_agent_messages WHERE agent_id = ? ORDER BY seq')
+    .all(a.id) as { seq: number; payload: string }[];
+  const role = (r: { payload: string }) => (JSON.parse(r.payload) as { role?: string }).role;
+  const user = rows.find((r) => role(r) === 'user')!;
+  const autre = rows.find((r) => role(r) !== 'user')!;
+  const marque = (seq: number | string, marked = true, id = a.id) =>
+    m.req('PUT', `/api/server-agents/${id}/messages/${seq}/mark`, { marked });
+
+  expect((await marque(user.seq)).json()).toEqual({ seq: user.seq, marked: true });
+  const lu = () =>
+    (
+      m.t.db
+        .prepare('SELECT marked FROM server_agent_messages WHERE agent_id = ? AND seq = ?')
+        .get(a.id, user.seq) as { marked: number }
+    ).marked;
+  expect(lu()).toBe(1);
+  expect((await marque(user.seq, false)).statusCode).toBe(200);
+  expect(lu()).toBe(0);
+  expect((await marque(autre.seq)).statusCode).toBe(422);
+  expect((await marque(0)).statusCode).toBe(400);
+  expect((await marque('1x')).statusCode).toBe(400);
+  expect((await marque(9999)).statusCode).toBe(404);
+  expect((await marque(user.seq, true, 'sa_inconnu')).statusCode).toBe(404);
+});
+
+test('options et réglages : modes du serveur, modèle et effort validés, écrits sur l’agent', async () => {
+  const m = await daemon(serveur());
+  const s = await creerServeur(m);
+  const a = (await creerDiscussion(m, s.id)).agents[0]!;
+  const options = (await m.req('GET', `/api/server-agents/${a.id}/options`)).json<{
+    modes: { id: string }[];
+    models: { id: string }[];
+  }>();
+  expect(options.modes.map((x) => x.id)).toEqual(['default', 'acceptEdits', 'auto', 'plan']);
+  expect(options.models.map((x) => x.id)).toContain('opus');
+
+  const r = await m.req('PATCH', `/api/server-agents/${a.id}/settings`, {
+    mode: 'acceptEdits',
+    model: 'opus',
+    effort: 'high',
+  });
+  expect(r.json()).toEqual({ mode: 'acceptEdits', model: 'opus', effort: 'high' });
+  const vue = (await m.req('GET', `/api/server-agents/${a.id}`)).json<ServerAgentView>();
+  expect([vue.permissionMode, vue.model, vue.effort]).toEqual(['acceptEdits', 'opus', 'high']);
+  // un champ absent garde sa valeur ; `null` revient au défaut de la CLI
+  expect(
+    (await m.req('PATCH', `/api/server-agents/${a.id}/settings`, { model: null })).json(),
+  ).toEqual({ mode: 'acceptEdits', model: null, effort: 'high' });
+
+  for (const body of [{ mode: 'bypassPermissions' }, { model: 'gpt-0' }, { effort: 'énorme' }])
+    expect((await m.req('PATCH', `/api/server-agents/${a.id}/settings`, body)).statusCode).toBe(
+      422,
+    );
+  expect(
+    (await m.req('PATCH', `/api/server-agents/${a.id}/settings`, { couleur: 'x' })).statusCode,
+  ).toBe(400);
+  expect((await m.req('GET', '/api/server-agents/sa_inconnu/options')).statusCode).toBe(404);
+});
+
+test('codex sous confirmation passé en auto depuis le composer : le daemon trie, le destructif reste en carte', async () => {
+  const m = await daemon(serveur());
+  const s = await creerServeur(m);
+  const a = (await creerDiscussion(m, s.id, 'codex')).agents[0]!;
+  const v = await carte(m, a.id, 'ls');
+  await repondre(m, v, 'yes');
+  await waitFor(() => ligne(m, a.id)?.status === 'idle', 15_000, 'idle');
+
+  const r = await m.req('PATCH', `/api/server-agents/${a.id}/settings`, { mode: 'auto' });
+  expect(r.statusCode).toBe(200);
+  await envoyer(m, a.id, 'commande: ls -la');
+  await waitFor(() => assistant(m, a.id, 'exécutée: ls -la') === 1, 15_000, 'ls -la');
+  expect(evenements(m, a.id, 'request')).toHaveLength(1);
+  const v2 = await carte(m, a.id, 'rm -f x');
+  expect(v2.pending!.confirm).toEqual({ server: 'vps-test' });
+});
+
+test('Reconnecter : relance un agent en veille sans message, 502 si le serveur ne répond pas', async () => {
+  const remote = serveur();
+  const m1 = await daemon(remote);
+  const s = await creerServeur(m1);
+  const a = (await creerDiscussion(m1, s.id, 'codex')).agents[0]!;
+  await envoyer(m1, a.id, 'bonjour');
+  await waitFor(() => ligne(m1, a.id)?.status === 'idle', 15_000, 'idle');
+  await m1.t.d.stop();
+
+  const m2 = await daemon(remote, m1.t.home);
+  remote.transport.env.FAKE_SSH_FAIL = '1';
+  expect((await m2.req('POST', `/api/server-agents/${a.id}/reconnect`)).statusCode).toBe(502);
+  delete remote.transport.env.FAKE_SSH_FAIL;
+  expect((await m2.req('POST', `/api/server-agents/${a.id}/reconnect`)).statusCode).toBe(202);
+  // relancé sous un relais neuf, avant tout message
+  const relais = ligne(m2, a.id)!.tmux_session;
+  expect(relais).not.toBe(`aid-${a.id}`);
+  // déjà vivant : rien à relancer
+  expect((await m2.req('POST', `/api/server-agents/${a.id}/reconnect`)).statusCode).toBe(202);
+  expect(ligne(m2, a.id)!.tmux_session).toBe(relais);
+  await envoyer(m2, a.id, 'deux');
+  await waitFor(() => assistant(m2, a.id, 'echo: deux') >= 1, 15_000, 'après reconnexion');
+  expect((await m2.req('POST', '/api/server-agents/sa_inconnu/reconnect')).statusCode).toBe(404);
+});
+
+test('réglages d’un codex en veille : catalogue inconnu, seul le champ envoyé est validé (revue R.6)', async () => {
+  const remote = serveur();
+  const m1 = await daemon(remote);
+  const s = await creerServeur(m1);
+  const a = (await creerDiscussion(m1, s.id, 'codex')).agents[0]!;
+  await m1.t.d.stop();
+  const m2 = await daemon(remote, m1.t.home);
+  // un modèle choisi avant le redémarrage, que le catalogue (vide tant que codex n'a pas parlé) ne connaît pas
+  m2.t.db.prepare("UPDATE server_agents SET model = 'gpt-x' WHERE id = ?").run(a.id);
+  const r = await m2.req('PATCH', `/api/server-agents/${a.id}/settings`, { mode: 'auto' });
+  expect(r.statusCode).toBe(200);
+  expect(r.json()).toEqual({ mode: 'auto', model: 'gpt-x', effort: null });
+  expect(
+    (await m2.req('PATCH', `/api/server-agents/${a.id}/settings`, { model: 'gpt-y' })).statusCode,
+  ).toBe(422);
+});

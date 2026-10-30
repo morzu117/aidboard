@@ -104,13 +104,13 @@ export function NavServeurs({ n }: { n: (rest: string) => string }) {
             {!replie &&
               g.servers.map((s) => {
                 const status = statuses[s.id] ?? statutInconnu(s.id);
-                // les discussions sur serveur arrivent avec le groupe R : la ligne mène à la configuration
+                // R.6 : la ligne ouvre la discussion du serveur (la plus récente, ou sa création)
                 const actif = pathname.startsWith(`/serveurs/${s.id}/`);
                 const horsLigne = status.state === 'unreachable' || status.state === 'error';
                 return (
                   <div key={s.id} className="barre-gauche-sujet-ligne">
                     <Link
-                      to={`/serveurs/${s.id}/configuration`}
+                      to={`/serveurs/${s.id}/discussion`}
                       className={`barre-gauche-sujet barre-gauche-serveur barre-gauche-serveur--${status.state}${actif ? ' est-actif' : ''}`}
                       data-node={n(`serveur-${s.id}`)}
                       data-etat={status.state}

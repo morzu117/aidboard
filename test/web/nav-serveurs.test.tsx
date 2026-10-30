@@ -144,7 +144,7 @@ test('une ligne par serveur, groupée par groupName dans l’ordre de création 
   ).toHaveProperty('style.background', 'rgb(167, 139, 250)');
 
   const ligne = node(n('serveur-srv_1'))!;
-  expect(ligne.getAttribute('href')).toBe('/serveurs/srv_1/configuration');
+  expect(ligne.getAttribute('href')).toBe('/serveurs/srv_1/discussion');
   expect(ligne.textContent).toContain('vps-ovh');
   expect(node(n('serveur-srv_1.etat'))?.textContent).toBe('12 ms');
   expect(ligne.querySelector('.icone-serveur')?.getAttribute('width')).toBe('15');

@@ -499,3 +499,52 @@ Reprises du brief §11.6, plus celles nées de l'état des lieux :
   au chantier **non prouvée**. e2e : `e2e/nav-edition.spec.ts:45`, comme en R.4.
 - **À trancher par l'opérateur (VPS)** : claude introuvable hors shell interactif — le relais et la
   détection échoueraient sur ce serveur tel quel.
+- **R.6**, une review comprise — écran Discussion (`web/src/ecrans/Discussion.tsx`, route
+  `/serveurs/:id/discussions/:discussionId`), résolveur `/serveurs/:id/discussion` (ligne de serveur de la barre
+  gauche), table « Discussions sur <serveur> » de la carte Serveurs (agent · état, activité, Reprendre, clic de
+  ligne), dialogue `NouvelleDiscussion`. Daemon : `PUT /api/server-agents/:id/messages/:seq/mark`,
+  `GET …/options`, `PATCH …/settings`, `POST …/reconnect`. Décisions prises en cours de point :
+  - **contexte de routes** (`web/src/conversation/routes.ts`) plutôt qu'une prop enfilée partout : le fil lit
+    `/api/agents` + `/ws/agent` par défaut, `/api/server-agents` + `/ws/server-agent` sous l'écran Discussion,
+    avec le nom du serveur et l'état « injoignable ». Le socket passe par `socketSur(chemin)` (sous-classe
+    d'`AgentSocket`) pour que la création reste sur une ligne : un troisième argument faisait réindenter tout
+    le bloc par Prettier ;
+  - **« Ouvrir la discussion »** : la plus récente non archivée **par activité de son agent** (la date de la
+    discussion ne bouge qu'au renommage), sinon le dialogue de création ; la barre gauche fait de même via le
+    résolveur, qui renvoie sur l'écran Serveurs avec le dialogue ouvert (`state.creer`, effacé à la fermeture) ;
+  - **« Reconnecter »** de la ligne d'échec : route `POST /api/server-agents/:id/reconnect` ajoutée (relance
+    par reprise de session, sans message ; 202 si déjà vivant, 502 si le serveur ne répond pas). Celui du
+    bandeau injoignable relance un contrôle du serveur (`/api/servers/:id/ping`) ;
+  - **issue d'une demande lue au fil** pour un agent distant (`request_answered`, `request_cancelled`, ou fin
+    de tour sans réponse) plutôt que par `agent.pending` : l'agent distant n'est pas dans `/api/state`, sa
+    relecture (à chaque événement du fil, une à la fois, et toutes les 5 s) arriverait après la carte ;
+  - une perte de lien et sa reprise font **une** ligne ; une perte suivie d'un échec devient la ligne rouge ;
+  - **réglages** : seuls les champs envoyés sont validés (un modèle codex déjà en place reste valable avant
+    que codex n'ait redonné son catalogue) ; le catalogue de l'agent lui-même passe avant celui d'un autre ;
+    codex sous confirmation passé en auto depuis le composer reste en `untrusted`, le tri du daemon prend le
+    relais (comme au lancement, R.5) ;
+  - **pas de pièce jointe** sur un fil distant : c'est un fichier du daemon (D70), la route distante n'en
+    prend pas ;
+  - lignes existantes modifiées (assumé, toutes ciblées) : 16 dans `web/src/conversation/` — les URL
+    `/api/agents/…` du composer, des réglages, de la carte de décision et du repère, le chemin du socket,
+    l'import et les deux lignes de création du socket, le placeholder, les trois `disabled` / `joindre` du
+    composer, `resolved` de la carte de décision ; 11 dans `Serveurs.tsx` (le bouton grisé et la table vide
+    « avant R.6 » que ce point remplace) ; 2 dans `NavServeurs.tsx` (lien vers la discussion). Deux tests qui
+    vérifiaient ce « avant R.6 » sont mis à jour (`serveurs.test.tsx`, `nav-serveurs.test.tsx`). La règle CSS
+    du bouton `aria-disabled` de la carte reste, sans usage.
+- **Review R.6** : retenus et corrigés — validation des réglages sur des champs non envoyés (422 sur un codex
+  en veille), « Reconnecter » réussi sans retour visible, pièces jointes proposées sur un fil distant, ligne
+  « reconnexion… » figée au-dessus d'un échec, libellé d'échec terminé par « : », catalogue codex d'un autre
+  serveur préféré à celui de l'agent, dialogue de création rouvert par l'historique, erreur de ping jamais
+  effacée, texte du bandeau, deux assertions de test trop faibles. Écartés : modes `acceptEdits` / `plan`
+  sous confirmation (codex ne les accepte pas — 422 ; claude garde ses règles `ask` dans tous les modes,
+  observé en D77) ; demande ordinaire sans `request_answered` (le daemon l'écrit pour toute réponse depuis
+  R.5) ; course `setSettings` / relance (`relaunch` relit la ligne juste avant `mount`) ; débounce des
+  relectures (une en vol, une en attente au plus).
+- **Hors R.6, laissé** : onglets d'agents et « + Agent » (une discussion = un agent), bouton Panneau
+  (groupe F), fichiers distants par `@`. Le dialogue de suppression d'un serveur dit encore « Rien n'est
+  exécuté sur le serveur » alors que la suppression arrête ses agents (R.4) — texte à revoir.
+- **Gate pendant R.6** : vert (1133, puis 1137 après la review). Entre les deux, `test/web/accueil.test.tsx:119`
+  rouge une fois (« expected 'fix/x' to be 'feat/s' », même échec qu'en R.3-R.5), vert seul 3/3 et sur le
+  gate suivant. e2e : `e2e/nav-edition.spec.ts:45` (« locator.press: Test ended »), comme en R.4 et R.5 ;
+  34 passés.

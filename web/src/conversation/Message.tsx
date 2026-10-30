@@ -1,5 +1,6 @@
 import type { AttachmentInfo } from '../../../src/shared/conversation.js';
 import { rendreMessage } from '../ui/markdownMessage.js';
+import { useAgentRoutes } from './routes.js';
 
 const heure = (at: string): string => {
   const d = new Date(at);
@@ -29,6 +30,8 @@ export function Message({
   onToggleMark?: (seq: number, marked: boolean) => void;
   dataNode: string;
 }) {
+  // R.6 : sur un serveur distant, chaque tour porte le nom du serveur à côté de l'agent
+  const serveur = useAgentRoutes().distant?.serveur;
   if (role === 'user')
     return (
       <div className="message-utilisateur-ligne" data-node={dataNode} data-repere={seq}>
@@ -68,6 +71,7 @@ export function Message({
     <div className="message-agent" data-node={dataNode}>
       <div className="message-agent-entete">
         <span className="message-agent-kind">{kind}</span>
+        {serveur && <span className="message-agent-serveur">{serveur}</span>}
         <span className="texte-faible">{heure(at)}</span>
         {questions > 0 && (
           <span className="message-agent-question" data-node={`${dataNode}.questions`}>

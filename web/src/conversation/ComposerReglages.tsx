@@ -6,6 +6,7 @@ import {
   type AgentSettings,
 } from '../../../src/shared/agentSettings.js';
 import { useAid } from '../data/useAidState.js';
+import { useAgentRoutes } from './routes.js';
 
 const message = (err: unknown) => (err instanceof Error ? err.message : String(err));
 const PAR_DEFAUT = 'Par défaut';
@@ -27,6 +28,7 @@ export function ComposerReglages({
   dataNode: string;
 }) {
   const { call } = useAid();
+  const { api } = useAgentRoutes();
   const [options, setOptions] = useState<AgentOptions | null>(null);
   // réglage affiché avant que l'instantané ne le confirme ; l'instantané reprend la main dès qu'il change
   const [attente, setAttente] = useState<AgentSettings | null>(null);
@@ -41,7 +43,7 @@ export function ComposerReglages({
   const ref = useRef<HTMLDivElement>(null);
 
   const charger = () =>
-    call<AgentOptions>('GET', `/api/agents/${agentId}/options`)
+    call<AgentOptions>('GET', `${api}/${agentId}/options`)
       .then(setOptions)
       .catch((err: unknown) => onErreur(message(err)));
   useEffect(() => {
@@ -77,7 +79,7 @@ export function ComposerReglages({
     setMenu(null);
     onErreur(null);
     try {
-      setAttente(await call<AgentSettings>('PATCH', `/api/agents/${agentId}/settings`, patch));
+      setAttente(await call<AgentSettings>('PATCH', `${api}/${agentId}/settings`, patch));
     } catch (err) {
       setAttente(null);
       onErreur(message(err));

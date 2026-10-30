@@ -1,10 +1,18 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router';
+import { Link, useLocation, useNavigate } from 'react-router';
 import type { Server, ServerStatus, ServerTest } from '../../../src/shared/model.js';
+import {
+  activite,
+  derniereDiscussion,
+  ETAT_AGENT,
+  useDiscussionsServeur,
+} from '../data/discussionsServeur.js';
 import { type ServeursStore, statutInconnu, useServeurs } from '../data/serveurs.js';
 import { useAid } from '../data/useAidState.js';
 import { Dialogue } from '../dialogues/Dialogue.js';
+import { NouvelleDiscussion } from '../dialogues/NouvelleDiscussion.js';
 import { ContextMenu } from '../ui/ContextMenu.js';
+import { depuis } from '../ui/depuis.js';
 import { Layout } from '../ui/Layout.js';
 import { IconeServeur, MODE_SERVEUR, PastilleEtatServeur } from '../ui/Serveur.js';
 
@@ -17,15 +25,13 @@ const agentsTexte = (s: Server) =>
       ? 'aucun'
       : s.detectedAgents.join(' · ');
 
-/** Les discussions sur serveur arrivent avec le groupe R (R.6) ; d'ici là, aucune n'existe. */
-const DISCUSSIONS_INDISPONIBLES = 'Les discussions sur serveur arrivent avec la prochaine étape.';
-
 function Carte({
   s,
   status,
   test,
   n,
   store,
+  creer = false,
   onSupprimer,
 }: {
   s: Server;
@@ -33,6 +39,8 @@ function Carte({
   test: ServerTest | undefined;
   n: number;
   store: ServeursStore;
+  /** arrivée depuis la barre gauche sur un serveur sans discussion : le dialogue de création s'ouvre */
+  creer?: boolean;
   onSupprimer: (s: Server) => void;
 }) {
   const { call } = useAid();
@@ -41,6 +49,16 @@ function Carte({
   const [enCours, setEnCours] = useState(false);
   const [erreur, setErreur] = useState<string | null>(null);
   const id = `serveurs.serveur-${n}`;
+  // R.6 : la discussion la plus récente du serveur, ou sa création s'il n'en a aucune
+  const { discussions, erreur: erreurDiscussions } = useDiscussionsServeur(s.id);
+  const [creation, setCreation] = useState(creer);
+  const urlDe = (discussionId: string) => `/serveurs/${s.id}/discussions/${discussionId}`;
+  const ouvrir = () => {
+    const d = discussions && derniereDiscussion(discussions);
+    if (d) navigate(urlDe(d.id));
+    else if (discussions) setCreation(true);
+    else navigate(`/serveurs/${s.id}/discussion`);
+  };
   const lancer = async (action: 'test' | 'ping') => {
     setErreur(null);
     setEnCours(true);
@@ -85,9 +103,7 @@ function Carte({
           className="bouton bouton--primaire"
           data-node={`${id}.ouvrir`}
           type="button"
-          aria-disabled="true"
-          aria-describedby={`${s.id}-discussions`}
-          title={DISCUSSIONS_INDISPONIBLES}
+          onClick={ouvrir}
         >
           Ouvrir la discussion
         </button>
@@ -178,12 +194,91 @@ function Carte({
       <div className="serveur-discussions" data-node={`${id}.discussions`}>
         <div className="groupe-entete">
           <span className="serveur-discussions-titre">Discussions sur {s.name}</span>
-          <span className="texte-faible">0</span>
+          <span className="texte-faible">{discussions?.length ?? '…'}</span>
         </div>
-        <p className="texte-discret" id={`${s.id}-discussions`}>
-          Aucune discussion sur ce serveur. {DISCUSSIONS_INDISPONIBLES}
-        </p>
+        {erreurDiscussions && (
+          <p className="message-erreur" role="alert" data-node={`${id}.discussions.erreur`}>
+            {erreurDiscussions}
+          </p>
+        )}
+        {discussions && discussions.length === 0 && (
+          <p className="texte-discret" data-node={`${id}.discussions.vide`}>
+            Aucune discussion sur ce serveur.
+          </p>
+        )}
+        {discussions && discussions.length > 0 && (
+          <table className="serveur-discussions-table" data-node={`${id}.discussions.table`}>
+            <thead>
+              <tr>
+                <th scope="col">Discussion</th>
+                <th scope="col">Agent</th>
+                <th scope="col">Activité</th>
+                <th scope="col">
+                  <span className="visuellement-cache">Action</span>
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {discussions.map((d, j) => {
+                const a = d.agents[0];
+                const dn = `${id}.discussion-${j + 1}`;
+                return (
+                  <tr
+                    key={d.id}
+                    className="serveur-discussion-ligne"
+                    data-node={dn}
+                    onClick={() => navigate(urlDe(d.id))}
+                  >
+                    <td>
+                      <span
+                        className={`serveur-discussion-point serveur-discussion-point--${a?.status ?? 'stopped'}`}
+                        aria-hidden="true"
+                      />
+                      <Link
+                        to={urlDe(d.id)}
+                        data-node={`${dn}.nom`}
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        {d.name}
+                      </Link>
+                      {d.archived && <span className="texte-faible"> · archivée</span>}
+                    </td>
+                    <td className="serveur-valeur-mono" data-node={`${dn}.agent`}>
+                      {a ? `${a.kind} · ${ETAT_AGENT[a.status]}` : '—'}
+                    </td>
+                    <td className="texte-faible" data-node={`${dn}.activite`}>
+                      {depuis(activite(d))}
+                    </td>
+                    <td>
+                      <button
+                        className="bouton"
+                        data-node={`${dn}.reprendre`}
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          navigate(urlDe(d.id));
+                        }}
+                      >
+                        Reprendre
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        )}
       </div>
+      {creation && (
+        <NouvelleDiscussion
+          server={s}
+          onClose={() => {
+            setCreation(false);
+            // venue de la barre gauche : l'historique ne rouvre pas le dialogue au retour (revue R.6)
+            if (creer) navigate('/serveurs', { replace: true, state: null });
+          }}
+        />
+      )}
     </section>
   );
 }
@@ -192,6 +287,8 @@ function Contenu() {
   const { call } = useAid();
   const { servers, statuses, tests, erreur, store } = useServeurs();
   const navigate = useNavigate();
+  // `/serveurs/:id/discussion` sans discussion renvoie ici, dialogue de création ouvert sur ce serveur
+  const creerSur = (useLocation().state as { creer?: string } | null)?.creer;
   const [suppression, setSuppression] = useState<Server | null>(null);
   const [suppressionEnCours, setSuppressionEnCours] = useState(false);
   const [erreurSuppression, setErreurSuppression] = useState<string | null>(null);
@@ -270,6 +367,7 @@ function Contenu() {
           status={statuses[s.id] ?? statutInconnu(s.id)}
           test={tests[s.id]}
           store={store}
+          creer={creerSur === s.id}
           onSupprimer={setSuppression}
         />
       ))}

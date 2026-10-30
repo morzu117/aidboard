@@ -99,10 +99,9 @@ test('une carte par serveur : état, cible, indicateurs (§11.1)', async () => {
   expect(node('serveurs.serveur-2.session')?.textContent).toBe('Inactive');
   expect(node('serveurs.serveur-2.raison')?.textContent).toBe('Connection refused');
 
-  // discussions : rien avant le groupe R ; le bouton dit pourquoi il est grisé
-  expect(node('serveurs.serveur-1.ouvrir')?.getAttribute('aria-disabled')).toBe('true');
-  const pourquoi = node('serveurs.serveur-1.ouvrir')?.getAttribute('aria-describedby');
-  expect(document.getElementById(pourquoi!)?.textContent).toContain('prochaine étape');
+  // discussions (R.6) : aucune sur ce serveur, « Ouvrir la discussion » actif (il propose d'en créer une)
+  expect(node('serveurs.serveur-1.ouvrir')?.getAttribute('aria-disabled')).toBeNull();
+  await waitFor(() => expect(node('serveurs.serveur-1.discussions.vide')).not.toBeNull());
   expect(node('serveurs.serveur-1.discussions')?.textContent).toContain('Aucune discussion');
   expect(node('serveurs.ajout')).not.toBeNull();
   expect(node('serveurs.vide')).toBeNull();
