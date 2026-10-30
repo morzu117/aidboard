@@ -688,7 +688,7 @@ export class AgentManager {
             topicId: stream.topicId,
             runId: stream.runId,
             agentId: stream.id,
-            data: { status: 'needs_input', reason: 'permission', pending: ev.request },
+            data: { status: 'needs_input', reason: ev.request.kind, pending: ev.request },
           });
           break;
         case 'request_cancelled':
@@ -1137,7 +1137,7 @@ export class AgentManager {
       throw new AidHttpError(409, 'cette demande n’est plus en cours');
     const option = pending.options.find((o) => o.answer === answer);
     if (!option) throw new AidHttpError(422, 'réponse inconnue pour cette demande');
-    s.driver.answer(pendingId, answer as 'yes' | 'always' | 'no');
+    s.driver.answer(pendingId, option.answer);
     this.deps.store.append({
       source: 'daemon',
       type: 'approval.resolved',
@@ -1161,7 +1161,7 @@ export class AgentManager {
       topicId: s.topicId,
       runId: s.runId,
       agentId: s.id,
-      data: { status: 'needs_input', reason: 'permission', pending: next },
+      data: { status: 'needs_input', reason: next.kind, pending: next },
     });
     return true;
   }
