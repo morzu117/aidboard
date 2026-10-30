@@ -33,6 +33,8 @@ export function agentView(a: Agent, where: 'carte' | 'boite' = 'carte'): StatusV
     case 'error':
       return { label: 'Erreur', tone: 'erreur' };
     case 'idle':
+      // le tour s'est fini sur une question posée à l'opérateur (le daemon l'a lue dans le dernier message)
+      if (a.statusReason === 'question') return { label: 'Attend une réponse', tone: 'attente' };
       if (where === 'carte') return { label: 'À relire', tone: 'relire', estimated };
       return estimated
         ? { label: 'Inactif', tone: 'relire', estimated }

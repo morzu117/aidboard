@@ -61,6 +61,7 @@ test('poseUneQuestion : ponctuation française et fermants markdown, pas les cod
   expect(poseUneQuestion('Tu veux *(recommandé)* ?*')).toBe(true);
   expect(poseUneQuestion('Pourquoi ?\nParce que.')).toBe(true);
   expect(poseUneQuestion('Utiliser `a ?`')).toBe(false);
+  expect(poseUneQuestion('Voir :\n```js\nconst a = b ?\n```\nFin.')).toBe(false);
   expect(poseUneQuestion('Rien à demander.')).toBe(false);
 });
 

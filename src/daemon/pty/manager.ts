@@ -49,6 +49,7 @@ import {
 } from './spawn.js';
 import { meshPaths } from '../mesh/paths.js';
 import { homedir } from 'node:os';
+import { poseUneQuestion } from '../../shared/question.js';
 
 const ulid = monotonicFactory();
 /** D70 : bornes des pièces jointes d'un message. */
@@ -106,6 +107,8 @@ export interface LiveStream {
   seq: number;
   /** demandes arrivées pendant qu'une autre est en cours (outils lancés en parallèle) : affichées une à une. */
   queued: PendingRequest[];
+  /** dernier texte de l'agent dans le tour en cours : s'il pose une question, le tour se termine en attente d'une réponse. */
+  lastAssistantText?: string;
   subscribe(cb: (ev: ConversationEvent) => void): () => void;
 }
 
@@ -658,6 +661,9 @@ export class AgentManager {
             .prepare('UPDATE agents SET session_id = ?, updated_at = ? WHERE id = ?')
             .run(ev.sessionId, new Date().toISOString(), stream.id);
           break;
+        case 'message':
+          if (ev.role === 'assistant') stream.lastAssistantText = ev.text;
+          break;
         case 'tool_start':
           this.deps.store.append({
             source: 'daemon',
@@ -700,7 +706,10 @@ export class AgentManager {
             });
           }
           break;
-        case 'turn_end':
+        case 'turn_end': {
+          // le statut reste `idle` (le composer reste ouvert) ; la raison `question` le fait lire « Attend une réponse »
+          const question = ev.ok && poseUneQuestion(stream.lastAssistantText ?? '');
+          stream.lastAssistantText = undefined;
           this.deps.store.append({
             source: 'daemon',
             type: 'agent.status',
@@ -708,9 +717,14 @@ export class AgentManager {
             topicId: stream.topicId,
             runId: stream.runId,
             agentId: stream.id,
-            data: { status: 'idle', ...(ev.ok ? {} : { message: ev.error }) },
+            data: {
+              status: 'idle',
+              ...(ev.ok ? {} : { message: ev.error }),
+              ...(question && { reason: 'question' }),
+            },
           });
           break;
+        }
         case 'exit':
           stream.exited = true;
           stream.exit = {

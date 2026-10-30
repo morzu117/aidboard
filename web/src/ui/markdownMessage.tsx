@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { marked, type Token, type Tokens } from 'marked';
+import { poseUneQuestion } from '../../../src/shared/question.js';
 import { renderMarkdown } from './markdown.js';
 
 // Le texte d'un message d'agent, mis en page pour la lecture : le rendu markdown de l'onglet Fichiers,
@@ -17,10 +18,7 @@ interface Section {
   unites: Unite[];
 }
 
-// Une phrase qui se termine par « ? » (ponctuation française comprise), éventuellement suivie d'un
-// fermant markdown ; les codes en ligne sont ignorés.
-const QUESTION = /\?[\s*_)»"”’']*$/m;
-export const poseUneQuestion = (raw: string): boolean => QUESTION.test(raw.replace(/`[^`]*`/g, ''));
+export { poseUneQuestion };
 
 // Un titre : un `#` quelconque, ou une ligne qui n'est qu'un passage en gras (la convention des agents).
 function titreDe(t: Token): string | null {
