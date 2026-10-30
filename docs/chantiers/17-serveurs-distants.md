@@ -290,3 +290,27 @@ Reprises du brief §11.6, plus celles nées de l'état des lieux :
   `e2e/trois-sujets.spec.ts:14`, instables d'une exécution complète à l'autre.
 - **Environnement du gate e2e** : Node 22 obligatoire (`package-server.sh`) et port 4871 pris par
   AID.app → `AID_E2E_PORT=4879`.
+- **S.5** `5a39d1f`, review comprise. Décisions prises sans arbitrage de l'opérateur :
+  - libellés des modes d'exécution repris du sélecteur du composer (« Demander avant
+    d'exécuter », « Modifications de fichiers automatiques », « Automatique », « Plan (lecture
+    seule) ») sur les valeurs du daemon ;
+  - couleurs en boutons `aria-pressed` (comme le `SegmentedControl`), pas en boutons radio ;
+  - le test lancé à l'enregistrement part du front (`POST /test` après le `POST`/`PATCH`), pas
+    du daemon ; un échec de ce lancement est affiché sans annuler l'enregistrement ;
+  - le formulaire n'est remonté qu'après un enregistrement réussi : un serveur modifié ailleurs
+    (autre onglet) ne jette pas le brouillon en cours ;
+  - un dossier tapé sans « Ajouter » part à l'enregistrement ; groupe vide → « Serveurs » ;
+  - un seul identifiant d'écran `serveurs` pour la liste et la configuration.
+- **S.6** `7157802`, review comprise — section « Serveurs » de la barre gauche (`NavServeurs.tsx`, insertion d'une ligne de
+  rendu dans `Nav.tsx`), toujours visible (« Aucun serveur », + vers l'ajout, titre vers la
+  liste). Décisions : couleur d'un groupe serveurs = celle de son plus ancien serveur (la couleur
+  est un réglage du serveur) ; repli gardé en mémoire de module, perdu au rechargement (aucune
+  table en v1) ; la ligne mène à la configuration tant que la discussion n'existe pas (R.6) ;
+  pas de case serveurs dans la barre réduite (rail) en v1.
+- **Instabilité constatée au gate e2e de S.5** : `e2e/sujet-colonnes.spec.ts:18`, le sélecteur de
+  dossier a préfixé le chemin saisi par le dossier personnel (`/Users/…/private/var/…`) ; spec
+  relancée seule trois fois, verte trois fois. Hors du périmètre du groupe S (sélecteur de
+  dossier des projets), signalée, non contournée.
+- **Gate e2e de S.6** : un premier passage a fait échouer `e2e/sujet-colonnes.spec.ts` (sélecteur
+  `.barre-gauche-groupes-entete .titre-zone` devenu ambigu) : la section a reçu ses propres classes,
+  la spec n'a pas été touchée. Gate et gate e2e complets ensuite verts (35/35).
