@@ -1,3 +1,4 @@
+import type { PermissionMode } from './agentSettings.js';
 import type { IndexEngine } from './structural.js';
 
 export type RunMode = 'standard' | 'swairm';
@@ -132,6 +133,10 @@ export interface Agent {
   lastTool: string | null;
   pending: PendingRequest | null;
   pausedAt: string | null;
+  /** Agent `stream` seulement (chantier 16, D67) : absent ou `null` pour un agent PTY. */
+  permissionMode?: PermissionMode | null;
+  model?: string | null;
+  effort?: string | null;
   createdAt: string;
   updatedAt: string;
 }

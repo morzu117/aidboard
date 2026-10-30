@@ -1,8 +1,9 @@
 import { Type } from '@sinclair/typebox';
 import type { FastifyInstance } from 'fastify';
+import type { AgentSettings } from '../../shared/agentSettings.js';
 import type { Db } from '../db.js';
 import { AidHttpError } from '../errors.js';
-import type { AgentManager } from '../pty/manager.js';
+import type { AgentManager, AttachmentUpload } from '../pty/manager.js';
 
 const Body = Type.Object(
   {
@@ -15,10 +16,27 @@ const Body = Type.Object(
   { additionalProperties: false },
 );
 
+// D70 : texte vide permis avec au moins une pièce jointe (vérifié par le gestionnaire) ; 10 Mio par fichier en base64.
 const InputBody = Type.Object(
-  { text: Type.String({ minLength: 1, maxLength: 4000 }) },
+  {
+    text: Type.String({ maxLength: 4000 }),
+    attachments: Type.Optional(
+      Type.Array(
+        Type.Object(
+          {
+            name: Type.String({ minLength: 1, maxLength: 255 }),
+            type: Type.String({ maxLength: 128 }),
+            data: Type.String({ maxLength: 14_000_000 }),
+          },
+          { additionalProperties: false },
+        ),
+        { maxItems: 5 },
+      ),
+    ),
+  },
   { additionalProperties: false },
 );
+const INPUT_BODY_LIMIT = 72 * 1024 * 1024;
 const AnswerBody = Type.Object(
   {
     pendingId: Type.String({ minLength: 1, maxLength: 64 }),
@@ -27,6 +45,14 @@ const AnswerBody = Type.Object(
   { additionalProperties: false },
 );
 const MarkBody = Type.Object({ marked: Type.Boolean() }, { additionalProperties: false });
+const SettingsBody = Type.Object(
+  {
+    mode: Type.Optional(Type.String({ minLength: 1, maxLength: 32 })),
+    model: Type.Optional(Type.Union([Type.String({ minLength: 1, maxLength: 128 }), Type.Null()])),
+    effort: Type.Optional(Type.Union([Type.String({ minLength: 1, maxLength: 32 }), Type.Null()])),
+  },
+  { additionalProperties: false },
+);
 
 export function registerAgentRoutes(
   app: FastifyInstance,
@@ -47,11 +73,16 @@ export function registerAgentRoutes(
     return { lines: deps.agents.screen(id, Number(lines ?? 6)) };
   });
 
-  app.post('/api/agents/:id/input', { schema: { body: InputBody } }, async (req, reply) => {
-    const { id } = req.params as { id: string };
-    deps.agents.input(id, (req.body as { text: string }).text);
-    return reply.code(202).send({ id });
-  });
+  app.post(
+    '/api/agents/:id/input',
+    { schema: { body: InputBody }, bodyLimit: INPUT_BODY_LIMIT },
+    async (req, reply) => {
+      const { id } = req.params as { id: string };
+      const body = req.body as { text: string; attachments?: AttachmentUpload[] };
+      deps.agents.input(id, body.text, body.attachments);
+      return reply.code(202).send({ id });
+    },
+  );
 
   app.post('/api/agents/:id/answer', { schema: { body: AnswerBody } }, async (req, reply) => {
     const { id } = req.params as { id: string };
@@ -109,6 +140,17 @@ export function registerAgentRoutes(
     const { id } = req.params as { id: string };
     deps.agents.interrupt(id);
     return reply.code(202).send({ id });
+  });
+
+  // Chantier 16 (D66-D71) : mode, modèle et effort d'un agent conversationnel, depuis le composer.
+  app.get('/api/agents/:id/options', async (req) => {
+    const { id } = req.params as { id: string };
+    return deps.agents.options(id);
+  });
+
+  app.patch('/api/agents/:id/settings', { schema: { body: SettingsBody } }, async (req) => {
+    const { id } = req.params as { id: string };
+    return deps.agents.setSettings(id, req.body as Partial<AgentSettings>);
   });
 
   app.delete('/api/agents/:id', async (req, reply) => {

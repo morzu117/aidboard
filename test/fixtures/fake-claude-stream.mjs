@@ -2,6 +2,7 @@
 /* global process */
 // Faux `claude --print --input-format stream-json ...` : rejoue des événements de la même forme que les
 // captures réelles (docs/chantiers/15-…, « Protocoles observés »). Remplace claude dans les tests.
+import { Buffer } from 'node:buffer';
 import { createInterface } from 'node:readline';
 
 const args = process.argv.slice(2);
@@ -11,6 +12,12 @@ const argAfter = (flag) => {
 };
 const resume = args.includes('--resume');
 const sessionId = resume ? argAfter('--resume') : argAfter('--session-id');
+// Réglages (chantier 16) : ceux du lancement, puis ceux des `control_request` reçus ; « reglages » les renvoie.
+const settings = {
+  mode: argAfter('--permission-mode') ?? 'default',
+  model: argAfter('--model') ?? null,
+  effort: argAfter('--effort') ?? null,
+};
 
 const emit = (obj) => process.stdout.write(JSON.stringify(obj) + '\n');
 
@@ -32,6 +39,7 @@ async function handleTurn(text) {
     process.kill(process.pid, 'SIGKILL');
     return;
   }
+  if (text === 'reglages') text = `reglages ${JSON.stringify(settings)}`;
 
   emit({ type: 'system', subtype: 'init', session_id: sessionId, cwd: process.cwd() });
 
@@ -192,12 +200,37 @@ rl.on('line', (line) => {
     }
     return;
   }
+  const reglage = msg.type === 'control_request' ? msg.request : undefined;
+  if (['set_permission_mode', 'set_model', 'apply_flag_settings'].includes(reglage?.subtype)) {
+    if (reglage.subtype === 'set_permission_mode') settings.mode = reglage.mode;
+    if (reglage.subtype === 'set_model') settings.model = reglage.model ?? null;
+    if (reglage.subtype === 'apply_flag_settings')
+      settings.effort = reglage.settings?.effortLevel ?? null;
+    emit({
+      type: 'control_response',
+      response: { subtype: 'success', request_id: msg.request_id },
+    });
+    return;
+  }
   if (msg.type === 'control_request' && msg.request?.subtype === 'interrupt') {
     emit({
       type: 'control_response',
       response: { subtype: 'success', request_id: msg.request_id, response: { still_queued: [] } },
     });
     if (longAbort) longAbort();
+    return;
+  }
+  // chantier 16 (D70) : un message avec pièces jointes arrive en blocs ; l'écho résume les images reçues.
+  if (msg.type === 'user' && Array.isArray(msg.message.content)) {
+    const blocs = msg.message.content;
+    const texte = blocs
+      .filter((b) => b.type === 'text')
+      .map((b) => b.text)
+      .join('');
+    const images = blocs
+      .filter((b) => b.type === 'image')
+      .map((b) => `${b.source.media_type}:${Buffer.from(b.source.data, 'base64').length}`);
+    void handleTurn(`${texte} [images: ${images.join(',')}]`);
     return;
   }
   if (msg.type === 'user') {

@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { expect, test } from 'vitest';
 import { type Db, openDb } from '../src/daemon/db.js';
+import { admitAgentEvent } from '../src/daemon/events/admit.js';
 import { project } from '../src/daemon/events/projectors.js';
 import { EventStore } from '../src/daemon/events/store.js';
 import type { StoredEvent } from '../src/shared/events.js';
@@ -180,6 +181,46 @@ test('since : après un id, avec filtre, et id inconnu = tout', () => {
   expect(store.since(a.id).map((e) => e.id)).toEqual([b.id, c.id]);
   expect(store.since(null, { topicId: 'tp_1' }).map((e) => e.id)).toEqual([a.id, c.id]);
   expect(store.since('inconnu')).toHaveLength(3);
+});
+
+test('agent.settings (D69) : réglage de l’agent et défaut du kind, rejouables depuis le journal', () => {
+  const { store, db } = setup();
+  seed(db);
+  const settings = (mode: string, model: string | null, effort: string | null) =>
+    store.append({
+      source: 'daemon',
+      type: 'agent.settings',
+      agentId: 'ag_1',
+      data: { kind: 'claude', mode, model, effort },
+    });
+  settings('auto', 'opus', 'high');
+  settings('acceptEdits', 'sonnet', null);
+  const dump = () => ({
+    agent: db.prepare("SELECT permission_mode, model, effort FROM agents WHERE id='ag_1'").get(),
+    defaults: db.prepare('SELECT * FROM agent_defaults').all(),
+  });
+  const before = dump();
+  expect(before).toEqual({
+    agent: { permission_mode: 'acceptEdits', model: 'sonnet', effort: null },
+    defaults: [{ kind: 'claude', permission_mode: 'acceptEdits', model: 'sonnet', effort: null }],
+  });
+  db.exec(
+    'UPDATE agents SET permission_mode=NULL, model=NULL, effort=NULL; DELETE FROM agent_defaults;',
+  );
+  for (const e of store.since(null)) project(db, e);
+  expect(dump()).toEqual(before);
+});
+
+test('un agent ne peut pas changer son propre mode : agent.settings réservé au daemon', () => {
+  const { db } = setup();
+  seed(db);
+  expect(
+    admitAgentEvent(
+      db,
+      { source: 'hook:claude', type: 'agent.settings', agentId: 'ag_1', data: { mode: 'auto' } },
+      'run_1',
+    ),
+  ).toBe('type ou source réservés au daemon');
 });
 
 test('reconstruction : rejouer le journal redonne les mêmes tables', () => {

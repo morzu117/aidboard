@@ -528,3 +528,200 @@ test('Composer : double clic sur « Arrêter » n’envoie qu’un seul POST int
     expect(h.calls.filter((c) => c.url === '/api/agents/ag_1/interrupt')).toHaveLength(1),
   );
 });
+
+const OPTIONS_CLAUDE = {
+  modes: [
+    { id: 'default', label: 'Demander' },
+    { id: 'acceptEdits', label: 'Modifs auto' },
+    { id: 'auto', label: 'Auto' },
+    { id: 'plan', label: 'Plan' },
+  ],
+  models: [
+    { id: 'opus', label: 'Opus 5.5', efforts: ['low', 'high', 'max'] },
+    { id: 'sonnet', label: 'Sonnet 5.5', efforts: ['low', 'high', 'max'] },
+  ],
+  efforts: ['low', 'high', 'max'],
+};
+
+function mountReglages(over: Partial<Agent> = {}) {
+  const m = mount(streamAgent({ status: 'idle', permissionMode: 'default', ...over }));
+  m.respond.set(
+    'GET /api/agents/ag_1/options',
+    () => new Response(JSON.stringify(OPTIONS_CLAUDE), { status: 200 }),
+  );
+  m.respond.set(
+    'PATCH /api/agents/ag_1/settings',
+    () =>
+      new Response(JSON.stringify({ mode: 'auto', model: null, effort: null }), { status: 200 }),
+  );
+  return m;
+}
+
+test('chip mode (16.5) : affiche le mode de l’agent, le menu liste les modes, un choix envoie le PATCH', async () => {
+  const { calls } = mountReglages();
+  const chip = await screen.findByRole('button', { name: 'Mode : Demander' });
+  await waitFor(() => expect(calls.some((c) => c.url === '/api/agents/ag_1/options')).toBe(true));
+  await userEvent.click(chip);
+  const menu = await screen.findByRole('menu', { name: 'Mode' });
+  expect(
+    Array.from(menu.querySelectorAll('[role="menuitemradio"]')).map((b) => b.textContent),
+  ).toEqual(['✓Demander', 'Modifs auto', 'Auto', 'Plan']);
+  await userEvent.click(screen.getByRole('menuitemradio', { name: 'Auto' }));
+  await waitFor(() =>
+    expect(calls.find((c) => c.method === 'PATCH')).toMatchObject({
+      url: '/api/agents/ag_1/settings',
+      body: { mode: 'auto' },
+    }),
+  );
+  expect(await screen.findByRole('button', { name: 'Mode : Auto' })).toBeTruthy();
+  expect(screen.queryByRole('menu')).toBeNull();
+});
+
+test('chip modèle : « Par défaut » sans réglage, puis modèle et effort choisis dans le même menu', async () => {
+  const { calls, respond } = mountReglages();
+  await userEvent.click(await screen.findByRole('button', { name: 'Modèle : Par défaut' }));
+  await screen.findByRole('menuitemradio', { name: 'Opus 5.5' });
+  respond.set(
+    'PATCH /api/agents/ag_1/settings',
+    () =>
+      new Response(JSON.stringify({ mode: 'default', model: 'opus', effort: null }), {
+        status: 200,
+      }),
+  );
+  await userEvent.click(screen.getByRole('menuitemradio', { name: 'Opus 5.5' }));
+  await screen.findByRole('button', { name: 'Modèle : Opus 5.5' });
+
+  await userEvent.click(screen.getByRole('button', { name: 'Modèle : Opus 5.5' }));
+  respond.set(
+    'PATCH /api/agents/ag_1/settings',
+    () =>
+      new Response(JSON.stringify({ mode: 'default', model: 'opus', effort: 'max' }), {
+        status: 200,
+      }),
+  );
+  await userEvent.click(await screen.findByRole('menuitemradio', { name: 'max' }));
+  expect(await screen.findByRole('button', { name: 'Modèle : Opus 5.5 · max' })).toBeTruthy();
+  expect(calls.filter((c) => c.method === 'PATCH').map((c) => c.body)).toEqual([
+    { model: 'opus' },
+    { effort: 'max' },
+  ]);
+});
+
+test('réglage refusé par le daemon : le chip revient à l’état de l’agent, l’erreur est affichée', async () => {
+  const { respond } = mountReglages();
+  respond.set(
+    'PATCH /api/agents/ag_1/settings',
+    () =>
+      new Response(JSON.stringify({ error: 'mode inconnu pour claude : plan' }), { status: 422 }),
+  );
+  await userEvent.click(await screen.findByRole('button', { name: 'Mode : Demander' }));
+  await userEvent.click(await screen.findByRole('menuitemradio', { name: 'Plan' }));
+  expect((await screen.findByRole('alert')).textContent).toContain('mode inconnu');
+  expect(screen.getByRole('button', { name: 'Mode : Demander' })).toBeTruthy();
+});
+
+test('l’instantané fait foi : un réglage changé ailleurs met le chip à jour', async () => {
+  const { rerenderWith } = mountReglages();
+  await screen.findByRole('button', { name: 'Mode : Demander' });
+  rerenderWith(streamAgent({ status: 'idle', permissionMode: 'plan', model: 'sonnet' }));
+  expect(await screen.findByRole('button', { name: 'Mode : Plan' })).toBeTruthy();
+  expect(await screen.findByRole('button', { name: 'Modèle : Sonnet 5.5' })).toBeTruthy();
+});
+
+test('Échap ferme le menu de réglage', async () => {
+  mountReglages();
+  await userEvent.click(await screen.findByRole('button', { name: 'Mode : Demander' }));
+  await screen.findByRole('menu', { name: 'Mode' });
+  await userEvent.keyboard('{Escape}');
+  expect(screen.queryByRole('menu')).toBeNull();
+});
+
+const fichier = (name: string, type: string, contenu = 'abc') =>
+  new File([contenu], name, { type });
+
+test('pièces jointes (16.6) : le trombone ajoute des puces retirables, l’envoi porte nom, type et base64', async () => {
+  const { calls } = mountReglages();
+  const input = document.querySelector<HTMLInputElement>('[data-node$=".composer.fichiers"]')!;
+  expect(screen.getByRole('button', { name: 'Joindre des fichiers' })).toBeTruthy();
+  await userEvent.upload(input, [
+    fichier('capture.png', 'image/png', 'png!'),
+    fichier('notes.txt', 'text/plain', 'salut'),
+    fichier('brut', ''),
+  ]);
+  const liste = screen.getByRole('list', { name: 'Pièces jointes' });
+  expect(liste.textContent).toContain('capture.png');
+  await userEvent.click(screen.getByRole('button', { name: 'Retirer brut' }));
+  expect(liste.textContent).not.toContain('brut');
+
+  // texte vide permis dès qu'une pièce est jointe
+  const envoyer = screen.getByRole('button', { name: 'Envoyer' }) as HTMLButtonElement;
+  expect(envoyer.disabled).toBe(false);
+  await userEvent.click(envoyer);
+  await waitFor(() =>
+    expect(calls.find((c) => c.method === 'POST' && c.url.endsWith('/input'))?.body).toEqual({
+      text: '',
+      attachments: [
+        { name: 'capture.png', type: 'image/png', data: btoa('png!') },
+        { name: 'notes.txt', type: 'text/plain', data: btoa('salut') },
+      ],
+    }),
+  );
+  await waitFor(() => expect(screen.queryByRole('list', { name: 'Pièces jointes' })).toBeNull());
+});
+
+test('pièces jointes : collage d’image et glisser-déposer ; bornes de nombre et de taille', async () => {
+  mountReglages();
+  const champ = screen.getByRole('textbox');
+  fireEvent.paste(champ, {
+    clipboardData: { files: [fichier('colle.png', 'image/png')], getData: () => '' },
+  });
+  expect(screen.getByRole('list', { name: 'Pièces jointes' }).textContent).toContain('colle.png');
+
+  const zone = document.querySelector('[data-node$=".composer"]')!;
+  fireEvent.drop(zone, {
+    dataTransfer: { files: [fichier('a.txt', 'text/plain'), fichier('b.txt', 'text/plain')] },
+  });
+  expect(screen.getAllByRole('listitem')).toHaveLength(3);
+
+  fireEvent.drop(zone, {
+    dataTransfer: {
+      files: [fichier('c', 'text/plain'), fichier('d', 'text/plain'), fichier('e', 'text/plain')],
+    },
+  });
+  expect((await screen.findByRole('alert')).textContent).toContain('5 pièces jointes au plus');
+  expect(screen.getAllByRole('listitem')).toHaveLength(3);
+
+  const gros = fichier('gros.bin', 'application/octet-stream');
+  Object.defineProperty(gros, 'size', { value: 10 * 1024 * 1024 + 1 });
+  fireEvent.drop(zone, { dataTransfer: { files: [gros] } });
+  expect((await screen.findByRole('alert')).textContent).toContain('gros.bin dépasse 10 Mio');
+});
+
+test('pièces jointes : pas de trombone pour un agent PTY', () => {
+  mount(agent({ id: 'ag_1', kind: 'claude', transport: 'pty', status: 'idle' }));
+  expect(screen.queryByRole('button', { name: 'Joindre des fichiers' })).toBeNull();
+});
+
+test('bulle utilisateur : liste les noms des pièces jointes', async () => {
+  mount(streamAgent());
+  const ws = FakeWs.all.at(-1)!;
+  ws.onopen?.();
+  ws.text({
+    t: 'history',
+    truncated: false,
+    items: [
+      {
+        seq: 1,
+        at: '2026-10-30T09:00:00.000Z',
+        event: {
+          type: 'message',
+          role: 'user',
+          text: 'regarde',
+          attachments: [{ name: 'capture.png', type: 'image/png', size: 4 }],
+        },
+      },
+    ],
+  });
+  await screen.findByText('regarde');
+  expect(screen.getByRole('list', { name: 'Pièces jointes' }).textContent).toContain('capture.png');
+});

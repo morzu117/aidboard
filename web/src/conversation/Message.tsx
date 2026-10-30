@@ -1,3 +1,5 @@
+import type { AttachmentInfo } from '../../../src/shared/conversation.js';
+
 const heure = (at: string): string => {
   const d = new Date(at);
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
@@ -11,6 +13,7 @@ export function Message({
   at,
   seq,
   marked,
+  attachments,
   onToggleMark,
   dataNode,
 }: {
@@ -20,6 +23,7 @@ export function Message({
   at: string;
   seq?: number;
   marked?: boolean;
+  attachments?: AttachmentInfo[];
   onToggleMark?: (seq: number, marked: boolean) => void;
   dataNode: string;
 }) {
@@ -41,6 +45,19 @@ export function Message({
           data-node={`${dataNode}.bulle`}
         >
           {text}
+          {attachments && attachments.length > 0 && (
+            <ul
+              className="message-pieces"
+              aria-label="Pièces jointes"
+              data-node={`${dataNode}.pieces`}
+            >
+              {attachments.map((a, i) => (
+                <li key={i} className="message-piece">
+                  📎 {a.name}
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
       </div>
     );

@@ -4,6 +4,7 @@ import { afterEach, expect, test } from 'vitest';
 import { buildCodexArgs, CodexDriver } from '../src/daemon/conversation/codex.js';
 import type { ConversationEvent } from '../src/daemon/conversation/driver.js';
 import { agentEnv } from '../src/daemon/pty/spawn.js';
+import type { AgentSettings } from '../src/shared/agentSettings.js';
 import type { PendingRequest } from '../src/shared/model.js';
 import { waitFor } from './helpers/daemon.js';
 
@@ -24,7 +25,7 @@ afterEach(async () => {
   driver = undefined;
 });
 
-function start(opts: { sessionId: string; resume?: boolean }) {
+function start(opts: { sessionId: string; resume?: boolean; settings?: AgentSettings }) {
   const events: ConversationEvent[] = [];
   driver = new CodexDriver({
     bin: FAKE_CODEX,
@@ -32,6 +33,7 @@ function start(opts: { sessionId: string; resume?: boolean }) {
     env: agentEnv(process.env, [], {}),
     sessionId: opts.sessionId,
     resume: opts.resume ?? false,
+    settings: opts.settings,
   });
   driver.onEvent((e) => events.push(e));
   driver.start();
@@ -327,4 +329,37 @@ test('buildCodexArgs : `app-server` puis les extraArgs', () => {
     extraArgs: ['--foo'],
   });
   expect(args).toEqual(['app-server', '--foo']);
+});
+
+const reglagesVus = (events: ConversationEvent[]) => {
+  const m = events.findLast((e) => e.type === 'message' && e.text.startsWith('echo: reglages ')) as
+    Extract<ConversationEvent, { type: 'message' }> | undefined;
+  return m ? JSON.parse(m.text.slice('echo: reglages '.length)) : undefined;
+};
+
+test('réglages (D66, D68) : turn/start porte approvalPolicy, modèle et effort du réglage courant', async () => {
+  const { driver: d, events } = start({ sessionId: randomUUID() });
+  d.send('reglages');
+  await waitFor(() => reglagesVus(events) !== undefined, 5000, 'réglages par défaut');
+  expect(reglagesVus(events)).toEqual({ approvalPolicy: 'on-request' });
+
+  d.configure({ mode: 'auto', model: 'gpt-fake', effort: 'high' });
+  const before = events.length;
+  d.send('reglages');
+  await waitFor(
+    () => events.length > before && reglagesVus(events.slice(before)) !== undefined,
+    5000,
+    'réglages changés',
+  );
+  expect(reglagesVus(events.slice(before))).toEqual({
+    approvalPolicy: 'never',
+    model: 'gpt-fake',
+    effort: 'high',
+  });
+});
+
+test('catalogue (D71) : model/list après la poignée de main, modèles cachés écartés', async () => {
+  const { driver: d } = start({ sessionId: randomUUID() });
+  await waitFor(() => (d.catalog?.() ?? []).length > 0, 5000, 'catalogue codex');
+  expect(d.catalog()).toEqual([{ id: 'gpt-fake', label: 'GPT-FAKE', efforts: ['low', 'high'] }]);
 });

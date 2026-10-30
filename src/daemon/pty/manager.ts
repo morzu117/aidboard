@@ -1,13 +1,34 @@
-import { closeSync, existsSync, openSync, readSync, statSync } from 'node:fs';
-import { join } from 'node:path';
+import {
+  closeSync,
+  existsSync,
+  mkdirSync,
+  openSync,
+  readSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs';
+import { basename, join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import type { IPty } from 'node-pty';
 import { monotonicFactory } from 'ulid';
+import {
+  type AgentOptions,
+  type AgentSettings,
+  agentOptions,
+  DEFAULT_SETTINGS,
+  MODES,
+  type ModelOption,
+  type PermissionMode,
+} from '../../shared/agentSettings.js';
 import type { Agent, PendingOption, PendingRequest } from '../../shared/model.js';
 import type { AidConfig } from '../config.js';
 import { buildClaudeArgs, ClaudeDriver } from '../conversation/claude.js';
 import { buildCodexArgs, CodexDriver } from '../conversation/codex.js';
-import type { ConversationDriver, ConversationEvent } from '../conversation/driver.js';
+import type {
+  AttachedFile,
+  ConversationDriver,
+  ConversationEvent,
+} from '../conversation/driver.js';
 import type { Db } from '../db.js';
 import { AidHttpError } from '../errors.js';
 import { clip } from '../events/status.js';
@@ -30,6 +51,16 @@ import { meshPaths } from '../mesh/paths.js';
 import { homedir } from 'node:os';
 
 const ulid = monotonicFactory();
+/** D70 : bornes des pièces jointes d'un message. */
+const ATTACHMENTS_MAX = 5;
+const ATTACHMENT_MAX_BYTES = 10 * 1024 * 1024;
+
+/** Une pièce jointe telle que reçue par `POST /api/agents/:id/input` (contenu en base64). */
+export interface AttachmentUpload {
+  name: string;
+  type: string;
+  data: string;
+}
 const INITIAL = { cols: 120, rows: 32 };
 // Bordures que les TUI (dont claude lui-même) dessinent au-dessus du champ de saisie : une ligne
 // non vide mais sans contenu, qui écrase l'aperçu d'un agent inactif si on ne l'exclut pas.
@@ -148,6 +179,8 @@ function readLogTail(path: string, max: number): string {
 export class AgentManager {
   private live = new Map<string, LiveAgent>();
   private streams = new Map<string, LiveStream>();
+  /** D71 : dernier catalogue annoncé par un pilote codex, gardé après sa sortie. */
+  private codexCatalog: ModelOption[] = [];
   // à part de `LiveStream` (interface publique, D62) : `recordStreamEvent` et `inputStream` en ont besoin hors du closure de `spawnStream`.
   private streamSubscribers = new Map<string, Set<(ev: ConversationEvent) => void>>();
   private readonly ticker: NodeJS.Timeout;
@@ -410,6 +443,7 @@ export class AgentManager {
     sessionId: string;
     resume: boolean;
     seq: number;
+    settings: AgentSettings;
   }): { stream: LiveStream; command: string[] } {
     const { paths, config, auth } = this.deps;
     const file = resolveOnPath(o.kind, process.env.PATH ?? '');
@@ -423,12 +457,17 @@ export class AgentManager {
       AID_AGENT: o.agentId,
       AID_SPOOL: paths.spool,
     });
+    // D70 : le dossier existe avant le lancement, `--add-dir` le désigne à claude
+    const attachmentsDir = join(paths.attachments, o.agentId);
+    mkdirSync(attachmentsDir, { recursive: true, mode: 0o700 });
     const driverOpts = {
       bin: file,
       cwd: o.topic.worktree,
       env,
       sessionId: o.sessionId,
       resume: o.resume,
+      settings: o.settings,
+      attachmentsDir,
     };
     const driver: ConversationDriver =
       o.kind === 'claude' ? new ClaudeDriver(driverOpts) : new CodexDriver(driverOpts);
@@ -475,6 +514,7 @@ export class AgentManager {
 
     const agentId = `ag_${ulid()}`;
     const sessionId = o.kind === 'claude' ? randomUUID() : '';
+    const settings = this.defaultSettings(o.kind);
     const { command } = this.createStream({
       agentId,
       topic,
@@ -483,6 +523,7 @@ export class AgentManager {
       sessionId,
       resume: false,
       seq: 0,
+      settings,
     });
 
     const now = new Date().toISOString();
@@ -512,6 +553,15 @@ export class AgentManager {
             now,
           ),
     );
+    store.append({
+      source: 'daemon',
+      type: 'agent.settings',
+      workspaceId: topic.workspace_id,
+      topicId: topic.id,
+      runId: run.id,
+      agentId,
+      data: { kind: o.kind, ...settings },
+    });
     return {
       id: agentId,
       runId: run.id,
@@ -523,6 +573,9 @@ export class AgentManager {
       command,
       pid: null,
       sessionId: sessionId || null,
+      permissionMode: settings.mode,
+      model: settings.model,
+      effort: settings.effort,
       exitCode: null,
       issue: null,
       statusReason: null,
@@ -579,6 +632,7 @@ export class AgentManager {
       sessionId,
       resume,
       seq: seqRow.maxSeq ?? 0,
+      settings: this.settingsOf(agentId),
     });
     store.append({
       source: 'daemon',
@@ -688,6 +742,79 @@ export class AgentManager {
       )
       .run(stream.id, seq, ev.type, JSON.stringify(ev), new Date().toISOString());
     for (const cb of this.streamSubscribers.get(stream.id) ?? []) cb(ev);
+  }
+
+  /** D67 : le dernier réglage choisi pour ce kind, sinon celui de la CLI. */
+  private defaultSettings(kind: 'claude' | 'codex'): AgentSettings {
+    const row = this.deps.db
+      .prepare('SELECT permission_mode, model, effort FROM agent_defaults WHERE kind = ?')
+      .get(kind) as
+      { permission_mode: string; model: string | null; effort: string | null } | undefined;
+    if (!row || !MODES[kind].some((m) => m.id === row.permission_mode))
+      return { ...DEFAULT_SETTINGS };
+    return { mode: row.permission_mode as PermissionMode, model: row.model, effort: row.effort };
+  }
+
+  /** Le réglage propre à l'agent (A.6 : repris tel quel à la relance) ; un agent d'avant le chantier 16 n'en a pas. */
+  private settingsOf(agentId: string): AgentSettings {
+    const row = this.deps.db
+      .prepare('SELECT permission_mode, model, effort FROM agents WHERE id = ?')
+      .get(agentId) as
+      { permission_mode: string | null; model: string | null; effort: string | null } | undefined;
+    if (!row?.permission_mode) return { ...DEFAULT_SETTINGS };
+    return { mode: row.permission_mode as PermissionMode, model: row.model, effort: row.effort };
+  }
+
+  private streamKindOr409(agentId: string): 'claude' | 'codex' {
+    const row = this.deps.db
+      .prepare('SELECT kind, transport FROM agents WHERE id = ?')
+      .get(agentId) as { kind: string; transport: string } | undefined;
+    if (!row) throw new AidHttpError(404, 'agent inconnu');
+    if (row.transport !== 'stream' || (row.kind !== 'claude' && row.kind !== 'codex'))
+      throw new AidHttpError(409, 'réservé aux agents conversationnels');
+    return row.kind;
+  }
+
+  /** D71 : ce que le composer peut proposer pour cet agent. */
+  options(agentId: string): AgentOptions {
+    const kind = this.streamKindOr409(agentId);
+    for (const s of this.streams.values()) {
+      const catalog = s.kind === 'codex' ? s.driver.catalog?.() : undefined;
+      if (catalog?.length) this.codexCatalog = catalog;
+    }
+    return agentOptions(kind, this.codexCatalog);
+  }
+
+  /** D68/D69 : journalisé, puis appliqué au pilote vivant ; un agent en veille le prend à sa relance. */
+  setSettings(agentId: string, patch: Partial<AgentSettings>): AgentSettings {
+    const kind = this.streamKindOr409(agentId);
+    const next: AgentSettings = { ...this.settingsOf(agentId), ...patch };
+    const options = this.options(agentId);
+    if (!options.modes.some((m) => m.id === next.mode))
+      throw new AidHttpError(422, `mode inconnu pour ${kind} : ${next.mode}`);
+    const model = next.model === null ? undefined : options.models.find((m) => m.id === next.model);
+    if (next.model !== null && !model)
+      throw new AidHttpError(422, `modèle inconnu pour ${kind} : ${next.model}`);
+    const efforts = model?.efforts.length ? model.efforts : options.efforts;
+    if (next.effort !== null && !efforts.includes(next.effort))
+      throw new AidHttpError(422, `effort inconnu : ${next.effort}`);
+    const ids = this.deps.db
+      .prepare(
+        'SELECT a.run_id, r.topic_id, t.workspace_id FROM agents a JOIN runs r ON r.id = a.run_id JOIN topics t ON t.id = r.topic_id WHERE a.id = ?',
+      )
+      .get(agentId) as { run_id: string; topic_id: string; workspace_id: string } | undefined;
+    this.deps.store.append({
+      source: 'daemon',
+      type: 'agent.settings',
+      workspaceId: ids?.workspace_id,
+      topicId: ids?.topic_id,
+      runId: ids?.run_id,
+      agentId,
+      data: { kind, ...next },
+    });
+    const live = this.streams.get(agentId);
+    if (live && !live.exited) live.driver.configure(next);
+    return next;
   }
 
   private streamOr409(agentId: string): LiveStream {
@@ -868,11 +995,13 @@ export class AgentManager {
   }
 
   /** Un message tapé pour l'agent : le texte, puis Entrée. Plusieurs lignes passent en collage encadré. */
-  input(agentId: string, raw: string): void {
+  input(agentId: string, raw: string, attachments: AttachmentUpload[] = []): void {
     if (this.streams.has(agentId) || this.dormantStream(agentId)) {
-      this.inputStream(agentId, raw);
+      this.inputStream(agentId, raw, attachments);
       return;
     }
+    if (attachments.length > 0)
+      throw new AidHttpError(409, 'pièces jointes réservées aux agents conversationnels');
     const a = this.liveOr409(agentId);
     const text = raw.replace(/\r\n?/g, '\n');
     // aucune séquence de contrôle : elle sortirait du collage encadré ou piloterait le terminal
@@ -889,17 +1018,26 @@ export class AgentManager {
   }
 
   /** Même message qu'au clavier (D59) : une ligne `agent_messages`, le statut `working`, puis le pilote. */
-  private inputStream(agentId: string, raw: string): void {
+  private inputStream(agentId: string, raw: string, attachments: AttachmentUpload[]): void {
     const text = raw.replace(/\r\n?/g, '\n');
     // eslint-disable-next-line no-control-regex
     if (/[\u0000-\u0008\u000b-\u001f\u007f]/.test(text))
       throw new AidHttpError(422, 'caractère de contrôle refusé');
-    if (!text.trim()) throw new AidHttpError(422, 'message vide');
+    const uploads = this.decodeAttachments(attachments);
+    if (!text.trim() && uploads.length === 0) throw new AidHttpError(422, 'message vide');
     if (this.pendingOf(agentId))
       throw new AidHttpError(409, 'répondre d’abord à la demande en cours');
     // validé : la relance (et son éventuel 404/409) n'a lieu que pour un message qui sera effectivement envoyé (review A.6)
     const s = this.streamOrResume(agentId);
-    this.recordStreamEvent(s, { type: 'message', role: 'user', text });
+    const files = this.storeAttachments(agentId, uploads);
+    this.recordStreamEvent(s, {
+      type: 'message',
+      role: 'user',
+      text,
+      ...(files.length > 0 && {
+        attachments: files.map(({ name, type, size }) => ({ name, type, size })),
+      }),
+    });
     this.deps.store.append({
       source: 'daemon',
       type: 'agent.status',
@@ -909,7 +1047,45 @@ export class AgentManager {
       agentId,
       data: { status: 'working' },
     });
-    s.driver.send(text);
+    s.driver.send(text, files);
+  }
+
+  /** D70 : tout est vérifié avant la relance éventuelle ; le nom ne garde que des caractères sûrs. */
+  private decodeAttachments(
+    list: AttachmentUpload[],
+  ): Array<{ name: string; type: string; data: Buffer }> {
+    if (list.length > ATTACHMENTS_MAX)
+      throw new AidHttpError(422, `au plus ${ATTACHMENTS_MAX} pièces jointes par message`);
+    return list.map((a) => {
+      if (!/^[A-Za-z0-9+/]*={0,2}$/.test(a.data))
+        throw new AidHttpError(422, `pièce jointe illisible : ${a.name}`);
+      const data = Buffer.from(a.data, 'base64');
+      if (data.length > ATTACHMENT_MAX_BYTES)
+        throw new AidHttpError(422, `pièce jointe de plus de 10 Mio : ${a.name}`);
+      const name =
+        basename(a.name)
+          .replace(/[^\p{L}\p{N}._ -]/gu, '_')
+          .slice(0, 100) || 'fichier';
+      const type = /^[\w.+-]+\/[\w.+-]+$/.test(a.type)
+        ? a.type.toLowerCase()
+        : 'application/octet-stream';
+      return { name, type, data };
+    });
+  }
+
+  /** D70 : hors worktree, dossier 0700 et fichiers 0600, un préfixe ulid pour ne jamais écraser. */
+  private storeAttachments(
+    agentId: string,
+    uploads: Array<{ name: string; type: string; data: Buffer }>,
+  ): Array<AttachedFile & { size: number }> {
+    if (uploads.length === 0) return [];
+    const dir = join(this.deps.paths.attachments, agentId);
+    mkdirSync(dir, { recursive: true, mode: 0o700 });
+    return uploads.map((u) => {
+      const path = join(dir, `${ulid()}-${u.name}`);
+      writeFileSync(path, u.data, { mode: 0o600 });
+      return { path, name: u.name, type: u.type, size: u.data.length };
+    });
   }
 
   /** Répond à la demande en cours, au clavier, après avoir vérifié que l'écran la montre toujours (E4). */

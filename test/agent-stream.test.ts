@@ -1,3 +1,4 @@
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { delimiter, join } from 'node:path';
 import { afterEach, expect, test } from 'vitest';
 import { gracefulInterrupt } from '../src/daemon/pty/reprise.js';
@@ -449,4 +450,198 @@ test('reprise (A.6) : un événement tardif de l’ancien pilote après la relan
       .get(agent.id) as { maxSeq: number }
   ).maxSeq;
   expect(seqApres).toBe(seqAvant);
+});
+
+function reglagesVus(agentId: string): unknown {
+  const m = messages(agentId, 'message')
+    .map((x) => (x as { text?: string }).text ?? '')
+    .findLast((t) => t.startsWith('echo: reglages '));
+  return m ? JSON.parse(m.slice('echo: reglages '.length)) : undefined;
+}
+
+async function patchSettings(agentId: string, payload: Record<string, unknown>) {
+  return c!.t.d.app.inject({
+    method: 'PATCH',
+    url: `/api/agents/${agentId}/settings`,
+    headers: c!.t.headers,
+    payload,
+  });
+}
+
+test('réglages (16.3) : options du kind, PATCH appliqué à chaud, défaut retenu pour le claude suivant', async () => {
+  const { agent, topic } = await spawnStream('claude');
+  await waitFor(() => row(agent.id).session_id === agent.sessionId, 5000, 'session claude');
+  expect(agent).toMatchObject({ permissionMode: 'default', model: null, effort: null });
+
+  const options = await c!.t.d.app.inject({
+    method: 'GET',
+    url: `/api/agents/${agent.id}/options`,
+    headers: c!.t.headers,
+  });
+  expect(options.statusCode).toBe(200);
+  const o = options.json<{ modes: { id: string }[]; models: { id: string }[] }>();
+  expect(o.modes.map((m) => m.id)).toEqual(['default', 'acceptEdits', 'auto', 'plan']);
+  expect(o.models.map((m) => m.id)).toContain('opus');
+
+  const r = await patchSettings(agent.id, { mode: 'auto', model: 'opus' });
+  expect(r.statusCode).toBe(200);
+  expect(r.json()).toEqual({ mode: 'auto', model: 'opus', effort: null });
+  c!.t.d.agents.input(agent.id, 'reglages');
+  await waitFor(() => reglagesVus(agent.id) !== undefined, 5000, 'réglages vus par claude');
+  expect(reglagesVus(agent.id)).toEqual({ mode: 'auto', model: 'opus', effort: null });
+
+  expect((await patchSettings(agent.id, { mode: 'bypassPermissions' })).statusCode).toBe(422);
+  expect((await patchSettings(agent.id, { model: 'gpt-x' })).statusCode).toBe(422);
+  expect((await patchSettings(agent.id, { effort: 'enorme' })).statusCode).toBe(422);
+  expect((await patchSettings(agent.id, { effort: 'max' })).statusCode).toBe(200);
+
+  const second = c!.t.d.agents.spawn({ topicId: topic.topicId, kind: 'claude' });
+  expect(second).toMatchObject({ permissionMode: 'auto', model: 'opus', effort: 'max' });
+  expect(second.command.join(' ')).toContain('--permission-mode auto --model opus --effort max');
+});
+
+test('réglages et relance (A.6) : changés pendant la veille, repris par les arguments de lancement', async () => {
+  const { agent } = await spawnStream('claude');
+  await waitFor(() => row(agent.id).session_id === agent.sessionId, 5000, 'session claude');
+  c!.t.d.agents.input(agent.id, 'crash');
+  await waitFor(() => c!.t.d.agents.getStream(agent.id)?.exited === true, 5000, 'sortie');
+
+  expect((await patchSettings(agent.id, { mode: 'plan', effort: 'low' })).statusCode).toBe(200);
+  c!.t.d.agents.input(agent.id, 'reglages');
+  await waitFor(() => reglagesVus(agent.id) !== undefined, 5000, 'réglages après relance');
+  expect(reglagesVus(agent.id)).toEqual({ mode: 'plan', model: null, effort: 'low' });
+});
+
+test('réglages codex (D66, D71) : deux modes, catalogue de model/list, approvalPolicy never en auto', async () => {
+  const { agent } = await spawnStream('codex');
+  await waitFor(() => c!.t.d.agents.options(agent.id).models.length > 0, 5000, 'catalogue codex');
+  const o = c!.t.d.agents.options(agent.id);
+  expect(o.modes.map((m) => m.id)).toEqual(['default', 'auto']);
+  expect(o.models).toEqual([{ id: 'gpt-fake', label: 'GPT-FAKE', efforts: ['low', 'high'] }]);
+
+  expect((await patchSettings(agent.id, { mode: 'acceptEdits' })).statusCode).toBe(422);
+  const r = await patchSettings(agent.id, { mode: 'auto', model: 'gpt-fake', effort: 'high' });
+  expect(r.statusCode).toBe(200);
+  c!.t.d.agents.input(agent.id, 'reglages');
+  await waitFor(() => reglagesVus(agent.id) !== undefined, 5000, 'réglages vus par codex');
+  expect(reglagesVus(agent.id)).toEqual({
+    approvalPolicy: 'never',
+    model: 'gpt-fake',
+    effort: 'high',
+  });
+});
+
+test('réglages : refusés pour un agent PTY (409) et un agent inconnu (404)', async () => {
+  const { agent } = await spawnPty('claude');
+  expect((await patchSettings(agent.id, { mode: 'auto' })).statusCode).toBe(409);
+  expect((await patchSettings('ag_nope', { mode: 'auto' })).statusCode).toBe(404);
+});
+
+const PNG = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+  'base64',
+);
+
+async function postInput(agentId: string, payload: Record<string, unknown>) {
+  return c!.t.d.app.inject({
+    method: 'POST',
+    url: `/api/agents/${agentId}/input`,
+    headers: c!.t.headers,
+    payload,
+  });
+}
+
+test('pièces jointes (16.4) : déposées hors worktree en 0600, image en ligne, fichier cité par son chemin', async () => {
+  const { agent, topic } = await spawnStream('claude');
+  await waitFor(() => row(agent.id).session_id === agent.sessionId, 5000, 'session claude');
+  const dir = join(c!.t.home, 'attachments', agent.id);
+  expect(agent.command).toContain(dir);
+
+  const r = await postInput(agent.id, {
+    text: 'regarde',
+    attachments: [
+      { name: 'capture.png', type: 'image/png', data: PNG.toString('base64') },
+      {
+        name: '../notes secrètes.txt',
+        type: 'text/plain',
+        data: Buffer.from('salut').toString('base64'),
+      },
+    ],
+  });
+  expect(r.statusCode).toBe(202);
+  await waitFor(() => row(agent.id).status === 'idle', 5000, 'fin du tour');
+
+  const fichiers = readdirSync(dir);
+  expect(fichiers).toHaveLength(2);
+  const notes = fichiers.find((f) => f.endsWith('-notes secrètes.txt'))!;
+  expect(notes).toBeDefined();
+  expect(statSync(join(dir, notes)).mode & 0o777).toBe(0o600);
+  expect(readFileSync(join(dir, notes), 'utf8')).toBe('salut');
+  expect(readdirSync(topic.wt)).not.toContain('attachments');
+
+  const user = messages(agent.id, 'message').find(
+    (m) => (m as { role?: string }).role === 'user',
+  ) as { text: string; attachments: unknown };
+  expect(user.text).toBe('regarde');
+  expect(user.attachments).toEqual([
+    { name: 'capture.png', type: 'image/png', size: PNG.length },
+    { name: 'notes secrètes.txt', type: 'text/plain', size: 5 },
+  ]);
+  const echo = messages(agent.id, 'message')
+    .map((m) => (m as { text?: string }).text ?? '')
+    .find((t) => t.startsWith('echo: '))!;
+  expect(echo).toContain(`[images: image/png:${PNG.length}]`);
+  expect(echo).toContain(join(dir, notes));
+  expect(echo).not.toContain('capture.png');
+});
+
+test('pièces jointes : texte vide permis avec un fichier, refusé sans ; bornes de nombre et de taille', async () => {
+  const { agent } = await spawnStream('claude');
+  await waitFor(() => row(agent.id).session_id === agent.sessionId, 5000, 'session claude');
+  const png = { name: 'a.png', type: 'image/png', data: PNG.toString('base64') };
+
+  expect((await postInput(agent.id, { text: '' })).statusCode).toBe(422);
+  expect(
+    (await postInput(agent.id, { text: 'x', attachments: Array(6).fill(png) })).statusCode,
+  ).toBe(400);
+  const lourd = Buffer.alloc(10 * 1024 * 1024 + 1).toString('base64');
+  expect(
+    (await postInput(agent.id, { text: 'x', attachments: [{ ...png, data: lourd }] })).statusCode,
+  ).toBe(422);
+  expect(
+    (await postInput(agent.id, { text: 'x', attachments: [{ ...png, data: '%%%' }] })).statusCode,
+  ).toBe(422);
+  expect(existsSync(join(c!.t.home, 'attachments', agent.id))).toBe(true);
+  expect(readdirSync(join(c!.t.home, 'attachments', agent.id))).toHaveLength(0);
+
+  expect((await postInput(agent.id, { text: '', attachments: [png] })).statusCode).toBe(202);
+  await waitFor(() => row(agent.id).status === 'idle', 5000, 'fin du tour');
+});
+
+test('pièces jointes codex : image passée en localImage par son chemin', async () => {
+  const { agent } = await spawnStream('codex');
+  await waitFor(() => row(agent.id).session_id !== null, 5000, 'thread codex');
+  const r = await postInput(agent.id, {
+    text: 'vois',
+    attachments: [{ name: 'a.png', type: 'image/png', data: PNG.toString('base64') }],
+  });
+  expect(r.statusCode).toBe(202);
+  const dir = join(c!.t.home, 'attachments', agent.id);
+  await waitFor(
+    () =>
+      messages(agent.id, 'message').some((m) =>
+        ((m as { text?: string }).text ?? '').startsWith(`echo: vois [images: ${dir}/`),
+      ),
+    5000,
+    'image vue par codex',
+  );
+});
+
+test('pièces jointes : refusées pour un agent PTY (409)', async () => {
+  const { agent } = await spawnPty('claude');
+  const r = await postInput(agent.id, {
+    text: 'x',
+    attachments: [{ name: 'a.png', type: 'image/png', data: PNG.toString('base64') }],
+  });
+  expect(r.statusCode).toBe(409);
 });

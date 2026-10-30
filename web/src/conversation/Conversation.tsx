@@ -8,6 +8,7 @@ import {
   useState,
 } from 'react';
 import { createPortal } from 'react-dom';
+import type { AgentSettings } from '../../../src/shared/agentSettings.js';
 import type { Agent, AgentStatus } from '../../../src/shared/model.js';
 import type { AgentStreamItem } from '../../../src/shared/conversation.js';
 import { useAid } from '../data/useAidState.js';
@@ -21,6 +22,11 @@ import { ToolCallGroup } from './ToolCallGroup.js';
 import { buildTurns, tourInterrompu } from './thread.js';
 
 const message = (err: unknown) => (err instanceof Error ? err.message : String(err));
+// Chantier 16 : seuls claude et codex en `stream` ont des réglages ; un agent d'avant la migration est en « Demander ».
+const settingsOf = (a: Agent): AgentSettings | undefined =>
+  a.transport === 'stream' && (a.kind === 'claude' || a.kind === 'codex')
+    ? { mode: a.permissionMode ?? 'default', model: a.model ?? null, effort: a.effort ?? null }
+    : undefined;
 const SEUIL_BAS = 40;
 const SEUIL_REPERE = 40;
 // Le canal précédent a fermé (D65) ; ces statuts disent que l'agent est reparti sous le même id (A.6).
@@ -317,6 +323,7 @@ export function Conversation({
                         at={b.at}
                         seq={b.seq}
                         marked={b.marked}
+                        attachments={b.attachments}
                         onToggleMark={(seq, m) => void toggleMark(seq, m)}
                         dataNode={bn}
                       />
@@ -405,6 +412,7 @@ export function Conversation({
         agentId={agent.id}
         kind={agent.kind}
         status={agent.status}
+        settings={settingsOf(agent)}
         dataNode={`${dn}.composer`}
       />
     </div>

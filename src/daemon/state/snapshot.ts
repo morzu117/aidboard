@@ -105,6 +105,9 @@ export async function buildSnapshot(
       lastTool: (r.last_tool as string | null) ?? null,
       pending: parseJson(r.pending) as Agent['pending'],
       pausedAt: (r.paused_at as string | null) ?? null,
+      permissionMode: (r.permission_mode as Agent['permissionMode']) ?? null,
+      model: (r.model as string | null) ?? null,
+      effort: (r.effort as string | null) ?? null,
       createdAt: r.created_at as string,
       updatedAt: r.updated_at as string,
     }));

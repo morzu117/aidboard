@@ -1,7 +1,16 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
+import { type AgentSettings, DEFAULT_SETTINGS } from '../../shared/agentSettings.js';
 import type { PendingOption, PendingRequest } from '../../shared/model.js';
-import type { ConversationDriver, ConversationDriverOptions, ConversationEvent } from './driver.js';
+import {
+  type AttachedFile,
+  type ConversationDriver,
+  type ConversationDriverOptions,
+  type ConversationEvent,
+  INLINE_IMAGE_TYPES,
+  withAttachmentPaths,
+} from './driver.js';
 
 const SIGTERM_DELAY_MS = 2_000;
 const SIGKILL_DELAY_MS = 5_000;
@@ -45,6 +54,17 @@ interface PendingPermission {
   input: unknown;
 }
 
+/** Réglages au lancement (D67) : rien de plus que les arguments d'avant quand rien n'est réglé. */
+function settingsArgs(opts: ConversationDriverOptions): string[] {
+  const s = opts.settings;
+  return [
+    ...(s && s.mode !== 'default' ? ['--permission-mode', s.mode] : []),
+    ...(s?.model ? ['--model', s.model] : []),
+    ...(s?.effort ? ['--effort', s.effort] : []),
+    ...(opts.attachmentsDir ? ['--add-dir', opts.attachmentsDir] : []),
+  ];
+}
+
 /** Construction des arguments D60, séparée du spawn pour être testable sans process réel. */
 export function buildClaudeArgs(opts: ConversationDriverOptions): string[] {
   return [
@@ -56,6 +76,7 @@ export function buildClaudeArgs(opts: ConversationDriverOptions): string[] {
     '--verbose',
     '--permission-prompt-tool',
     'stdio',
+    ...settingsArgs(opts),
     opts.resume ? '--resume' : '--session-id',
     opts.sessionId,
     ...(opts.extraArgs ?? []),
@@ -73,10 +94,12 @@ export class ClaudeDriver implements ConversationDriver {
   private pendingPermissions = new Map<string, PendingPermission>();
   private stopResolvers: Array<() => void> = [];
   private exited = false;
+  private settings: AgentSettings;
 
   constructor(opts: ConversationDriverOptions) {
     this.opts = opts;
     this.sessionId = opts.sessionId;
+    this.settings = opts.settings ?? DEFAULT_SETTINGS;
   }
 
   onEvent(cb: (event: ConversationEvent) => void): () => void {
@@ -255,8 +278,38 @@ export class ClaudeDriver implements ConversationDriver {
     this.child.stdin.write(JSON.stringify(obj) + '\n');
   }
 
-  send(text: string): void {
-    this.write({ type: 'user', message: { role: 'user', content: text } });
+  send(text: string, files: AttachedFile[] = []): void {
+    if (files.length === 0) {
+      this.write({ type: 'user', message: { role: 'user', content: text } });
+      return;
+    }
+    // D70 : les images en ligne (bloc base64), les autres fichiers par leur chemin sous --add-dir
+    const images = files
+      .filter((f) => INLINE_IMAGE_TYPES.has(f.type))
+      .map((f) => ({
+        type: 'image',
+        source: {
+          type: 'base64',
+          media_type: f.type,
+          data: readFileSync(f.path).toString('base64'),
+        },
+      }));
+    const texte = withAttachmentPaths(text, files);
+    const content = [...(texte ? [{ type: 'text', text: texte }] : []), ...images];
+    this.write({ type: 'user', message: { role: 'user', content } });
+  }
+
+  /** D68 : `control_request` observés sur claude 2.1.308 ; un `set_model` sans modèle revient au défaut. */
+  configure(next: AgentSettings): void {
+    const prev = this.settings;
+    this.settings = next;
+    const control = (request: Record<string, unknown>) =>
+      this.write({ type: 'control_request', request_id: randomUUID(), request });
+    if (next.mode !== prev.mode) control({ subtype: 'set_permission_mode', mode: next.mode });
+    if (next.model !== prev.model)
+      control({ subtype: 'set_model', ...(next.model && { model: next.model }) });
+    if (next.effort !== prev.effort)
+      control({ subtype: 'apply_flag_settings', settings: { effortLevel: next.effort } });
   }
 
   interrupt(): void {
