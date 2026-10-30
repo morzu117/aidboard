@@ -317,3 +317,30 @@ export interface ServerTest {
   steps: ServerTestStep[];
   raw: string;
 }
+
+/** Chantier 17 (R.1) : une discussion sur un serveur, à côté des sujets (D74). `cwd` = répertoire distant. */
+export interface ServerDiscussion {
+  id: string;
+  serverId: string;
+  name: string;
+  cwd: string;
+  archived: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** Chantier 17 (R.1) : un agent qui tourne sur le serveur ; `tmuxSession` et `outOffset` servent au rattachement (D73). */
+export interface ServerAgent {
+  id: string;
+  discussionId: string;
+  kind: Extract<AgentKind, 'claude' | 'codex'>;
+  sessionId: string | null;
+  status: AgentStatus;
+  tmuxSession: string | null;
+  outOffset: number;
+  permissionMode: PermissionMode;
+  model: string | null;
+  effort: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
