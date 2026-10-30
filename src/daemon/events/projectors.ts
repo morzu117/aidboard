@@ -139,6 +139,16 @@ export function project(tx: Db, e: AidEvent): void {
     case 'agent.status':
       projectStatus(tx, e, d);
       break;
+    case 'agent.settings':
+      // D69 : le réglage de l'agent, et le défaut du prochain agent du même kind (D67)
+      tx.prepare(
+        'UPDATE agents SET permission_mode = ?, model = ?, effort = ?, updated_at = ? WHERE id = ?',
+      ).run(d.mode ?? null, d.model ?? null, d.effort ?? null, e.ts, e.agentId);
+      if (typeof d.kind === 'string' && typeof d.mode === 'string')
+        tx.prepare(
+          'INSERT INTO agent_defaults (kind, permission_mode, model, effort) VALUES (?, ?, ?, ?) ON CONFLICT(kind) DO UPDATE SET permission_mode = excluded.permission_mode, model = excluded.model, effort = excluded.effort',
+        ).run(d.kind, d.mode, d.model ?? null, d.effort ?? null);
+      break;
     case 'agent.tool': {
       const label = clip(d.label, 200);
       if (label)
