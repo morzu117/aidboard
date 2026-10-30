@@ -27,6 +27,8 @@ const EXEC_MAX_BYTES = 1024 * 1024;
 const SIGKILL_DELAY_MS = 2_000;
 /** Options communes (D72) : jamais de prompt de mot de passe, connexion bornée, pas de pseudo-terminal. */
 const SSH_BASE = ['-o', 'BatchMode=yes', '-o', 'ConnectTimeout=8', '-T'];
+/** Flux longs (review S.2) : sans sonde, une connexion morte ne se voit qu'au bout de plusieurs heures. */
+const SSH_KEEPALIVE = ['-o', 'ServerAliveInterval=15', '-o', 'ServerAliveCountMax=3'];
 
 /** Guillemets simples POSIX : seul `'` est à traiter, tout le reste est littéral. */
 export function shQuote(s: string): string {
@@ -36,21 +38,23 @@ export function shQuote(s: string): string {
 /**
  * La commande telle que le serveur la reçoit : toujours dans le shell distant configuré, en shell de
  * connexion (`-l`) pour que le PATH du profil (`~/.local/bin`…) soit celui où `claude` est installé.
+ * Suppose un shell de connexion POSIX côté serveur (le `'\''` ne passe pas sous csh).
  */
 export function remoteCommand(server: Pick<Server, 'shell'>, cmd: string): string {
-  return `${server.shell} -lc ${shQuote(cmd)}`;
+  return `${shQuote(server.shell)} -lc ${shQuote(cmd)}`;
 }
 
 /** Argv local qui exécute `cmd` sur le serveur, par mode (D72). Jamais de concaténation ailleurs. */
 export function remoteArgv(
   server: Pick<Server, 'mode' | 'target' | 'sshOptions' | 'loadProfile' | 'shell'>,
   cmd: string,
-  opts: TransportOptions = {},
+  opts: TransportOptions & { keepAlive?: boolean } = {},
 ): Argv {
   const ssh = opts.ssh ?? 'ssh';
   const remote = remoteCommand(server, cmd);
+  const base = opts.keepAlive ? [...SSH_BASE, ...SSH_KEEPALIVE] : SSH_BASE;
   if (server.mode === 'ssh_alias') {
-    return { file: ssh, args: [...SSH_BASE, '--', server.target, remote] };
+    return { file: ssh, args: [...base, '--', server.target, remote] };
   }
   if (server.mode === 'ssh_host') {
     const o = server.sshOptions;
@@ -59,18 +63,22 @@ export function remoteArgv(
     if (o?.user != null) extra.push('-l', o.user);
     if (o?.identityFile != null) extra.push('-i', o.identityFile);
     if (o?.jump != null) extra.push('-J', o.jump);
-    return { file: ssh, args: [...SSH_BASE, ...extra, '--', server.target, remote] };
+    return { file: ssh, args: [...base, ...extra, '--', server.target, remote] };
   }
   // Commande locale : un préfixe qui accepte une commande distante en argument (ex. `ssh vps`). Une
   // fonction du profil n'existe que dans un shell qui le charge (§11.0) : d'où `-ic` si demandé.
   const line = `${server.target} ${shQuote(remote)}`;
   const env = opts.env ?? process.env;
-  return server.loadProfile
-    ? { file: env.SHELL || '/bin/sh', args: ['-ic', line] }
-    : { file: '/bin/sh', args: ['-c', line] };
+  if (!server.loadProfile) return { file: '/bin/sh', args: ['-c', line] };
+  // Sans SHELL (daemon lancé hors session), `/bin/sh -ic` ne chargerait pas le profil de l'opérateur :
+  // mieux vaut le dire que retomber en silence sur un shell qui ne connaît pas la fonction (review S.2).
+  if (!env.SHELL)
+    throw new Error('SHELL absent de l’environnement du daemon : profil shell introuvable');
+  return { file: env.SHELL, args: ['-ic', line] };
 }
 
-function killGroup(child: ReturnType<typeof spawn>, signal: NodeJS.Signals): void {
+/** Tue tout le groupe de processus d'un enfant lancé en `detached` (ssh, ou `sh -c` et son ssh). */
+export function killGroup(child: ReturnType<typeof spawn>, signal: NodeJS.Signals): void {
   if (child.pid === undefined) return;
   try {
     process.kill(-child.pid, signal);
@@ -85,7 +93,6 @@ export function remoteExec(
   cmd: string,
   opts: TransportOptions & { timeoutMs?: number; maxBytes?: number } = {},
 ): Promise<ExecResult> {
-  const { file, args } = remoteArgv(server, cmd, opts);
   const timeoutMs = opts.timeoutMs ?? EXEC_TIMEOUT_MS;
   const maxBytes = opts.maxBytes ?? EXEC_MAX_BYTES;
   const started = Date.now();
@@ -97,10 +104,13 @@ export function remoteExec(
     let truncated = false;
     let timedOut = false;
     let settled = false;
+    // déclarés avant `finish` : un `spawn` qui lève l'appelle avant tout minuteur (review S.2)
+    const timers: { main?: NodeJS.Timeout; kill?: NodeJS.Timeout } = {};
     const finish = (code: number | null, extraErr?: string) => {
       if (settled) return;
       settled = true;
-      clearTimeout(timer);
+      clearTimeout(timers.main);
+      clearTimeout(timers.kill);
       resolve({
         code,
         stdout: Buffer.concat(out).toString('utf8'),
@@ -122,6 +132,7 @@ export function remoteExec(
     };
     let child: ReturnType<typeof spawn>;
     try {
+      const { file, args } = remoteArgv(server, cmd, opts);
       // Groupe de processus à part : au délai dépassé on tue le groupe, sinon un petit-enfant (le `ssh`
       // lancé par `sh -c` en mode commande locale) garderait les tuyaux ouverts et `close` n'arriverait pas.
       child = spawn(file, args, {
@@ -133,13 +144,17 @@ export function remoteExec(
       finish(null, (e as Error).message);
       return;
     }
-    const timer = setTimeout(() => {
+    timers.main = setTimeout(() => {
       timedOut = true;
       killGroup(child, 'SIGTERM');
-      setTimeout(() => {
+      timers.kill = setTimeout(() => {
         killGroup(child, 'SIGKILL');
+        // un descendant sorti du groupe garderait les tuyaux : on n'attend plus `close`
+        child.stdout?.destroy();
+        child.stderr?.destroy();
         finish(null);
-      }, SIGKILL_DELAY_MS).unref();
+      }, SIGKILL_DELAY_MS);
+      timers.kill.unref();
     }, timeoutMs);
     child.stdout!.on('data', (c: Buffer) => (outBytes = keep(out, outBytes, c)));
     child.stderr!.on('data', (c: Buffer) => (errBytes = keep(err, errBytes, c)));
@@ -148,12 +163,23 @@ export function remoteExec(
   });
 }
 
-/** Flux long (relais d'un agent, R.2) : stdin, stdout et stderr ouverts, l'appelant gère la vie du process. */
+/**
+ * Flux long (relais d'un agent, R.2) : stdin, stdout et stderr ouverts, sondes de vie ssh, groupe de
+ * processus à part (à arrêter par `killGroup`). Les erreurs du process et d'une écriture sur un stdin
+ * fermé sont absorbées : l'appelant les lit par `exit`, jamais par une exception non capturée.
+ */
 export function remoteSpawn(
   server: Parameters<typeof remoteArgv>[0],
   cmd: string,
   opts: TransportOptions = {},
 ): ChildProcessWithoutNullStreams {
-  const { file, args } = remoteArgv(server, cmd, opts);
-  return spawn(file, args, { env: opts.env ?? process.env, stdio: ['pipe', 'pipe', 'pipe'] });
+  const { file, args } = remoteArgv(server, cmd, { ...opts, keepAlive: true });
+  const child = spawn(file, args, {
+    env: opts.env ?? process.env,
+    stdio: ['pipe', 'pipe', 'pipe'],
+    detached: true,
+  });
+  child.on('error', () => {});
+  child.stdin.on('error', () => {});
+  return child;
 }
