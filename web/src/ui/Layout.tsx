@@ -115,6 +115,7 @@ export function Layout({ screen, children }: { screen: EcranId; children: ReactN
       run: () => navigate('/boite'),
     },
     { id: 'ecran-consignes', label: 'Consignes', hint: 'écran', run: () => navigate('/consignes') },
+    { id: 'ecran-serveurs', label: 'Serveurs', hint: 'écran', run: () => navigate('/serveurs') },
     { id: 'ecran-reglages', label: 'Réglages', hint: 'écran', run: () => navigate('/reglages') },
   ];
   return (
