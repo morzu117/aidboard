@@ -332,4 +332,35 @@ Reprises du brief §11.6, plus celles nées de l'état des lieux :
     arrêt du daemon entre les deux perd ou rejoue des messages au rattachement ;
   - l'état de connexion d'un agent (lien ssh perdu, agent vivant dans tmux) passe par les
     événements de D75 (`connection_lost`…), pas par `AgentStatus`.
-- **D73 toujours à valider** : R.2 attend la réponse de l'opérateur.
+- **2026-10-30 — D73 validée** par l'opérateur : agent sur le serveur, dans un tmux détaché, via `aid-relay`.
+- **R.2**, review comprise — `src/daemon/remote/relay.ts` : script `aid-relay` (sh POSIX), commandes
+  `start` / `attach` / `alive` / `stop`, dépôt `ensureRelay` ; faux tmux et faux agent ligne à ligne pour
+  les tests (D79), plus un test sur le vrai tmux quand la machine l'a (socket dans le dossier du test).
+  Décisions prises en cours de point :
+  - **script embarqué dans le TypeScript**, pas dans `assets/remote/` : il part avec le bundle sans
+    toucher à la liste `files` du manifeste. Somme SHA-256 calculée au chargement ;
+  - **dépôt par le gestionnaire juste avant le premier `start`** (R.4), pas pendant le test de connexion,
+    qui reste en lecture seule. Fichier temporaire propre au dépôt, somme recontrôlée avant le `mv` :
+    un envoi coupé ne publie jamais un relais tronqué ;
+  - **serveur tmux dédié** (`tmux -L aid-relay -f /dev/null`) : ni la configuration de l'utilisateur
+    (`destroy-unattached`, `default-command`) ni ses sessions ne touchent au relais. Commande de
+    `new-session` en une seule chaîne : toute version de tmux convient ;
+  - **environnement du `start`** rejoué par l'agent (`export -p` → `env`) : le serveur tmux garde celui
+    de sa première session, l'agent verrait sinon un `PATH` ou des clés d'une autre connexion ;
+  - pids relus dans un fichier vérifiés avant tout `kill` (rattachement reconnu à sa ligne de commande,
+    agent reconnu comme enfant du shell `run`) : après un redémarrage, un pid réattribué n'est pas tué.
+    `stop` attend 3 s puis envoie SIGKILL ;
+  - `start` atomique (`mkdir` du dossier comme verrou) et sans reste en cas d'échec ; `attach` sort en 8
+    si l'offset dépasse la sortie (relance d'un agent sous le même id, compteur désynchronisé).
+  - seconde relecture : cibles tmux exactes (`-t =aid-<id>`) ; tmux accepte un préfixe, et `stop` d'un
+    agent sans session aurait tué `aid-<id>2…` (test sur vrai tmux, vérifié rouge sans le correctif).
+    Un rattachement précédent bloqué en écriture reçoit SIGKILL, enfants compris.
+- **Piège rencontré** : le shell de connexion relit `/etc/profile` ; sur macOS `path_helper` y remet
+  `/opt/homebrew/bin` devant le PATH du test, et les tests du relais utilisaient en silence le vrai tmux
+  de l'opérateur. Corrigé par un `.profile` dans le HOME distant du test et une garde (la session doit
+  figurer dans le faux tmux). Aucune session `aid-` n'est restée.
+- **À reprendre en R.3** : `err` n'est lu par aucune commande ; une erreur d'authentification de l'agent
+  y finit. R.3 en remontera la fin quand l'agent finit en échec.
+- **À documenter (F)** : un hôte avec `KillUserProcesses=yes` (systemd-logind) tue le serveur tmux à la
+  dernière déconnexion ; l'agent est alors « perdu » à chaque coupure complète. Remède côté serveur :
+  `loginctl enable-linger`.
