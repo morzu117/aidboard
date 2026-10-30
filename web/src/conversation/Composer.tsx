@@ -1,6 +1,8 @@
 import { type KeyboardEvent, useRef, useState } from 'react';
+import type { AgentSettings } from '../../../src/shared/agentSettings.js';
 import type { AgentStatus } from '../../../src/shared/model.js';
 import { useAid } from '../data/useAidState.js';
+import { ComposerReglages } from './ComposerReglages.js';
 
 const message = (err: unknown) => (err instanceof Error ? err.message : String(err));
 
@@ -8,11 +10,14 @@ export function Composer({
   agentId,
   kind,
   status,
+  settings,
   dataNode,
 }: {
   agentId: string;
   kind: string;
   status: AgentStatus;
+  /** Agent `stream` (chantier 16) : présent, les chips mode et modèle s'affichent. */
+  settings?: AgentSettings;
   dataNode: string;
 }) {
   const { call } = useAid();
@@ -89,6 +94,15 @@ export function Composer({
         onCompositionEnd={() => (composingRef.current = false)}
       />
       <div className="composer-barre">
+        {settings && (
+          <ComposerReglages
+            agentId={agentId}
+            kind={kind === 'codex' ? 'codex' : 'claude'}
+            settings={settings}
+            onErreur={setErreur}
+            dataNode={dataNode}
+          />
+        )}
         {needsInput && (
           <span className="texte-discret" data-node={`${dataNode}.attente`}>
             Répondre d’abord à la demande

@@ -757,6 +757,84 @@ body {
   align-items: center;
   gap: var(--sp-2);
 }
+.composer-reglages {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  min-width: 0;
+}
+.composer-chip {
+  background: var(--surface-2);
+  color: var(--text-2);
+  border: 1px solid var(--line);
+  border-radius: var(--r-s);
+  padding: 5px 9px;
+  font-family: var(--font);
+  font-size: var(--fs-s);
+  white-space: nowrap;
+  cursor: pointer;
+}
+.composer-chip:hover,
+.composer-chip[aria-expanded='true'] {
+  border-color: var(--line-2);
+  color: var(--text);
+}
+.composer-trombone {
+  background: transparent;
+  color: var(--muted);
+  border: 0;
+  padding: 5px 6px;
+  display: inline-flex;
+  cursor: pointer;
+}
+.composer-trombone:hover {
+  color: var(--text);
+}
+.composer-menu {
+  position: absolute;
+  bottom: calc(100% + var(--sp-2));
+  left: 0;
+  width: min(260px, calc(100vw - 32px));
+  box-sizing: border-box;
+  background: var(--surface-3);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-l);
+  padding: var(--sp-1);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.55);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  z-index: 2;
+}
+.composer-menu-titre {
+  margin: var(--sp-1) var(--sp-2) 2px;
+  color: var(--muted);
+  font-size: var(--fs-s);
+}
+.composer-menu-ligne {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  text-align: left;
+  background: transparent;
+  border: 0;
+  border-radius: var(--r-s);
+  padding: var(--sp-1) var(--sp-2);
+  color: var(--text-2);
+  font-family: var(--font);
+  font-size: var(--fs-m);
+  cursor: pointer;
+}
+.composer-menu-ligne:hover,
+.composer-menu-ligne[aria-checked='true'] {
+  background: var(--surface-4);
+  color: var(--text);
+}
+.composer-menu-coche {
+  width: 1em;
+  color: var(--acc);
+}
 .message-utilisateur-ligne {
   align-self: flex-end;
   max-width: 80%;

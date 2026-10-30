@@ -528,3 +528,110 @@ test('Composer : double clic sur « Arrêter » n’envoie qu’un seul POST int
     expect(h.calls.filter((c) => c.url === '/api/agents/ag_1/interrupt')).toHaveLength(1),
   );
 });
+
+const OPTIONS_CLAUDE = {
+  modes: [
+    { id: 'default', label: 'Demander' },
+    { id: 'acceptEdits', label: 'Modifs auto' },
+    { id: 'auto', label: 'Auto' },
+    { id: 'plan', label: 'Plan' },
+  ],
+  models: [
+    { id: 'opus', label: 'Opus 5.5', efforts: ['low', 'high', 'max'] },
+    { id: 'sonnet', label: 'Sonnet 5.5', efforts: ['low', 'high', 'max'] },
+  ],
+  efforts: ['low', 'high', 'max'],
+};
+
+function mountReglages(over: Partial<Agent> = {}) {
+  const m = mount(streamAgent({ status: 'idle', permissionMode: 'default', ...over }));
+  m.respond.set(
+    'GET /api/agents/ag_1/options',
+    () => new Response(JSON.stringify(OPTIONS_CLAUDE), { status: 200 }),
+  );
+  m.respond.set(
+    'PATCH /api/agents/ag_1/settings',
+    () =>
+      new Response(JSON.stringify({ mode: 'auto', model: null, effort: null }), { status: 200 }),
+  );
+  return m;
+}
+
+test('chip mode (16.5) : affiche le mode de l’agent, le menu liste les modes, un choix envoie le PATCH', async () => {
+  const { calls } = mountReglages();
+  const chip = await screen.findByRole('button', { name: 'Mode : Demander' });
+  await waitFor(() => expect(calls.some((c) => c.url === '/api/agents/ag_1/options')).toBe(true));
+  await userEvent.click(chip);
+  const menu = await screen.findByRole('menu', { name: 'Mode' });
+  expect(
+    Array.from(menu.querySelectorAll('[role="menuitemradio"]')).map((b) => b.textContent),
+  ).toEqual(['✓Demander', 'Modifs auto', 'Auto', 'Plan']);
+  await userEvent.click(screen.getByRole('menuitemradio', { name: 'Auto' }));
+  await waitFor(() =>
+    expect(calls.find((c) => c.method === 'PATCH')).toMatchObject({
+      url: '/api/agents/ag_1/settings',
+      body: { mode: 'auto' },
+    }),
+  );
+  expect(await screen.findByRole('button', { name: 'Mode : Auto' })).toBeTruthy();
+  expect(screen.queryByRole('menu')).toBeNull();
+});
+
+test('chip modèle : « Par défaut » sans réglage, puis modèle et effort choisis dans le même menu', async () => {
+  const { calls, respond } = mountReglages();
+  await userEvent.click(await screen.findByRole('button', { name: 'Modèle : Par défaut' }));
+  await screen.findByRole('menuitemradio', { name: 'Opus 5.5' });
+  respond.set(
+    'PATCH /api/agents/ag_1/settings',
+    () =>
+      new Response(JSON.stringify({ mode: 'default', model: 'opus', effort: null }), {
+        status: 200,
+      }),
+  );
+  await userEvent.click(screen.getByRole('menuitemradio', { name: 'Opus 5.5' }));
+  await screen.findByRole('button', { name: 'Modèle : Opus 5.5' });
+
+  await userEvent.click(screen.getByRole('button', { name: 'Modèle : Opus 5.5' }));
+  respond.set(
+    'PATCH /api/agents/ag_1/settings',
+    () =>
+      new Response(JSON.stringify({ mode: 'default', model: 'opus', effort: 'max' }), {
+        status: 200,
+      }),
+  );
+  await userEvent.click(await screen.findByRole('menuitemradio', { name: 'max' }));
+  expect(await screen.findByRole('button', { name: 'Modèle : Opus 5.5 · max' })).toBeTruthy();
+  expect(calls.filter((c) => c.method === 'PATCH').map((c) => c.body)).toEqual([
+    { model: 'opus' },
+    { effort: 'max' },
+  ]);
+});
+
+test('réglage refusé par le daemon : le chip revient à l’état de l’agent, l’erreur est affichée', async () => {
+  const { respond } = mountReglages();
+  respond.set(
+    'PATCH /api/agents/ag_1/settings',
+    () =>
+      new Response(JSON.stringify({ error: 'mode inconnu pour claude : plan' }), { status: 422 }),
+  );
+  await userEvent.click(await screen.findByRole('button', { name: 'Mode : Demander' }));
+  await userEvent.click(await screen.findByRole('menuitemradio', { name: 'Plan' }));
+  expect((await screen.findByRole('alert')).textContent).toContain('mode inconnu');
+  expect(screen.getByRole('button', { name: 'Mode : Demander' })).toBeTruthy();
+});
+
+test('l’instantané fait foi : un réglage changé ailleurs met le chip à jour', async () => {
+  const { rerenderWith } = mountReglages();
+  await screen.findByRole('button', { name: 'Mode : Demander' });
+  rerenderWith(streamAgent({ status: 'idle', permissionMode: 'plan', model: 'sonnet' }));
+  expect(await screen.findByRole('button', { name: 'Mode : Plan' })).toBeTruthy();
+  expect(await screen.findByRole('button', { name: 'Modèle : Sonnet 5.5' })).toBeTruthy();
+});
+
+test('Échap ferme le menu de réglage', async () => {
+  mountReglages();
+  await userEvent.click(await screen.findByRole('button', { name: 'Mode : Demander' }));
+  await screen.findByRole('menu', { name: 'Mode' });
+  await userEvent.keyboard('{Escape}');
+  expect(screen.queryByRole('menu')).toBeNull();
+});
