@@ -298,8 +298,8 @@ test('onglets : un terminal monté par agent, un seul visible ; bouton unique «
   expect(screen.getByTestId('term-ag_2').getAttribute('data-visible')).toBe('true');
   expect(screen.getByTestId('term-ag_1').getAttribute('data-visible')).toBe('false');
   expect(text('1-3.terminaux.onglet-1.type')).toBe('claude');
-  // « free » n'est pas du français : l'agent lancé à la main est « libre »
-  expect(text('1-3.terminaux.onglet-1.role')).toBe('libre');
+  // l'agent lancé à la main (role « free ») montre son statut, pas « libre » : à côté de la pastille, « libre » se lit comme un statut
+  expect(text('1-3.terminaux.onglet-1.role')).toBe('Démarrage');
   // plus de bouton par onglet : un seul, sur l'agent actif. ag_2 (dernier, terminé) est actif.
   expect(node('1-3.terminaux.onglet-1.arreter')).toBeNull();
   expect(node('1-3.terminaux.onglet-2.arreter')).toBeNull();
