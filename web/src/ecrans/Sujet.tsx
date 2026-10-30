@@ -747,7 +747,8 @@ function Contenu({
                           data-node={`1-3.terminaux.onglet-${i + 1}.role`}
                           data-bind="agent.role"
                         >
-                          {roleLabel(a.role)}
+                          {/* « libre » est le rôle d'un agent lancé à la main : à côté de la pastille il se lisait comme son statut */}
+                          {a.role === 'free' ? v.label : roleLabel(a.role)}
                         </span>
                       </button>
                     );
