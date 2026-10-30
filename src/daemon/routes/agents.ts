@@ -3,7 +3,7 @@ import type { FastifyInstance } from 'fastify';
 import type { AgentSettings } from '../../shared/agentSettings.js';
 import type { Db } from '../db.js';
 import { AidHttpError } from '../errors.js';
-import type { AgentManager } from '../pty/manager.js';
+import type { AgentManager, AttachmentUpload } from '../pty/manager.js';
 
 const Body = Type.Object(
   {
@@ -16,10 +16,27 @@ const Body = Type.Object(
   { additionalProperties: false },
 );
 
+// D70 : texte vide permis avec au moins une pièce jointe (vérifié par le gestionnaire) ; 10 Mio par fichier en base64.
 const InputBody = Type.Object(
-  { text: Type.String({ minLength: 1, maxLength: 4000 }) },
+  {
+    text: Type.String({ maxLength: 4000 }),
+    attachments: Type.Optional(
+      Type.Array(
+        Type.Object(
+          {
+            name: Type.String({ minLength: 1, maxLength: 255 }),
+            type: Type.String({ maxLength: 128 }),
+            data: Type.String({ maxLength: 14_000_000 }),
+          },
+          { additionalProperties: false },
+        ),
+        { maxItems: 5 },
+      ),
+    ),
+  },
   { additionalProperties: false },
 );
+const INPUT_BODY_LIMIT = 72 * 1024 * 1024;
 const AnswerBody = Type.Object(
   {
     pendingId: Type.String({ minLength: 1, maxLength: 64 }),
@@ -56,11 +73,16 @@ export function registerAgentRoutes(
     return { lines: deps.agents.screen(id, Number(lines ?? 6)) };
   });
 
-  app.post('/api/agents/:id/input', { schema: { body: InputBody } }, async (req, reply) => {
-    const { id } = req.params as { id: string };
-    deps.agents.input(id, (req.body as { text: string }).text);
-    return reply.code(202).send({ id });
-  });
+  app.post(
+    '/api/agents/:id/input',
+    { schema: { body: InputBody }, bodyLimit: INPUT_BODY_LIMIT },
+    async (req, reply) => {
+      const { id } = req.params as { id: string };
+      const body = req.body as { text: string; attachments?: AttachmentUpload[] };
+      deps.agents.input(id, body.text, body.attachments);
+      return reply.code(202).send({ id });
+    },
+  );
 
   app.post('/api/agents/:id/answer', { schema: { body: AnswerBody } }, async (req, reply) => {
     const { id } = req.params as { id: string };

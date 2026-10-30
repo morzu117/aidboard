@@ -1,8 +1,16 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import { type AgentSettings, DEFAULT_SETTINGS } from '../../shared/agentSettings.js';
 import type { PendingOption, PendingRequest } from '../../shared/model.js';
-import type { ConversationDriver, ConversationDriverOptions, ConversationEvent } from './driver.js';
+import {
+  type AttachedFile,
+  type ConversationDriver,
+  type ConversationDriverOptions,
+  type ConversationEvent,
+  INLINE_IMAGE_TYPES,
+  withAttachmentPaths,
+} from './driver.js';
 
 const SIGTERM_DELAY_MS = 2_000;
 const SIGKILL_DELAY_MS = 5_000;
@@ -270,8 +278,25 @@ export class ClaudeDriver implements ConversationDriver {
     this.child.stdin.write(JSON.stringify(obj) + '\n');
   }
 
-  send(text: string): void {
-    this.write({ type: 'user', message: { role: 'user', content: text } });
+  send(text: string, files: AttachedFile[] = []): void {
+    if (files.length === 0) {
+      this.write({ type: 'user', message: { role: 'user', content: text } });
+      return;
+    }
+    // D70 : les images en ligne (bloc base64), les autres fichiers par leur chemin sous --add-dir
+    const images = files
+      .filter((f) => INLINE_IMAGE_TYPES.has(f.type))
+      .map((f) => ({
+        type: 'image',
+        source: {
+          type: 'base64',
+          media_type: f.type,
+          data: readFileSync(f.path).toString('base64'),
+        },
+      }));
+    const texte = withAttachmentPaths(text, files);
+    const content = [...(texte ? [{ type: 'text', text: texte }] : []), ...images];
+    this.write({ type: 'user', message: { role: 'user', content } });
   }
 
   /** D68 : `control_request` observés sur claude 2.1.308 ; un `set_model` sans modèle revient au défaut. */

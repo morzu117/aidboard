@@ -5,7 +5,14 @@ import {
   type ModelOption,
 } from '../../shared/agentSettings.js';
 import type { PendingOption, PendingRequest } from '../../shared/model.js';
-import type { ConversationDriver, ConversationDriverOptions, ConversationEvent } from './driver.js';
+import {
+  type AttachedFile,
+  type ConversationDriver,
+  type ConversationDriverOptions,
+  type ConversationEvent,
+  INLINE_IMAGE_TYPES,
+  withAttachmentPaths,
+} from './driver.js';
 
 const SIGTERM_DELAY_MS = 2_000;
 const SIGKILL_DELAY_MS = 5_000;
@@ -104,7 +111,7 @@ export class CodexDriver implements ConversationDriver {
 
   private threadId: string;
   private phase: 'init' | 'ready' | 'turn' = 'init';
-  private queue: string[] = [];
+  private queue: unknown[][] = [];
   private activeTurnId: string | null = null;
   private interruptRequested = false;
   private settings: AgentSettings;
@@ -417,12 +424,12 @@ export class CodexDriver implements ConversationDriver {
     if (next !== undefined) this.startTurn(next);
   }
 
-  private startTurn(text: string): void {
+  private startTurn(input: unknown[]): void {
     this.phase = 'turn';
     this.interruptRequested = false;
     this.sendRequest('turn/start', {
       threadId: this.threadId,
-      input: [{ type: 'text', text }],
+      input,
       ...this.turnSettings(),
     })
       .then((result) => {
@@ -481,10 +488,17 @@ export class CodexDriver implements ConversationDriver {
     this.settings = settings;
   }
 
-  send(text: string): void {
+  send(text: string, files: AttachedFile[] = []): void {
     if (this.exited) return;
-    if (this.phase === 'ready') this.startTurn(text);
-    else this.queue.push(text);
+    // D70 : `localImage` pour une image, le chemin dans le texte pour le reste
+    const input = [
+      { type: 'text', text: withAttachmentPaths(text, files) },
+      ...files
+        .filter((f) => INLINE_IMAGE_TYPES.has(f.type))
+        .map((f) => ({ type: 'localImage', path: f.path })),
+    ];
+    if (this.phase === 'ready') this.startTurn(input);
+    else this.queue.push(input);
   }
 
   private sendInterrupt(): void {

@@ -316,6 +316,12 @@ rl.on('line', (line) => {
 
   if (msg.method === 'turn/start') {
     const text = msg.params?.input?.[0]?.text;
+    const images = (msg.params?.input ?? []).filter((i) => i.type === 'localImage');
+    if (images.length > 0) {
+      const vus = images.map((i) => i.path).join(',');
+      void runTurn(msg.id, msg.params.threadId, `${text} [images: ${vus}]`);
+      return;
+    }
     if (text === 'reglages') {
       const { approvalPolicy, model, effort } = msg.params;
       const vus = JSON.stringify({ approvalPolicy, model, effort });

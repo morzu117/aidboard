@@ -1,5 +1,13 @@
-import { closeSync, existsSync, mkdirSync, openSync, readSync, statSync } from 'node:fs';
-import { join } from 'node:path';
+import {
+  closeSync,
+  existsSync,
+  mkdirSync,
+  openSync,
+  readSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs';
+import { basename, join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import type { IPty } from 'node-pty';
 import { monotonicFactory } from 'ulid';
@@ -16,7 +24,11 @@ import type { Agent, PendingOption, PendingRequest } from '../../shared/model.js
 import type { AidConfig } from '../config.js';
 import { buildClaudeArgs, ClaudeDriver } from '../conversation/claude.js';
 import { buildCodexArgs, CodexDriver } from '../conversation/codex.js';
-import type { ConversationDriver, ConversationEvent } from '../conversation/driver.js';
+import type {
+  AttachedFile,
+  ConversationDriver,
+  ConversationEvent,
+} from '../conversation/driver.js';
 import type { Db } from '../db.js';
 import { AidHttpError } from '../errors.js';
 import { clip } from '../events/status.js';
@@ -39,6 +51,16 @@ import { meshPaths } from '../mesh/paths.js';
 import { homedir } from 'node:os';
 
 const ulid = monotonicFactory();
+/** D70 : bornes des pièces jointes d'un message. */
+const ATTACHMENTS_MAX = 5;
+const ATTACHMENT_MAX_BYTES = 10 * 1024 * 1024;
+
+/** Une pièce jointe telle que reçue par `POST /api/agents/:id/input` (contenu en base64). */
+export interface AttachmentUpload {
+  name: string;
+  type: string;
+  data: string;
+}
 const INITIAL = { cols: 120, rows: 32 };
 // Bordures que les TUI (dont claude lui-même) dessinent au-dessus du champ de saisie : une ligne
 // non vide mais sans contenu, qui écrase l'aperçu d'un agent inactif si on ne l'exclut pas.
@@ -973,11 +995,13 @@ export class AgentManager {
   }
 
   /** Un message tapé pour l'agent : le texte, puis Entrée. Plusieurs lignes passent en collage encadré. */
-  input(agentId: string, raw: string): void {
+  input(agentId: string, raw: string, attachments: AttachmentUpload[] = []): void {
     if (this.streams.has(agentId) || this.dormantStream(agentId)) {
-      this.inputStream(agentId, raw);
+      this.inputStream(agentId, raw, attachments);
       return;
     }
+    if (attachments.length > 0)
+      throw new AidHttpError(409, 'pièces jointes réservées aux agents conversationnels');
     const a = this.liveOr409(agentId);
     const text = raw.replace(/\r\n?/g, '\n');
     // aucune séquence de contrôle : elle sortirait du collage encadré ou piloterait le terminal
@@ -994,17 +1018,26 @@ export class AgentManager {
   }
 
   /** Même message qu'au clavier (D59) : une ligne `agent_messages`, le statut `working`, puis le pilote. */
-  private inputStream(agentId: string, raw: string): void {
+  private inputStream(agentId: string, raw: string, attachments: AttachmentUpload[]): void {
     const text = raw.replace(/\r\n?/g, '\n');
     // eslint-disable-next-line no-control-regex
     if (/[\u0000-\u0008\u000b-\u001f\u007f]/.test(text))
       throw new AidHttpError(422, 'caractère de contrôle refusé');
-    if (!text.trim()) throw new AidHttpError(422, 'message vide');
+    const uploads = this.decodeAttachments(attachments);
+    if (!text.trim() && uploads.length === 0) throw new AidHttpError(422, 'message vide');
     if (this.pendingOf(agentId))
       throw new AidHttpError(409, 'répondre d’abord à la demande en cours');
     // validé : la relance (et son éventuel 404/409) n'a lieu que pour un message qui sera effectivement envoyé (review A.6)
     const s = this.streamOrResume(agentId);
-    this.recordStreamEvent(s, { type: 'message', role: 'user', text });
+    const files = this.storeAttachments(agentId, uploads);
+    this.recordStreamEvent(s, {
+      type: 'message',
+      role: 'user',
+      text,
+      ...(files.length > 0 && {
+        attachments: files.map(({ name, type, size }) => ({ name, type, size })),
+      }),
+    });
     this.deps.store.append({
       source: 'daemon',
       type: 'agent.status',
@@ -1014,7 +1047,45 @@ export class AgentManager {
       agentId,
       data: { status: 'working' },
     });
-    s.driver.send(text);
+    s.driver.send(text, files);
+  }
+
+  /** D70 : tout est vérifié avant la relance éventuelle ; le nom ne garde que des caractères sûrs. */
+  private decodeAttachments(
+    list: AttachmentUpload[],
+  ): Array<{ name: string; type: string; data: Buffer }> {
+    if (list.length > ATTACHMENTS_MAX)
+      throw new AidHttpError(422, `au plus ${ATTACHMENTS_MAX} pièces jointes par message`);
+    return list.map((a) => {
+      if (!/^[A-Za-z0-9+/]*={0,2}$/.test(a.data))
+        throw new AidHttpError(422, `pièce jointe illisible : ${a.name}`);
+      const data = Buffer.from(a.data, 'base64');
+      if (data.length > ATTACHMENT_MAX_BYTES)
+        throw new AidHttpError(422, `pièce jointe de plus de 10 Mio : ${a.name}`);
+      const name =
+        basename(a.name)
+          .replace(/[^\p{L}\p{N}._ -]/gu, '_')
+          .slice(0, 100) || 'fichier';
+      const type = /^[\w.+-]+\/[\w.+-]+$/.test(a.type)
+        ? a.type.toLowerCase()
+        : 'application/octet-stream';
+      return { name, type, data };
+    });
+  }
+
+  /** D70 : hors worktree, dossier 0700 et fichiers 0600, un préfixe ulid pour ne jamais écraser. */
+  private storeAttachments(
+    agentId: string,
+    uploads: Array<{ name: string; type: string; data: Buffer }>,
+  ): Array<AttachedFile & { size: number }> {
+    if (uploads.length === 0) return [];
+    const dir = join(this.deps.paths.attachments, agentId);
+    mkdirSync(dir, { recursive: true, mode: 0o700 });
+    return uploads.map((u) => {
+      const path = join(dir, `${ulid()}-${u.name}`);
+      writeFileSync(path, u.data, { mode: 0o600 });
+      return { path, name: u.name, type: u.type, size: u.data.length };
+    });
   }
 
   /** Répond à la demande en cours, au clavier, après avoir vérifié que l'écran la montre toujours (E4). */

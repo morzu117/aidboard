@@ -2,6 +2,7 @@
 /* global process */
 // Faux `claude --print --input-format stream-json ...` : rejoue des événements de la même forme que les
 // captures réelles (docs/chantiers/15-…, « Protocoles observés »). Remplace claude dans les tests.
+import { Buffer } from 'node:buffer';
 import { createInterface } from 'node:readline';
 
 const args = process.argv.slice(2);
@@ -217,6 +218,19 @@ rl.on('line', (line) => {
       response: { subtype: 'success', request_id: msg.request_id, response: { still_queued: [] } },
     });
     if (longAbort) longAbort();
+    return;
+  }
+  // chantier 16 (D70) : un message avec pièces jointes arrive en blocs ; l'écho résume les images reçues.
+  if (msg.type === 'user' && Array.isArray(msg.message.content)) {
+    const blocs = msg.message.content;
+    const texte = blocs
+      .filter((b) => b.type === 'text')
+      .map((b) => b.text)
+      .join('');
+    const images = blocs
+      .filter((b) => b.type === 'image')
+      .map((b) => `${b.source.media_type}:${Buffer.from(b.source.data, 'base64').length}`);
+    void handleTurn(`${texte} [images: ${images.join(',')}]`);
     return;
   }
   if (msg.type === 'user') {

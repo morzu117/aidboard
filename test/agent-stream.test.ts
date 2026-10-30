@@ -1,3 +1,4 @@
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { delimiter, join } from 'node:path';
 import { afterEach, expect, test } from 'vitest';
 import { gracefulInterrupt } from '../src/daemon/pty/reprise.js';
@@ -534,4 +535,113 @@ test('réglages : refusés pour un agent PTY (409) et un agent inconnu (404)', a
   const { agent } = await spawnPty('claude');
   expect((await patchSettings(agent.id, { mode: 'auto' })).statusCode).toBe(409);
   expect((await patchSettings('ag_nope', { mode: 'auto' })).statusCode).toBe(404);
+});
+
+const PNG = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+  'base64',
+);
+
+async function postInput(agentId: string, payload: Record<string, unknown>) {
+  return c!.t.d.app.inject({
+    method: 'POST',
+    url: `/api/agents/${agentId}/input`,
+    headers: c!.t.headers,
+    payload,
+  });
+}
+
+test('pièces jointes (16.4) : déposées hors worktree en 0600, image en ligne, fichier cité par son chemin', async () => {
+  const { agent, topic } = await spawnStream('claude');
+  await waitFor(() => row(agent.id).session_id === agent.sessionId, 5000, 'session claude');
+  const dir = join(c!.t.home, 'attachments', agent.id);
+  expect(agent.command).toContain(dir);
+
+  const r = await postInput(agent.id, {
+    text: 'regarde',
+    attachments: [
+      { name: 'capture.png', type: 'image/png', data: PNG.toString('base64') },
+      {
+        name: '../notes secrètes.txt',
+        type: 'text/plain',
+        data: Buffer.from('salut').toString('base64'),
+      },
+    ],
+  });
+  expect(r.statusCode).toBe(202);
+  await waitFor(() => row(agent.id).status === 'idle', 5000, 'fin du tour');
+
+  const fichiers = readdirSync(dir);
+  expect(fichiers).toHaveLength(2);
+  const notes = fichiers.find((f) => f.endsWith('-notes secrètes.txt'))!;
+  expect(notes).toBeDefined();
+  expect(statSync(join(dir, notes)).mode & 0o777).toBe(0o600);
+  expect(readFileSync(join(dir, notes), 'utf8')).toBe('salut');
+  expect(readdirSync(topic.wt)).not.toContain('attachments');
+
+  const user = messages(agent.id, 'message').find(
+    (m) => (m as { role?: string }).role === 'user',
+  ) as { text: string; attachments: unknown };
+  expect(user.text).toBe('regarde');
+  expect(user.attachments).toEqual([
+    { name: 'capture.png', type: 'image/png', size: PNG.length },
+    { name: 'notes secrètes.txt', type: 'text/plain', size: 5 },
+  ]);
+  const echo = messages(agent.id, 'message')
+    .map((m) => (m as { text?: string }).text ?? '')
+    .find((t) => t.startsWith('echo: '))!;
+  expect(echo).toContain(`[images: image/png:${PNG.length}]`);
+  expect(echo).toContain(join(dir, notes));
+  expect(echo).not.toContain('capture.png');
+});
+
+test('pièces jointes : texte vide permis avec un fichier, refusé sans ; bornes de nombre et de taille', async () => {
+  const { agent } = await spawnStream('claude');
+  await waitFor(() => row(agent.id).session_id === agent.sessionId, 5000, 'session claude');
+  const png = { name: 'a.png', type: 'image/png', data: PNG.toString('base64') };
+
+  expect((await postInput(agent.id, { text: '' })).statusCode).toBe(422);
+  expect(
+    (await postInput(agent.id, { text: 'x', attachments: Array(6).fill(png) })).statusCode,
+  ).toBe(400);
+  const lourd = Buffer.alloc(10 * 1024 * 1024 + 1).toString('base64');
+  expect(
+    (await postInput(agent.id, { text: 'x', attachments: [{ ...png, data: lourd }] })).statusCode,
+  ).toBe(422);
+  expect(
+    (await postInput(agent.id, { text: 'x', attachments: [{ ...png, data: '%%%' }] })).statusCode,
+  ).toBe(422);
+  expect(existsSync(join(c!.t.home, 'attachments', agent.id))).toBe(true);
+  expect(readdirSync(join(c!.t.home, 'attachments', agent.id))).toHaveLength(0);
+
+  expect((await postInput(agent.id, { text: '', attachments: [png] })).statusCode).toBe(202);
+  await waitFor(() => row(agent.id).status === 'idle', 5000, 'fin du tour');
+});
+
+test('pièces jointes codex : image passée en localImage par son chemin', async () => {
+  const { agent } = await spawnStream('codex');
+  await waitFor(() => row(agent.id).session_id !== null, 5000, 'thread codex');
+  const r = await postInput(agent.id, {
+    text: 'vois',
+    attachments: [{ name: 'a.png', type: 'image/png', data: PNG.toString('base64') }],
+  });
+  expect(r.statusCode).toBe(202);
+  const dir = join(c!.t.home, 'attachments', agent.id);
+  await waitFor(
+    () =>
+      messages(agent.id, 'message').some((m) =>
+        ((m as { text?: string }).text ?? '').startsWith(`echo: vois [images: ${dir}/`),
+      ),
+    5000,
+    'image vue par codex',
+  );
+});
+
+test('pièces jointes : refusées pour un agent PTY (409)', async () => {
+  const { agent } = await spawnPty('claude');
+  const r = await postInput(agent.id, {
+    text: 'x',
+    attachments: [{ name: 'a.png', type: 'image/png', data: PNG.toString('base64') }],
+  });
+  expect(r.statusCode).toBe(409);
 });
