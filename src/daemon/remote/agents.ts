@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { monotonicFactory } from 'ulid';
 import type { AgentSettings, PermissionMode } from '../../shared/agentSettings.js';
+import { agentOptions, type AgentOptions, type ModelOption } from '../../shared/agentSettings.js';
 import type {
   AgentStatus,
   PendingRequest,
@@ -17,6 +18,7 @@ import { CONFIRM_OPTIONS, claudeConfirmSettings, isDestructive, rulePattern } fr
 import { RemoteDriver } from './driver.js';
 import { relayStop } from './relay.js';
 import { getServer } from './servers.js';
+import { SERVER_PERMISSION_MODES } from './servers.js';
 import { remoteExec, type TransportOptions } from './transport.js';
 
 const ulid = monotonicFactory();
@@ -116,6 +118,8 @@ export class RemoteAgentManager {
   private closing = new Set<string>();
   /** relances en cours, une par agent : deux messages simultanés ne lancent pas deux relais */
   private relaunching = new Map<string, Promise<LiveRemote>>();
+  /** dernier catalogue de modèles codex vu sur un pilote vivant (D71) */
+  private codexCatalog: ModelOption[] = [];
 
   constructor(private readonly deps: RemoteAgentManagerDeps) {}
 
@@ -392,6 +396,91 @@ export class RemoteAgentManager {
     const live = this.live.get(agentId);
     if (!live || live.exited) throw new AidHttpError(409, 'agent arrêté sur le serveur');
     return live;
+  }
+
+  /** R.6 (§11.3) : « Reconnecter » après un échec de reprise, sans attendre le prochain message. */
+  async reconnect(agentId: string): Promise<void> {
+    const row = this.agentRow(agentId);
+    this.assertOpen(row);
+    const live = this.live.get(agentId);
+    if (!live || live.exited) await this.relaunchOnce(row);
+  }
+
+  // ---- composer (R.6) : repères, mode, modèle et effort, comme pour un agent local
+
+  /** Repère (A.7) : seul un message utilisateur du fil se marque. */
+  mark(agentId: string, seq: number, marked: boolean): void {
+    this.agentRow(agentId);
+    const row = this.deps.db
+      .prepare('SELECT kind, payload FROM server_agent_messages WHERE agent_id = ? AND seq = ?')
+      .get(agentId, seq) as { kind: string; payload: string } | undefined;
+    if (!row) throw new AidHttpError(404, 'message inconnu');
+    let role: string | undefined;
+    if (row.kind === 'message') {
+      try {
+        role = (JSON.parse(row.payload) as { role?: string }).role;
+      } catch {
+        throw new AidHttpError(422, 'message illisible');
+      }
+    }
+    if (role !== 'user')
+      throw new AidHttpError(422, 'seul un message utilisateur peut être marqué');
+    this.deps.db
+      .prepare('UPDATE server_agent_messages SET marked = ? WHERE agent_id = ? AND seq = ?')
+      .run(marked ? 1 : 0, agentId, seq);
+  }
+
+  /** D71 : les modes sont ceux qu'un serveur accepte ; le catalogue codex vient d'un pilote vivant. */
+  options(agentId: string): AgentOptions {
+    const row = this.agentRow(agentId);
+    for (const live of this.live.values()) {
+      const catalog = live.driver.catalog();
+      if (catalog.length) this.codexCatalog = catalog;
+    }
+    // le catalogue de cet agent d'abord : deux serveurs peuvent avoir deux versions de codex (revue R.6)
+    const propre = this.live.get(agentId)?.driver.catalog() ?? [];
+    const options = agentOptions(row.kind, propre.length ? propre : this.codexCatalog);
+    return {
+      ...options,
+      modes: options.modes.filter((m) => SERVER_PERMISSION_MODES.includes(m.id)),
+    };
+  }
+
+  /** Écrit sur l'agent, appliqué au pilote vivant ; un agent arrêté le prend à sa relance. */
+  setSettings(agentId: string, patch: Partial<AgentSettings>): AgentSettings {
+    const row = this.agentRow(agentId);
+    const next: AgentSettings = {
+      mode: patch.mode ?? row.permission_mode,
+      model: patch.model === undefined ? row.model : patch.model,
+      effort: patch.effort === undefined ? row.effort : patch.effort,
+    };
+    const options = this.options(agentId);
+    if (!options.modes.some((m) => m.id === next.mode))
+      throw new AidHttpError(422, `mode inconnu pour ${row.kind} : ${next.mode}`);
+    // seuls les champs envoyés sont validés : un modèle déjà en place reste valable quand le catalogue codex
+    // n'est pas encore connu (agent en veille après un redémarrage du daemon, revue R.6)
+    const model = next.model === null ? undefined : options.models.find((m) => m.id === next.model);
+    if (patch.model !== undefined && next.model !== null && !model)
+      throw new AidHttpError(422, `modèle inconnu pour ${row.kind} : ${next.model}`);
+    const efforts = model?.efforts.length ? model.efforts : options.efforts;
+    if (patch.effort !== undefined && next.effort !== null && !efforts.includes(next.effort))
+      throw new AidHttpError(422, `effort inconnu : ${next.effort}`);
+    this.deps.db
+      .prepare(
+        'UPDATE server_agents SET permission_mode = ?, model = ?, effort = ?, updated_at = ? WHERE id = ?',
+      )
+      .run(next.mode, next.model, next.effort, new Date().toISOString(), agentId);
+    const live = this.live.get(agentId);
+    if (live && !live.exited) {
+      // R.5 : codex sous confirmation reste en `untrusted` ; son mode auto devient le tri du daemon
+      const driverSettings = { ...next };
+      if (live.confirm && row.kind === 'codex') {
+        live.confirm.autoApprove = next.mode === 'auto';
+        if (live.confirm.autoApprove) driverSettings.mode = 'default';
+      }
+      live.driver.configure(driverSettings);
+    }
+    return next;
   }
 
   // ---- cycle de vie

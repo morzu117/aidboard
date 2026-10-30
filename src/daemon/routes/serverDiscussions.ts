@@ -1,5 +1,6 @@
 import { Type } from '@sinclair/typebox';
 import type { FastifyInstance } from 'fastify';
+import type { AgentSettings } from '../../shared/agentSettings.js';
 import type { Db } from '../db.js';
 import { AidHttpError } from '../errors.js';
 import { RemoteAgentManager, type RemoteAgentManagerDeps } from '../remote/agents.js';
@@ -29,6 +30,16 @@ const AnswerBody = Type.Object(
   {
     pendingId: Type.String({ minLength: 1, maxLength: 64 }),
     answer: Type.String({ minLength: 1, maxLength: 8 }),
+  },
+  { additionalProperties: false },
+);
+// R.6 : mêmes corps que les routes d'un agent local
+const MarkBody = Type.Object({ marked: Type.Boolean() }, { additionalProperties: false });
+const SettingsBody = Type.Object(
+  {
+    mode: Type.Optional(Type.String({ minLength: 1, maxLength: 32 })),
+    model: Type.Optional(Type.Union([Type.String({ minLength: 1, maxLength: 128 }), Type.Null()])),
+    effort: Type.Optional(Type.Union([Type.String({ minLength: 1, maxLength: 32 }), Type.Null()])),
   },
   { additionalProperties: false },
 );
@@ -121,6 +132,33 @@ export function registerServerDiscussionRoutes(
       manager.answer(id, body.pendingId, body.answer);
       return reply.code(202).send({ id });
     },
+  );
+
+  app.put(
+    '/api/server-agents/:id/messages/:seq/mark',
+    { schema: { body: MarkBody } },
+    async (req, reply) => {
+      const { id, seq: seqParam } = req.params as { id: string; seq: string };
+      if (!/^[1-9][0-9]*$/.test(seqParam))
+        throw new AidHttpError(400, 'seq doit être un entier positif');
+      const { marked } = req.body as { marked: boolean };
+      manager.mark(id, Number(seqParam), marked);
+      return reply.code(200).send({ seq: Number(seqParam), marked });
+    },
+  );
+
+  app.post('/api/server-agents/:id/reconnect', async (req, reply) => {
+    const { id } = req.params as { id: string };
+    await manager.reconnect(id);
+    return reply.code(202).send({ id });
+  });
+
+  app.get('/api/server-agents/:id/options', async (req) =>
+    manager.options((req.params as { id: string }).id),
+  );
+
+  app.patch('/api/server-agents/:id/settings', { schema: { body: SettingsBody } }, async (req) =>
+    manager.setSettings((req.params as { id: string }).id, req.body as Partial<AgentSettings>),
   );
 
   manager.reattachAll();
