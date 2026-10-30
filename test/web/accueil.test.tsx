@@ -429,3 +429,22 @@ test('vue archivés : « Désarchiver » appelle le PATCH de Nav et retire le su
   );
   await waitFor(() => expect(node('1-1.table.ligne-1')).toBeNull());
 });
+
+test('shells en arrière-plan : le sujet qui n’affiche plus rien porte l’icône, pas le sujet sans agent', async () => {
+  open(
+    snapshot({
+      workspaces: [ws(), ws({ id: 'ws_2', name: 'project_1' })],
+      topics: [
+        topic(),
+        topic({ id: 'tp_2', workspaceId: 'ws_2', branch: 'fix/x', title: 'Autre', slug: 'x' }),
+      ],
+      runs: [{ id: 'run_1', topicId: 'tp_1', mode: 'standard', state: 'open', createdAt: 't' }],
+      agents: [agent({ status: 'working' })],
+    }),
+  );
+  await attendreTable();
+  expect(node('1-1.table.ligne-1.shells')?.getAttribute('aria-label')).toBe(
+    '1 shell en arrière-plan',
+  );
+  expect(node('1-1.table.ligne-2.shells')).toBeNull();
+});
