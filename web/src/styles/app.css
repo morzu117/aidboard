@@ -1969,3 +1969,249 @@ body {
   opacity: 0.5;
   cursor: not-allowed;
 }
+/* Chantier 17 (S.5) : configuration d'un serveur (§11.2, maquette ServerConfig). */
+.serveur-config {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.serveur-config-entete {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-5) var(--sp-8);
+  border-bottom: 1px solid var(--line);
+  background: var(--bg);
+}
+.serveur-config-titres {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.serveur-config-titres a {
+  color: inherit;
+}
+.serveur-config-corps {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 340px;
+  align-items: start;
+  gap: var(--sp-6);
+  padding: var(--sp-6) var(--sp-8) var(--sp-10);
+}
+[data-viewport='phone'] .serveur-config-corps,
+[data-viewport='tablet'] .serveur-config-corps {
+  grid-template-columns: minmax(0, 1fr);
+}
+.serveur-config-formulaire,
+.serveur-config-colonne {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+}
+.serveur-bloc {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  padding: var(--sp-4) var(--sp-5);
+  border: 1px solid var(--line);
+  border-radius: var(--r-xl);
+  background: var(--surface-1);
+}
+.serveur-bloc--danger {
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  border-color: var(--s-erreur-line);
+}
+.serveur-danger-titre,
+.serveur-test-titre {
+  margin: 0;
+  font-size: var(--fs-b);
+  font-weight: var(--fw-sb);
+}
+.serveur-champs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-3);
+}
+.serveur-champ {
+  display: flex;
+  flex: 1 1 200px;
+  flex-direction: column;
+  gap: var(--sp-1);
+  color: var(--text-2);
+  font-size: var(--fs-s);
+}
+.serveur-champ--court {
+  flex: 0 1 110px;
+}
+.serveur-champ .champ {
+  flex: none;
+}
+.serveur-champ-titre {
+  color: var(--text-2);
+  font-size: var(--fs-s);
+}
+.serveur-mono {
+  font-family: ui-monospace, monospace;
+}
+.serveur-aide {
+  display: block;
+  color: var(--faint);
+  font-size: var(--fs-s);
+}
+.serveur-couleurs,
+.serveur-dossiers {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2);
+}
+.serveur-couleur {
+  width: 22px;
+  height: 22px;
+  border: 2px solid transparent;
+  border-radius: var(--r-s);
+  cursor: pointer;
+}
+.serveur-segments {
+  display: inline-flex;
+  align-self: flex-start;
+  padding: 2px;
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-m);
+  background: var(--surface-2);
+}
+.serveur-segment {
+  padding: var(--sp-1) var(--sp-3);
+  border: 0;
+  border-radius: var(--r-s);
+  background: transparent;
+  color: var(--muted);
+  font-family: var(--font);
+  font-size: var(--fs-m);
+  cursor: pointer;
+}
+.serveur-segment[aria-pressed='true'] {
+  background: var(--surface-4);
+  color: var(--text);
+  font-weight: var(--fw-m);
+}
+.serveur-agents,
+.serveur-regles {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+}
+.serveur-agent,
+.serveur-regle {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+.serveur-dossier-retirer {
+  margin-left: var(--sp-1);
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+.serveur-dossier-champ {
+  flex: 0 1 160px;
+  height: var(--h-controle-s);
+}
+.serveur-test-entete {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.serveur-test-etapes {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.serveur-test-etape {
+  display: flex;
+  gap: var(--sp-2);
+  color: var(--text-2);
+  font-size: var(--fs-m);
+}
+.serveur-test-symbole {
+  flex: none;
+  width: 1em;
+  text-align: center;
+}
+.serveur-test-etape--ok .serveur-test-symbole {
+  color: var(--acc);
+}
+.serveur-test-etape--running .serveur-test-symbole {
+  color: var(--s-attente);
+}
+.serveur-test-etape--failed {
+  color: var(--s-erreur);
+}
+.serveur-test-etape--pending,
+.serveur-test-etape--skipped {
+  color: var(--faint);
+}
+.serveur-test-detail {
+  color: var(--faint);
+}
+.serveur-test-conclusion {
+  margin: 0;
+  color: var(--s-erreur);
+  font-weight: var(--fw-m);
+}
+.serveur-test-conclusion--ok {
+  color: var(--acc);
+}
+.serveur-test-brut pre {
+  max-height: 240px;
+  margin: var(--sp-2) 0 0;
+  padding: var(--sp-2);
+  overflow: auto;
+  border-radius: var(--r-s);
+  background: var(--surface-term);
+  font-family: ui-monospace, monospace;
+  font-size: var(--fs-s);
+  white-space: pre-wrap;
+}
+.serveur-apercu-groupe,
+.serveur-apercu-ligne {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+.serveur-apercu-carre {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+}
+.serveur-apercu-ligne {
+  padding: var(--sp-2) var(--sp-3);
+  border-radius: var(--r-m);
+  background: var(--surface-3);
+}
+.serveur-apercu-nom {
+  flex: 1 1 auto;
+}
+.serveur-config-entete > .message-erreur,
+.serveur-config-probleme {
+  flex: 1 0 100%;
+  margin: 0;
+}
+.serveur-config-probleme {
+  color: var(--s-attente);
+  font-size: var(--fs-s);
+}
+.serveur-couleur[aria-pressed='true'] {
+  border-color: var(--text);
+}
