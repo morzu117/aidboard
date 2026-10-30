@@ -42,20 +42,29 @@ function lastLine(s: string): string {
 function classify(
   r: ExecResult,
   timeoutMs: number,
+  mode: Server['mode'],
 ): { state: 'unreachable' | 'error'; reason: string } {
   if (r.timedOut) return { state: 'unreachable', reason: `délai dépassé (${timeoutMs / 1000} s)` };
   if (r.code === null)
     return { state: 'error', reason: lastLine(r.stderr) || 'commande de connexion introuvable' };
-  // 255 : code de `ssh` quand la connexion ou l'authentification échoue (jamais celui de la commande distante).
-  if (r.code === 255)
+  // 255 : code de `ssh` quand la connexion ou l'authentification échoue (jamais celui de la commande distante) ;
+  // en mode commande locale, il peut venir de la commande elle-même (review S.3).
+  if (r.code === 255 && mode !== 'command')
     return { state: 'unreachable', reason: lastLine(r.stderr) || 'connexion impossible' };
   return { state: 'error', reason: lastLine(r.stderr) || `code de sortie ${r.code}` };
+}
+
+/** La connexion elle-même a lâché (délai, signal, 255 de ssh) : le code ne dit rien de la commande. */
+function connectionLost(r: ExecResult, mode: Server['mode']): boolean {
+  return r.timedOut || r.code === null || (r.code === 255 && mode !== 'command');
 }
 
 export interface ServerConnectionsDeps {
   db: Db;
   store: EventStore;
   transport: TransportOptions;
+  /** Délai d'un aller-retour (15 s) ; réduit en test. */
+  timeoutMs?: number;
 }
 
 /**
@@ -67,6 +76,7 @@ export class ServerConnections {
   private pings = new Map<string, Promise<ServerStatus>>();
   private tests = new Map<string, ServerTest>();
   private disposed = false;
+  private readonly abort = new AbortController();
 
   constructor(private readonly deps: ServerConnectionsDeps) {}
 
@@ -97,21 +107,28 @@ export class ServerConnections {
   ping(server: Server): Promise<ServerStatus> {
     const inFlight = this.pings.get(server.id);
     if (inFlight) return inFlight;
-    if (this.status(server.id).state === 'unknown')
+    // pendant un test, l'étape `shell` fait foi : un ping parti avant n'écraserait qu'avec une mesure plus vieille
+    if (this.testRunning(server.id)) return Promise.resolve(this.status(server.id));
+    // un serveur sain ne clignote pas à chaque contrôle périodique ; un « Reconnecter » se voit
+    if (this.status(server.id).state !== 'connected')
       this.setStatus(server.id, { state: 'connecting' });
-    const p = remoteExec(server, `echo ${MARK}`, {
-      ...this.deps.transport,
-      timeoutMs: PING_TIMEOUT_MS,
-    }).then((r) => {
-      this.pings.delete(server.id);
-      return this.record(server.id, r, PING_TIMEOUT_MS);
-    });
+    const p = this.exec(server, `echo ${MARK}`)
+      .then((r) => this.record(server, r))
+      .catch((e: unknown) =>
+        this.setStatus(server.id, {
+          state: 'error',
+          latencyMs: null,
+          reason: e instanceof Error ? e.message : String(e),
+        }),
+      )
+      .finally(() => this.pings.delete(server.id));
     this.pings.set(server.id, p);
     return p;
   }
 
   lastTest(serverId: string): ServerTest | null {
-    return this.tests.get(serverId) ?? null;
+    const t = this.tests.get(serverId);
+    return t ? structuredClone(t) : null;
   }
 
   testRunning(serverId: string): boolean {
@@ -122,7 +139,7 @@ export class ServerConnections {
   /** Lance le test (§11.2) en tâche de fond et rend son état initial ; un test déjà en cours est rendu tel quel. */
   startTest(server: Server): ServerTest {
     const current = this.tests.get(server.id);
-    if (current && current.finishedAt === null) return current;
+    if (current && current.finishedAt === null) return structuredClone(current);
     const test: ServerTest = {
       serverId: server.id,
       startedAt: new Date().toISOString(),
@@ -140,13 +157,19 @@ export class ServerConnections {
     };
     this.tests.set(server.id, test);
     this.setStatus(server.id, { state: 'connecting' });
-    void this.runTest(server, test);
+    void this.runTest(server, test).catch((e: unknown) => {
+      // filet : `runTest` ne lève pas, mais un rejet non traité arrêterait le daemon
+      test.ok = false;
+      test.error ??= e instanceof Error ? e.message : String(e);
+      test.finishedAt ??= new Date().toISOString();
+    });
     return structuredClone(test);
   }
 
-  /** Les résultats qui arrivent après l'arrêt du daemon sont ignorés : la base est déjà fermée. */
+  /** Arrêt du daemon : les commandes en vol sont tuées, plus rien n'est lancé ni publié. */
   dispose(): void {
     this.disposed = true;
+    this.abort.abort();
   }
 
   forget(serverId: string): void {
@@ -154,8 +177,21 @@ export class ServerConnections {
     this.tests.delete(serverId);
   }
 
+  private get timeoutMs(): number {
+    return this.deps.timeoutMs ?? PING_TIMEOUT_MS;
+  }
+
   private exec(server: Server, cmd: string): Promise<ExecResult> {
-    return remoteExec(server, cmd, { ...this.deps.transport, timeoutMs: PING_TIMEOUT_MS });
+    return remoteExec(server, cmd, {
+      ...this.deps.transport,
+      timeoutMs: this.timeoutMs,
+      signal: this.abort.signal,
+    });
+  }
+
+  /** Serveur supprimé (ou recréé) pendant le test, ou daemon arrêté : le test est abandonné. */
+  private orphan(test: ServerTest): boolean {
+    return this.disposed || this.tests.get(test.serverId) !== test;
   }
 
   private async runTest(server: Server, test: ServerTest): Promise<void> {
@@ -163,6 +199,7 @@ export class ServerConnections {
       id: ServerTestStepId,
       run: () => Promise<{ detail: string; state?: 'ok' | 'skipped' }>,
     ): Promise<void> => {
+      if (this.orphan(test)) throw new StepFailed('test abandonné');
       const s = test.steps.find((x) => x.id === id)!;
       s.state = 'running';
       this.publishTest(test);
@@ -186,6 +223,12 @@ export class ServerConnections {
         test,
         `$ ${label}\n${r.stdout}${r.stderr}${r.code === 0 ? '' : `[code ${r.code ?? '—'}]\n`}`,
       );
+      if (r.timedOut) this.appendRaw(test, '[délai dépassé]\n');
+      // une coupure en cours de test : on dit la coupure, pas « répertoire inaccessible » ou « tmux absent »
+      if (label !== 'shell' && connectionLost(r, server.mode)) {
+        this.record(server, r);
+        throw new StepFailed(classify(r, this.timeoutMs, server.mode).reason);
+      }
       return r;
     };
 
@@ -198,10 +241,12 @@ export class ServerConnections {
       });
       await step('shell', async () => {
         const r = await remote('shell', `echo ${MARK}`);
-        this.record(server.id, r, PING_TIMEOUT_MS);
+        this.record(server, r);
         if (r.code !== 0 || !r.stdout.includes(MARK))
           throw new StepFailed(
-            r.code === 0 ? 'le shell distant n’a pas répondu' : classify(r, PING_TIMEOUT_MS).reason,
+            r.code === 0
+              ? 'le shell distant n’a pas répondu'
+              : classify(r, this.timeoutMs, server.mode).reason,
           );
         return { detail: `${r.durationMs} ms` };
       });
@@ -240,15 +285,19 @@ export class ServerConnections {
       test.ok = false;
       test.error = (e as Error).message;
       for (const s of test.steps) if (s.state === 'pending') s.state = 'skipped';
+      // l'étape `command` échoue avant tout aller-retour : l'état ne reste pas « connexion… » (review S.3)
+      if (!this.orphan(test) && this.status(server.id).state === 'connecting')
+        this.setStatus(server.id, { state: 'error', latencyMs: null, reason: test.error });
     }
     test.finishedAt = new Date().toISOString();
-    if (this.disposed) return;
+    if (this.orphan(test)) return;
     try {
-      // Agents détectés : gardés même si une étape suivante échoue ; `null` si l'étape n'a pas tourné.
-      if (detected !== null || test.steps.find((s) => s.id === 'agents')?.state === 'failed')
+      // Agents détectés : gardés même si une étape suivante échoue ; inchangés si la liste n'a pas pu être lue
+      // (étape non jouée, coupure) — `[]` seulement quand le serveur a répondu sans aucun agent.
+      if (detected !== null)
         this.deps.db
           .prepare('UPDATE servers SET detected_agents = ?, last_test_at = ? WHERE id = ?')
-          .run(JSON.stringify(detected ?? []), test.finishedAt, server.id);
+          .run(JSON.stringify(detected), test.finishedAt, server.id);
       else
         this.deps.db
           .prepare('UPDATE servers SET last_test_at = ? WHERE id = ?')
@@ -277,15 +326,15 @@ export class ServerConnections {
     return { path, error: `${shQuote(first)} introuvable dans le PATH du daemon` };
   }
 
-  private record(serverId: string, r: ExecResult, timeoutMs: number): ServerStatus {
+  private record(server: Server, r: ExecResult): ServerStatus {
     if (r.code === 0 && r.stdout.includes(MARK))
-      return this.setStatus(serverId, {
+      return this.setStatus(server.id, {
         state: 'connected',
         latencyMs: r.durationMs,
         reason: null,
       });
-    const c = classify(r, timeoutMs);
-    return this.setStatus(serverId, { state: c.state, latencyMs: null, reason: c.reason });
+    const c = classify(r, this.timeoutMs, server.mode);
+    return this.setStatus(server.id, { state: c.state, latencyMs: null, reason: c.reason });
   }
 
   private setStatus(serverId: string, patch: Partial<ServerStatus>): ServerStatus {
@@ -307,7 +356,7 @@ export class ServerConnections {
   }
 
   private publishTest(test: ServerTest): void {
-    if (this.disposed) return;
+    if (this.orphan(test)) return;
     this.deps.store.emitEphemeral({
       kind: 'ephemeral',
       type: 'server.test',

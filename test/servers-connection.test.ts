@@ -1,6 +1,8 @@
-import { chmodSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterEach, expect, test } from 'vitest';
+import { ServerConnections } from '../src/daemon/remote/connection.js';
+import { issueRunToken } from '../src/daemon/security.js';
 import type { Server, ServerStatus, ServerTest } from '../src/shared/model.js';
 import { FAKE_SSH, startTestDaemon, type TestDaemon, waitFor } from './helpers/daemon.js';
 
@@ -170,6 +172,10 @@ test('ssh introuvable : la première étape échoue sans rien lancer', async () 
     'skipped',
   ]);
   expect(done.error).toContain('/nonexistent/ssh introuvable');
+  // l'état ne reste pas « connexion… » après un test fini en échec (review S.3)
+  const status = (await req('GET', '/api/servers/status')).json<ServerStatus[]>()[0]!;
+  expect(status).toMatchObject({ state: 'error' });
+  expect(status.reason).toContain('/nonexistent/ssh introuvable');
 });
 
 test('un seul test à la fois par serveur ; 404 avant le premier', async () => {
@@ -202,4 +208,116 @@ test('état : inconnu puis contrôlé à la lecture, ping attendu, oublié à la
   await req('DELETE', `/api/servers/${s.id}`);
   expect((await req('GET', '/api/servers/status')).json()).toEqual([]);
   expect((await req('POST', `/api/servers/${s.id}/ping`)).statusCode).toBe(404);
+});
+
+const lines = (file: string) =>
+  existsSync(file) ? readFileSync(file, 'utf8').split('\n').filter(Boolean).length : 0;
+const pause = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+test('coupure en cours de test : la coupure est dite, les agents connus restent', async () => {
+  t = await startTestDaemon();
+  remote(t.home, ['claude', 'codex', 'tmux']);
+  const s = await create();
+  let got = listen();
+  await req('POST', `/api/servers/${s.id}/test`);
+  expect((await finished(got)).ok).toBe(true);
+
+  // le profil compte les connexions ; à partir de la 3e (étape `agents`), il ne répond plus
+  const bin = join(t.home, 'bin');
+  writeFileSync(
+    join(t.home, '.bash_profile'),
+    `n=$(( $(/bin/cat "$HOME/n" 2>/dev/null || echo 0) + 1 )); echo $n > "$HOME/n"\n` +
+      `[ "$n" -ge 3 ] && /bin/sleep 5\nPATH='${bin}'\n`,
+  );
+  const c = new ServerConnections({
+    db: t.db,
+    store: t.store,
+    transport: { ssh: FAKE_SSH, env: { ...process.env, FAKE_SSH_HOME: t.home } },
+    timeoutMs: 400,
+  });
+  got = listen();
+  c.startTest(s);
+  const done = await finished(got);
+  c.dispose();
+  expect(done.steps.map((x) => x.state)).toEqual(['ok', 'ok', 'ok', 'failed', 'skipped']);
+  expect(done.error).toContain('délai dépassé');
+  expect(done.raw).toContain('[délai dépassé]');
+  expect(c.status(s.id)).toMatchObject({ state: 'unreachable' });
+  expect((await req('GET', `/api/servers/${s.id}`)).json<Server>().detectedAgents).toEqual([
+    'claude',
+    'codex',
+  ]);
+});
+
+test('serveur supprimé pendant le test : plus rien n’est publié pour lui', async () => {
+  t = await startTestDaemon(undefined, {
+    remote: { ssh: FAKE_SSH, env: { ...process.env, FAKE_SSH_DELAY: '0.3' } },
+  });
+  const s = await create();
+  const got = listen();
+  await req('POST', `/api/servers/${s.id}/test`);
+  await waitFor(() => got.find((m) => m.type === 'server.test'), 5_000, 'premier message');
+  expect((await req('DELETE', `/api/servers/${s.id}`)).statusCode).toBe(204);
+  const before = got.length;
+  await pause(1_000);
+  expect(got.slice(before)).toEqual([]);
+  expect((await req('GET', '/api/servers/status')).json()).toEqual([]);
+});
+
+test('arrêt pendant un test : la commande en vol est tuée, rien d’autre ne part', async () => {
+  t = await startTestDaemon();
+  const s = await create();
+  const log = join(t.home, 'ssh.log');
+  const c = new ServerConnections({
+    db: t.db,
+    store: t.store,
+    transport: { ssh: FAKE_SSH, env: { ...process.env, FAKE_SSH_DELAY: '3', FAKE_SSH_LOG: log } },
+  });
+  c.startTest(s);
+  await waitFor(() => lines(log) === 1 || undefined, 5_000, 'étape shell lancée');
+  const started = Date.now();
+  c.dispose();
+  await waitFor(() => c.lastTest(s.id)?.finishedAt ?? undefined, 2_000, 'test arrêté');
+  expect(Date.now() - started).toBeLessThan(1_500);
+  await pause(300);
+  expect(lines(log)).toBe(1);
+});
+
+test('mode commande : un 255 de la commande locale est une erreur, pas une coupure', async () => {
+  t = await startTestDaemon();
+  const s = await create({ mode: 'command', target: "/bin/sh -c 'exit 255'", loadProfile: false });
+  const st = (await req('POST', `/api/servers/${s.id}/ping`)).json<ServerStatus>();
+  expect(st).toMatchObject({ state: 'error', reason: 'code de sortie 255' });
+});
+
+test('contrôle périodique : un état plus vieux que l’âge maximal relance un aller-retour', async () => {
+  t = await startTestDaemon();
+  const s = await create();
+  const log = join(t.home, 'ssh.log');
+  const c = new ServerConnections({
+    db: t.db,
+    store: t.store,
+    transport: { ssh: FAKE_SSH, env: { ...process.env, FAKE_SSH_LOG: log } },
+  });
+  await c.ping(s);
+  expect(lines(log)).toBe(1);
+  c.statusesRefreshing(60_000);
+  expect(lines(log)).toBe(1);
+  c.statusesRefreshing(-1);
+  await waitFor(() => lines(log) === 2 || undefined, 5_000, 'second contrôle');
+  c.dispose();
+});
+
+test('réservé à l’administrateur : un token de run est refusé', async () => {
+  t = await startTestDaemon();
+  const s = await create();
+  const headers = { ...t.headers, authorization: `Bearer ${issueRunToken(t.d.auth, 'run_1')}` };
+  for (const [method, url] of [
+    ['GET', '/api/servers'],
+    ['GET', '/api/servers/status'],
+    ['POST', `/api/servers/${s.id}/ping`],
+    ['POST', `/api/servers/${s.id}/test`],
+    ['GET', '/ws/events'],
+  ] as const)
+    expect((await t.d.app.inject({ method, url, headers })).statusCode, url).toBe(403);
 });

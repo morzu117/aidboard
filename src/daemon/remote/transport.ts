@@ -91,7 +91,7 @@ export function killGroup(child: ReturnType<typeof spawn>, signal: NodeJS.Signal
 export function remoteExec(
   server: Parameters<typeof remoteArgv>[0],
   cmd: string,
-  opts: TransportOptions & { timeoutMs?: number; maxBytes?: number } = {},
+  opts: TransportOptions & { timeoutMs?: number; maxBytes?: number; signal?: AbortSignal } = {},
 ): Promise<ExecResult> {
   const timeoutMs = opts.timeoutMs ?? EXEC_TIMEOUT_MS;
   const maxBytes = opts.maxBytes ?? EXEC_MAX_BYTES;
@@ -106,9 +106,12 @@ export function remoteExec(
     let settled = false;
     // déclarés avant `finish` : un `spawn` qui lève l'appelle avant tout minuteur (review S.2)
     const timers: { main?: NodeJS.Timeout; kill?: NodeJS.Timeout } = {};
+    // arrêt du daemon (review S.3) : le groupe est tué sans attendre le délai
+    const hooks: { abort?: () => void } = {};
     const finish = (code: number | null, extraErr?: string) => {
       if (settled) return;
       settled = true;
+      if (hooks.abort) opts.signal?.removeEventListener('abort', hooks.abort);
       clearTimeout(timers.main);
       clearTimeout(timers.kill);
       resolve({
@@ -131,6 +134,10 @@ export function remoteExec(
       return used + Math.min(chunk.length, room);
     };
     let child: ReturnType<typeof spawn>;
+    if (opts.signal?.aborted) {
+      finish(null, 'interrompu');
+      return;
+    }
     try {
       const { file, args } = remoteArgv(server, cmd, opts);
       // Groupe de processus à part : au délai dépassé on tue le groupe, sinon un petit-enfant (le `ssh`
@@ -160,6 +167,13 @@ export function remoteExec(
     child.stderr!.on('data', (c: Buffer) => (errBytes = keep(err, errBytes, c)));
     child.on('error', (e) => finish(null, e.message));
     child.on('close', (code) => finish(code));
+    hooks.abort = () => {
+      killGroup(child, 'SIGKILL');
+      child.stdout?.destroy();
+      child.stderr?.destroy();
+      finish(null, 'interrompu');
+    };
+    opts.signal?.addEventListener('abort', hooks.abort, { once: true });
   });
 }
 
