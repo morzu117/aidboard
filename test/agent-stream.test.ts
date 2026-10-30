@@ -450,3 +450,88 @@ test('reprise (A.6) : un événement tardif de l’ancien pilote après la relan
   ).maxSeq;
   expect(seqApres).toBe(seqAvant);
 });
+
+function reglagesVus(agentId: string): unknown {
+  const m = messages(agentId, 'message')
+    .map((x) => (x as { text?: string }).text ?? '')
+    .findLast((t) => t.startsWith('echo: reglages '));
+  return m ? JSON.parse(m.slice('echo: reglages '.length)) : undefined;
+}
+
+async function patchSettings(agentId: string, payload: Record<string, unknown>) {
+  return c!.t.d.app.inject({
+    method: 'PATCH',
+    url: `/api/agents/${agentId}/settings`,
+    headers: c!.t.headers,
+    payload,
+  });
+}
+
+test('réglages (16.3) : options du kind, PATCH appliqué à chaud, défaut retenu pour le claude suivant', async () => {
+  const { agent, topic } = await spawnStream('claude');
+  await waitFor(() => row(agent.id).session_id === agent.sessionId, 5000, 'session claude');
+  expect(agent).toMatchObject({ permissionMode: 'default', model: null, effort: null });
+
+  const options = await c!.t.d.app.inject({
+    method: 'GET',
+    url: `/api/agents/${agent.id}/options`,
+    headers: c!.t.headers,
+  });
+  expect(options.statusCode).toBe(200);
+  const o = options.json<{ modes: { id: string }[]; models: { id: string }[] }>();
+  expect(o.modes.map((m) => m.id)).toEqual(['default', 'acceptEdits', 'auto', 'plan']);
+  expect(o.models.map((m) => m.id)).toContain('opus');
+
+  const r = await patchSettings(agent.id, { mode: 'auto', model: 'opus' });
+  expect(r.statusCode).toBe(200);
+  expect(r.json()).toEqual({ mode: 'auto', model: 'opus', effort: null });
+  c!.t.d.agents.input(agent.id, 'reglages');
+  await waitFor(() => reglagesVus(agent.id) !== undefined, 5000, 'réglages vus par claude');
+  expect(reglagesVus(agent.id)).toEqual({ mode: 'auto', model: 'opus', effort: null });
+
+  expect((await patchSettings(agent.id, { mode: 'bypassPermissions' })).statusCode).toBe(422);
+  expect((await patchSettings(agent.id, { model: 'gpt-x' })).statusCode).toBe(422);
+  expect((await patchSettings(agent.id, { effort: 'enorme' })).statusCode).toBe(422);
+  expect((await patchSettings(agent.id, { effort: 'max' })).statusCode).toBe(200);
+
+  const second = c!.t.d.agents.spawn({ topicId: topic.topicId, kind: 'claude' });
+  expect(second).toMatchObject({ permissionMode: 'auto', model: 'opus', effort: 'max' });
+  expect(second.command.join(' ')).toContain('--permission-mode auto --model opus --effort max');
+});
+
+test('réglages et relance (A.6) : changés pendant la veille, repris par les arguments de lancement', async () => {
+  const { agent } = await spawnStream('claude');
+  await waitFor(() => row(agent.id).session_id === agent.sessionId, 5000, 'session claude');
+  c!.t.d.agents.input(agent.id, 'crash');
+  await waitFor(() => c!.t.d.agents.getStream(agent.id)?.exited === true, 5000, 'sortie');
+
+  expect((await patchSettings(agent.id, { mode: 'plan', effort: 'low' })).statusCode).toBe(200);
+  c!.t.d.agents.input(agent.id, 'reglages');
+  await waitFor(() => reglagesVus(agent.id) !== undefined, 5000, 'réglages après relance');
+  expect(reglagesVus(agent.id)).toEqual({ mode: 'plan', model: null, effort: 'low' });
+});
+
+test('réglages codex (D66, D71) : deux modes, catalogue de model/list, approvalPolicy never en auto', async () => {
+  const { agent } = await spawnStream('codex');
+  await waitFor(() => c!.t.d.agents.options(agent.id).models.length > 0, 5000, 'catalogue codex');
+  const o = c!.t.d.agents.options(agent.id);
+  expect(o.modes.map((m) => m.id)).toEqual(['default', 'auto']);
+  expect(o.models).toEqual([{ id: 'gpt-fake', label: 'GPT-FAKE', efforts: ['low', 'high'] }]);
+
+  expect((await patchSettings(agent.id, { mode: 'acceptEdits' })).statusCode).toBe(422);
+  const r = await patchSettings(agent.id, { mode: 'auto', model: 'gpt-fake', effort: 'high' });
+  expect(r.statusCode).toBe(200);
+  c!.t.d.agents.input(agent.id, 'reglages');
+  await waitFor(() => reglagesVus(agent.id) !== undefined, 5000, 'réglages vus par codex');
+  expect(reglagesVus(agent.id)).toEqual({
+    approvalPolicy: 'never',
+    model: 'gpt-fake',
+    effort: 'high',
+  });
+});
+
+test('réglages : refusés pour un agent PTY (409) et un agent inconnu (404)', async () => {
+  const { agent } = await spawnPty('claude');
+  expect((await patchSettings(agent.id, { mode: 'auto' })).statusCode).toBe(409);
+  expect((await patchSettings('ag_nope', { mode: 'auto' })).statusCode).toBe(404);
+});

@@ -1,8 +1,17 @@
-import { closeSync, existsSync, openSync, readSync, statSync } from 'node:fs';
+import { closeSync, existsSync, mkdirSync, openSync, readSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import type { IPty } from 'node-pty';
 import { monotonicFactory } from 'ulid';
+import {
+  type AgentOptions,
+  type AgentSettings,
+  agentOptions,
+  DEFAULT_SETTINGS,
+  MODES,
+  type ModelOption,
+  type PermissionMode,
+} from '../../shared/agentSettings.js';
 import type { Agent, PendingOption, PendingRequest } from '../../shared/model.js';
 import type { AidConfig } from '../config.js';
 import { buildClaudeArgs, ClaudeDriver } from '../conversation/claude.js';
@@ -148,6 +157,8 @@ function readLogTail(path: string, max: number): string {
 export class AgentManager {
   private live = new Map<string, LiveAgent>();
   private streams = new Map<string, LiveStream>();
+  /** D71 : dernier catalogue annoncé par un pilote codex, gardé après sa sortie. */
+  private codexCatalog: ModelOption[] = [];
   // à part de `LiveStream` (interface publique, D62) : `recordStreamEvent` et `inputStream` en ont besoin hors du closure de `spawnStream`.
   private streamSubscribers = new Map<string, Set<(ev: ConversationEvent) => void>>();
   private readonly ticker: NodeJS.Timeout;
@@ -410,6 +421,7 @@ export class AgentManager {
     sessionId: string;
     resume: boolean;
     seq: number;
+    settings: AgentSettings;
   }): { stream: LiveStream; command: string[] } {
     const { paths, config, auth } = this.deps;
     const file = resolveOnPath(o.kind, process.env.PATH ?? '');
@@ -423,12 +435,17 @@ export class AgentManager {
       AID_AGENT: o.agentId,
       AID_SPOOL: paths.spool,
     });
+    // D70 : le dossier existe avant le lancement, `--add-dir` le désigne à claude
+    const attachmentsDir = join(paths.attachments, o.agentId);
+    mkdirSync(attachmentsDir, { recursive: true, mode: 0o700 });
     const driverOpts = {
       bin: file,
       cwd: o.topic.worktree,
       env,
       sessionId: o.sessionId,
       resume: o.resume,
+      settings: o.settings,
+      attachmentsDir,
     };
     const driver: ConversationDriver =
       o.kind === 'claude' ? new ClaudeDriver(driverOpts) : new CodexDriver(driverOpts);
@@ -475,6 +492,7 @@ export class AgentManager {
 
     const agentId = `ag_${ulid()}`;
     const sessionId = o.kind === 'claude' ? randomUUID() : '';
+    const settings = this.defaultSettings(o.kind);
     const { command } = this.createStream({
       agentId,
       topic,
@@ -483,6 +501,7 @@ export class AgentManager {
       sessionId,
       resume: false,
       seq: 0,
+      settings,
     });
 
     const now = new Date().toISOString();
@@ -512,6 +531,15 @@ export class AgentManager {
             now,
           ),
     );
+    store.append({
+      source: 'daemon',
+      type: 'agent.settings',
+      workspaceId: topic.workspace_id,
+      topicId: topic.id,
+      runId: run.id,
+      agentId,
+      data: { kind: o.kind, ...settings },
+    });
     return {
       id: agentId,
       runId: run.id,
@@ -523,6 +551,9 @@ export class AgentManager {
       command,
       pid: null,
       sessionId: sessionId || null,
+      permissionMode: settings.mode,
+      model: settings.model,
+      effort: settings.effort,
       exitCode: null,
       issue: null,
       statusReason: null,
@@ -579,6 +610,7 @@ export class AgentManager {
       sessionId,
       resume,
       seq: seqRow.maxSeq ?? 0,
+      settings: this.settingsOf(agentId),
     });
     store.append({
       source: 'daemon',
@@ -688,6 +720,79 @@ export class AgentManager {
       )
       .run(stream.id, seq, ev.type, JSON.stringify(ev), new Date().toISOString());
     for (const cb of this.streamSubscribers.get(stream.id) ?? []) cb(ev);
+  }
+
+  /** D67 : le dernier réglage choisi pour ce kind, sinon celui de la CLI. */
+  private defaultSettings(kind: 'claude' | 'codex'): AgentSettings {
+    const row = this.deps.db
+      .prepare('SELECT permission_mode, model, effort FROM agent_defaults WHERE kind = ?')
+      .get(kind) as
+      { permission_mode: string; model: string | null; effort: string | null } | undefined;
+    if (!row || !MODES[kind].some((m) => m.id === row.permission_mode))
+      return { ...DEFAULT_SETTINGS };
+    return { mode: row.permission_mode as PermissionMode, model: row.model, effort: row.effort };
+  }
+
+  /** Le réglage propre à l'agent (A.6 : repris tel quel à la relance) ; un agent d'avant le chantier 16 n'en a pas. */
+  private settingsOf(agentId: string): AgentSettings {
+    const row = this.deps.db
+      .prepare('SELECT permission_mode, model, effort FROM agents WHERE id = ?')
+      .get(agentId) as
+      { permission_mode: string | null; model: string | null; effort: string | null } | undefined;
+    if (!row?.permission_mode) return { ...DEFAULT_SETTINGS };
+    return { mode: row.permission_mode as PermissionMode, model: row.model, effort: row.effort };
+  }
+
+  private streamKindOr409(agentId: string): 'claude' | 'codex' {
+    const row = this.deps.db
+      .prepare('SELECT kind, transport FROM agents WHERE id = ?')
+      .get(agentId) as { kind: string; transport: string } | undefined;
+    if (!row) throw new AidHttpError(404, 'agent inconnu');
+    if (row.transport !== 'stream' || (row.kind !== 'claude' && row.kind !== 'codex'))
+      throw new AidHttpError(409, 'réservé aux agents conversationnels');
+    return row.kind;
+  }
+
+  /** D71 : ce que le composer peut proposer pour cet agent. */
+  options(agentId: string): AgentOptions {
+    const kind = this.streamKindOr409(agentId);
+    for (const s of this.streams.values()) {
+      const catalog = s.kind === 'codex' ? s.driver.catalog?.() : undefined;
+      if (catalog?.length) this.codexCatalog = catalog;
+    }
+    return agentOptions(kind, this.codexCatalog);
+  }
+
+  /** D68/D69 : journalisé, puis appliqué au pilote vivant ; un agent en veille le prend à sa relance. */
+  setSettings(agentId: string, patch: Partial<AgentSettings>): AgentSettings {
+    const kind = this.streamKindOr409(agentId);
+    const next: AgentSettings = { ...this.settingsOf(agentId), ...patch };
+    const options = this.options(agentId);
+    if (!options.modes.some((m) => m.id === next.mode))
+      throw new AidHttpError(422, `mode inconnu pour ${kind} : ${next.mode}`);
+    const model = next.model === null ? undefined : options.models.find((m) => m.id === next.model);
+    if (next.model !== null && !model)
+      throw new AidHttpError(422, `modèle inconnu pour ${kind} : ${next.model}`);
+    const efforts = model?.efforts.length ? model.efforts : options.efforts;
+    if (next.effort !== null && !efforts.includes(next.effort))
+      throw new AidHttpError(422, `effort inconnu : ${next.effort}`);
+    const ids = this.deps.db
+      .prepare(
+        'SELECT a.run_id, r.topic_id, t.workspace_id FROM agents a JOIN runs r ON r.id = a.run_id JOIN topics t ON t.id = r.topic_id WHERE a.id = ?',
+      )
+      .get(agentId) as { run_id: string; topic_id: string; workspace_id: string } | undefined;
+    this.deps.store.append({
+      source: 'daemon',
+      type: 'agent.settings',
+      workspaceId: ids?.workspace_id,
+      topicId: ids?.topic_id,
+      runId: ids?.run_id,
+      agentId,
+      data: { kind, ...next },
+    });
+    const live = this.streams.get(agentId);
+    if (live && !live.exited) live.driver.configure(next);
+    return next;
   }
 
   private streamOr409(agentId: string): LiveStream {

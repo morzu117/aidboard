@@ -15,6 +15,8 @@ export interface AidPaths {
   worktrees: string;
   spool: string;
   memory: string;
+  /** D70 : pièces jointes des agents conversationnels, une sous-dossier par agent. */
+  attachments: string;
 }
 
 export function resolvePaths(home = process.env.AID_HOME ?? join(homedir(), '.aid')): AidPaths {
@@ -31,6 +33,7 @@ export function resolvePaths(home = process.env.AID_HOME ?? join(homedir(), '.ai
     worktrees: join(home, 'worktrees'),
     spool: join(home, 'spool'),
     memory: join(home, 'memory'),
+    attachments: join(home, 'attachments'),
   };
 }
 

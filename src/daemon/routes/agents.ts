@@ -1,5 +1,6 @@
 import { Type } from '@sinclair/typebox';
 import type { FastifyInstance } from 'fastify';
+import type { AgentSettings } from '../../shared/agentSettings.js';
 import type { Db } from '../db.js';
 import { AidHttpError } from '../errors.js';
 import type { AgentManager } from '../pty/manager.js';
@@ -27,6 +28,14 @@ const AnswerBody = Type.Object(
   { additionalProperties: false },
 );
 const MarkBody = Type.Object({ marked: Type.Boolean() }, { additionalProperties: false });
+const SettingsBody = Type.Object(
+  {
+    mode: Type.Optional(Type.String({ minLength: 1, maxLength: 32 })),
+    model: Type.Optional(Type.Union([Type.String({ minLength: 1, maxLength: 128 }), Type.Null()])),
+    effort: Type.Optional(Type.Union([Type.String({ minLength: 1, maxLength: 32 }), Type.Null()])),
+  },
+  { additionalProperties: false },
+);
 
 export function registerAgentRoutes(
   app: FastifyInstance,
@@ -109,6 +118,17 @@ export function registerAgentRoutes(
     const { id } = req.params as { id: string };
     deps.agents.interrupt(id);
     return reply.code(202).send({ id });
+  });
+
+  // Chantier 16 (D66-D71) : mode, modèle et effort d'un agent conversationnel, depuis le composer.
+  app.get('/api/agents/:id/options', async (req) => {
+    const { id } = req.params as { id: string };
+    return deps.agents.options(id);
+  });
+
+  app.patch('/api/agents/:id/settings', { schema: { body: SettingsBody } }, async (req) => {
+    const { id } = req.params as { id: string };
+    return deps.agents.setSettings(id, req.body as Partial<AgentSettings>);
   });
 
   app.delete('/api/agents/:id', async (req, reply) => {
