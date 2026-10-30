@@ -13,21 +13,23 @@ import {
 
 const ulid = monotonicFactory();
 
-const Nullable = <T extends Parameters<typeof Type.Union>[0][number]>(t: T) =>
-  Type.Union([t, Type.Null()]);
+// Type JSON multiple plutôt qu'une union (review S.1) : la coercition d'Ajv lit `null` comme 0 ou "" dans
+// `[t, null]`, et 0 ou "" comme `null` dans `[null, t]` ; avec `type: [t, 'null']`, une valeur qui a déjà
+// l'un des types n'est jamais convertie.
+const Nullable = <V>(type: 'integer' | 'string') => Type.Unsafe<V | null>({ type: [type, 'null'] });
 
 const SshOptions = Type.Object(
   {
-    port: Nullable(Type.Integer()),
-    user: Nullable(Type.String()),
-    identityFile: Nullable(Type.String()),
-    jump: Nullable(Type.String()),
+    port: Nullable<number>('integer'),
+    user: Nullable<string>('string'),
+    identityFile: Nullable<string>('string'),
+    jump: Nullable<string>('string'),
   },
   { additionalProperties: false },
 );
 
 const editable = {
-  sshOptions: Type.Optional(Nullable(SshOptions)),
+  sshOptions: Type.Optional(Type.Union([SshOptions, Type.Null()])),
   loadProfile: Type.Optional(Type.Boolean()),
   workdir: Type.Optional(Type.String()),
   shell: Type.Optional(Type.String()),
