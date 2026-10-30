@@ -324,6 +324,45 @@ export interface ServerTest {
   raw: string;
 }
 
+/** Chantier 17 (F.1) : une entrée du panneau Fichiers d'un serveur (un niveau à la fois). */
+export interface ServerFsEntry {
+  name: string;
+  kind: 'dir' | 'file' | 'other';
+  symlink: boolean;
+  /** D78 : fichier sensible, signalé « masqué », contenu jamais lu. */
+  hidden: boolean;
+  /** D78 : dossier lourd, grisé, non déplié par défaut. */
+  heavy: boolean;
+  /** Badge `git status` : `M` modifié, `?` non suivi ; un dossier porte celui de son contenu. */
+  git: 'M' | '?' | null;
+}
+
+export interface ServerFsListing {
+  serverId: string;
+  /** Chemin tel que demandé (`~/…` gardé), base des chemins des entrées. */
+  path: string;
+  /** Chemin résolu par `realpath` sur le serveur. */
+  resolved: string;
+  entries: ServerFsEntry[];
+  truncated: boolean;
+  /** Le dossier est dans un dépôt Git (badges disponibles). */
+  git: boolean;
+  readAt: string;
+}
+
+export interface ServerFilePreview {
+  serverId: string;
+  path: string;
+  resolved: string;
+  size: number;
+  /** Octet nul dans les 8 premiers Kio : contenu non transmis. */
+  binary: boolean;
+  /** Aperçu coupé à 256 Kio (D78). */
+  truncated: boolean;
+  content: string | null;
+  readAt: string;
+}
+
 /** Chantier 17 (R.1) : une discussion sur un serveur, à côté des sujets (D74). `cwd` = répertoire distant. */
 export interface ServerDiscussion {
   id: string;

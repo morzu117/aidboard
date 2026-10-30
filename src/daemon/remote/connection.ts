@@ -1,5 +1,6 @@
 import type { Server, ServerStatus, ServerTest, ServerTestStepId } from '../../shared/model.js';
 import type { Db } from '../db.js';
+import { AidHttpError } from '../errors.js';
 import type { EventStore } from '../events/store.js';
 import { resolveOnPath } from '../pty/spawn.js';
 import { listServers } from './servers.js';
@@ -170,6 +171,18 @@ export class ServerConnections {
   dispose(): void {
     this.disposed = true;
     this.abort.abort();
+  }
+
+  /**
+   * F.1 : une commande de lecture du panneau Fichiers / Git. Une connexion perdue marque le serveur
+   * injoignable (la pastille et le bandeau le disent) et répond 502 ; le code de la commande reste à l'appelant.
+   */
+  async read(server: Server, cmd: string): Promise<ExecResult> {
+    const r = await this.exec(server, cmd);
+    if (!connectionLost(r, server.mode)) return r;
+    const c = classify(r, this.timeoutMs, server.mode);
+    this.setStatus(server.id, { state: c.state, latencyMs: null, reason: c.reason });
+    throw new AidHttpError(502, `${server.name} ne répond pas : ${c.reason}`);
   }
 
   forget(serverId: string): void {

@@ -852,8 +852,8 @@ function Formulaire({
       {suppression && server && (
         <Dialogue titre={`Supprimer ${server.name} ?`} onClose={() => setSuppression(false)}>
           <p className="texte-discret">
-            A-I-D oublie ce serveur. Rien n’est exécuté sur le serveur : ses fichiers et ses
-            sessions restent en place.
+            A-I-D oublie ce serveur et ses discussions ; les agents qui y tournent sont arrêtés. Ses
+            fichiers restent en place.
           </p>
           <div className="dialogue-actions">
             <button
