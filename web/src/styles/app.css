@@ -766,6 +766,66 @@ body {
   color: var(--muted);
   font-size: var(--fs-s);
 }
+/* Chantier 17 (R.5, §11.3) : confirmation d'une commande destructive sur un serveur (maquette ServerChat). */
+.confirm-carte {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 16px;
+  border: 1px solid var(--s-attente-line);
+  border-radius: 12px;
+  background: var(--surface-alerte);
+}
+.confirm-carte--autorisee,
+.confirm-carte--refusee,
+.confirm-carte--close {
+  opacity: 0.75;
+}
+.confirm-titre {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  color: var(--s-attente);
+  font-size: var(--fs-s);
+}
+.confirm-point {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--s-attente);
+}
+.confirm-commande {
+  margin: 0;
+  padding: 9px 12px;
+  border: 1px solid var(--s-attente-line);
+  border-radius: 8px;
+  background: var(--surface-term);
+  font-family: ui-monospace, monospace;
+  font-size: 13px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.confirm-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.confirm-option--yes {
+  border-color: transparent;
+  background: var(--acc);
+  color: var(--acc-ink);
+  font-weight: 600;
+}
+.confirm-option--always {
+  background: transparent;
+  color: var(--muted);
+}
+.confirm-issue {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--fs-s);
+}
 .composer {
   flex-shrink: 0;
   margin: var(--sp-3);

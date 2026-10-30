@@ -19,6 +19,8 @@ let approvalCounter = 0;
 const pendingApprovalResolvers = new Map();
 const pendingUnknownResolvers = new Map();
 let longAbort = null;
+// politique d'approbation du dernier `turn/start` (chantier 17, R.5)
+let turnApprovalPolicy = null;
 
 function makeTurnId() {
   return `turn-${++turnCounter}`;
@@ -39,6 +41,47 @@ async function runTurn(reqId, turnThreadId, text) {
         threadId: turnThreadId,
         turn: { id: turnId, status: 'interrupted', durationMs: 1 },
       },
+    });
+    return;
+  }
+
+  // Chantier 17 (R.5) : une commande shell. Comme codex 0.157.0 (D77) : en `untrusted`, toute commande est
+  // soumise, `command` enveloppée dans le shell, `commandActions[].command` telle qu'écrite ; sinon elle s'exécute.
+  if (text.startsWith('commande: ')) {
+    const command = text.slice('commande: '.length);
+    let verdict = 'exécutée sans demande';
+    if (turnApprovalPolicy === 'untrusted') {
+      const approvalId = approvalCounter++;
+      emit({
+        id: approvalId,
+        method: 'item/commandExecution/requestApproval',
+        params: {
+          kind: 'command',
+          threadId: turnThreadId,
+          turnId,
+          itemId: `exec-${approvalId}`,
+          command: `/bin/zsh -lc '${command.replace(/'/g, `'\\''`)}'`,
+          cwd: process.cwd(),
+          commandActions: [{ type: 'unknown', command }],
+          availableDecisions: ['accept', 'cancel'],
+        },
+      });
+      const decision = await new Promise((resolve) =>
+        pendingApprovalResolvers.set(approvalId, resolve),
+      );
+      verdict = decision === 'accept' ? 'exécutée' : 'refusée';
+    }
+    emit({
+      method: 'item/completed',
+      params: {
+        item: { type: 'agentMessage', id: `msg-${turnId}`, text: `${verdict}: ${command}` },
+        threadId: turnThreadId,
+        turnId,
+      },
+    });
+    emit({
+      method: 'turn/completed',
+      params: { threadId: turnThreadId, turn: { id: turnId, status: 'completed', durationMs: 5 } },
     });
     return;
   }
@@ -316,6 +359,7 @@ rl.on('line', (line) => {
 
   if (msg.method === 'turn/start') {
     const text = msg.params?.input?.[0]?.text;
+    turnApprovalPolicy = msg.params?.approvalPolicy ?? null;
     const images = (msg.params?.input ?? []).filter((i) => i.type === 'localImage');
     if (images.length > 0) {
       const vus = images.map((i) => i.path).join(',');

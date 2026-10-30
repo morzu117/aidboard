@@ -53,6 +53,12 @@ export interface PendingRequest {
   kind: 'permission' | 'question';
   question: string;
   options: PendingOption[];
+  /** Chantier 17 (R.5) : la commande shell visée, quand la demande en porte une (outil Bash, commande codex). */
+  command?: string;
+  /** Demande forcée par une règle `ask` passée à l'agent (claude : `decision_reason_type: "rule"`). */
+  byRule?: boolean;
+  /** Carte de confirmation d'un serveur distant (§11.3) : « Toujours autoriser » y écrit une règle du serveur. */
+  confirm?: { server: string };
 }
 
 /** Ce qui a fondé un statut estimé (infobulle). */
