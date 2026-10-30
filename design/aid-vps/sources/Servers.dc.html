@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>AID — serveurs</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+body{margin:0;background:#0b0c0e}
+button{font-family:inherit;cursor:pointer}
+</style>
+</helmet>
+<div style="width: 1440px; height: 900px; box-sizing: border-box; display: flex; flex-direction: column; overflow: hidden; background: #0b0c0e; color: #e6e8eb; font-family: Inter, system-ui, sans-serif; font-size: 14px">
+
+<div style="height: 56px; flex-shrink: 0; box-sizing: border-box; display: flex; align-items: center; gap: 28px; padding: 0 20px; border-bottom: 1px solid #23272e">
+<div style="font-weight: 600; font-size: 20px; letter-spacing: 0.5px"><span style="color: #5de0a1">›:</span>AID</div>
+<nav style="display: flex; gap: 22px; color: #8d94a0"><span>Accueil</span><span>Boîte de réception</span><span>Consignes</span><span style="color: #e6e8eb">Serveurs</span><span>Réglages</span></nav>
+<div style="flex-grow: 1"></div>
+<div style="display: flex; align-items: center; gap: 8px; border: 1px solid #23272e; border-radius: 999px; padding: 6px 12px; font-size: 12px; color: #8d94a0"><span style="width: 8px; height: 8px; border-radius: 50%; background: #5b616c"></span>hors mesh depuis 22 h</div>
+<div style="display: flex; align-items: center; gap: 8px; font-size: 12px; color: #8d94a0"><span style="width: 8px; height: 8px; border-radius: 50%; background: #5de0a1"></span>daemon local</div>
+<div style="border: 1px solid #23272e; border-radius: 8px; padding: 8px 12px; width: 220px; font-size: 13px; color: #8d94a0; box-sizing: border-box">Rechercher…  <span style="float: right; font-family: 'JetBrains Mono', monospace; font-size: 11px">⌘K</span></div>
+<button style="background: #5de0a1; color: #06251a; border: 0; border-radius: 8px; padding: 9px 14px; font-weight: 600; font-size: 13px">Nouveau sujet</button>
+</div>
+
+<div style="flex-grow: 1; min-height: 0; display: flex">
+<div style="width: 280px; flex-shrink: 0; height: 844px; border-right: 1px solid #23272e; overflow: hidden"><dc-import name="Nav" active="servers" hint-size="280px,844px"></dc-import></div>
+
+<main style="flex-grow: 1; min-width: 0; overflow-y: auto; padding: 28px 40px; display: flex; flex-direction: column; gap: 24px">
+
+<div style="display: flex; align-items: flex-start; gap: 16px">
+<div style="flex-grow: 1">
+<h1 style="margin: 0; font-size: 26px; font-weight: 600">Serveurs</h1>
+<div style="margin-top: 6px; color: #8d94a0; line-height: 1.5; max-width: 600px">Machines distantes où tes agents peuvent travailler. La connexion passe par le daemon local de ton ordinateur.</div>
+</div>
+<button style="background: #5de0a1; color: #06251a; border: 0; border-radius: 8px; padding: 9px 14px; font-weight: 600; font-size: 13px">Ajouter un serveur</button>
+</div>
+
+<!-- Carte serveur -->
+<section style="border: 1px solid #23272e; border-radius: 14px; background: #0e1013; padding: 20px 22px; display: flex; flex-direction: column; gap: 18px">
+<div style="display: flex; align-items: center; gap: 14px">
+<div style="width: 44px; height: 44px; border-radius: 12px; background: #16191e; display: flex; align-items: center; justify-content: center">
+<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#5de0a1" stroke-width="1.8" aria-hidden="true"><rect x="3" y="4" width="18" height="7" rx="2"/><rect x="3" y="13" width="18" height="7" rx="2"/><path d="M7 7.5h.01M7 16.5h.01"/></svg>
+</div>
+<div style="flex-grow: 1; min-width: 0">
+<div style="display: flex; align-items: center; gap: 10px">
+<span style="font-size: 18px; font-weight: 600">vps-ovh</span>
+<span style="display: flex; align-items: center; gap: 6px; border: 1px solid #2f5a47; color: #5de0a1; border-radius: 999px; padding: 3px 10px; font-size: 12px"><span style="width: 7px; height: 7px; border-radius: 50%; background: #5de0a1"></span>Connecté</span>
+</div>
+<div style="margin-top: 4px; font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #8d94a0">commande locale · vps</div>
+</div>
+<button style="background: #16191e; color: #e6e8eb; border: 1px solid #23272e; border-radius: 8px; padding: 8px 12px; font-size: 13px">Configurer</button>
+<button style="background: #5de0a1; color: #06251a; border: 0; border-radius: 8px; padding: 8px 14px; font-weight: 600; font-size: 13px">Ouvrir la discussion</button>
+<button aria-label="Plus d'actions" style="background: #16191e; color: #e6e8eb; border: 1px solid #23272e; border-radius: 8px; width: 36px; height: 34px">···</button>
+</div>
+<div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px">
+<div style="background: #111317; border-radius: 10px; padding: 12px 14px"><div style="font-size: 11px; font-weight: 600; letter-spacing: 1px; text-transform: uppercase; color: #8d94a0">Latence</div><div style="margin-top: 6px; font-family: 'JetBrains Mono', monospace">12 ms</div></div>
+<div style="background: #111317; border-radius: 10px; padding: 12px 14px"><div style="font-size: 11px; font-weight: 600; letter-spacing: 1px; text-transform: uppercase; color: #8d94a0">Agents détectés</div><div style="margin-top: 6px; font-family: 'JetBrains Mono', monospace">claude · codex</div></div>
+<div style="background: #111317; border-radius: 10px; padding: 12px 14px"><div style="font-size: 11px; font-weight: 600; letter-spacing: 1px; text-transform: uppercase; color: #8d94a0">Répertoire de travail</div><div style="margin-top: 6px; font-family: 'JetBrains Mono', monospace">~</div></div>
+<div style="background: #111317; border-radius: 10px; padding: 12px 14px"><div style="font-size: 11px; font-weight: 600; letter-spacing: 1px; text-transform: uppercase; color: #8d94a0">Session persistante</div><div style="margin-top: 6px">Active</div></div>
+</div>
+</section>
+
+<!-- Discussions sur ce serveur -->
+<section style="display: flex; flex-direction: column; gap: 12px">
+<div style="display: flex; align-items: center; gap: 10px"><span style="font-weight: 600">Discussions sur vps-ovh</span><span style="color: #8d94a0">2</span></div>
+<div style="border: 1px solid #23272e; border-radius: 12px; overflow: hidden; background: #0e1013">
+<div style="display: flex; gap: 12px; padding: 10px 16px; font-size: 11px; font-weight: 600; letter-spacing: 1px; text-transform: uppercase; color: #8d94a0; border-bottom: 1px solid #23272e"><span style="width: 360px">Discussion</span><span style="width: 160px">Agent</span><span style="flex-grow: 1; text-align: right">Activité</span><span style="width: 110px"></span></div>
+<div style="display: flex; align-items: center; gap: 12px; padding: 0 16px; height: 54px; box-sizing: border-box; border-bottom: 1px solid #181b21">
+<div style="width: 360px; display: flex; align-items: center; gap: 12px"><span style="width: 8px; height: 8px; border-radius: 50%; background: #6ea8ff"></span><span>maintenance-nginx</span></div>
+<span style="width: 160px; font-size: 13px; color: #c4c9d2">claude · libre</span>
+<span style="flex-grow: 1; text-align: right; font-size: 12px; color: #8d94a0">il y a 2 min</span>
+<span style="width: 110px; text-align: right"><button style="background: #16191e; color: #e6e8eb; border: 1px solid #23272e; border-radius: 8px; padding: 6px 11px; font-size: 12px; font-weight: 600">Reprendre</button></span>
+</div>
+<div style="display: flex; align-items: center; gap: 12px; padding: 0 16px; height: 54px; box-sizing: border-box">
+<div style="width: 360px; display: flex; align-items: center; gap: 12px"><span style="width: 8px; height: 8px; border-radius: 50%; background: #5b616c"></span><span>mise-a-jour-systeme</span></div>
+<span style="width: 160px; font-size: 13px; color: #8d94a0">claude · arrêté</span>
+<span style="flex-grow: 1; text-align: right; font-size: 12px; color: #8d94a0">il y a 3 j</span>
+<span style="width: 110px; text-align: right"><button style="background: #16191e; color: #e6e8eb; border: 1px solid #23272e; border-radius: 8px; padding: 6px 11px; font-size: 12px; font-weight: 600">Reprendre</button></span>
+</div>
+</div>
+</section>
+
+<!-- Ajouter un autre serveur -->
+<section style="border: 1px dashed #2d323a; border-radius: 14px; padding: 22px; display: flex; align-items: center; gap: 16px">
+<div style="flex-grow: 1">
+<div style="font-weight: 500">Ajouter un autre serveur</div>
+<div style="margin-top: 4px; font-size: 13px; color: #8d94a0; line-height: 1.5">Un second VPS, une machine de build ou un serveur de test. Chacun apparaît dans la barre gauche avec son propre état de connexion.</div>
+</div>
+<button style="background: #16191e; color: #e6e8eb; border: 1px solid #23272e; border-radius: 8px; padding: 9px 14px; font-size: 13px">Ajouter un serveur</button>
+</section>
+
+</main>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>
