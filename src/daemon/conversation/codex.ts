@@ -145,7 +145,7 @@ export class CodexDriver implements ConversationDriver {
   start(): void {
     if (this.child) throw new Error('driver déjà démarré');
     const args = buildCodexArgs(this.opts);
-    const child = spawn(this.opts.bin, args, {
+    const child = (this.opts.spawnChild ?? spawn)(this.opts.bin, args, {
       cwd: this.opts.cwd,
       env: this.opts.env,
       stdio: ['pipe', 'pipe', 'pipe'],
