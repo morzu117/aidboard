@@ -238,3 +238,45 @@ export interface NavState {
   placements: NavPlacement[];
   prefs: NavPrefs;
 }
+
+/** Chantier 17 (D72) : comment le daemon atteint un serveur. Seul `ssh_alias` est câblé de bout en bout en v1. */
+export type ServerMode = 'ssh_alias' | 'ssh_host' | 'command';
+
+/** Options du mode `ssh_host` : construites en options `ssh`, jamais un secret (D76). */
+export interface ServerSshOptions {
+  port: number | null;
+  user: string | null;
+  identityFile: string | null;
+  jump: string | null;
+}
+
+/** Règle « Toujours autoriser sur ce serveur » (§11.3), révocable depuis la configuration. */
+export interface ServerRule {
+  id: string;
+  pattern: string;
+  createdAt: string;
+}
+
+/** Chantier 17 (S.1) : un serveur distant. `target` = alias, hôte ou commande locale selon `mode`. */
+export interface Server {
+  id: string;
+  name: string;
+  mode: ServerMode;
+  target: string;
+  sshOptions: ServerSshOptions | null;
+  loadProfile: boolean;
+  workdir: string;
+  shell: string;
+  keepSession: boolean;
+  permissionMode: PermissionMode;
+  confirmDestructive: boolean;
+  allowedDirs: string[];
+  groupName: string;
+  color: string;
+  /** Agents trouvés au dernier test de connexion (S.3) ; `null` = jamais testé. */
+  detectedAgents: string[] | null;
+  lastTestAt: string | null;
+  rules: ServerRule[];
+  createdAt: string;
+  updatedAt: string;
+}
