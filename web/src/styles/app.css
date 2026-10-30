@@ -1811,3 +1811,161 @@ body {
   font-family: ui-monospace, monospace;
   color: var(--muted);
 }
+/* Chantier 17 (S.4) : écran Serveurs (§11.1, maquette Servers). */
+.serveur-carte {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+  padding: var(--sp-5) var(--sp-5);
+  border: 1px solid var(--line);
+  border-radius: var(--r-xl);
+  background: var(--surface-1);
+}
+.serveur-carte-entete {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-3);
+}
+.serveur-carte-icone {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: var(--r-xl);
+  background: var(--surface-2);
+}
+.serveur-carte-ident {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.serveur-carte-nom {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2);
+}
+.serveur-nom {
+  font-size: var(--fs-l);
+  font-weight: var(--fw-sb);
+}
+.serveur-carte-cible,
+.serveur-valeur-mono {
+  font-family: ui-monospace, monospace;
+}
+.serveur-carte-cible {
+  margin-top: var(--sp-1);
+  overflow: hidden;
+  color: var(--muted);
+  font-size: var(--fs-s);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.serveur-carte-menu {
+  position: relative;
+}
+.serveur-carte-plus {
+  min-width: 36px;
+  letter-spacing: 0.1em;
+}
+.serveur-carte-raison {
+  margin: 0;
+  color: var(--s-erreur);
+  font-size: var(--fs-s);
+}
+.pastille-serveur {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px var(--sp-2);
+  border: 1px solid var(--line-2);
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: var(--fs-s);
+  white-space: nowrap;
+}
+.pastille-serveur-point {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--s-inactif);
+}
+.pastille-serveur--connected {
+  border-color: var(--acc);
+  color: var(--acc);
+}
+.pastille-serveur--connected .pastille-serveur-point {
+  background: var(--acc);
+}
+.pastille-serveur--connecting {
+  border-color: var(--s-attente-line);
+  color: var(--s-attente);
+}
+.pastille-serveur--connecting .pastille-serveur-point {
+  background: var(--s-attente);
+}
+.pastille-serveur--error {
+  border-color: var(--s-erreur-line);
+  color: var(--s-erreur);
+}
+.pastille-serveur--error .pastille-serveur-point {
+  background: var(--s-erreur);
+}
+.serveur-indicateurs {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--sp-3);
+  margin: 0;
+}
+[data-viewport='phone'] .serveur-indicateurs {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.serveur-indicateur {
+  padding: var(--sp-3) var(--sp-3);
+  border-radius: var(--r-l);
+  background: var(--surface-2);
+}
+.serveur-indicateur dt {
+  color: var(--muted);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-sb);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.serveur-indicateur dd {
+  margin: var(--sp-1) 0 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.serveur-discussions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+.serveur-discussions-titre {
+  font-weight: var(--fw-sb);
+}
+.serveur-ajout {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-4);
+  padding: var(--sp-5);
+  border: 1px dashed var(--line-2);
+  border-radius: var(--r-xl);
+}
+.serveur-ajout-texte {
+  flex: 1 1 280px;
+}
+.serveur-ajout-titre {
+  margin: 0 0 var(--sp-1);
+  font-weight: var(--fw-m);
+}
+/* « Ouvrir la discussion » avant le groupe R : focalisable (aria-disabled) pour que son explication soit lue */
+.serveur-carte .bouton[aria-disabled='true'] {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

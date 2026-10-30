@@ -29,6 +29,13 @@ export interface AidApi {
   ) => Promise<T>;
 }
 
+/** Le client lui-même, pour un magasin rattaché à sa durée de vie (serveurs, S.4). */
+export function useAidClient(): AidClient {
+  const c = useContext(Ctx);
+  if (!c) throw new Error('useAidClient doit être appelé sous <AidProvider>');
+  return c;
+}
+
 export function useAid(): ClientSnapshot & AidApi {
   const c = useContext(Ctx);
   if (!c) throw new Error('useAid doit être appelé sous <AidProvider>');
