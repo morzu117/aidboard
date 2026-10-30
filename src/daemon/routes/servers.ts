@@ -5,6 +5,13 @@ import type { Db } from '../db.js';
 import { AidHttpError } from '../errors.js';
 import type { EventStore } from '../events/store.js';
 import { ServerConnections } from '../remote/connection.js';
+import {
+  checkRemotePath,
+  listCommand,
+  parseListing,
+  parsePreview,
+  readCommand,
+} from '../remote/files.js';
 import type { TransportOptions } from '../remote/transport.js';
 import {
   assertNameFree,
@@ -57,6 +64,8 @@ const PatchBody = Type.Object(
   },
   { additionalProperties: false },
 );
+const PathQuery = Type.Object({ path: Type.Optional(Type.String({ maxLength: 4096 })) });
+const FileQuery = Type.Object({ path: Type.String({ maxLength: 4096 }) });
 
 function write(db: Db, id: string, s: Required<ServerInput>, now: string, createdAt?: string) {
   const values = {
@@ -167,6 +176,19 @@ export function registerServerRoutes(
     const test = connections.lastTest(server.id);
     if (!test) throw new AidHttpError(404, 'aucun test de connexion pour ce serveur');
     return test;
+  });
+
+  // F.1 (§11.3.1) : panneau Fichiers, lecture seule, bornée aux dossiers autorisés (D78) ; chemin par défaut = workdir.
+  app.get('/api/servers/:id/fs', { schema: { querystring: PathQuery } }, async (req) => {
+    const server = found((req.params as { id: string }).id);
+    const path = checkRemotePath(server, (req.query as { path?: string }).path || server.workdir);
+    return parseListing(server, path, await connections.read(server, listCommand(server, path)));
+  });
+
+  app.get('/api/servers/:id/file', { schema: { querystring: FileQuery } }, async (req) => {
+    const server = found((req.params as { id: string }).id);
+    const path = checkRemotePath(server, (req.query as { path: string }).path);
+    return parsePreview(server, path, await connections.read(server, readCommand(server, path)));
   });
 
   app.delete('/api/servers/:id/rules/:ruleId', async (req) => {

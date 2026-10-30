@@ -548,3 +548,54 @@ Reprises du brief §11.6, plus celles nées de l'état des lieux :
   rouge une fois (« expected 'fix/x' to be 'feat/s' », même échec qu'en R.3-R.5), vert seul 3/3 et sur le
   gate suivant. e2e : `e2e/nav-edition.spec.ts:45` (« locator.press: Test ended »), comme en R.4 et R.5 ;
   34 passés.
+
+## Journal du groupe F
+
+- **F.1**, une review comprise — lecture de fichiers d'un serveur (`src/daemon/remote/files.ts`, routes
+  `GET /api/servers/:id/fs?path=` et `GET /api/servers/:id/file?path=` dans `routes/servers.ts`, types
+  `ServerFsEntry` / `ServerFsListing` / `ServerFilePreview` dans `shared/model.ts`).
+  - un aller-retour par requête : un script POSIX `sh` (lancé par le shell de connexion, arguments passés
+    par `shQuote`) résout le chemin par `realpath` sur le serveur, vérifie le périmètre, puis liste ou lit ;
+    réponse en enregistrements séparés par un octet nul, précédés d'une marque — ce qu'un profil bavard
+    écrit avant est ignoré ;
+  - **périmètre** : chemin résolu, symlinks et `..` compris, dans un dossier autorisé résolu de même
+    (`"$a"/*` : `~/proj-old` n'est pas dans `~/proj`). Un chemin absent est jugé sur son plus proche parent
+    existant : hors périmètre, 403 qu'il existe ou non (pas de sondage du disque par 403 / 404). Le daemon
+    revérifie le chemin résolu rendu par le script ;
+  - **D78** (validée le 2026-10-30) : masqués comparés **sans casse** (`.ENV` est `.env` sur un système
+    de fichiers insensible) — refusés sur le nom avant tout aller-retour, et sur le chemin résolu (un lien
+    vers `.env` est refusé, son contenu jamais lu). Seuls les composants **sous** le dossier autorisé
+    comptent : `/srv/id_app/proj` autorisé reste lisible. Dossier masqué jamais listé ; grisés listés si on
+    le demande (le front ne les déplie pas). Aperçu 256 Kio ; binaire (octet nul dans les 8 premiers Kio)
+    non transmis — réponse 200 `binary: true, content: null` plutôt qu'un refus, l'aperçu l'affiche ;
+  - un niveau, plafonné à 2000 entrées (`truncated`) ; tri dossiers d'abord ; badges `git status` du
+    dossier (`M` / `?`, un dossier porte celui de son contenu, renommages compris) ;
+  - **lecture seule stricte** : `git --no-optional-locks -c core.fsmonitor=false -c core.untrackedCache=false`
+    — ni index réécrit, ni fsmonitor du dépôt lancé (deux tests, vérifiés par mutation) ; `git status`
+    borné à 8 s par `timeout` quand il existe : un gros dépôt perd ses badges, pas son listing ;
+  - `ServerConnections.read` : une connexion perdue marque le serveur injoignable et répond 502 ;
+  - `?path=` vide ou absent = `workdir` ;
+  - texte du dialogue de suppression d'un serveur corrigé (liste et configuration) : la suppression arrête
+    les agents et efface les discussions depuis R.4 (Q4). Lignes existantes modifiées : ces 4 lignes, rien
+    d'autre.
+- **Review F.1** : retenus et corrigés — masquage sensible à la casse, `git status` pouvant lancer le
+  fsmonitor du dépôt, oracle d'existence hors périmètre, ancêtres du dossier autorisé comptés comme masqués,
+  profil de connexion qui écrit sur stdout (502 permanent), `realpath` absent rendu en 404 (désormais 502
+  explicite), aperçu coupé par le transport sans drapeau, nom à tabulation, chemins de `git status` pris
+  pour des entrées, renommage en colonne Y, `?path=` vide. Tests ajoutés : injection par chemin et par nom
+  de fichier, casse, préfixe frère, ancêtre masqué, absent hors périmètre, permissions, profil bavard,
+  fsmonitor, témoin positif du journal ssh. Écartés ou reportés :
+  - **secrets hors liste D78** (`.git/config` avec jeton, `.git-credentials`, `.netrc`, `.npmrc`, `.aws/`,
+    `.gnupg/`, `*.pfx`…) : lisibles, conformément à D78 — **à reposer à l'opérateur à la review complète** ;
+  - plafond de 2000 entrées appliqué dans l'ordre du glob, pas celui de l'affichage ;
+  - coupure UTF-8 à la limite de 256 Kio (un U+FFFD final) ;
+  - TOCTOU entre `realpath` et la lecture (suppose un accès en écriture au serveur) ;
+  - shell de connexion `fish` : la double `shQuote` n'y est pas valable — concerne toute commande distante
+    (`remoteCommand`), pas F.1 ; **à traiter à la review complète**.
+- **Portabilité** : tests F.1 passés aussi avec `dash` comme `sh`. GNU coreutils non disponible sur ce poste
+  (Docker arrêté, VM non lancée) : `realpath` / `head -c` / `tr` / `timeout` GNU à vérifier sur le serveur
+  réel lors de la vérification opérateur.
+- **Gate pendant F.1** : vert (1146, puis 1151 après la review). Entre les deux, `test/web/panneau-contexte.test.tsx`
+  (« repli sur Plan quand l'onglet mémoire sélectionné disparaît, et y rend le focus » : focus sur `<body>`)
+  rouge une fois, vert seul 3/3 et sur le gate suivant ; ni ce test ni son composant ne sont touchés.
+  e2e : `e2e/nav-edition.spec.ts:45`, comme en R.4-R.6 ; 34 passés.

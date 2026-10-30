@@ -393,8 +393,8 @@ function Contenu() {
       {suppression && (
         <Dialogue titre={`Supprimer ${suppression.name} ?`} onClose={fermerSuppression}>
           <p className="texte-discret">
-            A-I-D oublie ce serveur. Rien n’est exécuté sur le serveur : ses fichiers et ses
-            sessions restent en place.
+            A-I-D oublie ce serveur et ses discussions ; les agents qui y tournent sont arrêtés. Ses
+            fichiers restent en place.
           </p>
           {erreurSuppression && (
             <p className="message-erreur" role="alert" data-node="serveurs.supprimer.erreur">
