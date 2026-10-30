@@ -30,6 +30,8 @@ export async function startTestDaemon(
     config?: Partial<AidConfig>;
     /** Transport distant : faux ssh par défaut, HOME distant = le AID_HOME temporaire. */
     remote?: TransportOptions;
+    /** Chantier 17 (R.4) : faux agents lancés sur le faux serveur. */
+    remoteBins?: Partial<Record<'claude' | 'codex', string>>;
     memory?: {
       embedder?: Embedder;
       backoffMs?: number[];
@@ -65,6 +67,7 @@ export async function startTestDaemon(
       ssh: FAKE_SSH,
       env: { ...process.env, FAKE_SSH_HOME: home },
     },
+    remoteBins: extra.remoteBins,
   });
   const headers = { host: `127.0.0.1:${d.port}`, authorization: `Bearer ${d.auth.adminToken}` };
   return { d, home, headers, db: d.db, store: d.store };

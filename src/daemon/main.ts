@@ -41,6 +41,7 @@ import { installMode } from './install.js';
 import { readVersion } from '../cli/version.js';
 import type { IndexEngine } from '../shared/structural.js';
 import type { TransportOptions } from './remote/transport.js';
+import type { RemoteKind } from './remote/agents.js';
 
 export class AidPortInUse extends Error {
   constructor(port: number) {
@@ -79,6 +80,8 @@ export async function startDaemon(
     checkUpdates?: boolean;
     /** Chantier 17 : `ssh` et environnement du transport distant ; les tests passent un faux ssh (D79). */
     remote?: TransportOptions;
+    /** Chantier 17 (R.4) : binaires des agents distants ; les tests passent les faux agents. */
+    remoteBins?: Partial<Record<RemoteKind, string>>;
     // tests : un Embedder/ChatModel déterministe, des délais courts, un rythme d'entretien rapide
     memory?: {
       embedder?: Embedder;
@@ -247,6 +250,7 @@ export async function startDaemon(
       install: () => install,
       devOrigin,
       remote: opts.remote,
+      remoteBins: opts.remoteBins,
       logger: opts.logger,
     });
     try {
