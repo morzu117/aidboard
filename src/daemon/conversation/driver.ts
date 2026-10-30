@@ -1,4 +1,5 @@
 import type { AgentSettings, ModelOption } from '../../shared/agentSettings.js';
+import type { PendingOption } from '../../shared/model.js';
 /** Défini dans le partagé (D65) : le front en dépend sans dépendre du daemon. */
 import type { ConversationEvent } from '../../shared/conversation.js';
 export type { ConversationEvent };
@@ -41,7 +42,7 @@ export interface ConversationDriver {
   start(): void;
   send(text: string, files?: AttachedFile[]): void;
   interrupt(): void;
-  answer(requestId: string, decision: 'yes' | 'always' | 'no'): void;
+  answer(requestId: string, decision: PendingOption['answer']): void;
   /** D68 : appliqué sans relancer le process (claude : tout de suite ; codex : au tour suivant). */
   configure(settings: AgentSettings): void;
   /** D71 : modèles annoncés par la CLI, vide tant qu'elle n'a rien dit. */

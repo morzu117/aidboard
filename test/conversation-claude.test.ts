@@ -104,6 +104,43 @@ test('permission refusée : control_response deny, le process reste utilisable',
   expect(() => d.answer('inconnu', 'yes')).toThrow();
 });
 
+test('AskUserQuestion : une demande `question` par question, réponses rendues à claude', async () => {
+  const { driver: d, events } = start({ sessionId: randomUUID() });
+  const requests = () => events.flatMap((e) => (e.type === 'request' ? [e.request] : []));
+
+  d.send('demande questions');
+  await waitFor(() => requests().length === 1, 5000, 'première question');
+  const first = requests()[0]!;
+  expect(first).toMatchObject({ kind: 'question', question: '(1/2) Où écrire le graphe ?' });
+  expect(first.options.map((o) => o.label)).toEqual(['YAML', 'JSON', 'Répondre en texte']);
+
+  d.answer(first.id, '2');
+  await waitFor(() => requests().length === 2, 5000, 'seconde question');
+  const second = requests()[1]!;
+  expect(second).toMatchObject({ kind: 'question', question: '(2/2) Quel moteur ?' });
+  expect(() => d.answer(first.id, '1')).toThrow();
+
+  d.answer(second.id, '3');
+  await waitFor(() => events.some((e) => e.type === 'turn_end'), 5000, 'fin du tour');
+  expect(
+    events.some(
+      (e) =>
+        e.type === 'message' &&
+        e.text === 'réponses {"Où écrire le graphe ?":"JSON","Quel moteur ?":"C"}',
+    ),
+  ).toBe(true);
+});
+
+test('AskUserQuestion : « Répondre en texte » refuse l’outil avec une consigne', async () => {
+  const { driver: d, events } = start({ sessionId: randomUUID() });
+
+  d.send('demande questions');
+  await waitFor(() => events.some((e) => e.type === 'request'), 5000, 'question');
+  d.answer(findRequest(events).id, 'no');
+  await waitFor(() => events.some((e) => e.type === 'turn_end'), 5000, 'fin du tour');
+  expect(events.some((e) => e.type === 'message' && e.text.startsWith('refusé'))).toBe(true);
+});
+
 test('interruption puis tour suivant réussi dans le même process', async () => {
   const sid = randomUUID();
   const { driver: d, events } = start({ sessionId: sid });

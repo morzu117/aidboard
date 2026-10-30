@@ -52,6 +52,40 @@ function textFromToolResultContent(content: unknown): string {
 
 interface PendingPermission {
   input: unknown;
+  /** Outil AskUserQuestion : le questionnaire en cours, réponse après réponse. */
+  ask?: AskState;
+}
+
+interface AskQuestion {
+  question: string;
+  labels: string[];
+}
+
+interface AskState {
+  requestId: string;
+  questions: AskQuestion[];
+  answers: Record<string, string>;
+}
+
+// Au-delà, le dernier bouton est « Répondre en texte » : 9 réponses au plus par demande.
+const ASK_OPTIONS_MAX = 8;
+const ASK_TEXT_ANSWER: PendingOption = { label: 'Répondre en texte', answer: 'no' };
+
+/** Les questions d'un AskUserQuestion ; null si l'entrée n'a pas la forme attendue (retombe sur la permission). */
+function askQuestionsOf(input: unknown): AskQuestion[] | null {
+  const raw = (input as { questions?: unknown } | null)?.questions;
+  if (!Array.isArray(raw) || raw.length === 0) return null;
+  const questions: AskQuestion[] = [];
+  for (const q of raw) {
+    const o = (q ?? {}) as { question?: unknown; options?: unknown };
+    if (typeof o.question !== 'string' || !Array.isArray(o.options)) return null;
+    const labels = o.options
+      .map((opt) => (opt as { label?: unknown } | null)?.label)
+      .filter((l): l is string => typeof l === 'string' && l.length > 0);
+    if (labels.length === 0) return null;
+    questions.push({ question: o.question, labels: labels.slice(0, ASK_OPTIONS_MAX) });
+  }
+  return questions;
 }
 
 /** Réglages au lancement (D67) : rien de plus que les arguments d'avant quand rien n'est réglé. */
@@ -251,6 +285,11 @@ export class ClaudeDriver implements ConversationDriver {
     }
     const toolName = typeof request.tool_name === 'string' ? request.tool_name : 'outil';
     const input = request.input;
+    const questions = toolName === 'AskUserQuestion' ? askQuestionsOf(input) : null;
+    if (questions) {
+      this.askNext(input, { requestId: o.request_id, questions, answers: {} });
+      return;
+    }
     this.pendingPermissions.set(o.request_id, { input });
     const pendingRequest: PendingRequest = {
       id: o.request_id,
@@ -259,6 +298,28 @@ export class ClaudeDriver implements ConversationDriver {
       options: PERMISSION_OPTIONS,
     };
     this.emit({ type: 'request', request: pendingRequest });
+  }
+
+  /** Une question à la fois : une demande `question` dont les options sont celles de l'outil, pas Autoriser/Refuser. */
+  private askNext(input: unknown, ask: AskState): void {
+    const n = Object.keys(ask.answers).length;
+    const q = ask.questions[n]!;
+    const id = n === 0 ? ask.requestId : `${ask.requestId}#${n}`;
+    this.pendingPermissions.set(id, { input, ask });
+    const prefix = ask.questions.length > 1 ? `(${n + 1}/${ask.questions.length}) ` : '';
+    const options: PendingOption[] = q.labels.map((label, i) => ({
+      label,
+      answer: String(i + 1) as PendingOption['answer'],
+    }));
+    this.emit({
+      type: 'request',
+      request: {
+        id,
+        kind: 'question',
+        question: `${prefix}${q.question}`,
+        options: [...options, ASK_TEXT_ANSWER],
+      },
+    });
   }
 
   private handleResult(o: Record<string, unknown>): void {
@@ -320,10 +381,51 @@ export class ClaudeDriver implements ConversationDriver {
     });
   }
 
-  answer(requestId: string, decision: 'yes' | 'always' | 'no'): void {
+  answer(requestId: string, decision: PendingOption['answer']): void {
     const pending = this.pendingPermissions.get(requestId);
     if (!pending) throw new Error(`requête de permission inconnue : ${requestId}`);
     this.pendingPermissions.delete(requestId);
+    const ask = pending.ask;
+    if (ask && decision !== 'no') {
+      const n = Object.keys(ask.answers).length;
+      const q = ask.questions[n]!;
+      const label = q.labels[Number(decision) - 1];
+      if (label === undefined) {
+        this.pendingPermissions.set(requestId, pending);
+        throw new Error(`réponse inconnue : ${decision}`);
+      }
+      ask.answers[q.question] = label;
+      if (n + 1 < ask.questions.length) {
+        this.askNext(pending.input, ask);
+        return;
+      }
+      this.write({
+        type: 'control_response',
+        response: {
+          subtype: 'success',
+          request_id: ask.requestId,
+          response: {
+            behavior: 'allow',
+            updatedInput: { ...(pending.input as object), answers: ask.answers },
+          },
+        },
+      });
+      return;
+    }
+    if (ask) {
+      this.write({
+        type: 'control_response',
+        response: {
+          subtype: 'success',
+          request_id: ask.requestId,
+          response: {
+            behavior: 'deny',
+            message: 'L’opérateur préfère répondre en texte : arrête-toi et attends sa réponse.',
+          },
+        },
+      });
+      return;
+    }
     // 'always' se comporte comme 'yes' en v1 : pas de règle persistée.
     const response =
       decision === 'no'

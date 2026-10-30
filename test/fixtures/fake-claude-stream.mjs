@@ -117,6 +117,48 @@ async function handleTurn(text) {
     return;
   }
 
+  // AskUserQuestion : claude le fait passer par `can_use_tool` ; la réponse revient dans `updatedInput.answers`.
+  if (text === 'demande questions') {
+    const requestId = `req-${++reqCounter}`;
+    const input = {
+      questions: [
+        {
+          question: 'Où écrire le graphe ?',
+          header: 'Graphe',
+          options: [{ label: 'YAML' }, { label: 'JSON' }],
+        },
+        {
+          question: 'Quel moteur ?',
+          header: 'Moteur',
+          options: [{ label: 'A' }, { label: 'B' }, { label: 'C' }],
+        },
+      ],
+    };
+    const response = new Promise((resolve) => pendingControl.set(requestId, resolve));
+    emit({
+      type: 'control_request',
+      request_id: requestId,
+      request: { subtype: 'can_use_tool', tool_name: 'AskUserQuestion', input },
+    });
+    const answered = await response;
+    const texte =
+      answered.behavior === 'allow'
+        ? `réponses ${JSON.stringify(answered.updatedInput.answers)}`
+        : `refusé ${answered.message}`;
+    emit({
+      type: 'assistant',
+      message: { role: 'assistant', content: [{ type: 'text', text: texte }] },
+    });
+    emit({
+      type: 'result',
+      subtype: 'success',
+      session_id: sessionId,
+      total_cost_usd: 0.001,
+      duration_ms: 10,
+    });
+    return;
+  }
+
   // Deux outils dans la même réponse (Read puis Bash) : claude envoie les deux can_use_tool sans attendre.
   if (text === 'deux permissions') {
     const tools = [
