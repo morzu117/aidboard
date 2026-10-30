@@ -3,6 +3,9 @@ import type { FastifyInstance } from 'fastify';
 import { monotonicFactory } from 'ulid';
 import type { Db } from '../db.js';
 import { AidHttpError } from '../errors.js';
+import type { EventStore } from '../events/store.js';
+import { ServerConnections } from '../remote/connection.js';
+import type { TransportOptions } from '../remote/transport.js';
 import {
   assertNameFree,
   getServer,
@@ -95,8 +98,17 @@ function write(db: Db, id: string, s: Required<ServerInput>, now: string, create
  * Chantier 17 (S.1) : serveurs distants. Réservé à l'administrateur — un token de run est déjà refusé
  * hors `/api/events`, `/api/memory/`, `/api/structural/` par `security.ts`.
  */
-export function registerServerRoutes(app: FastifyInstance, deps: { db: Db }): void {
+export function registerServerRoutes(
+  app: FastifyInstance,
+  deps: { db: Db; store: EventStore; remote?: TransportOptions },
+): ServerConnections {
   const { db } = deps;
+  const connections = new ServerConnections({
+    db,
+    store: deps.store,
+    transport: deps.remote ?? {},
+  });
+  app.addHook('onClose', async () => connections.dispose());
   const found = (id: string) => {
     const server = getServer(db, id);
     if (!server) throw new AidHttpError(404, `serveur ${id} inconnu`);
@@ -104,6 +116,9 @@ export function registerServerRoutes(app: FastifyInstance, deps: { db: Db }): vo
   };
 
   app.get('/api/servers', async () => listServers(db));
+
+  // S.3 : état de connexion de chaque serveur ; un état de plus de 60 s relance un contrôle en tâche de fond.
+  app.get('/api/servers/status', async () => connections.statusesRefreshing());
 
   app.get('/api/servers/:id', async (req) => found((req.params as { id: string }).id));
 
@@ -132,7 +147,26 @@ export function registerServerRoutes(app: FastifyInstance, deps: { db: Db }): vo
   app.delete('/api/servers/:id', async (req, reply) => {
     const server = found((req.params as { id: string }).id);
     db.prepare('DELETE FROM servers WHERE id = ?').run(server.id);
+    connections.forget(server.id);
     return reply.code(204).send();
+  });
+
+  // « Reconnecter » / « Tester la connexion » du menu ··· (§11.1) : un aller-retour, attendu.
+  app.post('/api/servers/:id/ping', async (req) =>
+    connections.ping(found((req.params as { id: string }).id)),
+  );
+
+  // §11.2 : test séquentiel, en tâche de fond ; la progression part en `server.test` sur /ws/events.
+  app.post('/api/servers/:id/test', async (req, reply) => {
+    const server = found((req.params as { id: string }).id);
+    return reply.code(202).send(connections.startTest(server));
+  });
+
+  app.get('/api/servers/:id/test', async (req) => {
+    const server = found((req.params as { id: string }).id);
+    const test = connections.lastTest(server.id);
+    if (!test) throw new AidHttpError(404, 'aucun test de connexion pour ce serveur');
+    return test;
   });
 
   app.delete('/api/servers/:id/rules/:ruleId', async (req) => {
@@ -144,4 +178,5 @@ export function registerServerRoutes(app: FastifyInstance, deps: { db: Db }): vo
     if (r.changes === 0) throw new AidHttpError(404, `règle ${ruleId} inconnue`);
     return found(server.id);
   });
+  return connections;
 }

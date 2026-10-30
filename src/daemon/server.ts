@@ -32,6 +32,7 @@ import { registerStructuralRoutes } from './routes/structural.js';
 import { registerMeshRoutes } from './routes/mesh.js';
 import { registerNavRoutes } from './routes/nav.js';
 import { registerServerRoutes } from './routes/servers.js';
+import type { TransportOptions } from './remote/transport.js';
 import type { MeshService } from './mesh/service.js';
 import type { MemoryProposals } from './memory/maintain.js';
 import type { MemoryService } from './memory/service.js';
@@ -63,6 +64,8 @@ export interface ServerDeps {
   /** 12.4 : null ou absent = mesh désactivé, les routes /api/mesh répondent 404 */
   mesh?: MeshService | null;
   devOrigin?: string;
+  /** Chantier 17 : binaire `ssh` et environnement du transport distant ; un faux ssh en test (D79). */
+  remote?: TransportOptions;
   webRoot?: string | null;
   logger?: boolean;
 }
@@ -154,7 +157,7 @@ export async function buildServer(deps: ServerDeps): Promise<FastifyInstance> {
   registerAgentRoutes(app, { db: deps.db, agents: deps.agents });
   registerWorkspaceRoutes(app, { ...deps, engine: structural });
   registerNavRoutes(app, { db: deps.db });
-  registerServerRoutes(app, { db: deps.db });
+  registerServerRoutes(app, { db: deps.db, store: deps.store, remote: deps.remote });
   registerFsRoutes(app);
   registerFileRoutes(app, { db: deps.db });
   registerHookRoutes(app, () => process.env);
