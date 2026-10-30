@@ -7,6 +7,7 @@ import { ContextMenu, type MenuItem } from './ContextMenu.js';
 import { depuis, depuisCourt } from './depuis.js';
 import { useLayout } from './Layout.js';
 import { compteVue, VUES, type VueId } from './navVues.js';
+import { NavServeurs } from './NavServeurs.js';
 import { Point, topicView } from './Statut.js';
 import { ShellsEnArriere } from './Statut.js';
 
@@ -1010,6 +1011,8 @@ export function Nav({ screen }: { screen: EcranId }) {
               </button>
             )}
           </div>
+          {/* chantier 17 (S.6) : serveurs distants, sous les groupes de sujets */}
+          <NavServeurs n={n} />
           {erreur && (
             <p className="barre-gauche-erreur" role="status" data-node={n('erreur')}>
               {erreur}

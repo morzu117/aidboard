@@ -2215,3 +2215,51 @@ body {
 .serveur-couleur[aria-pressed='true'] {
   border-color: var(--text);
 }
+/* Chantier 17 (S.6) : section Serveurs de la barre gauche. */
+.barre-gauche-serveurs-lien {
+  color: inherit;
+  text-decoration: none;
+}
+.barre-gauche-serveurs-lien:hover,
+.barre-gauche-serveurs-lien[aria-current='page'] {
+  color: var(--text);
+}
+.barre-gauche-serveurs-entete a.barre-gauche-actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+}
+.barre-gauche-serveurs-vide {
+  margin: 0;
+  padding: 0 var(--sp-2);
+  font-size: var(--fs-s);
+}
+.barre-gauche-serveur .icone-serveur {
+  flex: none;
+}
+.barre-gauche-serveur--unreachable .barre-gauche-sujet-nom,
+.barre-gauche-serveur--error .barre-gauche-sujet-nom {
+  color: var(--faint);
+}
+.barre-gauche-serveur--connecting .barre-gauche-sujet-temps {
+  color: var(--s-attente);
+}
+/* Classes propres à la section : les sélecteurs des groupes de sujets (e2e compris) ne la voient pas. */
+.barre-gauche-serveurs {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+.barre-gauche-serveurs-entete {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: var(--sp-3) var(--sp-2) 0;
+}
+.barre-gauche-serveurs-entete .titre-zone {
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
