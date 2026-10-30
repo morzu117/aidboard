@@ -262,3 +262,31 @@ Reprises du brief §11.6, plus celles nées de l'état des lieux :
 4. Discussions d'un serveur supprimé : lecture seule (proposition) ou suppression ?
 5. Modes de connexion câblés dès la v1 : Alias SSH seul (D72) ou aussi Hôte SSH ?
 6. Accès à l'écran Serveurs : barre gauche seule (S.6) ou aussi un lien dans la barre du haut ?
+   → **Tranchée par la maquette Servers** (2026-10-30) : lien « Serveurs » dans la barre du haut,
+   entre Consignes et Réglages (§5.1), en plus de la section de la barre gauche (S.6).
+
+## Journal du groupe S
+
+- **2026-10-30 — validations.** D72, D74, D76 et D78 validées par l'opérateur pour le groupe S.
+- **S.1** `acbed2e`, review `048309c` : validation resserrée (jeux de caractères fermés pour
+  cible, utilisateur, rebond, shell, chemins distants ; `null` explicite sans coercition Ajv).
+- **S.2** `2252eb4`, review `3f1dbdc`. Risque accepté : en mode commande locale, la cible est un
+  fragment de shell local exécuté par le daemon ; seule la garde administrateur la protège (comme
+  toute route qui lance un agent). L'écran de configuration (S.5) le rappelle et interdit d'y
+  mettre un secret (D76).
+- **S.3** `4f46846`, review `f90c316`. Écart au plan : le dépôt d'`aid-relay` au test de
+  connexion passe au point **R.2**, avec le relais lui-même — le déposer avant qu'il existe ne
+  testerait rien. Le rafraîchissement de l'état est piloté par la lecture (`GET
+  /api/servers/status` relance un contrôle au-delà de 60 s), plus une relecture du front toutes
+  les 30 s, suspendue onglet caché.
+- **S.4** `84280dd`, review comprise. « Ouvrir la discussion » grisé (avec explication lisible au
+  clavier) jusqu'au groupe R. Ligne existante modifiée : l'union `EcranId` de `Barre.tsx`
+  (inévitable : un alias de type sur une ligne).
+- **Échecs pré-existants constatés sur `origin/main`** (prouvés sur un worktree de la base,
+  signalés, non contournés) : `test/web/accueil.test.tsx:119` (`expected 'fix/x' to be
+  'feat/s'`, 16 échecs sur 120 exécutions ; depuis `c6c44c5` du 2026-10-27 — le tri par activité
+  départage deux sujets dont `updatedAt` vient de `new Date()` à la milliseconde près) ;
+  `e2e/nav-edition.spec.ts:45` (Échap au renommage, délai de 90 s) et
+  `e2e/trois-sujets.spec.ts:14`, instables d'une exécution complète à l'autre.
+- **Environnement du gate e2e** : Node 22 obligatoire (`package-server.sh`) et port 4871 pris par
+  AID.app → `AID_E2E_PORT=4879`.
