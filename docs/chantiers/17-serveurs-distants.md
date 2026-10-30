@@ -260,6 +260,7 @@ Reprises du brief §11.6, plus celles nées de l'état des lieux :
 3. Discussions de serveur sur l'Accueil ? Proposition du brief : oui, étiquette « Serveur » —
    hors v1 de ce chantier sauf demande.
 4. Discussions d'un serveur supprimé : lecture seule (proposition) ou suppression ?
+   → **Tranchée par l'opérateur** (2026-10-30) : supprimées avec le serveur (cascade en base, R.1).
 5. Modes de connexion câblés dès la v1 : Alias SSH seul (D72) ou aussi Hôte SSH ?
 6. Accès à l'écran Serveurs : barre gauche seule (S.6) ou aussi un lien dans la barre du haut ?
    → **Tranchée par la maquette Servers** (2026-10-30) : lien « Serveurs » dans la barre du haut,
@@ -314,3 +315,21 @@ Reprises du brief §11.6, plus celles nées de l'état des lieux :
 - **Gate e2e de S.6** : un premier passage a fait échouer `e2e/sujet-colonnes.spec.ts` (sélecteur
   `.barre-gauche-groupes-entete .titre-zone` devenu ambigu) : la section a reçu ses propres classes,
   la spec n'a pas été touchée. Gate et gate e2e complets ensuite verts (35/35).
+
+## Journal du groupe R
+
+- **R.1** `445614e`, review comprise — migration `015_server_discussions.sql`, types partagés `ServerDiscussion` et
+  `ServerAgent`. Chaîne `ON DELETE CASCADE` serveur → discussions → agents → fils (question 4).
+  Écart de nommage : la colonne de marque s'appelle `marked`, comme dans `agent_messages` (011),
+  et non `mark`. Ligne existante modifiée : `user_version` attendu dans `test/mesh-schema.test.ts`
+  (14 → 15), comme en S.1. Pas de `CHECK` sur `kind`, `status`, `permission_mode` : même convention
+  que la table `agents` ; validation à l'écriture par le gestionnaire (R.4).
+- **À reprendre en R.2 à R.4** (review R.1) :
+  - la cascade ne touche que la base : `DELETE /api/servers/:id` devra passer par le gestionnaire
+    (arrêter les relais, tuer les sessions tmux au mieux, puis supprimer) et les écritures du relais
+    tolérer une ligne disparue ;
+  - écrire les messages d'un lot et le nouvel `out_offset` dans une même transaction, sinon un
+    arrêt du daemon entre les deux perd ou rejoue des messages au rattachement ;
+  - l'état de connexion d'un agent (lien ssh perdu, agent vivant dans tmux) passe par les
+    événements de D75 (`connection_lost`…), pas par `AgentStatus`.
+- **D73 toujours à valider** : R.2 attend la réponse de l'opérateur.
