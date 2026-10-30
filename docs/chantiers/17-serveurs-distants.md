@@ -364,3 +364,29 @@ Reprises du brief §11.6, plus celles nées de l'état des lieux :
 - **À documenter (F)** : un hôte avec `KillUserProcesses=yes` (systemd-logind) tue le serveur tmux à la
   dernière déconnexion ; l'agent est alors « perdu » à chaque coupure complète. Remède côté serveur :
   `loginctl enable-linger`.
+- **R.3**, review comprise — `src/daemon/remote/child.ts` (`RemoteChild`, lanceur `remoteSpawnChild`),
+  `src/daemon/remote/driver.ts` (`RemoteDriver`). `ConversationDriverOptions.spawnChild` (D75) : les
+  deux seules lignes existantes modifiées sont les appels `spawn` de `claude.ts` et `codex.ts`, comme
+  prévu. Trois variantes ajoutées à `ConversationEvent` ; aucun `switch` exhaustif à relever (le fil
+  et le gestionnaire les ignorent jusqu'à R.6). Décisions prises en cours de point :
+  - **la reprise par `--resume` vit dans un pilote enveloppe** (`RemoteDriver`), pas sous le pilote :
+    codex refait sa poignée de main (`thread/resume`) au démarrage, un process remplacé sous un
+    `CodexDriver` vivant ne la referait pas. Le pilote local est remonté, même relais, sortie à 0 ;
+  - **dépôt du relais à chaque connexion** du `RemoteChild` (une somme comparée, un aller-retour),
+    plutôt que par le gestionnaire avant le premier lancement : un relais effacé entre deux
+    connexions est redéposé à la reconnexion ;
+  - connexion rétablie = marqueur `aid-relay: attaché` (ajouté au relais) ou premiers octets reçus ;
+  - `cwd` du pilote = répertoire sur le serveur ; l'environnement local n'y part pas (D76) ;
+  - offset sûr exposé (`committedOffset`, dernière fin de ligne) : c'est lui que R.4 persistera, un
+    rattachement à partir de là ne coupe aucun message ;
+  - au plus 3 reprises d'affilée sans un tour réussi, puis `resume_failed` ; un `--resume` refusé
+    par la CLI après la connexion compte comme échec de reprise ; la fin d'un agent en échec rend la
+    fin de sa sortie d'erreur (commande `err` du relais) ;
+  - `stop()` injoignable : rendu au pilote, le message dit que l'agent tourne peut-être encore ;
+    `detach()` (arrêt du daemon, R.4) laisse l'agent au serveur et `stop()` rend la main aussitôt.
+- **Limite connue** : l'entrée n'est pas acquittée. Un message écrit pendant que le lien meurt, avant
+  que ssh ne le constate (sondes à 15 s × 3), peut se perdre ; le tour ne démarre alors pas. Un `\n`
+  de garde à la reprise a été écarté (il casserait la ligne JSON-RPC de codex). À reprendre si
+  l'usage le montre : compteur d'octets d'entrée côté relais.
+- **À reprendre en R.4** : au redémarrage du daemon, un `CodexDriver` remonté refait sa poignée de
+  main sur un codex vivant — à traiter avant de ré-attacher un agent codex (claude n'a pas ce cas).

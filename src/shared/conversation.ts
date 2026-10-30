@@ -17,6 +17,11 @@ export type ConversationEvent =
   | { type: 'request'; request: PendingRequest }
   | { type: 'turn_end'; ok: boolean; costUsd?: number; durationMs?: number; error?: string }
   | { type: 'exit'; code: number | null; signal: NodeJS.Signals | null; message?: string }
+  // Chantier 17 (D75) : le lien avec un agent distant ; l'agent, lui, continue sur le serveur.
+  // `sessionFound` faux : la session tmux avait disparu, l'agent a été relancé par reprise de session.
+  | { type: 'connection_lost'; at: string }
+  | { type: 'connection_resumed'; at: string; afterMs: number; sessionFound: boolean }
+  | { type: 'resume_failed'; reason: string }
   | { type: 'request_cancelled'; requestId: string };
 
 /** Une ligne `agent_messages` telle que rendue par `/ws/agent/:agentId` (D65). */

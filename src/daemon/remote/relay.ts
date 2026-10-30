@@ -26,6 +26,7 @@ export const RELAY_SCRIPT = String.raw`#!/bin/sh
 #   aid-relay attach <id> <offset>   entrée standard → agent ; sortie de l'agent à partir de l'octet <offset>
 #   aid-relay alive <id>             vivant | fini <code> | perdu | inconnu
 #   aid-relay stop <id>              arrête l'agent et efface ses fichiers
+#   aid-relay err <id>               fin de la sortie d'erreur de l'agent (4 000 octets)
 #   aid-relay version
 #
 # Fichiers d'un agent : ~/.aid-remote/agents/<id>/ — in (FIFO), out, err, exit, env, pid, apid, attach.
@@ -159,6 +160,8 @@ attach)
   # un seul rattachement : le précédent (connexion à moitié morte) est arrêté
   arreter_attach
   echo $$ >"$d/attach"
+  # le rattachement est en place : le daemon le lit pour savoir la connexion rétablie (R.3)
+  printf 'aid-relay: attaché\n' >&2
   # redirection explicite : sans elle, une commande en arrière-plan lit /dev/null
   exec 3<&0
   cat <&3 >"$d/in" &
@@ -214,6 +217,9 @@ stop)
   rm -rf "$d"
   echo 'aid-relay: arrêté'
   ;;
+err)
+  [ ! -f "$d/err" ] || tail -c 4000 "$d/err"
+  ;;
 *) die "commande inconnue : $cmd" 2 ;;
 esac
 `;
@@ -245,6 +251,7 @@ export function relayAttach(id: string, offset: number): string {
 
 export const relayAlive = (id: string) => relay(`alive ${relayId(id)}`);
 export const relayStop = (id: string) => relay(`stop ${relayId(id)}`);
+export const relayErr = (id: string) => relay(`err ${relayId(id)}`);
 
 export type RelayAlive =
   | { state: 'vivant' }
