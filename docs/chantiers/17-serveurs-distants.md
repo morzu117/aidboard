@@ -390,3 +390,42 @@ Reprises du brief §11.6, plus celles nées de l'état des lieux :
   l'usage le montre : compteur d'octets d'entrée côté relais.
 - **À reprendre en R.4** : au redémarrage du daemon, un `CodexDriver` remonté refait sa poignée de
   main sur un codex vivant — à traiter avant de ré-attacher un agent codex (claude n'a pas ce cas).
+- **R.4**, review comprise — `src/daemon/remote/agents.ts` (`RemoteAgentManager`),
+  `src/daemon/routes/serverDiscussions.ts` (CRUD des discussions, `/api/server-agents/:id/{input,interrupt,answer}`),
+  `src/daemon/ws/serverAgent.ts` (`/ws/server-agent/:id`, même protocole que `/ws/agent/:id`, y compris
+  pour un agent en veille : `exited`, puis `exit` `daemon_restart`). Câblage par insertions dans
+  `server.ts` et `main.ts` (option `remoteBins`, les faux agents en test). Décisions prises en cours de point :
+  - **codex n'est pas rattaché au redémarrage du daemon** : son pilote referait la poignée de main
+    JSON-RPC sur un process qui l'a déjà faite. Relais arrêté au mieux, statut `idle`, relancé par
+    `thread/resume` au message suivant. claude, lui, est rattaché à son offset ;
+  - **une relance prend un relais neuf** (`<agentId>-<ulid>`, offset remis à 0), et n'a lieu qu'une fois
+    l'ancien relais arrêté (`stop` à 0) : sinon 502 « serveur injoignable », `tmux_session` inchangé.
+    Deux agents sur la même session, ou un agent perdu de vue, sont ainsi exclus ;
+  - `--resume` seulement si le fil a déjà un `turn_end` : avant le premier tour, la session n'existe pas ;
+  - **demandes en attente en mémoire seulement**. Un claude rattaché alors qu'il était `needs_input`
+    reçoit une interruption et passe `working` : son pilote ne connaît plus l'id de la demande, le
+    tour resterait bloqué. Comportement réel de claude sur cette interruption : à observer en R.5 (D77) ;
+  - pas de pièces jointes (D70 : fichiers du daemon, pas du serveur) ;
+  - le message de l'opérateur part au pilote **avant** d'être écrit au fil (un envoi refusé ne laisse
+    pas de ligne) ; il est diffusé aux abonnés du canal comme pour un agent de sujet ; abonnés rangés
+    par agent, ils suivent une relance ;
+  - offset écrit dans la transaction de chaque ligne : la livraison `PassThrough` → `readline` est
+    synchrone (vérifié), l'offset d'une ligne journalisée l'inclut, rien n'est perdu ni rejoué. Une
+    écriture en échec autre que la clé étrangère ferme le lien (l'offset n'avance pas par-dessus) ;
+  - suppression d'une discussion ou d'un serveur : relances en cours attendues, puis chaque agent est
+    arrêté au mieux, **quel que soit son statut** (un pilote sorti en erreur faute de lien laisse un
+    agent vivant) ; serveur injoignable n'empêche pas de supprimer. Pendant l'arrêt, plus aucune
+    création ni relance dans la discussion ou sur le serveur (409). `DELETE /api/servers/:id` passe par un
+    `preHandler` qui arrête les agents avant la cascade ;
+  - répertoire de discussion : chemin absolu ou sous `~`, sans caractère de contrôle.
+- **Limite connue (R.4)** : si le handler de `DELETE /api/servers/:id` échouait après le `preHandler`, le
+  serveur resterait avec ses agents arrêtés. Accepté : le handler ne fait qu'un `DELETE` après la même
+  vérification d'existence.
+- **Test instable relevé pendant R.4** : `test/agents-pilotage.test.ts` « pause : le groupe est stoppé
+  (état T)… », délai dépassé (`stoppé` / `stoppé de nouveau`). 5 échecs sur 54 lancements avec le diff,
+  tous sous charge (charge 8 à 9 pendant les gates), 0 sur 34 sur la base `590928f` ; les 30 derniers
+  lancements avec le diff sont verts. Aucun mécanisme trouvé (le diff ne touche ni aux PTY ni aux
+  signaux) ; antériorité **non prouvée**. Également : `test/web/accueil.test.tsx:119`, déjà vu en R.3.
+- **À reprendre** : un `fake-line-agent.sh` orphelin (parent 1) a été trouvé après les tests, lancé
+  ~1 h 35 plus tôt, donc par un test du relais (R.2/R.3) et non de R.4. Arrêté à la main ; la fuite n'a
+  pas été reproduite (aucun process restant après les trois gates de R.4).
