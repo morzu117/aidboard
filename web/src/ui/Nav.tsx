@@ -8,6 +8,7 @@ import { depuis, depuisCourt } from './depuis.js';
 import { useLayout } from './Layout.js';
 import { compteVue, VUES, type VueId } from './navVues.js';
 import { Point, topicView } from './Statut.js';
+import { ShellsEnArriere } from './Statut.js';
 
 // Les trois vues principales du rail réduit (brief §5.2.3) : les trois premières de VUES.
 const VUES_RAIL = VUES.slice(0, 3);
@@ -948,6 +949,7 @@ export function Nav({ screen }: { screen: EcranId }) {
                                   <span className="barre-gauche-sujet-nom" data-bind="sujet.nom">
                                     {p.displayName ?? t.branch}
                                   </span>
+                                  <ShellsEnArriere agents={agentsOf(t.id)} />
                                   {decisions > 0 && (
                                     <span
                                       className="compteur barre-gauche-sujet-decisions"

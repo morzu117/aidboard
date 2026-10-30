@@ -10,6 +10,7 @@ import { A_TRAITER, Layout, useLayout } from '../ui/Layout.js';
 import { getNavCacheSnapshot } from '../ui/Nav.js';
 import { compteVue, topicsForVue, VUES, type VueId } from '../ui/navVues.js';
 import { isAlive, mostUrgent, Point, type Tone, topicView } from '../ui/Statut.js';
+import { ShellsEnArriere } from '../ui/Statut.js';
 import { Volet } from '../ui/Volet.js';
 import { CasErreurWorktree } from './CasErreurWorktree.js';
 import { FilActivite } from './FilActivite.js';
@@ -794,6 +795,7 @@ function Contenu() {
                             <span data-node={`${rowId}.nom`} data-bind="sujet.nom_affiche">
                               {nomAffiche(t)}
                             </span>
+                            <ShellsEnArriere agents={agents} dataNode={`${rowId}.shells`} />
                             {t.phase && <span className="md-code-ligne">{t.phase}</span>}
                           </Link>
                           <span className="texte-faible" data-node={`${rowId}.index`}>

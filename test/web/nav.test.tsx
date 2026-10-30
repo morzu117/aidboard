@@ -342,3 +342,31 @@ test('sous 1280 px, la barre reste complète même si « reduit » est enregistr
   expect(node('1-1.barre-gauche.rail')).toBeNull();
   expect(node('1-1.barre-gauche.vues')).toBeTruthy();
 });
+
+test('shells en arrière-plan : l’icône apparaît sur le sujet qui n’affiche plus rien, pas sur un sujet sans shell', async () => {
+  open(
+    snapshot({
+      workspaces: [ws()],
+      topics: [topic({ id: 'tp_1' }), topic({ id: 'tp_2', branch: 'feat/sans-agent' })],
+      runs: [{ id: 'run_1', topicId: 'tp_1', mode: 'standard', state: 'open', createdAt: 't' }],
+      agents: [
+        agent({
+          id: 'ag_1',
+          runId: 'run_1',
+          kind: 'claude',
+          transport: 'stream',
+          status: 'stopped',
+        }),
+        agent({ id: 'ag_2', runId: 'run_1', kind: 'shell', status: 'working' }),
+      ],
+    }),
+    navState({
+      placements: [placement({ topicId: 'tp_1', ord: 0 }), placement({ topicId: 'tp_2', ord: 1 })],
+    }),
+  );
+  await screen.findByText('feat/s');
+  const avec = node('1-1.barre-gauche.sujet-tp_1');
+  expect(avec?.querySelector('[aria-label="1 shell en arrière-plan"]')).not.toBeNull();
+  const sans = node('1-1.barre-gauche.sujet-tp_2');
+  expect(sans?.querySelector('[aria-label$="en arrière-plan"]')).toBeNull();
+});

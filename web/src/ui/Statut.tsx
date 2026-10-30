@@ -33,6 +33,8 @@ export function agentView(a: Agent, where: 'carte' | 'boite' = 'carte'): StatusV
     case 'error':
       return { label: 'Erreur', tone: 'erreur' };
     case 'idle':
+      // le tour s'est fini sur une question posée à l'opérateur (le daemon l'a lue dans le dernier message)
+      if (a.statusReason === 'question') return { label: 'Attend une réponse', tone: 'attente' };
       if (where === 'carte') return { label: 'À relire', tone: 'relire', estimated };
       return estimated
         ? { label: 'Inactif', tone: 'relire', estimated }
@@ -69,6 +71,42 @@ export function mostUrgent(agents: Agent[]): Agent | undefined {
 export function topicView(agents: Agent[]): StatusView {
   const a = mostUrgent(agents);
   return a ? agentView(a) : { label: 'Aucun agent', tone: 'inactif' };
+}
+
+/** Les shells encore vivants d'un sujet : ils tournent en arrière-plan, sans statut suivi. */
+export const shellsVivants = (agents: Agent[]): number =>
+  agents.filter((a) => a.kind === 'shell' && isAlive(a)).length;
+
+/**
+ * Icône « shells en arrière-plan », pour un sujet qui n'affiche plus rien (point gris : en veille,
+ * arrêté, aucun agent, ou rien d'autre qu'un shell) alors que des shells tournent encore. Dès qu'un
+ * agent a un statut à montrer, c'est le point qui parle et l'icône disparaît.
+ */
+export function ShellsEnArriere({ agents, dataNode }: { agents: Agent[]; dataNode?: string }) {
+  const n = shellsVivants(agents);
+  if (n === 0 || topicView(agents).tone !== 'inactif') return null;
+  const label = `${n} shell${n > 1 ? 's' : ''} en arrière-plan`;
+  return (
+    <span
+      className="shells-arriere"
+      role="img"
+      aria-label={label}
+      title={label}
+      data-node={dataNode}
+    >
+      <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
+        <path
+          d="M3 5l4 3-4 3M8.5 12H13"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.5"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+      {n > 1 && <span>{n}</span>}
+    </span>
+  );
 }
 
 export function Point({

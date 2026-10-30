@@ -645,3 +645,24 @@ test('pièces jointes : refusées pour un agent PTY (409)', async () => {
   });
   expect(r.statusCode).toBe(409);
 });
+
+test('un tour qui finit sur une question : statut idle, raison question ; le message suivant l’efface', async () => {
+  const { agent } = await spawnStream('claude');
+  await waitFor(() => row(agent.id).session_id === agent.sessionId, 5000, 'session claude');
+  const reason = () =>
+    (
+      c!.t.db.prepare('SELECT status_reason AS r FROM agents WHERE id = ?').get(agent.id) as {
+        r: string | null;
+      }
+    ).r;
+
+  c!.t.d.agents.input(agent.id, 'on continue ?');
+  await waitFor(() => row(agent.id).status === 'idle', 5000, 'fin du tour');
+  expect(reason()).toBe('question');
+
+  c!.t.d.agents.input(agent.id, 'oui');
+  expect(row(agent.id).status).toBe('working');
+  expect(reason()).toBeNull();
+  await waitFor(() => row(agent.id).status === 'idle', 5000, 'fin du tour suivant');
+  expect(reason()).toBeNull();
+});

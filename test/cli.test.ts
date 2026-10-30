@@ -167,6 +167,17 @@ describe.skipIf(!built)('aid en sous-processus', () => {
     expect((await run('stop')).code).toBe(0);
   }, 90_000);
 
+  test('un arrêt par signal laisse sa trace dans daemon.log', async () => {
+    await boot();
+    expect((await run()).code).toBe(0);
+    const { pid } = info();
+    process.kill(pid, 'SIGTERM');
+    await waitFor(() => !alive(pid), 15_000);
+    const log = readFileSync(join(home, 'daemon.log'), 'utf8');
+    expect(log).toMatch(/signal SIGTERM reçu : arrêt du daemon/);
+    expect(log).toMatch(/daemon arrêté \(code 0\)/);
+  }, 90_000);
+
   test('commande inconnue : code 1 ; --version et aide', async () => {
     await boot();
     expect((await run('nimporte')).code).toBe(1);

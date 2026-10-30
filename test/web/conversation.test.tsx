@@ -111,7 +111,9 @@ test('history puis event : bulle utilisateur, message assistant, groupe d’outi
     ],
   });
   await screen.findByText('Fais X');
-  expect(screen.getByText(/réponse/).textContent).toContain('<img src=x onerror=alert(1)>');
+  expect(screen.getByText(/réponse/).closest('.md-p')!.textContent).toContain(
+    '<img src=x onerror=alert(1)>',
+  );
   expect(document.querySelector('img')).toBeNull();
   expect(screen.getByText('2 commandes')).toBeTruthy();
   // doublon (reconnexion) : le même seq renvoyé en direct ne crée pas une seconde ligne

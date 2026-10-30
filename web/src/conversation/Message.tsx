@@ -1,11 +1,13 @@
 import type { AttachmentInfo } from '../../../src/shared/conversation.js';
+import { rendreMessage } from '../ui/markdownMessage.js';
 
 const heure = (at: string): string => {
   const d = new Date(at);
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 };
 
-// Texte brut uniquement : les enfants React échappent toujours le contenu, jamais de HTML injecté.
+// Le texte d'un utilisateur reste brut ; celui de l'agent est rendu en markdown par nos propres nœuds React,
+// jamais de HTML injecté.
 export function Message({
   role,
   text,
@@ -61,13 +63,19 @@ export function Message({
         </div>
       </div>
     );
+  const { corps, questions } = rendreMessage(text);
   return (
     <div className="message-agent" data-node={dataNode}>
       <div className="message-agent-entete">
         <span className="message-agent-kind">{kind}</span>
         <span className="texte-faible">{heure(at)}</span>
+        {questions > 0 && (
+          <span className="message-agent-question" data-node={`${dataNode}.questions`}>
+            {questions} question{questions > 1 ? 's' : ''}
+          </span>
+        )}
       </div>
-      <div className="message-agent-texte">{text}</div>
+      <div className="message-agent-texte md-message">{corps}</div>
     </div>
   );
 }
