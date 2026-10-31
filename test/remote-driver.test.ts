@@ -315,3 +315,31 @@ test('arrêt pendant que le serveur est injoignable : le exit dit que l’agent 
   });
   delete transport.env!.FAKE_SSH_FAIL;
 });
+
+test('session disparue avec une demande ouverte : la carte est annulée avant la reprise (review complète, déjà tenu par les pilotes)', async () => {
+  const { home, transport } = serveur();
+  const r = distant(transport, 'sa_c9', 'claude');
+  r.driver.send('demande permission');
+  await r.attendre(type('request'), 'demande');
+  const demande = r.events.find((e) => e.type === 'request');
+  const id = demande?.type === 'request' ? demande.request.id : '';
+  redemarrer(home, transport, 'sa_c9');
+  await r.attendre(type('connection_resumed'), 'reprise');
+  const annulee = r.events.findIndex((e) => e.type === 'request_cancelled' && e.requestId === id);
+  expect(annulee).toBeGreaterThanOrEqual(0);
+  expect(annulee).toBeLessThan(r.events.findIndex((e) => e.type === 'connection_resumed'));
+  expect(r.compte(type('request_cancelled'))).toBe(1);
+});
+
+test('demande répondue puis session disparue : rien à annuler', async () => {
+  const { home, transport } = serveur();
+  const r = distant(transport, 'sa_c10', 'claude');
+  r.driver.send('demande permission');
+  await r.attendre(type('request'), 'demande');
+  const demande = r.events.find((e) => e.type === 'request');
+  r.driver.answer(demande?.type === 'request' ? demande.request.id : '', 'yes');
+  await r.attendre(type('turn_end'), 'fin du tour');
+  redemarrer(home, transport, 'sa_c10');
+  await r.attendre(type('connection_resumed'), 'reprise');
+  expect(r.compte(type('request_cancelled'))).toBe(0);
+});
