@@ -565,7 +565,7 @@ const evenements = (m: Monte, agentId: string, type: string) =>
     unknown
   >[];
 
-const CONFIRMATION = ['Autoriser', 'Refuser', 'Toujours autoriser sur ce serveur'];
+const CONFIRMATION = ['Autoriser', 'Refuser', 'Toujours autoriser dans ce dossier'];
 
 test('claude sous confirmation : le destructif demande confirmation, « Toujours autoriser » écrit une règle du serveur', async () => {
   const m = await daemon(serveur());
@@ -881,3 +881,36 @@ test('claude lancé en `auto` puis confirmation activée : ramené à `default` 
   expect(v.pending!.confirm).toEqual({ server: 'vps-test' });
   await repondre(m2, v, 'no');
 }, 40_000);
+
+test('« Toujours autoriser » ne vaut que dans le dossier de la discussion (décision du 2026-10-31)', async () => {
+  const remote = serveur();
+  mkdirSync(join(remote.home, 'autre'));
+  const m = await daemon(remote);
+  const s = await creerServeur(m);
+  const d = await creerDiscussion(m, s.id);
+  const a = d.agents[0]!;
+  const v1 = await carte(m, a.id, 'rm -f x');
+  expect(v1.pending!.options.map((o) => o.label)).toEqual(CONFIRMATION);
+  await repondre(m, v1, 'always');
+  await waitFor(() => assistant(m, a.id, 'exécutée: rm -f x') === 1, 15_000, 'toujours');
+  await waitFor(() => ligne(m, a.id)?.status === 'idle', 15_000, 'idle');
+  const regles = (await m.req('GET', `/api/servers/${s.id}`)).json<Server>().rules;
+  expect(regles.map((r) => [r.cwd, r.pattern])).toEqual([[d.cwd, 'rm -f x']]);
+
+  // autre dossier du même serveur : la même commande redemande
+  const r = await m.req('POST', `/api/servers/${s.id}/discussions`, {
+    name: 'Ailleurs',
+    kind: 'claude',
+    cwd: '~/autre',
+  });
+  expect(r.statusCode).toBe(201);
+  const b = r.json<ServerDiscussionView>().agents[0]!;
+  const v2 = await carte(m, b.id, 'rm -f x');
+  expect(v2.pending!.confirm).toEqual({ server: 'vps-test' });
+  await repondre(m, v2, 'no');
+  await waitFor(() => assistant(m, b.id, 'refusée: rm -f x') === 1, 15_000, 'refus ailleurs');
+
+  // dans le dossier d'origine, la règle répond seule
+  await envoyer(m, a.id, 'commande: rm -f x');
+  await waitFor(() => assistant(m, a.id, 'exécutée: rm -f x') === 2, 15_000, 'par règle');
+});

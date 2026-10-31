@@ -28,6 +28,7 @@ export interface ServerRow {
 interface RuleRow {
   id: string;
   server_id: string;
+  cwd: string;
   pattern: string;
   created_at: string;
 }
@@ -111,7 +112,7 @@ function rulesOf(db: Db, serverId: string): ServerRule[] {
     db
       .prepare('SELECT * FROM server_rules WHERE server_id = ? ORDER BY created_at, id')
       .all(serverId) as RuleRow[]
-  ).map((r) => ({ id: r.id, pattern: r.pattern, createdAt: r.created_at }));
+  ).map((r) => ({ id: r.id, cwd: r.cwd, pattern: r.pattern, createdAt: r.created_at }));
 }
 
 export function listServers(db: Db): Server[] {

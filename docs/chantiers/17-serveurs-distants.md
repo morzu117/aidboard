@@ -869,3 +869,13 @@ Reprises du brief §11.6, plus celles nées de l'état des lieux :
   daemon fait les cartes. Codex garde son `auto` (tout passe au tri, `untrusted`). Tests adaptés (claude
   sous confirmation : une carte ordinaire pour le non destructif ; modes proposés) et ajoutés (refus,
   sans confirmation, codex, process rattaché). Mutations vérifiées. Gate : vert (1222).
+- **D.4, « Toujours autoriser » porte le dossier de la discussion** (`migrations/016`, `remote/agents.ts`,
+  `ServeurConfig.tsx`) : `server_rules` reconstruite avec `cwd`, unicité `(serveur, dossier, commande)` ; les
+  règles d'avant sont retirées, pas reportées — sans dossier connu, leur en donner un serait inventer une
+  portée (elles se reposeront à la première demande). La règle écrite prend le `cwd` de la discussion, le tri
+  ne la reconnaît que dans ce même dossier ; le bouton devient « Toujours autoriser dans ce dossier », la
+  configuration affiche le dossier de chaque règle. Lignes modifiées (déclarées) : l'INSERT et son `.run`,
+  le test de couverture, le libellé, le numéro de schéma épinglé de `mesh-schema.test.ts` (15 → 16, comme à
+  chaque migration), les fixtures de règles. Tests : portée par dossier (autre dossier redemande, dossier
+  d'origine répond seul), migration (règles d'avant retirées, unicité, cascade). Mutation (dossier ignoré au
+  tri) tuée. Gate : vert (1224).

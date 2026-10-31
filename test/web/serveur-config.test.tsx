@@ -240,7 +240,9 @@ test('agents détectés, dossiers autorisés, règles révocables', async () => 
     '/serveurs/srv_1/configuration',
     [
       serveur({
-        rules: [{ id: 'rule_1', pattern: 'Bash(systemctl restart nginx)', createdAt: 't' }],
+        rules: [
+          { id: 'rule_1', cwd: '~/proj', pattern: 'Bash(systemctl restart nginx)', createdAt: 't' },
+        ],
       }),
     ],
     { 'DELETE /api/servers/srv_1/rules/rule_1': json(200, serveur()) },
@@ -341,7 +343,7 @@ test('l’échec du lancement du test reste affiché après l’enregistrement ;
 test('un dossier tapé sans « Ajouter » part à l’enregistrement ; révoquer une règle garde le brouillon', async () => {
   const h = ouvrir(
     '/serveurs/srv_1/configuration',
-    [serveur({ rules: [{ id: 'rule_1', pattern: 'Bash(ls)', createdAt: 't' }] })],
+    [serveur({ rules: [{ id: 'rule_1', cwd: '~/proj', pattern: 'Bash(ls)', createdAt: 't' }] })],
     {
       'DELETE /api/servers/srv_1/rules/rule_1': json(200, serveur()),
       'PATCH /api/servers/srv_1': json(200, serveur()),

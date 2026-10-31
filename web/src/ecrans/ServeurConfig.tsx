@@ -742,6 +742,9 @@ function Formulaire({
                 {server.rules.map((r) => (
                   <div key={r.id} className="serveur-regle">
                     <code>{r.pattern}</code>
+                    <span className="texte-discret" data-node="serveur-config.regle.dossier">
+                      dans {r.cwd}
+                    </span>
                     <button
                       type="button"
                       className="bouton bouton--fantome"

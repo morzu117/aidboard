@@ -50,7 +50,7 @@ export const DESTRUCTIVE_PREFIXES: readonly string[] = [
 export const CONFIRM_OPTIONS: PendingOption[] = [
   { label: 'Autoriser', answer: 'yes' },
   { label: 'Refuser', answer: 'no' },
-  { label: 'Toujours autoriser sur ce serveur', answer: 'always' },
+  { label: 'Toujours autoriser dans ce dossier', answer: 'always' },
 ];
 
 /**

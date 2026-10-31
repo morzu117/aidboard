@@ -1,4 +1,8 @@
+import { copyFileSync, mkdtempSync, readdirSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join, resolve } from 'node:path';
 import { afterEach, expect, test } from 'vitest';
+import { migrate, openDb } from '../src/daemon/db.js';
 import type { Server } from '../src/shared/model.js';
 import { startTestDaemon, type TestDaemon } from './helpers/daemon.js';
 
@@ -96,4 +100,30 @@ test('supprimer un serveur supprime ses discussions, leurs agents et leurs fils 
   expect(compte('server_agents')).toBe(1);
   expect(compte('server_agent_messages')).toBe(2);
   expect(t.db.prepare('SELECT 1 FROM server_agents WHERE id = ?').get(a.agentId)).toBeUndefined();
+});
+
+test('migration 016 : règles reconstruites avec leur dossier, celles d’avant retirées (décision du 2026-10-31)', () => {
+  const tout = resolve(__dirname, '../migrations');
+  const avant = mkdtempSync(join(tmpdir(), 'aid-migr-'));
+  for (const f of readdirSync(tout).filter((f) => f < '016'))
+    copyFileSync(join(tout, f), join(avant, f));
+  const db = openDb(join(mkdtempSync(join(tmpdir(), 'aid-db-')), 'aid.db'), avant);
+  db.prepare(
+    "INSERT INTO servers (id, name, mode, target, color, created_at, updated_at) VALUES ('srv_1', 'vps', 'ssh_alias', 'vps', 'c1', 't', 't')",
+  ).run();
+  db.prepare(
+    "INSERT INTO server_rules (id, server_id, pattern, created_at) VALUES ('sr_1', 'srv_1', 'rm -rf build', 't')",
+  ).run();
+  migrate(db, tout);
+  expect(db.prepare('SELECT COUNT(*) AS n FROM server_rules').get()).toEqual({ n: 0 });
+  const ecrire = db.prepare(
+    "INSERT INTO server_rules (id, server_id, cwd, pattern, created_at) VALUES (?, 'srv_1', ?, 'rm -rf build', 't')",
+  );
+  ecrire.run('sr_2', '~/a');
+  // même commande, autre dossier : une autre règle ; même dossier : refusée par l'unicité
+  ecrire.run('sr_3', '~/b');
+  expect(() => ecrire.run('sr_4', '~/a')).toThrow(/UNIQUE/);
+  db.prepare("DELETE FROM servers WHERE id = 'srv_1'").run();
+  expect(db.prepare('SELECT COUNT(*) AS n FROM server_rules').get()).toEqual({ n: 0 });
+  db.close();
 });
