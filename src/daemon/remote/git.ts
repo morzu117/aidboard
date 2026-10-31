@@ -134,9 +134,11 @@ const PUSHABLE = `st
 [ -n "$ab" ] && [ "\${ab#*\t}" != 0 ] || { printf 'rien\\000%s\\000' "$br"; exit 0; }
 [ "$hd" = "$eh" ] || { printf 'perime\\000'; exit 0; }
 ps=push
+# le commit confirmé, pas ce que HEAD est devenu entre-temps (un agent commite pendant le fetch, review complète)
+pc=$eh
 `;
 
-const PUSH_STEP = `o=$(gn push --porcelain origin "HEAD:refs/heads/$br" 2>&1) || {
+const PUSH_STEP = `o=$(gn push --porcelain origin "$pc:refs/heads/$br" 2>&1) || {
   case "$o" in *'[rejected]'*) printf 'rejete\\000%s\\000' "$br" ;; *) printf 'echec\\000%s\\000%s\\000' "$ps" "$o" ;; esac
   exit 0
 }
@@ -157,16 +159,21 @@ if g rev-parse --verify --quiet "refs/remotes/origin/$br" >/dev/null 2>&1; then
 fi
 if [ "$bh" != 0 ]; then
   g diff --quiet HEAD -- 2>/dev/null || { printf 'modifie\\000'; exit 0; }
+  # le rebase porte sur la branche courante : elle et son commit sont encore ceux confirmés (review complète)
+  [ "$(g rev-parse --verify --quiet HEAD 2>/dev/null)" = "$eh" ] && [ "$(g symbolic-ref --quiet HEAD 2>/dev/null)" = "refs/heads/$br" ] || { printf 'perime\\000'; exit 0; }
   # connexion coupée ou délai dépassé en plein rebase : annulé quand même, jamais laissé à moitié
   trap 'git rebase --abort >/dev/null 2>&1; exit 1' HUP INT TERM PIPE
   if ! e=$($tn git -c core.fsmonitor=false -c rebase.autoStash=false rebase --quiet "refs/remotes/origin/$br" 2>&1); then
     u=$(git diff --name-only --diff-filter=U 2>/dev/null | head -n 20)
     git rebase --abort >/dev/null 2>&1
+    # annulation elle-même en échec (verrou de l'index…) : le dépôt n'est pas revenu, le dire (review complète)
+    if [ -d "$gd/rebase-merge" ] || [ -d "$gd/rebase-apply" ]; then printf 'rebaselaisse\\000'; exit 0; fi
     if [ -n "$u" ]; then printf 'conflit\\000%s\\000%s\\000' "$br" "$u"; else printf 'echec\\000rebase\\000%s\\000' "$e"; fi
     exit 0
   fi
   trap - HUP INT TERM PIPE
   ps=pushrebase
+  pc=$(g rev-parse --verify --quiet HEAD 2>/dev/null) || { printf 'echec\\000rebase\\000HEAD illisible après le rebase\\000'; exit 0; }
 fi
 ${PUSH_STEP}`;
 
@@ -219,6 +226,7 @@ const REFUSALS: Record<string, [number, (d: string[]) => string]> = {
     ([br, files]) =>
       `conflit avec origin/${br} (${(files ?? '').split('\n').filter(Boolean).join(', ')}) : rebase annulé, rien n’a changé sur le serveur`,
   ],
+  rebaselaisse: [409, () => 'rebase en échec et non annulé sur le serveur : à terminer sur place'],
   rejete: [409, ([br]) => `origin/${br} a avancé : Synchroniser d’abord`],
   perime: [409, () => 'le dépôt du serveur a changé depuis l’affichage : relire avant de pousser'],
   echec: [

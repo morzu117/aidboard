@@ -806,3 +806,10 @@ Reprises du brief §11.6, plus celles nées de l'état des lieux :
   dynamique (`$a`, `rm${IFS}…`, glob, accolades) est demandé, `2>&1` / `>&2` / `&>f` sont des redirections et
   plus des séparateurs, une commande trop chère à relire (longueur × substitutions) est demandée. Gate : vert
   (1210).
+- **Finding R2#4 réfuté** (cartes orphelines à la reprise) : les pilotes claude et codex annulent leurs demandes
+  à la sortie ; deux tests de `remote-driver` le tiennent désormais.
+- **Correctif RC.2, écritures Git** (`remote/git.ts`) : Pousser et Synchroniser poussent le commit confirmé (ou
+  celui que le rebase vient d'écrire), jamais ce que HEAD est devenu pendant le fetch ; avant le rebase, branche
+  et commit sont revérifiés (`perime` sinon) ; une annulation de rebase elle-même en échec est dite
+  (`rebaselaisse`) au lieu de « rien n'a changé ». Tests : un `git` du serveur qui commite pendant le fetch, ou
+  dont `rebase --abort` échoue. Mutations vérifiées sur les trois gardes. Gate : vert (1215).
