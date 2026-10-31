@@ -175,6 +175,16 @@ test('shell de connexion non POSIX (fish, csh) : étape shell en échec, ping en
     const st = (await req('POST', `/api/servers/${s.id}/ping`)).json<ServerStatus>();
     expect(st, login).toMatchObject({ state: 'error', latencyMs: null });
     expect(st.reason, login).toContain('non supporté pour le moment');
+    // review complète : aucune commande du panneau ne part vers ce shell
+    for (const [method, url] of [
+      ['GET', `/api/servers/${s.id}/fs`],
+      ['GET', `/api/servers/${s.id}/git/status`],
+      ['POST', `/api/servers/${s.id}/git/fetch`],
+    ] as const) {
+      const r = await req(method, url, method === 'POST' ? {} : undefined);
+      expect(r.statusCode, `${login} ${url}`).toBe(409);
+      expect(r.json().error, url).toContain('non supporté pour le moment');
+    }
     await t.d.stop();
     t = undefined;
   }

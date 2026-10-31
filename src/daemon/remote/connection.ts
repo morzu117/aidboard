@@ -196,6 +196,7 @@ export class ServerConnections {
    * injoignable (la pastille et le bandeau le disent) et répond 502 ; le code de la commande reste à l'appelant.
    */
   async read(server: Server, cmd: string): Promise<ExecResult> {
+    this.assertSupported(server);
     const r = await this.exec(server, cmd);
     if (!connectionLost(r, server.mode)) return r;
     const c = classify(r, this.timeoutMs, server.mode);
@@ -205,6 +206,7 @@ export class ServerConnections {
 
   /** F.2 : comme `read`, avec un délai propre — fetch / push passent par le réseau du serveur. */
   async run(server: Server, cmd: string, timeoutMs: number): Promise<ExecResult> {
+    this.assertSupported(server);
     const r = await remoteExec(server, cmd, {
       ...this.deps.transport,
       timeoutMs,
@@ -214,6 +216,18 @@ export class ServerConnections {
     const c = classify(r, timeoutMs, server.mode);
     this.setStatus(server.id, { state: c.state, latencyMs: null, reason: c.reason });
     throw new AidHttpError(502, `${server.name} ne répond pas : ${c.reason}`);
+  }
+
+  /**
+   * Review complète : shell de connexion non POSIX constaté (test ou ping) — aucune commande du panneau n'y part,
+   * elle y serait altérée. Levé par le prochain ping sain (« Reconnecter »).
+   */
+  private assertSupported(server: Server): void {
+    if (this.status(server.id).reason === UNSUPPORTED_LOGIN_SHELL)
+      throw new AidHttpError(
+        409,
+        `${server.name} : ${UNSUPPORTED_LOGIN_SHELL} (Reconnecter une fois le shell changé)`,
+      );
   }
 
   forget(serverId: string): void {
