@@ -831,3 +831,27 @@ Reprises du brief §11.6, plus celles nées de l'état des lieux :
   `GIT_CONFIG_PARAMETERS` / `GIT_CONFIG_COUNT` exportés par le profil distant sont retirés comme les autres
   `GIT_*` : une trace HTTP porte l'en-tête d'authentification jusqu'au message d'erreur. Test : un hook qui
   relève les variables vues. Mutation vérifiée. Gate : vert (1220).
+- **Review complète, findings réfutés après vérification** : bypassPermissions désarmant la confirmation
+  (absent de `SERVER_PERMISSION_MODES`) ; injection par `target` / tiret en tête (`SSH_HOST_RE`) ; refus du
+  préambule mal lus par Git (`records` les mappe) ; `released` sur un DELETE en échec (voulu : le serveur
+  redevient utilisable) ; arrêt contre reprise (`terminate` pose `ending`, `lost` n'est posé que par
+  `loseSession`) ; canal jamais rouvert après une sortie (statut relu périodiquement et à chaque événement) ;
+  WebSocket sans contrôle d'origine (hook global de `security.ts`, `/ws/` compris) ; cartes orphelines à la
+  reprise (voir plus haut).
+- **e2e après RC.1-RC.5** : 34 passés, `e2e/nav-edition.spec.ts:45` seul en échec (pré-existant, prouvé sur
+  `origin/main`, voir plus haut) ; `e2e/pilotage.spec.ts:18`, rouge au passage F.4, passe seul (4/4) et en
+  passage complet : instable. `test/web/accueil.test.tsx:119` du gate RC.4 est l'échec pré-existant prouvé
+  sur `origin/main` (voir plus haut).
+- **Review complète, à trancher par l'opérateur** : masquage des secrets dans le texte libre (fil de l'agent,
+  commande d'une carte, règle « Toujours autoriser » stockée en clair, sortie du test de connexion) ;
+  suppression d'un serveur injoignable dont des agents tournent (aujourd'hui : supprimé quand même) ; claude en
+  `auto` ne soumet que ce que ses règles `ask` rattrapent (`/bin/rm`, `git -C x push`, `find -delete`
+  passent) ; portée de « Toujours autoriser » (serveur entier, sans dossier) ; Synchroniser pendant que
+  l'agent travaille ; `allowedDirs` par défaut `['~']` ; archiver n'arrête pas l'agent ; correctif du HEAD de
+  `layoutGraph` dans l'onglet Git d'un sujet (hors périmètre).
+- **Review complète, à planifier (non bloquant)** : lectures Git dégradées présentées comme complètes
+  (`git status` tué → « propre », journal coupé sans `truncated`, badges absents = propre) ; agent en
+  `error` après une perte de lien jamais rattaché ; critère de reprise `hasTurn` ; `confirmDestructive` figé
+  au lancement ; erreurs avalées sans journal ; plafond de 2000 entrées dans l'ordre du glob ; course
+  `realpath` / lecture (même utilisateur, sans gain de privilège) ; extensions de données manquantes (`csv`,
+  `bak`, `db`) pour les mots de secret.
