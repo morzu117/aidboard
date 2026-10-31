@@ -988,3 +988,129 @@ test('supprimer quand même un serveur injoignable : les lignes partent, l’age
   delete remote.transport.env.FAKE_SSH_FAIL;
   process.kill(parseInt(readFileSync(fichier, 'utf8'), 10), 'SIGTERM');
 });
+
+test('entrées refusées : discussion inconnue, renommage vide ou trop long, réponse inconnue, agent arrêté', async () => {
+  const m = await daemon(serveur());
+  const s = await creerServeur(m);
+  // dossier blanc : le dossier de travail du serveur
+  const r0 = await m.req('POST', `/api/servers/${s.id}/discussions`, {
+    name: 'Blanc',
+    kind: 'claude',
+    cwd: '   ',
+  });
+  expect(r0.json<ServerDiscussionView>().cwd).toBe(s.workdir);
+  const d = r0.json<ServerDiscussionView>();
+  const a = d.agents[0]!;
+  expect((await m.req('GET', `/api/servers/${s.id}/discussions/sd_inconnue`)).statusCode).toBe(404);
+  const url = `/api/servers/${s.id}/discussions/${d.id}`;
+  expect((await m.req('PATCH', url, { name: '  ' })).statusCode).toBe(422);
+  expect((await m.req('PATCH', url, { name: 'x'.repeat(121) })).statusCode).toBe(422);
+  // une seule des deux : l'autre garde sa valeur
+  expect(
+    (await m.req('PATCH', url, { archived: true })).json<ServerDiscussionView>(),
+  ).toMatchObject({
+    name: 'Blanc',
+    archived: true,
+  });
+  expect(
+    (await m.req('PATCH', url, { name: 'Renommée' })).json<ServerDiscussionView>(),
+  ).toMatchObject({ name: 'Renommée', archived: true });
+  expect(
+    (await m.req('PATCH', url, { archived: false })).json<ServerDiscussionView>().archived,
+  ).toBe(false);
+
+  await envoyer(m, a.id, 'demande permission');
+  await waitFor(() => ligne(m, a.id)?.status === 'needs_input', 15_000, 'needs_input');
+  const pending = (await m.req('GET', `/api/server-agents/${a.id}`)).json<ServerAgentView>()
+    .pending!;
+  const inconnue = await m.req('POST', `/api/server-agents/${a.id}/answer`, {
+    pendingId: pending.id,
+    answer: 'peut',
+  });
+  expect(inconnue.statusCode).toBe(422);
+  expect(inconnue.json<{ error: string }>().error).toBe('réponse inconnue pour cette demande');
+  await repondre(
+    m,
+    (await m.req('GET', `/api/server-agents/${a.id}`)).json<ServerAgentView>(),
+    'yes',
+  );
+  await waitFor(() => ligne(m, a.id)?.status === 'idle', 15_000, 'idle');
+
+  // agent fini sur le serveur, pilote sorti : interrompre n'a plus de cible
+  process.kill(parseInt(readFileSync(apid(m, a.id), 'utf8'), 10), 'SIGKILL');
+  await waitFor(() => ['done', 'error'].includes(ligne(m, a.id)?.status ?? ''), 15_000, 'fini');
+  const r = await m.req('POST', `/api/server-agents/${a.id}/interrupt`);
+  expect(r.statusCode).toBe(409);
+  expect(r.json<{ error: string }>().error).toBe('agent arrêté sur le serveur');
+});
+
+test('/ws/server-agent : historique après `after`, lignes corrompues ignorées, marquées, borné en octets', async () => {
+  const m = await daemon(serveur());
+  const s = await creerServeur(m);
+  const a = (await creerDiscussion(m, s.id)).agents[0]!;
+  await envoyer(m, a.id, 'bonjour');
+  await waitFor(() => ligne(m, a.id)?.status === 'idle', 15_000, 'idle');
+  const msg = m.t.db.prepare(
+    'INSERT INTO server_agent_messages (agent_id, seq, kind, payload, at, marked) VALUES (?, ?, ?, ?, ?, ?)',
+  );
+  msg.run(a.id, 1001, 'assistant', '{pas du json', 't', 0);
+  msg.run(
+    a.id,
+    1002,
+    'assistant',
+    JSON.stringify({ type: 'message', role: 'assistant', text: 'm' }),
+    't',
+    1,
+  );
+  type Hist = { items: { seq: number; marked?: boolean }[]; truncated: boolean };
+  const hist = async (after?: number) => {
+    const c = await Client.open(m, a.id, after);
+    await waitFor(() => c.find('history').length > 0, 5_000, 'history');
+    c.ws.close();
+    return c.find('history')[0] as unknown as Hist;
+  };
+  // après 1000 : la ligne corrompue tombe, la marquée le dit
+  expect((await hist(1000)).items).toEqual([
+    { seq: 1002, at: 't', event: expect.any(Object), marked: true },
+  ]);
+  // `after` illisible ou négatif : tout l'historique
+  const tout = await hist(-4);
+  expect(tout.items.length).toBeGreaterThan(1);
+  expect(tout.truncated).toBe(false);
+  expect((await hist(Number.NaN)).items).toEqual(tout.items);
+
+  // au-delà de 4 Mo d'historique : les plus récents seulement, `truncated`
+  const gros = JSON.stringify({
+    type: 'message',
+    role: 'assistant',
+    text: 'x'.repeat(1024 * 1024),
+  });
+  for (let i = 0; i < 5; i++) msg.run(a.id, 2000 + i, 'assistant', gros, 't', 0);
+  const borne = await hist(1999);
+  expect(borne.truncated).toBe(true);
+  // chacun un peu plus d'1 Mo : trois tiennent sous la borne
+  expect(borne.items.map((i) => i.seq)).toEqual([2002, 2003, 2004]);
+});
+
+test('/ws/server-agent : l’agent s’arrête pendant l’abonnement — exit avec sa raison, puis fermeture ; fini avant : exit tout de suite', async () => {
+  const m = await daemon(serveur());
+  const s = await creerServeur(m);
+  const d = await creerDiscussion(m, s.id);
+  const a = d.agents[0]!;
+  await envoyer(m, a.id, 'bonjour');
+  await waitFor(() => ligne(m, a.id)?.status === 'idle', 15_000, 'idle');
+
+  const c = await Client.open(m, a.id);
+  await waitFor(() => c.find('history').length > 0, 5_000, 'history');
+  process.kill(parseInt(readFileSync(apid(m, a.id), 'utf8'), 10), 'SIGKILL');
+  await waitFor(() => c.closeCode !== null, 15_000, 'fermeture');
+  expect(c.closeCode).toBe(1000);
+  expect(c.find('event').some((e) => (e.event as { type: string }).type === 'exit')).toBe(true);
+  expect(c.find('exit')[0]).toMatchObject({ reason: 'exit' });
+
+  // pilote sorti : le même canal répond `exited` et l'exit enregistré
+  const c2 = await Client.open(m, a.id);
+  await waitFor(() => c2.closeCode !== null, 5_000, 'fermeture');
+  expect(c2.find('hello')[0]).toMatchObject({ exited: true });
+  expect(c2.find('exit')[0]).toMatchObject({ reason: 'exit' });
+});

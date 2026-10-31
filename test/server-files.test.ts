@@ -20,6 +20,7 @@ import {
   HIDDEN_PAIR_CASE,
   HIDDEN_PATTERNS,
   isHidden,
+  parseListing,
   parsePreview,
   PREVIEW_MAX,
   readCommand,
@@ -636,4 +637,70 @@ test('review complète : le daemon refuse un dossier autorisé de secrets annonc
     ['/h/.config/gcloud/x', '/h/.config/gcloud'],
   ] as const)
     expect(() => parsePreview(s, '~/x', sortie(resolved, base)), resolved).toThrow(/masqué/);
+});
+
+test('relecture d’une liste : badges Git (ignorés, hors du dossier, renommés), types, échecs sans état', () => {
+  const s = { id: 'srv_x', allowedDirs: ['~'] } as Server;
+  const sortie = (recs: string[], stderr = '', code: number | null = 0): ExecResult => ({
+    code,
+    stdout: ['bruit du profil', 'aid-fs', ...recs].join('\0'),
+    stderr,
+    durationMs: 1,
+    timedOut: false,
+    truncated: false,
+  });
+  const liste = parseListing(
+    s,
+    '~/proj/src',
+    sortie([
+      'ok',
+      '/h/proj/src',
+      '/h',
+      'e\td\tlib',
+      'e\tf\ta.ts',
+      'e\tfl\tlien',
+      'e\tp\tfifo',
+      'e\tf\tb.ts',
+      'e\tf\tc.ts',
+      'git\tsrc/',
+      // ignoré par git : jamais un badge
+      '!! src/build.log',
+      // hors du dossier listé (git rend les chemins depuis la racine du dépôt)
+      ' M README.md',
+      // renommage : le chemin d'origine suit, il n'est pas lu comme une entrée
+      'R  src/b.ts',
+      'src/ancien.ts',
+      ' M src/lib/x.ts',
+      '?? src/lib/y.ts',
+      '?? src/c.ts',
+      'xx',
+    ]),
+  );
+  const par = Object.fromEntries(liste.entries.map((e) => [e.name, e]));
+  expect(par.lib).toMatchObject({ kind: 'dir', git: 'M' });
+  expect(par['a.ts']).toMatchObject({ kind: 'file', git: null });
+  expect(par.lien).toMatchObject({ kind: 'file', symlink: true });
+  expect(par.fifo).toMatchObject({ kind: 'other', symlink: false });
+  expect(par['b.ts']!.git).toBe('M');
+  expect(par['c.ts']!.git).toBe('?');
+  expect(liste.entries.some((e) => e.name === 'ancien.ts' || e.name === 'build.log')).toBe(false);
+
+  // aucune marque ni état : la dernière ligne d'erreur, à défaut le code de sortie
+  const vide = (stderr: string, code: number | null) => ({
+    code,
+    stdout: 'rien',
+    stderr,
+    durationMs: 1,
+    timedOut: false,
+    truncated: false,
+  });
+  expect(() => parseListing(s, '~', vide('a\nsh: realpath: cassé\n', 2))).toThrow(
+    'lecture impossible sur le serveur : sh: realpath: cassé',
+  );
+  expect(() => parseListing(s, '~', vide('', 9))).toThrow(
+    'lecture impossible sur le serveur : code de sortie 9',
+  );
+  // résolu relatif, ou dossier autorisé qui est un dossier de secrets : refusés quoi qu'en dise le script
+  expect(() => parseListing(s, '~', sortie(['ok', 'h/proj', 'h']))).toThrow(/hors des dossiers/);
+  expect(() => parseListing(s, '~', sortie(['ok', '/h/.ssh', '/h/.ssh']))).toThrow(/masqué/);
 });
