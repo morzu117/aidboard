@@ -819,3 +819,11 @@ Reprises du brief §11.6, plus celles nées de l'état des lieux :
   masqués) n'est plus jamais autorisé : refusé à l'enregistrement (400), refusé par le script sur le dossier
   autorisé résolu (lien compris), revérifié par le daemon. Les motifs de fichiers ne comptent pas
   (`/srv/id_app/proj` reste autorisable). Mutations vérifiées sur les trois couches. Gate : vert (1219).
+- **Correctif RC.4, shell de connexion non POSIX à l'usage** (`remote/connection.ts`) : le verdict du test ou
+  du ping (« non supporté pour le moment ») n'empêchait pas les lectures et écritures du panneau ; elles sont
+  désormais refusées (409) tant qu'un ping sain ne l'a pas levé. Limite connue, signalée : le verdict vit en
+  mémoire (perdu au redémarrage du daemon jusqu'au premier ping) et le lancement d'un agent ne le consulte pas
+  (les agents ne passent pas par `ServerConnections`) ; sous fish, un nom de fichier forgé par un agent ne
+  donne rien de plus que ce que l'agent peut déjà faire sur ce serveur. Gate : vert (1219) au second passage —
+  `test/web/accueil.test.tsx` (« une ligne par sujet », ordre des lignes) a échoué une fois puis passé, seul
+  et en gate complet, sans rapport avec le diff (fichier intouché par la branche) : instable, signalé.
