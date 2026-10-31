@@ -208,3 +208,32 @@ test('remoteSpawn : ssh absent ou stdin fermé, jamais d’exception non captur�
   done.stdin.write('après la fin\n');
   await sleep(50);
 });
+
+test('argv Hôte SSH : seules les options renseignées passent, aucune sans options', () => {
+  const host = (sshOptions: Conn['sshOptions']): Conn => ({
+    mode: 'ssh_host',
+    target: 'vps.exemple.fr',
+    sshOptions,
+    loadProfile: true,
+    shell: 'bash',
+  });
+  const options = (c: Conn) => {
+    const args = remoteArgv(c, 'uptime').args;
+    return args.slice(args.indexOf('-T') + 1, args.indexOf('--'));
+  };
+  expect(options(host(null))).toEqual([]);
+  expect(options(host({ port: null, user: 'debian', identityFile: null, jump: null }))).toEqual([
+    '-l',
+    'debian',
+  ]);
+  expect(options(host({ port: 22, user: null, identityFile: null, jump: 'bastion' }))).toEqual([
+    '-p',
+    '22',
+    '-J',
+    'bastion',
+  ]);
+  expect(options(host({ port: null, user: null, identityFile: '~/.ssh/k', jump: null }))).toEqual([
+    '-i',
+    '~/.ssh/k',
+  ]);
+});

@@ -365,3 +365,24 @@ test('kill du process distant (délai du pilote) : arrêt sur le serveur, confir
   });
   expect(alive.trim()).toBe('inconnu');
 });
+
+test('agent effacé du serveur pendant une coupure : au retour du lien, fin « agent inconnu », sans relance', async () => {
+  const { home, transport } = serveur();
+  const r = distant(transport, 'sa_c12', 'claude');
+  r.driver.send('bonjour');
+  await r.attendre(type('turn_end'), 'premier tour');
+  transport.env!.FAKE_SSH_FAIL = '1';
+  couper(r.driver);
+  await r.attendre(type('connection_lost'), 'connexion perdue');
+  // arrêté et effacé par ailleurs (nettoyage manuel du serveur) pendant que le lien est coupé
+  redemarrer(home, transport, 'sa_c12');
+  rmSync(join(home, '.aid-remote/agents/sa_c12'), { recursive: true, force: true });
+  delete transport.env!.FAKE_SSH_FAIL;
+  await r.attendre(type('exit'), 'fin');
+  expect(r.events.find((e) => e.type === 'exit')).toMatchObject({
+    message: expect.stringContaining('agent inconnu sur le serveur'),
+  });
+  // rien n'a été relancé : ni reprise, ni nouveau dossier d'agent
+  expect(r.created).toHaveLength(1);
+  expect(existsSync(join(home, '.aid-remote/agents/sa_c12'))).toBe(false);
+});

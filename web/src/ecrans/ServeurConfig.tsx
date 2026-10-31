@@ -825,7 +825,9 @@ function Formulaire({
                 style={{ background: b.color }}
                 aria-hidden="true"
               />
-              <span data-node="serveur-config.apercu.groupe">{b.groupName || 'Serveurs'}</span>
+              <span data-node="serveur-config.apercu.groupe">
+                {b.groupName.trim() || 'Serveurs'}
+              </span>
             </div>
             <div className="serveur-apercu-ligne">
               <IconeServeur state={status.state} taille={15} />
