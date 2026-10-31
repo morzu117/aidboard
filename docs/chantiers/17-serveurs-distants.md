@@ -663,3 +663,73 @@ Reprises du brief §11.6, plus celles nées de l'état des lieux :
 - **Gate des shells** : vert (1158) au réveil du poste ; les trois passages de la nuit, rouges uniquement en
   délai dépassé (700 à 975 s par test), tombaient pendant la mise en veille (`caffeinate -i` n'empêche pas
   la veille capot fermé).
+- **F.2** — Git d'un serveur (`src/daemon/remote/git.ts`, routes `GET /api/servers/:id/git/status`,
+  `…/git/log?scope=all|branch`, `…/git/commits/:hash`, `POST …/git/{fetch,push,sync}` dans
+  `routes/servers.ts`, types `ServerGitRepo` / `ServerGitStatus` / `ServerGitLog` dans `shared/git.ts`).
+  Même préambule que F.1 (realpath, périmètre, masqués), puis : racine du dépôt bornée au dossier autorisé
+  (`GIT_CEILING_DIRECTORIES` + revérification par le script et par le daemon), variables `GIT_*` du profil
+  ignorées, jamais de prompt ni d'éditeur, lectures sans verrou optionnel ni fsmonitor. Le journal garde la
+  forme de celui d'un sujet (`GitLogResponse`, `parseLog` et `LOG_FORMAT` de `git/inspect.ts` réexportés)
+  pour que F.3 puisse reprendre les composants de `OngletGit`. Lignes existantes modifiées : aucune
+  (exports ajoutés en fin de `files.ts` et d'`inspect.ts`, méthode `run` ajoutée à `ServerConnections`).
+  **Décisions prises à la place de l'opérateur** (à reposer à la review complète) :
+  - écritures **synchrones**, une à la fois par serveur (409 sinon), réponse = état du dépôt après
+    l'opération — pas la file d'actions locale de D33, qui est celle d'un workspace ;
+  - avance / retard mesurés sur `origin/<branche du même nom>`, pas sur l'amont configuré ; une branche
+    jamais poussée a pour avance ses commits absents de tout `origin/*` ; Pousser = `push origin
+    HEAD:refs/heads/<branche>`, jamais de force ni de `-u` (la configuration du dépôt ne change pas) ;
+  - confirmation exigée **aussi par le daemon** (`confirm: true`, 400 sinon) en plus de la carte de F.3 ;
+  - Synchroniser = fetch, rebase sur `origin/<branche>` s'il a avancé, puis poussée ; un rebase qui échoue
+    est annulé aussitôt (rien ne change sur le serveur, conflit nommé) ; modifications suivies non
+    commitées : refus avant tout (jamais d'autostash) ; **refusé sans avance**, conforme au plan — un simple
+    tirage (retard seul) n'est donc pas proposé ;
+  - un dossier autorisé situé **dans** un dépôt dont la racine est au-dessus n'est pas un dépôt pour A-I-D
+    (le `.git` est hors périmètre) ;
+  - dépôts détectés : profondeur 4, dossiers lourds sautés, dépôts sous un dossier masqué exclus, 50 au plus ;
+  - « hors HEAD » (commits atténués) relu sur 2 000 commits des autres branches au plus ; au-delà, supposés
+    dans HEAD ;
+  - les hooks du dépôt du serveur (`pre-push`…) s'exécutent comme pour un push fait sur place.
+- **Tests F.2** (`test/server-git.test.ts`, 16) : état et fetch, branche jamais poussée, HEAD détachée,
+  dépôt vide, dossier non Git et dépôts détectés, racine hors périmètre, refus du périmètre de F.1, journal
+  `all` / `branch` et WIP, détail (compteurs, binaire, premier commit, hash invalide sans effet), pousser
+  (confirmation, sans avance, branche neuve sans `-u`, refus si origin a avancé, HEAD détachée / merge en
+  cours / sans origin), synchroniser (linéaire, non-suivis gardés, conflit annulé, modifications suivies),
+  une écriture à la fois, `GIT_DIR` du profil ignoré, identifiants d'URL jamais renvoyés, serveur
+  injoignable. Mutations vérifiées : `unset GIT_*`, refus sans avance, `rebase --abort`.
+- **Review F.2** — retenus :
+  - branche et tag du même nom : `symbolic-ref --short` rendait `heads/main`, et Pousser aurait créé une
+    branche `heads/main` sur origin (bloquant) → nom complet, préfixe `refs/heads/` retiré ;
+  - délais : fetch, rebase et poussée bornés chacun à 45 s, aller-retour à 180 s ; le rebase est annulé
+    par un `trap` si la connexion tombe ou si le délai saute en plein rebase ;
+  - un mot de passe contenant `@` fuyait en partie (`https://u:p@ss@h/` → `ss@h`) → retiré jusqu'au
+    dernier `@` avant l'hôte ;
+  - un fichier nommé `fin`, `inhead`… était pris pour une section du détail d'un commit → sections
+    marquées `/…`, jamais un chemin de `diff-tree` ;
+  - confirmation liée à rien → Pousser et Synchroniser exigent `head`, le commit affiché sur la carte ; si
+    HEAD a bougé entre l'affichage et le clic, le script refuse (409) ;
+  - `gc.auto`, `maintenance.auto` et `push.followTags` neutralisés pour les écritures ;
+  - message d'erreur : la dernière ligne `fatal` / `error` / `remote` / `!` plutôt que `Done` ;
+  - une poussée qui échoue après un rebase réussi le dit ;
+  - un chemin contenant une tabulation ;
+  - test d'un chemin qui est un fichier.
+
+  Tests ajoutés (21 au total) : commit affiché périmé, tag homonyme, hook `pre-push` qui refuse en
+  affichant une URL avec identifiants, modifications seulement indexées, rebase en échec hors conflit
+  (non-suivi qui gêne), enregistrements forgés (racine hors du dossier autorisé, candidats sous un dossier
+  masqué, tabulation). Mutations vérifiées : `--short`, sentinelles, borne de `stripUserinfo`, `head`
+  confirmé. Non prouvé par mutation : le choix de la ligne d'erreur, car le cas « `Done` en dernière
+  ligne » n'est pas reproduit en local.
+
+  Écarté, **à reposer à l'opérateur à la review complète** : un worktree dans un dossier autorisé dont le
+  dépôt principal est au-dehors fait lire à `git log` des refs et objets hors périmètre. Le refuser rendrait
+  inutilisable la disposition des worktrees d'A-I-D lui-même ; le contenu lu est celui du même projet,
+  jamais un fichier de l'arbre hors périmètre.
+
+  Reportés à la review complète :
+  - un `git status` tué par son délai donne un comptage tronqué (faux « propre ») ;
+  - sept appels git de 8 s peuvent dépasser le délai de lecture de 15 s : serveur vu injoignable à tort ;
+  - `find` descend dans les dossiers masqués (noms seulement, filtrés ensuite) ;
+  - fusions dans les commits locaux pendant Synchroniser (aplaties par le rebase).
+
+  `LC_ALL=C` signalé absent : il est déjà exporté par le préambule de F.1.
+- **Gate F.2** : vert (1174, puis 1179 après la review).

@@ -327,6 +327,15 @@ function records(r: ExecResult): string[] {
   return recs;
 }
 
+/** F.2 : chemin résolu du serveur sous `base` (résolu aussi, `''` pour `/`), sans composant masqué dessous. */
+export function visibleUnder(path: string, base: string): boolean {
+  const inside = path === base || path.startsWith(`${base}/`) || base === '';
+  return path.startsWith('/') && inside && !hiddenIn(path.slice(base.length), lastOf(base));
+}
+
+// F.2 : l'onglet Git passe par le même préambule et la même relecture que les fichiers
+export { command, records };
+
 function badges(recs: string[], at: number): Map<string, 'M' | '?'> | null {
   if (at < 0) return null;
   const prefix = recs[at]!.slice(4);

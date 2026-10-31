@@ -71,3 +71,48 @@ export interface GitBranch {
 export interface GitBranchesResponse {
   branches: GitBranch[];
 }
+
+/** Chantier 17 (F.2) : un dépôt Git d'un serveur, relu par le shell du serveur à chaque appel (jamais stocké). */
+export interface ServerGitRepo {
+  /** Racine du dépôt, dans un dossier autorisé du serveur. */
+  root: string;
+  /** null en HEAD détachée. */
+  branch: string | null;
+  /** null dans un dépôt sans commit. */
+  head: string | null;
+  /** Fichiers modifiés ou non suivis. */
+  changes: number;
+  /** Le dépôt a un remote `origin`. */
+  origin: boolean;
+  /** `origin/<branche>` s'il existe ; null pour une branche jamais poussée. */
+  upstream: string | null;
+  /**
+   * Par rapport à `origin/<branche>` ; branche jamais poussée : avance = commits absents de tout `origin/*`,
+   * retard 0. null sans origin ou sans commit.
+   */
+  aheadBehind: { ahead: number; behind: number } | null;
+  /** Opération laissée en cours sur le serveur. */
+  operation: 'rebase' | 'merge' | 'cherry-pick' | 'revert' | 'bisect' | null;
+}
+
+export interface ServerGitStatus {
+  serverId: string;
+  path: string;
+  resolved: string;
+  /** null : le dossier n'est pas dans un dépôt Git (ou son dépôt sort des dossiers autorisés). */
+  repo: ServerGitRepo | null;
+  /** Dossier non Git : dépôts détectés dans les dossiers autorisés (chemins résolus) ; vide sinon. */
+  repos: string[];
+  readAt: string;
+}
+
+/** Même forme que le journal d'un sujet (composants de `OngletGit`), plus l'état du dépôt du serveur. */
+export interface ServerGitLog extends GitLogResponse {
+  serverId: string;
+  path: string;
+  scope: 'all' | 'branch';
+  repo: ServerGitRepo;
+  /** Fenêtre de commits pleine : l'historique continue au-delà. */
+  truncated: boolean;
+  readAt: string;
+}
