@@ -879,3 +879,21 @@ Reprises du brief §11.6, plus celles nées de l'état des lieux :
   chaque migration), les fixtures de règles. Tests : portée par dossier (autre dossier redemande, dossier
   d'origine répond seul), migration (règles d'avant retirées, unicité, cascade). Mutation (dossier ignoré au
   tri) tuée. Gate : vert (1224).
+- **D.2, suppression sur un arrêt non confirmé** (`remote/agents.ts`, `remote/child.ts`, `remote/relay.ts`,
+  `routes/serverDiscussions.ts`, `Serveurs.tsx`, `ServeurConfig.tsx`) : supprimer un serveur ou une discussion
+  dont le serveur ne confirme pas l'arrêt d'un agent (injoignable, relais en erreur) répond **409**
+  « arrêt non confirmé par le serveur (N agent·s) : il y tourne peut-être encore », `unconfirmed: N` ; rien
+  n'est effacé, la fermeture est levée. `?force=1` supprime quand même. L'arrêt d'un pilote vivant est lu sur
+  son process (`stoppedOnServer`, posé par l'arrêt sur le serveur) ; sans pilote ou sans arrêt tenté, un `stop`
+  du relais tranche. Un relais jamais déposé vaut arrêt acquis (aucun agent d'A-I-D n'a pu y tourner) :
+  `relayStop` sort en 0 sans lui — sans quoi une discussion jamais lancée bloquait sa suppression. Web : les
+  deux dialogues de suppression gardent le refus affiché et passent à « Supprimer quand même ». La suppression
+  d'une discussion n'a pas d'écran : la route accepte `?force=1`, sans bouton. Lignes modifiées (déclarées) :
+  signatures et appels de `deleteDiscussion`/`forgetServer`/`stopAgentsOf`, le `else` devenu
+  `if (confirmed === null)` et son `stop` qui rend le code, `relayStop`, URL et libellé des deux boutons,
+  imports, ouverture du dialogue de configuration. Tests : discussion (409 puis forcée), serveur en veille
+  (409 à deux agents, puis suppression ordinaire une fois joignable), serveur forcé injoignable, `stop` sans
+  relais, web (refus, « quand même », autre 409 sans proposition, remise à zéro du dialogue). Mutations tuées
+  (force inversé, code ignoré, arrêt toujours confirmé, garde du relais, URL forcée, remise à zéro). Survit :
+  lire `stoppedOnServer` à `null` — le `stop` de relais qui suit rattrape, au prix d'un second délai sur un
+  serveur injoignable ; gardé pour ce délai. Gate : vert (1231).

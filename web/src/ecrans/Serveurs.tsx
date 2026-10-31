@@ -7,7 +7,12 @@ import {
   ETAT_AGENT,
   useDiscussionsServeur,
 } from '../data/discussionsServeur.js';
-import { type ServeursStore, statutInconnu, useServeurs } from '../data/serveurs.js';
+import {
+  arretNonConfirme,
+  type ServeursStore,
+  statutInconnu,
+  useServeurs,
+} from '../data/serveurs.js';
 import { useAid } from '../data/useAidState.js';
 import { Dialogue } from '../dialogues/Dialogue.js';
 import { NouvelleDiscussion } from '../dialogues/NouvelleDiscussion.js';
@@ -292,21 +297,25 @@ function Contenu() {
   const [suppression, setSuppression] = useState<Server | null>(null);
   const [suppressionEnCours, setSuppressionEnCours] = useState(false);
   const [erreurSuppression, setErreurSuppression] = useState<string | null>(null);
+  // décision D.2 : arrêt des agents non confirmé, la suppression se refait « quand même »
+  const [forcer, setForcer] = useState(false);
   const ajouter = () => navigate('/serveurs/nouveau');
   const fermerSuppression = () => {
     setSuppression(null);
     setErreurSuppression(null);
+    setForcer(false);
   };
   const supprimer = async (s: Server) => {
     setErreurSuppression(null);
     setSuppressionEnCours(true);
     try {
-      await call('DELETE', `/api/servers/${s.id}`);
+      await call('DELETE', `/api/servers/${s.id}${forcer ? '?force=1' : ''}`);
       store.retirer(s.id);
       setSuppression(null);
     } catch (err) {
       // le dialogue reste ouvert : l'erreur s'affiche là où l'action a été faite (review S.4)
       setErreurSuppression(message(err));
+      if (arretNonConfirme(err)) setForcer(true);
     } finally {
       setSuppressionEnCours(false);
     }
@@ -401,6 +410,12 @@ function Contenu() {
               {erreurSuppression}
             </p>
           )}
+          {forcer && (
+            <p className="texte-discret" data-node="serveurs.supprimer.forcer">
+              Supprimer quand même retire le serveur d’A-I-D ; ses agents seront à arrêter sur
+              place.
+            </p>
+          )}
           <div className="dialogue-actions">
             <button
               className="bouton"
@@ -417,7 +432,7 @@ function Contenu() {
               disabled={suppressionEnCours}
               onClick={() => void supprimer(suppression)}
             >
-              Supprimer
+              {forcer ? 'Supprimer quand même' : 'Supprimer'}
             </button>
           </div>
         </Dialogue>

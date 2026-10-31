@@ -914,3 +914,77 @@ test('« Toujours autoriser » ne vaut que dans le dossier de la discussion (dé
   await envoyer(m, a.id, 'commande: rm -f x');
   await waitFor(() => assistant(m, a.id, 'exécutée: rm -f x') === 2, 15_000, 'par règle');
 });
+
+test('arrêt non confirmé par un serveur injoignable : 409, la discussion reste, « quand même » la supprime (décision D.2)', async () => {
+  const remote = serveur();
+  const m = await daemon(remote);
+  const s = await creerServeur(m);
+  const d = await creerDiscussion(m, s.id);
+  const a = d.agents[0]!;
+  await envoyer(m, a.id, 'bonjour');
+  await waitFor(() => ligne(m, a.id)?.status === 'idle', 15_000, 'idle');
+
+  remote.transport.env.FAKE_SSH_FAIL = '1';
+  const r = await m.req('DELETE', `/api/servers/${s.id}/discussions/${d.id}`);
+  expect(r.statusCode).toBe(409);
+  expect(r.json<{ error: string; unconfirmed: number }>()).toEqual({
+    error: 'arrêt non confirmé par le serveur (1 agent) : il y tourne peut-être encore',
+    unconfirmed: 1,
+  });
+  expect(vivant(apid(m, a.id))).toBe(true);
+  expect(ligne(m, a.id)).toBeDefined();
+
+  const forcee = await m.req('DELETE', `/api/servers/${s.id}/discussions/${d.id}?force=1`);
+  expect(forcee.statusCode).toBe(204);
+  expect(ligne(m, a.id)).toBeUndefined();
+  delete remote.transport.env.FAKE_SSH_FAIL;
+});
+
+test('supprimer un serveur injoignable dont un agent en veille tourne : 409, puis supprimé une fois joignable (décision D.2)', async () => {
+  const remote = serveur();
+  const m1 = await daemon(remote);
+  const s = await creerServeur(m1);
+  const a = (await creerDiscussion(m1, s.id, 'codex')).agents[0]!;
+  const b = (await creerDiscussion(m1, s.id)).agents[0]!;
+  await envoyer(m1, a.id, 'bonjour');
+  await envoyer(m1, b.id, 'bonjour');
+  await waitFor(
+    () => ligne(m1, a.id)?.status === 'idle' && ligne(m1, b.id)?.status === 'idle',
+    15_000,
+    'idle',
+  );
+  await m1.t.d.stop();
+
+  const m2 = await daemon(remote, m1.t.home);
+  remote.transport.env.FAKE_SSH_FAIL = '1';
+  const r = await m2.req('DELETE', `/api/servers/${s.id}`);
+  expect(r.statusCode).toBe(409);
+  expect(r.json<{ unconfirmed: number }>().unconfirmed).toBe(2);
+  expect(r.json<{ error: string }>().error).toContain('(2 agents)');
+  expect((await m2.req('GET', `/api/servers/${s.id}`)).statusCode).toBe(200);
+  expect(vivant(apid(m2, a.id)) && vivant(apid(m2, b.id))).toBe(true);
+
+  // le refus lève la fermeture : le serveur revenu, la suppression ordinaire arrête et efface
+  delete remote.transport.env.FAKE_SSH_FAIL;
+  expect((await m2.req('DELETE', `/api/servers/${s.id}`)).statusCode).toBe(204);
+  expect(vivant(apid(m2, a.id)) || vivant(apid(m2, b.id))).toBe(false);
+  expect(m2.t.db.prepare('SELECT COUNT(*) AS n FROM server_agents').get()).toEqual({ n: 0 });
+});
+
+test('supprimer quand même un serveur injoignable : les lignes partent, l’agent peut y tourner encore (décision D.2)', async () => {
+  const remote = serveur();
+  const m = await daemon(remote);
+  const s = await creerServeur(m);
+  const a = (await creerDiscussion(m, s.id)).agents[0]!;
+  await envoyer(m, a.id, 'bonjour');
+  await waitFor(() => ligne(m, a.id)?.status === 'idle', 15_000, 'idle');
+  const fichier = apid(m, a.id);
+
+  remote.transport.env.FAKE_SSH_FAIL = '1';
+  expect((await m.req('DELETE', `/api/servers/${s.id}?force=1`)).statusCode).toBe(204);
+  expect((await m.req('GET', `/api/servers/${s.id}`)).statusCode).toBe(404);
+  expect(m.t.db.prepare('SELECT COUNT(*) AS n FROM server_agents').get()).toEqual({ n: 0 });
+  expect(vivant(fichier)).toBe(true);
+  delete remote.transport.env.FAKE_SSH_FAIL;
+  process.kill(parseInt(readFileSync(fichier, 'utf8'), 10), 'SIGTERM');
+});

@@ -101,6 +101,16 @@ const PREFIX = 'aid-';
  */
 const claudeSansAuto = (kind: RemoteKind, server: Pick<Server, 'confirmDestructive'>) =>
   kind === 'claude' && server.confirmDestructive;
+/** Décision D.2 : des agents peut-être encore en marche sur le serveur, la suppression attend un « quand même ». */
+function assertStopped(unconfirmed: number, force: boolean): void {
+  if (unconfirmed === 0 || force) return;
+  throw new AidHttpError(
+    409,
+    `arrêt non confirmé par le serveur (${unconfirmed} agent${unconfirmed > 1 ? 's' : ''}) : ` +
+      'il y tourne peut-être encore',
+    { unconfirmed },
+  );
+}
 const relayOf = (row: Pick<AgentRow, 'id' | 'tmux_session'>) =>
   row.tmux_session?.startsWith(PREFIX) ? row.tmux_session.slice(PREFIX.length) : row.id;
 
@@ -263,12 +273,15 @@ export class RemoteAgentManager {
     return this.discussion(serverId, discussionId);
   }
 
-  /** Arrête ses agents sur le serveur (au mieux), puis supprime la discussion, ses agents et leurs fils. */
-  async deleteDiscussion(serverId: string, discussionId: string): Promise<void> {
+  /**
+   * Arrête ses agents sur le serveur, puis supprime la discussion, ses agents et leurs fils. Un arrêt que le
+   * serveur ne confirme pas (injoignable) refuse la suppression, sauf `force` (décision D.2).
+   */
+  async deleteDiscussion(serverId: string, discussionId: string, force = false): Promise<void> {
     const row = this.discussionRow(serverId, discussionId);
     this.closing.add(row.id);
     try {
-      await this.stopAgentsOf([row.id]);
+      assertStopped(await this.stopAgentsOf([row.id]), force);
       this.deps.db.prepare('DELETE FROM server_discussions WHERE id = ?').run(row.id);
     } finally {
       this.closing.delete(row.id);
@@ -276,7 +289,7 @@ export class RemoteAgentManager {
   }
 
   /** Avant `DELETE /api/servers/:id` (revue R.1) : la cascade ne touche que la base, les relais s'arrêtent ici. */
-  async forgetServer(serverId: string): Promise<void> {
+  async forgetServer(serverId: string, force = false): Promise<void> {
     // levé par `released` une fois la réponse du DELETE partie : la ligne du serveur est alors effacée
     this.closing.add(serverId);
     const ids = (
@@ -284,15 +297,17 @@ export class RemoteAgentManager {
         .prepare('SELECT id FROM server_discussions WHERE server_id = ?')
         .all(serverId) as { id: string }[]
     ).map((r) => r.id);
-    await this.stopAgentsOf(ids);
+    assertStopped(await this.stopAgentsOf(ids), force);
   }
 
   released(serverId: string): void {
     this.closing.delete(serverId);
   }
 
-  private async stopAgentsOf(discussionIds: string[]): Promise<void> {
-    if (discussionIds.length === 0) return;
+  /** Arrête les agents de ces discussions ; rend le nombre de ceux dont le serveur n'a pas confirmé l'arrêt. */
+  private async stopAgentsOf(discussionIds: string[]): Promise<number> {
+    if (discussionIds.length === 0) return 0;
+    let unconfirmed = 0;
     const rows = this.deps.db
       .prepare(
         `SELECT * FROM server_agents WHERE discussion_id IN (${discussionIds.map(() => '?').join(',')})`,
@@ -303,18 +318,26 @@ export class RemoteAgentManager {
         // une relance partie avant la suppression : on l'attend, son pilote est arrêté avec les autres
         await this.relaunching.get(r.id)?.catch(() => undefined);
         const live = this.live.get(r.id);
+        let confirmed: boolean | null = null;
         if (live && !live.exited) {
           live.stopReason = 'deleted';
-          // au mieux : un serveur injoignable n'empêche pas de supprimer
+          // injoignable : l'arrêt n'est pas confirmé, l'appelant le dit (décision D.2)
           await live.driver.stop().catch(() => undefined);
-        } else {
+          confirmed = live.driver.remoteChild?.stoppedOnServer ?? null;
+        }
+        if (confirmed === null) {
           // sans pilote vivant (en veille, ou sorti en erreur faute de lien) l'agent peut tourner encore ;
           // `stop` d'un relais inconnu ne fait rien
-          await this.stopRelay(this.agentRowOf(r)).catch(() => undefined);
+          confirmed = await this.stopRelay(this.agentRowOf(r)).then(
+            (x) => x.code === 0,
+            () => false,
+          );
         }
+        if (!confirmed) unconfirmed++;
         this.live.delete(r.id);
       }),
     );
+    return unconfirmed;
   }
 
   // ---- pilotage

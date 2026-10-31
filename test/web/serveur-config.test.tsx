@@ -365,3 +365,35 @@ test('un dossier tapé sans « Ajouter » part à l’enregistrement ; révoquer
     allowedDirs: ['~', '/srv'],
   });
 });
+
+test('arrêt non confirmé : le dialogue reste ouvert, « Supprimer quand même » force (décision D.2)', async () => {
+  const refus = 'arrêt non confirmé par le serveur (2 agents) : il y tourne peut-être encore';
+  const h = ouvrir('/serveurs/srv_1/configuration', [serveur()], {
+    'DELETE /api/servers/srv_1': json(409, { error: refus, unconfirmed: 2 }),
+    'DELETE /api/servers/srv_1?force=1': json(204, {}),
+  });
+  await waitFor(() => expect(node('serveur-config.supprimer')).not.toBeNull());
+  fireEvent.click(node('serveur-config.supprimer')!);
+  fireEvent.click(node('serveur-config.supprimer.confirmer')!);
+  await waitFor(() => expect(node('serveur-config.supprimer.erreur')?.textContent).toBe(refus));
+  expect(node('serveur-config.supprimer.confirmer')?.textContent).toBe('Supprimer quand même');
+
+  // refermé puis rouvert : la demande repart ordinaire
+  fireEvent.click(
+    within(screen.getByRole('dialog', { name: 'Supprimer vps-ovh ?' })).getByRole('button', {
+      name: 'Annuler',
+    }),
+  );
+  fireEvent.click(node('serveur-config.supprimer')!);
+  expect(node('serveur-config.supprimer.erreur')).toBeNull();
+  expect(node('serveur-config.supprimer.confirmer')?.textContent).toBe('Supprimer');
+  fireEvent.click(node('serveur-config.supprimer.confirmer')!);
+  await waitFor(() => expect(node('serveur-config.supprimer.erreur')).not.toBeNull());
+  fireEvent.click(node('serveur-config.supprimer.confirmer')!);
+  await screen.findByText('liste des serveurs');
+  expect(h.calls.filter((c) => c.method === 'DELETE').map((c) => c.url)).toEqual([
+    '/api/servers/srv_1',
+    '/api/servers/srv_1',
+    '/api/servers/srv_1?force=1',
+  ]);
+});

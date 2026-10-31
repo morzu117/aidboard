@@ -367,3 +367,36 @@ test('magasin : relecture périodique tant qu’un abonné reste, suspendue ongl
     vi.useRealTimers();
   }
 });
+
+test('arrêt non confirmé : « Supprimer quand même » refait la suppression forcée (décision D.2)', async () => {
+  const h = ouvrir([serveur()], [etat()]);
+  const refus = 'arrêt non confirmé par le serveur (1 agent) : il y tourne peut-être encore';
+  h.respond.set('DELETE /api/servers/srv_1', json(409, { error: refus, unconfirmed: 1 }));
+  h.respond.set('DELETE /api/servers/srv_1?force=1', json(204, {}));
+  await waitFor(() => expect(node('serveurs.serveur-1')).not.toBeNull());
+  fireEvent.click(node('serveurs.serveur-1.plus')!);
+  fireEvent.click(screen.getByRole('menuitem', { name: 'Supprimer' }));
+  expect(node('serveurs.supprimer.confirmer')?.textContent).toBe('Supprimer');
+  fireEvent.click(node('serveurs.supprimer.confirmer')!);
+  await waitFor(() => expect(node('serveurs.supprimer.erreur')?.textContent).toBe(refus));
+  expect(node('serveurs.supprimer.forcer')).not.toBeNull();
+  expect(node('serveurs.supprimer.confirmer')?.textContent).toBe('Supprimer quand même');
+  fireEvent.click(node('serveurs.supprimer.confirmer')!);
+  await waitFor(() => expect(node('serveurs.serveur-1')).toBeNull());
+  expect(h.calls.filter((c) => c.method === 'DELETE').map((c) => c.url)).toEqual([
+    '/api/servers/srv_1',
+    '/api/servers/srv_1?force=1',
+  ]);
+});
+
+test('une autre erreur que l’arrêt non confirmé ne propose pas « quand même » (décision D.2)', async () => {
+  const h = ouvrir([serveur()], [etat()]);
+  h.respond.set('DELETE /api/servers/srv_1', json(409, { error: 'serveur occupé' }));
+  await waitFor(() => expect(node('serveurs.serveur-1')).not.toBeNull());
+  fireEvent.click(node('serveurs.serveur-1.plus')!);
+  fireEvent.click(screen.getByRole('menuitem', { name: 'Supprimer' }));
+  fireEvent.click(node('serveurs.supprimer.confirmer')!);
+  await waitFor(() => expect(node('serveurs.supprimer.erreur')).not.toBeNull());
+  expect(node('serveurs.supprimer.forcer')).toBeNull();
+  expect(node('serveurs.supprimer.confirmer')?.textContent).toBe('Supprimer');
+});

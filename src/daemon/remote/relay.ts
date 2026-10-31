@@ -250,7 +250,9 @@ export function relayAttach(id: string, offset: number): string {
 }
 
 export const relayAlive = (id: string) => relay(`alive ${relayId(id)}`);
-export const relayStop = (id: string) => relay(`stop ${relayId(id)}`);
+/** Relais jamais déposé : aucun agent d'A-I-D n'a pu y tourner, l'arrêt est acquis (décision D.2). */
+export const relayStop = (id: string) =>
+  `[ -f ${RELAY_PATH} ] || exit 0; ${relay(`stop ${relayId(id)}`)}`;
 export const relayErr = (id: string) => relay(`err ${relayId(id)}`);
 
 export type RelayAlive =
