@@ -12,6 +12,7 @@ import {
 } from '../data/discussionsServeur.js';
 import { AidApiError } from '../data/api.js';
 import { ecrirePanneau, lirePanneau, type PanneauPref } from '../data/panneauServeur.js';
+import { suivreOutils, type SuiviOutils } from '../data/panneauServeur.js';
 import { statutInconnu, useServeurs } from '../data/serveurs.js';
 import { useAidClient } from '../data/useAidState.js';
 import { Layout } from '../ui/Layout.js';
@@ -100,6 +101,8 @@ function Contenu() {
   // F.3 : panneau Fichiers / Git, ouvert ou fermé et onglet mémorisés par serveur (§11.3.1)
   const [panneau, setPanneau] = useState<PanneauPref | null>(null);
   const basculeRef = useRef<HTMLButtonElement>(null);
+  // F.4 : chaque fin de groupe d'outils relit le panneau ouvert, jamais en continu
+  const [outils, setOutils] = useState<SuiviOutils>({ fins: 0, outilTermine: false, seq: -1 });
 
   useEffect(() => {
     // une autre discussion remonte l'écran (clé de `Contenu`) : rien à remettre à zéro ici
@@ -182,6 +185,7 @@ function Contenu() {
         raison: status.reason,
         onReconnecter: reconnecter,
         onEvent: relireAgent,
+        onItem: (it) => setOutils((s) => suivreOutils(s, it)),
       }),
     [serveurNom, injoignable, status.reason, reconnecter, relireAgent],
   );
@@ -293,6 +297,8 @@ function Contenu() {
           serveur={serveurNom}
           racine={discussion.cwd}
           onglet={panneau.tab}
+          actualisation={outils.fins}
+          injoignable={injoignable}
           onOnglet={(tab) => changerPanneau({ ...panneau, tab }, panneau)}
           onFermer={() => {
             changerPanneau({ ...panneau, open: false }, panneau);

@@ -2652,3 +2652,7 @@ body {
   color: var(--muted);
   font-family: var(--font);
 }
+/* F.4 : serveur injoignable, l'âge des dernières données lues passe en ambre. */
+.panneau-serveur-age[data-ancien] {
+  color: var(--s-attente);
+}

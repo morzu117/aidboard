@@ -1,12 +1,15 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
+import { act } from '@testing-library/react';
 import { Route, Routes } from 'react-router';
 import { afterEach, expect, test, vi } from 'vitest';
 import type { ServerGitLog, ServerGitRepo, ServerGitStatus } from '../../src/shared/git.js';
 import type { Server, ServerFsListing } from '../../src/shared/model.js';
+import type { ConversationEvent } from '../../src/shared/conversation.js';
 import type { ServerDiscussionView } from '../../web/src/data/discussionsServeur.js';
 import { age, sousChemin } from '../../web/src/data/panneauServeur.js';
 import { Discussion } from '../../web/src/ecrans/Discussion.js';
+import { suivreOutils } from '../../web/src/data/panneauServeur.js';
 import { FakeSocket, json, setup, snapshot } from './helpers.js';
 
 /** Chantier 17 (F.3, §11.3.1) : panneau Fichiers / Git de l'écran Discussion d'un serveur. */
@@ -642,4 +645,263 @@ test('réglage du panneau non enregistré : retour à l’état précédent, err
   await waitFor(() => expect(node('discussion.erreur')?.textContent).toBe('base verrouillée'));
   expect(node('discussion.panneau')).toBeNull();
   expect(bascule.getAttribute('aria-pressed')).toBe('false');
+});
+
+// F.4 : actualisation à la fin d'un groupe d'outils, au retour du serveur ; injoignable : données gardées.
+
+const AGENT = {
+  id: 'sa_1',
+  discussionId: 'sd_1',
+  kind: 'claude' as const,
+  sessionId: 's',
+  status: 'idle' as const,
+  tmuxSession: 'aid-sa_1',
+  outOffset: 0,
+  permissionMode: 'default' as const,
+  model: null,
+  effort: null,
+  createdAt: '2026-10-30T09:00:00.000Z',
+  updatedAt: '2026-10-30T09:00:00.000Z',
+  pending: null,
+};
+
+function ouvrirAvecAgent(
+  panneau: { open: boolean; tab: 'files' | 'git' },
+  routes: Record<string, () => Response>,
+  state: 'connected' | 'unreachable' = 'connected',
+) {
+  return ouvrir(panneau, {
+    'GET /api/servers/srv_1/discussions/sd_1': json(200, { ...discussion, agents: [AGENT] }),
+    'GET /api/server-agents/sa_1': json(200, AGENT),
+    'GET /api/servers/status': json(200, [
+      {
+        serverId: 'srv_1',
+        state,
+        latencyMs: state === 'connected' ? 12 : null,
+        checkedAt: READ_AT,
+        reason: state === 'connected' ? null : 'Connection refused',
+      },
+    ]),
+    ...routes,
+  });
+}
+
+const fil = async () => {
+  await waitFor(() =>
+    expect(FakeSocket.all.some((s) => s.url.includes('/ws/server-agent/'))).toBe(true),
+  );
+  const s = FakeSocket.all.filter((x) => x.url.includes('/ws/server-agent/')).at(-1)!;
+  act(() => s.open());
+  act(() => s.push({ t: 'history', truncated: false, items: [] }));
+  return s;
+};
+const evenement = (s: FakeSocket, seq: number, event: object) =>
+  act(() => s.push({ t: 'event', seq, at: READ_AT, event }));
+
+/** Laisse passer la coalescence des relectures (300 ms) avant d'affirmer qu'aucune n'est partie. */
+const calme = () => act(() => new Promise((r) => setTimeout(r, 450)));
+
+/** Statut du serveur poussé comme en direct par `/ws/events`. */
+const statut = (state: 'connected' | 'unreachable') => {
+  const s = FakeSocket.all.filter((x) => x.url.includes('/ws/events')).at(-1)!;
+  act(() =>
+    s.push({
+      kind: 'ephemeral',
+      type: 'server.status',
+      status: {
+        serverId: 'srv_1',
+        state,
+        latencyMs: state === 'connected' ? 9 : null,
+        checkedAt: new Date().toISOString(),
+        reason: state === 'connected' ? null : 'Connection refused',
+      },
+    }),
+  );
+};
+
+test('suivreOutils : une fin de groupe après au moins un outil terminé, au lien rétabli ; seq déjà vu ignoré', () => {
+  let s = { fins: 0, outilTermine: false, seq: -1 };
+  let seq = 0;
+  const pas = (event: ConversationEvent) => (s = suivreOutils(s, { seq: ++seq, event }));
+  pas({ type: 'message', role: 'assistant', text: 'je regarde' });
+  pas({ type: 'turn_end', ok: true });
+  expect(s.fins).toBe(0);
+  pas({ type: 'tool_start', toolId: 't1', name: 'Bash', input: 'ls' });
+  pas({ type: 'tool_end', toolId: 't1', output: '', isError: false });
+  pas({ type: 'tool_start', toolId: 't2', name: 'Bash', input: 'git commit' });
+  pas({ type: 'tool_end', toolId: 't2', output: '', isError: false });
+  expect(s.fins).toBe(0);
+  pas({ type: 'message', role: 'assistant', text: 'fait' });
+  expect(s.fins).toBe(1);
+  pas({ type: 'turn_end', ok: true });
+  expect(s.fins).toBe(1);
+  pas({ type: 'tool_end', toolId: 't3', output: '', isError: true });
+  pas({ type: 'exit', code: 1, signal: null });
+  expect(s.fins).toBe(2);
+  pas({ type: 'connection_resumed', at: 't', afterMs: 10, sessionFound: true });
+  expect(s.fins).toBe(3);
+  // sans changement : même objet, pas de rendu
+  expect(suivreOutils(s, { seq: ++seq, event: { type: 'thinking' } })).toBe(s);
+
+  // redélivré (même seq ou plus ancien) : ne compte pas
+  const avant = s;
+  expect(
+    suivreOutils(s, {
+      seq: s.seq,
+      event: { type: 'connection_resumed', at: 't', afterMs: 1, sessionFound: true },
+    }),
+  ).toBe(avant);
+  s = suivreOutils(s, {
+    seq: 100,
+    event: { type: 'tool_end', toolId: 't4', output: '', isError: false },
+  });
+  s = suivreOutils(s, { seq: 101, event: { type: 'message', role: 'assistant', text: 'ok' } });
+  expect(s.fins).toBe(4);
+  expect(
+    suivreOutils(s, { seq: 101, event: { type: 'message', role: 'assistant', text: 'ok' } }),
+  ).toBe(s);
+});
+
+test('onglet Git relu à la fin d’un groupe d’outils de l’agent, pas à chaque événement', async () => {
+  const h = ouvrirAvecAgent({ open: true, tab: 'git' }, { [LOG('~/app')]: json(200, journal()) });
+  await waitFor(() => expect(node('discussion.panneau.git.branche')).not.toBeNull());
+  const s = await fil();
+  const lectures = () => h.calls.filter((c) => c.url === LOG('~/app').slice(4)).length;
+  const avant = lectures();
+
+  evenement(s, 1, { type: 'tool_start', toolId: 't1', name: 'Bash', input: 'git commit -m x' });
+  evenement(s, 2, { type: 'tool_end', toolId: 't1', output: '', isError: false });
+  evenement(s, 3, { type: 'thinking' });
+  await calme();
+  expect(lectures()).toBe(avant);
+
+  h.respond.set(
+    LOG('~/app'),
+    json(200, journal({ repo: depot({ aheadBehind: { ahead: 3, behind: 0 } }) })),
+  );
+  evenement(s, 4, { type: 'message', role: 'assistant', text: 'Commit fait.' });
+  await waitFor(() =>
+    expect(node('discussion.panneau.git.pousser')?.textContent).toBe('Pousser 3 commits'),
+  );
+  expect(lectures()).toBe(avant + 1);
+
+  // sans outil terminé entre deux, ni la fin de tour ni un message ne relisent
+  evenement(s, 5, { type: 'turn_end', ok: true });
+  evenement(s, 6, { type: 'message', role: 'user', text: 'merci' });
+  await calme();
+  expect(lectures()).toBe(avant + 1);
+
+  // rafale : deux groupes coup sur coup, une seule relecture
+  evenement(s, 7, { type: 'tool_end', toolId: 't2', output: '', isError: false });
+  evenement(s, 8, { type: 'message', role: 'assistant', text: 'a' });
+  evenement(s, 9, { type: 'tool_end', toolId: 't3', output: '', isError: false });
+  evenement(s, 10, { type: 'message', role: 'assistant', text: 'b' });
+  await waitFor(() => expect(lectures()).toBe(avant + 2));
+  await calme();
+  expect(lectures()).toBe(avant + 2);
+});
+
+test('onglet Fichiers relu à la fin d’un groupe d’outils : racine et dossiers dépliés, aperçu compris', async () => {
+  const h = ouvrirAvecAgent({ open: true, tab: 'files' }, ARBRE);
+  await waitFor(() => expect(ligne('src')).not.toBeNull());
+  fireEvent.click(ligne('src')!);
+  await waitFor(() => expect(ligne('index.ts')).not.toBeNull());
+  const s = await fil();
+  const lu = (path: string) =>
+    h.calls.filter((c) => c.url === `/api/servers/srv_1/fs?${p(path)}`).length;
+  const luFichier = () =>
+    h.calls.filter((c) => c.url === `/api/servers/srv_1/file?${p('~/app/README.md')}`).length;
+  expect([lu('~/app'), lu('~/app/src')]).toEqual([1, 1]);
+
+  evenement(s, 1, { type: 'tool_end', toolId: 't1', output: '', isError: false });
+  evenement(s, 2, { type: 'turn_end', ok: true });
+  await waitFor(() => expect([lu('~/app'), lu('~/app/src')]).toEqual([2, 2]));
+
+  // aperçu ouvert : le fichier et l'arbre sont relus, l'aperçu reste affiché
+  fireEvent.click(ligne('README.md')!);
+  await waitFor(() => expect(node('discussion.panneau.apercu.contenu')).not.toBeNull());
+  expect(luFichier()).toBe(1);
+  evenement(s, 3, { type: 'tool_end', toolId: 't2', output: '', isError: false });
+  evenement(s, 4, { type: 'turn_end', ok: true });
+  await waitFor(() => expect(luFichier()).toBe(2));
+  expect(lu('~/app')).toBe(3);
+  expect(node('discussion.panneau.apercu.contenu')?.textContent).toBe('# Application');
+});
+
+test('coupure : dernières données gardées, âge en ambre, écritures désactivées ; au retour une seule relecture', async () => {
+  const h = ouvrirAvecAgent({ open: true, tab: 'git' }, { [LOG('~/app')]: json(200, journal()) });
+  await waitFor(() =>
+    expect(node('discussion.panneau.git.pousser')?.textContent).toBe('Pousser 2 commits'),
+  );
+  const s = await fil();
+  expect(node('discussion.panneau.age')?.dataset.ancien).toBeUndefined();
+  fireEvent.click(node('discussion.panneau.git.pousser')!);
+  const lectures = () => h.calls.filter((c) => c.url === LOG('~/app').slice(4)).length;
+  const avant = lectures();
+
+  statut('unreachable');
+  await waitFor(() => expect(node('discussion.panneau.age')?.dataset.ancien).toBe('true'));
+  expect(node('discussion.panneau.age')?.title).toContain('injoignable');
+  expect(node('discussion.panneau.git.branche')?.textContent).toBe('feat/x');
+  expect(node(`discussion.panneau.git.commit-${HEAD}`)).not.toBeNull();
+  for (const n of [
+    'actualiser',
+    'git.pousser',
+    'git.synchroniser',
+    'git.fetch',
+    'git.confirmation.valider',
+  ])
+    expect((node(`discussion.panneau.${n}`) as HTMLButtonElement).disabled).toBe(true);
+
+  // une fin de groupe pendant la coupure ne relit rien
+  evenement(s, 1, { type: 'tool_end', toolId: 't1', output: '', isError: false });
+  evenement(s, 2, { type: 'turn_end', ok: true });
+  await calme();
+  expect(lectures()).toBe(avant);
+
+  // retour du serveur puis lien de l'agent rétabli : une seule relecture
+  statut('connected');
+  evenement(s, 3, { type: 'connection_resumed', at: 't', afterMs: 5000, sessionFound: true });
+  await waitFor(() => expect(lectures()).toBe(avant + 1));
+  await calme();
+  expect(lectures()).toBe(avant + 1);
+  expect(node('discussion.panneau.age')?.dataset.ancien).toBeUndefined();
+  for (const n of ['actualiser', 'git.pousser', 'git.synchroniser', 'git.fetch'])
+    expect((node(`discussion.panneau.${n}`) as HTMLButtonElement).disabled).toBe(false);
+});
+
+test('ouvert pendant une coupure : bandeau de la discussion, données de la lecture d’ouverture en ambre', async () => {
+  ouvrirAvecAgent(
+    { open: true, tab: 'git' },
+    { [LOG('~/app')]: json(200, journal()) },
+    'unreachable',
+  );
+  await waitFor(() => expect(node('discussion.panneau.git.branche')).not.toBeNull());
+  expect(node('discussion.panneau.age')?.dataset.ancien).toBe('true');
+  expect((node('discussion.panneau.actualiser') as HTMLButtonElement).disabled).toBe(true);
+});
+
+test('relectures croisées d’un dossier : la réponse de la plus ancienne, arrivée en dernier, est ignorée', async () => {
+  let lente: ((r: Response) => void) | null = null;
+  const h = ouvrir({ open: true, tab: 'files' }, ARBRE);
+  await waitFor(() => expect(ligne('src')).not.toBeNull());
+  const cle = `GET /api/servers/srv_1/fs?${p('~/app')}`;
+  // première relecture : réponse retenue ; seconde : immédiate, sans README.md
+  h.respond.set(cle, (() => new Promise<Response>((r) => (lente = r))) as never);
+  fireEvent.click(node('discussion.panneau.actualiser')!);
+  await waitFor(() => expect(lente).not.toBeNull());
+  h.respond.set(cle, json(200, dossier('~/app', [entree({ name: 'src', kind: 'dir' })])));
+  fireEvent.click(node('discussion.panneau.actualiser')!);
+  await waitFor(() => expect(ligne('README.md')).toBeNull());
+
+  act(() =>
+    lente!(
+      new Response(JSON.stringify(dossier('~/app', [entree({ name: 'ancien.txt' })])), {
+        status: 200,
+      }),
+    ),
+  );
+  await calme();
+  expect(ligne('ancien.txt')).toBeNull();
+  expect(ligne('src')).not.toBeNull();
 });

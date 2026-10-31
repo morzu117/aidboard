@@ -775,3 +775,27 @@ Reprises du brief §11.6, plus celles nées de l'état des lieux :
   d'onglet ; un GET du réglage en échec pose le défaut, qu'un clic écrit ensuite ; second
   `import { useRef } from 'react'` dans `Discussion.tsx` pour ne pas modifier la ligne d'import existante.
 - **Gate F.3** : vert (1202).
+- **F.4** — actualisation du panneau. Relu à l'ouverture (montage), sur ↻, au retour du serveur (statut
+  injoignable → joignable) et à la fin de chaque groupe d'outils de l'agent ; jamais en continu. Fin d'un
+  groupe : un message, une fin de tour, une demande ou la sortie de l'agent après au moins un `tool_end` ; le
+  lien rétabli (`connection_resumed`) compte aussi. Un événement redélivré (même `seq`) ne compte pas deux
+  fois ; les déclencheurs rapprochés (retour du serveur puis lien rétabli, rafale de groupes) sont fondus en
+  une relecture (300 ms). Injoignable : dernières données gardées, âge en ambre, ↻, Pousser, Synchroniser,
+  Fetch et la validation d'une carte déjà ouverte désactivés.
+  - Le fil (`Conversation`, partagé avec les sujets) expose l'événement par un `onItem` optionnel ajouté par
+    insertion ; sans écran Discussion, il n'est pas renseigné.
+  - Lignes de F.3 modifiées (6) : `disabled` de ↻ et de Fetch, `poussable`, la balise de l'âge, et les deux
+    rappels de lecture d'un dossier (garde de la dernière relecture). Pas de forme par insertion pour
+    désactiver un bouton ou garder une réponse.
+- **Tests F.4** (`test/web/panneau-serveur.test.tsx`, +7) : `suivreOutils` (groupes, sortie, lien rétabli,
+  `seq` redélivré), Git relu à la fin d'un groupe seulement, rafale fondue, Fichiers relus (dossiers dépliés,
+  aperçu gardé), coupure puis retour en une relecture, ouverture pendant une coupure, relectures croisées
+  d'un dossier. Mutations vérifiées : appel de `onItem`, saut pendant la coupure, relecture au retour,
+  coalescence, garde de la dernière relecture d'un dossier.
+- **Review F.4** — retenus : double relecture au retour (statut puis lien rétabli) → coalescence ; réponses
+  croisées d'un dossier ; arbre périmé quand un aperçu est ouvert ; `seq` redélivré ; carte de confirmation
+  ouverte avant la coupure encore validable ; sortie de l'agent après un outil ; assertions négatives
+  affirmées avant la relecture ; coupure jamais exercée en transition. Écarté : « lectures Git croisées »,
+  déjà gardées par le compteur de `lire` (F.3). Limite connue : un panneau ouvert pendant une coupure tente
+  sa lecture d'ouverture (rien d'autre à afficher), l'erreur est alors montrée.
+- **Gate F.4** : vert (1208).
