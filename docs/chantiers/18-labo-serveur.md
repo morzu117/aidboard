@@ -56,3 +56,9 @@ Un point = un commit. Après chaque point : `npm run gate` en entier et `npm run
   dash, et pour zsh avec `shell: bash` (la commande traverse deux shells). Mutation vérifiée : un
   home attendu faux fait échouer les quatre cas (les home viennent bien du conteneur). Rien ne
   reste après le run (conteneur supprimé, dossier temporaire effacé).
+- **L.2 Le relais contre le vrai tmux** : pour bash, zsh et dash, dépôt du relais, démarrage sous tmux,
+  **vraie coupure ssh** en plein tour (le client ssh tué : sshd ferme la session distante, l'agent
+  continue), ré-attache à l'offset sans perte ni doublon, arrêt (session tmux et process de l'agent
+  disparus). Session tuée par `tmux kill-session` : le vrai tmux emporte l'agent, `perdu`, attach rend
+  la sortie restante puis 4. Serveur tmux tué (redémarrage) : tous perdus, un nouveau start repart.
+  Mutation vérifiée : `perdu()` toujours faux fait échouer les deux scénarios de perte.
