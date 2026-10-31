@@ -14,7 +14,17 @@ import {
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, expect, test } from 'vitest';
-import { ENTRIES_MAX, PREVIEW_MAX } from '../src/daemon/remote/files.js';
+import {
+  ENTRIES_MAX,
+  HIDDEN_CASE,
+  HIDDEN_PAIR_CASE,
+  HIDDEN_PATTERNS,
+  isHidden,
+  parsePreview,
+  PREVIEW_MAX,
+  readCommand,
+} from '../src/daemon/remote/files.js';
+import { type ExecResult, remoteExec } from '../src/daemon/remote/transport.js';
 import type {
   Server,
   ServerFilePreview,
@@ -65,7 +75,7 @@ function projet(home: string): string {
   mkdirSync(join(p, 'node_modules', 'x'), { recursive: true });
   mkdirSync(join(p, '.ssh'));
   mkdirSync(join(home, 'dehors'));
-  writeFileSync(join(home, 'dehors', 'secret.txt'), 'hors périmètre');
+  writeFileSync(join(home, 'dehors', 'note.txt'), 'hors périmètre');
   writeFileSync(join(p, 'README.md'), '# Projet\n');
   writeFileSync(join(p, 'src', 'index.ts'), 'export {};\n');
   writeFileSync(join(p, 'ancien.txt'), 'renommé\n');
@@ -135,7 +145,7 @@ test('F.1 : dossier entièrement non suivi, sous-dossier, dossier hors dépôt',
     await get(`/api/servers/${s.id}/fs?path=${q('~/dehors')}`)
   ).json<ServerFsListing>();
   expect(dehors.git).toBe(false);
-  expect(dehors.entries).toEqual([expect.objectContaining({ name: 'secret.txt', git: null })]);
+  expect(dehors.entries).toEqual([expect.objectContaining({ name: 'note.txt', git: null })]);
 });
 
 test('F.1 : 403 hors des dossiers autorisés, symlinks et `..` compris', async () => {
@@ -147,7 +157,7 @@ test('F.1 : 403 hors des dossiers autorisés, symlinks et `..` compris', async (
     expect(r.statusCode, path).toBe(403);
     expect(r.json<{ error: string }>().error).toMatch(/hors des dossiers autorisés/);
   }
-  const f = await get(`/api/servers/${s.id}/file?path=${q('~/proj/sortie/secret.txt')}`);
+  const f = await get(`/api/servers/${s.id}/file?path=${q('~/proj/sortie/note.txt')}`);
   expect(f.statusCode).toBe(403);
   expect(f.body).not.toContain('hors périmètre');
 });
@@ -189,6 +199,165 @@ test('F.1 : nom masqué en majuscules résolu derrière un lien', async () => {
   expect(r.body).not.toContain('clé de prod');
   const l = (await get(`/api/servers/${s.id}/fs`)).json<ServerFsListing>();
   expect(l.entries.find((e) => e.name === 'ID_PROD')?.hidden).toBe(true);
+});
+
+test('secrets : règle immuable, liste élargie (jetons, identifiants, .git/config)', async () => {
+  t = await startTestDaemon();
+  const p = projet(t.home);
+  mkdirSync(join(p, '.aws'));
+  writeFileSync(join(p, '.aws', 'credentials'), 'aws_secret_access_key=XYZ');
+  writeFileSync(join(p, '.npmrc'), '//registry.npmjs.org/:_authToken=XYZ');
+  writeFileSync(join(p, '.NETRC'), 'machine x password XYZ');
+  writeFileSync(join(p, 'client_secret.json'), '{"k":"XYZ"}');
+  mkdirSync(join(p, 'conf', 'gh'), { recursive: true });
+  writeFileSync(join(p, 'conf', 'gh', 'hosts.yml'), 'oauth_token: XYZ');
+  writeFileSync(join(p, 'conf', 'config'), 'ordinaire');
+  git(p, 'remote', 'add', 'origin', 'https://jeton-XYZ@github.com/o/r.git');
+  // `.git` autorisé lui-même : son `config` reste masqué
+  const s = await create({ allowedDirs: ['~/proj', '~/proj/.git'] });
+  for (const path of [
+    '~/proj/.aws/credentials',
+    '~/proj/.npmrc',
+    '~/proj/.NETRC',
+    '~/proj/client_secret.json',
+    '~/proj/conf/gh/hosts.yml',
+    '~/proj/.git/config',
+    '~/proj/.git/CONFIG',
+  ]) {
+    const r = await get(`/api/servers/${s.id}/file?path=${q(path)}`);
+    expect(r.statusCode, path).toBe(403);
+    expect(r.json<{ error: string }>().error, path).toMatch(/masqué/);
+    expect(r.body, path).not.toContain('XYZ');
+  }
+  expect((await get(`/api/servers/${s.id}/fs?path=${q('~/proj/.aws')}`)).statusCode).toBe(403);
+  // un `config` ordinaire reste lisible ; la liste de `.git` signale le sien « masqué »
+  const conf = await get(`/api/servers/${s.id}/file?path=${q('~/proj/conf/config')}`);
+  expect(conf.json<ServerFilePreview>().content).toBe('ordinaire');
+  const g = (await get(`/api/servers/${s.id}/fs?path=${q('~/proj/.git')}`)).json<ServerFsListing>();
+  expect(g.entries.find((e) => e.name === 'config')?.hidden).toBe(true);
+  expect(g.entries.find((e) => e.name === 'HEAD')?.hidden).toBe(false);
+  // un lien vers le `config` de `.git` est refusé sur le chemin résolu
+  symlinkSync('.git/config', join(p, 'lien-config'));
+  const lien = await get(`/api/servers/${s.id}/file?path=${q('~/proj/lien-config')}`);
+  expect(lien.statusCode).toBe(403);
+  expect(lien.body).not.toContain('XYZ');
+  // le script refuse lui-même, sur le serveur : le contenu ne traverse jamais ssh (le daemon revérifie ensuite)
+  writeFileSync(join(p, 'ID_PROD'), 'XYZ');
+  symlinkSync('ID_PROD', join(p, 'alias-maj'));
+  for (const path of ['~/proj/lien-config', '~/proj/alias-maj', '~/proj/lien']) {
+    const r = await remoteExec(s, readCommand(s, path), {
+      ssh: FAKE_SSH,
+      env: { ...process.env, FAKE_SSH_HOME: t.home },
+    });
+    expect(r.stdout, path).toContain('masque');
+    expect(r.stdout, path).not.toMatch(/XYZ|ne-doit-jamais-sortir/);
+  }
+  const l = (await get(`/api/servers/${s.id}/fs`)).json<ServerFsListing>();
+  for (const n of ['.aws', '.npmrc', '.NETRC', 'client_secret.json'])
+    expect(l.entries.find((e) => e.name === n)?.hidden, n).toBe(true);
+});
+
+test('secrets : le `case` du script et la regex du daemon disent la même chose', () => {
+  // un exemple par motif, en casse mêlée ; `*` remplacé par un fragment ordinaire
+  const sample = (p: string) => p.replace(/\*/g, 'Ab').replace(/[a-z]/, (c) => c.toUpperCase());
+  const names = HIDDEN_PATTERNS.filter((p) => !p.includes('/')).map(sample);
+  const pairs = HIDDEN_PATTERNS.filter((p) => p.includes('/')).map(sample);
+  const ordinaires = [
+    'README.md',
+    'PasswordInput.tsx',
+    'credentials.ts',
+    'forgot-password.html',
+    'secrets.py',
+    'tokens.json',
+    'tokenizer.py',
+    'config',
+    'package.json',
+    'main.rs',
+  ];
+  const ordinairesPaires = ['src/config', 'conf/hosts.yml', 'gh/config.yml', '.github/hosts.yml'];
+  const run = (pattern: string, args: string[]) =>
+    execFileSync(
+      'sh',
+      [
+        '-c',
+        `for n in "$@"; do case "$n" in ${pattern}) echo y ;; *) echo n ;; esac; done`,
+        'sh',
+        ...args,
+      ],
+      { encoding: 'utf8' },
+    )
+      .trim()
+      .split('\n');
+  const shNames = run(HIDDEN_CASE, [...names, ...ordinaires]);
+  [...names, ...ordinaires].forEach((n, i) =>
+    expect([n, shNames[i]], n).toEqual([n, isHidden(n) ? 'y' : 'n']),
+  );
+  expect(names.every((n) => isHidden(n))).toBe(true);
+  expect(ordinaires.filter((n) => isHidden(n))).toEqual([]);
+  const shPairs = run(HIDDEN_PAIR_CASE, [...pairs, ...ordinairesPaires]);
+  [...pairs, ...ordinairesPaires].forEach((pp, i) => {
+    const [parent = '', name = ''] = pp.split('/');
+    expect([pp, shPairs[i]], pp).toEqual([pp, isHidden(name, parent) ? 'y' : 'n']);
+  });
+  expect(pairs.every((pp) => isHidden(pp.split('/')[1]!, pp.split('/')[0]!))).toBe(true);
+});
+
+test('secrets : le daemon revérifie le chemin résolu rendu par le script', () => {
+  const s = { id: 'srv_x', allowedDirs: ['~'] } as Server;
+  const sortie = (resolved: string, base: string): ExecResult => ({
+    code: 0,
+    stdout: `\0aid-fs\0ok\0${resolved}\0${base}\0${3}\0${0}\0XYZ`,
+    stderr: '',
+    durationMs: 1,
+    timedOut: false,
+    truncated: false,
+  });
+  // le dernier composant du dossier autorisé sert de parent au premier composant dessous
+  for (const [resolved, base] of [
+    ['/h/proj/.git/config', '/h/proj'],
+    ['/h/proj/.git/config', '/h/proj/.git'],
+    ['/h/repo.git/config', '/h'],
+    ['/h/proj/.env', '/h/proj'],
+  ] as const)
+    expect(() => parsePreview(s, '~/x', sortie(resolved, base)), resolved).toThrow(/masqué/);
+  // hors du dossier autorisé annoncé : refus, quoi qu'en dise le script
+  expect(() => parsePreview(s, '~/x', sortie('/etc/hosts', '/h/proj'))).toThrow(
+    /hors des dossiers/,
+  );
+  // au-dessus du dossier autorisé, un nom « masqué » ne compte pas
+  expect(parsePreview(s, '~/x', sortie('/srv/id_app/a.txt', '/srv/id_app')).content).toBe('XYZ');
+});
+
+test('secrets : `.`, dépôt nu, dossier `gh` autorisé, faux positifs voulus', async () => {
+  t = await startTestDaemon();
+  const p = projet(t.home);
+  mkdirSync(join(p, 'conf', 'gh'), { recursive: true });
+  writeFileSync(join(p, 'conf', 'gh', 'hosts.yml'), 'oauth_token: XYZ');
+  mkdirSync(join(p, 'nu.git'));
+  writeFileSync(join(p, 'nu.git', 'config'), 'url = https://XYZ@h/r');
+  writeFileSync(join(p, 'PasswordInput.tsx'), 'export {};');
+  writeFileSync(join(p, 'tokens.json'), '{"couleur":"#fff"}');
+  mkdirSync(join(p, 'locales'));
+  writeFileSync(join(p, 'locales', 'auth.json'), '{"titre":"Connexion"}');
+  const s = await create({ allowedDirs: ['~/proj', '~/proj/conf/gh'] });
+  for (const path of [
+    '~/proj/.git/./config',
+    '~/proj/nu.git/config',
+    '~/proj/conf/gh/hosts.yml',
+    '~/proj/conf/gh/./hosts.yml',
+  ]) {
+    const r = await get(`/api/servers/${s.id}/file?path=${q(path)}`);
+    expect(r.statusCode, path).toBe(403);
+    expect(r.body, path).not.toContain('XYZ');
+  }
+  for (const path of ['~/proj/PasswordInput.tsx', '~/proj/tokens.json']) {
+    const r = await get(`/api/servers/${s.id}/file?path=${q(path)}`);
+    expect(r.statusCode, path).toBe(200);
+  }
+  // compromis assumé : `auth.json` (Composer) masque aussi un fichier de traduction du même nom
+  expect(
+    (await get(`/api/servers/${s.id}/file?path=${q('~/proj/locales/auth.json')}`)).statusCode,
+  ).toBe(403);
 });
 
 test('F.1 : aucune injection par le chemin ni par un nom de fichier', async () => {
@@ -234,7 +403,7 @@ test('F.1 : préfixe frère, ancêtre masqué, chemin absent hors périmètre', 
   expect(f.json<ServerFilePreview>().content).toBe('lisible');
   expect((await get(`/api/servers/${s.id}/fs?path=${q('~/id_app')}`)).statusCode).toBe(403);
   // hors périmètre, la réponse ne dit pas si le chemin existe
-  for (const path of ['~/dehors/secret.txt', '~/dehors/absent', '/nulle/part']) {
+  for (const path of ['~/dehors/note.txt', '~/dehors/absent', '/nulle/part']) {
     const r = await get(`/api/servers/${s.id}/file?path=${q(path)}`);
     expect(r.statusCode, path).toBe(403);
   }
