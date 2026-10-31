@@ -24,7 +24,9 @@ new-session)
     echo "duplicate session: $nom" >&2
     exit 1
   fi
-  sh -c "$1" </dev/null >/dev/null 2>&1 &
+  # exec explicite : dash 0.5.11 (Ubuntu 22.04, la CI) ne remplace pas `sh -c` par sa dernière commande, et
+  # le HUP de kill-session ne toucherait que ce shell intermédiaire, pas la commande de la session
+  sh -c "exec $1" </dev/null >/dev/null 2>&1 &
   echo $! >"$dir/$nom"
   ;;
 has-session)

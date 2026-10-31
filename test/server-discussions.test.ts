@@ -955,8 +955,9 @@ test('supprimer un serveur injoignable dont un agent en veille tourne : 409, pui
   );
   await m1.t.d.stop();
 
-  const m2 = await daemon(remote, m1.t.home);
+  // injoignable avant le redémarrage : sinon l'arrêt du relais codex au démarrage (reattachAll) gagne la course
   remote.transport.env.FAKE_SSH_FAIL = '1';
+  const m2 = await daemon(remote, m1.t.home);
   const r = await m2.req('DELETE', `/api/servers/${s.id}`);
   expect(r.statusCode).toBe(409);
   expect(r.json<{ unconfirmed: number }>().unconfirmed).toBe(2);
@@ -987,6 +988,8 @@ test('supprimer quand même un serveur injoignable : les lignes partent, l’age
   expect(vivant(fichier)).toBe(true);
   delete remote.transport.env.FAKE_SSH_FAIL;
   process.kill(parseInt(readFileSync(fichier, 'utf8'), 10), 'SIGTERM');
+  // le relais écrit la fin de l'agent dans son dossier : attendue, sans quoi le nettoyage efface en même temps
+  await waitFor(() => existsSync(join(fichier, '..', 'exit')), 5_000, 'exit');
 });
 
 test('entrées refusées : discussion inconnue, renommage vide ou trop long, réponse inconnue, agent arrêté', async () => {

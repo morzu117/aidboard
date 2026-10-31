@@ -924,3 +924,13 @@ Reprises du brief §11.6, plus celles nées de l'état des lieux :
   chantier 99,9 % des instructions (6 manquantes : routes de `App.tsx`, défense de `refuse` dans `git.ts`),
   89,8 % des branches — le reste est surtout des repliés `??` et des gardes de course (réponse tardive
   ignorée) ; fichiers entiers touchés : 93,2 % des lignes, 84,1 % des branches. Gate : vert (1246).
+- **CI de la PR #84 rouge sous Linux, verte sur macOS** (8 tests, Node 22 et 24) — défauts des tests, pas
+  du code livré. (a) Le faux tmux notait le pid d'un `sh -c` intermédiaire : le dash 0.5.11 d'Ubuntu 22.04
+  ne remplace pas `sh -c` par sa dernière commande (celui de macOS, si), et le HUP de `kill-session` ne
+  tuait que ce shell — le `run` du relais survivait et écrivait `exit` : « fini » au lieu de « perdu » (7
+  tests de session disparue). `exec` explicite (ligne modifiée, déclarée). (b) Test D.2 « serveur
+  injoignable, agent en veille » : `FAKE_SSH_FAIL` posé après le redémarrage, en course avec l'arrêt du
+  relais codex que `reattachAll` lance au démarrage (voulu) ; posé avant (ligne déplacée, déclarée).
+  (c) « Supprimer quand même » : le test attend maintenant le `exit` écrit par le relais, sinon le
+  nettoyage efface pendant l'écriture (`ENOTEMPTY`, vu en émulation lente). Reproduit puis vérifié dans un
+  conteneur ubuntu:22.04 (Node 22.23.4, utilisateur non root) : 112 tests des fichiers distants verts.
