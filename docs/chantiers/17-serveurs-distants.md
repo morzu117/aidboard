@@ -799,3 +799,10 @@ Reprises du brief §11.6, plus celles nées de l'état des lieux :
   déjà gardées par le compteur de `lire` (F.3). Limite connue : un panneau ouvert pendant une coupure tente
   sa lecture d'ouverture (rien d'autre à afficher), l'erreur est alors montrée.
 - **Gate F.4** : vert (1208).
+- **Review complète de la branche** (après F.4, sept lots : S, W1, W2, R1, R2, F1, F2) — chaque finding vérifié
+  contre le code avant correction ; un correctif par commit, gate complet à chacun.
+- **Correctif RC.1, tri des commandes destructives** (`remote/confirm.ts`) : un commentaire `#` ne cache plus
+  la ligne suivante, `\'` n'achève plus un `$'…'`, un guillemet resté ouvert est demandé, un premier mot
+  dynamique (`$a`, `rm${IFS}…`, glob, accolades) est demandé, `2>&1` / `>&2` / `&>f` sont des redirections et
+  plus des séparateurs, une commande trop chère à relire (longueur × substitutions) est demandée. Gate : vert
+  (1210).

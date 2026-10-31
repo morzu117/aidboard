@@ -66,11 +66,18 @@ export function claudeConfirmSettings(): string {
  * Les commandes d'une ligne shell, chacune en mots sans guillemets : coupées sur `;`, `&&`, `||`, `|`, `&`, un saut
  * de ligne, une parenthèse ou une substitution, hors guillemets. Le contenu d'une substitution est relu à part.
  */
+class Unparsed extends Error {}
+
+/** Au-delà, la relecture des substitutions coûterait trop : la commande est demandée (revue complète). */
+const READ_BUDGET = 4_000_000;
+
 function segments(command: string, substitutions = true): string[][] {
   const out: string[][] = [];
   let words: string[] = [];
   let word: string | null = null;
   let quote: '"' | "'" | null = null;
+  // `$'…'` : dans ces guillemets simples, `\` échappe le caractère suivant, `\'` compris (revue complète)
+  let ansi = false;
   const endWord = () => {
     if (word !== null) words.push(word);
     word = null;
@@ -82,6 +89,27 @@ function segments(command: string, substitutions = true): string[][] {
   };
   for (let i = 0; i < command.length; i++) {
     const ch = command[i]!;
+    if (quote === "'" && ansi && ch === '\\' && i + 1 < command.length) {
+      word = (word ?? '') + command[++i];
+      continue;
+    }
+    if (quote === "'" && ch === "'") ansi = false;
+    if (quote === null && ch === '#' && word === null) {
+      // commentaire en début de mot : ignoré jusqu'au saut de ligne, qui sépare encore (revue complète)
+      while (i + 1 < command.length && command[i + 1] !== '\n') i++;
+      continue;
+    }
+    if (
+      quote === null &&
+      ch === '&' &&
+      (command[i - 1] === '>' ||
+        command[i - 1] === '<' ||
+        (command[i + 1] === '>' && command[i - 1] !== '&'))
+    ) {
+      // `2>&1`, `>&2`, `&>f` : une redirection, pas un séparateur (revue complète)
+      word = (word ?? '') + ch;
+      continue;
+    }
     if (quote === "'") {
       if (ch === "'") quote = null;
       else word += ch;
@@ -98,6 +126,7 @@ function segments(command: string, substitutions = true): string[][] {
       word ??= '';
     } else if (ch === '$' && command[i + 1] === "'") {
       // `$'…'` : chaîne entre guillemets simples
+      ansi = true;
     } else if (/\s/.test(ch) && ch !== '\n') {
       endWord();
     } else if (';&|\n()`'.includes(ch) || (ch === '$' && command[i + 1] === '(')) {
@@ -106,6 +135,8 @@ function segments(command: string, substitutions = true): string[][] {
       word = (word ?? '') + ch;
     }
   }
+  // guillemet resté ouvert : la ligne n'est pas comprise, elle est demandée (revue complète)
+  if (quote !== null && substitutions) throw new Unparsed();
   endSegment();
   // une substitution s'exécute aussi entre guillemets doubles : le texte qui la suit est relu comme une commande.
   // Chaque suffixe une fois, sans relecture de ses propres substitutions : la boucle les visite déjà (revue R.5)
@@ -131,7 +162,7 @@ const VALUED: Record<string, ReadonlySet<string>> = {
 /** Interpréteurs dont le code en ligne (`-c`, `-e`, `-r`) n'est pas analysable : demandé par principe. */
 const INLINE_CODE = /^(python[0-9.]*|perl|ruby|node|php|lua)$/;
 /** Redirection placée devant la commande (`>f rm x`, `2> err rm x`). */
-const REDIRECT = /^\d*(>>?|<<?|&>)/;
+const REDIRECT = /^\d*(>>?&?|<<?&?|&>>?)/;
 
 function destructiveWords(input: string[]): boolean {
   let words = input;
@@ -154,6 +185,8 @@ function destructiveWords(input: string[]): boolean {
       words = words.slice(1);
     } else break;
   }
+  // premier mot dynamique (`$a`, `rm${IFS}-rf`, `/bin/r?`, `{rm,-rf,x}`) : illisible ici, demandé (revue complète)
+  if (words[0] !== '[' && words[0] !== '[[' && /[$*?[{]/.test(words[0]!)) return true;
   // un chemin vaut son nom (`/usr/bin/rm`), `mkfs.ext4` vaut `mkfs`
   const first = words[0]!.replace(/^.*\//, '').replace(/^(mkfs)\..*$/, '$1');
   let rest = words.slice(1);
@@ -180,7 +213,14 @@ function destructiveWords(input: string[]): boolean {
 }
 
 export function isDestructive(command: string): boolean {
-  return segments(command).some(destructiveWords);
+  const substitutions = command.match(/\$\(|`/g)?.length ?? 0;
+  if (command.length * (substitutions + 1) > READ_BUDGET) return true;
+  try {
+    return segments(command).some(destructiveWords);
+  } catch (err) {
+    if (err instanceof Unparsed) return true;
+    throw err;
+  }
 }
 
 /** Règle « Toujours autoriser sur ce serveur » : la commande exacte, espaces de bord retirés. */
