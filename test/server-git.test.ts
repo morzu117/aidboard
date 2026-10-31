@@ -644,3 +644,25 @@ test('review complète : synchroniser — annulation du rebase en échec, dit te
     'rebase en échec et non annulé sur le serveur : à terminer sur place',
   );
 });
+
+test('review complète : traces git du profil retirées — rien de la trace ne remonte dans un message', async () => {
+  t = await startTestDaemon();
+  const { clone } = depot(t.home);
+  writeFileSync(
+    join(t.home, '.profile'),
+    'export GIT_TRACE=1 GIT_TRACE_PACKET=1 GIT_TRACE_CURL=1 GIT_CURL_VERBOSE=1 GIT_TRACE2=1\n',
+  );
+  const vu = join(t.home, 'traces-vues.txt');
+  const hook = join(clone, '.git', 'hooks', 'pre-push');
+  writeFileSync(
+    hook,
+    `#!/bin/sh\nprintf '[%s]' "\${GIT_TRACE:-}\${GIT_TRACE_PACKET:-}\${GIT_TRACE_CURL:-}\${GIT_CURL_VERBOSE:-}\${GIT_TRACE2:-}" > '${vu}'\nexit 1\n`,
+  );
+  chmodSync(hook, 0o755);
+  commitFile(clone, 'a.txt', 'a\n');
+  const s = await create();
+  const r = await post(`/api/servers/${s.id}/git/push`, oui(clone));
+  expect(r.statusCode).toBe(502);
+  expect(readFileSync(vu, 'utf8')).toBe('[]');
+  expect(r.body).not.toMatch(/trace:|packet:/);
+});
