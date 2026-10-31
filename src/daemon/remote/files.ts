@@ -138,6 +138,24 @@ const WORD_PATTERNS = [
   'refresh_token*',
 ];
 export const HIDDEN_PATTERNS: readonly string[] = [...KEYS, ...TOOLS, ...WORD_PATTERNS];
+/**
+ * Review complète : dossiers de secrets — jamais un dossier autorisé ni l'un de ses composants, même atteint par
+ * un symlink. Sous un dossier autorisé, le masquage par nom les couvre déjà ; c'est le dossier autorisé lui-même
+ * (`~/.kube` autorisé ouvrait `config`) qu'il fallait fermer. Les motifs de fichiers (`id_*`…) n'en sont pas :
+ * `/srv/id_app/proj` autorisé reste lisible (review F.1).
+ */
+export const SECRET_DIRS: readonly string[] = [
+  '.ssh',
+  '.gnupg',
+  '.password-store',
+  '.aws',
+  '.azure',
+  '.docker',
+  '.kube',
+  '.vnc',
+  '.config/gcloud',
+  '*.git/modules',
+];
 /** D78 : dossiers lourds, grisés et non dépliés par défaut (le daemon les liste si on le lui demande). */
 export const HEAVY_DIRS = ['node_modules', '.git', 'dist', '.venv', 'target'] as const;
 /** D78 : aperçu tronqué à 256 Kio ; binaire = octet nul dans les 8 premiers Kio. */
@@ -166,6 +184,24 @@ const shCase = (ps: string[]) =>
 /** Exportés pour le test de parité `case` / regex. */
 export const HIDDEN_CASE = shCase(NAMES);
 export const HIDDEN_PAIR_CASE = shCase(PAIRS);
+const SECRET_NAMES = SECRET_DIRS.filter((p) => !p.includes('/'));
+const SECRET_PAIRS = SECRET_DIRS.filter((p) => p.includes('/'));
+const SECRET_NAME_RE = SECRET_NAMES.map(glob);
+const SECRET_PAIR_RE = SECRET_PAIRS.map(glob);
+export const SECRET_CASE = shCase(SECRET_NAMES);
+export const SECRET_PAIR_CASE = shCase(SECRET_PAIRS);
+
+/** Un composant de `dir` (dossier autorisé, lexical ou résolu) est un dossier de secrets. */
+export function secretDirIn(dir: string): boolean {
+  let prev = '';
+  for (const c of dir.split('/')) {
+    if (c === '' || c === '.') continue;
+    if (SECRET_NAME_RE.some((re) => re.test(c))) return true;
+    if (SECRET_PAIR_RE.some((re) => re.test(`${prev}/${c}`))) return true;
+    prev = c;
+  }
+  return false;
+}
 
 /** `parent` : nom du dossier qui contient `name`, pour les motifs `dossier/nom`. */
 export function isHidden(name: string, parent = ''): boolean {
@@ -241,6 +277,14 @@ for a in "$@"; do
   case "$r" in "$a" | "$a"/*) ok=1; [ \${#a} -ge \${#b} ] && b=$a ;; esac
 done
 [ -n "$ok" ] || { printf 'refus\\000'; exit 0; }
+set -f; IFS=/; prev=
+for c in $b; do
+  case "$c" in '' | .) continue ;; esac
+  case "$c" in ${SECRET_CASE}) printf 'masque\\000'; exit 0 ;; esac
+  case "$prev/$c" in ${SECRET_PAIR_CASE}) printf 'masque\\000'; exit 0 ;; esac
+  prev=$c
+done
+unset IFS; set +f
 [ -n "$e" ] || { printf 'absent\\000'; exit 0; }
 set -f; IFS=/; prev=\${b##*/}
 for c in \${r#"$b"}; do
@@ -322,6 +366,7 @@ function records(r: ExecResult): string[] {
   const [, resolved = '', base = ''] = recs;
   const inside = resolved === base || resolved.startsWith(`${base}/`) || base === '';
   if (!resolved.startsWith('/') || !inside) throw new AidHttpError(403, REFUSALS.refus![1]);
+  if (secretDirIn(base)) throw new AidHttpError(403, REFUSALS.masque![1]);
   if (hiddenIn(resolved.slice(base.length), lastOf(base)))
     throw new AidHttpError(403, REFUSALS.masque![1]);
   return recs;
@@ -330,6 +375,7 @@ function records(r: ExecResult): string[] {
 /** F.2 : chemin résolu du serveur sous `base` (résolu aussi, `''` pour `/`), sans composant masqué dessous. */
 export function visibleUnder(path: string, base: string): boolean {
   const inside = path === base || path.startsWith(`${base}/`) || base === '';
+  if (secretDirIn(base)) return false;
   return path.startsWith('/') && inside && !hiddenIn(path.slice(base.length), lastOf(base));
 }
 

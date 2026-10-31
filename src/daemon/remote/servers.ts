@@ -2,6 +2,7 @@ import type { PermissionMode } from '../../shared/agentSettings.js';
 import type { Server, ServerMode, ServerRule, ServerSshOptions } from '../../shared/model.js';
 import type { Db } from '../db.js';
 import { AidHttpError } from '../errors.js';
+import { secretDirIn } from './files.js';
 
 export interface ServerRow {
   id: string;
@@ -209,6 +210,10 @@ export function validateServer(input: ServerInput): Required<ServerInput> {
   if (!COLOR_RE.test(color)) invalid('color doit être un hex #rrggbb');
   if ((input.allowedDirs?.length ?? 0) > 32) invalid('32 dossiers autorisés au plus');
   const allowedDirs = (input.allowedDirs ?? ['~']).map((d) => remotePath('dossier autorisé', d));
+  // review complète : un dossier de secrets n'est jamais autorisé, ni rien dessous (règle immuable des secrets)
+  const secret = allowedDirs.find(secretDirIn);
+  if (secret !== undefined)
+    invalid(`dossier autorisé ${secret} : dossier de secrets, jamais autorisé (masqué)`);
   return {
     name,
     mode: input.mode,
