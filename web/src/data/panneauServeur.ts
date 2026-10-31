@@ -1,5 +1,6 @@
 import type { GitCommitDetail, ServerGitLog, ServerGitStatus } from '../../../src/shared/git.js';
 import type { ServerFilePreview, ServerFsListing } from '../../../src/shared/model.js';
+import type { AgentStreamItem } from '../../../src/shared/conversation.js';
 import type { AidClient } from './client.js';
 
 /** Chantier 17 (F.3) : ce que l'écran Discussion lit et écrit pour le panneau Fichiers / Git d'un serveur. */
@@ -57,4 +58,33 @@ export function age(readAt: string, now = Date.now()): string {
   const m = Math.round(s / 60);
   if (m < 60) return `il y a ${m} min`;
   return `il y a ${Math.round(m / 60)} h`;
+}
+
+/**
+ * F.4 (§11.3.1) : fin d'un groupe d'outils de l'agent — après au moins un outil terminé, il passe à autre chose
+ * (message, fin de tour, demande, sortie). Le lien rétabli compte aussi : ce qu'il a fait pendant la coupure n'a pas
+ * été vu. Un événement déjà vu (même `seq`, redélivré) ne compte pas deux fois.
+ */
+export interface SuiviOutils {
+  /** Nombre de fins de groupe vues : le panneau se relit quand il change. */
+  fins: number;
+  outilTermine: boolean;
+  seq: number;
+}
+
+const APRES_OUTILS = new Set(['message', 'turn_end', 'request', 'exit']);
+
+export function suivreOutils(
+  s: SuiviOutils,
+  it: Pick<AgentStreamItem, 'seq' | 'event'>,
+): SuiviOutils {
+  if (it.seq <= s.seq) return s;
+  const e = it.event;
+  if (e.type === 'tool_end') return { ...s, outilTermine: true, seq: it.seq };
+  if (e.type === 'connection_resumed')
+    return { fins: s.fins + 1, outilTermine: false, seq: it.seq };
+  if (s.outilTermine && APRES_OUTILS.has(e.type))
+    return { fins: s.fins + 1, outilTermine: false, seq: it.seq };
+  // rien ne change pour le panneau : même objet, pas de rendu (le `seq` suivant reste comparé au dernier compté)
+  return s;
 }

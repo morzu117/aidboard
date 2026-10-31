@@ -35,6 +35,34 @@ const message = (err: unknown) => (err instanceof Error ? err.message : String(e
 /** Voie 0 du graphe : la branche principale du dépôt du serveur, quel que soit son nom courant. */
 const BRANCHES_PRINCIPALES = ['origin/main', 'main', 'origin/master', 'master'];
 
+/** F.4 (§11.3.1) : ce que l'écran Discussion transmet à chaque onglet. */
+interface Suivi {
+  /** Change à chaque fin de groupe d'outils de l'agent. */
+  actualisation: number;
+  /** Dernières données gardées, âge en ambre, ↻ et écritures désactivés. */
+  injoignable: boolean;
+}
+
+/** Les déclencheurs rapprochés (retour du serveur puis lien rétabli, rafale de groupes) ne font qu'une relecture. */
+const ACTUALISATION_MS = 300;
+
+/** Relit à chaque fin de groupe d'outils et au retour du serveur ; rien tant qu'il est injoignable, jamais en continu. */
+function useActualisation(relire: () => void, { actualisation, injoignable }: Suivi): void {
+  const relireRef = useRef(relire);
+  useEffect(() => {
+    relireRef.current = relire;
+  });
+  const vuRef = useRef({ actualisation, injoignable });
+  useEffect(() => {
+    const vu = vuRef.current;
+    vuRef.current = { actualisation, injoignable };
+    if (injoignable) return;
+    if (vu.actualisation === actualisation && !vu.injoignable) return;
+    const t = setTimeout(() => relireRef.current(), ACTUALISATION_MS);
+    return () => clearTimeout(t);
+  }, [actualisation, injoignable]);
+}
+
 /** L'âge affiché suit l'horloge sans relire le serveur. */
 function useMaintenant(periodeMs = 1_000): number {
   const [now, setNow] = useState(() => Date.now());
@@ -51,12 +79,14 @@ function BarreChemin({
   readAt,
   chargement,
   onActualiser,
+  injoignable = false,
 }: {
   serveur: string;
   dossier: string;
   readAt: string | null;
   chargement: boolean;
   onActualiser: () => void;
+  injoignable?: boolean;
 }) {
   const now = useMaintenant();
   return (
@@ -68,7 +98,12 @@ function BarreChemin({
       >
         {serveur}:{dossier}
       </span>
-      <span className="panneau-serveur-age" data-node="discussion.panneau.age">
+      <span
+        className="panneau-serveur-age"
+        data-node="discussion.panneau.age"
+        data-ancien={injoignable || undefined}
+        title={injoignable ? 'Serveur injoignable : dernières données lues' : undefined}
+      >
         {readAt ? age(readAt, now) : chargement ? 'lecture…' : ''}
       </span>
       <button
@@ -78,7 +113,7 @@ function BarreChemin({
         aria-label="Actualiser"
         title="Actualiser"
         onClick={onActualiser}
-        disabled={chargement}
+        disabled={chargement || injoignable}
       >
         ↻
       </button>
@@ -156,10 +191,12 @@ function OngletFichiersServeur({
   serverId,
   serveur,
   racine,
+  suivi = { actualisation: 0, injoignable: false },
 }: {
   serverId: string;
   serveur: string;
   racine: string;
+  suivi?: Suivi;
 }) {
   const client = useAidClient();
   const [dossiers, setDossiers] = useState<Record<string, Lecture>>({});
@@ -175,11 +212,17 @@ function OngletFichiersServeur({
     if (apercuOuvert) apercuRetourRef.current?.focus();
   }, [apercuOuvert]);
 
+  // relectures d'un même dossier qui se croisent : seule la dernière partie fait foi
+  const lecturesRef = useRef(new Map<string, number>());
   const charger = useCallback(
     (path: string) => {
+      const n = (lecturesRef.current.get(path) ?? 0) + 1;
+      lecturesRef.current.set(path, n);
+      const derniere = () => lecturesRef.current.get(path) === n;
       lireDossier(client, serverId, path).then(
-        (listing) => setDossiers((d) => ({ ...d, [path]: { listing } })),
-        (err: unknown) => setDossiers((d) => ({ ...d, [path]: { erreur: message(err) } })),
+        (listing) => derniere() && setDossiers((d) => ({ ...d, [path]: { listing } })),
+        (err: unknown) =>
+          derniere() && setDossiers((d) => ({ ...d, [path]: { erreur: message(err) } })),
       );
     },
     [client, serverId],
@@ -274,11 +317,24 @@ function OngletFichiersServeur({
     );
   };
 
+  // l'arbre aussi quand un aperçu est ouvert : l'agent a pu créer ou supprimer des fichiers ; l'aperçu reste affiché
+  useActualisation(() => {
+    actualiser();
+    const path = apercu?.path;
+    if (path)
+      lireFichier(client, serverId, path).then(
+        (preview) => setApercu((a) => (a?.path === path ? { path, preview, erreur: null } : a)),
+        (err: unknown) =>
+          setApercu((a) => (a?.path === path ? { path, preview: null, erreur: message(err) } : a)),
+      );
+  }, suivi);
+
   return (
     <>
       <BarreChemin
         serveur={serveur}
         dossier={apercu?.path ?? racine}
+        injoignable={suivi.injoignable}
         readAt={apercu ? (apercu.preview?.readAt ?? null) : readAt}
         chargement={!racineLue}
         onActualiser={() => (apercu ? ouvrirFichier(apercu.path) : actualiser())}
@@ -373,10 +429,12 @@ function OngletGitServeur({
   serverId,
   serveur,
   racine,
+  suivi = { actualisation: 0, injoignable: false },
 }: {
   serverId: string;
   serveur: string;
   racine: string;
+  suivi?: Suivi;
 }) {
   const client = useAidClient();
   const [chemin, setChemin] = useState(racine);
@@ -437,6 +495,8 @@ function OngletGitServeur({
   }, [client, serverId, chemin, scope]);
 
   useEffect(() => lire(), [lire]);
+  useActualisation(lire, suivi);
+  const { injoignable } = suivi;
 
   const ecrire = async (op: EcritureGit, repo: ServerGitRepo | null) => {
     setAConfirmer(null);
@@ -517,6 +577,7 @@ function OngletGitServeur({
     <BarreChemin
       serveur={serveur}
       dossier={journal?.repo.root ?? chemin}
+      injoignable={injoignable}
       readAt={journal?.readAt ?? horsDepot?.readAt ?? null}
       chargement={chargement}
       onActualiser={lire}
@@ -589,7 +650,8 @@ function OngletGitServeur({
   const ahead = repo.aheadBehind?.ahead ?? 0;
   const occupe = enCours !== null;
   // le daemon refuse aussi chacun de ces cas ; désactivé ici pour ne pas proposer une carte vouée au refus
-  const poussable = !occupe && ahead > 0 && !!repo.branch && !!repo.head && repo.operation === null;
+  const poussable =
+    !occupe && !injoignable && ahead > 0 && !!repo.branch && !!repo.head && repo.operation === null;
   const situation = (
     <section className="situation" data-node="discussion.panneau.git.situation">
       <div className="situation-texte">
@@ -644,7 +706,7 @@ function OngletGitServeur({
           className="bouton"
           data-node="discussion.panneau.git.fetch"
           type="button"
-          disabled={occupe || !repo.origin}
+          disabled={occupe || injoignable || !repo.origin}
           onClick={() => void ecrire('fetch', repo)}
         >
           {enCours === 'fetch' ? 'Fetch…' : 'Fetch'}
@@ -677,6 +739,7 @@ function OngletGitServeur({
               className="bouton bouton--primaire confirm-option"
               data-node="discussion.panneau.git.confirmation.valider"
               type="button"
+              disabled={injoignable}
               onClick={() => void ecrire(aConfirmer.op, aConfirmer.repo)}
             >
               {CONFIRMATIONS[aConfirmer.op].titre}
@@ -887,6 +950,8 @@ export function PanneauServeur({
   onglet,
   onOnglet,
   onFermer,
+  actualisation = 0,
+  injoignable = false,
 }: {
   serverId: string;
   serveur: string;
@@ -895,7 +960,11 @@ export function PanneauServeur({
   onglet: OngletPanneau;
   onOnglet: (o: OngletPanneau) => void;
   onFermer: () => void;
+  /** F.4 : incrémenté à chaque fin de groupe d'outils de l'agent. */
+  actualisation?: number;
+  injoignable?: boolean;
 }) {
+  const suivi = useMemo(() => ({ actualisation, injoignable }), [actualisation, injoignable]);
   return (
     <aside
       className="panneau-serveur panneau-contexte"
@@ -933,6 +1002,7 @@ export function PanneauServeur({
           serverId={serverId}
           serveur={serveur}
           racine={racine}
+          suivi={suivi}
         />
       ) : (
         <OngletGitServeur
@@ -940,6 +1010,7 @@ export function PanneauServeur({
           serverId={serverId}
           serveur={serveur}
           racine={racine}
+          suivi={suivi}
         />
       )}
     </aside>

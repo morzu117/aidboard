@@ -1,4 +1,5 @@
 import { createContext, useContext } from 'react';
+import type { AgentStreamItem } from '../../../src/shared/conversation.js';
 
 /** Ce que l'écran Discussion ajoute au fil d'un agent distant (§11.3). */
 export interface Distant {
@@ -10,6 +11,8 @@ export interface Distant {
   onReconnecter?: () => Promise<void>;
   /** chaque événement du fil : l'écran relit l'agent (statut, demande en cours) sans attendre sa relecture */
   onEvent?: () => void;
+  /** F.4 (chantier 17) : l'événement lui-même, pour que l'écran repère la fin d'un groupe d'outils */
+  onItem?: (item: AgentStreamItem) => void;
 }
 
 /**

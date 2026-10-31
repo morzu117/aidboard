@@ -84,6 +84,11 @@ export function Conversation({
   useEffect(() => {
     evenementRef.current = distant?.onEvent;
   });
+  // F.4 : même chose avec l'événement, pour l'actualisation du panneau du serveur
+  const itemRef = useRef(distant?.onItem);
+  useEffect(() => {
+    itemRef.current = distant?.onItem;
+  });
   // id stable mais unique par instance (D65 : une Conversation par agent, montée en permanence) —
   // `dn` est une constante littérale partagée par toutes les instances, donc impropre à un id DOM (review A.7)
   const raccourcisId = useId();
@@ -105,6 +110,7 @@ export function Conversation({
           setItems((m) => new Map(m).set(it.seq, it));
           if (!atBottomRef.current) setPill(true);
           evenementRef.current?.();
+          itemRef.current?.(it);
         },
         onExit: () => {
           exitedRef.current = true;
