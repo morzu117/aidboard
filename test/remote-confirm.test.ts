@@ -100,3 +100,49 @@ test('règles `ask` de claude : une par préfixe, au format observé', () => {
 test('motif de règle : la commande exacte, espaces de bord retirés', () => {
   expect(rulePattern('  sudo -n true \n')).toBe('sudo -n true');
 });
+
+test('revue complète : commentaires, `$’…’`, guillemet ouvert, premier mot dynamique, redirections', () => {
+  for (const c of [
+    // l'apostrophe d'un commentaire ne cache pas la ligne suivante
+    "echo ok # l'état\nrm -rf build",
+    "echo ok # l'état d'avant\nrm -rf build",
+    // `\'` n'achève pas un `$'…'`
+    "echo $'\\''; rm -rf x; echo ''",
+    "echo $'\\''; rm -rf x; echo $'\\''",
+    // guillemet resté ouvert : la ligne n'est pas comprise
+    "echo 'a; rm -rf x",
+    'echo "a; rm -rf x',
+    // premier mot dynamique
+    '$a -rf x',
+    '"$a" -rf x',
+    'rm${IFS}-rf${IFS}x',
+    '/bin/r? -rf x',
+    '{rm,-rf,x}',
+    // une redirection n'est pas un séparateur
+    '2>&1 rm -rf x',
+    '>&2 rm -rf x',
+    '&>f rm -rf x',
+    '>& f rm x',
+  ])
+    expect(isDestructive(c), c).toBe(true);
+  for (const c of [
+    'ls # rm -rf x',
+    '# rm -rf x',
+    'echo a#b',
+    "echo $'a\\tb'",
+    "echo $'it\\'s'",
+    '[ -f x ] && echo ok',
+    '[[ -f x ]] && echo ok',
+    'ls 2>&1 | grep x',
+    'make >log 2>&1 &',
+    'echo ${#x}',
+  ])
+    expect(isDestructive(c), c).toBe(false);
+});
+
+test('revue complète : une commande trop chère à relire est demandée, sans bloquer le daemon', () => {
+  const debut = Date.now();
+  expect(isDestructive(`echo ${'$(a)'.repeat(20_000)}`)).toBe(true);
+  expect(isDestructive('ls '.repeat(100_000))).toBe(false);
+  expect(Date.now() - debut).toBeLessThan(1000);
+});
