@@ -91,6 +91,13 @@ const GitBody = Type.Object(
   { additionalProperties: false },
 );
 
+// F.3 : panneau Fichiers / Git de l'écran Discussion, ouvert ou fermé et onglet, mémorisés par serveur.
+const PanelBody = Type.Object(
+  { open: Type.Boolean(), tab: Type.Union([Type.Literal('files'), Type.Literal('git')]) },
+  { additionalProperties: false },
+);
+const panelKey = (serverId: string) => `serveur.panneau.${serverId}`;
+
 function write(db: Db, id: string, s: Required<ServerInput>, now: string, createdAt?: string) {
   const values = {
     id,
@@ -180,6 +187,7 @@ export function registerServerRoutes(
   app.delete('/api/servers/:id', async (req, reply) => {
     const server = found((req.params as { id: string }).id);
     db.prepare('DELETE FROM servers WHERE id = ?').run(server.id);
+    db.prepare('DELETE FROM nav_pref WHERE key = ?').run(panelKey(server.id));
     connections.forget(server.id);
     return reply.code(204).send();
   });
@@ -280,6 +288,27 @@ export function registerServerRoutes(
       }
     });
   }
+
+  app.get('/api/servers/:id/panel', async (req) => {
+    const server = found((req.params as { id: string }).id);
+    const row = db.prepare('SELECT value FROM nav_pref WHERE key = ?').get(panelKey(server.id)) as
+      { value: string } | undefined;
+    try {
+      const v = JSON.parse(row?.value ?? '') as { open?: unknown; tab?: unknown };
+      return { open: v.open === true, tab: v.tab === 'git' ? 'git' : 'files' };
+    } catch {
+      return { open: false, tab: 'files' };
+    }
+  });
+
+  app.put('/api/servers/:id/panel', { schema: { body: PanelBody } }, async (req) => {
+    const server = found((req.params as { id: string }).id);
+    const body = req.body as { open: boolean; tab: 'files' | 'git' };
+    db.prepare(
+      'INSERT INTO nav_pref (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value',
+    ).run(panelKey(server.id), JSON.stringify({ open: body.open, tab: body.tab }));
+    return { open: body.open, tab: body.tab };
+  });
 
   app.delete('/api/servers/:id/rules/:ruleId', async (req) => {
     const { id, ruleId } = req.params as { id: string; ruleId: string };

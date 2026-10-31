@@ -568,3 +568,6 @@ export function OngletGit({
     </>
   );
 }
+
+// F.3 (chantier 17) : même graphe pour l’onglet Git du panneau d’un serveur.
+export { CommitGraphe };

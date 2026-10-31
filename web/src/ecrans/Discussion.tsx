@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useRef } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
 import type { Agent, ServerStatus } from '../../../src/shared/model.js';
 import { Conversation } from '../conversation/Conversation.js';
@@ -10,10 +11,12 @@ import {
   type ServerDiscussionView,
 } from '../data/discussionsServeur.js';
 import { AidApiError } from '../data/api.js';
+import { ecrirePanneau, lirePanneau, type PanneauPref } from '../data/panneauServeur.js';
 import { statutInconnu, useServeurs } from '../data/serveurs.js';
 import { useAidClient } from '../data/useAidState.js';
 import { Layout } from '../ui/Layout.js';
 import { ETAT_SERVEUR } from '../ui/Serveur.js';
+import { PanneauServeur } from './PanneauServeur.js';
 
 const message = (err: unknown) => (err instanceof Error ? err.message : String(err));
 
@@ -94,6 +97,9 @@ function Contenu() {
   const [introuvable, setIntrouvable] = useState(false);
   const [actionsHost, setActionsHost] = useState<HTMLDivElement | null>(null);
   const agentId = discussion?.agents[0]?.id ?? null;
+  // F.3 : panneau Fichiers / Git, ouvert ou fermé et onglet mémorisés par serveur (§11.3.1)
+  const [panneau, setPanneau] = useState<PanneauPref | null>(null);
+  const basculeRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     // une autre discussion remonte l'écran (clé de `Contenu`) : rien à remettre à zéro ici
@@ -114,6 +120,28 @@ function Contenu() {
       actif = false;
     };
   }, [client, id, discussionId]);
+
+  useEffect(() => {
+    let actif = true;
+    lirePanneau(client, id).then(
+      (p) => actif && setPanneau(p),
+      () => actif && setPanneau({ open: false, tab: 'files' }),
+    );
+    return () => {
+      actif = false;
+    };
+  }, [client, id]);
+
+  const changerPanneau = useCallback(
+    (p: PanneauPref, avant: PanneauPref) => {
+      setPanneau(p);
+      ecrirePanneau(client, id, p).catch((err: unknown) => {
+        setPanneau((courant) => (courant === p ? avant : courant));
+        setErreur(message(err));
+      });
+    },
+    [client, id],
+  );
 
   const relireAgent = useMemo(
     () =>
@@ -185,6 +213,17 @@ function Contenu() {
           </h1>
         </div>
         <button
+          ref={basculeRef}
+          className={`bouton${panneau?.open ? ' est-actif' : ''}`}
+          data-node="discussion.panneau.bascule"
+          type="button"
+          aria-pressed={panneau?.open ?? false}
+          disabled={!panneau}
+          onClick={() => panneau && changerPanneau({ ...panneau, open: !panneau.open }, panneau)}
+        >
+          Panneau
+        </button>
+        <button
           className="bouton"
           data-node="discussion.configurer"
           type="button"
@@ -248,6 +287,19 @@ function Contenu() {
           </AgentRoutesContext.Provider>
         )}
       </div>
+      {panneau?.open && discussion && (
+        <PanneauServeur
+          serverId={id}
+          serveur={serveurNom}
+          racine={discussion.cwd}
+          onglet={panneau.tab}
+          onOnglet={(tab) => changerPanneau({ ...panneau, tab }, panneau)}
+          onFermer={() => {
+            changerPanneau({ ...panneau, open: false }, panneau);
+            basculeRef.current?.focus();
+          }}
+        />
+      )}
     </main>
   );
 }

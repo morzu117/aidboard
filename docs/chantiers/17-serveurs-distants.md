@@ -733,3 +733,45 @@ Reprises du brief §11.6, plus celles nées de l'état des lieux :
 
   `LC_ALL=C` signalé absent : il est déjà exporté par le préambule de F.1.
 - **Gate F.2** : vert (1174, puis 1179 après la review).
+- **F.3** — panneau Fichiers / Git de l'écran Discussion (`web/src/ecrans/PanneauServeur.tsx`,
+  `web/src/data/panneauServeur.ts`, routes `GET` / `PUT /api/servers/:id/panel`). Bouton **Panneau** dans
+  l'en-tête, 360 px à droite du fil : la grille de `.discussion` ne s'applique que panneau ouvert
+  (`:has(> .panneau-serveur)`), aucune ligne existante de l'écran touchée. Ouvert / fermé et onglet
+  mémorisés par serveur dans `nav_pref` (clé `serveur.panneau.<id>`, effacée avec le serveur).
+  - **Décision : composants dédiés pour l'onglet Git.** `OngletGit` est lié au sujet (`topicId`, file
+    d'actions du sujet, `fetchGitLog` par sujet, `base` / `remote`) ; le découpler serait une réécriture.
+    Repris tels quels : `CommitGraphe` (exporté par insertion), `layoutGraph`, `findRefTip` et les classes
+    CSS du panneau d'un sujet. Même chose pour Fichiers : `OngletFichiers` lit l'arbre local d'un sujet ;
+    `FileTreeRow` est neuf, il reprend `.arbre` / `.chevron` de la maquette.
+  - Fichiers : racine = répertoire de la discussion, un dossier lu à son premier dépliage, ↻ relit la racine
+    et les dossiers visibles en gardant l'arbre affiché jusqu'à la réponse ; badges `M` / `?`, entrée masquée
+    atteignable au clavier mais jamais ouverte, dossier lourd grisé et dépliable ; aperçu à la place de
+    l'arbre, binaire et tronqué signalés.
+  - Git : journal (portée Toutes / Branche seule), sinon dépôts détectés ; Pousser / Synchroniser derrière
+    une carte de confirmation (focus sur Annuler, Échap), POST lié au commit affiché ; carte refermée si
+    HEAD a bougé à la relecture ; désactivés sans avance, sans branche, sans commit, opération en cours, et
+    Synchroniser sans `origin/<branche>`.
+  - `git log` décore `HEAD -> <branche>`, `layoutGraph` cherche `HEAD` seul : le panneau scinde la ref
+    avant le graphe, sinon ni nœud courant ni ligne WIP. **Le même défaut touche l'onglet Git d'un sujet**
+    (`findRefTip(commits, ['HEAD'])`, `web/src/ui/gitGraph.ts`) : préexistant, hors périmètre, non corrigé
+    — à reposer à la review complète.
+- **Tests F.3** : `test/server-panel.test.ts` (4 : défaut, mémorisation par serveur, corps validé et 404,
+  suppression avec le serveur, valeur illisible) ; `test/web/panneau-serveur.test.tsx` (19 : ouverture et
+  mémorisation, focus rendu à la fermeture, arbre et dépliage paresseux, masqué jamais lu, aperçu et binaire,
+  erreurs, onglet Git, portée, pousser / synchroniser / fetch, désactivations, carte périmée, dépôts
+  détectés et retour, WIP, détail, retour arrière d'un réglage non enregistré). Mutations vérifiées :
+  effacement de la clé avec le serveur, dossier déjà lu non relu, carte périmée, Synchroniser sans
+  upstream, retour arrière du réglage, scission `HEAD -> …`.
+- **Review F.3** — retenus : ↻ démontait l'arbre ; Synchroniser actif sur une branche jamais poussée et
+  carte qui annonçait « jusqu'à <hash> » pour un rebase (réécrit) ; Pousser actif pendant un merge ; carte
+  périmée après relecture ; fuite du détail / de la carte d'un dépôt à l'autre, impasse après un dépôt en
+  échec ; erreur de dossier jamais relue ; rôles ARIA (`tree`, `tab`, `listitem` sur des boutons) sans le
+  comportement promis → boutons `aria-expanded` / `aria-pressed` ; focus (carte, Retour, fermeture) ;
+  réglage optimiste sans retour arrière ; règle `set-state-in-effect` (état de chargement dérivé).
+  Vérifiés sans changement : `head` vide refusé par le daemon (400), identifiants d'URL retirés des
+  messages git (F.2), `extra` refusé en 400 (test vert).
+  Reportés : âge de la seule racine (F.4) ; suppression du serveur et de sa clé hors transaction (la ligne
+  existante n'est pas réécrite, une clé orpheline est inoffensive) ; état du panneau perdu au changement
+  d'onglet ; un GET du réglage en échec pose le défaut, qu'un clic écrit ensuite ; second
+  `import { useRef } from 'react'` dans `Discussion.tsx` pour ne pas modifier la ligne d'import existante.
+- **Gate F.3** : vert (1202).
