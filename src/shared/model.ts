@@ -259,6 +259,8 @@ export interface ServerSshOptions {
 /** Règle « Toujours autoriser sur ce serveur » (§11.3), révocable depuis la configuration. */
 export interface ServerRule {
   id: string;
+  /** Dossier de la discussion où la règle a été écrite : elle ne vaut que là (décision du 2026-10-31). */
+  cwd: string;
   pattern: string;
   createdAt: string;
 }

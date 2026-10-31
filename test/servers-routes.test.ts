@@ -221,11 +221,15 @@ test('suppression : le serveur et ses règles, rien d’autre ; règle révocabl
   const s = (await req('POST', '/api/servers', VPS)).json<Server>();
   const now = new Date().toISOString();
   t.db
-    .prepare('INSERT INTO server_rules (id, server_id, pattern, created_at) VALUES (?, ?, ?, ?)')
-    .run('sr_1', s.id, 'systemctl restart nginx', now);
+    .prepare(
+      'INSERT INTO server_rules (id, server_id, cwd, pattern, created_at) VALUES (?, ?, ?, ?, ?)',
+    )
+    .run('sr_1', s.id, '~/proj', 'systemctl restart nginx', now);
   t.db
-    .prepare('INSERT INTO server_rules (id, server_id, pattern, created_at) VALUES (?, ?, ?, ?)')
-    .run('sr_2', s.id, 'journalctl', now);
+    .prepare(
+      'INSERT INTO server_rules (id, server_id, cwd, pattern, created_at) VALUES (?, ?, ?, ?, ?)',
+    )
+    .run('sr_2', s.id, '~/proj', 'journalctl', now);
   expect((await req('GET', `/api/servers/${s.id}`)).json<Server>().rules.map((r) => r.id)).toEqual([
     'sr_1',
     'sr_2',

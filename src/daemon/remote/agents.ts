@@ -8,6 +8,7 @@ import type {
   Server,
   ServerAgent,
   ServerDiscussion,
+  ServerRule,
 } from '../../shared/model.js';
 import { ClaudeDriver } from '../conversation/claude.js';
 import { CodexDriver } from '../conversation/codex.js';
@@ -70,6 +71,8 @@ export interface LiveRemote {
   queued: PendingRequest[];
   /** R.5 (D77) : confirmation des commandes destructives, fixée au lancement ; nulle si le serveur ne la demande pas */
   confirm: Confirm | null;
+  /** Dossier de la discussion : une règle « Toujours autoriser » n'y vaut que là (décision du 2026-10-31) */
+  cwd: string;
   subscribe(cb: (ev: ConversationEvent) => void): () => void;
 }
 
@@ -393,9 +396,9 @@ export class RemoteAgentManager {
     // déjà là (deux cartes pour la même commande) : la contrainte UNIQUE la garde une fois
     this.deps.db
       .prepare(
-        'INSERT OR IGNORE INTO server_rules (id, server_id, pattern, created_at) VALUES (?, ?, ?, ?)',
+        'INSERT OR IGNORE INTO server_rules (id, server_id, cwd, pattern, created_at) VALUES (?, ?, ?, ?, ?)',
       )
-      .run(`sr_${ulid()}`, server.id, rulePattern(command), new Date().toISOString());
+      .run(`sr_${ulid()}`, server.id, live.cwd, rulePattern(command), new Date().toISOString());
   }
 
   private liveOr409(agentId: string): LiveRemote {
@@ -658,6 +661,7 @@ export class RemoteAgentManager {
       pending: null,
       queued: [],
       confirm,
+      cwd: discussion.cwd,
       subscribe: (cb) => {
         const set = this.subscribers.get(row.id) ?? new Set();
         set.add(cb);
@@ -760,7 +764,8 @@ export class RemoteAgentManager {
     // règle illisible ou réponse impossible : la carte est présentée, rien ne passe en silence
     try {
       const server = this.serverOf(this.agentRow(live.id));
-      if (!server.rules.some((r) => r.pattern === rulePattern(command))) return shown;
+      const covered = (r: ServerRule) => r.cwd === live.cwd && r.pattern === rulePattern(command);
+      if (!server.rules.some(covered)) return shown;
       live.driver.answer(request.id, 'yes');
     } catch {
       return shown;
