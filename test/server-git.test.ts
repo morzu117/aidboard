@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process';
 import {
   chmodSync,
   existsSync,
@@ -582,4 +583,64 @@ test('F.2 : serveur injoignable pendant une écriture — 502 et état injoignab
   expect(r.json().error).toContain('vps-ovh ne répond pas');
   const statuses = (await get('/api/servers/status')).json<ServerStatus[]>();
   expect(statuses.find((x) => x.serverId === s.id)?.state).toBe('unreachable');
+});
+
+/**
+ * Review complète : un `git` du serveur qui fait une action de plus avant la vraie commande — un agent qui
+ * commite pendant le fetch, une annulation de rebase qui échoue. Posé par le profil distant, devant le PATH.
+ */
+async function avecGitDuServeur(script: string): Promise<{ home: string }> {
+  const home = mkdtempSync(join(tmpdir(), 'aid-d-'));
+  const bin = join(home, 'faux-bin');
+  mkdirSync(bin);
+  const vrai = execFileSync('/bin/sh', ['-c', 'command -v git'], { encoding: 'utf8' }).trim();
+  writeFileSync(join(bin, 'git'), `#!/bin/sh\nVRAI='${vrai}'\n${script}\nexec "$VRAI" "$@"\n`);
+  chmodSync(join(bin, 'git'), 0o755);
+  writeFileSync(join(home, '.profile'), `PATH='${bin}':"$PATH"\nexport PATH\n`);
+  t = await startTestDaemon(home, {
+    remote: { ssh: FAKE_SSH, env: { ...process.env, FAKE_SSH_HOME: home } },
+  });
+  return { home };
+}
+
+const COMMIT_PENDANT_FETCH = `case " $* " in *" fetch "*) "$VRAI" -c user.name=agent -c user.email=agent@x commit -q --allow-empty -m "agent pendant le fetch" ;; esac`;
+
+test('review complète : pousser envoie le commit confirmé, pas un commit arrivé pendant l’écriture', async () => {
+  const { home } = await avecGitDuServeur(COMMIT_PENDANT_FETCH);
+  const { origin, clone } = depot(home);
+  const s = await create();
+  commitFile(clone, 'local.txt', 'l\n');
+  const confirme = sh(clone, 'rev-parse', 'HEAD');
+  const r = await post(`/api/servers/${s.id}/git/sync`, oui(clone));
+  expect(r.statusCode).toBe(200);
+  // l'agent a commité pendant le fetch : origin reçoit le commit confirmé, rien de plus
+  expect(sh(origin, 'rev-parse', 'main')).toBe(confirme);
+  expect(sh(clone, 'log', '-1', '--format=%s')).toBe('agent pendant le fetch');
+});
+
+test('review complète : synchroniser — HEAD a bougé pendant le fetch, rebase refusé, rien ne change', async () => {
+  const { home } = await avecGitDuServeur(COMMIT_PENDANT_FETCH);
+  const { origin, clone } = depot(home);
+  const s = await create();
+  avancerOrigin(home, origin);
+  const distant = sh(origin, 'rev-parse', 'main');
+  commitFile(clone, 'local.txt', 'l\n');
+  const r = await post(`/api/servers/${s.id}/git/sync`, oui(clone));
+  expect(r.statusCode).toBe(409);
+  expect(r.json().error).toContain('a changé depuis l’affichage');
+  expect(sh(origin, 'rev-parse', 'main')).toBe(distant);
+  expect(sh(clone, 'log', '-1', '--format=%s')).toBe('agent pendant le fetch');
+});
+
+test('review complète : synchroniser — annulation du rebase en échec, dit tel quel', async () => {
+  const { home } = await avecGitDuServeur(`case " $* " in *" rebase --abort "*) exit 1 ;; esac`);
+  const { origin, clone } = depot(home);
+  const s = await create();
+  avancerOrigin(home, origin, 'README.md', 'distant\n');
+  commitFile(clone, 'README.md', 'local\n');
+  const r = await post(`/api/servers/${s.id}/git/sync`, oui(clone));
+  expect(r.statusCode).toBe(409);
+  expect(r.json().error).toBe(
+    'rebase en échec et non annulé sur le serveur : à terminer sur place',
+  );
 });
