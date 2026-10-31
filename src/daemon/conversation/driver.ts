@@ -1,3 +1,4 @@
+import type { ChildProcessWithoutNullStreams } from 'node:child_process';
 import type { AgentSettings, ModelOption } from '../../shared/agentSettings.js';
 import type { PendingOption } from '../../shared/model.js';
 /** Défini dans le partagé (D65) : le front en dépend sans dépendre du daemon. */
@@ -16,7 +17,16 @@ export interface ConversationDriverOptions {
   settings?: AgentSettings;
   /** D70 : dossier des pièces jointes, lisible par l'agent sans demande. */
   attachmentsDir?: string;
+  /** Chantier 17 (D75) : lanceur du process ; absent = `child_process.spawn`. Le pilote distant passe un `RemoteChild`. */
+  spawnChild?: SpawnChild;
 }
+
+/** Ce que les pilotes demandent à un lanceur (D75) : les mêmes arguments que `spawn`, les mêmes flux en retour. */
+export type SpawnChild = (
+  bin: string,
+  args: string[],
+  opts: { cwd: string; env: NodeJS.ProcessEnv; stdio: ['pipe', 'pipe', 'pipe'] },
+) => ChildProcessWithoutNullStreams;
 
 /** Pièce jointe déjà déposée sur disque par le daemon (D70) : le pilote la lit ou la cite par son chemin. */
 export interface AttachedFile {

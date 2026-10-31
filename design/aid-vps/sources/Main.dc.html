@@ -1,0 +1,324 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>AID — conversation</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+.thread{outline:0}
+.thread:focus-visible{box-shadow:inset 0 0 0 1px #2f5a47}
+body{margin:0;background:#0b0c0e}
+button{font-family:inherit;cursor:pointer}
+::-webkit-scrollbar{width:8px}
+::-webkit-scrollbar-thumb{background:#262a31;border-radius:4px}
+</style>
+</helmet>
+<div style="width: 1440px; height: 900px; box-sizing: border-box; display: flex; flex-direction: column; overflow: hidden; background: #0b0c0e; color: #e6e8eb; font-family: Inter, system-ui, sans-serif; font-size: 14px">
+
+<!-- Barre du haut -->
+<div style="height: 56px; flex-shrink: 0; box-sizing: border-box; display: flex; align-items: center; gap: 28px; padding: 0 20px; border-bottom: 1px solid #23272e">
+<div style="font-weight: 600; font-size: 20px; letter-spacing: 0.5px"><span style="color: #5de0a1">›:</span>AID</div>
+<nav style="display: flex; gap: 22px; color: #8d94a0; font-size: 14px">
+<span style="color: #e6e8eb">Accueil</span><span>Boîte de réception</span><span>Consignes</span><span>Serveurs</span><span>Réglages</span>
+</nav>
+<div style="flex-grow: 1"></div>
+<div style="display: flex; align-items: center; gap: 8px; border: 1px solid #23272e; border-radius: 999px; padding: 6px 12px; font-size: 12px; color: #8d94a0"><span style="width: 8px; height: 8px; border-radius: 50%; background: #5b616c"></span>hors mesh depuis 22 h</div>
+<div style="display: flex; align-items: center; gap: 8px; font-size: 12px; color: #8d94a0"><span style="width: 8px; height: 8px; border-radius: 50%; background: #5de0a1"></span>daemon local</div>
+<div style="display: flex; align-items: center; gap: 10px; border: 1px solid #23272e; border-radius: 8px; padding: 8px 12px; width: 220px; font-size: 13px; color: #8d94a0; box-sizing: border-box"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg><span style="flex-grow: 1">Rechercher…</span><span style="font-family: 'JetBrains Mono', monospace; font-size: 11px; background: #16191e; padding: 2px 6px; border-radius: 4px">⌘K</span></div>
+<button style="background: #5de0a1; color: #06251a; border: 0; border-radius: 8px; padding: 9px 14px; font-weight: 600; font-size: 13px">Nouveau sujet</button>
+</div>
+
+<!-- Corps : 1/4 · 2/4 · 1/4 -->
+<div style="flex-grow: 1; min-height: 0; display: flex">
+
+<!-- 1/4 Barre gauche -->
+<div style="width: 360px; flex-shrink: 0; height: 844px; border-right: 1px solid #23272e; overflow: hidden"><dc-import name="Nav" active="restart-dev" hint-size="360px,844px"></dc-import></div>
+
+<!-- 2/4 Conversation -->
+<main style="width: 720px; flex-shrink: 0; box-sizing: border-box; display: flex; flex-direction: column; min-width: 0">
+<div style="padding: 18px 24px 0; flex-shrink: 0">
+<div style="display: flex; align-items: flex-start; gap: 12px">
+<div style="flex-grow: 1; min-width: 0">
+<div style="font-size: 13px; color: #8d94a0">orgasso / sujet</div>
+<h1 style="margin: 2px 0 0; font-size: 24px; font-weight: 600">restart-dev</h1>
+</div>
+<button style="background: #16191e; color: #e6e8eb; border: 1px solid #23272e; border-radius: 8px; padding: 8px 12px; font-size: 13px">Ouvrir dans l'éditeur</button>
+<button aria-label="Plus d'actions" style="background: #16191e; color: #e6e8eb; border: 1px solid #23272e; border-radius: 8px; width: 36px; height: 34px">···</button>
+</div>
+<div style="display: flex; gap: 8px; margin-top: 12px; font-family: 'JetBrains Mono', monospace; font-size: 12px">
+<span style="background: #1a2740; color: #8fb8ff; padding: 4px 9px; border-radius: 6px">active</span>
+<span style="background: #16191e; color: #c4c9d2; padding: 4px 9px; border-radius: 6px">feat/restart-dev</span>
+<span style="background: #16191e; color: #c4c9d2; padding: 4px 9px; border-radius: 6px">base origin/main</span>
+</div>
+<div style="display: flex; align-items: center; gap: 4px; margin-top: 14px; border-bottom: 1px solid #23272e">
+<div style="padding: 9px 14px; border-bottom: 2px solid #5de0a1; margin-bottom: -1px; display: flex; align-items: center; gap: 8px; font-weight: 500"><span style="width: 8px; height: 8px; border-radius: 50%; border: 2px solid #5de0a1; box-sizing: border-box"></span>swairm-cell <span style="color: #8d94a0; font-weight: 400">libre</span></div>
+<div style="padding: 9px 14px; color: #8d94a0">claude</div>
+<div style="padding: 9px 14px; color: #8d94a0">+ Agent</div>
+<div style="flex-grow: 1"></div>
+<button onClick="{{toggleMenu}}" style="background: {{menuBg}}; color: #c4c9d2; border: 1px solid #23272e; border-radius: 6px; padding: 5px 10px; font-size: 12px">Repères · {{pos}} ▾</button>
+<button onClick="{{toggleAll}}" style="background: transparent; color: #c4c9d2; border: 1px solid #23272e; border-radius: 6px; padding: 5px 10px; font-size: 12px">{{allLabel}}</button>
+<button style="background: transparent; color: #8d94a0; border: 1px solid #23272e; border-radius: 6px; padding: 5px 10px; font-size: 12px">Arrêter</button>
+</div>
+</div>
+
+<!-- Fil de conversation : seule zone qui défile + rail de repères -->
+<div style="flex-grow: 1; min-height: 0; display: flex; position: relative">
+<div class="thread" tabindex="0" aria-label="Fil de conversation. j et k : question suivante ou précédente, m : marquer, e : détail" onScroll="{{onScroll}}" onKeyDown="{{onKey}}" style="position: relative; flex-grow: 1; min-width: 0; overflow-y: auto; padding: 22px 8px 22px 24px; display: flex; flex-direction: column; gap: 26px">
+<sc-for list="{{turns}}" as="t" hint-placeholder-count="3">
+<div style="display: flex; flex-direction: column; gap: 12px">
+<div id="{{t.anchor}}" style="align-self: flex-end; max-width: 80%; display: flex; align-items: center; gap: 8px">
+<button onClick="{{t.toggleMark}}" aria-label="Marquer cette question" style="background: transparent; border: 0; padding: 4px; font-size: 16px; line-height: 1; color: {{t.starColor}}">{{t.star}}</button>
+<div style="background: #1a1e24; border: 1px solid {{t.qBorder}}; border-radius: 14px 14px 4px 14px; padding: 11px 14px; line-height: 1.5">{{t.q}}</div>
+</div>
+<div style="display: flex; align-items: center; gap: 8px; font-size: 12px; color: #8d94a0"><span style="font-family: 'JetBrains Mono', monospace; background: #16191e; border-radius: 6px; padding: 3px 8px; color: #5de0a1">swairm-cell</span>{{t.time}}</div>
+<div style="line-height: 1.55; max-width: 92%">{{t.intro}}</div>
+<div style="border: 1px solid #23272e; border-radius: 10px; background: #0e1013; font-family: 'JetBrains Mono', monospace; font-size: 12px; overflow: hidden">
+<div style="display: flex; align-items: center; gap: 8px; padding: 7px 12px; border-bottom: 1px solid #1a1d23; font-family: Inter, system-ui, sans-serif; color: #8d94a0">
+<span style="flex-grow: 1">{{t.count}}</span>
+<button onClick="{{t.toggleOpen}}" style="background: transparent; color: #c4c9d2; border: 1px solid #23272e; border-radius: 6px; padding: 3px 9px; font-size: 12px">{{t.openLabel}}</button>
+</div>
+<sc-for list="{{t.calls}}" as="c" hint-placeholder-count="3">
+<div style="border-bottom: 1px solid #1a1d23">
+<div style="display: flex; align-items: center; gap: 10px; padding: 8px 12px"><span style="color: #5de0a1">✓</span><span style="color: #e6e8eb">{{c.cmd}}</span><span style="flex-grow: 1"></span><span style="color: #8d94a0">{{c.out}}</span></div>
+<sc-if value="{{t.open}}" hint-placeholder-val="{{false}}">
+<div style="margin: 0 12px 10px; background: #0b0c0e; border: 1px solid #1a1d23; border-radius: 8px; padding: 8px 10px; color: #a9afba; line-height: 1.6; white-space: pre-wrap">{{c.detail}}</div>
+</sc-if>
+</div>
+</sc-for>
+</div>
+<div style="line-height: 1.55; max-width: 92%">{{t.outro}}</div>
+<sc-if value="{{t.decision}}" hint-placeholder-val="{{false}}">
+<div style="border: 1px solid #5a4514; background: #1a150a; border-radius: 12px; padding: 14px 16px; display: flex; flex-direction: column; gap: 10px">
+<div style="display: flex; align-items: center; gap: 8px; font-size: 12px; color: #f2b84b"><span style="width: 8px; height: 8px; border-radius: 50%; background: #f2b84b"></span>Décision · morzu117/Orgasso#decision/1</div>
+<div style="font-weight: 500">Sujet swairm/capacitor-socle garé (plan v1)</div>
+<div style="display: flex; gap: 8px">
+<button style="background: #5de0a1; color: #06251a; border: 0; border-radius: 8px; padding: 8px 12px; font-weight: 600; font-size: 13px">Relancer le plan</button>
+<button style="background: #16191e; color: #e6e8eb; border: 1px solid #23272e; border-radius: 8px; padding: 8px 12px; font-size: 13px">Réviser le plan</button>
+<button style="background: transparent; color: #8d94a0; border: 1px solid #23272e; border-radius: 8px; padding: 8px 12px; font-size: 13px">Laisser garé</button>
+</div>
+</div>
+</sc-if>
+</div>
+</sc-for>
+</div>
+
+<!-- Rail de repères : un trait par question -->
+<div style="width: 30px; flex-shrink: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 22px 0">
+<sc-for list="{{marks}}" as="m" hint-placeholder-count="3">
+<a href="{{m.href}}" onClick="{{m.go}}" title="{{m.label}}" aria-label="{{m.label}}" style="display: block; width: {{m.w}}; height: 4px; border-radius: 2px; background: {{m.color}}; box-shadow: {{m.shadow}}"></a>
+</sc-for>
+</div>
+
+<!-- Menu des repères -->
+<sc-if value="{{menu}}" hint-placeholder-val="{{false}}">
+<div style="position: absolute; right: 40px; top: 8px; width: 340px; box-sizing: border-box; background: #16191e; border: 1px solid #2d323a; border-radius: 12px; padding: 8px; box-shadow: 0 12px 32px rgba(0,0,0,0.55); display: flex; flex-direction: column; gap: 2px">
+<div style="padding: 6px 10px; font-size: 11px; font-weight: 600; letter-spacing: 1px; text-transform: uppercase; color: #8d94a0">Questions de cette discussion</div>
+<sc-for list="{{marks}}" as="m" hint-placeholder-count="3">
+<a href="{{m.href}}" onClick="{{m.go}}" style="display: flex; align-items: center; gap: 10px; padding: 9px 10px; border-radius: 8px; text-decoration: none; color: #e6e8eb; font-size: 13px; background: {{m.rowBg}}">
+<span style="color: {{m.starColor}}; font-size: 14px">{{m.star}}</span>
+<span style="flex-grow: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">{{m.label}}</span>
+<span style="font-size: 12px; color: #8d94a0">{{m.time}}</span>
+</a>
+</sc-for>
+<div style="padding: 8px 10px 4px; font-size: 12px; color: #8d94a0; border-top: 1px solid #23272e; margin-top: 4px"><span style="font-family: 'JetBrains Mono', monospace">j</span> / <span style="font-family: 'JetBrains Mono', monospace">k</span> question suivante / précédente · <span style="font-family: 'JetBrains Mono', monospace">m</span> marquer · <span style="font-family: 'JetBrains Mono', monospace">e</span> détail. Clique dans le fil pour activer les raccourcis.</div>
+</div>
+</sc-if>
+</div>
+
+<!-- Zone de saisie : toujours visible -->
+<div style="flex-shrink: 0; padding: 0 24px 20px">
+<div style="border: 1px solid #2d323a; border-radius: 14px; background: #111317; padding: 12px 14px; display: flex; flex-direction: column; gap: 10px">
+<textarea aria-label="Message à swairm-cell" placeholder="Écris à swairm-cell…  (/ commandes · @ fichier)" rows="2" style="resize: none; background: transparent; border: 0; outline: 0; color: #e6e8eb; font-family: inherit; font-size: 14px; line-height: 1.5; width: 100%"></textarea>
+<div style="display: flex; align-items: center; gap: 8px; font-size: 12px">
+<button style="background: #16191e; color: #c4c9d2; border: 1px solid #23272e; border-radius: 6px; padding: 5px 9px">▸▸ auto mode</button>
+<button style="background: #16191e; color: #c4c9d2; border: 1px solid #23272e; border-radius: 6px; padding: 5px 9px">Sonnet 5.5 · high</button>
+<button aria-label="Joindre un fichier" style="background: transparent; color: #8d94a0; border: 0; padding: 5px 6px"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 12l-8.5 8.5a5 5 0 01-7-7L14 5a3.5 3.5 0 015 5l-8.5 8.5a2 2 0 01-3-3L15 8"/></svg></button>
+<div style="flex-grow: 1"></div>
+<button aria-label="Envoyer" style="background: #5de0a1; color: #06251a; border: 0; border-radius: 8px; width: 34px; height: 30px; font-size: 16px; font-weight: 600">↑</button>
+</div>
+</div>
+</div>
+</main>
+
+<!-- 1/4 Panneau contextuel -->
+<aside style="width: 360px; flex-shrink: 0; box-sizing: border-box; border-left: 1px solid #23272e; display: flex; flex-direction: column; background: #0e1013">
+<div style="display: flex; padding: 12px 12px 0; gap: 2px; border-bottom: 1px solid #23272e">
+<sc-for list="{{tabs}}" as="t" hint-placeholder-count="5">
+<button onClick="{{t.pick}}" style="background: transparent; border: 0; border-bottom: 2px solid {{t.line}}; margin-bottom: -1px; padding: 9px 11px; font-size: 13px; color: {{t.color}}">{{t.label}}</button>
+</sc-for>
+</div>
+
+<sc-if value="{{showGit}}" hint-placeholder-val="{{true}}">
+<div style="display: flex; flex-direction: column; min-height: 0; flex-grow: 1">
+<div style="display: flex; align-items: center; gap: 8px; padding: 14px 16px">
+<span style="flex-grow: 1; font-size: 12px; color: #8d94a0; background: #16191e; border-radius: 6px; padding: 6px 9px">À jour avec origin</span>
+<button style="background: #16191e; color: #e6e8eb; border: 1px solid #23272e; border-radius: 8px; padding: 6px 10px; font-size: 12px">Synchroniser</button>
+<button style="background: #5de0a1; color: #06251a; border: 0; border-radius: 8px; padding: 6px 10px; font-size: 12px; font-weight: 600">Pousser</button>
+</div>
+<div style="display: flex; gap: 6px; padding: 0 16px 10px; font-size: 12px">
+<span style="background: #16191e; border-radius: 6px; padding: 5px 9px">Toutes</span><span style="color: #8d94a0; padding: 5px 9px">Sujet et main</span><span style="color: #8d94a0; padding: 5px 9px">Sujet seul</span>
+</div>
+<div style="flex-grow: 1; min-height: 0; overflow-y: auto; padding: 0 8px 12px">
+<sc-for list="{{commits}}" as="c" hint-placeholder-count="8">
+<div style="display: flex; gap: 10px; padding: 9px 8px; border-radius: 8px">
+<span style="width: 9px; height: 9px; border-radius: 50%; margin-top: 5px; flex-shrink: 0; background: {{c.color}}"></span>
+<div style="min-width: 0; flex-grow: 1">
+<div style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px">{{c.msg}}</div>
+<div style="font-size: 11px; color: #8d94a0; margin-top: 2px">jhoubart · {{c.when}}</div>
+</div>
+<span style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #8d94a0; margin-top: 2px">{{c.hash}}</span>
+</div>
+</sc-for>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{showPlan}}" hint-placeholder-val="{{false}}">
+<div style="padding: 28px 20px; display: flex; flex-direction: column; align-items: flex-start; gap: 12px">
+<div style="font-weight: 500">Plan pas encore écrit</div>
+<div style="color: #8d94a0; line-height: 1.5; font-size: 13px">Le plan apparaît ici dès que l'agent le rédige. Il reste visible à côté de la conversation pendant que tu discutes.</div>
+<button style="background: #16191e; color: #e6e8eb; border: 1px solid #23272e; border-radius: 8px; padding: 8px 12px; font-size: 13px">Demander un plan à l'agent</button>
+</div>
+</sc-if>
+
+<sc-if value="{{showFiles}}" hint-placeholder-val="{{false}}">
+<div style="padding: 14px 16px; display: flex; flex-direction: column; gap: 4px">
+<div style="font-size: 12px; color: #8d94a0; padding-bottom: 8px">Index absent : lecture directe du worktree</div>
+<sc-for list="{{files}}" as="f" hint-placeholder-count="5">
+<div style="display: flex; align-items: center; gap: 8px; padding: 7px 8px; border-radius: 6px; font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #c4c9d2"><span style="color: #8d94a0">{{f.icon}}</span>{{f.name}}</div>
+</sc-for>
+</div>
+</sc-if>
+
+<sc-if value="{{showOther}}" hint-placeholder-val="{{false}}">
+<div style="padding: 28px 20px; color: #8d94a0; font-size: 13px">Pas encore écrite.</div>
+</sc-if>
+</aside>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { tab: 'git', open: {}, marks: { q2: true }, menu: false, active: 'q1' };
+  }
+  renderVals() {
+    const st = this.state;
+    const tab = st.tab;
+    const defs = [['plan', 'Plan'], ['git', 'Git'], ['files', 'Fichiers'], ['review', 'Revue'], ['retro', 'Rétro']];
+    const tabs = defs.map(([id, label]) => ({
+      label,
+      pick: () => this.setState({ tab: id }),
+      color: tab === id ? '#e6e8eb' : '#8d94a0',
+      line: tab === id ? '#5de0a1' : 'transparent'
+    }));
+    const raw = [
+      { id: 'q1', time: '09:12', q: 'Reprends le sujet capacitor-socle et dis-moi ce qui bloque.',
+        intro: 'Je regarde l\'état du projet, la boîte de réception et le journal des événements.',
+        calls: [
+          { cmd: 'swairm> inbox', out: '1 décision', detail: 'morzu117/Orgasso#decision/1  decision\nSujet swairm/capacitor-socle garé (plan v1)' },
+          { cmd: 'swairm> status', out: 'waiting_you · parked', detail: 'swairm — morzu117/Orgasso · 1 à toi\nwaiting_you  parked  swairm/capacitor-socle' },
+          { cmd: 'swairm> events', out: '20 derniers', detail: '10  branch_push_intent  swairm/capacitor-socle\n11  branch_pushed       swairm/capacitor-socle\n20  decision_opened     swairm/capacitor-socle\n22  budget_spent        swairm/capacitor-socle' }
+        ],
+        outro: 'Le sujet swairm/capacitor-socle est garé (plan v1) : le pas de commande cap-deps s\'est arrêté.' },
+      { id: 'q2', time: '09:14', q: 'Pourquoi le pas cap-deps s\'est arrêté ?',
+        intro: 'Je relis le détail du sujet et l\'ordre des événements autour de l\'ouverture de la décision.',
+        calls: [
+          { cmd: 'swairm> show swairm/capacitor-socle', out: 'plan v1', detail: 'sujet    swairm/capacitor-socle\nétat     parked\nplan     v1 · pas cap-deps arrêté' },
+          { cmd: 'swairm> events', out: 'extraction → decision_opened', detail: '19  extraction       swairm/capacitor-socle\n20  decision_opened  swairm/capacitor-socle\n21  subject_state    swairm/capacitor-socle' }
+        ],
+        outro: 'L\'extraction a ouvert la décision juste après la pousse de la branche. Le plan v1 ne prévoit pas la commande cap-deps, donc le pas s\'est arrêté.' },
+      { id: 'q3', time: '09:19', q: 'Peux-tu proposer un plan v2 ?',
+        intro: 'Je pars du plan v1 et j\'ajoute le pas manquant.',
+        calls: [
+          { cmd: 'Lire plan v1', out: '1 fichier', detail: 'plan v1 · 4 pas · cap-deps absent' },
+          { cmd: 'Brouillon plan v2', out: '5 pas', detail: '1. socle\n2. cap-deps  (nouveau)\n3. extraction\n4. revue\n5. rétro' }
+        ],
+        outro: 'Le plan v2 ajoute cap-deps avant l\'extraction. Je te laisse trancher avant de relancer.', decision: true }
+    ];
+    const turns = raw.map((r) => {
+      const marked = !!st.marks[r.id];
+      const open = !!st.open[r.id];
+      return Object.assign({}, r, {
+        anchor: r.id, open,
+        count: r.calls.length + ' commandes',
+        openLabel: open ? 'Replier le détail' : 'Voir le détail',
+        toggleOpen: () => this.setState({ open: Object.assign({}, st.open, { [r.id]: !open }) }),
+        toggleMark: () => this.setState({ marks: Object.assign({}, st.marks, { [r.id]: !marked }) }),
+        star: marked ? '★' : '☆',
+        starColor: marked ? '#f2b84b' : '#8d94a0',
+        qBorder: marked ? '#5a4514' : '#23272e'
+      });
+    });
+    const marks = raw.map((r) => {
+      const marked = !!st.marks[r.id];
+      return {
+        href: '#' + r.id, label: r.q, time: r.time,
+        color: st.active === r.id ? '#5de0a1' : (marked ? '#f2b84b' : '#3a3f48'),
+        w: st.active === r.id ? '26px' : (marked ? '18px' : '12px'),
+        shadow: (st.active === r.id && marked) ? '0 0 0 2px #f2b84b' : 'none',
+        rowBg: st.active === r.id ? '#1f252d' : 'transparent',
+        star: marked ? '★' : '☆', starColor: marked ? '#f2b84b' : '#8d94a0',
+        go: () => this.setState({ menu: false })
+      };
+    });
+    const ids = raw.map((r) => r.id);
+    const onScroll = (e) => {
+      const box = e.currentTarget;
+      let cur = ids[0];
+      ids.forEach((id) => {
+        const el = box.querySelector('#' + id);
+        if (el && el.offsetTop <= box.scrollTop + 40) cur = id;
+      });
+      if (cur !== this.state.active) this.setState({ active: cur });
+    };
+    const onKey = (e) => {
+      const i = ids.indexOf(st.active);
+      const k = e.key;
+      if (k === 'j' || k === 'k') {
+        const next = ids[Math.max(0, Math.min(ids.length - 1, i + (k === 'j' ? 1 : -1)))];
+        const el = e.currentTarget.querySelector('#' + next);
+        if (el) e.currentTarget.scrollTo({ top: el.offsetTop - 16, behavior: 'smooth' });
+        this.setState({ active: next });
+      } else if (k === 'm') {
+        this.setState({ marks: Object.assign({}, st.marks, { [st.active]: !st.marks[st.active] }) });
+      } else if (k === 'e') {
+        this.setState({ open: Object.assign({}, st.open, { [st.active]: !st.open[st.active] }) });
+      }
+    };
+    const allOpen = raw.every((r) => st.open[r.id]);
+    return {
+      tabs, turns, marks, menu: st.menu, onScroll, onKey, pos: (ids.indexOf(st.active) + 1) + '/' + ids.length,
+      menuBg: st.menu ? '#1f252d' : 'transparent',
+      toggleMenu: () => this.setState({ menu: !st.menu }),
+      allLabel: allOpen ? 'Tout replier' : 'Tout déplier',
+      toggleAll: () => this.setState({ open: raw.reduce((o, r) => { o[r.id] = !allOpen; return o; }, {}) }),
+      commits: [
+        { msg: 'Ruche : activer l\'Extracteur', when: 'il y a 12 j', hash: '42aedda', color: '#a78bfa' },
+        { msg: 'Merge pull request #5 · maquettes', when: 'il y a 13 j', hash: '23c7a40', color: '#6ea8ff' },
+        { msg: 'Maquettes : Orgasso', when: 'il y a 14 j', hash: 'df915f1', color: '#a78bfa' },
+        { msg: 'Merge pull request #4 · chore/vitest-include', when: 'il y a 14 j', hash: '67e7407', color: '#6ea8ff' },
+        { msg: 'Vitest trouve les tests où qu\'ils soient', when: 'il y a 14 j', hash: 'ed9ec6c', color: '#a78bfa' },
+        { msg: 'Merge pull request #3 · chore/deps-base', when: 'il y a 14 j', hash: 'f7c8af2', color: '#6ea8ff' },
+        { msg: 'Dépendances de base : police Inter', when: 'il y a 14 j', hash: 'dde6fee', color: '#a78bfa' },
+        { msg: 'first commit', when: 'il y a 14 j', hash: 'aaa34b3', color: '#6ea8ff' }
+      ],
+      files: [
+        { icon: '▸', name: 'apps/' }, { icon: '▸', name: 'docs/' }, { icon: '▸', name: 'packages/' },
+        { icon: '·', name: 'package.json' }, { icon: '·', name: 'README.md' }
+      ],
+      showGit: tab === 'git', showPlan: tab === 'plan', showFiles: tab === 'files',
+      showOther: tab === 'review' || tab === 'retro'
+    };
+  }
+}
+</script>
+</body>
+</html>

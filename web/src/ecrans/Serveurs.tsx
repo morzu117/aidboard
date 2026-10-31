@@ -1,0 +1,450 @@
+import { useState } from 'react';
+import { Link, useLocation, useNavigate } from 'react-router';
+import type { Server, ServerStatus, ServerTest } from '../../../src/shared/model.js';
+import {
+  activite,
+  derniereDiscussion,
+  ETAT_AGENT,
+  useDiscussionsServeur,
+} from '../data/discussionsServeur.js';
+import {
+  arretNonConfirme,
+  type ServeursStore,
+  statutInconnu,
+  useServeurs,
+} from '../data/serveurs.js';
+import { useAid } from '../data/useAidState.js';
+import { Dialogue } from '../dialogues/Dialogue.js';
+import { NouvelleDiscussion } from '../dialogues/NouvelleDiscussion.js';
+import { ContextMenu } from '../ui/ContextMenu.js';
+import { depuis } from '../ui/depuis.js';
+import { Layout } from '../ui/Layout.js';
+import { IconeServeur, MODE_SERVEUR, PastilleEtatServeur } from '../ui/Serveur.js';
+
+const message = (err: unknown) => (err instanceof Error ? err.message : String(err));
+
+const agentsTexte = (s: Server) =>
+  s.detectedAgents === null
+    ? 'non testé'
+    : s.detectedAgents.length === 0
+      ? 'aucun'
+      : s.detectedAgents.join(' · ');
+
+function Carte({
+  s,
+  status,
+  test,
+  n,
+  store,
+  creer = false,
+  onSupprimer,
+}: {
+  s: Server;
+  status: ServerStatus;
+  test: ServerTest | undefined;
+  n: number;
+  store: ServeursStore;
+  /** arrivée depuis la barre gauche sur un serveur sans discussion : le dialogue de création s'ouvre */
+  creer?: boolean;
+  onSupprimer: (s: Server) => void;
+}) {
+  const { call } = useAid();
+  const navigate = useNavigate();
+  const [menu, setMenu] = useState(false);
+  const [enCours, setEnCours] = useState(false);
+  const [erreur, setErreur] = useState<string | null>(null);
+  const id = `serveurs.serveur-${n}`;
+  // R.6 : la discussion la plus récente du serveur, ou sa création s'il n'en a aucune
+  const { discussions, erreur: erreurDiscussions } = useDiscussionsServeur(s.id);
+  const [creation, setCreation] = useState(creer);
+  const urlDe = (discussionId: string) => `/serveurs/${s.id}/discussions/${discussionId}`;
+  const ouvrir = () => {
+    const d = discussions && derniereDiscussion(discussions);
+    if (d) navigate(urlDe(d.id));
+    else if (discussions) setCreation(true);
+    else navigate(`/serveurs/${s.id}/discussion`);
+  };
+  const lancer = async (action: 'test' | 'ping') => {
+    setErreur(null);
+    setEnCours(true);
+    try {
+      const r = await call<ServerStatus | ServerTest>('POST', `/api/servers/${s.id}/${action}`);
+      // « Reconnecter » rend l'état mesuré : la carte bouge même sans l'éphémère (socket coupée)
+      if (action === 'ping' && r && 'state' in r) store.appliquer(r);
+    } catch (err) {
+      setErreur(message(err));
+    } finally {
+      setEnCours(false);
+    }
+  };
+  const testEnCours = test !== undefined && test.finishedAt === null;
+  const raison = status.state === 'unreachable' || status.state === 'error' ? status.reason : null;
+  return (
+    <section className="serveur-carte" data-node={id} aria-label={s.name}>
+      <div className="serveur-carte-entete">
+        <div className="serveur-carte-icone">
+          <IconeServeur state={status.state} />
+        </div>
+        <div className="serveur-carte-ident">
+          <div className="serveur-carte-nom">
+            <span className="serveur-nom" data-node={`${id}.nom`}>
+              {s.name}
+            </span>
+            <PastilleEtatServeur state={status.state} dataNode={`${id}.etat`} />
+          </div>
+          <div className="serveur-carte-cible" data-node={`${id}.cible`}>
+            {MODE_SERVEUR[s.mode]} · {s.target}
+          </div>
+        </div>
+        <button
+          className="bouton"
+          data-node={`${id}.configurer`}
+          type="button"
+          onClick={() => navigate(`/serveurs/${s.id}/configuration`)}
+        >
+          Configurer
+        </button>
+        <button
+          className="bouton bouton--primaire"
+          data-node={`${id}.ouvrir`}
+          type="button"
+          onClick={ouvrir}
+        >
+          Ouvrir la discussion
+        </button>
+        <div className="serveur-carte-menu">
+          <button
+            className="bouton serveur-carte-plus"
+            data-node={`${id}.plus`}
+            type="button"
+            aria-label={`Plus d’actions pour ${s.name}`}
+            aria-haspopup="menu"
+            aria-expanded={menu}
+            onClick={() => setMenu(true)}
+          >
+            ···
+          </button>
+          {menu && (
+            <ContextMenu
+              label={`Actions pour ${s.name}`}
+              onClose={() => setMenu(false)}
+              items={[
+                {
+                  id: 'tester',
+                  label: 'Tester la connexion',
+                  disabled: enCours || testEnCours,
+                  onSelect: () => void lancer('test'),
+                },
+                {
+                  id: 'reconnecter',
+                  label: 'Reconnecter',
+                  disabled: enCours || testEnCours,
+                  onSelect: () => void lancer('ping'),
+                },
+                {
+                  id: 'supprimer',
+                  label: 'Supprimer',
+                  separatorBefore: true,
+                  onSelect: () => onSupprimer(s),
+                },
+              ]}
+            />
+          )}
+        </div>
+      </div>
+      {raison && (
+        <p className="serveur-carte-raison" data-node={`${id}.raison`}>
+          {raison}
+        </p>
+      )}
+      {testEnCours && (
+        <p className="texte-discret" data-node={`${id}.test`}>
+          Test de connexion en cours…
+        </p>
+      )}
+      {test?.finishedAt && test.ok === false && (
+        <p className="serveur-carte-raison" data-node={`${id}.test`}>
+          Dernier test : {test.error}
+        </p>
+      )}
+      <dl className="serveur-indicateurs">
+        <div className="serveur-indicateur">
+          <dt>Latence</dt>
+          <dd className="serveur-valeur-mono" data-node={`${id}.latence`}>
+            {status.latencyMs === null ? '—' : `${status.latencyMs} ms`}
+          </dd>
+        </div>
+        <div className="serveur-indicateur">
+          <dt>Agents détectés</dt>
+          <dd className="serveur-valeur-mono" data-node={`${id}.agents`} title={agentsTexte(s)}>
+            {agentsTexte(s)}
+          </dd>
+        </div>
+        <div className="serveur-indicateur">
+          <dt>Répertoire de travail</dt>
+          <dd className="serveur-valeur-mono" data-node={`${id}.repertoire`} title={s.workdir}>
+            {s.workdir}
+          </dd>
+        </div>
+        <div className="serveur-indicateur">
+          <dt>Session persistante</dt>
+          <dd data-node={`${id}.session`}>{s.keepSession ? 'Active' : 'Inactive'}</dd>
+        </div>
+      </dl>
+      {erreur && (
+        <p className="message-erreur" role="alert" data-node={`${id}.erreur`}>
+          {erreur}
+        </p>
+      )}
+      <div className="serveur-discussions" data-node={`${id}.discussions`}>
+        <div className="groupe-entete">
+          <span className="serveur-discussions-titre">Discussions sur {s.name}</span>
+          <span className="texte-faible">{discussions?.length ?? '…'}</span>
+        </div>
+        {erreurDiscussions && (
+          <p className="message-erreur" role="alert" data-node={`${id}.discussions.erreur`}>
+            {erreurDiscussions}
+          </p>
+        )}
+        {discussions && discussions.length === 0 && (
+          <p className="texte-discret" data-node={`${id}.discussions.vide`}>
+            Aucune discussion sur ce serveur.
+          </p>
+        )}
+        {discussions && discussions.length > 0 && (
+          <table className="serveur-discussions-table" data-node={`${id}.discussions.table`}>
+            <thead>
+              <tr>
+                <th scope="col">Discussion</th>
+                <th scope="col">Agent</th>
+                <th scope="col">Activité</th>
+                <th scope="col">
+                  <span className="visuellement-cache">Action</span>
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {discussions.map((d, j) => {
+                const a = d.agents[0];
+                const dn = `${id}.discussion-${j + 1}`;
+                return (
+                  <tr
+                    key={d.id}
+                    className="serveur-discussion-ligne"
+                    data-node={dn}
+                    onClick={() => navigate(urlDe(d.id))}
+                  >
+                    <td>
+                      <span
+                        className={`serveur-discussion-point serveur-discussion-point--${a?.status ?? 'stopped'}`}
+                        aria-hidden="true"
+                      />
+                      <Link
+                        to={urlDe(d.id)}
+                        data-node={`${dn}.nom`}
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        {d.name}
+                      </Link>
+                      {d.archived && <span className="texte-faible"> · archivée</span>}
+                    </td>
+                    <td className="serveur-valeur-mono" data-node={`${dn}.agent`}>
+                      {a ? `${a.kind} · ${ETAT_AGENT[a.status]}` : '—'}
+                    </td>
+                    <td className="texte-faible" data-node={`${dn}.activite`}>
+                      {depuis(activite(d))}
+                    </td>
+                    <td>
+                      <button
+                        className="bouton"
+                        data-node={`${dn}.reprendre`}
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          navigate(urlDe(d.id));
+                        }}
+                      >
+                        Reprendre
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        )}
+      </div>
+      {creation && (
+        <NouvelleDiscussion
+          server={s}
+          onClose={() => {
+            setCreation(false);
+            // venue de la barre gauche : l'historique ne rouvre pas le dialogue au retour (revue R.6)
+            if (creer) navigate('/serveurs', { replace: true, state: null });
+          }}
+        />
+      )}
+    </section>
+  );
+}
+
+function Contenu() {
+  const { call } = useAid();
+  const { servers, statuses, tests, erreur, store } = useServeurs();
+  const navigate = useNavigate();
+  // `/serveurs/:id/discussion` sans discussion renvoie ici, dialogue de création ouvert sur ce serveur
+  const creerSur = (useLocation().state as { creer?: string } | null)?.creer;
+  const [suppression, setSuppression] = useState<Server | null>(null);
+  const [suppressionEnCours, setSuppressionEnCours] = useState(false);
+  const [erreurSuppression, setErreurSuppression] = useState<string | null>(null);
+  // décision D.2 : arrêt des agents non confirmé, la suppression se refait « quand même »
+  const [forcer, setForcer] = useState(false);
+  const ajouter = () => navigate('/serveurs/nouveau');
+  const fermerSuppression = () => {
+    setSuppression(null);
+    setErreurSuppression(null);
+    setForcer(false);
+  };
+  const supprimer = async (s: Server) => {
+    setErreurSuppression(null);
+    setSuppressionEnCours(true);
+    try {
+      await call('DELETE', `/api/servers/${s.id}${forcer ? '?force=1' : ''}`);
+      store.retirer(s.id);
+      setSuppression(null);
+    } catch (err) {
+      // le dialogue reste ouvert : l'erreur s'affiche là où l'action a été faite (review S.4)
+      setErreurSuppression(message(err));
+      if (arretNonConfirme(err)) setForcer(true);
+    } finally {
+      setSuppressionEnCours(false);
+    }
+  };
+  return (
+    <main className="page">
+      <div className="entete" data-node="serveurs.entete">
+        <div className="entete-texte">
+          <h1 className="titre-ecran" data-node="serveurs.entete.titre">
+            Serveurs
+          </h1>
+          <p className="resume">
+            Machines distantes où tes agents peuvent travailler. La connexion passe par le daemon
+            local de ton ordinateur.
+          </p>
+        </div>
+        {servers !== null && servers.length > 0 && (
+          <button
+            className="bouton bouton--primaire"
+            data-node="serveurs.ajouter"
+            data-action="serveur.ajouter"
+            type="button"
+            onClick={ajouter}
+          >
+            Ajouter un serveur
+          </button>
+        )}
+      </div>
+      {erreur && (
+        <p className="message-erreur" role="alert" data-node="serveurs.erreur">
+          {erreur}
+        </p>
+      )}
+      {servers !== null && servers.length === 0 && (
+        <section className="vide" data-node="serveurs.vide">
+          <p className="vide-message">Aucun serveur</p>
+          <p className="texte-discret">
+            Ajoute un VPS ou une machine de build : A-I-D s’y connecte par ssh, depuis ton
+            ordinateur, avec ta configuration ssh. Aucun mot de passe ni clé n’est enregistré.
+          </p>
+          <div className="vide-actions">
+            <button
+              className="bouton bouton--primaire"
+              data-node="serveurs.vide.ajouter"
+              type="button"
+              onClick={ajouter}
+            >
+              Ajouter un serveur
+            </button>
+          </div>
+        </section>
+      )}
+      {servers?.map((s, i) => (
+        <Carte
+          key={s.id}
+          s={s}
+          n={i + 1}
+          status={statuses[s.id] ?? statutInconnu(s.id)}
+          test={tests[s.id]}
+          store={store}
+          creer={creerSur === s.id}
+          onSupprimer={setSuppression}
+        />
+      ))}
+      {servers !== null && servers.length > 0 && (
+        <section className="serveur-ajout" data-node="serveurs.ajout">
+          <div className="serveur-ajout-texte">
+            <p className="serveur-ajout-titre">Ajouter un autre serveur</p>
+            <p className="texte-discret">
+              Un second VPS, une machine de build ou un serveur de test. Chacun apparaît dans la
+              barre gauche avec son propre état de connexion.
+            </p>
+          </div>
+          <button
+            className="bouton"
+            data-node="serveurs.ajout.ajouter"
+            type="button"
+            onClick={ajouter}
+          >
+            Ajouter un serveur
+          </button>
+        </section>
+      )}
+      {suppression && (
+        <Dialogue titre={`Supprimer ${suppression.name} ?`} onClose={fermerSuppression}>
+          <p className="texte-discret">
+            A-I-D oublie ce serveur et ses discussions ; les agents qui y tournent sont arrêtés. Ses
+            fichiers restent en place.
+          </p>
+          {erreurSuppression && (
+            <p className="message-erreur" role="alert" data-node="serveurs.supprimer.erreur">
+              {erreurSuppression}
+            </p>
+          )}
+          {forcer && (
+            <p className="texte-discret" data-node="serveurs.supprimer.forcer">
+              Supprimer quand même retire le serveur d’A-I-D ; ses agents seront à arrêter sur
+              place.
+            </p>
+          )}
+          <div className="dialogue-actions">
+            <button
+              className="bouton"
+              type="button"
+              disabled={suppressionEnCours}
+              onClick={fermerSuppression}
+            >
+              Annuler
+            </button>
+            <button
+              className="bouton bouton--danger"
+              data-node="serveurs.supprimer.confirmer"
+              type="button"
+              disabled={suppressionEnCours}
+              onClick={() => void supprimer(suppression)}
+            >
+              {forcer ? 'Supprimer quand même' : 'Supprimer'}
+            </button>
+          </div>
+        </Dialogue>
+      )}
+    </main>
+  );
+}
+
+export function Serveurs() {
+  return (
+    <Layout screen="serveurs">
+      <Contenu />
+    </Layout>
+  );
+}

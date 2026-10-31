@@ -3,7 +3,10 @@ import { AidProvider } from './data/useAidState.js';
 import { Accueil } from './ecrans/Accueil.js';
 import { Boite } from './ecrans/Boite.js';
 import { Consignes } from './ecrans/Consignes.js';
+import { Discussion, OuvrirDiscussion } from './ecrans/Discussion.js';
 import { Reglages } from './ecrans/Reglages.js';
+import { ServeurConfig } from './ecrans/ServeurConfig.js';
+import { Serveurs } from './ecrans/Serveurs.js';
 import { Sujet } from './ecrans/Sujet.js';
 import { Notifieur } from './ui/Notifieur.js';
 
@@ -16,6 +19,11 @@ export function App() {
         <Route path="/boite" element={<Boite />} />
         <Route path="/consignes" element={<Consignes />} />
         <Route path="/reglages" element={<Reglages />} />
+        <Route path="/serveurs" element={<Serveurs />} />
+        <Route path="/serveurs/nouveau" element={<ServeurConfig />} />
+        <Route path="/serveurs/:id/configuration" element={<ServeurConfig />} />
+        <Route path="/serveurs/:id/discussion" element={<OuvrirDiscussion />} />
+        <Route path="/serveurs/:id/discussions/:discussionId" element={<Discussion />} />
         <Route path="/sujets/:topicId" element={<Sujet />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

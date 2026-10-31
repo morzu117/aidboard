@@ -378,3 +378,6 @@ export async function gitFileStatuses(worktree: string): Promise<Map<string, Fil
   }
   return byPath;
 }
+
+// F.2 (chantier 17) : même format et même lecture pour le journal d'un dépôt de serveur distant.
+export { LOG_FORMAT, parseLog };

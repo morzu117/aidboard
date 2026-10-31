@@ -1,4 +1,5 @@
 import type { StoredEvent } from '../../../src/shared/events.js';
+import type { ServerStatus, ServerTest } from '../../../src/shared/model.js';
 import type { StateSnapshot } from '../../../src/shared/state.js';
 import { api, SessionExpired } from './api.js';
 import type { DaemonLink } from './types.js';
@@ -12,6 +13,9 @@ export interface ClientSnapshot {
   state: StateSnapshot | null;
   daemon: DaemonLink;
   outputs: Readonly<Record<string, readonly OutputLine[]>>;
+  /** Chantier 17 (S.4) : derniers `server.status` / `server.test` éphémères reçus, par serveur. */
+  serverStatuses?: Readonly<Record<string, ServerStatus>>;
+  serverTests?: Readonly<Record<string, ServerTest>>;
 }
 
 export interface ClientOptions {
@@ -124,6 +128,8 @@ export class AidClient {
       actionId?: string;
       stream?: string;
       line?: string;
+      status?: ServerStatus;
+      test?: ServerTest;
     };
     try {
       msg = JSON.parse(raw);
@@ -143,6 +149,12 @@ export class AidClient {
         -this.o.maxOutputLines,
       );
       this.set({ outputs: { ...this.snap.outputs, [msg.actionId]: next } });
+    } else if (msg.kind === 'ephemeral' && msg.type === 'server.status' && msg.status) {
+      const id = msg.status.serverId;
+      this.set({ serverStatuses: { ...this.snap.serverStatuses, [id]: msg.status } });
+    } else if (msg.kind === 'ephemeral' && msg.type === 'server.test' && msg.test) {
+      const id = msg.test.serverId;
+      this.set({ serverTests: { ...this.snap.serverTests, [id]: msg.test } });
     }
   }
 

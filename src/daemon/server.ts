@@ -31,11 +31,16 @@ import { registerMemoryRoutes } from './routes/memory.js';
 import { registerStructuralRoutes } from './routes/structural.js';
 import { registerMeshRoutes } from './routes/mesh.js';
 import { registerNavRoutes } from './routes/nav.js';
+import { registerServerRoutes } from './routes/servers.js';
+import { registerServerDiscussionRoutes } from './routes/serverDiscussions.js';
+import type { RemoteKind } from './remote/agents.js';
+import type { TransportOptions } from './remote/transport.js';
 import type { MeshService } from './mesh/service.js';
 import type { MemoryProposals } from './memory/maintain.js';
 import type { MemoryService } from './memory/service.js';
 import { type AuthState, registerSecurity, writeSessionToken } from './security.js';
 import { registerAgentSocket } from './ws/agent.js';
+import { registerServerAgentSocket } from './ws/serverAgent.js';
 import { registerEventSocket } from './ws/events.js';
 import { registerPtySocket } from './ws/pty.js';
 
@@ -62,6 +67,10 @@ export interface ServerDeps {
   /** 12.4 : null ou absent = mesh désactivé, les routes /api/mesh répondent 404 */
   mesh?: MeshService | null;
   devOrigin?: string;
+  /** Chantier 17 : binaire `ssh` et environnement du transport distant ; un faux ssh en test (D79). */
+  remote?: TransportOptions;
+  /** Chantier 17 (R.4) : binaire de chaque agent sur le serveur ; défaut son nom. Les tests y mettent les faux. */
+  remoteBins?: Partial<Record<RemoteKind, string>>;
   webRoot?: string | null;
   logger?: boolean;
 }
@@ -153,6 +162,12 @@ export async function buildServer(deps: ServerDeps): Promise<FastifyInstance> {
   registerAgentRoutes(app, { db: deps.db, agents: deps.agents });
   registerWorkspaceRoutes(app, { ...deps, engine: structural });
   registerNavRoutes(app, { db: deps.db });
+  registerServerRoutes(app, { db: deps.db, store: deps.store, remote: deps.remote });
+  const serverAgents = registerServerDiscussionRoutes(app, {
+    db: deps.db,
+    transport: deps.remote ?? {},
+    bins: deps.remoteBins,
+  });
   registerFsRoutes(app);
   registerFileRoutes(app, { db: deps.db });
   registerHookRoutes(app, () => process.env);
@@ -188,6 +203,7 @@ export async function buildServer(deps: ServerDeps): Promise<FastifyInstance> {
     agents: deps.agents,
   });
   registerAgentSocket(app, { db: deps.db, agents: deps.agents });
+  registerServerAgentSocket(app, { db: deps.db, agents: serverAgents });
   const webRoot = deps.webRoot === undefined ? defaultWebRoot() : deps.webRoot;
   if (webRoot) {
     await app.register(fastifyStatic, { root: webRoot });

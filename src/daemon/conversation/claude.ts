@@ -154,7 +154,7 @@ export class ClaudeDriver implements ConversationDriver {
   start(): void {
     if (this.child) throw new Error('driver déjà démarré');
     const args = buildClaudeArgs(this.opts);
-    const child = spawn(this.opts.bin, args, {
+    const child = (this.opts.spawnChild ?? spawn)(this.opts.bin, args, {
       cwd: this.opts.cwd,
       env: this.opts.env,
       stdio: ['pipe', 'pipe', 'pipe'],
@@ -296,6 +296,13 @@ export class ClaudeDriver implements ConversationDriver {
       kind: 'permission',
       question: `${toolName} : ${summarizeInput(input)}`,
       options: PERMISSION_OPTIONS,
+      ...(toolName === 'Bash' &&
+        typeof (input as { command?: unknown } | undefined)?.command === 'string' && {
+          command: (input as { command: string }).command,
+        }),
+      // seulement nos règles (`--settings`) : une règle `ask` de l'utilisateur distant reste une carte ordinaire
+      ...(request.decision_reason_type === 'rule' &&
+        request.decision_reason_rule_source === 'flagSettings' && { byRule: true }),
     };
     this.emit({ type: 'request', request: pendingRequest });
   }

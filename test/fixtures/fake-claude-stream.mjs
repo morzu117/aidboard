@@ -117,6 +117,83 @@ async function handleTurn(text) {
     return;
   }
 
+  // Chantier 17 (R.5) : une commande Bash. Comme claude 2.1.308 (D77) : une règle `ask` de `--settings` force la
+  // demande quel que soit le mode, et la demande porte `decision_reason_type: "rule"` ; sans règle, seul le mode
+  // `default` demande.
+  // plusieurs commandes lancées en parallèle (`commandes: a ;; b`) : toutes les demandes partent avant la
+  // première réponse, comme des outils parallèles
+  if (text.startsWith('commandes: ')) {
+    const answers = await Promise.all(
+      text
+        .slice('commandes: '.length)
+        .split(' ;; ')
+        .map((command) => {
+          const requestId = `req-${++reqCounter}`;
+          emit({
+            type: 'control_request',
+            request_id: requestId,
+            request: {
+              subtype: 'can_use_tool',
+              tool_name: 'Bash',
+              input: { command },
+              decision_reason_type: 'rule',
+              decision_reason_rule_source: 'flagSettings',
+            },
+          });
+          return new Promise((resolve) => pendingControl.set(requestId, resolve)).then(
+            (r) => `${r.behavior === 'allow' ? 'exécutée' : 'refusée'}: ${command}`,
+          );
+        }),
+    );
+    for (const t of answers)
+      emit({
+        type: 'assistant',
+        message: { role: 'assistant', content: [{ type: 'text', text: t }] },
+      });
+    emit({ type: 'result', subtype: 'success', session_id: sessionId });
+    return;
+  }
+
+  if (text.startsWith('commande: ')) {
+    const command = text.slice('commande: '.length);
+    const rules = (JSON.parse(argAfter('--settings') ?? '{}').permissions?.ask ?? [])
+      .map((r) => /^Bash\((.+):\*\)$/.exec(r)?.[1])
+      .filter(Boolean);
+    const byRule = command
+      .split(/&&|\|\||;|\|/)
+      .map((c) => c.trim())
+      .some((c) => rules.some((p) => c === p || c.startsWith(`${p} `)));
+    const say = (t) =>
+      emit({
+        type: 'assistant',
+        message: { role: 'assistant', content: [{ type: 'text', text: t }] },
+      });
+    if (byRule || settings.mode === 'default') {
+      const requestId = `req-${++reqCounter}`;
+      emit({
+        type: 'control_request',
+        request_id: requestId,
+        request: {
+          subtype: 'can_use_tool',
+          tool_name: 'Bash',
+          display_name: 'Bash',
+          input: { command, description: 'commande demandée' },
+          tool_use_id: `tool-${reqCounter}`,
+          ...(byRule && {
+            decision_reason_type: 'rule',
+            decision_reason_rule_source: 'flagSettings',
+          }),
+        },
+      });
+      const response = await new Promise((resolve) => pendingControl.set(requestId, resolve));
+      say(`${response.behavior === 'allow' ? 'exécutée' : 'refusée'}: ${command}`);
+    } else {
+      say(`exécutée sans demande: ${command}`);
+    }
+    emit({ type: 'result', subtype: 'success', session_id: sessionId });
+    return;
+  }
+
   // AskUserQuestion : claude le fait passer par `can_use_tool` ; la réponse revient dans `updatedInput.answers`.
   if (text === 'demande questions') {
     const requestId = `req-${++reqCounter}`;

@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>AID — configurer un serveur</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+body{margin:0;background:#0b0c0e}
+button{font-family:inherit;cursor:pointer}
+input[type=checkbox]{accent-color:#5de0a1;width:16px;height:16px;margin:0}
+</style>
+</helmet>
+<div style="width: 1440px; height: 900px; box-sizing: border-box; display: flex; flex-direction: column; overflow: hidden; background: #0b0c0e; color: #e6e8eb; font-family: Inter, system-ui, sans-serif; font-size: 14px">
+
+<div style="height: 56px; flex-shrink: 0; box-sizing: border-box; display: flex; align-items: center; gap: 28px; padding: 0 20px; border-bottom: 1px solid #23272e">
+<div style="font-weight: 600; font-size: 20px; letter-spacing: 0.5px"><span style="color: #5de0a1">›:</span>AID</div>
+<nav style="display: flex; gap: 22px; color: #8d94a0"><span>Accueil</span><span>Boîte de réception</span><span>Consignes</span><span style="color: #e6e8eb">Serveurs</span><span>Réglages</span></nav>
+<div style="flex-grow: 1"></div>
+<div style="display: flex; align-items: center; gap: 8px; border: 1px solid #23272e; border-radius: 999px; padding: 6px 12px; font-size: 12px; color: #8d94a0"><span style="width: 8px; height: 8px; border-radius: 50%; background: #5b616c"></span>hors mesh depuis 22 h</div>
+<div style="display: flex; align-items: center; gap: 8px; font-size: 12px; color: #8d94a0"><span style="width: 8px; height: 8px; border-radius: 50%; background: #5de0a1"></span>daemon local</div>
+<div style="border: 1px solid #23272e; border-radius: 8px; padding: 8px 12px; width: 220px; font-size: 13px; color: #8d94a0; box-sizing: border-box">Rechercher…  <span style="float: right; font-family: 'JetBrains Mono', monospace; font-size: 11px">⌘K</span></div>
+<button style="background: #5de0a1; color: #06251a; border: 0; border-radius: 8px; padding: 9px 14px; font-weight: 600; font-size: 13px">Nouveau sujet</button>
+</div>
+
+<div style="flex-grow: 1; min-height: 0; display: flex">
+<div style="width: 280px; flex-shrink: 0; height: 844px; border-right: 1px solid #23272e; overflow: hidden"><dc-import name="Nav" active="vps-ovh" hint-size="280px,844px"></dc-import></div>
+
+<main style="flex-grow: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column">
+
+<!-- En-tête fixe -->
+<div style="flex-shrink: 0; padding: 22px 40px 16px; display: flex; align-items: flex-end; gap: 12px; border-bottom: 1px solid #23272e">
+<div style="flex-grow: 1">
+<div style="font-size: 13px; color: #8d94a0">Serveurs / vps-ovh</div>
+<h1 style="margin: 2px 0 0; font-size: 24px; font-weight: 600">Configurer vps-ovh</h1>
+</div>
+<button style="background: transparent; color: #c4c9d2; border: 1px solid #23272e; border-radius: 8px; padding: 8px 14px; font-size: 13px">Annuler</button>
+<button style="background: #5de0a1; color: #06251a; border: 0; border-radius: 8px; padding: 8px 16px; font-weight: 600; font-size: 13px">Enregistrer</button>
+</div>
+
+<div style="flex-grow: 1; min-height: 0; overflow-y: auto; padding: 24px 40px; display: flex; gap: 28px; align-items: flex-start">
+
+<!-- Formulaire -->
+<div style="flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; gap: 18px">
+
+<section style="border: 1px solid #23272e; border-radius: 14px; background: #0e1013; padding: 20px 22px; display: flex; flex-direction: column; gap: 16px">
+<div style="font-weight: 600">Identité</div>
+<div style="display: flex; gap: 16px">
+<div style="flex: 1; display: flex; flex-direction: column; gap: 6px"><label for="f-name" style="font-size: 12px; font-weight: 500; color: #8d94a0">Nom affiché</label><input id="f-name" value="vps-ovh" style="background: #111317; border: 1px solid #2d323a; border-radius: 8px; padding: 9px 12px; color: #e6e8eb; font-family: inherit; font-size: 14px"></div>
+<div style="flex: 1; display: flex; flex-direction: column; gap: 6px"><label for="f-group" style="font-size: 12px; font-weight: 500; color: #8d94a0">Groupe dans la barre gauche</label><input id="f-group" value="Serveurs" style="background: #111317; border: 1px solid #2d323a; border-radius: 8px; padding: 9px 12px; color: #e6e8eb; font-family: inherit; font-size: 14px"></div>
+</div>
+<div style="display: flex; align-items: center; gap: 10px"><span style="font-size: 12px; font-weight: 500; color: #8d94a0">Couleur</span>
+<span style="width: 20px; height: 20px; border-radius: 6px; background: #5de0a1; box-shadow: 0 0 0 2px #0e1013, 0 0 0 4px #5de0a1"></span>
+<span style="width: 20px; height: 20px; border-radius: 6px; background: #6ea8ff"></span><span style="width: 20px; height: 20px; border-radius: 6px; background: #a78bfa"></span><span style="width: 20px; height: 20px; border-radius: 6px; background: #f59e6b"></span><span style="width: 20px; height: 20px; border-radius: 6px; background: #f07ab0"></span><span style="width: 20px; height: 20px; border-radius: 6px; background: #4fd1d9"></span>
+</div>
+</section>
+
+<section style="border: 1px solid #23272e; border-radius: 14px; background: #0e1013; padding: 20px 22px; display: flex; flex-direction: column; gap: 16px">
+<div style="font-weight: 600">Connexion</div>
+<div style="display: flex; gap: 6px; background: #111317; border-radius: 10px; padding: 4px; align-self: flex-start">
+<button aria-pressed="true" style="background: #1f252d; color: #e6e8eb; border: 0; border-radius: 7px; padding: 7px 14px; font-size: 13px; font-weight: 500">Commande locale</button>
+<button aria-pressed="false" style="background: transparent; color: #8d94a0; border: 0; border-radius: 7px; padding: 7px 14px; font-size: 13px">Hôte SSH</button>
+<button aria-pressed="false" style="background: transparent; color: #8d94a0; border: 0; border-radius: 7px; padding: 7px 14px; font-size: 13px">Alias SSH</button>
+</div>
+<div style="display: flex; flex-direction: column; gap: 6px"><label for="f-cmd" style="font-size: 12px; font-weight: 500; color: #8d94a0">Commande de connexion</label><input id="f-cmd" value="vps" style="background: #111317; border: 1px solid #5de0a1; border-radius: 8px; padding: 9px 12px; color: #e6e8eb; font-family: 'JetBrains Mono', monospace; font-size: 14px"></div>
+<div style="font-size: 13px; color: #8d94a0; line-height: 1.5">Le daemon local exécute cette commande sur ton ordinateur ; elle doit ouvrir un shell sur le serveur. AID ne stocke ni mot de passe ni clé privée.</div>
+<label style="display: flex; align-items: flex-start; gap: 10px; line-height: 1.45"><input type="checkbox" checked><span>Charger mon profil shell avant de lancer la commande<br><span style="font-size: 12px; color: #8d94a0">Nécessaire si <span style="font-family: 'JetBrains Mono', monospace">vps</span> est un alias ou une fonction définie dans ton fichier de profil bash.</span></span></label>
+</section>
+
+<section style="border: 1px solid #23272e; border-radius: 14px; background: #0e1013; padding: 20px 22px; display: flex; flex-direction: column; gap: 16px">
+<div style="font-weight: 600">Environnement distant</div>
+<div style="display: flex; gap: 16px">
+<div style="flex: 1; display: flex; flex-direction: column; gap: 6px"><label for="f-dir" style="font-size: 12px; font-weight: 500; color: #8d94a0">Répertoire de travail</label><input id="f-dir" value="~" style="background: #111317; border: 1px solid #2d323a; border-radius: 8px; padding: 9px 12px; color: #e6e8eb; font-family: 'JetBrains Mono', monospace; font-size: 14px"></div>
+<div style="flex: 1; display: flex; flex-direction: column; gap: 6px"><label for="f-shell" style="font-size: 12px; font-weight: 500; color: #8d94a0">Shell distant</label><input id="f-shell" value="bash" style="background: #111317; border: 1px solid #2d323a; border-radius: 8px; padding: 9px 12px; color: #e6e8eb; font-family: 'JetBrains Mono', monospace; font-size: 14px"></div>
+</div>
+<label style="display: flex; align-items: flex-start; gap: 10px; line-height: 1.45"><input type="checkbox" checked><span>Garder la session vivante sur le serveur<br><span style="font-size: 12px; color: #8d94a0">La discussion et les commandes en cours survivent à une coupure, à un refresh ou à la fermeture de l'application, et reprennent à la reconnexion.</span></span></label>
+<div style="display: flex; flex-direction: column; gap: 4px">
+<div style="font-size: 12px; font-weight: 500; color: #8d94a0; padding-bottom: 4px">Agents sur le serveur</div>
+<div style="display: flex; align-items: center; gap: 10px; padding: 8px 10px; background: #111317; border-radius: 8px"><span style="color: #5de0a1">✓</span><span style="font-family: 'JetBrains Mono', monospace; flex-grow: 1">claude</span><span style="font-size: 12px; color: #8d94a0">détecté</span></div>
+<div style="display: flex; align-items: center; gap: 10px; padding: 8px 10px; background: #111317; border-radius: 8px"><span style="color: #5de0a1">✓</span><span style="font-family: 'JetBrains Mono', monospace; flex-grow: 1">codex</span><span style="font-size: 12px; color: #8d94a0">détecté</span></div>
+<div style="display: flex; align-items: center; gap: 10px; padding: 8px 10px; background: #111317; border-radius: 8px"><span style="color: #5b616c">–</span><span style="font-family: 'JetBrains Mono', monospace; flex-grow: 1; color: #8d94a0">cursor</span><span style="font-size: 12px; color: #8d94a0">non détecté</span></div>
+</div>
+</section>
+
+<section style="border: 1px solid #23272e; border-radius: 14px; background: #0e1013; padding: 20px 22px; display: flex; flex-direction: column; gap: 14px">
+<div style="font-weight: 600">Permissions</div>
+<div style="display: flex; flex-direction: column; gap: 6px"><label for="f-mode" style="font-size: 12px; font-weight: 500; color: #8d94a0">Mode d'exécution par défaut</label><input id="f-mode" value="Demander avant d'exécuter" style="background: #111317; border: 1px solid #2d323a; border-radius: 8px; padding: 9px 12px; color: #e6e8eb; font-family: inherit; font-size: 14px; max-width: 320px"></div>
+<label style="display: flex; align-items: flex-start; gap: 10px; line-height: 1.45"><input type="checkbox" checked><span>Toujours confirmer les commandes sudo et destructives<br><span style="font-size: 12px; color: #8d94a0">Même en mode automatique. Une carte de confirmation s'affiche dans la discussion.</span></span></label>
+<div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap"><span style="font-size: 12px; font-weight: 500; color: #8d94a0; margin-right: 4px">Dossiers autorisés</span>
+<span style="font-family: 'JetBrains Mono', monospace; font-size: 12px; background: #16191e; border-radius: 6px; padding: 4px 9px">~</span>
+<span style="font-family: 'JetBrains Mono', monospace; font-size: 12px; background: #16191e; border-radius: 6px; padding: 4px 9px">/srv</span>
+<span style="font-size: 12px; color: #8d94a0; border: 1px dashed #2d323a; border-radius: 6px; padding: 3px 9px">+ Ajouter</span></div>
+</section>
+
+<section style="border: 1px solid #3a2023; border-radius: 14px; padding: 16px 22px; display: flex; align-items: center; gap: 16px">
+<div style="flex-grow: 1"><div style="font-weight: 500">Supprimer ce serveur</div><div style="margin-top: 3px; font-size: 13px; color: #8d94a0">Retire le serveur d'AID. Les fichiers distants ne sont pas touchés.</div></div>
+<button style="background: transparent; color: #f26d6d; border: 1px solid #5a2a2d; border-radius: 8px; padding: 8px 14px; font-size: 13px">Supprimer</button>
+</section>
+</div>
+
+<!-- Test de connexion -->
+<aside style="width: 340px; flex-shrink: 0; display: flex; flex-direction: column; gap: 18px">
+<section style="border: 1px solid #23272e; border-radius: 14px; background: #0e1013; padding: 18px 20px; display: flex; flex-direction: column; gap: 14px">
+<div style="display: flex; align-items: center; gap: 10px"><span style="font-weight: 600; flex-grow: 1">Test de connexion</span><button style="background: #16191e; color: #e6e8eb; border: 1px solid #23272e; border-radius: 8px; padding: 7px 12px; font-size: 13px">Tester</button></div>
+<div style="display: flex; flex-direction: column; gap: 10px; font-size: 13px">
+<div style="display: flex; gap: 10px"><span style="color: #5de0a1">✓</span><span style="flex-grow: 1">Commande <span style="font-family: 'JetBrains Mono', monospace">vps</span> trouvée</span></div>
+<div style="display: flex; gap: 10px"><span style="color: #5de0a1">✓</span><span style="flex-grow: 1">Shell distant ouvert</span><span style="color: #8d94a0">412 ms</span></div>
+<div style="display: flex; gap: 10px"><span style="color: #5de0a1">✓</span><span style="flex-grow: 1">Répertoire de travail accessible</span></div>
+<div style="display: flex; gap: 10px"><span style="color: #5de0a1">✓</span><span style="flex-grow: 1">Agents détectés : claude, codex</span></div>
+<div style="display: flex; gap: 10px"><span style="color: #5de0a1">✓</span><span style="flex-grow: 1">Session persistante disponible</span></div>
+</div>
+<div style="border-top: 1px solid #23272e; padding-top: 12px; display: flex; align-items: center; gap: 8px; color: #5de0a1; font-weight: 500"><span style="width: 8px; height: 8px; border-radius: 50%; background: #5de0a1"></span>Connecté</div>
+</section>
+
+<section style="border: 1px solid #23272e; border-radius: 14px; background: #0e1013; padding: 18px 20px; display: flex; flex-direction: column; gap: 10px">
+<div style="font-weight: 600">Aperçu dans la barre gauche</div>
+<div style="display: flex; align-items: center; gap: 10px; height: 34px; padding: 0 10px 0 12px; border-radius: 8px; background: #1f252d">
+<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#5de0a1" stroke-width="2" aria-hidden="true"><rect x="3" y="4" width="18" height="7" rx="2"/><rect x="3" y="13" width="18" height="7" rx="2"/><path d="M7 7.5h.01M7 16.5h.01"/></svg>
+<span style="flex-grow: 1">vps-ovh</span><span style="font-size: 12px; color: #8d94a0">12 ms</span></div>
+<div style="font-size: 12px; color: #8d94a0; line-height: 1.5">Le point devient gris quand le serveur est injoignable et ambre pendant une reconnexion.</div>
+</section>
+</aside>
+</div>
+</main>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

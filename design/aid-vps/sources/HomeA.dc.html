@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>AID — accueil A</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+body{margin:0;background:#0b0c0e}
+button{font-family:inherit;cursor:pointer}
+</style>
+</helmet>
+<div style="width: 1440px; height: 900px; box-sizing: border-box; display: flex; flex-direction: column; overflow: hidden; background: #0b0c0e; color: #e6e8eb; font-family: Inter, system-ui, sans-serif; font-size: 14px">
+
+<div style="height: 56px; flex-shrink: 0; box-sizing: border-box; display: flex; align-items: center; gap: 28px; padding: 0 20px; border-bottom: 1px solid #23272e">
+<div style="font-weight: 600; font-size: 20px; letter-spacing: 0.5px"><span style="color: #5de0a1">›:</span>AID</div>
+<nav style="display: flex; gap: 22px; color: #8d94a0"><span style="color: #e6e8eb">Accueil</span><span>Boîte de réception</span><span>Consignes</span><span>Serveurs</span><span>Réglages</span></nav>
+<div style="flex-grow: 1"></div>
+<div style="display: flex; align-items: center; gap: 8px; font-size: 12px; color: #8d94a0"><span style="width: 8px; height: 8px; border-radius: 50%; background: #5de0a1"></span>daemon local</div>
+<div style="border: 1px solid #23272e; border-radius: 8px; padding: 8px 12px; width: 220px; font-size: 13px; color: #8d94a0; box-sizing: border-box">Rechercher…  <span style="float: right; font-family: 'JetBrains Mono', monospace; font-size: 11px">⌘K</span></div>
+<button style="background: #5de0a1; color: #06251a; border: 0; border-radius: 8px; padding: 9px 14px; font-weight: 600; font-size: 13px">Nouveau sujet</button>
+</div>
+
+<div style="flex-grow: 1; min-height: 0; display: flex">
+<div style="width: 280px; flex-shrink: 0; height: 844px; border-right: 1px solid #23272e; overflow: hidden"><dc-import name="Nav" active="all" hint-size="280px,844px"></dc-import></div>
+<div style="flex-grow: 1; min-width: 0; min-height: 0; display: flex; gap: 32px; padding: 28px 32px">
+
+<!-- Colonne principale -->
+<div style="flex-grow: 1; min-width: 0; display: flex; flex-direction: column; gap: 22px">
+<div>
+<div style="font-size: 13px; color: #8d94a0">Lundi 26 octobre</div>
+<h1 style="margin: 4px 0 0; font-size: 26px; font-weight: 600">1 chose attend ta réponse</h1>
+</div>
+
+<!-- À traiter -->
+<div style="border: 1px solid #5a4514; background: #1a150a; border-radius: 12px; padding: 16px 18px; display: flex; align-items: center; gap: 16px">
+<span style="width: 10px; height: 10px; border-radius: 50%; background: #f2b84b; flex-shrink: 0"></span>
+<div style="flex-grow: 1; min-width: 0">
+<div style="font-weight: 500">Sujet swairm/capacitor-socle garé (plan v1)</div>
+<div style="font-size: 12px; color: #a99a73; margin-top: 3px; font-family: 'JetBrains Mono', monospace">orgasso · feat/restart-dev · décision #1 · il y a 18 min</div>
+</div>
+<button style="background: #5de0a1; color: #06251a; border: 0; border-radius: 8px; padding: 8px 12px; font-weight: 600; font-size: 13px">Relancer le plan</button>
+<button style="background: #16191e; color: #e6e8eb; border: 1px solid #23272e; border-radius: 8px; padding: 8px 12px; font-size: 13px">Ouvrir le sujet</button>
+</div>
+
+<!-- Table des sujets -->
+<div style="display: flex; flex-direction: column; min-height: 0; flex-grow: 1">
+<div style="display: flex; align-items: center; gap: 8px; padding-bottom: 12px">
+<span style="font-weight: 600; margin-right: 8px">Tous les sujets <span style="color: #8d94a0; font-weight: 400">8</span></span>
+<span style="flex-grow: 1"></span>
+<span style="display: flex; align-items: center; gap: 8px; border: 1px solid #23272e; border-radius: 8px; padding: 6px 11px; width: 220px; box-sizing: border-box; font-size: 12px; color: #8d94a0">Filtrer les sujets…</span>
+<span style="border: 1px solid #23272e; border-radius: 8px; padding: 6px 11px; font-size: 12px; color: #c4c9d2">Tri : activité récente ▾</span>
+</div>
+<div style="border: 1px solid #23272e; border-radius: 12px; overflow: hidden; background: #0e1013">
+<div style="display: flex; gap: 12px; padding: 10px 16px; font-size: 11px; font-weight: 600; letter-spacing: 1px; text-transform: uppercase; color: #8d94a0; border-bottom: 1px solid #23272e">
+<span style="width: 250px">Sujet</span><span style="width: 100px">Projet</span><span style="width: 130px">Agent</span><span style="width: 110px"></span><span style="flex-grow: 1; text-align: right">Activité</span>
+</div>
+<sc-for list="{{rows}}" as="r" hint-placeholder-count="8">
+<div style="display: flex; align-items: center; gap: 12px; padding: 0 16px; height: 54px; box-sizing: border-box; border-bottom: 1px solid #181b21">
+<div style="width: 250px; display: flex; align-items: center; gap: 12px; min-width: 0">
+<span style="width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; background: {{r.dot}}"></span>
+<div style="min-width: 0">
+<div style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap">{{r.branch}}</div>
+<div style="font-size: 12px; color: #8d94a0; font-family: 'JetBrains Mono', monospace">{{r.step}}</div>
+</div>
+</div>
+<span style="width: 100px; color: #c4c9d2">{{r.project}}</span>
+<span style="width: 130px; color: {{r.agentColor}}; font-size: 13px">{{r.agent}}</span>
+<span style="flex-grow: 1; text-align: right; font-size: 12px; color: #8d94a0">{{r.when}}</span>
+<span style="width: 110px; text-align: right"><button style="background: {{r.btnBg}}; color: {{r.btnColor}}; border: {{r.btnBorder}}; border-radius: 8px; padding: 6px 11px; font-size: 12px; font-weight: 600">{{r.cta}}</button></span>
+</div>
+</sc-for>
+</div>
+</div>
+</div>
+
+<!-- Fil d'activité -->
+<aside style="width: 280px; flex-shrink: 0; display: flex; flex-direction: column; gap: 14px">
+<div style="border: 1px solid #23272e; border-radius: 12px; padding: 14px 16px; background: #0e1013; display: flex; flex-direction: column; gap: 10px; flex-grow: 1; min-height: 0">
+<div style="font-weight: 600">Activité récente</div>
+<sc-for list="{{feed}}" as="e" hint-placeholder-count="7">
+<div style="display: flex; gap: 10px; align-items: flex-start">
+<span style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #8d94a0; padding-top: 2px; width: 40px">{{e.time}}</span>
+<div style="min-width: 0">
+<div style="font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #e6e8eb">{{e.ev}}</div>
+<div style="font-size: 12px; color: #8d94a0">{{e.where}}</div>
+</div>
+</div>
+</sc-for>
+</div>
+<div style="border: 1px solid #23272e; border-radius: 12px; padding: 14px 16px; background: #0e1013; display: flex; flex-direction: column; gap: 8px; font-size: 13px">
+<div style="display: flex; justify-content: space-between"><span style="color: #8d94a0">Daemon local</span><span style="color: #5de0a1">en ligne</span></div>
+<div style="display: flex; justify-content: space-between"><span style="color: #8d94a0">Mesh</span><span>hors ligne depuis 22 h</span></div>
+</div>
+</aside>
+</div>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const g = '#5b616c', b = '#6ea8ff', a = '#f2b84b', m = '#5de0a1';
+    const row = (branch, step, project, agent, index, when, dot, agentColor) => ({ branch, step, project, agent, index, when, dot, agentColor: agentColor || '#8d94a0', cta: agent === 'aucun agent' ? 'Lancer' : 'Reprendre', btnBg: '#16191e', btnColor: '#e6e8eb', btnBorder: '1px solid #23272e' });
+    const rows = [
+      Object.assign(row('feat/restart-dev', 'restart-dev', 'orgasso', 'swairm-cell · libre', 'indisponible', 'il y a 18 min', a, '#c4c9d2'), { cta: 'Trancher', btnBg: '#5de0a1', btnColor: '#06251a', btnBorder: '0' }),
+      row('feat/lieutenants', 'lieutenants', 'descent-wf', 'claude · libre', 'à jour', 'il y a 2 min', b, '#c4c9d2'),
+      row('swairm-cli-interact', 'move_to_cli', 'swairm', 'claude · libre', 'à jour', 'il y a 58 min', g, '#c4c9d2'),
+      row('docs/cell-swairm-rewrap', 'remote-origin-missing', 'a-i-d', 'claude · libre', 'à jour', 'il y a 10 h', g, '#c4c9d2'),
+      row('refactor/minimal-examples', 'improve_skifer_supervisor', 'skifer', 'aucun agent', 'à jour', 'à l\'instant', g),
+      row('fix/update-demo', 'update_demo', 'demo-sts', 'aucun agent', 'indisponible', 'il y a 9 j', g),
+      row('feat/refacto', 'refacto', 'agent-kernel', 'aucun agent', 'indisponible', 'il y a 10 j', g),
+      row('feat/supports-pagination-formats', 'review_parent_mode', 'myskooli', 'claude · libre', 'à jour', 'il y a 10 j', g, '#c4c9d2')
+    ];
+    const feed = [
+      { time: '09:48', ev: 'lease_released', where: 'swairm-cell · orgasso' },
+      { time: '09:48', ev: 'lease_acquired', where: 'swairm-cell · orgasso' },
+      { time: '09:40', ev: 'lease_released', where: 'swairm-cell · orgasso' },
+      { time: '13:00', ev: 'decision_opened', where: 'swairm/capacitor-socle' },
+      { time: '13:00', ev: 'extraction', where: 'swairm/capacitor-socle' },
+      { time: '13:00', ev: 'branch_pushed', where: 'swairm/capacitor-socle' },
+      { time: '13:00', ev: 'branch_push_intent', where: 'swairm/capacitor-socle' }
+    ];
+    return { rows, feed };
+  }
+}
+</script>
+</body>
+</html>

@@ -40,6 +40,27 @@ interface PendingApproval {
   rawId: unknown;
 }
 
+/**
+ * Chantier 17 (R.5) : la commande d'une demande d'approbation. Observé (0.157.0, D77) : `command` est enveloppée
+ * (`/bin/zsh -lc '…'`), `commandActions[].command` porte la commande telle que l'agent l'a écrite. L'enveloppe
+ * ouverte rend ce qui s'exécute ; à défaut `command` telle quelle (le tri sait ouvrir un `sh -c`), et les actions
+ * de codex, résumé qui peut écarter des morceaux, en dernier (revue R.5).
+ */
+export function commandOf(
+  params: Record<string, unknown> | undefined,
+): { command: string } | undefined {
+  const raw = typeof params?.command === 'string' ? params.command : null;
+  const wrapped = raw && /^(?:\S*\/)?(?:ba|z|da|k)?sh -l?c '((?:[^']|'\\'')*)'$/s.exec(raw);
+  if (wrapped) return { command: wrapped[1]!.replace(/'\\''/g, "'") };
+  if (raw) return { command: raw };
+  const actions = Array.isArray(params?.commandActions) ? params.commandActions : [];
+  const parts = actions
+    .map((a) => (a as { command?: unknown } | null)?.command)
+    .filter((c): c is string => typeof c === 'string' && c.length > 0);
+  if (parts.length > 0) return { command: parts.join(' && ') };
+  return typeof params?.command === 'string' ? { command: params.command } : undefined;
+}
+
 function summarize(value: unknown): string {
   return typeof value === 'string' ? value.slice(0, 160) : JSON.stringify(value).slice(0, 160);
 }
@@ -145,7 +166,7 @@ export class CodexDriver implements ConversationDriver {
   start(): void {
     if (this.child) throw new Error('driver déjà démarré');
     const args = buildCodexArgs(this.opts);
-    const child = spawn(this.opts.bin, args, {
+    const child = (this.opts.spawnChild ?? spawn)(this.opts.bin, args, {
       cwd: this.opts.cwd,
       env: this.opts.env,
       stdio: ['pipe', 'pipe', 'pipe'],
@@ -396,6 +417,7 @@ export class CodexDriver implements ConversationDriver {
       kind: 'permission',
       question,
       options: APPROVAL_OPTIONS,
+      ...(method === 'item/commandExecution/requestApproval' && commandOf(params)),
     };
     this.emit({ type: 'request', request });
   }

@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { join } from 'node:path';
 import { afterEach, expect, test } from 'vitest';
-import { buildCodexArgs, CodexDriver } from '../src/daemon/conversation/codex.js';
+import { buildCodexArgs, CodexDriver, commandOf } from '../src/daemon/conversation/codex.js';
 import type { ConversationEvent } from '../src/daemon/conversation/driver.js';
 import { agentEnv } from '../src/daemon/pty/spawn.js';
 import type { AgentSettings } from '../src/shared/agentSettings.js';
@@ -362,4 +362,29 @@ test('catalogue (D71) : model/list après la poignée de main, modèles cachés 
   const { driver: d } = start({ sessionId: randomUUID() });
   await waitFor(() => (d.catalog?.() ?? []).length > 0, 5000, 'catalogue codex');
   expect(d.catalog()).toEqual([{ id: 'gpt-fake', label: 'GPT-FAKE', efforts: ['low', 'high'] }]);
+});
+
+test('commande d’une approbation (revue R.5) : enveloppe ouverte, sinon telle quelle, sinon les actions', () => {
+  expect(commandOf({ command: "/bin/zsh -lc 'rm -f x'" })).toEqual({ command: 'rm -f x' });
+  expect(commandOf({ command: "bash -c 'echo '\\''a'\\'''" })).toEqual({ command: "echo 'a'" });
+  // non enveloppée : la commande telle qu'elle s'exécute, les actions ne l'emportent pas
+  expect(commandOf({ command: 'rm -f x', commandActions: [{ command: 'ls' }] })).toEqual({
+    command: 'rm -f x',
+  });
+  // sans commande : les actions, jointes, celles sans texte écartées
+  expect(
+    commandOf({
+      commandActions: [
+        { command: 'cd a' },
+        null,
+        { command: '' },
+        { command: 3 },
+        { command: 'rm b' },
+      ],
+    }),
+  ).toEqual({ command: 'cd a && rm b' });
+  // commande vide sans action : rendue telle quelle ; rien du tout : aucune commande
+  expect(commandOf({ command: '', commandActions: 'pas une liste' })).toEqual({ command: '' });
+  expect(commandOf({ commandActions: [] })).toBeUndefined();
+  expect(commandOf(undefined)).toBeUndefined();
 });

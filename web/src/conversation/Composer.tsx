@@ -3,6 +3,7 @@ import type { AgentSettings } from '../../../src/shared/agentSettings.js';
 import type { AgentStatus } from '../../../src/shared/model.js';
 import { useAid } from '../data/useAidState.js';
 import { ComposerReglages } from './ComposerReglages.js';
+import { useAgentRoutes } from './routes.js';
 
 const message = (err: unknown) => (err instanceof Error ? err.message : String(err));
 
@@ -33,6 +34,9 @@ export function Composer({
   dataNode: string;
 }) {
   const { call } = useAid();
+  const { api, distant } = useAgentRoutes();
+  // R.6 (§11.3) : serveur injoignable, rien ne part ; le bandeau de l'écran Discussion dit pourquoi
+  const ferme = distant?.injoignable === true;
   const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);
   const [arretBusy, setArretBusy] = useState(false);
@@ -42,7 +46,8 @@ export function Composer({
   const [pieces, setPieces] = useState<File[]>([]);
   const fichierRef = useRef<HTMLInputElement>(null);
   // pièces jointes : agents `stream` seulement (D70), les mêmes qui ont des réglages
-  const joindre = settings !== undefined;
+  // R.6 : pas sur un serveur distant, une pièce jointe est un fichier du daemon (D70)
+  const joindre = settings !== undefined && !distant;
 
   const needsInput = status === 'needs_input';
   const working = status === 'working';
@@ -62,7 +67,7 @@ export function Composer({
       );
       await call(
         'POST',
-        `/api/agents/${agentId}/input`,
+        `${api}/${agentId}/input`,
         attachments.length > 0 ? { text, attachments } : { text },
       );
       setText('');
@@ -79,7 +84,7 @@ export function Composer({
     setArretBusy(true);
     setErreur(null);
     try {
-      await call('POST', `/api/agents/${agentId}/interrupt`);
+      await call('POST', `${api}/${agentId}/interrupt`);
     } catch (err) {
       setErreur(message(err));
     } finally {
@@ -162,10 +167,10 @@ export function Composer({
         className="composer-champ"
         data-node={`${dataNode}.champ`}
         aria-label={`Message à ${kind}`}
-        placeholder={`Écris à ${kind}…`}
+        placeholder={distant ? `Écris à ${kind} sur ${distant.serveur}…` : `Écris à ${kind}…`}
         rows={2}
         maxLength={4000}
-        disabled={needsInput}
+        disabled={needsInput || ferme}
         value={text}
         onChange={(e) => {
           setText(e.target.value);
@@ -245,7 +250,7 @@ export function Composer({
           data-node={`${dataNode}.envoyer`}
           type="button"
           aria-label="Envoyer"
-          disabled={(!text.trim() && pieces.length === 0) || needsInput || busy}
+          disabled={(!text.trim() && pieces.length === 0) || needsInput || busy || ferme}
           onClick={() => void envoyer()}
         >
           ↑

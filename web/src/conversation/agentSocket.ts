@@ -23,6 +23,8 @@ export interface AgentSocketOptions {
   socketFactory?: (url: string) => WebSocket;
   origin?: { protocol: string; host: string };
   backoffMs?: number[];
+  /** Chantier 17 (R.6) : `/ws/server-agent` pour un agent distant ; défaut `/ws/agent`. */
+  path?: string;
 }
 
 // Canal lecture seule d'un agent conversationnel (D65) : historique puis direct, reconnexion par `after`.
@@ -45,7 +47,7 @@ export class AgentSocket {
   private connect(): void {
     const origin = this.o.origin ?? window.location;
     const proto = origin.protocol === 'https:' ? 'wss:' : 'ws:';
-    const url = `${proto}//${origin.host}/ws/agent/${encodeURIComponent(this.agentId)}?after=${this.lastSeq}`;
+    const url = `${proto}//${origin.host}${this.o.path ?? '/ws/agent'}/${encodeURIComponent(this.agentId)}?after=${this.lastSeq}`;
     const socket = this.o.socketFactory ? this.o.socketFactory(url) : new WebSocket(url);
     this.socket = socket;
     socket.onopen = () => {
@@ -101,4 +103,20 @@ export class AgentSocket {
     if (this.timer) clearTimeout(this.timer);
     this.socket?.close();
   }
+}
+
+const parChemin = new Map<string, typeof AgentSocket>();
+
+/** Chantier 17 (R.6) : le même canal sur un autre chemin (`/ws/server-agent`), une classe par chemin. */
+export function socketSur(path: string): typeof AgentSocket {
+  let C = parChemin.get(path);
+  if (!C) {
+    C = class extends AgentSocket {
+      constructor(agentId: string, h: AgentSocketHandlers, o: AgentSocketOptions = {}) {
+        super(agentId, h, { ...o, path });
+      }
+    };
+    parChemin.set(path, C);
+  }
+  return C;
 }
