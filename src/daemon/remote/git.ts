@@ -36,6 +36,8 @@ cd "$r" 2>/dev/null || { printf 'illisible\\000'; exit 0; }
 printf 'ok\\000%s\\000%s\\000' "$r" "$b"
 command -v git >/dev/null 2>&1 || { printf 'nogit\\000'; exit 0; }
 unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_OBJECT_DIRECTORY GIT_ALTERNATE_OBJECT_DIRECTORIES GIT_COMMON_DIR GIT_NAMESPACE
+# traces et réglages du profil : une trace HTTP porte l'en-tête d'authentification jusqu'au message (review complète)
+unset GIT_TRACE GIT_TRACE2 GIT_TRACE2_EVENT GIT_TRACE2_PERF GIT_TRACE_CURL GIT_TRACE_PACKET GIT_TRACE_PACK_ACCESS GIT_TRACE_PERFORMANCE GIT_TRACE_SETUP GIT_TRACE_SHALLOW GIT_CURL_VERBOSE GIT_CONFIG_PARAMETERS GIT_CONFIG_COUNT
 export GIT_OPTIONAL_LOCKS=0 GIT_TERMINAL_PROMPT=0 GIT_PAGER=cat PAGER=cat GIT_EDITOR=true
 [ -z "$b" ] || { GIT_CEILING_DIRECTORIES=$(dirname "$b"); export GIT_CEILING_DIRECTORIES; }
 to=; tn=; command -v timeout >/dev/null 2>&1 && { to="timeout ${GIT_TIMEOUT_S}"; tn="timeout ${NET_TIMEOUT_S}"; }

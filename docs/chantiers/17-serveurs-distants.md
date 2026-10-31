@@ -827,3 +827,7 @@ Reprises du brief §11.6, plus celles nées de l'état des lieux :
   donne rien de plus que ce que l'agent peut déjà faire sur ce serveur. Gate : vert (1219) au second passage —
   `test/web/accueil.test.tsx` (« une ligne par sujet », ordre des lignes) a échoué une fois puis passé, seul
   et en gate complet, sans rapport avec le diff (fichier intouché par la branche) : instable, signalé.
+- **Correctif RC.5, traces git du profil** (`remote/git.ts`) : `GIT_TRACE*`, `GIT_CURL_VERBOSE`,
+  `GIT_CONFIG_PARAMETERS` / `GIT_CONFIG_COUNT` exportés par le profil distant sont retirés comme les autres
+  `GIT_*` : une trace HTTP porte l'en-tête d'authentification jusqu'au message d'erreur. Test : un hook qui
+  relève les variables vues. Mutation vérifiée. Gate : vert (1220).
