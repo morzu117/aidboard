@@ -91,6 +91,13 @@ export interface RemoteAgentManagerDeps {
 }
 
 const PREFIX = 'aid-';
+/**
+ * Décision opérateur du 2026-10-31 (review complète) : claude en `auto` ne soumet que ce que ses règles `ask`
+ * rattrapent — `/bin/rm`, `git -C x push`, `find -delete` passeraient sans carte. Sous confirmation, pas d'`auto`
+ * pour claude ; codex, lui, soumet tout au tri du daemon (`untrusted`).
+ */
+const claudeSansAuto = (kind: RemoteKind, server: Pick<Server, 'confirmDestructive'>) =>
+  kind === 'claude' && server.confirmDestructive;
 const relayOf = (row: Pick<AgentRow, 'id' | 'tmux_session'>) =>
   row.tmux_session?.startsWith(PREFIX) ? row.tmux_session.slice(PREFIX.length) : row.id;
 
@@ -440,9 +447,12 @@ export class RemoteAgentManager {
     // le catalogue de cet agent d'abord : deux serveurs peuvent avoir deux versions de codex (revue R.6)
     const propre = this.live.get(agentId)?.driver.catalog() ?? [];
     const options = agentOptions(row.kind, propre.length ? propre : this.codexCatalog);
+    const sansAuto = claudeSansAuto(row.kind, this.serverOf(row));
     return {
       ...options,
-      modes: options.modes.filter((m) => SERVER_PERMISSION_MODES.includes(m.id)),
+      modes: options.modes.filter(
+        (m) => SERVER_PERMISSION_MODES.includes(m.id) && !(sansAuto && m.id === 'auto'),
+      ),
     };
   }
 
@@ -605,6 +615,14 @@ export class RemoteAgentManager {
       : null;
     // codex en auto passerait en `never` : plus rien ne serait demandé, destructif compris
     if (confirm?.autoApprove) settings.mode = 'default';
+    // claude en `auto` (mode du serveur, ou lancé avant que la confirmation soit activée) : ramené à `default`
+    const ramene = claudeSansAuto(row.kind, server) && settings.mode === 'auto';
+    // le pilote part du mode du process (rattaché, il tourne en `auto`), puis reçoit `default` au démarrage
+    if (ramene) {
+      this.deps.db
+        .prepare('UPDATE server_agents SET permission_mode = ? WHERE id = ?')
+        .run('default', row.id);
+    }
     const confirmOpts = !confirm
       ? {}
       : row.kind === 'claude'
@@ -664,6 +682,8 @@ export class RemoteAgentManager {
       }
     });
     driver.start();
+    // rattaché à un process lancé en `auto` : le changement de mode lui est envoyé, il demandera tout
+    if (ramene) driver.configure({ ...settings, mode: 'default' });
     return live;
   }
 

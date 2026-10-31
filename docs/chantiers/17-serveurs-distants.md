@@ -855,3 +855,17 @@ Reprises du brief §11.6, plus celles nées de l'état des lieux :
   au lancement ; erreurs avalées sans journal ; plafond de 2000 entrées dans l'ordre du glob ; course
   `realpath` / lecture (même utilisateur, sans gain de privilège) ; extensions de données manquantes (`csv`,
   `bak`, `db`) pour les mots de secret.
+- **Décisions opérateur du 2026-10-31 (après la review complète)** : (1) masquage des secrets dans le texte libre
+  (fil de l'agent, commande d'une carte, règles, sortie du test) → **chantier séparé**, détecteur de contenu
+  côté daemon (clés privées, `user:mdp@`, préfixes de jetons connus) ; (2) supprimer un serveur dont l'arrêt
+  des agents n'est pas confirmé → **409, « supprimer quand même » explicite** ; (3) **pas d'`auto` pour
+  claude distant sous confirmation** ; (4) **« Toujours autoriser » porte le dossier de la discussion**.
+  Restent sans réponse, comportement actuel gardé : Synchroniser pendant que l'agent travaille,
+  `allowedDirs` par défaut, archivage sans arrêt, HEAD de `layoutGraph`.
+- **D.3, pas d'`auto` pour claude sous confirmation** (`remote/agents.ts`) : `auto` retiré des options de
+  claude quand le serveur confirme (le PATCH le refuse en 422, mode inconnu) ; un claude en `auto` (mode par
+  défaut du serveur, ou lancé avant l'activation de la confirmation et rattaché au redémarrage) est ramené à
+  `default` — en base, et sur le process vivant par `set_permission_mode` : il demande alors tout, le tri du
+  daemon fait les cartes. Codex garde son `auto` (tout passe au tri, `untrusted`). Tests adaptés (claude
+  sous confirmation : une carte ordinaire pour le non destructif ; modes proposés) et ajoutés (refus,
+  sans confirmation, codex, process rattaché). Mutations vérifiées. Gate : vert (1222).

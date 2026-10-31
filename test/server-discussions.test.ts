@@ -135,6 +135,13 @@ const ligne = (m: Monte, agentId: string) =>
     | { status: string; out_offset: number; tmux_session: string; session_id: string | null }
     | undefined;
 
+/** Mode d'exécution écrit sur l'agent (décision opérateur du 2026-10-31 : pas d'`auto` pour claude sous confirmation). */
+const modeDe = (m: Monte, agentId: string) =>
+  (
+    m.t.db.prepare('SELECT permission_mode FROM server_agents WHERE id = ?').get(agentId) as
+      { permission_mode: string } | undefined
+  )?.permission_mode;
+
 function fil(m: Monte, agentId: string): { kind: string; role?: string; text?: string }[] {
   return (
     m.t.db
@@ -560,15 +567,19 @@ const evenements = (m: Monte, agentId: string, type: string) =>
 
 const CONFIRMATION = ['Autoriser', 'Refuser', 'Toujours autoriser sur ce serveur'];
 
-test('claude en auto : le destructif demande confirmation, « Toujours autoriser » écrit une règle du serveur', async () => {
+test('claude sous confirmation : le destructif demande confirmation, « Toujours autoriser » écrit une règle du serveur', async () => {
   const m = await daemon(serveur());
   const s = await creerServeur(m);
   await reglerServeur(m, s.id, { permissionMode: 'auto' });
   const a = (await creerDiscussion(m, s.id)).agents[0]!;
+  // décision opérateur du 2026-10-31 : sous confirmation, claude n'est jamais en `auto` — ramené à `default`
+  expect(modeDe(m, a.id)).toBe('default');
 
-  // non destructif : l'agent en auto ne demande rien
-  await envoyer(m, a.id, 'commande: ls -la');
-  await waitFor(() => assistant(m, a.id, 'exécutée sans demande: ls -la') === 1, 15_000, 'ls');
+  // non destructif : une carte ordinaire, pas une confirmation
+  const v0 = await carte(m, a.id, 'ls -la');
+  expect(v0.pending!.confirm).toBeUndefined();
+  await repondre(m, v0, 'yes');
+  await waitFor(() => assistant(m, a.id, 'exécutée: ls -la') === 1, 15_000, 'ls');
   await waitFor(() => ligne(m, a.id)?.status === 'idle', 15_000, 'idle');
 
   // commande composée : la règle `ask` passée en `--settings` la rattrape, la carte porte la commande
@@ -595,11 +606,12 @@ test('claude en auto : le destructif demande confirmation, « Toujours autoriser
   await waitFor(() => assistant(m, a.id, 'exécutée: sudo -n true') === 2, 15_000, 'par règle');
   await waitFor(() => ligne(m, a.id)?.status === 'idle', 15_000, 'idle');
   expect(evenements(m, a.id, 'request_answered').map((e) => [e.answer, e.auto])).toEqual([
+    ['yes', undefined],
     ['no', undefined],
     ['always', undefined],
     ['yes', true],
   ]);
-  expect(evenements(m, a.id, 'request')).toHaveLength(3);
+  expect(evenements(m, a.id, 'request')).toHaveLength(4);
 
   // la règle vaut pour la commande exacte, pas pour une voisine
   const v3 = await carte(m, a.id, 'sudo true');
@@ -738,7 +750,8 @@ test('options et réglages : modes du serveur, modèle et effort validés, écri
     modes: { id: string }[];
     models: { id: string }[];
   }>();
-  expect(options.modes.map((x) => x.id)).toEqual(['default', 'acceptEdits', 'auto', 'plan']);
+  // sous confirmation (défaut du serveur), claude n'a pas d'`auto` (décision opérateur du 2026-10-31)
+  expect(options.modes.map((x) => x.id)).toEqual(['default', 'acceptEdits', 'plan']);
   expect(options.models.map((x) => x.id)).toContain('opus');
 
   const r = await m.req('PATCH', `/api/server-agents/${a.id}/settings`, {
@@ -822,3 +835,49 @@ test('réglages d’un codex en veille : catalogue inconnu, seul le champ envoy�
     (await m2.req('PATCH', `/api/server-agents/${a.id}/settings`, { model: 'gpt-y' })).statusCode,
   ).toBe(422);
 });
+
+test('claude sous confirmation : `auto` ni proposé ni accepté ; sans confirmation, proposé (décision du 2026-10-31)', async () => {
+  const m = await daemon(serveur());
+  const s = await creerServeur(m);
+  const a = (await creerDiscussion(m, s.id)).agents[0]!;
+  const r = await m.req('PATCH', `/api/server-agents/${a.id}/settings`, { mode: 'auto' });
+  expect(r.statusCode).toBe(422);
+  expect(modeDe(m, a.id)).toBe('default');
+
+  await reglerServeur(m, s.id, { permissionMode: 'auto', confirmDestructive: false });
+  const b = (await creerDiscussion(m, s.id)).agents[0]!;
+  expect(modeDe(m, b.id)).toBe('auto');
+  const modes = (await m.req('GET', `/api/server-agents/${b.id}/options`)).json<{
+    modes: { id: string }[];
+  }>().modes;
+  expect(modes.map((x) => x.id)).toContain('auto');
+
+  // codex sous confirmation garde son `auto` : le daemon trie tout ce qu'il soumet (`untrusted`)
+  await reglerServeur(m, s.id, { confirmDestructive: true });
+  const c = (await creerDiscussion(m, s.id, 'codex')).agents[0]!;
+  expect(modeDe(m, c.id)).toBe('auto');
+});
+
+test('claude lancé en `auto` puis confirmation activée : ramené à `default` à sa relance', async () => {
+  const remote = serveur();
+  const m1 = await daemon(remote);
+  const s = await creerServeur(m1);
+  await reglerServeur(m1, s.id, { permissionMode: 'auto', confirmDestructive: false });
+  const a = (await creerDiscussion(m1, s.id)).agents[0]!;
+  expect(modeDe(m1, a.id)).toBe('auto');
+  await envoyer(m1, a.id, 'commande: rm -f avant');
+  await waitFor(
+    () => assistant(m1, a.id, 'exécutée sans demande: rm -f avant') === 1,
+    15_000,
+    'auto',
+  );
+  await waitFor(() => ligne(m1, a.id)?.status === 'idle', 15_000, 'idle');
+  await reglerServeur(m1, s.id, { confirmDestructive: true });
+  await m1.t.d.stop();
+
+  const m2 = await daemon(remote, m1.t.home);
+  await waitFor(() => modeDe(m2, a.id) === 'default', 15_000, 'mode ramené');
+  const v = await carte(m2, a.id, 'rm -f x');
+  expect(v.pending!.confirm).toEqual({ server: 'vps-test' });
+  await repondre(m2, v, 'no');
+}, 40_000);
