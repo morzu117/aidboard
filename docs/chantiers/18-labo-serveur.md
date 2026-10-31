@@ -81,3 +81,11 @@ Un point = un commit. Après chaque point : `npm run gate` en entier et `npm run
   chantier 17). Mutation vérifiée : une règle qui ignore le dossier fait échouer le premier scénario.
   Helpers du L.3 sortis dans `test/labo/daemon-labo.ts` (`monterBanc`) : lignes du L.3 déplacées,
   déclarées.
+- **L.5 Panneau Fichiers et Git** : vrai dépôt dans le conteneur (`~/proj`, origin nu `~/origin.git`),
+  lu par le vrai ssh et le vrai git. Liste (badges `M` et `?`, secrets `hidden`), aperçu, `.env` et
+  `id_ed25519` refusés en 403 sans que leur contenu sorte, `/etc` hors des dossiers autorisés ; état
+  (branche, upstream, HEAD), journal, fetch qui fait apparaître le retard sans toucher à l'arbre ;
+  l'index du dépôt n'est pas réécrit ; serveur coupé → 502. Constat : le compteur `changes` inclut les
+  secrets non suivis (4 et non 2) — un nombre, ni nom ni contenu ; attente du test corrigée, pas le
+  code. Mutation vérifiée : sans les motifs `.env*` et `*.env` (les deux : l'un couvre l'autre), le
+  `.env` n'est plus masqué et le scénario échoue.
