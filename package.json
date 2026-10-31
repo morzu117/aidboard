@@ -19,6 +19,7 @@
     "e2e": "playwright test",
     "gate": "npm run typecheck && npm run lint && npm run build && npm run test",
     "gate:e2e": "npm run build && AID_PACK_TEST=1 vitest run test/pack.test.ts test/package-server.test.ts && npm run e2e",
+    "gate:labo": "vitest run --config vitest.labo.config.ts",
     "package:server": "scripts/package-server.sh",
     "dev:web": "vite web",
     "dev:daemon": "tsup && node --enable-source-maps dist/cli/aid.js daemon --foreground",
