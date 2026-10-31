@@ -89,3 +89,6 @@ Un point = un commit. Après chaque point : `npm run gate` en entier et `npm run
   secrets non suivis (4 et non 2) — un nombre, ni nom ni contenu ; attente du test corrigée, pas le
   code. Mutation vérifiée : sans les motifs `.env*` et `*.env` (les deux : l'un couvre l'autre), le
   `.env` n'est plus masqué et le scénario échoue.
+- **L.6 CI** : stabilité vérifiée avant (3 runs locaux de suite, 16/16 chaque fois, aucun conteneur
+  laissé). Job `labo serveur` ajouté à `ci.yml` (Ubuntu 22.04, Node 22, `npm run gate:labo`), en
+  insertion à la fin du fichier ; les jobs `gate` existants ne changent pas.
