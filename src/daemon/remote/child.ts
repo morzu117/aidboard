@@ -103,6 +103,12 @@ export class RemoteChild extends EventEmitter {
     return this.attach?.pid;
   }
 
+  /**
+   * Issue de l'arrêt demandé par le pilote : confirmé par le serveur, ou non (injoignable) ; `null` tant qu'aucun
+   * arrêt n'a été tenté (décision D.2 : une suppression ne se fait pas sur un arrêt non confirmé).
+   */
+  stoppedOnServer: boolean | null = null;
+
   kill(signal: NodeJS.Signals = 'SIGTERM'): boolean {
     void this.terminate(signal);
     return true;
@@ -303,6 +309,7 @@ export class RemoteChild extends EventEmitter {
     this.cleanup();
     // même sans lancement constaté : un `start` interrompu en vol a pu aboutir sur le serveur
     const r = await this.stopRemote().catch(() => null);
+    this.stoppedOnServer = r?.code === 0;
     // injoignable : l'arrêt est rendu au pilote, mais l'agent peut tourner encore — le message le dit
     if (r?.code !== 0)
       this.stderr.write(

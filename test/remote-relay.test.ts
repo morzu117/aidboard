@@ -370,3 +370,13 @@ test.skipIf(!tmux)('avec le vrai tmux : démarrage, écho, fin, environnement du
   expect(await alive(transport, 'sa_9')).toEqual({ state: 'vivant' });
   expect((await exec(transport, relayStop('sa_9'))).code).toBe(0);
 });
+
+test('stop sans relais déposé : rien n’a pu tourner, l’arrêt est acquis ; ailleurs, l’échec reste un échec (décision D.2)', async () => {
+  const { home, transport } = serveur();
+  expect(existsSync(join(home, '.aid-remote'))).toBe(false);
+  expect((await exec(transport, relayStop('sa_1'))).code).toBe(0);
+  // relais présent mais cassé : le code d'erreur remonte, l'arrêt n'est pas confirmé
+  mkdirSync(join(home, '.aid-remote'));
+  writeFileSync(join(home, '.aid-remote/aid-relay'), 'exit 3\n');
+  expect((await exec(transport, relayStop('sa_1'))).code).toBe(3);
+});

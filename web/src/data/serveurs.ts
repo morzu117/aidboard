@@ -1,7 +1,12 @@
 import { useEffect, useSyncExternalStore } from 'react';
 import type { Server, ServerStatus, ServerTest } from '../../../src/shared/model.js';
+import { AidApiError } from './api.js';
 import type { AidClient } from './client.js';
 import { useAidClient } from './useAidState.js';
+
+/** Décision D.2 : refus d'une suppression dont le serveur n'a pas confirmé l'arrêt des agents ; « quand même » possible. */
+export const arretNonConfirme = (err: unknown): boolean =>
+  err instanceof AidApiError && err.status === 409 && typeof err.body.unconfirmed === 'number';
 
 /** Relecture de la liste et des états : le daemon relance lui-même un contrôle au-delà de 60 s (S.3). */
 export const SERVEURS_RELECTURE_MS = 30_000;

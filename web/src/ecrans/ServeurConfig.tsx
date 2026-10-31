@@ -8,7 +8,7 @@ import type {
   ServerTest,
   ServerTestStep,
 } from '../../../src/shared/model.js';
-import { statutInconnu, useServeurs } from '../data/serveurs.js';
+import { arretNonConfirme, statutInconnu, useServeurs } from '../data/serveurs.js';
 import { useAid, useAidClient } from '../data/useAidState.js';
 import { Dialogue } from '../dialogues/Dialogue.js';
 import { Layout } from '../ui/Layout.js';
@@ -243,6 +243,8 @@ function Formulaire({
   const occupe = useRef(false);
   const [quitter, setQuitter] = useState(false);
   const [suppression, setSuppression] = useState(false);
+  // décision D.2 : refus d'un arrêt non confirmé, affiché dans le dialogue qui propose « quand même »
+  const [nonConfirme, setNonConfirme] = useState<string | null>(null);
   const [testLu, setTestLu] = useState<ServerTest | null>(null);
   const id = server?.id ?? null;
 
@@ -342,11 +344,15 @@ function Formulaire({
     occupe.current = true;
     setEnCours(true);
     try {
-      await call('DELETE', `/api/servers/${id}`);
+      await call('DELETE', `/api/servers/${id}${nonConfirme ? '?force=1' : ''}`);
       // quitter d'abord : retiré du store, le serveur rendrait « introuvable » un instant
       navigate('/serveurs');
       store.retirer(id);
     } catch (err) {
+      if (arretNonConfirme(err)) {
+        setNonConfirme(message(err));
+        return;
+      }
       setErreur(message(err));
       setSuppression(false);
     } finally {
@@ -771,7 +777,10 @@ function Formulaire({
                 type="button"
                 className="bouton bouton--danger"
                 data-node="serveur-config.supprimer"
-                onClick={() => setSuppression(true)}
+                onClick={() => {
+                  setNonConfirme(null);
+                  setSuppression(true);
+                }}
               >
                 Supprimer
               </button>
@@ -858,6 +867,21 @@ function Formulaire({
             A-I-D oublie ce serveur et ses discussions ; les agents qui y tournent sont arrêtés. Ses
             fichiers restent en place.
           </p>
+          {nonConfirme && (
+            <>
+              <p
+                className="message-erreur"
+                role="alert"
+                data-node="serveur-config.supprimer.erreur"
+              >
+                {nonConfirme}
+              </p>
+              <p className="texte-discret">
+                Supprimer quand même retire le serveur d’A-I-D ; ses agents seront à arrêter sur
+                place.
+              </p>
+            </>
+          )}
           <div className="dialogue-actions">
             <button
               className="bouton"
@@ -874,7 +898,7 @@ function Formulaire({
               disabled={enCours}
               onClick={() => void supprimer()}
             >
-              Supprimer
+              {nonConfirme ? 'Supprimer quand même' : 'Supprimer'}
             </button>
           </div>
         </Dialogue>

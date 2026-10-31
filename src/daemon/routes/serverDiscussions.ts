@@ -44,6 +44,9 @@ const SettingsBody = Type.Object(
   { additionalProperties: false },
 );
 
+/** `?force=1` : « supprimer quand même » malgré un arrêt non confirmé (décision D.2). */
+const forced = (query: unknown) => (query as { force?: string } | undefined)?.force === '1';
+
 /**
  * Chantier 17 (R.4) : discussions sur un serveur et pilotage de leurs agents, mêmes formes que `/api/agents/:id/…`.
  * Réservé à l'administrateur comme le reste des routes serveurs (D76) : un token de run n'atteint pas ces chemins.
@@ -60,7 +63,7 @@ export function registerServerDiscussionRoutes(
   app.addHook('preHandler', async (req) => {
     if (req.method !== 'DELETE' || req.routeOptions.url !== '/api/servers/:id') return;
     const { id } = req.params as { id: string };
-    if (getServer(db, id)) await manager.forgetServer(id);
+    if (getServer(db, id)) await manager.forgetServer(id, forced(req.query));
   });
   app.addHook('onResponse', async (req) => {
     if (req.method === 'DELETE' && req.routeOptions.url === '/api/servers/:id')
@@ -103,7 +106,7 @@ export function registerServerDiscussionRoutes(
 
   app.delete('/api/servers/:id/discussions/:discussionId', async (req, reply) => {
     const { id, discussionId } = req.params as { id: string; discussionId: string };
-    await manager.deleteDiscussion(found(id).id, discussionId);
+    await manager.deleteDiscussion(found(id).id, discussionId, forced(req.query));
     return reply.code(204).send();
   });
 
