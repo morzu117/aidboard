@@ -46,7 +46,9 @@ interface PendingApproval {
  * ouverte rend ce qui s'exécute ; à défaut `command` telle quelle (le tri sait ouvrir un `sh -c`), et les actions
  * de codex, résumé qui peut écarter des morceaux, en dernier (revue R.5).
  */
-function commandOf(params: Record<string, unknown> | undefined): { command: string } | undefined {
+export function commandOf(
+  params: Record<string, unknown> | undefined,
+): { command: string } | undefined {
   const raw = typeof params?.command === 'string' ? params.command : null;
   const wrapped = raw && /^(?:\S*\/)?(?:ba|z|da|k)?sh -l?c '((?:[^']|'\\'')*)'$/s.exec(raw);
   if (wrapped) return { command: wrapped[1]!.replace(/'\\''/g, "'") };

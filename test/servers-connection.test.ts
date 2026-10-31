@@ -424,3 +424,27 @@ test('réservé à l’administrateur : un token de run est refusé', async () =
   ] as const)
     expect((await t.d.app.inject({ method, url, headers })).statusCode, url).toBe(403);
 });
+
+test('mode commande, étape 1 : le préfixe local cherché sur le PATH, un nom du profil laissé à l’étape suivante', async () => {
+  t = await startTestDaemon();
+  const premier = async (body: Record<string, unknown>) => {
+    const s = await create({ name: `cmd-${Math.random().toString(36).slice(2, 8)}`, ...body });
+    const got = listen();
+    await req('POST', `/api/servers/${s.id}/test`);
+    return (await finished(got)).steps[0]!;
+  };
+  expect(
+    await premier({ mode: 'command', target: 'sh -c true', loadProfile: false }),
+  ).toMatchObject({ state: 'ok', detail: expect.stringMatching(/\/sh$/) });
+  // absent du PATH, sans profil : rien ne peut le définir, l'étape échoue en le citant
+  expect(
+    await premier({ mode: 'command', target: 'aid-absent-xyz vps', loadProfile: false }),
+  ).toMatchObject({
+    state: 'failed',
+    detail: "'aid-absent-xyz' introuvable dans le PATH du daemon",
+  });
+  // absent du PATH, profil chargé : peut-être une fonction ou un alias, l'étape passe en le disant
+  expect(
+    await premier({ mode: 'command', target: 'aid-absent-xyz vps', loadProfile: true }),
+  ).toMatchObject({ state: 'ok', detail: 'aid-absent-xyz (profil shell)' });
+});

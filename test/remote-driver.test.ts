@@ -313,6 +313,8 @@ test('arrêt pendant que le serveur est injoignable : le exit dit que l’agent 
   expect(r.events.find((e) => e.type === 'exit')).toMatchObject({
     message: expect.stringContaining('tourne peut-être encore'),
   });
+  // décision D.2 : l'arrêt n'est pas confirmé, une suppression le saura
+  expect(r.driver.remoteChild?.stoppedOnServer).toBe(false);
   delete transport.env!.FAKE_SSH_FAIL;
 });
 
@@ -342,4 +344,24 @@ test('demande répondue puis session disparue : rien à annuler', async () => {
   redemarrer(home, transport, 'sa_c10');
   await r.attendre(type('connection_resumed'), 'reprise');
   expect(r.compte(type('request_cancelled'))).toBe(0);
+});
+
+test('kill du process distant (délai du pilote) : arrêt sur le serveur, confirmé (décision D.2)', async () => {
+  const { transport } = serveur();
+  const r = distant(transport, 'sa_c11', 'claude');
+  r.driver.send('bonjour');
+  await r.attendre(type('turn_end'), 'premier tour');
+  const child = r.driver.remoteChild!;
+  expect(child.stoppedOnServer).toBeNull();
+  expect(child.kill('SIGKILL')).toBe(true);
+  // un second signal pendant l'arrêt ne relance rien
+  expect(child.kill()).toBe(true);
+  await r.attendre(type('exit'), 'fin');
+  expect(r.compte(type('exit'))).toBe(1);
+  expect(child.stoppedOnServer).toBe(true);
+  const alive = execFileSync(FAKE_SSH, ['vps', 'sh ~/.aid-remote/aid-relay alive sa_c11'], {
+    env: transport.env,
+    encoding: 'utf8',
+  });
+  expect(alive.trim()).toBe('inconnu');
 });
