@@ -905,3 +905,135 @@ test('relectures croisées d’un dossier : la réponse de la plus ancienne, arr
   expect(ligne('ancien.txt')).toBeNull();
   expect(ligne('src')).not.toBeNull();
 });
+
+test('arbre et aperçu : lien symbolique signalé, aperçu tronqué, aperçu en échec', async () => {
+  const fichier = (path: string, over: object) =>
+    json(200, {
+      serverId: 'srv_1',
+      path,
+      resolved: path.replace('~', '/home/deploy'),
+      size: 900_000,
+      binary: false,
+      truncated: true,
+      content: 'début',
+      readAt: READ_AT,
+      ...over,
+    });
+  ouvrir(
+    { open: true, tab: 'files' },
+    {
+      [`GET /api/servers/srv_1/fs?${p('~/app')}`]: json(
+        200,
+        dossier('~/app', [
+          entree({ name: 'courant', symlink: true }),
+          entree({ name: 'gros.log' }),
+          entree({ name: 'interdit' }),
+        ]),
+      ),
+      [`GET /api/servers/srv_1/file?${p('~/app/gros.log')}`]: fichier('~/app/gros.log', {}),
+      [`GET /api/servers/srv_1/file?${p('~/app/interdit')}`]: json(403, {
+        error: 'lecture refusée par le serveur (permissions)',
+      }),
+    },
+  );
+  await waitFor(() => expect(ligne('courant')).not.toBeNull());
+  expect(ligne('courant')!.title).toBe('courant (lien symbolique)');
+  expect(ligne('courant')!.textContent).toContain('↗');
+  expect(ligne('gros.log')!.textContent).not.toContain('↗');
+
+  fireEvent.click(ligne('gros.log')!);
+  await waitFor(() =>
+    expect(node('discussion.panneau.apercu.tronque')?.textContent).toBe(
+      'Aperçu tronqué (900000 octets au total).',
+    ),
+  );
+  expect(node('discussion.panneau.apercu.contenu')?.textContent).toBe('début');
+  fireEvent.click(node('discussion.panneau.apercu.retour')!);
+
+  fireEvent.click(ligne('interdit')!);
+  await waitFor(() =>
+    expect(screen.getByRole('alert').textContent).toBe(
+      'lecture refusée par le serveur (permissions)',
+    ),
+  );
+  expect(node('discussion.panneau.apercu.contenu')).toBeNull();
+});
+
+test('Git : position inconnue, un seul modifié, journal vide, aucun dépôt détecté', async () => {
+  ouvrir(
+    { open: true, tab: 'git' },
+    {
+      [LOG('~/app')]: json(
+        200,
+        journal({ repo: depot({ aheadBehind: null, changes: 1 }), commits: [] }),
+      ),
+    },
+  );
+  await waitFor(() =>
+    expect(node('discussion.panneau.git.position')?.textContent).toBe('position inconnue'),
+  );
+  expect(node('discussion.panneau.git.modifies')?.textContent).toBe('1 modifié');
+  expect(node('discussion.panneau.git.vide')?.textContent).toBe('Aucun commit dans ce dépôt.');
+  cleanup();
+
+  ouvrir(
+    { open: true, tab: 'git' },
+    {
+      [LOG('~/app')]: json(409, { error: 'pas un dépôt Git' }),
+      [`GET /api/servers/srv_1/git/status?${p('~/app')}`]: json(
+        200,
+        etatGit({ repo: null, repos: [] }),
+      ),
+    },
+  );
+  await waitFor(() =>
+    expect(screen.getByText('Aucun dépôt trouvé dans les dossiers autorisés.')).not.toBeNull(),
+  );
+  expect(nodes('discussion.panneau.git.depot')).toHaveLength(0);
+});
+
+test('Git : Échap ferme la carte de confirmation et le détail ; détail en échec ou hors de la branche', async () => {
+  const COMMIT = (hash: string) => `GET /api/servers/srv_1/git/commits/${hash}?${p('~/app')}`;
+  ouvrir(
+    { open: true, tab: 'git' },
+    {
+      [LOG('~/app')]: json(200, journal()),
+      [COMMIT(HEAD)]: json(404, { error: 'commit introuvable dans ce dépôt' }),
+      [COMMIT(BASE)]: json(200, {
+        hash: BASE,
+        parents: [],
+        author: 'Bob',
+        date: '2026-10-29T10:00:00.000Z',
+        message: 'Premier commit',
+        body: '',
+        refs: [],
+        inHead: false,
+        files: [{ path: 'logo.png', status: 'A', additions: null, deletions: null }],
+      }),
+    },
+  );
+  await waitFor(() => expect(node('discussion.panneau.git.pousser')).not.toBeNull());
+  fireEvent.click(node('discussion.panneau.git.pousser')!);
+  fireEvent.keyDown(node('discussion.panneau.git.confirmation')!, { key: 'Enter' });
+  expect(node('discussion.panneau.git.confirmation')).not.toBeNull();
+  fireEvent.keyDown(node('discussion.panneau.git.confirmation')!, { key: 'Escape' });
+  expect(node('discussion.panneau.git.confirmation')).toBeNull();
+
+  fireEvent.click(node(`discussion.panneau.git.commit-${HEAD}`)!);
+  await waitFor(() =>
+    expect(screen.getByRole('alert').textContent).toBe('commit introuvable dans ce dépôt'),
+  );
+  fireEvent.keyDown(node('discussion.panneau.git.detail')!, { key: 'Escape' });
+  expect(node('discussion.panneau.git.detail')).toBeNull();
+
+  fireEvent.click(node(`discussion.panneau.git.commit-${BASE}`)!);
+  await waitFor(() => expect(node('discussion.panneau.git.detail.fichier')).not.toBeNull());
+  const detail = node('discussion.panneau.git.detail')!;
+  expect(detail.textContent).toContain('Dans la branchenon');
+  expect(detail.textContent).toContain('1 fichier');
+  expect(detail.textContent).not.toContain('1 fichiers');
+  // binaire : ni ajouts ni suppressions chiffrés
+  const f = node('discussion.panneau.git.detail.fichier')!;
+  expect(f.querySelector('.ajouts')?.textContent).toBe('');
+  expect(f.querySelector('.suppressions')?.textContent).toBe('');
+});

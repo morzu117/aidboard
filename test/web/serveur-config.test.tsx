@@ -397,3 +397,72 @@ test('arrêt non confirmé : le dialogue reste ouvert, « Supprimer quand même 
     '/api/servers/srv_1?force=1',
   ]);
 });
+
+test('validation : port illisible, répertoire et shell obligatoires ; groupe vide vaut « Serveurs »', async () => {
+  const h = ouvrir('/serveurs/srv_1/configuration', [serveur()], {
+    'PATCH /api/servers/srv_1': json(200, serveur()),
+    'POST /api/servers/srv_1/test': json(202, testLance()),
+  });
+  await waitFor(() => expect(node('serveur-config.titre')).not.toBeNull());
+  fireEvent.click(node('serveur-config.mode-ssh_host')!);
+  saisir(champ('Hôte'), 'vps.exemple.fr');
+  saisir(champ('Port'), '22a');
+  expect(node('serveur-config.erreur')?.textContent).toBe('Le port doit être entre 1 et 65535.');
+  saisir(champ('Port'), '');
+  saisir(champ('Répertoire de travail'), '  ');
+  expect(node('serveur-config.erreur')?.textContent).toBe(
+    'Le répertoire de travail est obligatoire.',
+  );
+  saisir(champ('Répertoire de travail'), '~/app');
+  saisir(champ('Shell distant'), ' ');
+  expect(node('serveur-config.erreur')?.textContent).toBe('Le shell distant est obligatoire.');
+  expect(enregistrer().disabled).toBe(true);
+  saisir(champ('Shell distant'), 'bash');
+
+  // l'aperçu suit ce qui sera enregistré : un groupe blanc est « Serveurs »
+  saisir(champ('Groupe dans la barre gauche'), '   ');
+  expect(node('serveur-config.apercu.groupe')?.textContent).toBe('Serveurs');
+  expect(node('serveur-config.erreur')).toBeNull();
+  fireEvent.click(enregistrer());
+  await waitFor(() => expect(h.calls.some((c) => c.method === 'PATCH')).toBe(true));
+  expect(h.calls.find((c) => c.method === 'PATCH')!.body).toMatchObject({
+    groupName: 'Serveurs',
+    workdir: '~/app',
+    sshOptions: { port: null },
+  });
+});
+
+test('dossiers autorisés : Entrée ajoute, un doublon ou un blanc n’ajoute rien', async () => {
+  ouvrir('/serveurs/srv_1/configuration', [serveur()]);
+  await waitFor(() => expect(node('serveur-config.dossier')).not.toBeNull());
+  const puces = () =>
+    [...node('serveur-config.dossiers')!.querySelectorAll('button[aria-label^="Retirer "]')].map(
+      (b) => b.getAttribute('aria-label'),
+    );
+  expect(puces()).toEqual(['Retirer ~']);
+  saisir(node('serveur-config.dossier')!, ' /srv ');
+  fireEvent.keyDown(node('serveur-config.dossier')!, { key: 'a' });
+  expect(puces()).toEqual(['Retirer ~']);
+  fireEvent.keyDown(node('serveur-config.dossier')!, { key: 'Enter' });
+  expect(puces()).toEqual(['Retirer ~', 'Retirer /srv']);
+  expect((node('serveur-config.dossier') as HTMLInputElement).value).toBe('');
+  saisir(node('serveur-config.dossier')!, '/srv');
+  fireEvent.click(node('serveur-config.dossier-ajouter')!);
+  saisir(node('serveur-config.dossier')!, '   ');
+  fireEvent.click(node('serveur-config.dossier-ajouter')!);
+  expect(puces()).toEqual(['Retirer ~', 'Retirer /srv']);
+});
+
+test('colonne de test : échec sans message dit « Échec du test » ; à départ égal, le test fini l’emporte', async () => {
+  ouvrir('/serveurs/srv_1/configuration', [serveur()], {
+    'GET /api/servers/srv_1/test': json(200, testFini({ ok: false, error: null })),
+  });
+  await waitFor(() =>
+    expect(node('serveur-config.test.conclusion')?.textContent).toContain('Échec du test'),
+  );
+  // le même test (même départ) arrive encore en cours par le canal : le compte rendu fini reste
+  await waitFor(() => expect(FakeSocket.all.length).toBeGreaterThan(0));
+  const enCours = testFini({ finishedAt: null, ok: null, error: null });
+  act(() => FakeSocket.all.at(-1)!.push({ kind: 'ephemeral', type: 'server.test', test: enCours }));
+  expect(node('serveur-config.test.conclusion')?.textContent).toContain('Échec du test');
+});

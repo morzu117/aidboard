@@ -897,3 +897,30 @@ Reprises du brief §11.6, plus celles nées de l'état des lieux :
   (force inversé, code ignoré, arrêt toujours confirmé, garde du relais, URL forcée, remise à zéro). Survit :
   lire `stoppedOnServer` à `null` — le `stop` de relais qui suit rattrape, au prix d'un second délai sur un
   serveur injoignable ; gardé pour ce délai. Gate : vert (1231).
+- **Décisions 5 à 8 (opérateur, 2026-10-31 : « je suis ta reco »)** — toutes sans changement de code :
+  (5) **Synchroniser pendant que l'agent travaille : gardé.** La synchronisation d'un sujet local ne regarde
+  pas ses agents non plus ; côté serveur, le rebase est déjà refusé sur des modifications suivies non
+  commitées (`modifie`), sur un HEAD ou une branche qui ont bougé depuis la carte (`perime`), sans
+  `autoStash`, et annulé s'il échoue. (6) **`allowedDirs` par défaut `['~']` : gardé** — secrets masqués
+  (règle immuable), dossiers de secrets jamais autorisés (RC.3). (7) **Archiver n'arrête pas l'agent :
+  gardé**, c'est un masquage, comme « Archiver » de la navigation pour un sujet local (le nettoyage d'un
+  sujet, lui, exige des agents arrêtés : pas d'équivalent distant). (8) **HEAD de `layoutGraph` dans l'onglet
+  Git d'un sujet : hors chantier**, correctif séparé à planifier.
+- **Étape couverture** : `@vitest/coverage-v8` 5.0.5 ajouté en devDependency (accord opérateur). Mesure sur
+  les 49 fichiers touchés par le chantier : 92,7 % des lignes, 82 % des branches (fichiers entiers, code
+  d'avant compris) ; lignes ajoutées par le chantier : 99,8 % des instructions. Lot 1 (`15cb306`) : mode
+  commande à l'étape 1 du test, `commandOf` de codex, `kill` du process distant, refus de route des
+  discussions, canal WS (after, corrompu, marqué, borne, exit en direct), relecture d'une liste. Non couvert,
+  assumé : le 502 « lecture Git impossible » sur un état inconnu (`refuse` de `git.ts`) — le script tué rend
+  une erreur de connexion, pas cet état ; défense seulement. Piège noté : un faux `git` qui tue ses ancêtres
+  remonte jusqu'au process de test (le faux ssh fait `exec`) — ne tuer que des ancêtres reconnus.
+- **Couverture, lot 2** : panneau (lien symbolique, aperçu tronqué ou refusé, position inconnue, singulier,
+  journal vide, aucun dépôt, Échap sur la carte et le détail, détail en échec ou hors branche, binaire sans
+  compteurs), configuration (port illisible, répertoire et shell obligatoires, groupe blanc, dossiers :
+  Entrée, doublon, blanc ; test en échec sans message, test fini gardé face au même test en cours), options
+  ssh partielles, agent effacé du serveur pendant une coupure. **Correctif trouvé par un test** : l'aperçu de
+  la barre gauche affichait un groupe blanc (espaces) alors que l'enregistrement envoie « Serveurs » ; il suit
+  maintenant la valeur enregistrée (ligne modifiée, déclarée). Mesure finale : lignes ajoutées par le
+  chantier 99,9 % des instructions (6 manquantes : routes de `App.tsx`, défense de `refuse` dans `git.ts`),
+  89,8 % des branches — le reste est surtout des repliés `??` et des gardes de course (réponse tardive
+  ignorée) ; fichiers entiers touchés : 93,2 % des lignes, 84,1 % des branches. Gate : vert (1246).
