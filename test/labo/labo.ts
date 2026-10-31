@@ -20,6 +20,9 @@ export const COMPTES = {
   'aid-labo-dash': { user: 'aiddash', shell: 'dash', home: '/home/aiddash' },
 } as const;
 export type Alias = keyof typeof COMPTES;
+const COMPTES_UTILISATEURS = Object.values(COMPTES)
+  .map((c) => c.user)
+  .join(' ');
 
 export interface Labo {
   /** Enveloppeur du vrai ssh, à passer au daemon comme binaire `ssh`. */
@@ -28,6 +31,13 @@ export interface Labo {
   conteneur: string;
   /** Exécute une commande shell dans le conteneur, sous un compte (root par défaut). */
   exec(cmd: string, user?: string): string;
+  /**
+   * Coupure réseau : les connexions ssh en cours tombent et les nouvelles sont refusées (sshd relit sa
+   * configuration). Les process du serveur, agents et tmux compris, continuent.
+   */
+  couper(): void;
+  /** Fin de la coupure : le serveur répond de nouveau. */
+  retablir(): void;
   arreter(): void;
 }
 
@@ -137,27 +147,35 @@ export function demarrerLabo(): Labo {
     writeFileSync(ssh, `#!/bin/sh\nexec ssh -F '${config}' "$@"\n`);
     chmodSync(ssh, 0o755);
 
-    attendre(
-      () => {
-        try {
-          execFileSync(ssh, ['-o', 'BatchMode=yes', 'aid-labo', 'true'], {
-            stdio: 'ignore',
-            timeout: 10_000,
-          });
-          return true;
-        } catch {
-          return false;
-        }
-      },
-      30_000,
-      'sshd du conteneur',
-    );
+    const joignable = () => {
+      try {
+        execFileSync(ssh, ['-o', 'BatchMode=yes', 'aid-labo', 'true'], {
+          stdio: 'ignore',
+          timeout: 10_000,
+        });
+        return true;
+      } catch {
+        return false;
+      }
+    };
+    attendre(joignable, 30_000, 'sshd du conteneur');
 
     return {
       ssh,
       transport: { ssh, env: { ...process.env } },
       conteneur,
       exec,
+      couper: () => {
+        exec(
+          `printf 'DenyUsers ${COMPTES_UTILISATEURS}\\n' > /etc/ssh/sshd_config.d/00-coupure.conf && kill -HUP 1`,
+        );
+        attendre(() => !joignable(), 10_000, 'coupure du serveur');
+        exec(`pkill -f '^sshd: (${COMPTES_UTILISATEURS.replace(/ /g, '|')})' || true`);
+      },
+      retablir: () => {
+        exec('rm -f /etc/ssh/sshd_config.d/00-coupure.conf && kill -HUP 1');
+        attendre(joignable, 10_000, 'retour du serveur');
+      },
       arreter: () => {
         try {
           docker(['rm', '-f', conteneur], 60_000);

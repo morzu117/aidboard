@@ -62,3 +62,13 @@ Un point = un commit. Après chaque point : `npm run gate` en entier et `npm run
   disparus). Session tuée par `tmux kill-session` : le vrai tmux emporte l'agent, `perdu`, attach rend
   la sortie restante puis 4. Serveur tmux tué (redémarrage) : tous perdus, un nouveau start repart.
   Mutation vérifiée : `perdu()` toujours faux fait échouer les deux scénarios de perte.
+- **L.3 Discussions de bout en bout** : daemon réel, vrai ssh, agents détectés par un vrai test de
+  connexion. Claude : échange ; daemon arrêté, l'agent continue sur le serveur (même pid), le daemon
+  suivant se rattache au même relais ; **coupure réseau en plein tour** (`labo.couper()` : sshd refuse
+  les comptes et les connexions en cours tombent ; `labo.retablir()`), `connection_lost` puis
+  `connection_resumed` dans le fil, agent intact, fil sans doublon ; suppression : agent et session
+  tmux disparus du serveur. Codex : l'ancien relais arrêté au démarrage du daemon, reprise du même
+  thread sous un relais neuf. D.2 contre un serveur réellement coupé : 409, agent vivant ; revenu,
+  204 et agent arrêté. Mutation vérifiée : sans nouvelle tentative de connexion après une coupure, le
+  scénario claude échoue (« lien rétabli »). `labo.ts` : l'attente de sshd devient `joignable()`,
+  réutilisée par la coupure (lignes du L.1 réécrites, déclarées).
