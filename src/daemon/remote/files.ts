@@ -8,8 +8,136 @@ import { AidHttpError } from '../errors.js';
 import type { ExecResult } from './transport.js';
 import { shQuote } from './transport.js';
 
-/** D78 : fichiers sensibles, signalés « masqué » ; leur contenu n'est jamais lu, un dossier masqué jamais listé. */
-export const HIDDEN_PATTERNS = ['.env*', '*.pem', '*.key', 'id_*', '.ssh', '*.p12'] as const;
+/**
+ * Règle immuable (décision opérateur du 2026-10-30) : un secret est masqué — signalé « masqué », contenu
+ * jamais lu, dossier jamais listé ; aucun réglage ne l'ouvre. D78 l'a posée ; la liste couvre aussi les
+ * clés, coffres, jetons et identifiants courants. Un motif `dossier/nom` vise un nom dans un dossier précis.
+ */
+const KEYS = [
+  // D78
+  '.env*',
+  '*.pem',
+  '*.key',
+  'id_*',
+  '.ssh',
+  '*.p12',
+  // clés privées et coffres
+  'ssh_host_*',
+  '*_rsa',
+  '*_dsa',
+  '*_ecdsa',
+  '*_ed25519',
+  '*.ppk',
+  '*.pfx',
+  '*.p8',
+  '*.pkcs12',
+  '*.jks',
+  '*.keystore',
+  '*.kdb',
+  '*.kdbx',
+  '*.gpg',
+  '*.asc',
+  '*.ovpn',
+  '.gnupg',
+  '.password-store',
+  'shadow',
+  'shadow-',
+  'gshadow',
+  'gshadow-',
+  'environ',
+];
+const TOOLS = [
+  '.git-credentials',
+  '.gitconfig',
+  '.netrc',
+  '_netrc',
+  '.npmrc',
+  '.yarnrc*',
+  '.pypirc',
+  '.pgpass',
+  '.my.cnf',
+  '.mylogin.cnf',
+  '.msmtprc',
+  '.vault-token',
+  '.vault_pass*',
+  '.htpasswd',
+  '.s3cfg',
+  '.boto',
+  '.databrickscfg',
+  '.dockercfg',
+  'rclone.conf',
+  'gradle.properties',
+  'kubeconfig*',
+  'service-account*.json',
+  'auth.json',
+  'wp-config.php',
+  '*.tfstate*',
+  '*.tfvars',
+  '*.env',
+  '.aws',
+  '.azure',
+  '.docker',
+  '.kube',
+  '.vnc',
+  // historiques de shell : des secrets y sont tapés
+  '*_history',
+  '.*history',
+  '.histfile',
+  // dossier/nom : URL de remote avec jeton (dépôts nus et sous-modules compris), jetons d'outils
+  '*.git/config',
+  '*.git/config.worktree',
+  '*.git/modules',
+  '.config/gcloud',
+  'gh/hosts.yml',
+  'github-copilot/hosts.json',
+  'github-copilot/apps.json',
+  '.bundle/config',
+  '.m2/settings.xml',
+];
+/**
+ * Mots de secret : masqués sur les fichiers de données et les noms nus (`github_token`, `.secrets`), pas
+ * sur le code — `PasswordInput.tsx` ou `credentials.ts` restent lisibles (décision prise pour
+ * l'opérateur à la review de F.1 bis : un secret vit dans une donnée, pas dans un nom de composant).
+ */
+const WORDS = ['secret', 'credential', 'password', 'passwd', 'apikey', 'api_key', 'api-key'];
+const DATA = [
+  'json',
+  'yml',
+  'yaml',
+  'toml',
+  'ini',
+  'env',
+  'txt',
+  'conf',
+  'cfg',
+  'properties',
+  'xml',
+];
+const WORD_PATTERNS = [
+  ...WORDS.flatMap((w) => [
+    w,
+    `${w}s`,
+    `.${w}`,
+    `.${w}s`,
+    `*_${w}`,
+    `*-${w}`,
+    `*.${w}`,
+    `*_${w}s`,
+    ...DATA.map((ext) => `*${w}*.${ext}`),
+  ]),
+  // `token` plus serré : `tokens.json` (jetons de design) et `tokenizer.py` sont des fichiers ordinaires
+  'token',
+  'token.json',
+  '.token',
+  '*_token',
+  '*-token',
+  '*.token',
+  '*_token.json',
+  '*-token.json',
+  'access_token*',
+  'refresh_token*',
+];
+export const HIDDEN_PATTERNS: readonly string[] = [...KEYS, ...TOOLS, ...WORD_PATTERNS];
 /** D78 : dossiers lourds, grisés et non dépliés par défaut (le daemon les liste si on le lui demande). */
 export const HEAVY_DIRS = ['node_modules', '.git', 'dist', '.venv', 'target'] as const;
 /** D78 : aperçu tronqué à 256 Kio ; binaire = octet nul dans les 8 premiers Kio. */
@@ -23,33 +151,51 @@ const GIT_TIMEOUT_S = 8;
 /** Marque le début de la réponse : ce qu'un profil de connexion écrit avant est ignoré (review F.1). */
 const MARK = 'aid-fs';
 
+const NAMES: string[] = HIDDEN_PATTERNS.filter((p) => !p.includes('/'));
+const PAIRS: string[] = HIDDEN_PATTERNS.filter((p) => p.includes('/'));
 // sans casse (review F.1) : sur un système de fichiers insensible, `.ENV` est le même fichier que `.env`
-const HIDDEN_RE = HIDDEN_PATTERNS.map(
-  (p) => new RegExp(`^${p.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*')}$`, 'is'),
-);
-// même liste côté `sh` : chaque lettre en classe `[eE]`
-const HIDDEN_CASE = HIDDEN_PATTERNS.map((p) =>
-  p.replace(/[a-z]/g, (c) => `[${c}${c.toUpperCase()}]`),
-).join(' | ');
+const glob = (p: string) =>
+  new RegExp(`^${p.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*')}$`, 'is');
+const NAME_RE = NAMES.map(glob);
+const PAIR_RE = PAIRS.map(glob);
+// mêmes listes côté `sh` : chaque lettre en classe `[eE]`
+const shCase = (ps: string[]) =>
+  ps
+    .map((p) => p.replace(/[a-zA-Z]/g, (c) => `[${c.toLowerCase()}${c.toUpperCase()}]`))
+    .join(' | ');
+/** Exportés pour le test de parité `case` / regex. */
+export const HIDDEN_CASE = shCase(NAMES);
+export const HIDDEN_PAIR_CASE = shCase(PAIRS);
 
-export function isHidden(name: string): boolean {
-  return HIDDEN_RE.some((re) => re.test(name));
+/** `parent` : nom du dossier qui contient `name`, pour les motifs `dossier/nom`. */
+export function isHidden(name: string, parent = ''): boolean {
+  return NAME_RE.some((re) => re.test(name)) || PAIR_RE.some((re) => re.test(`${parent}/${name}`));
 }
 
-function hiddenIn(rest: string): boolean {
-  return rest.split('/').some((c) => c !== '' && isHidden(c));
+const lastOf = (p: string) => p.split('/').filter(Boolean).at(-1) ?? '';
+
+/** Composants de `rest`, chemin pris sous un dossier dont le dernier composant est `parent`. */
+function hiddenIn(rest: string, parent: string): boolean {
+  let prev = parent;
+  for (const c of rest.split('/')) {
+    // `.` ne change pas de dossier : `.git/./config` reste `.git/config` (review F.1 bis)
+    if (c === '' || c === '.') continue;
+    if (isHidden(c, prev)) return true;
+    prev = c;
+  }
+  return false;
 }
 
 const trimSlash = (d: string) => (d.length > 1 && d.endsWith('/') ? d.slice(0, -1) : d);
 
-/** Partie du chemin sous le plus long dossier autorisé qui le contient (lexicalement), sinon `null`. */
-function underAllowed(path: string, allowed: string[]): string | null {
+/** Plus long dossier autorisé qui contient le chemin (lexicalement) et la partie du chemin dessous. */
+function underAllowed(path: string, allowed: string[]): { base: string; rest: string } | null {
   let best: string | null = null;
   for (const d of allowed.map(trimSlash)) {
     const inside = path === d || path.startsWith(d === '/' ? '/' : `${d}/`);
     if (inside && (best === null || d.length > best.length)) best = d;
   }
-  return best === null ? null : path.slice(best.length);
+  return best === null ? null : { base: best, rest: path.slice(best.length) };
 }
 
 /**
@@ -62,8 +208,9 @@ export function checkRemotePath(server: Server, path: string): string {
     throw new AidHttpError(400, 'chemin invalide');
   if (!(path === '~' || path.startsWith('~/') || path.startsWith('/')))
     throw new AidHttpError(400, 'chemin attendu : ~, ~/… ou absolu');
-  const rest = underAllowed(path, server.allowedDirs);
-  if (rest !== null && hiddenIn(rest)) throw new AidHttpError(403, REFUSALS.masque![1]);
+  const u = underAllowed(path, server.allowedDirs);
+  if (u !== null && hiddenIn(u.rest, lastOf(u.base)))
+    throw new AidHttpError(403, REFUSALS.masque![1]);
   return path;
 }
 
@@ -95,8 +242,13 @@ for a in "$@"; do
 done
 [ -n "$ok" ] || { printf 'refus\\000'; exit 0; }
 [ -n "$e" ] || { printf 'absent\\000'; exit 0; }
-set -f; IFS=/
-for c in \${r#"$b"}; do case "$c" in ${HIDDEN_CASE}) printf 'masque\\000'; exit 0 ;; esac; done
+set -f; IFS=/; prev=\${b##*/}
+for c in \${r#"$b"}; do
+  case "$c" in '' | .) continue ;; esac
+  case "$c" in ${HIDDEN_CASE}) printf 'masque\\000'; exit 0 ;; esac
+  case "$prev/$c" in ${HIDDEN_PAIR_CASE}) printf 'masque\\000'; exit 0 ;; esac
+  prev=$c
+done
 unset IFS; set +f
 `;
 
@@ -170,7 +322,8 @@ function records(r: ExecResult): string[] {
   const [, resolved = '', base = ''] = recs;
   const inside = resolved === base || resolved.startsWith(`${base}/`) || base === '';
   if (!resolved.startsWith('/') || !inside) throw new AidHttpError(403, REFUSALS.refus![1]);
-  if (hiddenIn(resolved.slice(base.length))) throw new AidHttpError(403, REFUSALS.masque![1]);
+  if (hiddenIn(resolved.slice(base.length), lastOf(base)))
+    throw new AidHttpError(403, REFUSALS.masque![1]);
   return recs;
 }
 
@@ -217,7 +370,7 @@ export function parseListing(server: Server, path: string, r: ExecResult): Serve
       name,
       kind,
       symlink: t.endsWith('l'),
-      hidden: isHidden(name),
+      hidden: isHidden(name, lastOf(recs[1]!)),
       heavy: kind === 'dir' && (HEAVY_DIRS as readonly string[]).includes(name),
       git: whole ?? git?.get(name) ?? null,
     });

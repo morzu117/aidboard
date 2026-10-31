@@ -107,6 +107,9 @@ Numérotation continue depuis D71 (chantier 16).
   par défaut, contenu jamais lu : `.env*`, `*.pem`, `*.key`, `id_*`, `.ssh/`, `*.p12`. Grisés,
   non dépliés : `node_modules`, `.git`, `dist`, `.venv`, `target`. Aperçu tronqué à **256 Kio**,
   binaire détecté (octet nul dans les 8 premiers Kio) non affiché. Valeurs à confirmer (§11.6 Q1).
+  **Opérateur, 2026-10-30** : « secret → masqué » est une **règle immuable** (aucun réglage ne l'ouvre) ;
+  liste élargie aux jetons et identifiants courants (point F.1 bis). Afficher un secret demandera le mot de
+  passe de la machine — fonction à concevoir, hors groupe F.
 - **D79 — tests sans réseau**. Jamais de vrai `ssh` ni de vrai serveur dans un test : fixture
   `test/fixtures/fake-ssh.sh` (ignore l'hôte, exécute la commande localement sous `sh`, peut
   simuler une coupure ou un échec), et `fake-tmux.sh` dans le `PATH` des tests du relais si
@@ -599,3 +602,35 @@ Reprises du brief §11.6, plus celles nées de l'état des lieux :
   (« repli sur Plan quand l'onglet mémoire sélectionné disparaît, et y rend le focus » : focus sur `<body>`)
   rouge une fois, vert seul 3/3 et sur le gate suivant ; ni ce test ni son composant ne sont touchés.
   e2e : `e2e/nav-edition.spec.ts:45`, comme en R.4-R.6 ; 34 passés.
+- **F.1 bis** — secrets : **règle immuable** posée par l'opérateur le 2026-10-30 (« secret → masqué ; pour
+  l'afficher, on demandera le mot de passe de la machine »). `HIDDEN_PATTERNS` élargi en trois familles :
+  - clés et coffres : la liste D78, plus clés d'hôte `ssh_host_*`, `*_rsa`, `*_ed25519`…, `*.ppk`, `*.pfx`,
+    `*.p8`, `*.jks`, `*.kdbx`, `*.gpg`, `*.asc`, `*.ovpn`, `.gnupg`, `.password-store`, `shadow`, `environ` ;
+  - jetons et identifiants d'outils : `.git-credentials`, `.gitconfig`, `.netrc`, `.npmrc`, `.yarnrc*`,
+    `.pypirc`, `.pgpass`, `.my.cnf`, `.vault-token`, `.htpasswd`, `.aws`, `.azure`, `.docker`, `.kube`,
+    `.databrickscfg`, `rclone.conf`, `gradle.properties`, `kubeconfig*`, `auth.json`, `wp-config.php`,
+    `*.tfstate*`, `*.tfvars`, `*.env`, historiques de shell ; motifs `dossier/nom` vérifiés sur composants
+    consécutifs : `*.git/config` (URL de remote avec jeton, dépôts nus compris), `*.git/modules`
+    (sous-modules), `gh/hosts.yml`, `github-copilot/hosts.json`, `.config/gcloud`, `.m2/settings.xml`… —
+    le dernier composant du dossier autorisé sert de parent, `.git` autorisé lui-même garde son `config` ;
+  - mots de secret (`secret`, `credential`, `password`, `passwd`, `apikey`) : **sur les fichiers de
+    données et les noms nus seulement** (`*secret*.json`, `.secrets`, `github_password`), pas sur le code —
+    `PasswordInput.tsx`, `credentials.ts`, `secrets.py` restent lisibles. `token` plus serré
+    (`token.json`, `*_token`, `access_token*`) : `tokens.json` (jetons de design) reste lisible.
+    **Décision prise à la place de l'opérateur** à la review (sinon composants et sous-arbres entiers
+    disparaissaient du panneau). Compromis assumé : `auth.json` masque aussi un fichier de traduction du
+    même nom ; `.env.example` et `id_mapping.json` restent masqués (hérités de D78, règle immuable).
+- **Review F.1 bis** (relancée deux fois : les deux premiers lancements, en tâche de fond, se sont figés
+  sans sortie ; le troisième a rendu en 4 min) : retenus — clés privées sans `.key`, `.git/config` des
+  dépôts nus et sous-modules, `token` / `apikey` / outils absents, `fish_history`, faux positifs des mots de
+  secret sur le code, `.` dans un chemin qui contournait le pré-contrôle, casse générée sur `[a-z]`
+  seulement. Tests ajoutés : parité `case` du script / regex du daemon sur toute la liste et sur des noms
+  ordinaires (mutation vérifiée), revérification par le daemon du chemin résolu (`records`), contenu jamais
+  sorti par ssh (le script seul, mutation vérifiée), `.git/./config`, dépôt nu, `gh` autorisé, faux
+  positifs voulus, message de refus vérifié. Le fixture `secret.txt` des tests de périmètre devient
+  `note.txt`. Écartés : écart de parent `~` lexical / résolu (le script et le daemon jugent sur le résolu),
+  pliage de casse Unicode d'APFS (hors périmètre). Lignes de F.1 modifiées : la liste et les fonctions de
+  masquage de `files.ts` (code du commit précédent).
+- **Gate pendant F.1 bis** : vert (1152, puis 1155 après la review). Un passage intermédiaire à 12 rouges,
+  tous en délai dépassé (~926 s par test, fichiers sans rapport) : horloge sautée pendant une mise en veille
+  probable du poste, qui explique aussi les deux reviews figées ; relancé, vert.
