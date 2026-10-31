@@ -12,6 +12,18 @@ import {
   parsePreview,
   readCommand,
 } from '../remote/files.js';
+import {
+  GIT_WRITE_TIMEOUT_MS,
+  gitCommitCommand,
+  gitFetchCommand,
+  gitLogCommand,
+  gitPushCommand,
+  gitStatusCommand,
+  gitSyncCommand,
+  parseGitCommit,
+  parseGitLog,
+  parseGitStatus,
+} from '../remote/git.js';
 import type { TransportOptions } from '../remote/transport.js';
 import {
   assertNameFree,
@@ -66,6 +78,18 @@ const PatchBody = Type.Object(
 );
 const PathQuery = Type.Object({ path: Type.Optional(Type.String({ maxLength: 4096 })) });
 const FileQuery = Type.Object({ path: Type.String({ maxLength: 4096 }) });
+const LogQuery = Type.Object({
+  path: Type.Optional(Type.String({ maxLength: 4096 })),
+  scope: Type.Optional(Type.Union([Type.Literal('all'), Type.Literal('branch')])),
+});
+const GitBody = Type.Object(
+  {
+    path: Type.Optional(Type.String({ maxLength: 4096 })),
+    confirm: Type.Optional(Type.Boolean()),
+    head: Type.Optional(Type.String({ maxLength: 64 })),
+  },
+  { additionalProperties: false },
+);
 
 function write(db: Db, id: string, s: Required<ServerInput>, now: string, createdAt?: string) {
   const values = {
@@ -190,6 +214,72 @@ export function registerServerRoutes(
     const path = checkRemotePath(server, (req.query as { path: string }).path);
     return parsePreview(server, path, await connections.read(server, readCommand(server, path)));
   });
+
+  // F.2 (§11.3.1) : onglet Git du serveur, dans le périmètre de F.1 ; dépôt par défaut = celui du workdir.
+  app.get('/api/servers/:id/git/status', { schema: { querystring: PathQuery } }, async (req) => {
+    const server = found((req.params as { id: string }).id);
+    const path = checkRemotePath(server, (req.query as { path?: string }).path || server.workdir);
+    return parseGitStatus(
+      server,
+      path,
+      await connections.read(server, gitStatusCommand(server, path)),
+    );
+  });
+
+  app.get('/api/servers/:id/git/log', { schema: { querystring: LogQuery } }, async (req) => {
+    const server = found((req.params as { id: string }).id);
+    const query = req.query as { path?: string; scope?: 'all' | 'branch' };
+    const path = checkRemotePath(server, query.path || server.workdir);
+    const scope = query.scope ?? 'all';
+    return parseGitLog(
+      server,
+      path,
+      scope,
+      await connections.read(server, gitLogCommand(server, path, scope)),
+    );
+  });
+
+  app.get(
+    '/api/servers/:id/git/commits/:hash',
+    { schema: { querystring: PathQuery } },
+    async (req) => {
+      const { id, hash } = req.params as { id: string; hash: string };
+      const server = found(id);
+      const path = checkRemotePath(server, (req.query as { path?: string }).path || server.workdir);
+      const cmd = gitCommitCommand(server, path, hash);
+      return parseGitCommit(hash, await connections.read(server, cmd));
+    },
+  );
+
+  // D33 : fetch / push / sync écrivent sur les refs — une opération à la fois par serveur. Pousser et
+  // Synchroniser passent par la carte de confirmation (§11.3.1) : sans `confirm` ni `head` (le commit affiché),
+  // refus ; sans avance ou si HEAD a bougé, le script qui pousse refuse lui-même. Réponse : l'état du dépôt
+  // après l'opération.
+  const gitBusy = new Set<string>();
+  const GIT_WRITES = {
+    fetch: gitFetchCommand,
+    push: gitPushCommand,
+    sync: gitSyncCommand,
+  } as const;
+  for (const [op, build] of Object.entries(GIT_WRITES)) {
+    app.post(`/api/servers/:id/git/${op}`, { schema: { body: GitBody } }, async (req) => {
+      const server = found((req.params as { id: string }).id);
+      const body = (req.body ?? {}) as { path?: string; confirm?: boolean; head?: string };
+      if (op !== 'fetch' && body.confirm !== true)
+        throw new AidHttpError(400, 'confirmation requise : pousser modifie le dépôt distant');
+      const path = checkRemotePath(server, body.path || server.workdir);
+      const cmd = build(server, path, body.head);
+      if (gitBusy.has(server.id))
+        throw new AidHttpError(409, 'une opération Git est déjà en cours sur ce serveur');
+      gitBusy.add(server.id);
+      try {
+        const r = await connections.run(server, cmd, GIT_WRITE_TIMEOUT_MS);
+        return parseGitStatus(server, path, r, false);
+      } finally {
+        gitBusy.delete(server.id);
+      }
+    });
+  }
 
   app.delete('/api/servers/:id/rules/:ruleId', async (req) => {
     const { id, ruleId } = req.params as { id: string; ruleId: string };

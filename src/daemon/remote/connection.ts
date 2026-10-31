@@ -203,6 +203,19 @@ export class ServerConnections {
     throw new AidHttpError(502, `${server.name} ne répond pas : ${c.reason}`);
   }
 
+  /** F.2 : comme `read`, avec un délai propre — fetch / push passent par le réseau du serveur. */
+  async run(server: Server, cmd: string, timeoutMs: number): Promise<ExecResult> {
+    const r = await remoteExec(server, cmd, {
+      ...this.deps.transport,
+      timeoutMs,
+      signal: this.abort.signal,
+    });
+    if (!connectionLost(r, server.mode)) return r;
+    const c = classify(r, timeoutMs, server.mode);
+    this.setStatus(server.id, { state: c.state, latencyMs: null, reason: c.reason });
+    throw new AidHttpError(502, `${server.name} ne répond pas : ${c.reason}`);
+  }
+
   forget(serverId: string): void {
     this.statuses.delete(serverId);
     this.tests.delete(serverId);
