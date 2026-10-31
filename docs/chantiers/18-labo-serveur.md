@@ -72,3 +72,12 @@ Un point = un commit. Après chaque point : `npm run gate` en entier et `npm run
   204 et agent arrêté. Mutation vérifiée : sans nouvelle tentative de connexion après une coupure, le
   scénario claude échoue (« lien rétabli »). `labo.ts` : l'attente de sshd devient `joignable()`,
   réutilisée par la coupure (lignes du L.1 réécrites, déclarées).
+- **L.4 Confirmations** : à travers le vrai ssh, carte d'une commande composée destructive (règle
+  `ask`, serveur nommé), refus, « Toujours autoriser dans ce dossier » (règle au `cwd` de la
+  discussion, puis réponse seule de la règle), autre dossier du même serveur : redemandé. Redémarrage
+  du daemon pendant une carte : carte effacée, tour en `working`, interruption acceptée, agent intact
+  sur le serveur. **Non vérifiable ici** : la fin du tour après cette interruption — le faux claude ne
+  termine que « tour long » sur interruption, et la réaction du vrai claude reste à observer (journal du
+  chantier 17). Mutation vérifiée : une règle qui ignore le dossier fait échouer le premier scénario.
+  Helpers du L.3 sortis dans `test/labo/daemon-labo.ts` (`monterBanc`) : lignes du L.3 déplacées,
+  déclarées.
