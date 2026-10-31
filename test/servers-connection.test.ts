@@ -1,4 +1,13 @@
-import { chmodSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, expect, test } from 'vitest';
 import { ServerConnections } from '../src/daemon/remote/connection.js';
@@ -118,6 +127,90 @@ test('connexion refusée : injoignable, étapes suivantes sautées, agents incha
   const after = (await req('GET', `/api/servers/${s.id}`)).json<Server>();
   expect(after.detectedAgents).toBeNull();
   expect(after.lastTestAt).toBe(done.finishedAt);
+});
+
+/**
+ * Faux shells de connexion, sans dépendre de ce que la machine installe : le faux fish réduit `\\` à `\`
+ * entre quotes simples, le faux csh refuse un saut de ligne entre quotes, comme les vrais.
+ */
+function fauxShells(): { fish: string; csh: string } {
+  const dir = mkdtempSync(join(tmpdir(), 'aid-shells-'));
+  const fish = join(dir, 'fish');
+  const csh = join(dir, 'csh');
+  writeFileSync(
+    fish,
+    `#!/bin/sh\ncmd=$(printf '%s' "$2" | sed 's/\\\\\\\\/\\\\/g')\nexec sh -c "$cmd"\n`,
+  );
+  writeFileSync(
+    csh,
+    `#!/bin/sh\ncase "$2" in *'\n'*) echo "Unmatched '." >&2; exit 1 ;; esac\nexec sh -c "$2"\n`,
+  );
+  chmodSync(fish, 0o755);
+  chmodSync(csh, 0o755);
+  return { fish, csh };
+}
+
+test('shell de connexion non POSIX (fish, csh) : étape shell en échec, ping en erreur', async () => {
+  const { fish, csh } = fauxShells();
+  for (const login of [fish, csh]) {
+    const home = mkdtempSync(join(tmpdir(), 'aid-d-'));
+    t = await startTestDaemon(home, {
+      remote: {
+        ssh: FAKE_SSH,
+        env: { ...process.env, FAKE_SSH_HOME: home, FAKE_SSH_SHELL: login },
+      },
+    });
+    remote(home, ['claude', 'tmux']);
+    const s = await create();
+    const got = listen();
+    await req('POST', `/api/servers/${s.id}/test`);
+    const done = await finished(got);
+    expect(done.ok, login).toBe(false);
+    expect(done.error, login).toContain('non supporté pour le moment');
+    expect(
+      done.steps.map((x) => x.state),
+      login,
+    ).toEqual(['ok', 'failed', 'skipped', 'skipped', 'skipped']);
+    // le ping porte la sonde : jamais « connecté » sur ce shell, même sans test
+    const st = (await req('POST', `/api/servers/${s.id}/ping`)).json<ServerStatus>();
+    expect(st, login).toMatchObject({ state: 'error', latencyMs: null });
+    expect(st.reason, login).toContain('non supporté pour le moment');
+    await t.d.stop();
+    t = undefined;
+  }
+});
+
+test('shell de connexion POSIX : la sonde passe (sh, et bash, dash, zsh, ksh quand présents)', async () => {
+  const logins = ['/bin/sh', '/bin/bash', '/bin/dash', '/bin/zsh', '/bin/ksh'].filter(existsSync);
+  for (const login of logins) {
+    const home = mkdtempSync(join(tmpdir(), 'aid-d-'));
+    t = await startTestDaemon(home, {
+      remote: {
+        ssh: FAKE_SSH,
+        env: { ...process.env, FAKE_SSH_HOME: home, FAKE_SSH_SHELL: login },
+      },
+    });
+    const s = await create();
+    const st = (await req('POST', `/api/servers/${s.id}/ping`)).json<ServerStatus>();
+    expect(st, login).toMatchObject({ state: 'connected', reason: null });
+    await t.d.stop();
+    t = undefined;
+  }
+  expect(logins).toContain('/bin/sh');
+});
+
+test('coupure pendant le ping : injoignable, jamais « shell non supporté »', async () => {
+  const { fish } = fauxShells();
+  t = await startTestDaemon(undefined, {
+    remote: {
+      ssh: FAKE_SSH,
+      env: { ...process.env, FAKE_SSH_FAIL: '1', FAKE_SSH_SHELL: fish },
+    },
+  });
+  const s = await create();
+  const st = (await req('POST', `/api/servers/${s.id}/ping`)).json<ServerStatus>();
+  expect(st.state).toBe('unreachable');
+  expect(st.reason).not.toContain('non supporté');
 });
 
 test('répertoire absent, aucun agent, tmux absent : l’étape en échec dit pourquoi', async () => {

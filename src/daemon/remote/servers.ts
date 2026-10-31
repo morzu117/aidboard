@@ -49,6 +49,20 @@ const SSH_HOST_RE = /^[A-Za-z0-9_.]([A-Za-z0-9_.-]*@[A-Za-z0-9_.])?[A-Za-z0-9_.-
 const SSH_JUMP_RE = /^[A-Za-z0-9_.]([A-Za-z0-9_.-]*@[A-Za-z0-9_.])?[A-Za-z0-9_.-]*(:[0-9]{1,5})?$/;
 const SSH_USER_RE = /^[A-Za-z0-9_.][A-Za-z0-9_.-]*$/;
 const SHELL_RE = /^[A-Za-z0-9_./][A-Za-z0-9_./-]*$/;
+export const POSIX_SHELLS = [
+  'bash',
+  'zsh',
+  'sh',
+  'dash',
+  'ksh',
+  'ksh93',
+  'mksh',
+  'oksh',
+  'pdksh',
+  'loksh',
+  'ash',
+  'yash',
+] as const;
 // Chemin distant (review S.1) : il finira dans une commande distante, donc jeu de caractères fermé —
 // ni espace, ni `$`, ni `;`, ni guillemet. `~` seulement en tête.
 const REMOTE_PATH_RE = /^(~|~\/|\/)[A-Za-z0-9_./@+,-]*$/;
@@ -184,6 +198,11 @@ export function validateServer(input: ServerInput): Required<ServerInput> {
     );
   const shell = input.shell === undefined ? 'bash' : text('shell', input.shell);
   if (!SHELL_RE.test(shell)) invalid('shell distant invalide');
+  // décision opérateur du 2026-10-30 : les commandes distantes supposent un shell POSIX ; fish, csh… pas pour le moment
+  if (!(POSIX_SHELLS as readonly string[]).includes(shell.split('/').at(-1)!))
+    invalid(
+      `shell ${shell} non supporté pour le moment (shells POSIX : ${POSIX_SHELLS.join(', ')})`,
+    );
   const permissionMode = input.permissionMode ?? 'default';
   if (!SERVER_PERMISSION_MODES.includes(permissionMode)) invalid('mode d’exécution inconnu');
   const color = input.color ?? DEFAULT_SERVER_COLOR;
