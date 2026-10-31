@@ -1,0 +1,123 @@
+{
+  "v": 3,
+  "createdOnFiles": {
+    "v": 1,
+    "at": "2026-10-26T08:40:00Z"
+  },
+  "title": "AID — refonte conversation",
+  "launch": {
+    "view": "canvas"
+  },
+  "pages": [],
+  "boards": {
+    "Main.dc.html": {
+      "x": 0,
+      "y": 0,
+      "w": 1440,
+      "h": 900,
+      "title": "Conversation 1/4 · 2/4 · 1/4",
+      "is_interactive": true
+    },
+    "Sidebar.dc.html": {
+      "x": 0,
+      "y": 1200,
+      "w": 1280,
+      "h": 960,
+      "title": "Barre gauche : lecture, édition, réduit",
+      "is_interactive": true
+    },
+    "Nav.dc.html": {
+      "x": 1360,
+      "y": 1200,
+      "w": 320,
+      "h": 844,
+      "title": "Composant barre gauche",
+      "is_interactive": true
+    },
+    "HomeA.dc.html": {
+      "x": 0,
+      "y": 2500,
+      "w": 1440,
+      "h": 900,
+      "title": "Accueil A · File de tri"
+    },
+    "HomeB.dc.html": {
+      "x": 1520,
+      "y": 2500,
+      "w": 1440,
+      "h": 900,
+      "title": "Accueil B · Tableau par état"
+    },
+    "HomeC.dc.html": {
+      "x": 3040,
+      "y": 2500,
+      "w": 1440,
+      "h": 900,
+      "title": "Accueil C · Reprendre + projets"
+    },
+    "Servers.dc.html": {
+      "x": 0,
+      "y": 3620,
+      "w": 1440,
+      "h": 900,
+      "title": "Serveurs · liste"
+    },
+    "ServerConfig.dc.html": {
+      "x": 1520,
+      "y": 3620,
+      "w": 1440,
+      "h": 900,
+      "title": "Serveurs · configuration"
+    },
+    "ServerChat.dc.html": {
+      "x": 3040,
+      "y": 3620,
+      "w": 1440,
+      "h": 900,
+      "title": "Serveurs · discussion",
+      "is_interactive": true
+    }
+  },
+  "order": [
+    "Main.dc.html",
+    "Sidebar.dc.html",
+    "Nav.dc.html",
+    "HomeA.dc.html",
+    "HomeB.dc.html",
+    "HomeC.dc.html",
+    "Servers.dc.html",
+    "ServerConfig.dc.html",
+    "ServerChat.dc.html"
+  ],
+  "notes": {
+    "t1": {
+      "x": 0,
+      "y": -240,
+      "text": "1 · Espace de conversation",
+      "kind": "title1",
+      "maxW": 1440
+    },
+    "t2": {
+      "x": 0,
+      "y": 960,
+      "text": "2 · Barre gauche façon boîte mail",
+      "kind": "title1",
+      "maxW": 1680
+    },
+    "t3": {
+      "x": 0,
+      "y": 2260,
+      "text": "3 · Accueil : trois pistes",
+      "kind": "title1",
+      "maxW": 4480
+    },
+    "t4": {
+      "x": 0,
+      "y": 3380,
+      "text": "4 · Serveurs distants (VPS)",
+      "kind": "title1",
+      "maxW": 4480
+    }
+  },
+  "designSystems": []
+}

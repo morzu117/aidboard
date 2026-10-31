@@ -2,6 +2,7 @@ import { useState } from 'react';
 import type { PendingRequest } from '../../../src/shared/model.js';
 import type { AidApi } from '../data/useAidState.js';
 import { useAid } from '../data/useAidState.js';
+import { useAgentRoutes } from './routes.js';
 
 const message = (err: unknown) => (err instanceof Error ? err.message : String(err));
 
@@ -11,8 +12,9 @@ export async function answerPending(
   agentId: string,
   pendingId: string,
   answer: string,
+  api = '/api/agents',
 ): Promise<void> {
-  await call('POST', `/api/agents/${agentId}/answer`, { pendingId, answer });
+  await call('POST', `${api}/${agentId}/answer`, { pendingId, answer });
 }
 
 export function DecisionCard({
@@ -27,6 +29,7 @@ export function DecisionCard({
   dataNode: string;
 }) {
   const { call } = useAid();
+  const { api } = useAgentRoutes();
   const [busy, setBusy] = useState(false);
   const [erreur, setErreur] = useState<string | null>(null);
   const [reponse, setReponse] = useState<string | null>(null);
@@ -35,7 +38,7 @@ export function DecisionCard({
     setBusy(true);
     setErreur(null);
     try {
-      await answerPending(call, agentId, request.id, answer);
+      await answerPending(call, agentId, request.id, answer, api);
       setReponse(label);
     } catch (err) {
       setErreur(message(err));

@@ -24,6 +24,16 @@ export type Block =
   | { kind: 'tools'; seq: number; calls: ToolCall[] }
   | { kind: 'decision'; seq: number; request: PendingRequest }
   | { kind: 'turn_end'; seq: number; ok: false; error?: string }
+  // Chantier 17 (R.6, §11.3) : le lien avec un agent distant. Une perte et sa reprise font une seule ligne.
+  | {
+      kind: 'connexion';
+      seq: number;
+      at: string;
+      etat: 'perdue' | 'reprise' | 'echec';
+      afterMs?: number;
+      sessionFound?: boolean;
+      reason?: string;
+    }
   | { kind: 'exit'; seq: number; message?: string };
 
 export interface Turn {
@@ -37,6 +47,8 @@ export function buildTurns(items: AgentStreamItem[]): Turn[] {
   let current: Turn | null = null;
   let openTools: ToolCall[] = [];
   let openToolsSeq = 0;
+  // perte de lien encore sans reprise : sa ligne reçoit la reprise quand elle arrive
+  let perte: Extract<Block, { kind: 'connexion' }> | null = null;
 
   const ensureTurn = (seq: number) => {
     if (!current) current = { id: seq, blocks: [] };
@@ -122,6 +134,39 @@ export function buildTurns(items: AgentStreamItem[]): Turn[] {
         ensureTurn(seq);
         current!.blocks.push({ kind: 'exit', seq, message: event.message });
         closeTurn();
+        break;
+      case 'connection_lost':
+        // une seconde perte sans reprise entre les deux : la même coupure, déjà sur sa ligne
+        if (perte) break;
+        ensureTurn(seq);
+        perte = { kind: 'connexion', seq, at: event.at, etat: 'perdue' };
+        current!.blocks.push(perte);
+        break;
+      case 'connection_resumed':
+        if (perte) {
+          perte.etat = 'reprise';
+          perte.afterMs = event.afterMs;
+          perte.sessionFound = event.sessionFound;
+        }
+        perte = null;
+        break;
+      case 'resume_failed':
+        // la coupure en cours devient la ligne d'échec, plutôt qu'une « reconnexion… » sans fin au-dessus
+        if (perte) {
+          perte.etat = 'echec';
+          perte.reason = event.reason;
+          perte.seq = seq;
+        } else {
+          ensureTurn(seq);
+          current!.blocks.push({
+            kind: 'connexion',
+            seq,
+            at: item.at,
+            etat: 'echec',
+            reason: event.reason,
+          });
+        }
+        perte = null;
         break;
       case 'session':
       case 'thinking':

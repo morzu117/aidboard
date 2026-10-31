@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>AID — accueil C</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+body{margin:0;background:#0b0c0e}
+button{font-family:inherit;cursor:pointer}
+</style>
+</helmet>
+<div style="width: 1440px; height: 900px; box-sizing: border-box; display: flex; flex-direction: column; overflow: hidden; background: #0b0c0e; color: #e6e8eb; font-family: Inter, system-ui, sans-serif; font-size: 14px">
+
+<div style="height: 56px; flex-shrink: 0; box-sizing: border-box; display: flex; align-items: center; gap: 28px; padding: 0 20px; border-bottom: 1px solid #23272e">
+<div style="font-weight: 600; font-size: 20px; letter-spacing: 0.5px"><span style="color: #5de0a1">›:</span>AID</div>
+<nav style="display: flex; gap: 22px; color: #8d94a0"><span style="color: #e6e8eb">Accueil</span><span>Boîte de réception</span><span>Consignes</span><span>Serveurs</span><span>Réglages</span></nav>
+<div style="flex-grow: 1"></div>
+<div style="display: flex; align-items: center; gap: 8px; font-size: 12px; color: #8d94a0"><span style="width: 8px; height: 8px; border-radius: 50%; background: #5de0a1"></span>daemon local</div>
+<div style="border: 1px solid #23272e; border-radius: 8px; padding: 8px 12px; width: 220px; font-size: 13px; color: #8d94a0; box-sizing: border-box">Rechercher…  <span style="float: right; font-family: 'JetBrains Mono', monospace; font-size: 11px">⌘K</span></div>
+</div>
+
+<div style="flex-grow: 1; min-height: 0; display: flex">
+<div style="width: 280px; flex-shrink: 0; height: 844px; border-right: 1px solid #23272e; overflow: hidden"><dc-import name="Nav" active="all" hint-size="280px,844px"></dc-import></div>
+<div style="flex-grow: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; gap: 28px; padding: 28px 40px">
+
+<!-- Haut : reprendre + nouveau sujet -->
+<div style="display: flex; gap: 24px">
+
+<div style="flex: 1.5 1 0; min-width: 0; border: 1px solid #23272e; border-radius: 14px; background: #0e1013; padding: 22px; display: flex; flex-direction: column; gap: 14px">
+<div style="font-size: 12px; font-weight: 600; letter-spacing: 1px; text-transform: uppercase; color: #8d94a0">Reprendre</div>
+<div style="display: flex; align-items: center; gap: 12px">
+<span style="width: 10px; height: 10px; border-radius: 50%; background: #6ea8ff"></span>
+<span style="font-size: 20px; font-weight: 600">feat/lieutenants</span>
+<span style="font-size: 13px; color: #8d94a0">descent-wf · il y a 2 min</span>
+</div>
+<div style="display: flex; gap: 8px; font-family: 'JetBrains Mono', monospace; font-size: 12px">
+<span style="background: #16191e; color: #c4c9d2; padding: 4px 9px; border-radius: 6px">claude · libre</span>
+<span style="background: #16191e; color: #c4c9d2; padding: 4px 9px; border-radius: 6px">base origin/main</span>
+<span style="background: #16191e; color: #c4c9d2; padding: 4px 9px; border-radius: 6px">index prêt</span>
+</div>
+<div style="border: 1px solid #2d323a; border-radius: 12px; background: #111317; padding: 12px 14px; display: flex; align-items: center; gap: 12px">
+<span style="flex-grow: 1; color: #8d94a0">Continuer avec claude…</span>
+<button style="background: #5de0a1; color: #06251a; border: 0; border-radius: 8px; padding: 8px 14px; font-weight: 600; font-size: 13px">Ouvrir la conversation</button>
+</div>
+</div>
+
+<div style="flex: 1 1 0; min-width: 0; border: 1px solid #23272e; border-radius: 14px; background: #0e1013; padding: 22px; display: flex; flex-direction: column; gap: 12px">
+<div style="font-size: 12px; font-weight: 600; letter-spacing: 1px; text-transform: uppercase; color: #8d94a0">Nouveau sujet</div>
+<div style="display: flex; gap: 8px">
+<span style="flex: 1; border: 1px solid #2d323a; border-radius: 8px; padding: 9px 12px; color: #c4c9d2">orgasso ▾</span>
+<span style="flex: 1.4; border: 1px solid #2d323a; border-radius: 8px; padding: 9px 12px; color: #8d94a0; font-family: 'JetBrains Mono', monospace; font-size: 13px">feat/…</span>
+</div>
+<div style="display: flex; gap: 6px; font-size: 12px">
+<span style="background: #1a1e24; border: 1px solid #5de0a1; border-radius: 6px; padding: 6px 10px">claude</span>
+<span style="border: 1px solid #23272e; border-radius: 6px; padding: 6px 10px; color: #8d94a0">codex</span>
+<span style="border: 1px solid #23272e; border-radius: 6px; padding: 6px 10px; color: #8d94a0">cursor</span>
+<span style="border: 1px solid #23272e; border-radius: 6px; padding: 6px 10px; color: #8d94a0">swairm</span>
+</div>
+<button style="align-self: flex-start; background: #5de0a1; color: #06251a; border: 0; border-radius: 8px; padding: 9px 14px; font-weight: 600; font-size: 13px">Créer le sujet</button>
+</div>
+</div>
+
+<!-- Projets -->
+<div style="display: flex; flex-direction: column; gap: 14px; min-height: 0; flex-grow: 1">
+<div style="display: flex; align-items: center; gap: 10px">
+<span style="font-weight: 600">Projets</span>
+<span style="color: #8d94a0">8 sujets ouverts · 1 attend ta réponse</span>
+<span style="flex-grow: 1"></span>
+<span style="font-size: 13px; color: #8d94a0">Organiser ›</span>
+</div>
+<div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 18px">
+<sc-for list="{{projects}}" as="p" hint-placeholder-count="8">
+<div style="border: 1px solid {{p.border}}; border-radius: 12px; background: #0e1013; padding: 16px; display: flex; flex-direction: column; gap: 10px; height: 150px; box-sizing: border-box">
+<div style="display: flex; align-items: center; gap: 8px">
+<span style="width: 8px; height: 8px; border-radius: 50%; background: {{p.dot}}"></span>
+<span style="font-weight: 600; flex-grow: 1">{{p.name}}</span>
+<span style="font-size: 12px; color: #8d94a0">{{p.when}}</span>
+</div>
+<div style="font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #c4c9d2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">{{p.branch}}</div>
+<div style="font-size: 12px; color: #8d94a0">{{p.agent}}</div>
+<div style="flex-grow: 1"></div>
+<div style="display: flex; justify-content: space-between; font-size: 13px"><span style="color: #5de0a1">Ouvrir →</span><span style="color: #8d94a0">+ sujet</span></div>
+</div>
+</sc-for>
+</div>
+</div>
+</div>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const p = (name, branch, agent, when, dot, border) => ({ name, branch, agent, when, dot: dot || '#5b616c', border: border || '#23272e' });
+    return { projects: [
+      p('a-i-d', 'docs/cell-swairm-rewrap', 'claude · libre', '10 h'),
+      p('agent-kernel', 'feat/refacto', 'aucun agent', '10 j'),
+      p('demo-sts', 'fix/update-demo', 'aucun agent', '9 j'),
+      p('descent-wf', 'feat/lieutenants', 'claude · libre', '2 min', '#6ea8ff'),
+      p('myskooli', 'feat/supports-pagination-formats', 'claude · libre', '10 j'),
+      p('orgasso', 'feat/restart-dev', 'attend ta réponse · swairm-cell', '18 min', '#f2b84b', '#5a4514'),
+      p('skifer', 'refactor/minimal-examples', 'aucun agent', 'maintenant'),
+      p('swairm', 'swairm-cli-interact', 'claude · libre', '58 min')
+    ] };
+  }
+}
+</script>
+</body>
+</html>

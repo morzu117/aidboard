@@ -9,7 +9,7 @@ const DAEMON_TEXT: Record<DaemonLink, string> = {
   'session-expiree': 'session expirée',
 };
 
-export type EcranId = '1-1' | '1-2' | '1-3' | 'consignes' | 'reglages';
+export type EcranId = '1-1' | '1-2' | '1-3' | 'consignes' | 'reglages' | 'serveurs';
 
 /** La pastille « Mesh » de la barre (12.5) : absente quand `mesh.cell` n'est pas configuré. */
 export interface BarreMesh {
@@ -52,6 +52,8 @@ const LIENS = [
   { id: 'accueil', to: '/', label: 'Accueil' },
   { id: 'boite', to: '/boite', label: 'Boîte de réception' },
   { id: 'consignes', to: '/consignes', label: 'Consignes' },
+  // chantier 17 (S.4) : la maquette Servers place « Serveurs » entre Consignes et Réglages (§5.1)
+  { id: 'serveurs', to: '/serveurs', label: 'Serveurs' },
   { id: 'reglages', to: '/reglages', label: 'Réglages' },
 ] as const;
 

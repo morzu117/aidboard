@@ -53,6 +53,12 @@ export interface PendingRequest {
   kind: 'permission' | 'question';
   question: string;
   options: PendingOption[];
+  /** Chantier 17 (R.5) : la commande shell visée, quand la demande en porte une (outil Bash, commande codex). */
+  command?: string;
+  /** Demande forcée par une règle `ask` passée à l'agent (claude : `decision_reason_type: "rule"`). */
+  byRule?: boolean;
+  /** Carte de confirmation d'un serveur distant (§11.3) : « Toujours autoriser » y écrit une règle du serveur. */
+  confirm?: { server: string };
 }
 
 /** Ce qui a fondé un statut estimé (infobulle). */
@@ -237,4 +243,151 @@ export interface NavState {
   groups: NavGroup[];
   placements: NavPlacement[];
   prefs: NavPrefs;
+}
+
+/** Chantier 17 (D72) : comment le daemon atteint un serveur. Seul `ssh_alias` est câblé de bout en bout en v1. */
+export type ServerMode = 'ssh_alias' | 'ssh_host' | 'command';
+
+/** Options du mode `ssh_host` : construites en options `ssh`, jamais un secret (D76). */
+export interface ServerSshOptions {
+  port: number | null;
+  user: string | null;
+  identityFile: string | null;
+  jump: string | null;
+}
+
+/** Règle « Toujours autoriser sur ce serveur » (§11.3), révocable depuis la configuration. */
+export interface ServerRule {
+  id: string;
+  /** Dossier de la discussion où la règle a été écrite : elle ne vaut que là (décision du 2026-10-31). */
+  cwd: string;
+  pattern: string;
+  createdAt: string;
+}
+
+/** Chantier 17 (S.1) : un serveur distant. `target` = alias, hôte ou commande locale selon `mode`. */
+export interface Server {
+  id: string;
+  name: string;
+  mode: ServerMode;
+  target: string;
+  sshOptions: ServerSshOptions | null;
+  loadProfile: boolean;
+  workdir: string;
+  shell: string;
+  keepSession: boolean;
+  permissionMode: PermissionMode;
+  confirmDestructive: boolean;
+  allowedDirs: string[];
+  groupName: string;
+  color: string;
+  /** Agents trouvés au dernier test de connexion (S.3) ; `null` = jamais testé. */
+  detectedAgents: string[] | null;
+  lastTestAt: string | null;
+  rules: ServerRule[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** Chantier 17 (S.3) : état de connexion d'un serveur, tenu en mémoire par le daemon (§11.1, pastille d'état). */
+export type ServerState = 'unknown' | 'connecting' | 'connected' | 'unreachable' | 'error';
+
+export interface ServerStatus {
+  serverId: string;
+  state: ServerState;
+  /** Durée d'un aller-retour `ssh` complet (connexion comprise), mesurée au dernier contrôle. */
+  latencyMs: number | null;
+  checkedAt: string | null;
+  /** Cause lisible d'un état `unreachable` ou `error`. */
+  reason: string | null;
+}
+
+export type ServerTestStepId = 'command' | 'shell' | 'workdir' | 'agents' | 'session';
+export type ServerTestStepState = 'pending' | 'running' | 'ok' | 'failed' | 'skipped';
+
+export interface ServerTestStep {
+  id: ServerTestStepId;
+  label: string;
+  state: ServerTestStepState;
+  durationMs: number | null;
+  detail: string | null;
+}
+
+/** Test de connexion (§11.2, colonne de droite) : étapes séquentielles, conclusion, sortie brute dépliable. */
+export interface ServerTest {
+  serverId: string;
+  startedAt: string;
+  finishedAt: string | null;
+  /** `null` tant que le test tourne. */
+  ok: boolean | null;
+  /** Message de l'étape en échec. */
+  error: string | null;
+  steps: ServerTestStep[];
+  raw: string;
+}
+
+/** Chantier 17 (F.1) : une entrée du panneau Fichiers d'un serveur (un niveau à la fois). */
+export interface ServerFsEntry {
+  name: string;
+  kind: 'dir' | 'file' | 'other';
+  symlink: boolean;
+  /** D78 : fichier sensible, signalé « masqué », contenu jamais lu. */
+  hidden: boolean;
+  /** D78 : dossier lourd, grisé, non déplié par défaut. */
+  heavy: boolean;
+  /** Badge `git status` : `M` modifié, `?` non suivi ; un dossier porte celui de son contenu. */
+  git: 'M' | '?' | null;
+}
+
+export interface ServerFsListing {
+  serverId: string;
+  /** Chemin tel que demandé (`~/…` gardé), base des chemins des entrées. */
+  path: string;
+  /** Chemin résolu par `realpath` sur le serveur. */
+  resolved: string;
+  entries: ServerFsEntry[];
+  truncated: boolean;
+  /** Le dossier est dans un dépôt Git (badges disponibles). */
+  git: boolean;
+  readAt: string;
+}
+
+export interface ServerFilePreview {
+  serverId: string;
+  path: string;
+  resolved: string;
+  size: number;
+  /** Octet nul dans les 8 premiers Kio : contenu non transmis. */
+  binary: boolean;
+  /** Aperçu coupé à 256 Kio (D78). */
+  truncated: boolean;
+  content: string | null;
+  readAt: string;
+}
+
+/** Chantier 17 (R.1) : une discussion sur un serveur, à côté des sujets (D74). `cwd` = répertoire distant. */
+export interface ServerDiscussion {
+  id: string;
+  serverId: string;
+  name: string;
+  cwd: string;
+  archived: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** Chantier 17 (R.1) : un agent qui tourne sur le serveur ; `tmuxSession` et `outOffset` servent au rattachement (D73). */
+export interface ServerAgent {
+  id: string;
+  discussionId: string;
+  kind: Extract<AgentKind, 'claude' | 'codex'>;
+  sessionId: string | null;
+  status: AgentStatus;
+  tmuxSession: string | null;
+  outOffset: number;
+  permissionMode: PermissionMode;
+  model: string | null;
+  effort: string | null;
+  createdAt: string;
+  updatedAt: string;
 }

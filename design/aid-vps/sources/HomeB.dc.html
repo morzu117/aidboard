@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>AID — accueil B</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+body{margin:0;background:#0b0c0e}
+button{font-family:inherit;cursor:pointer}
+</style>
+</helmet>
+<div style="width: 1440px; height: 900px; box-sizing: border-box; display: flex; flex-direction: column; overflow: hidden; background: #0b0c0e; color: #e6e8eb; font-family: Inter, system-ui, sans-serif; font-size: 14px">
+
+<div style="height: 56px; flex-shrink: 0; box-sizing: border-box; display: flex; align-items: center; gap: 28px; padding: 0 20px; border-bottom: 1px solid #23272e">
+<div style="font-weight: 600; font-size: 20px; letter-spacing: 0.5px"><span style="color: #5de0a1">›:</span>AID</div>
+<nav style="display: flex; gap: 22px; color: #8d94a0"><span style="color: #e6e8eb">Accueil</span><span>Boîte de réception</span><span>Consignes</span><span>Serveurs</span><span>Réglages</span></nav>
+<div style="flex-grow: 1"></div>
+<div style="display: flex; align-items: center; gap: 8px; font-size: 12px; color: #8d94a0"><span style="width: 8px; height: 8px; border-radius: 50%; background: #5de0a1"></span>daemon local</div>
+<div style="border: 1px solid #23272e; border-radius: 8px; padding: 8px 12px; width: 220px; font-size: 13px; color: #8d94a0; box-sizing: border-box">Rechercher…  <span style="float: right; font-family: 'JetBrains Mono', monospace; font-size: 11px">⌘K</span></div>
+<button style="background: #5de0a1; color: #06251a; border: 0; border-radius: 8px; padding: 9px 14px; font-weight: 600; font-size: 13px">Nouveau sujet</button>
+</div>
+
+<div style="flex-grow: 1; min-height: 0; display: flex">
+<div style="width: 280px; flex-shrink: 0; height: 844px; border-right: 1px solid #23272e; overflow: hidden"><dc-import name="Nav" active="all" hint-size="280px,844px"></dc-import></div>
+<div style="flex-grow: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; gap: 18px; padding: 24px 32px">
+<div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap">
+<h1 style="margin: 0 12px 0 0; font-size: 22px; font-weight: 600">Sujets</h1>
+<span style="background: #1a1e24; border: 1px solid #2d323a; border-radius: 999px; padding: 5px 12px; font-size: 12px">Tous</span>
+<sc-for list="{{projects}}" as="p" hint-placeholder-count="8">
+<span style="border: 1px solid #23272e; border-radius: 999px; padding: 5px 12px; font-size: 12px; color: #8d94a0">{{p}}</span>
+</sc-for>
+</div>
+
+<div style="flex-grow: 1; min-height: 0; display: flex; gap: 24px">
+<sc-for list="{{columns}}" as="col" hint-placeholder-count="3">
+<section style="flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; gap: 12px; background: #0e1013; border: 1px solid #23272e; border-radius: 14px; padding: 16px">
+<div style="display: flex; align-items: center; gap: 10px">
+<span style="width: 9px; height: 9px; border-radius: 50%; background: {{col.color}}"></span>
+<span style="font-weight: 600">{{col.title}}</span>
+<span style="color: #8d94a0">{{col.count}}</span>
+<span style="flex-grow: 1; text-align: right; font-size: 12px; color: #8d94a0">{{col.hint}}</span>
+</div>
+<div style="display: flex; flex-direction: column; gap: 10px; overflow-y: auto; min-height: 0">
+<sc-for list="{{col.cards}}" as="c" hint-placeholder-count="3">
+<div style="background: #14171b; border: 1px solid {{c.border}}; border-radius: 12px; padding: 14px; display: flex; flex-direction: column; gap: 8px">
+<div style="display: flex; align-items: center; gap: 8px">
+<span style="font-weight: 500; flex-grow: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">{{c.branch}}</span>
+<span style="font-size: 12px; color: #8d94a0">{{c.when}}</span>
+</div>
+<div style="font-size: 12px; color: #8d94a0; font-family: 'JetBrains Mono', monospace">{{c.project}} · {{c.step}}</div>
+<div style="font-size: 13px; color: #c4c9d2; line-height: 1.45">{{c.note}}</div>
+<div style="display: flex; align-items: center; gap: 8px; margin-top: 2px">
+<span style="font-size: 12px; color: #c4c9d2; background: #1d2127; border-radius: 6px; padding: 3px 8px">{{c.agent}}</span>
+<span style="flex-grow: 1"></span>
+<button style="background: {{c.btnBg}}; color: {{c.btnColor}}; border: {{c.btnBorder}}; border-radius: 8px; padding: 6px 11px; font-size: 12px; font-weight: 600">{{c.cta}}</button>
+</div>
+</div>
+</sc-for>
+</div>
+</section>
+</sc-for>
+</div>
+</div>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const primary = { btnBg: '#5de0a1', btnColor: '#06251a', btnBorder: '0' };
+    const plain = { btnBg: '#16191e', btnColor: '#e6e8eb', btnBorder: '1px solid #23272e' };
+    const card = (branch, project, step, note, agent, when, cta, style, border) =>
+      Object.assign({ branch, project, step, note, agent, when, cta, border: border || '#23272e' }, style);
+    const columns = [
+      { title: 'À décider', color: '#f2b84b', count: 1, hint: 'attend ta réponse', cards: [
+        card('feat/restart-dev', 'orgasso', 'restart-dev', 'Sujet swairm/capacitor-socle garé (plan v1). Décision #1 ouverte.', 'swairm-cell · libre', '18 min', 'Trancher', primary, '#5a4514')
+      ] },
+      { title: 'Récents', color: '#6ea8ff', count: 4, hint: 'moins de 24 h', cards: [
+        card('feat/lieutenants', 'descent-wf', 'lieutenants', 'Agent libre. Index à jour.', 'claude · libre', '2 min', 'Reprendre', plain),
+        card('swairm-cli-interact', 'swairm', 'move_to_cli', 'Agent libre. Index à jour.', 'claude · libre', '58 min', 'Reprendre', plain),
+        card('docs/cell-swairm-rewrap', 'a-i-d', 'remote-origin-missing', 'Agent libre. Origine distante absente.', 'claude · libre', '10 h', 'Reprendre', plain),
+        card('refactor/minimal-examples', 'skifer', 'improve_skifer_supervisor', 'Aucun agent lancé.', 'aucun agent', 'maintenant', 'Lancer un agent', plain)
+      ] },
+      { title: 'Dormants', color: '#5b616c', count: 3, hint: 'plus de 7 jours', cards: [
+        card('feat/supports-pagination-formats', 'myskooli', 'review_parent_mode', 'Agent libre depuis 10 jours.', 'claude · libre', '10 j', 'Reprendre', plain),
+        card('feat/refacto', 'agent-kernel', 'refacto', 'Aucun agent. Index indisponible.', 'aucun agent', '10 j', 'Lancer un agent', plain),
+        card('fix/update-demo', 'demo-sts', 'update_demo', 'Aucun agent. Index indisponible.', 'aucun agent', '9 j', 'Lancer un agent', plain)
+      ] }
+    ];
+    return { projects: ['a-i-d', 'agent-kernel', 'demo-sts', 'descent-wf', 'myskooli', 'orgasso', 'skifer', 'swairm'], columns };
+  }
+}
+</script>
+</body>
+</html>

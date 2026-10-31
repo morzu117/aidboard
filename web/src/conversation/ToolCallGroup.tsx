@@ -1,3 +1,4 @@
+import { useAgentRoutes } from './routes.js';
 import type { ToolCall } from './thread.js';
 
 const resumeEntree = (input: unknown): string => {
@@ -31,11 +32,13 @@ export function ToolCallGroup({
   onToggle: () => void;
   dataNode: string;
 }) {
+  const serveur = useAgentRoutes().distant?.serveur;
   return (
     <div className="outil-groupe" data-node={dataNode}>
       <div className="outil-groupe-entete">
         <span className="outil-groupe-compte">
           {calls.length} commande{calls.length > 1 ? 's' : ''}
+          {serveur && ` sur ${serveur}`}
         </span>
         <button
           className="bouton"

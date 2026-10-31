@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>AID — barre gauche</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+body{margin:0;background:#0b0c0e}
+button{font-family:inherit;cursor:pointer}
+</style>
+</helmet>
+<div style="width: 1280px; height: 960px; box-sizing: border-box; padding: 36px; display: flex; gap: 32px; background: #0b0c0e; color: #e6e8eb; font-family: Inter, system-ui, sans-serif; font-size: 14px">
+
+<!-- Lecture -->
+<div style="width: 320px; flex-shrink: 0; display: flex; flex-direction: column; gap: 10px">
+<div style="font-size: 12px; font-weight: 600; letter-spacing: 1px; text-transform: uppercase; color: #8d94a0">Lecture</div>
+<div style="height: 844px; border: 1px solid #23272e; border-radius: 12px; overflow: hidden">
+<dc-import name="Nav" active="restart-dev" hint-size="320px,844px"></dc-import>
+</div>
+</div>
+
+<!-- Édition -->
+<div style="width: 320px; flex-shrink: 0; display: flex; flex-direction: column; gap: 10px">
+<div style="font-size: 12px; font-weight: 600; letter-spacing: 1px; text-transform: uppercase; color: #5de0a1">Édition</div>
+<div style="position: relative; height: 844px; border: 1px solid #2f5a47; border-radius: 12px; overflow: hidden">
+<dc-import name="Nav" active="restart-dev" edit="{{yes}}" hint-size="320px,844px"></dc-import>
+<div style="position: absolute; left: 118px; top: 392px; width: 196px; box-sizing: border-box; background: #16191e; border: 1px solid #2d323a; border-radius: 10px; padding: 6px; box-shadow: 0 12px 32px rgba(0,0,0,0.55); font-size: 13px">
+<div style="padding: 7px 10px; border-radius: 6px; background: #1f242b">Renommer</div>
+<div style="padding: 7px 10px; display: flex; align-items: center; gap: 6px; color: #c4c9d2">Couleur
+<span style="margin-left: auto; display: flex; gap: 4px"><span style="width: 10px; height: 10px; border-radius: 3px; background: #5de0a1"></span><span style="width: 10px; height: 10px; border-radius: 3px; background: #6ea8ff"></span><span style="width: 10px; height: 10px; border-radius: 3px; background: #f2b84b"></span><span style="width: 10px; height: 10px; border-radius: 3px; background: #f07ab0"></span></span></div>
+<div style="padding: 7px 10px; color: #c4c9d2">Déplacer vers…</div>
+<div style="padding: 7px 10px; color: #c4c9d2">Épingler en haut</div>
+<div style="padding: 7px 10px; color: #c4c9d2">Masquer de la barre</div>
+<div style="padding: 7px 10px; color: #8d94a0; border-top: 1px solid #23272e; margin-top: 4px">Archiver le groupe</div>
+</div>
+</div>
+</div>
+
+<!-- Rail réduit -->
+<div style="width: 72px; flex-shrink: 0; display: flex; flex-direction: column; gap: 10px">
+<div style="font-size: 12px; font-weight: 600; letter-spacing: 1px; text-transform: uppercase; color: #8d94a0">Réduit</div>
+<div style="height: 844px; box-sizing: border-box; border: 1px solid #23272e; border-radius: 12px; background: #0e1013; display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 14px 0">
+<div style="width: 40px; height: 40px; border-radius: 12px; background: #5de0a1; color: #06251a; display: flex; align-items: center; justify-content: center; font-size: 20px; font-weight: 600">+</div>
+<div style="width: 40px; height: 34px; border-radius: 999px; background: #1f252d; display: flex; align-items: center; justify-content: center"><span style="width: 10px; height: 10px; border-radius: 3px; background: #5de0a1"></span></div>
+<div style="position: relative; width: 40px; height: 34px; display: flex; align-items: center; justify-content: center"><span style="width: 10px; height: 10px; border-radius: 3px; background: #f2b84b"></span><span style="position: absolute; top: 0; right: 0; background: #f2b84b; color: #2a1d00; font-size: 10px; font-weight: 600; border-radius: 999px; padding: 0 5px">1</span></div>
+<div style="width: 40px; height: 34px; display: flex; align-items: center; justify-content: center"><span style="width: 10px; height: 10px; border-radius: 3px; background: #6ea8ff"></span></div>
+<div style="width: 36px; height: 1px; background: #23272e; margin: 6px 0"></div>
+<div style="width: 34px; height: 34px; border-radius: 9px; background: #5de0a1; color: #06251a; font-size: 12px; font-weight: 600; display: flex; align-items: center; justify-content: center">AI</div>
+<div style="width: 34px; height: 34px; border-radius: 9px; background: #a78bfa; color: #1b1238; font-size: 12px; font-weight: 600; display: flex; align-items: center; justify-content: center">AK</div>
+<div style="width: 34px; height: 34px; border-radius: 9px; background: #f59e6b; color: #3a1a06; font-size: 12px; font-weight: 600; display: flex; align-items: center; justify-content: center">DS</div>
+<div style="width: 34px; height: 34px; border-radius: 9px; background: #6ea8ff; color: #0b2347; font-size: 12px; font-weight: 600; display: flex; align-items: center; justify-content: center">DW</div>
+<div style="width: 34px; height: 34px; border-radius: 9px; background: #f07ab0; color: #3d0f26; font-size: 12px; font-weight: 600; display: flex; align-items: center; justify-content: center">MY</div>
+<div style="width: 34px; height: 34px; border-radius: 9px; background: #f2b84b; color: #2a1d00; font-size: 12px; font-weight: 600; display: flex; align-items: center; justify-content: center">OR</div>
+<div style="width: 34px; height: 34px; border-radius: 9px; background: #4fd1d9; color: #062f33; font-size: 12px; font-weight: 600; display: flex; align-items: center; justify-content: center">SK</div>
+<div style="width: 34px; height: 34px; border-radius: 9px; background: #8d94a0; color: #14161a; font-size: 12px; font-weight: 600; display: flex; align-items: center; justify-content: center">SW</div>
+<div style="flex-grow: 1"></div>
+<div style="color: #8d94a0; border: 1px solid #23272e; border-radius: 6px; width: 26px; height: 24px; display: flex; align-items: center; justify-content: center; font-size: 12px">›</div>
+</div>
+</div>
+
+<!-- Parité boîte mail -->
+<div style="flex-grow: 1; min-width: 0; padding-top: 34px; display: flex; flex-direction: column; gap: 18px; font-size: 13px; line-height: 1.5; color: #c4c9d2">
+<div style="font-size: 12px; font-weight: 600; letter-spacing: 1px; text-transform: uppercase; color: #8d94a0">Ce que reprend la barre d'une boîte mail</div>
+<sc-for list="{{features}}" as="f" hint-placeholder-count="7">
+<div><span style="color: #5de0a1; font-weight: 600">{{f.title}}</span><br>{{f.text}}</div>
+</sc-for>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":960}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {
+      yes: true,
+      features: [
+        { title: 'Présente partout', text: 'La même barre sur l\'accueil, la boîte de réception, une conversation et les réglages. Sélection, groupes repliés et mode réduit sont conservés d\'une page à l\'autre.' },
+        { title: 'Vues avec compteurs', text: 'Tous les sujets, À décider, Agent libre, Sans agent, Épinglés, Archivés. Le compteur ambre apparaît quand une réponse t\'est demandée, comme les non-lus.' },
+        { title: 'Groupes colorés et repliables', text: 'Chaque groupe est un libellé avec sa couleur et son nombre de sujets. Un clic le plie ou le déplie.' },
+        { title: 'Glisser-déposer', text: 'Poignée sur les groupes et les sujets en mode édition. Un sujet peut passer d\'un groupe à un autre.' },
+        { title: 'Menu ··· ', text: 'Renommer, couleur, déplacer vers, épingler, masquer, archiver.' },
+        { title: 'Renommer en place', text: 'Double-clic sur un nom. Seul le nom affiché change, la branche Git reste intacte.' },
+        { title: 'Nouveau sujet en tête', text: 'Le bouton principal se trouve en haut de la barre, comme « Nouveau message ».' },
+        { title: 'Rail réduit', text: 'Le bouton ‹ réduit la barre à des icônes et pastilles de couleur. Le survol affiche le nom, les compteurs restent visibles.' }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

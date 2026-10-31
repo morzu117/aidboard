@@ -766,6 +766,66 @@ body {
   color: var(--muted);
   font-size: var(--fs-s);
 }
+/* Chantier 17 (R.5, §11.3) : confirmation d'une commande destructive sur un serveur (maquette ServerChat). */
+.confirm-carte {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 16px;
+  border: 1px solid var(--s-attente-line);
+  border-radius: 12px;
+  background: var(--surface-alerte);
+}
+.confirm-carte--autorisee,
+.confirm-carte--refusee,
+.confirm-carte--close {
+  opacity: 0.75;
+}
+.confirm-titre {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  color: var(--s-attente);
+  font-size: var(--fs-s);
+}
+.confirm-point {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--s-attente);
+}
+.confirm-commande {
+  margin: 0;
+  padding: 9px 12px;
+  border: 1px solid var(--s-attente-line);
+  border-radius: 8px;
+  background: var(--surface-term);
+  font-family: ui-monospace, monospace;
+  font-size: 13px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.confirm-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.confirm-option--yes {
+  border-color: transparent;
+  background: var(--acc);
+  color: var(--acc-ink);
+  font-weight: 600;
+}
+.confirm-option--always {
+  background: transparent;
+  color: var(--muted);
+}
+.confirm-issue {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--fs-s);
+}
 .composer {
   flex-shrink: 0;
   margin: var(--sp-3);
@@ -1810,4 +1870,789 @@ body {
 .chemin-worktree {
   font-family: ui-monospace, monospace;
   color: var(--muted);
+}
+/* Chantier 17 (S.4) : écran Serveurs (§11.1, maquette Servers). */
+.serveur-carte {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+  padding: var(--sp-5) var(--sp-5);
+  border: 1px solid var(--line);
+  border-radius: var(--r-xl);
+  background: var(--surface-1);
+}
+.serveur-carte-entete {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-3);
+}
+.serveur-carte-icone {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: var(--r-xl);
+  background: var(--surface-2);
+}
+.serveur-carte-ident {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.serveur-carte-nom {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2);
+}
+.serveur-nom {
+  font-size: var(--fs-l);
+  font-weight: var(--fw-sb);
+}
+.serveur-carte-cible,
+.serveur-valeur-mono {
+  font-family: ui-monospace, monospace;
+}
+.serveur-carte-cible {
+  margin-top: var(--sp-1);
+  overflow: hidden;
+  color: var(--muted);
+  font-size: var(--fs-s);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.serveur-carte-menu {
+  position: relative;
+}
+.serveur-carte-plus {
+  min-width: 36px;
+  letter-spacing: 0.1em;
+}
+.serveur-carte-raison {
+  margin: 0;
+  color: var(--s-erreur);
+  font-size: var(--fs-s);
+}
+.pastille-serveur {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px var(--sp-2);
+  border: 1px solid var(--line-2);
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: var(--fs-s);
+  white-space: nowrap;
+}
+.pastille-serveur-point {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--s-inactif);
+}
+.pastille-serveur--connected {
+  border-color: var(--acc);
+  color: var(--acc);
+}
+.pastille-serveur--connected .pastille-serveur-point {
+  background: var(--acc);
+}
+.pastille-serveur--connecting {
+  border-color: var(--s-attente-line);
+  color: var(--s-attente);
+}
+.pastille-serveur--connecting .pastille-serveur-point {
+  background: var(--s-attente);
+}
+.pastille-serveur--error {
+  border-color: var(--s-erreur-line);
+  color: var(--s-erreur);
+}
+.pastille-serveur--error .pastille-serveur-point {
+  background: var(--s-erreur);
+}
+.serveur-indicateurs {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--sp-3);
+  margin: 0;
+}
+[data-viewport='phone'] .serveur-indicateurs {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.serveur-indicateur {
+  padding: var(--sp-3) var(--sp-3);
+  border-radius: var(--r-l);
+  background: var(--surface-2);
+}
+.serveur-indicateur dt {
+  color: var(--muted);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-sb);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.serveur-indicateur dd {
+  margin: var(--sp-1) 0 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.serveur-discussions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+.serveur-discussions-titre {
+  font-weight: var(--fw-sb);
+}
+/* Chantier 17 (R.6) : table « Discussions sur <serveur> » (maquette Servers). */
+.serveur-discussions-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--fs-s);
+}
+.serveur-discussions-table th {
+  padding: var(--sp-1) var(--sp-2);
+  color: var(--muted);
+  font-weight: var(--fw-m);
+  text-align: left;
+}
+.serveur-discussions-table td {
+  padding: var(--sp-2);
+  border-top: 1px solid var(--line);
+}
+.serveur-discussion-ligne {
+  cursor: pointer;
+}
+.serveur-discussion-ligne:hover {
+  background: var(--surface-2);
+}
+.serveur-discussion-ligne a {
+  color: inherit;
+}
+.serveur-discussion-point {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-right: var(--sp-2);
+  border-radius: 50%;
+  background: var(--s-inactif);
+}
+.serveur-discussion-point--working,
+.serveur-discussion-point--starting {
+  background: var(--acc);
+}
+.serveur-discussion-point--needs_input {
+  background: var(--s-attente);
+}
+.serveur-discussion-point--error {
+  background: var(--s-erreur);
+}
+/* Chantier 17 (R.6) : écran Discussion (§11.3, maquette ServerChat) — colonne de 820 px, fil en pleine hauteur. */
+.discussion {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+}
+.discussion-entete {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-5) var(--sp-8) var(--sp-2);
+}
+.discussion-titres {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.discussion-titres a {
+  color: inherit;
+}
+.discussion-puces {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+  padding: 0 var(--sp-8) var(--sp-3);
+  border-bottom: 1px solid var(--line);
+}
+.discussion-puce {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  max-width: 320px;
+  padding: 2px var(--sp-3);
+  overflow: hidden;
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-pill);
+  color: var(--text-2);
+  font-size: var(--fs-s);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.discussion-puce--mono {
+  font-family: ui-monospace, monospace;
+}
+.discussion-puce-point {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--s-inactif);
+}
+.discussion-puce--connected {
+  border-color: var(--acc);
+}
+.discussion-puce--connected .discussion-puce-point {
+  background: var(--acc);
+}
+.discussion-puce--connecting .discussion-puce-point {
+  background: var(--s-attente);
+}
+.discussion-puce--error .discussion-puce-point {
+  background: var(--s-erreur);
+}
+.discussion-colonne {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  width: 100%;
+  max-width: 820px;
+  min-height: 0;
+  margin: 0 auto;
+  padding: var(--sp-3) var(--sp-6) var(--sp-4);
+}
+.discussion-agent {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding-bottom: var(--sp-2);
+}
+.discussion-agent-nom {
+  font-family: ui-monospace, monospace;
+  color: var(--acc);
+}
+.discussion-agent .onglets-actions-portail {
+  margin-left: auto;
+}
+.discussion .conversation {
+  flex: 1 1 auto;
+  height: auto;
+  min-height: 0;
+}
+/* Le nom du serveur à côté de l'agent sur chaque tour distant. */
+.message-agent-serveur {
+  font-family: ui-monospace, monospace;
+  color: var(--muted);
+  font-size: var(--fs-s);
+}
+/* Ligne de reprise (§11.3) : séparateur centré, pastille ambre ; échec en rouge. */
+.ligne-connexion {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-2);
+  margin: var(--sp-3) 0;
+  color: var(--muted);
+  font-size: var(--fs-s);
+}
+.ligne-connexion-point {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--s-attente);
+}
+.ligne-connexion--echec {
+  color: var(--s-erreur);
+}
+.ligne-connexion--echec .ligne-connexion-point {
+  background: var(--s-erreur);
+}
+/* Serveur injoignable : bandeau ambre au-dessus du composer, composer fermé. */
+.bandeau-injoignable {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-3);
+  margin-bottom: var(--sp-2);
+  padding: var(--sp-2) var(--sp-3);
+  border: 1px solid var(--s-attente-line);
+  border-radius: var(--r-m);
+  background: var(--s-attente-bg);
+  font-size: var(--fs-s);
+}
+.bandeau-injoignable span {
+  flex: 1 1 240px;
+}
+.serveur-ajout {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-4);
+  padding: var(--sp-5);
+  border: 1px dashed var(--line-2);
+  border-radius: var(--r-xl);
+}
+.serveur-ajout-texte {
+  flex: 1 1 280px;
+}
+.serveur-ajout-titre {
+  margin: 0 0 var(--sp-1);
+  font-weight: var(--fw-m);
+}
+/* « Ouvrir la discussion » avant le groupe R : focalisable (aria-disabled) pour que son explication soit lue */
+.serveur-carte .bouton[aria-disabled='true'] {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+/* Chantier 17 (S.5) : configuration d'un serveur (§11.2, maquette ServerConfig). */
+.serveur-config {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.serveur-config-entete {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-5) var(--sp-8);
+  border-bottom: 1px solid var(--line);
+  background: var(--bg);
+}
+.serveur-config-titres {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.serveur-config-titres a {
+  color: inherit;
+}
+.serveur-config-corps {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 340px;
+  align-items: start;
+  gap: var(--sp-6);
+  padding: var(--sp-6) var(--sp-8) var(--sp-10);
+}
+[data-viewport='phone'] .serveur-config-corps,
+[data-viewport='tablet'] .serveur-config-corps {
+  grid-template-columns: minmax(0, 1fr);
+}
+.serveur-config-formulaire,
+.serveur-config-colonne {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+}
+.serveur-bloc {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  padding: var(--sp-4) var(--sp-5);
+  border: 1px solid var(--line);
+  border-radius: var(--r-xl);
+  background: var(--surface-1);
+}
+.serveur-bloc--danger {
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  border-color: var(--s-erreur-line);
+}
+.serveur-danger-titre,
+.serveur-test-titre {
+  margin: 0;
+  font-size: var(--fs-b);
+  font-weight: var(--fw-sb);
+}
+.serveur-champs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-3);
+}
+.serveur-champ {
+  display: flex;
+  flex: 1 1 200px;
+  flex-direction: column;
+  gap: var(--sp-1);
+  color: var(--text-2);
+  font-size: var(--fs-s);
+}
+.serveur-champ--court {
+  flex: 0 1 110px;
+}
+.serveur-champ .champ {
+  flex: none;
+}
+.serveur-champ-titre {
+  color: var(--text-2);
+  font-size: var(--fs-s);
+}
+.serveur-mono {
+  font-family: ui-monospace, monospace;
+}
+.serveur-aide {
+  display: block;
+  color: var(--faint);
+  font-size: var(--fs-s);
+}
+.serveur-couleurs,
+.serveur-dossiers {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2);
+}
+.serveur-couleur {
+  width: 22px;
+  height: 22px;
+  border: 2px solid transparent;
+  border-radius: var(--r-s);
+  cursor: pointer;
+}
+.serveur-segments {
+  display: inline-flex;
+  align-self: flex-start;
+  padding: 2px;
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-m);
+  background: var(--surface-2);
+}
+.serveur-segment {
+  padding: var(--sp-1) var(--sp-3);
+  border: 0;
+  border-radius: var(--r-s);
+  background: transparent;
+  color: var(--muted);
+  font-family: var(--font);
+  font-size: var(--fs-m);
+  cursor: pointer;
+}
+.serveur-segment[aria-pressed='true'] {
+  background: var(--surface-4);
+  color: var(--text);
+  font-weight: var(--fw-m);
+}
+.serveur-agents,
+.serveur-regles {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+}
+.serveur-agent,
+.serveur-regle {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+.serveur-dossier-retirer {
+  margin-left: var(--sp-1);
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+.serveur-dossier-champ {
+  flex: 0 1 160px;
+  height: var(--h-controle-s);
+}
+.serveur-test-entete {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.serveur-test-etapes {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.serveur-test-etape {
+  display: flex;
+  gap: var(--sp-2);
+  color: var(--text-2);
+  font-size: var(--fs-m);
+}
+.serveur-test-symbole {
+  flex: none;
+  width: 1em;
+  text-align: center;
+}
+.serveur-test-etape--ok .serveur-test-symbole {
+  color: var(--acc);
+}
+.serveur-test-etape--running .serveur-test-symbole {
+  color: var(--s-attente);
+}
+.serveur-test-etape--failed {
+  color: var(--s-erreur);
+}
+.serveur-test-etape--pending,
+.serveur-test-etape--skipped {
+  color: var(--faint);
+}
+.serveur-test-detail {
+  color: var(--faint);
+}
+.serveur-test-conclusion {
+  margin: 0;
+  color: var(--s-erreur);
+  font-weight: var(--fw-m);
+}
+.serveur-test-conclusion--ok {
+  color: var(--acc);
+}
+.serveur-test-brut pre {
+  max-height: 240px;
+  margin: var(--sp-2) 0 0;
+  padding: var(--sp-2);
+  overflow: auto;
+  border-radius: var(--r-s);
+  background: var(--surface-term);
+  font-family: ui-monospace, monospace;
+  font-size: var(--fs-s);
+  white-space: pre-wrap;
+}
+.serveur-apercu-groupe,
+.serveur-apercu-ligne {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+.serveur-apercu-carre {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+}
+.serveur-apercu-ligne {
+  padding: var(--sp-2) var(--sp-3);
+  border-radius: var(--r-m);
+  background: var(--surface-3);
+}
+.serveur-apercu-nom {
+  flex: 1 1 auto;
+}
+.serveur-config-entete > .message-erreur,
+.serveur-config-probleme {
+  flex: 1 0 100%;
+  margin: 0;
+}
+.serveur-config-probleme {
+  color: var(--s-attente);
+  font-size: var(--fs-s);
+}
+.serveur-couleur[aria-pressed='true'] {
+  border-color: var(--text);
+}
+/* Chantier 17 (S.6) : section Serveurs de la barre gauche. */
+.barre-gauche-serveurs-lien {
+  color: inherit;
+  text-decoration: none;
+}
+.barre-gauche-serveurs-lien:hover,
+.barre-gauche-serveurs-lien[aria-current='page'] {
+  color: var(--text);
+}
+.barre-gauche-serveurs-entete a.barre-gauche-actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+}
+.barre-gauche-serveurs-vide {
+  margin: 0;
+  padding: 0 var(--sp-2);
+  font-size: var(--fs-s);
+}
+.barre-gauche-serveur .icone-serveur {
+  flex: none;
+}
+.barre-gauche-serveur--unreachable .barre-gauche-sujet-nom,
+.barre-gauche-serveur--error .barre-gauche-sujet-nom {
+  color: var(--faint);
+}
+.barre-gauche-serveur--connecting .barre-gauche-sujet-temps {
+  color: var(--s-attente);
+}
+/* Classes propres à la section : les sélecteurs des groupes de sujets (e2e compris) ne la voient pas. */
+.barre-gauche-serveurs {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+.barre-gauche-serveurs-entete {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: var(--sp-3) var(--sp-2) 0;
+}
+.barre-gauche-serveurs-entete .titre-zone {
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* Chantier 17 (F.3, §11.3.1) : panneau Fichiers / Git de l'écran Discussion, 360 px à droite du fil. La grille
+   ne s'applique que panneau ouvert ; fermé, l'écran garde sa colonne flex. */
+.discussion:has(> .panneau-serveur) {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 360px;
+  grid-template-rows: auto auto auto minmax(0, 1fr);
+}
+.discussion:has(> .panneau-serveur) > .discussion-entete {
+  grid-row: 1;
+  grid-column: 1 / -1;
+}
+.discussion:has(> .panneau-serveur) > .discussion-puces {
+  grid-row: 2;
+  grid-column: 1 / -1;
+}
+.discussion:has(> .panneau-serveur) > .message-erreur {
+  grid-row: 3;
+  grid-column: 1 / -1;
+}
+.discussion:has(> .panneau-serveur) > .discussion-colonne {
+  grid-row: 4;
+  grid-column: 1;
+}
+.panneau-serveur {
+  grid-row: 4;
+  grid-column: 2;
+  min-height: 0;
+}
+.panneau-serveur-entete {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--line);
+}
+.panneau-serveur-onglets {
+  display: flex;
+}
+.panneau-serveur-barre {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: var(--sp-2) var(--sp-3);
+  border-bottom: 1px solid var(--line);
+  font-size: var(--fs-s);
+}
+.panneau-serveur-chemin {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: ui-monospace, monospace;
+  color: var(--text-2);
+}
+.panneau-serveur-age {
+  flex: none;
+  color: var(--muted);
+}
+.panneau-serveur-contenu {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+}
+.panneau-serveur .situation {
+  margin: var(--sp-2);
+  padding: var(--sp-2) var(--sp-3);
+}
+.panneau-serveur .situation .actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+}
+.panneau-serveur .confirm-carte {
+  flex: 1 1 100%;
+}
+.panneau-serveur-branche {
+  font-family: ui-monospace, monospace;
+  color: var(--text);
+}
+.panneau-serveur-source {
+  margin: 0;
+  padding: var(--sp-3);
+  font-family: ui-monospace, monospace;
+  font-size: var(--fs-s);
+  white-space: pre;
+  overflow-x: auto;
+}
+.panneau-serveur-depots {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  padding: var(--sp-2) var(--sp-3);
+}
+.panneau-serveur-depot {
+  justify-content: flex-start;
+  font-family: ui-monospace, monospace;
+}
+.panneau-serveur .panneau-pied {
+  border-radius: 0;
+}
+.ligne-arbre {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  width: 100%;
+  height: 30px;
+  padding-right: var(--sp-3);
+  border: 0;
+  background: transparent;
+  color: var(--text-2);
+  font-family: var(--font);
+  font-size: var(--fs-m);
+  text-align: left;
+  cursor: pointer;
+}
+.ligne-arbre:hover:not(:disabled) {
+  background: var(--surface-3);
+}
+.ligne-arbre:disabled {
+  cursor: default;
+}
+.ligne-arbre--lourd,
+.ligne-arbre--masque {
+  color: var(--muted);
+}
+.ligne-arbre-nom {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ligne-arbre-lien {
+  color: var(--muted);
+}
+.ligne-arbre-badge {
+  flex: none;
+  font-family: ui-monospace, monospace;
+  font-size: var(--fs-s);
+}
+.ligne-arbre-badge--modifie {
+  color: var(--s-attente);
+}
+.ligne-arbre-badge--non-suivi {
+  color: var(--s-relire);
+}
+.ligne-arbre-badge--masque {
+  color: var(--muted);
+  font-family: var(--font);
+}
+/* F.4 : serveur injoignable, l'âge des dernières données lues passe en ambre. */
+.panneau-serveur-age[data-ancien] {
+  color: var(--s-attente);
 }

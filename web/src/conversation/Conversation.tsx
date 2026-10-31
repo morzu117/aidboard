@@ -12,14 +12,17 @@ import type { AgentSettings } from '../../../src/shared/agentSettings.js';
 import type { Agent, AgentStatus } from '../../../src/shared/model.js';
 import type { AgentStreamItem } from '../../../src/shared/conversation.js';
 import { useAid } from '../data/useAidState.js';
-import { AgentSocket } from './agentSocket.js';
+import { AgentSocket, socketSur } from './agentSocket.js';
 import { Composer } from './Composer.js';
+import { ConfirmCard, type ConfirmResolution } from './ConfirmCard.js';
 import { DecisionCard } from './DecisionCard.js';
 import { MarkMenu } from './MarkMenu.js';
 import { MarkRail, type QuestionRepere } from './MarkRail.js';
 import { Message } from './Message.js';
+import { useAgentRoutes } from './routes.js';
 import { ToolCallGroup } from './ToolCallGroup.js';
 import { buildTurns, tourInterrompu } from './thread.js';
+import type { Block } from './thread.js';
 
 const message = (err: unknown) => (err instanceof Error ? err.message : String(err));
 // Chantier 16 : seuls claude et codex en `stream` ont des réglages ; un agent d'avant la migration est en « Demander ».
@@ -31,6 +34,19 @@ const SEUIL_BAS = 40;
 const SEUIL_REPERE = 40;
 // Le canal précédent a fermé (D65) ; ces statuts disent que l'agent est reparti sous le même id (A.6).
 const REPART: ReadonlySet<AgentStatus> = new Set(['starting', 'working', 'needs_input']);
+const heure = (at: string) =>
+  new Date(at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+/** R.6 (§11.3) : « Connexion perdue à 09:41 · reprise après 4 s · session retrouvée ». */
+function ligneConnexion(b: Extract<Block, { kind: 'connexion' }>): string {
+  if (b.etat === 'echec')
+    return b.reason
+      ? `Session introuvable sur le serveur : ${b.reason}`
+      : 'Session introuvable sur le serveur';
+  const perdue = `Connexion perdue à ${heure(b.at)}`;
+  if (b.etat === 'perdue') return `${perdue} · reconnexion…`;
+  const apres = Math.max(1, Math.round((b.afterMs ?? 0) / 1000));
+  return `${perdue} · reprise après ${apres} s · ${b.sessionFound ? 'session retrouvée' : 'session relancée'}`;
+}
 
 // Une instance par agent, montée une fois et masquée au changement d'onglet, comme <Terminal> (D65).
 export function Conversation({
@@ -45,6 +61,8 @@ export function Conversation({
   actionsHost?: HTMLDivElement | null;
 }) {
   const { call } = useAid();
+  // R.6 : agent de sujet par défaut ; sous l'écran Discussion, agent distant
+  const { api, ws, distant } = useAgentRoutes();
   const [items, setItems] = useState<Map<number, AgentStreamItem>>(new Map());
   const [truncated, setTruncated] = useState(false);
   const [linked, setLinked] = useState(true);
@@ -61,13 +79,23 @@ export function Conversation({
   const sockRef = useRef<AgentSocket | null>(null);
   // pas de rendu propre (A.6) : seul un futur changement de `agent.status` doit déclencher la relance
   const exitedRef = useRef(false);
+  // R.6 : l'écran Discussion relit l'agent à chaque événement ; tenu par ref, le canal n'est pas rouvert pour lui
+  const evenementRef = useRef(distant?.onEvent);
+  useEffect(() => {
+    evenementRef.current = distant?.onEvent;
+  });
+  // F.4 : même chose avec l'événement, pour l'actualisation du panneau du serveur
+  const itemRef = useRef(distant?.onItem);
+  useEffect(() => {
+    itemRef.current = distant?.onItem;
+  });
   // id stable mais unique par instance (D65 : une Conversation par agent, montée en permanence) —
   // `dn` est une constante littérale partagée par toutes les instances, donc impropre à un id DOM (review A.7)
   const raccourcisId = useId();
 
   const ouvrirSocket = useCallback(
     () =>
-      new AgentSocket(agent.id, {
+      new (socketSur(ws))(agent.id, {
         onHello: () => {},
         onHistory: (hist, trunc) => {
           setItems((m) => {
@@ -81,13 +109,15 @@ export function Conversation({
         onEvent: (it) => {
           setItems((m) => new Map(m).set(it.seq, it));
           if (!atBottomRef.current) setPill(true);
+          evenementRef.current?.();
+          itemRef.current?.(it);
         },
         onExit: () => {
           exitedRef.current = true;
         },
         onLink: setLinked,
       }),
-    [agent.id],
+    [agent.id, ws],
   );
 
   useEffect(() => {
@@ -105,6 +135,23 @@ export function Conversation({
 
   const sorted = useMemo(() => [...items.values()].sort((a, b) => a.seq - b.seq), [items]);
   const turns = useMemo(() => buildTurns(sorted), [sorted]);
+  // R.5 : l'issue d'une carte de confirmation, lue au fil (réponse de l'opérateur, d'une règle, ou demande close)
+  const resolutions = useMemo(() => {
+    const m = new Map<string, Exclude<ConfirmResolution, null>>();
+    let ouvertes: string[] = [];
+    for (const { event: e } of sorted)
+      if (e.type === 'request') ouvertes.push(e.request.id);
+      else if (e.type === 'request_answered')
+        m.set(e.requestId, e.auto ? { answer: e.answer, auto: true } : { answer: e.answer });
+      else if (e.type === 'request_cancelled' && !m.has(e.requestId))
+        m.set(e.requestId, { cancelled: true });
+      else if (e.type === 'turn_end' || e.type === 'exit') {
+        // tour fini sans réponse au fil (redémarrage du daemon, lien perdu) : la demande est close
+        for (const id of ouvertes) if (!m.has(id)) m.set(id, { cancelled: true });
+        ouvertes = [];
+      }
+    return m;
+  }, [sorted]);
   const toolSeqs = useMemo(
     () => turns.flatMap((t) => t.blocks.filter((b) => b.kind === 'tools').map((b) => b.seq)),
     [turns],
@@ -189,9 +236,34 @@ export function Conversation({
   };
 
   // Pas d'optimisme (D65-A.7) : la bascule locale n'a lieu qu'après la réponse 200 de la route.
+  // R.6 (§11.3) : dernier échec de reprise sans message ni reprise après lui, le seul à offrir « Reconnecter »
+  const echecOuvert = useMemo(() => {
+    let seq: number | null = null;
+    for (const { seq: s, event: e } of sorted)
+      if (e.type === 'resume_failed') seq = s;
+      else if (e.type === 'connection_resumed' || (e.type === 'message' && e.role === 'user'))
+        seq = null;
+    return seq;
+  }, [sorted]);
+  // issue de « Reconnecter », attachée à la ligne d'échec qui l'a offert : un nouvel échec repart de zéro
+  const [tentative, setTentative] = useState<{ seq: number; etat: string } | null>(null);
+  const reconnexion = tentative !== null && tentative.seq === echecOuvert ? tentative.etat : null;
+  const reconnecter = async () => {
+    if (echecOuvert === null) return;
+    const seq = echecOuvert;
+    setTentative({ seq, etat: 'en-cours' });
+    try {
+      await call('POST', `${api}/${agent.id}/reconnect`);
+      // l'agent est relancé ; sa ligne d'échec le dit, plutôt que de laisser le bouton comme si rien n'avait eu lieu
+      setTentative({ seq, etat: 'ok' });
+    } catch (err) {
+      setTentative({ seq, etat: message(err) });
+    }
+  };
+
   const toggleMark = async (seq: number, marked: boolean) => {
     try {
-      await call('PUT', `/api/agents/${agent.id}/messages/${seq}/mark`, { marked });
+      await call('PUT', `${api}/${agent.id}/messages/${seq}/mark`, { marked });
       setMarkErreur(null);
       setItems((m) => {
         const it = m.get(seq);
@@ -339,14 +411,71 @@ export function Conversation({
                       />
                     );
                   case 'decision':
+                    if (b.request.confirm)
+                      return (
+                        <ConfirmCard
+                          key={bn}
+                          agentId={agent.id}
+                          request={b.request}
+                          resolution={resolutions.get(b.request.id) ?? null}
+                          dataNode={bn}
+                        />
+                      );
                     return (
                       <DecisionCard
                         key={bn}
                         agentId={agent.id}
                         request={b.request}
-                        resolved={agent.pending?.id !== b.request.id}
+                        resolved={
+                          distant
+                            ? resolutions.has(b.request.id)
+                            : agent.pending?.id !== b.request.id
+                        }
                         dataNode={bn}
                       />
+                    );
+                  case 'connexion':
+                    return (
+                      <p
+                        className={`ligne-connexion ligne-connexion--${b.etat}`}
+                        key={bn}
+                        data-node={bn}
+                        role={b.etat === 'echec' ? 'alert' : undefined}
+                      >
+                        <span className="ligne-connexion-point" aria-hidden="true" />
+                        {ligneConnexion(b)}
+                        {b.etat === 'echec' &&
+                          distant &&
+                          b.seq === echecOuvert &&
+                          reconnexion !== 'ok' && (
+                            <button
+                              className="bouton"
+                              data-node={`${bn}.reconnecter`}
+                              type="button"
+                              disabled={reconnexion === 'en-cours'}
+                              onClick={() => void reconnecter()}
+                            >
+                              Reconnecter
+                            </button>
+                          )}
+                        {b.etat === 'echec' && b.seq === echecOuvert && reconnexion && (
+                          <span
+                            className={
+                              reconnexion === 'en-cours' || reconnexion === 'ok'
+                                ? 'texte-faible'
+                                : 'message-erreur'
+                            }
+                            role="status"
+                            data-node={`${bn}.reconnexion`}
+                          >
+                            {reconnexion === 'en-cours'
+                              ? 'Reconnexion…'
+                              : reconnexion === 'ok'
+                                ? 'Agent relancé sur le serveur'
+                                : reconnexion}
+                          </span>
+                        )}
+                      </p>
                     );
                   case 'turn_end':
                     return (
@@ -407,6 +536,24 @@ export function Conversation({
         <p className="message-erreur" role="status" data-node={`${dn}.mark-erreur`}>
           {markErreur}
         </p>
+      )}
+      {distant?.injoignable && (
+        <div className="bandeau-injoignable" role="alert" data-node={`${dn}.injoignable`}>
+          <span>
+            {distant.serveur} ne répond pas{distant.raison ? ` : ${distant.raison}` : ''}. Les
+            messages pourront partir quand il sera de nouveau joignable.
+          </span>
+          {distant.onReconnecter && (
+            <button
+              className="bouton"
+              data-node={`${dn}.injoignable.reconnecter`}
+              type="button"
+              onClick={() => void distant.onReconnecter?.()}
+            >
+              Reconnecter
+            </button>
+          )}
+        </div>
       )}
       <Composer
         agentId={agent.id}
