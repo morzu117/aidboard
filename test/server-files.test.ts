@@ -23,6 +23,10 @@ import {
   parsePreview,
   PREVIEW_MAX,
   readCommand,
+  SECRET_CASE,
+  SECRET_DIRS,
+  SECRET_PAIR_CASE,
+  secretDirIn,
 } from '../src/daemon/remote/files.js';
 import { type ExecResult, remoteExec } from '../src/daemon/remote/transport.js';
 import type {
@@ -530,4 +534,106 @@ test('F.1 : le git status ne réécrit pas l’index du dépôt (lecture seule)'
   expect(r.statusCode).toBe(200);
   expect(r.json<ServerFsListing>().entries.find((e) => e.name === 'README.md')?.git).toBeNull();
   expect(statSync(join(p, '.git', 'index')).mtimeMs).toBe(avant);
+});
+
+test('review complète : un dossier de secrets n’est jamais un dossier autorisé', async () => {
+  t = await startTestDaemon();
+  projet(t.home);
+  for (const dir of [
+    '~/.kube',
+    '~/.aws',
+    '~/.gnupg',
+    '~/.config/gcloud',
+    '~/proj/.docker/sub',
+    '/srv/repo.git/modules/a',
+    '~/.SSH',
+  ]) {
+    const r = await t.d.app.inject({
+      method: 'POST',
+      url: '/api/servers',
+      headers: t.headers,
+      payload: {
+        name: `s${dir.length}`,
+        mode: 'ssh_alias',
+        target: 'vps',
+        allowedDirs: ['~', dir],
+      },
+    });
+    expect(r.statusCode, dir).toBe(400);
+    expect(r.json().error, dir).toContain('dossier de secrets');
+  }
+  // les motifs de fichiers ne comptent pas dans un dossier autorisé (review F.1)
+  const s = await create({ allowedDirs: ['~/proj', '/srv/id_app/proj', '~/.config/app'] });
+  expect(s.allowedDirs).toEqual(['~/proj', '/srv/id_app/proj', '~/.config/app']);
+});
+
+test('review complète : dossier autorisé qui mène à un dossier de secrets par un lien, refusé', async () => {
+  t = await startTestDaemon();
+  projet(t.home);
+  mkdirSync(join(t.home, '.kube'));
+  writeFileSync(join(t.home, '.kube', 'config'), 'token: XYZ');
+  symlinkSync(join(t.home, '.kube'), join(t.home, 'clusters'));
+  const s = await create({ allowedDirs: ['~/proj', '~/clusters'] });
+  for (const url of [
+    `/api/servers/${s.id}/fs?path=${q('~/clusters')}`,
+    `/api/servers/${s.id}/file?path=${q('~/clusters/config')}`,
+  ]) {
+    const r = await get(url);
+    expect(r.statusCode, url).toBe(403);
+    expect(r.body, url).toContain('masqué');
+    expect(r.body, url).not.toContain('XYZ');
+  }
+  expect((await get(`/api/servers/${s.id}/fs?path=${q('~/proj')}`)).statusCode).toBe(200);
+  // le script refuse lui-même, sur le serveur : le contenu ne traverse jamais ssh
+  const r = await remoteExec(s, readCommand(s, '~/clusters/config'), {
+    ssh: FAKE_SSH,
+    env: { ...process.env, FAKE_SSH_HOME: t.home },
+  });
+  expect(r.stdout).toContain('masque');
+  expect(r.stdout).not.toContain('XYZ');
+});
+
+test('review complète : dossiers de secrets — le `case` du script et la regex du daemon disent la même chose', () => {
+  expect(SECRET_DIRS.every((d) => HIDDEN_PATTERNS.includes(d))).toBe(true);
+  const run = (pattern: string, args: string[]) =>
+    execFileSync(
+      'sh',
+      [
+        '-c',
+        `for n in "$@"; do case "$n" in ${pattern}) echo y ;; *) echo n ;; esac; done`,
+        'sh',
+        ...args,
+      ],
+      { encoding: 'utf8' },
+    )
+      .trim()
+      .split('\n');
+  const noms = ['.ssh', '.Kube', '.aws', '.vnc', 'id_app', 'proj', '.config', 'ssh'];
+  run(SECRET_CASE, noms).forEach((r, i) =>
+    expect([noms[i], r]).toEqual([noms[i], secretDirIn(`/h/${noms[i]}`) ? 'y' : 'n']),
+  );
+  const paires = ['.config/gcloud', 'x.git/modules', 'proj/modules', 'gcloud/x'];
+  run(SECRET_PAIR_CASE, paires).forEach((r, i) =>
+    expect([paires[i], r]).toEqual([paires[i], secretDirIn(`/h/${paires[i]}`) ? 'y' : 'n']),
+  );
+  expect(secretDirIn('/srv/id_app/proj')).toBe(false);
+  expect(secretDirIn('~/.config/gcloud/x')).toBe(true);
+});
+
+test('review complète : le daemon refuse un dossier autorisé de secrets annoncé par le script', () => {
+  const s = { id: 'srv_x', allowedDirs: ['~'] } as Server;
+  const sortie = (resolved: string, base: string): ExecResult => ({
+    code: 0,
+    stdout: `\0aid-fs\0ok\0${resolved}\0${base}\0${3}\0${0}\0XYZ`,
+    stderr: '',
+    durationMs: 1,
+    timedOut: false,
+    truncated: false,
+  });
+  for (const [resolved, base] of [
+    ['/h/.kube/config', '/h/.kube'],
+    ['/h/.aws/config', '/h/.aws'],
+    ['/h/.config/gcloud/x', '/h/.config/gcloud'],
+  ] as const)
+    expect(() => parsePreview(s, '~/x', sortie(resolved, base)), resolved).toThrow(/masqué/);
 });

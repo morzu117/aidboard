@@ -813,3 +813,9 @@ Reprises du brief §11.6, plus celles nées de l'état des lieux :
   et commit sont revérifiés (`perime` sinon) ; une annulation de rebase elle-même en échec est dite
   (`rebaselaisse`) au lieu de « rien n'a changé ». Tests : un `git` du serveur qui commite pendant le fetch, ou
   dont `rebase --abort` échoue. Mutations vérifiées sur les trois gardes. Gate : vert (1215).
+- **Correctif RC.3, dossier autorisé de secrets** (`remote/files.ts`, `remote/servers.ts`) : `~/.kube`,
+  `~/.aws`, `~/.gnupg`, `~/.config/gcloud`… autorisés ouvraient leur contenu (`config`), le masquage ne testant
+  que les composants sous le dossier autorisé. Un dossier de secrets (`SECRET_DIRS`, sous-ensemble des motifs
+  masqués) n'est plus jamais autorisé : refusé à l'enregistrement (400), refusé par le script sur le dossier
+  autorisé résolu (lien compris), revérifié par le daemon. Les motifs de fichiers ne comptent pas
+  (`/srv/id_app/proj` reste autorisable). Mutations vérifiées sur les trois couches. Gate : vert (1219).
