@@ -110,6 +110,11 @@ Numérotation continue depuis D71 (chantier 16).
   **Opérateur, 2026-10-30** : « secret → masqué » est une **règle immuable** (aucun réglage ne l'ouvre) ;
   liste élargie aux jetons et identifiants courants (point F.1 bis). Afficher un secret demandera le mot de
   passe de la machine — fonction à concevoir, hors groupe F.
+  Piste retenue par l'opérateur (2026-10-31) : un **mot de passe propre à `aid-relay`**, défini sur le
+  serveur (empreinte scrypt côté relais, jamais connu d'A-I-D au repos, D76), saisi à chaque affichage,
+  passé au relais par stdin, vérifié et limité en essais par le relais, affichage journalisé sur le serveur,
+  rien gardé côté A-I-D. Touch ID / session du Mac (AID.app) : option ultérieure. Limite assumée : barrière
+  de consentement, pas de protection contre un daemon compromis (il a l'accès ssh).
 - **D79 — tests sans réseau**. Jamais de vrai `ssh` ni de vrai serveur dans un test : fixture
   `test/fixtures/fake-ssh.sh` (ignore l'hôte, exécute la commande localement sous `sh`, peut
   simuler une coupure ou un échec), et `fake-tmux.sh` dans le `PATH` des tests du relais si
@@ -634,3 +639,27 @@ Reprises du brief §11.6, plus celles nées de l'état des lieux :
 - **Gate pendant F.1 bis** : vert (1152, puis 1155 après la review). Un passage intermédiaire à 12 rouges,
   tous en délai dépassé (~926 s par test, fichiers sans rapport) : horloge sautée pendant une mise en veille
   probable du poste, qui explique aussi les deux reviews figées ; relancé, vert.
+- **Shells non POSIX** — décision opérateur du 2026-10-30 : « assumer que certains shells de connexion ne
+  sont pas supportés pour le moment ». Toute commande distante passe, doublement quotée, par le shell de
+  connexion du compte (`sshd` : `$SHELL -c`) : fish y réduit `\\` entre quotes simples, csh y refuse un saut
+  de ligne entre quotes. Deux gardes :
+  - `server.shell` (lancé par `-lc`) restreint aux shells POSIX par nom de base (`bash`, `zsh`, `sh`, `dash`,
+    `ksh`, `ksh93`, `mksh`, `oksh`, `pdksh`, `loksh`, `ash`, `yash`), 400 sinon, raison dite. Un serveur déjà
+    enregistré avec un autre shell refuse toute modification tant que son shell n'est pas changé (assumé) ;
+  - sonde du **shell de connexion** portée par **chaque ping** (`echo aid-ok; printf '%s|' 'a\\b' 'c⏎d'`),
+    sans connexion de plus : un shell qui l'altère (fish) ou la refuse (csh, « Unmatched ' ») met le serveur
+    en `error` — jamais « connecté » — et l'étape `shell` du test en échec, avec « non supporté pour le
+    moment ». Une coupure n'est jamais un verdict sur le shell.
+  - fixture : `FAKE_SSH_SHELL` (shell de connexion simulé) ; le journal du faux ssh garde une ligne par
+    appel même si la commande porte un saut de ligne (1 ligne existante modifiée). Faux fish et faux csh
+    écrits par le test, sans dépendre de ce que la machine installe ; contrôle positif sur `sh` et sur
+    `bash`, `dash`, `zsh`, `ksh` quand présents.
+- **Review shells** : retenus — sonde faite au seul test (le ping restait « sain » sous fish) → portée par
+  le ping ; toute défaillance de sonde lue comme « non supporté » → coupure classée d'abord ; `/bin/tcsh`
+  absent des CI → faux csh ; shells `ksh93` / `oksh` / `pdksh` refusés à tort ; tests d'acceptation et de
+  message. Reporté à la review complète : relais et agents ne vérifient pas eux-mêmes l'état du serveur
+  avant de lancer (un serveur jamais pingé sous fish échouerait à la première commande, pas en silence :
+  les scripts du relais portent sauts de ligne et `\\`).
+- **Gate des shells** : vert (1158) au réveil du poste ; les trois passages de la nuit, rouges uniquement en
+  délai dépassé (700 à 975 s par test), tombaient pendant la mise en veille (`caffeinate -i` n'empêche pas
+  la veille capot fermé).

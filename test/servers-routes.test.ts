@@ -189,6 +189,10 @@ test('environnement, permissions et identité : validés, dossiers autorisés d�
     { allowedDirs: ['/srv/a b'] },
     { allowedDirs: ['~x'] },
     { shell: '-c' },
+    { shell: 'fish' },
+    { shell: '/usr/bin/fish' },
+    { shell: 'csh' },
+    { shell: 'tcsh' },
     { name: 'x'.repeat(65) },
     { allowedDirs: Array.from({ length: 33 }, (_, i) => `/d${i}`) },
     { color: 'rouge' },
@@ -201,6 +205,15 @@ test('environnement, permissions et identité : validés, dossiers autorisés d�
     ).toBe(400);
   }
   expect((await req('PATCH', '/api/servers/srv_nope', { shell: 'zsh' })).statusCode).toBe(404);
+  // shells POSIX acceptés, chemin complet compris ; les autres refusés avec la raison
+  for (const shell of ['sh', 'dash', 'ksh93', 'mksh', 'ash', '/usr/local/bin/zsh', '/bin/bash']) {
+    const r = await req('PATCH', `/api/servers/${s.id}`, { shell });
+    expect(r.statusCode, shell).toBe(200);
+    expect(r.json<Server>().shell).toBe(shell);
+  }
+  const fish = await req('PATCH', `/api/servers/${s.id}`, { shell: '/opt/homebrew/bin/fish' });
+  expect(fish.statusCode).toBe(400);
+  expect(fish.json<{ error: string }>().error).toContain('non supporté pour le moment');
 });
 
 test('suppression : le serveur et ses règles, rien d’autre ; règle révocable', async () => {

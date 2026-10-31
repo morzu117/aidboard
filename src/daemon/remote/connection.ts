@@ -11,6 +11,24 @@ const PING_TIMEOUT_MS = 15_000;
 export const STATUS_MAX_AGE_MS = 60_000;
 const RAW_MAX = 64 * 1024;
 const MARK = 'aid-ok';
+/**
+ * Décision opérateur du 2026-10-30 : shell de connexion non POSIX (fish, csh…) non supporté pour le moment.
+ * Toute commande distante passe par lui, doublement quotée : il doit garder `\\` et un saut de ligne entre
+ * quotes simples — fish réduit l'un, csh refuse l'autre (« Unmatched ' »). La sonde voyage avec chaque
+ * ping : sans connexion de plus, un serveur dont le shell change après le test ne paraît jamais sain.
+ */
+const POSIX_PROBE = "printf '%s|' 'a\\\\b' 'c\nd'";
+const POSIX_PROBE_OUT = 'a\\\\b|c\nd|';
+const PING = `echo ${MARK}; ${POSIX_PROBE}`;
+export const UNSUPPORTED_LOGIN_SHELL =
+  'shell de connexion du serveur non POSIX (fish, csh…) : non supporté pour le moment, les commandes A-I-D y seraient altérées';
+
+/** Une coupure n'est jamais un verdict sur le shell ; sinon fish (sonde altérée) ou csh (quote refusée). */
+function loginShellUnsupported(r: ExecResult, mode: Server['mode']): boolean {
+  if (connectionLost(r, mode)) return false;
+  if (r.stdout.includes(MARK)) return !r.stdout.includes(POSIX_PROBE_OUT);
+  return /Unmatched '/.test(r.stderr);
+}
 
 /** Agents connus (§11.2) : binaire cherché sur le serveur → nom affiché. */
 const KNOWN_AGENTS: ReadonlyArray<[bin: string, name: string]> = [
@@ -113,7 +131,7 @@ export class ServerConnections {
     // un serveur sain ne clignote pas à chaque contrôle périodique ; un « Reconnecter » se voit
     if (this.status(server.id).state !== 'connected')
       this.setStatus(server.id, { state: 'connecting' });
-    const p = this.exec(server, `echo ${MARK}`)
+    const p = this.exec(server, PING)
       .then((r) => this.record(server, r))
       .catch((e: unknown) =>
         this.setStatus(server.id, {
@@ -253,8 +271,9 @@ export class ServerConnections {
         return { detail: found.path };
       });
       await step('shell', async () => {
-        const r = await remote('shell', `echo ${MARK}`);
+        const r = await remote('shell', PING);
         this.record(server, r);
+        if (loginShellUnsupported(r, server.mode)) throw new StepFailed(UNSUPPORTED_LOGIN_SHELL);
         if (r.code !== 0 || !r.stdout.includes(MARK))
           throw new StepFailed(
             r.code === 0
@@ -340,6 +359,12 @@ export class ServerConnections {
   }
 
   private record(server: Server, r: ExecResult): ServerStatus {
+    if (loginShellUnsupported(r, server.mode))
+      return this.setStatus(server.id, {
+        state: 'error',
+        latencyMs: null,
+        reason: UNSUPPORTED_LOGIN_SHELL,
+      });
     if (r.code === 0 && r.stdout.includes(MARK))
       return this.setStatus(server.id, {
         state: 'connected',
