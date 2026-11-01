@@ -316,6 +316,8 @@ if command -v git >/dev/null 2>&1 && [ "$(git rev-parse --is-inside-work-tree 2>
   to=; command -v timeout >/dev/null 2>&1 && to="timeout ${GIT_TIMEOUT_S}"
   GIT_OPTIONAL_LOCKS=0 $to git --no-optional-locks -c core.fsmonitor=false -c core.untrackedCache=false \\
     status --porcelain -z --untracked-files=normal -- . 2>/dev/null
+  # toujours le dernier enregistrement : absent (sortie coupée) ou non nul, les badges sont incomplets (chantier 19, S.3)
+  printf 'gitrc\\t%s\\000' "$?"
 fi
 `;
 
@@ -410,7 +412,10 @@ function badges(recs: string[], at: number): Map<string, 'M' | '?'> | null {
 export function parseListing(server: Server, path: string, r: ExecResult): ServerFsListing {
   const recs = records(r);
   const at = recs.findIndex((x) => x.startsWith('git\t'));
-  const git = badges(recs, at);
+  // S.3 : le code de sortie de `git status`, dernier enregistrement non vide quand la sortie est entière
+  const last = recs.findLastIndex((x) => x !== '');
+  const rc = at >= 0 && last > at && /^gitrc\t\d+$/.test(recs[last]!) ? last : -1;
+  const git = badges(rc < 0 ? recs : recs.slice(0, rc), at);
   const whole = git?.get('') ?? null;
   const entries: ServerFsEntry[] = [];
   // les entrées s'arrêtent à la section git : un chemin de `git status` n'en est jamais une
@@ -445,6 +450,7 @@ export function parseListing(server: Server, path: string, r: ExecResult): Serve
     // `plus` : le plafond d'entrées ; `r.truncated` : la sortie elle-même coupée (git status d'un gros dépôt)
     truncated: listed.includes('plus') || r.truncated,
     git: git !== null,
+    gitPartial: git !== null && (rc < 0 || recs[rc] !== 'gitrc\t0'),
     readAt: new Date().toISOString(),
   };
 }

@@ -349,6 +349,8 @@ export interface ServerFsListing {
   truncated: boolean;
   /** Le dossier est dans un dépôt Git (badges disponibles). */
   git: boolean;
+  /** Chantier 19 (S.3) : `git status` n'a pas abouti (délai, échec, sortie coupée) — un fichier sans badge n'est pas forcément propre. */
+  gitPartial: boolean;
   readAt: string;
 }
 

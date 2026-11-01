@@ -46,6 +46,8 @@ test('fichiers et git sur un vrai dépôt : liste, aperçu, secrets masqués, é
     path: '~/proj',
     resolved: '/home/aid/proj',
     git: true,
+    // chantier 19, S.3 : le vrai git status a abouti
+    gitPartial: false,
     truncated: false,
   });
   const by = new Map(l.entries.map((e) => [e.name, e]));

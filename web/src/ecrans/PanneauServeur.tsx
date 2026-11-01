@@ -313,6 +313,16 @@ function OngletFichiersServeur({
             Liste tronquée : dossier trop grand pour être lu en entier.
           </p>
         )}
+        {lu.listing.gitPartial && (
+          <p
+            className="texte-discret"
+            style={{ paddingLeft: `${depth * 20 + 8}px` }}
+            data-node="discussion.panneau.fichiers.badges-incomplets"
+          >
+            Badges Git incomplets : git status n’a pas abouti, un fichier sans badge n’est pas
+            forcément propre.
+          </p>
+        )}
       </>
     );
   };

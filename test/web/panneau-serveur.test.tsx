@@ -64,6 +64,7 @@ const dossier = (path: string, entries: ServerFsListing['entries']): ServerFsLis
   entries,
   truncated: false,
   git: true,
+  gitPartial: false,
   readAt: READ_AT,
 });
 const entree = (over: Partial<ServerFsListing['entries'][number]>) => ({
@@ -1046,4 +1047,26 @@ test('chantier 19, S.1 : modifiés inconnus (git status en échec) — dit tel q
   await waitFor(() =>
     expect(node('discussion.panneau.git.modifies')?.textContent).toBe('modifiés : inconnu'),
   );
+});
+
+test('chantier 19, S.3 : badges Git incomplets — dit sous l’arbre ; complets, rien', async () => {
+  ouvrir(
+    { open: true, tab: 'files' },
+    {
+      [`GET /api/servers/srv_1/fs?${p('~/app')}`]: json(200, {
+        ...dossier('~/app', [entree({ name: 'README.md' })]),
+        gitPartial: true,
+      }),
+    },
+  );
+  await waitFor(() =>
+    expect(node('discussion.panneau.fichiers.badges-incomplets')?.textContent).toBe(
+      'Badges Git incomplets : git status n’a pas abouti, un fichier sans badge n’est pas forcément propre.',
+    ),
+  );
+  cleanup();
+
+  ouvrir({ open: true, tab: 'files' }, ARBRE);
+  await waitFor(() => expect(ligne('README.md')).not.toBeNull());
+  expect(node('discussion.panneau.fichiers.badges-incomplets')).toBeNull();
 });

@@ -704,3 +704,68 @@ test('relecture d’une liste : badges Git (ignorés, hors du dossier, renommés
   expect(() => parseListing(s, '~', sortie(['ok', 'h/proj', 'h']))).toThrow(/hors des dossiers/);
   expect(() => parseListing(s, '~', sortie(['ok', '/h/.ssh', '/h/.ssh']))).toThrow(/masqué/);
 });
+
+/** Chantier 19 : un `git` du serveur qui échoue sur `status`, posé par le profil distant devant le PATH. */
+async function avecGitStatusEnEchec(): Promise<string> {
+  const home = mkdtempSync(join(tmpdir(), 'aid-d-'));
+  const bin = join(home, 'faux-bin');
+  mkdirSync(bin);
+  const vrai = execFileSync('/bin/sh', ['-c', 'command -v git'], { encoding: 'utf8' }).trim();
+  // une sortie partielle, puis le code de `timeout`
+  writeFileSync(
+    join(bin, 'git'),
+    `#!/bin/sh\ncase " $* " in *" status "*) printf ' M README.md\\000' ; exit 124 ;; esac\nexec '${vrai}' "$@"\n`,
+  );
+  chmodSync(join(bin, 'git'), 0o755);
+  writeFileSync(join(home, '.profile'), `PATH='${bin}':"$PATH"\nexport PATH\n`);
+  t = await startTestDaemon(home, {
+    remote: { ssh: FAKE_SSH, env: { ...process.env, FAKE_SSH_HOME: home } },
+  });
+  return home;
+}
+
+test('chantier 19, S.3 : git status abouti — badges complets', async () => {
+  t = await startTestDaemon();
+  projet(t.home);
+  const s = await create();
+  const l = (await get(`/api/servers/${s.id}/fs`)).json<ServerFsListing>();
+  expect(l).toMatchObject({ git: true, gitPartial: false });
+  // le code de sortie n'est jamais une entrée ni un badge
+  expect(l.entries.some((e) => e.name.startsWith('gitrc') || e.name.startsWith('rc'))).toBe(false);
+});
+
+test('chantier 19, S.3 : git status tué — badges incomplets, listing intact', async () => {
+  const home = await avecGitStatusEnEchec();
+  projet(home);
+  const s = await create();
+  const l = (await get(`/api/servers/${s.id}/fs`)).json<ServerFsListing>();
+  expect(l).toMatchObject({ git: true, gitPartial: true, truncated: false });
+  expect(l.entries.map((e) => e.name)).toContain('nouveau.txt');
+  // ce qui est arrivé avant la coupure reste montré
+  expect(l.entries.find((e) => e.name === 'README.md')?.git).toBe('M');
+});
+
+test('chantier 19, S.3 : sortie coupée par le transport — badges incomplets ; hors dépôt, rien à compléter', () => {
+  const server = { id: 'srv_x' } as Server;
+  const forge = (recs: string[], truncated: boolean): ExecResult => ({
+    code: 0,
+    stdout: ['', 'aid-fs', 'ok', '/srv/p', '/srv/p', ...recs, ''].join('\0'),
+    stderr: '',
+    durationMs: 1,
+    timedOut: false,
+    truncated,
+  });
+  const coupe = parseListing(server, '/srv/p', forge(['e\tf\ta.txt', 'git\t', ' M a.txt'], true));
+  expect(coupe).toMatchObject({ git: true, gitPartial: true, truncated: true });
+  const entier = parseListing(
+    server,
+    '/srv/p',
+    forge(['e\tf\ta.txt', 'git\t', ' M a.txt', 'gitrc\t0'], false),
+  );
+  expect(entier).toMatchObject({ git: true, gitPartial: false });
+  expect(entier.entries).toEqual([expect.objectContaining({ name: 'a.txt', git: 'M' })]);
+  expect(parseListing(server, '/srv/p', forge(['e\tf\ta.txt'], false))).toMatchObject({
+    git: false,
+    gitPartial: false,
+  });
+});

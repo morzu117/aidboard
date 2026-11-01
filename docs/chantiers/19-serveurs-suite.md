@@ -109,3 +109,19 @@ Un point = un commit. Après chaque point :
     - l'enregistrement partiel gardé fait échouer le premier.
   - Lignes existantes modifiées : les trois commandes du script `LOG`, la construction de `raw` et `truncated`.
   - Gate vert (1251). `gate:labo` vert (16/16).
+- **S.3 Badges incomplets** :
+  - Le script `LIST` termine la section Git par `gitrc\t<code>`, toujours le dernier enregistrement.
+  - `parseListing` passe `gitPartial: true` dans deux cas :
+    - l'enregistrement manque (sortie coupée par le transport) ;
+    - il est non nul (`git status` tué ou en échec).
+  - Les badges reçus avant la coupure restent montrés.
+  - Le panneau dit « Badges Git incomplets… » sous l'arbre du dossier concerné.
+  - Tests :
+    - git abouti ;
+    - faux `git` qui sort en 124 sur `status` ;
+    - enregistrements forgés : coupés, entiers, hors dépôt ;
+    - test web (dit, puis absent) ;
+    - labo : `gitPartial: false` sur le vrai git.
+  - Mutation vérifiée : `gitPartial` toujours faux fait échouer deux tests.
+  - Ligne existante modifiée : l'appel de `badges` dans `parseListing`. Le reste est inséré.
+  - Gate vert (1255). `gate:labo` vert (16/16, puis `fichiers.labo.ts` seul après l'assertion ajoutée).
