@@ -61,3 +61,15 @@ Le labo est lancé à la fin (aucun script distant n'est modifié).
   - Deux mutations vérifiées : sans masque à l'entrée, sans masque au fil.
   - Aucune ligne existante modifiée.
   - Gate vert : 1275.
+- **M.3 Cartes et règles** : dans `screen`, une commande masquée (elle porte `MASK`) est présentée avec
+  **Autoriser** et **Refuser** seulement, avant toute recherche de règle.
+  - « Toujours » n'étant plus une option de la demande, `answer` le refuse en 422 sans code nouveau.
+  - La carte de l'interface affiche les options que rend le daemon : rien à changer côté web.
+  - Test :
+    - `sudo git push https://deploy:motdepasse@…` : carte masquée à deux boutons, « Toujours » en 422 ;
+    - une règle identique au caractère près à la commande masquée ne s'applique pas ;
+    - aucune règle écrite, le mot de passe absent des règles ;
+    - une commande sans secret garde ses trois boutons.
+  - Mutations vérifiées : bloc DM3 retiré, mauvaise option retirée.
+  - Aucune ligne existante modifiée.
+  - Gate vert : 1276.

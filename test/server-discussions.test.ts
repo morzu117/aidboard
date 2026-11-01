@@ -1372,3 +1372,37 @@ test('chantier 20, M.2 : un secret au fil est masqué — base, vue, socket ; l�
     ).some((r) => r.payload.includes('A1b2C3')),
   ).toBe(false);
 }, 40_000);
+
+test('chantier 20, M.3 : une commande qui portait un secret — ni « Toujours autoriser », ni règle écrite ou appliquée', async () => {
+  const m = await daemon(serveur());
+  const s = await creerServeur(m);
+  const d = await creerDiscussion(m, s.id);
+  const a = d.agents[0]!;
+  const commande = 'sudo git push https://deploy:motdepasse@git.exemple/o/r.git';
+  const masquee = 'sudo git push https://[secret masqué]@git.exemple/o/r.git';
+  // une règle identique au caractère près à la commande masquée ne s'applique pas
+  m.t.db
+    .prepare(
+      'INSERT INTO server_rules (id, server_id, cwd, pattern, created_at) VALUES (?, ?, ?, ?, ?)',
+    )
+    .run('sr_piege', s.id, d.cwd, masquee, new Date().toISOString());
+
+  const v = await carte(m, a.id, commande);
+  expect(v.pending).toMatchObject({ command: masquee, confirm: { server: 'vps-test' } });
+  expect(v.pending!.options.map((o) => o.label)).toEqual(['Autoriser', 'Refuser']);
+  const toujours = await m.req('POST', `/api/server-agents/${a.id}/answer`, {
+    pendingId: v.pending!.id,
+    answer: 'always',
+  });
+  expect(toujours.statusCode).toBe(422);
+  await repondre(m, v, 'yes');
+  await waitFor(() => assistant(m, a.id, `exécutée: ${masquee}`) === 1, 15_000, 'autorisée');
+  await waitFor(() => ligne(m, a.id)?.status === 'idle', 15_000, 'idle');
+  const regles = (await m.req('GET', `/api/servers/${s.id}`)).json<Server>().rules;
+  expect(regles.map((r) => r.id)).toEqual(['sr_piege']);
+  expect(JSON.stringify(regles)).not.toContain('motdepasse');
+
+  // une commande sans secret garde ses trois boutons
+  const ordinaire = await carte(m, a.id, 'sudo -n true');
+  expect(ordinaire.pending!.options.map((o) => o.label)).toEqual(CONFIRMATION);
+}, 40_000);

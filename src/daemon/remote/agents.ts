@@ -15,7 +15,7 @@ import { CodexDriver } from '../conversation/codex.js';
 import type { ConversationDriver, ConversationEvent } from '../conversation/driver.js';
 import type { Db } from '../db.js';
 import { AidHttpError } from '../errors.js';
-import { maskDeep } from '../secrets.js';
+import { MASK, maskDeep } from '../secrets.js';
 import { CONFIRM_OPTIONS, claudeConfirmSettings, isDestructive, rulePattern } from './confirm.js';
 import { RemoteDriver } from './driver.js';
 import { stripUserinfo } from './git.js';
@@ -874,6 +874,10 @@ export class RemoteAgentManager {
       options: CONFIRM_OPTIONS,
       confirm: { server: confirm.server },
     };
+    // chantier 20 (DM3) : une commande qui portait un secret n'écrit ni n'applique de règle — la règle serait le
+    // secret, et deux secrets masqués pareils partageraient la même
+    if (command.includes(MASK))
+      return { ...shown, options: CONFIRM_OPTIONS.filter((o) => o.answer !== 'always') };
     // règle illisible ou réponse impossible : la carte est présentée, rien ne passe en silence
     try {
       const server = this.serverOf(this.agentRow(live.id));
