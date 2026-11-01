@@ -96,3 +96,16 @@ Un point = un commit. Après chaque point :
     - la stat du panneau.
   - Gate vert (1249 passés). `gate:labo` vert (16/16) : `changes: 4` inchangé sur le vrai git.
   - codegraph est indisponible (erreur interne `statInode`) : lecture directe.
+- **S.2 Journal coupé → `truncated`** :
+  - Un `git log` en échec ou tué écrit un enregistrement `logko` après sa sortie. Une liste hors HEAD
+    (`rev-list`) dans le même cas l'écrit aussi.
+  - `parseGitLog` écarte alors l'enregistrement à moitié écrit qui précède la marque et passe `truncated: true`.
+  - Tests :
+    - `git log` coupé à 150 octets puis sorti en 124, sur les deux portées : tronqué, moins de 3 commits,
+      chacun complet (hash de 40 caractères, date valide) ;
+    - `rev-list --not HEAD` en échec : tronqué, journal de HEAD intact.
+  - Deux mutations vérifiées :
+    - sans `partial`, les deux tests échouent ;
+    - l'enregistrement partiel gardé fait échouer le premier.
+  - Lignes existantes modifiées : les trois commandes du script `LOG`, la construction de `raw` et `truncated`.
+  - Gate vert (1251). `gate:labo` vert (16/16).

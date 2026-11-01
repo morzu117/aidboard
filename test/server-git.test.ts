@@ -693,3 +693,32 @@ test('chantier 19, S.1 : git status abouti — le compte est celui des lignes, p
   writeFileSync(join(clone, 'README.md'), 'changé\n');
   expect((await status(s)).repo!.changes).toBe(2);
 });
+
+test('chantier 19, S.2 : git log tué en plein journal — tronqué, aucun commit à moitié lu', async () => {
+  const { home } = await avecGitDuServeur(
+    `case " $* " in *" log "*) "$VRAI" "$@" | head -c 150; exit 124 ;; esac`,
+  );
+  const { clone } = depot(home);
+  commitFile(clone, 'a.txt', 'a\n', 'deux');
+  commitFile(clone, 'b.txt', 'b\n', 'trois');
+  const s = await create();
+  for (const scope of ['all', 'branch']) {
+    const log = (await get(`/api/servers/${s.id}/git/log?scope=${scope}`)).json<ServerGitLog>();
+    expect(log.truncated, scope).toBe(true);
+    expect(log.commits.length, scope).toBeLessThan(3);
+    for (const c of log.commits) {
+      expect(c.hash, scope).toMatch(/^[0-9a-f]{40}$/);
+      expect(Number.isNaN(Date.parse(c.date)), scope).toBe(false);
+    }
+  }
+});
+
+test('chantier 19, S.2 : commits hors HEAD non relus — tronqué, journal de HEAD intact', async () => {
+  const { home } = await avecGitDuServeur(`case " $* " in *" --not HEAD "*) exit 124 ;; esac`);
+  depot(home);
+  const s = await create();
+  const log = (await get(`/api/servers/${s.id}/git/log`)).json<ServerGitLog>();
+  expect(log.truncated).toBe(true);
+  expect(log.commits.map((c) => c.message)).toEqual(['initial']);
+  expect(log.commits[0]!.inHead).toBe(true);
+});
