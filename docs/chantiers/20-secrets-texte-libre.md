@@ -42,3 +42,12 @@ Le labo est lancé à la fin (aucun script distant n'est modifié).
 - **M.5 Données existantes.** DM6. Tests : une base peuplée avant la migration (messages et règle à secret), puis un démarrage : masquée et règle retirée, les autres intactes ; un second démarrage ne refait rien.
 
 ## Journal
+- **M.1 Le détecteur** : `src/daemon/secrets.ts` (`maskSecrets`, `hasSecret`, `maskDeep`, `MASK`). Rien n'est encore branché.
+  - Un identifiant d'URL n'est masqué que s'il porte un `:` ou fait au moins 20 caractères. `ssh://git@…` reste lisible.
+  - Une clé privée devient `clé privée [secret masqué]`. Le remplacement ne reprend pas l'en-tête `BEGIN`, sinon un second passage avalerait la suite du texte.
+  - `pk_live_` (clé Stripe publique) n'est pas masqué.
+  - Tests : 5 (corpus par famille, faux positifs, idempotence, `maskDeep`).
+  - Cinq mutations vérifiées : clé coupée, `AKIA` retiré, tout identifiant d'URL masqué, longueurs minimales retirées, en-têtes de clé retirés.
+  - Aucune ligne existante modifiée.
+  - Gate vert : 1274.
+  - codegraph indisponible (`statInode`) : lecture directe des fichiers.
