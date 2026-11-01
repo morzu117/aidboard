@@ -11,7 +11,7 @@ import {
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import WebSocket from 'ws';
-import { afterEach, expect, test } from 'vitest';
+import { afterEach, expect, test, vi } from 'vitest';
 import type { ServerAgentView, ServerDiscussionView } from '../src/daemon/remote/agents.js';
 import type { TransportOptions } from '../src/daemon/remote/transport.js';
 import { issueRunToken } from '../src/daemon/security.js';
@@ -1117,3 +1117,207 @@ test('/ws/server-agent : l’agent s’arrête pendant l’abonnement — exit a
   expect(c2.find('hello')[0]).toMatchObject({ exited: true });
   expect(c2.find('exit')[0]).toMatchObject({ reason: 'exit' });
 });
+
+test('chantier 19, S.4 : daemon redémarré serveur éteint — claude jamais en erreur, rattaché au même relais une fois revenu', async () => {
+  const remote = serveur();
+  const m1 = await daemon(remote);
+  const s = await creerServeur(m1);
+  const a = (await creerDiscussion(m1, s.id)).agents[0]!;
+  await envoyer(m1, a.id, 'bonjour');
+  await waitFor(() => ligne(m1, a.id)?.status === 'idle', 15_000, 'idle');
+  await m1.t.d.stop();
+
+  remote.transport.env.FAKE_SSH_FAIL = '1';
+  const m2 = await daemon(remote, m1.t.home);
+  // plusieurs tentatives de rattachement échouent (1 s, 2 s…) : l'agent reste en cours, pas fini
+  await new Promise((r) => setTimeout(r, 3_500));
+  expect(ligne(m2, a.id)!.status).not.toBe('error');
+  expect(vivant(apid(m2, a.id))).toBe(true);
+  delete remote.transport.env.FAKE_SSH_FAIL;
+  await envoyer(m2, a.id, 'deux');
+  await waitFor(() => assistant(m2, a.id, 'echo: deux') === 1, 20_000, 'réponse');
+  // rattaché, pas relancé : même relais, l'agent d'avant a répondu
+  expect(ligne(m2, a.id)!.tmux_session).toBe(`aid-${a.id}`);
+  expect(assistant(m2, a.id, 'echo: bonjour')).toBe(1);
+}, 40_000);
+
+test('chantier 19, S.4 : Reconnecter un claude fini faute de lien qui tourne encore — rattaché à son offset, pas relancé', async () => {
+  const remote = serveur();
+  const m1 = await daemon(remote);
+  const s = await creerServeur(m1);
+  const a = (await creerDiscussion(m1, s.id)).agents[0]!;
+  await envoyer(m1, a.id, 'bonjour');
+  await waitFor(() => ligne(m1, a.id)?.status === 'idle', 15_000, 'idle');
+  // pilote sorti en erreur faute de lien : statut fini, agent toujours vivant sur le serveur
+  m1.t.db.prepare("UPDATE server_agents SET status = 'error' WHERE id = ?").run(a.id);
+  await m1.t.d.stop();
+
+  const m2 = await daemon(remote, m1.t.home);
+  const pid = readFileSync(apid(m2, a.id), 'utf8');
+  expect((await m2.req('POST', `/api/server-agents/${a.id}/reconnect`)).statusCode).toBe(202);
+  expect(ligne(m2, a.id)).toMatchObject({ status: 'idle', tmux_session: `aid-${a.id}` });
+  await envoyer(m2, a.id, 'deux');
+  await waitFor(() => assistant(m2, a.id, 'echo: deux') === 1, 15_000, 'réponse');
+  // le même agent : ni relancé, ni sa sortie déjà lue rejouée
+  expect(readFileSync(apid(m2, a.id), 'utf8')).toBe(pid);
+  expect(assistant(m2, a.id, 'echo: bonjour')).toBe(1);
+  // déjà rattaché : rien de plus
+  expect((await m2.req('POST', `/api/server-agents/${a.id}/reconnect`)).statusCode).toBe(202);
+  expect(ligne(m2, a.id)!.tmux_session).toBe(`aid-${a.id}`);
+}, 30_000);
+
+test('chantier 19, S.4 : Reconnecter un claude dont l’agent est arrêté sur le serveur — relancé sous un relais neuf', async () => {
+  const remote = serveur();
+  const m1 = await daemon(remote);
+  const s = await creerServeur(m1);
+  const a = (await creerDiscussion(m1, s.id)).agents[0]!;
+  await envoyer(m1, a.id, 'bonjour');
+  await waitFor(() => ligne(m1, a.id)?.status === 'idle', 15_000, 'idle');
+  m1.t.db.prepare("UPDATE server_agents SET status = 'error' WHERE id = ?").run(a.id);
+  await m1.t.d.stop();
+  tuer(apid(m1, a.id));
+
+  const m2 = await daemon(remote, m1.t.home);
+  await waitFor(() => !vivant(apid(m2, a.id)), 5_000, 'agent arrêté');
+  expect((await m2.req('POST', `/api/server-agents/${a.id}/reconnect`)).statusCode).toBe(202);
+  expect(ligne(m2, a.id)!.tmux_session).not.toBe(`aid-${a.id}`);
+}, 30_000);
+
+test('chantier 19, S.5 : premier tour mort avant sa fin, session déjà créée — la relance reprend la session (--resume)', async () => {
+  const remote = serveur();
+  remote.transport.env.FAKE_CLAUDE_STRICT = '1';
+  const m = await daemon(remote);
+  const s = await creerServeur(m);
+  const a = (await creerDiscussion(m, s.id)).agents[0]!;
+  // l'agent meurt au premier message : la session existe chez claude, aucun `turn_end` au fil
+  await envoyer(m, a.id, 'crash');
+  await waitFor(() => ligne(m, a.id)?.status === 'error', 15_000, 'agent mort');
+  await envoyer(m, a.id, 'deux');
+  await waitFor(() => assistant(m, a.id, 'echo: deux') === 1, 15_000, 'réponse après relance');
+  await waitFor(() => ligne(m, a.id)?.status === 'idle', 15_000, 'idle');
+  expect(fil(m, a.id).filter((e) => (e as { type?: string }).type === 'exit')).toHaveLength(1);
+}, 30_000);
+
+test('chantier 19, S.5 : session inconnue du serveur malgré un tour fini — la relance repart sur une session neuve', async () => {
+  const remote = serveur();
+  remote.transport.env.FAKE_CLAUDE_STRICT = '1';
+  const m = await daemon(remote);
+  const s = await creerServeur(m);
+  const a = (await creerDiscussion(m, s.id)).agents[0]!;
+  await envoyer(m, a.id, 'bonjour');
+  await waitFor(() => ligne(m, a.id)?.status === 'idle', 15_000, 'idle');
+  // les sessions de claude effacées sur le serveur, puis l'agent arrêté
+  rmSync(join(remote.home, '.fake-claude-sessions'), { recursive: true, force: true });
+  await envoyer(m, a.id, 'crash');
+  await waitFor(() => ligne(m, a.id)?.status === 'error', 15_000, 'agent mort');
+  rmSync(join(remote.home, '.fake-claude-sessions'), { recursive: true, force: true });
+  await envoyer(m, a.id, 'trois');
+  await waitFor(() => assistant(m, a.id, 'echo: trois') === 1, 15_000, 'réponse après relance');
+}, 30_000);
+
+test('chantier 19, S.5 : relance refusée dans les deux sens — une seule nouvelle tentative, puis l’erreur', async () => {
+  const remote = serveur();
+  remote.transport.env.FAKE_CLAUDE_STRICT = '1';
+  const m = await daemon(remote);
+  const s = await creerServeur(m);
+  const a = (await creerDiscussion(m, s.id)).agents[0]!;
+  await envoyer(m, a.id, 'crash');
+  await waitFor(() => ligne(m, a.id)?.status === 'error', 15_000, 'agent mort');
+  // le binaire de reprise ne démarre plus du tout : ni --session-id ni --resume
+  remote.transport.env.FAKE_CLAUDE_REFUSE = '1';
+  await envoyer(m, a.id, 'deux');
+  await waitFor(
+    () => fil(m, a.id).filter((e) => (e as { type?: string }).type === 'exit').length === 2,
+    15_000,
+    'seconde fin',
+  );
+  await waitFor(() => ligne(m, a.id)?.status === 'error', 15_000, 'erreur');
+  await new Promise((r) => setTimeout(r, 1_000));
+  expect(fil(m, a.id).filter((e) => (e as { type?: string }).type === 'exit')).toHaveLength(2);
+}, 30_000);
+
+test('chantier 19, S.6 : confirmation changée pendant que l’agent tourne — signalée, jusqu’à la relance qui la prend', async () => {
+  const remote = serveur();
+  const m = await daemon(remote);
+  const s = await creerServeur(m);
+  await reglerServeur(m, s.id, { confirmDestructive: false });
+  const a = (await creerDiscussion(m, s.id)).agents[0]!;
+  await envoyer(m, a.id, 'bonjour');
+  await waitFor(() => ligne(m, a.id)?.status === 'idle', 15_000, 'idle');
+  const vue = async () =>
+    (await m.req('GET', `/api/server-agents/${a.id}`)).json<ServerAgentView>().staleConfirm;
+  expect(await vue()).toBe(false);
+
+  await reglerServeur(m, s.id, { confirmDestructive: true });
+  expect(await vue()).toBe(true);
+  // la discussion rend la même vue
+  const d = (
+    await m.req('GET', `/api/servers/${s.id}/discussions/${a.discussionId}`)
+  ).json<ServerDiscussionView>();
+  expect(d.agents[0]!.staleConfirm).toBe(true);
+  // revenu au réglage du lancement : plus d'écart
+  await reglerServeur(m, s.id, { confirmDestructive: false });
+  expect(await vue()).toBe(false);
+
+  await reglerServeur(m, s.id, { confirmDestructive: true });
+  await envoyer(m, a.id, 'crash');
+  await waitFor(() => ligne(m, a.id)?.status === 'error', 15_000, 'agent mort');
+  // fini : rien ne tourne avec l'ancien réglage
+  expect(await vue()).toBe(false);
+  await envoyer(m, a.id, 'commande: rm -f x');
+  await waitFor(() => ligne(m, a.id)?.status === 'needs_input', 15_000, 'carte');
+  expect(await vue()).toBe(false);
+}, 30_000);
+
+test('chantier 19, S.7 : demande perdue en route — tracée sans identifiants, refusée auprès de l’agent, jamais en attente sans carte', async () => {
+  const lignes: string[] = [];
+  const espion = vi.spyOn(console, 'error').mockImplementation((l: unknown) => {
+    lignes.push(String(l));
+  });
+  nettoyages.push(() => espion.mockRestore());
+  const m = await daemon(serveur());
+  const s = await creerServeur(m);
+  const a = (await creerDiscussion(m, s.id)).agents[0]!;
+  // la base refuse le passage en attente : l'événement `request` lève en plein traitement
+  m.t.db.exec(
+    `CREATE TRIGGER panne BEFORE UPDATE OF status ON server_agents WHEN NEW.status = 'needs_input'
+     BEGIN SELECT RAISE(ABORT, 'panne simulée https://deploy:jeton-secret@git.exemple/x'); END`,
+  );
+  await envoyer(m, a.id, 'commande: ls');
+  await waitFor(() => assistant(m, a.id, 'refusée: ls') === 1, 15_000, 'refus');
+  expect(
+    (await m.req('GET', `/api/server-agents/${a.id}`)).json<ServerAgentView>().pending,
+  ).toBeNull();
+  const trace = lignes.find((l) => l.includes('événement request non traité'));
+  expect(trace).toBe(
+    `serveurs : événement request non traité (agent ${a.id}) : panne simulée https://git.exemple/x`,
+  );
+  expect(lignes.join('\n')).not.toContain('jeton-secret');
+}, 30_000);
+
+test('chantier 19, S.7 : écriture au fil en échec — tracée, le lien fermé, le message suivant relance', async () => {
+  const lignes: string[] = [];
+  const espion = vi.spyOn(console, 'error').mockImplementation((l: unknown) => {
+    lignes.push(String(l));
+  });
+  nettoyages.push(() => espion.mockRestore());
+  const m = await daemon(serveur());
+  const s = await creerServeur(m);
+  const a = (await creerDiscussion(m, s.id)).agents[0]!;
+  m.t.db.exec(
+    `CREATE TRIGGER panne BEFORE INSERT ON server_agent_messages WHEN json_extract(NEW.payload, '$.text') = 'echo: un'
+     BEGIN SELECT RAISE(ABORT, 'disque plein'); END`,
+  );
+  await envoyer(m, a.id, 'un');
+  await waitFor(
+    () => lignes.some((l) => l.startsWith('serveurs : écriture au fil (message)')),
+    15_000,
+    'trace',
+  );
+  expect(lignes.find((l) => l.startsWith('serveurs : écriture au fil'))).toBe(
+    `serveurs : écriture au fil (message) (agent ${a.id}) : disque plein`,
+  );
+  m.t.db.exec('DROP TRIGGER panne');
+  await envoyer(m, a.id, 'deux');
+  await waitFor(() => assistant(m, a.id, 'echo: deux') >= 1, 15_000, 'relancé');
+}, 30_000);

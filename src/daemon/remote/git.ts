@@ -79,7 +79,9 @@ st() {
   elif [ -f "$gd/REVERT_HEAD" ]; then op=revert
   elif [ -f "$gd/BISECT_LOG" ]; then op=bisect
   fi
-  ch=$(g status --porcelain --untracked-files=normal 2>/dev/null | wc -l | tr -d ' ')
+  # git status tué par son délai ou en échec : x, jamais un compte partiel lu « propre » (chantier 19, S.1)
+  ch=$( { g status --porcelain --untracked-files=normal 2>/dev/null; printf '\\nrc%s\\n' "$?"; } |
+    awk '/^rc[0-9]+$/ { rc = substr($0, 3); next } NF { n++ } END { print (rc == "0" ? n + 0 : "x") }')
 }
 pr() {
   printf 'fait\\000br\\t%s\\000hd\\t%s\\000og\\t%s\\000up\\t%s\\000ab\\t%s\\000op\\t%s\\000ch\\t%s\\000' \\
@@ -93,12 +95,13 @@ const STATUS = `st; pr
 const LOG = `st; pr
 printf 'log\\000'
 [ -n "$hd" ] || exit 0
+# git log ou rev-list tués par leur délai ou en échec : logko, la fenêtre lue est partielle (chantier 19, S.2)
 if [ "$sc" = all ]; then
-  g log --topo-order --max-count=${LOG_MAX} --format=${shQuote(`format:${LOG_FORMAT}`)} HEAD --branches --remotes 2>/dev/null
+  g log --topo-order --max-count=${LOG_MAX} --format=${shQuote(`format:${LOG_FORMAT}`)} HEAD --branches --remotes 2>/dev/null || printf '\\000logko\\000'
   printf 'horshead\\000'
-  g rev-list --max-count=${OUTSIDE_HEAD_MAX} --branches --remotes --not HEAD 2>/dev/null | tr '\\n' '\\000'
+  { g rev-list --max-count=${OUTSIDE_HEAD_MAX} --branches --remotes --not HEAD 2>/dev/null || printf 'logko\\n'; } | tr '\\n' '\\000'
 else
-  g log --topo-order --max-count=${LOG_MAX} --format=${shQuote(`format:${LOG_FORMAT}`)} HEAD 2>/dev/null
+  g log --topo-order --max-count=${LOG_MAX} --format=${shQuote(`format:${LOG_FORMAT}`)} HEAD 2>/dev/null || printf '\\000logko\\000'
 fi
 `;
 
@@ -279,7 +282,7 @@ function repoOf(root: string, recs: string[]): ServerGitRepo {
     root,
     branch: kv.get('br') || null,
     head: kv.get('hd') || null,
-    changes: Number(kv.get('ch') || 0),
+    changes: kv.get('ch') === 'x' ? null : Number(kv.get('ch') || 0),
     origin: kv.get('og') === '1',
     upstream: kv.get('up') || null,
     aheadBehind:
@@ -376,7 +379,11 @@ export function parseGitLog(
   const rest = p.recs.slice(8);
   const at = rest.indexOf('horshead');
   const outside = new Set(at < 0 ? [] : rest.slice(at + 1).filter(Boolean));
-  const raw = (at < 0 ? rest : rest.slice(0, at)).join('\0');
+  const logged = at < 0 ? rest : rest.slice(0, at);
+  // S.2 : la commande coupée a pu laisser un enregistrement à moitié écrit, juste avant la marque
+  const ko = logged.indexOf('logko');
+  const partial = ko >= 0 || outside.has('logko');
+  const raw = (ko < 0 ? logged : logged.slice(0, Math.max(0, ko - 1))).join('\0');
   // parseLog marque dans HEAD ce qui est dans l'ensemble donné : ici, tout ce qui n'est pas hors de HEAD
   const hashes = raw
     .split('\0')
@@ -389,14 +396,15 @@ export function parseGitLog(
     scope,
     repo,
     commits,
-    dirty: repo.changes > 0,
+    // DS2 : modifiés inconnus = WIP affiché, jamais « propre » par défaut
+    dirty: repo.changes !== 0,
     live: {
       aheadBehind: repo.aheadBehind,
       rebaseInProgress: repo.operation === 'rebase',
       onTopicBranch: true,
       headBranch: repo.branch,
     },
-    truncated: commits.length >= LOG_MAX || r.truncated,
+    truncated: commits.length >= LOG_MAX || r.truncated || partial,
     readAt: new Date().toISOString(),
   };
 }

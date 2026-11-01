@@ -4,6 +4,8 @@
 // captures réelles (docs/chantiers/15-…, « Protocoles observés »). Remplace claude dans les tests.
 import { Buffer } from 'node:buffer';
 import { createInterface } from 'node:readline';
+import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 
 const args = process.argv.slice(2);
 const argAfter = (flag) => {
@@ -21,6 +23,25 @@ const settings = {
 
 const emit = (obj) => process.stdout.write(JSON.stringify(obj) + '\n');
 
+// Chantier 19 (S.5) : FAKE_CLAUDE_STRICT=1 fait comme le vrai claude — la session existe dès le premier message
+// (même si le tour n'aboutit pas) ; `--session-id` d'une session existante et `--resume` d'une inconnue sont refusés.
+const sessions = join(process.env.HOME ?? '.', '.fake-claude-sessions');
+const sessionFile = sessionId ? join(sessions, sessionId) : null;
+if (process.env.FAKE_CLAUDE_REFUSE) {
+  process.stderr.write('Error: refusé (FAKE_CLAUDE_REFUSE)\n');
+  process.exit(1);
+}
+if (process.env.FAKE_CLAUDE_STRICT && sessionFile) {
+  if (!resume && existsSync(sessionFile)) {
+    process.stderr.write(`Error: Session ID ${sessionId} is already in use.\n`);
+    process.exit(1);
+  }
+  if (resume && !existsSync(sessionFile)) {
+    process.stderr.write(`No conversation found with session ID: ${sessionId}\n`);
+    process.exit(1);
+  }
+}
+
 // Ligne reconnaissable pour que le test vérifie les arguments reçus (--session-id / --resume).
 emit({
   type: 'system',
@@ -35,6 +56,10 @@ const pendingControl = new Map();
 let longAbort = null;
 
 async function handleTurn(text) {
+  if (process.env.FAKE_CLAUDE_STRICT && sessionFile) {
+    mkdirSync(sessions, { recursive: true });
+    writeFileSync(sessionFile, '');
+  }
   if (text === 'crash') {
     process.kill(process.pid, 'SIGKILL');
     return;

@@ -443,3 +443,18 @@ test('dialogue venu de la barre gauche : Annuler efface l’état de navigation 
   await waitFor(() => expect(node('sonde')?.textContent).toBe('null'));
   expect(node('nouvelle-discussion')).toBeNull();
 });
+
+test('chantier 19, S.6 : confirmation modifiée pendant que l’agent tourne — dit au-dessus du fil ; sinon, rien', async () => {
+  ouvrir('/serveurs/srv_1/discussions/sd_1', {
+    d: discussion({ agents: [agentVue({ staleConfirm: true })] }),
+  });
+  await waitFor(() =>
+    expect(node('discussion.confirmation-perimee')?.textContent).toBe(
+      'Confirmation des commandes destructives modifiée sur ce serveur : cet agent garde l’ancien réglage jusqu’à sa prochaine relance.',
+    ),
+  );
+  cleanup();
+  ouvrir('/serveurs/srv_1/discussions/sd_1');
+  await waitFor(() => expect(node('discussion.titre')?.textContent).toBe('Déploiement'));
+  expect(node('discussion.confirmation-perimee')).toBeNull();
+});

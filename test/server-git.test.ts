@@ -666,3 +666,59 @@ test('review complète : traces git du profil retirées — rien de la trace ne 
   expect(readFileSync(vu, 'utf8')).toBe('[]');
   expect(r.body).not.toMatch(/trace:|packet:/);
 });
+
+test('chantier 19, S.1 : git status tué par son délai — modifiés inconnus, jamais « propre »', async () => {
+  // une sortie partielle, puis le code de `timeout` : le compte lu n'en est pas un
+  const { home } = await avecGitDuServeur(
+    `case " $* " in *" status "*) printf ' M a.txt\\n?? b' ; exit 124 ;; esac`,
+  );
+  const { clone } = depot(home);
+  const s = await create();
+  const st = await status(s);
+  expect(st.repo).toMatchObject({ branch: 'main', head: sh(clone, 'rev-parse', 'HEAD') });
+  expect(st.repo!.changes).toBeNull();
+  const log = (await get(`/api/servers/${s.id}/git/log`)).json<ServerGitLog>();
+  expect(log.repo.changes).toBeNull();
+  // DS2 : inconnu se montre comme du travail en cours
+  expect(log.dirty).toBe(true);
+});
+
+test('chantier 19, S.1 : git status abouti — le compte est celui des lignes, propre compris', async () => {
+  const { home } = await avecGitDuServeur('');
+  const { clone } = depot(home);
+  const s = await create();
+  expect((await status(s)).repo!.changes).toBe(0);
+  expect((await get(`/api/servers/${s.id}/git/log`)).json<ServerGitLog>().dirty).toBe(false);
+  writeFileSync(join(clone, 'sans fin de ligne'), 'x');
+  writeFileSync(join(clone, 'README.md'), 'changé\n');
+  expect((await status(s)).repo!.changes).toBe(2);
+});
+
+test('chantier 19, S.2 : git log tué en plein journal — tronqué, aucun commit à moitié lu', async () => {
+  const { home } = await avecGitDuServeur(
+    `case " $* " in *" log "*) "$VRAI" "$@" | head -c 150; exit 124 ;; esac`,
+  );
+  const { clone } = depot(home);
+  commitFile(clone, 'a.txt', 'a\n', 'deux');
+  commitFile(clone, 'b.txt', 'b\n', 'trois');
+  const s = await create();
+  for (const scope of ['all', 'branch']) {
+    const log = (await get(`/api/servers/${s.id}/git/log?scope=${scope}`)).json<ServerGitLog>();
+    expect(log.truncated, scope).toBe(true);
+    expect(log.commits.length, scope).toBeLessThan(3);
+    for (const c of log.commits) {
+      expect(c.hash, scope).toMatch(/^[0-9a-f]{40}$/);
+      expect(Number.isNaN(Date.parse(c.date)), scope).toBe(false);
+    }
+  }
+});
+
+test('chantier 19, S.2 : commits hors HEAD non relus — tronqué, journal de HEAD intact', async () => {
+  const { home } = await avecGitDuServeur(`case " $* " in *" --not HEAD "*) exit 124 ;; esac`);
+  depot(home);
+  const s = await create();
+  const log = (await get(`/api/servers/${s.id}/git/log`)).json<ServerGitLog>();
+  expect(log.truncated).toBe(true);
+  expect(log.commits.map((c) => c.message)).toEqual(['initial']);
+  expect(log.commits[0]!.inHead).toBe(true);
+});

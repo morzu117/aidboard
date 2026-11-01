@@ -17,7 +17,8 @@ import type { Db } from '../db.js';
 import { AidHttpError } from '../errors.js';
 import { CONFIRM_OPTIONS, claudeConfirmSettings, isDestructive, rulePattern } from './confirm.js';
 import { RemoteDriver } from './driver.js';
-import { relayStop } from './relay.js';
+import { stripUserinfo } from './git.js';
+import { parseAlive, relayAlive, relayStop } from './relay.js';
 import { getServer } from './servers.js';
 import { SERVER_PERMISSION_MODES } from './servers.js';
 import { remoteExec, type TransportOptions } from './transport.js';
@@ -74,6 +75,11 @@ export interface LiveRemote {
   /** Dossier de la discussion : une règle « Toujours autoriser » n'y vaut que là (décision du 2026-10-31) */
   cwd: string;
   subscribe(cb: (ev: ConversationEvent) => void): () => void;
+  /**
+   * Chantier 19, S.5 (DS4) : relance d'un claude dont le critère de reprise (`hasTurn`) peut se tromper. Tant que
+   * l'agent n'a rien dit, un refus au démarrage est retenté une fois avec le critère inverse, les messages renvoyés.
+   */
+  retry?: { resume: boolean; texts: string[] };
 }
 
 /** `autoApprove` : codex en mode auto, lancé en `untrusted` ; le daemon laisse passer ce qui n'est pas destructif. */
@@ -91,6 +97,8 @@ export interface RemoteAgentManagerDeps {
   /** Binaire lancé sur le serveur, par agent ; défaut : son nom, cherché dans le PATH distant. Les tests y mettent les faux. */
   bins?: Partial<Record<RemoteKind, string>>;
   delaysMs?: readonly number[];
+  /** Chantier 19, S.7 (DS6) : une ligne par erreur attrapée ; défaut : la sortie d'erreur du daemon (son journal). */
+  log?: (line: string) => void;
 }
 
 const PREFIX = 'aid-';
@@ -201,7 +209,19 @@ export class RemoteAgentManager {
       createdAt: r.created_at,
       updatedAt: r.updated_at,
       pending: this.live.get(r.id)?.pending ?? null,
+      staleConfirm: this.staleConfirm(r),
     };
+  }
+
+  /** S.6 (DS5) : agent vivant lancé sous l'autre réglage de confirmation que celui du serveur aujourd'hui. */
+  private staleConfirm(r: AgentRow): boolean {
+    const live = this.live.get(r.id);
+    if (!live || live.exited) return false;
+    try {
+      return (live.confirm !== null) !== this.serverOf(r).confirmDestructive;
+    } catch {
+      return false;
+    }
   }
 
   // ---- discussions
@@ -360,6 +380,7 @@ export class RemoteAgentManager {
     } catch {
       throw new AidHttpError(409, 'agent arrêté sur le serveur : message non transmis');
     }
+    live.retry?.texts.push(text);
     this.record(live, { type: 'message', role: 'user', text });
     this.setStatus(agentId, 'working');
   }
@@ -403,8 +424,9 @@ export class RemoteAgentManager {
             auto: true,
           });
         }
-      } catch {
+      } catch (err) {
         // lien perdu : les demandes restantes suivent leur cours (annulées par le pilote, ou présentées)
+        this.trace('réponse « toujours » aux demandes en file', live.id, err);
       }
       this.nextPending(live);
       return;
@@ -436,7 +458,36 @@ export class RemoteAgentManager {
     const row = this.agentRow(agentId);
     this.assertOpen(row);
     const live = this.live.get(agentId);
+    if ((!live || live.exited) && (await this.reattach(row))) return;
     if (!live || live.exited) await this.relaunchOnce(row);
+  }
+
+  /**
+   * Chantier 19, S.4 (DS3) : un claude fini faute de lien dont l'agent tourne encore sur le serveur est rattaché à
+   * son offset, comme au démarrage du daemon — le relancer tuerait le tour en cours. Faux s'il n'y a rien à
+   * rattacher (agent arrêté, serveur muet) : la relance reprend la main.
+   */
+  private async reattach(row: AgentRow): Promise<boolean> {
+    if (row.kind !== 'claude' || !row.session_id) return false;
+    const r = await remoteExec(this.serverOf(row), relayAlive(relayOf(row)), {
+      ...this.deps.transport,
+      timeoutMs: 10_000,
+    }).catch(() => null);
+    let state: string | null = null;
+    try {
+      state = r?.code === 0 ? parseAlive(r.stdout).state : null;
+    } catch {
+      state = null;
+    }
+    if (state !== 'vivant') return false;
+    // un double clic : le premier a déjà rattaché
+    const other = this.live.get(row.id);
+    if (other && !other.exited) return true;
+    const fresh = this.agentRow(row.id);
+    this.live.delete(row.id);
+    this.mount(fresh, { resume: this.hasTurn(row.id), offset: fresh.out_offset });
+    this.setStatus(row.id, 'idle');
+    return true;
   }
 
   // ---- composer (R.6) : repères, mode, modèle et effort, comme pour un agent local
@@ -544,11 +595,14 @@ export class RemoteAgentManager {
             this.setStatus(row.id, 'working');
           }
         } else {
-          void this.stopRelay(row).catch(() => undefined);
+          void this.stopRelay(row).catch((err: unknown) =>
+            this.trace('arrêt du relais codex au démarrage', row.id, err),
+          );
           this.setStatus(row.id, 'idle');
         }
-      } catch {
+      } catch (err) {
         // une ligne illisible n'empêche ni le daemon de démarrer ni les autres agents d'être rattachés
+        this.trace('rattachement au démarrage', row.id, err);
       }
     }
   }
@@ -574,7 +628,7 @@ export class RemoteAgentManager {
    * L'ancien relais est arrêté d'abord, et attendu : sinon deux agents reprendraient la même session, et un
    * arrêt échoué perdrait de vue un agent dont `tmux_session` est la seule trace.
    */
-  private async relaunch(row: AgentRow): Promise<LiveRemote> {
+  private async relaunch(row: AgentRow, resume?: boolean): Promise<LiveRemote> {
     const res = await this.stopRelay(row).catch(() => null);
     if (res?.code !== 0)
       throw new AidHttpError(502, 'serveur injoignable : l’agent précédent n’a pas pu être arrêté');
@@ -587,8 +641,26 @@ export class RemoteAgentManager {
         'UPDATE server_agents SET tmux_session = ?, out_offset = 0, updated_at = ? WHERE id = ?',
       )
       .run(`${PREFIX}${relayId}`, new Date().toISOString(), row.id);
-    return this.mount(this.agentRow(row.id), {
-      resume: !!fresh.session_id && this.hasTurn(row.id),
+    const guess = !!fresh.session_id && this.hasTurn(row.id);
+    const live = this.mount(this.agentRow(row.id), { resume: resume ?? guess });
+    if (resume === undefined && row.kind === 'claude' && fresh.session_id)
+      live.retry = { resume: guess, texts: [] };
+    return live;
+  }
+
+  /** S.5 : le pilote relancé est remplacé par un autre, lancé avec le critère de reprise inverse. */
+  private retryInverse(live: LiveRemote, retry: { resume: boolean; texts: string[] }): void {
+    live.exited = true;
+    const p = this.relaunch(this.agentRow(live.id), !retry.resume)
+      .then((next) => {
+        for (const text of retry.texts) next.driver.send(text);
+        return next;
+      })
+      .finally(() => this.relaunching.delete(live.id));
+    this.relaunching.set(live.id, p);
+    p.catch((err: unknown) => {
+      this.trace('nouvelle tentative de relance', live.id, err);
+      this.setStatus(live.id, 'error');
     });
   }
 
@@ -704,8 +776,11 @@ export class RemoteAgentManager {
         this.onEvent(live, ev);
         // `thinking` n'est pas journalisé (D65) mais se diffuse ; le reste l'a été par `record`
         if (ev.type === 'thinking') this.notify(live.id, ev);
-      } catch {
+      } catch (err) {
         // une écriture en base qui échoue ne remonte pas dans la lecture de la sortie du relais
+        this.trace(`événement ${ev.type} non traité`, live.id, err);
+        // S.7 : une demande perdue en route est refusée — sans carte, l'agent l'attendrait sans fin
+        if (ev.type === 'request') this.refuseLost(live, ev.request);
       }
     });
     driver.start();
@@ -715,6 +790,16 @@ export class RemoteAgentManager {
   }
 
   private onEvent(live: LiveRemote, ev: ConversationEvent): void {
+    if (live.retry) {
+      // S.5 : refus au démarrage, avant tout mot de l'agent — retenté une fois, la fin n'entre pas au fil
+      if (ev.type === 'exit' && ev.code !== 0 && !live.stopReason) {
+        const retry = live.retry;
+        live.retry = undefined;
+        return this.retryInverse(live, retry);
+      }
+      if (ev.type !== 'exit' && ev.type !== 'connection_lost' && ev.type !== 'connection_resumed')
+        live.retry = undefined;
+    }
     if (ev.type === 'request' && live.confirm && !ev.request.confirm) {
       const screened = this.screen(live, live.confirm, ev.request);
       if (screened !== ev.request) {
@@ -775,7 +860,8 @@ export class RemoteAgentManager {
         // codex en auto : ce que `never` aurait laissé passer ; le fil en garde l'exécution (`tool_start`)
         live.driver.answer(request.id, 'yes');
         return null;
-      } catch {
+      } catch (err) {
+        this.trace('acceptation d’office (codex en auto)', live.id, err);
         return request;
       }
     }
@@ -790,7 +876,8 @@ export class RemoteAgentManager {
       const covered = (r: ServerRule) => r.cwd === live.cwd && r.pattern === rulePattern(command);
       if (!server.rules.some(covered)) return shown;
       live.driver.answer(request.id, 'yes');
-    } catch {
+    } catch (err) {
+      this.trace('réponse par une règle du serveur', live.id, err);
       return shown;
     }
     this.record(live, { type: 'request', request: shown });
@@ -826,6 +913,7 @@ export class RemoteAgentManager {
     } catch (err) {
       // discussion supprimée pendant que l'agent parlait encore : rien à écrire
       if ((err as { code?: string }).code === 'SQLITE_CONSTRAINT_FOREIGNKEY') return;
+      this.trace(`écriture au fil (${ev.type})`, live.id, err);
       // autre échec : la ligne n'est pas au fil et l'offset n'a pas avancé. Le lien est fermé pour que la
       // suite ne fasse pas avancer l'offset par-dessus ; le prochain message relance l'agent (revue R.4)
       if (this.live.get(live.id) === live) this.live.delete(live.id);
@@ -839,9 +927,29 @@ export class RemoteAgentManager {
     for (const cb of this.subscribers.get(agentId) ?? []) {
       try {
         cb(ev);
-      } catch {
+      } catch (err) {
         // un abonné en échec ne prive pas les autres de l'événement
+        this.trace('abonné du fil', agentId, err);
       }
+    }
+  }
+
+  /** S.7 (DS6) : une erreur attrapée laisse une trace, sans identifiants d'URL. */
+  private trace(what: string, agentId: string, err: unknown): void {
+    const why = stripUserinfo(err instanceof Error ? err.message : String(err));
+    (this.deps.log ?? ((l: string) => console.error(l)))(
+      `serveurs : ${what} (agent ${agentId}) : ${why}`,
+    );
+  }
+
+  /** S.7 : demande perdue en route — retirée de l'attente et refusée auprès de l'agent. */
+  private refuseLost(live: LiveRemote, request: PendingRequest): void {
+    live.queued = live.queued.filter((r) => r.id !== request.id);
+    if (live.pending?.id === request.id) live.pending = live.queued.shift() ?? null;
+    try {
+      live.driver.answer(request.id, 'no');
+    } catch (err) {
+      this.trace('refus d’une demande perdue', live.id, err);
     }
   }
 

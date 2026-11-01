@@ -386,3 +386,40 @@ test('agent effacé du serveur pendant une coupure : au retour du lien, fin « a
   expect(r.created).toHaveLength(1);
   expect(existsSync(join(home, '.aid-remote/agents/sa_c12'))).toBe(false);
 });
+
+test('chantier 19, S.4 : session perdue, serveur injoignable pendant la reprise — retentée, jamais une fin', async () => {
+  const { home, transport } = serveur();
+  const r = distant(transport, 'sa_s4', 'claude');
+  r.driver.send('bonjour');
+  await r.attendre(type('turn_end'), 'premier tour');
+  // le rattachement en place voit la session disparaître ; la reprise, elle, ne joint plus le serveur
+  transport.env!.FAKE_SSH_FAIL = '1';
+  redemarrer(home, transport, 'sa_s4');
+  await r.attendre(type('connection_lost'), 'perte');
+  await new Promise((res) => setTimeout(res, 600));
+  expect(r.compte(type('exit'))).toBe(0);
+  expect(r.compte(type('resume_failed'))).toBe(0);
+  delete transport.env!.FAKE_SSH_FAIL;
+  await r.attendre(type('connection_resumed'), 'reprise');
+  r.driver.send('deux');
+  await r.attendre(message('echo: deux'), 'réponse après reprise');
+  expect(r.compte(type('exit'))).toBe(0);
+  expect(r.created.at(-1)).toMatchObject({ resume: true });
+});
+
+test('chantier 19, S.4 : reprise refusée par le serveur lui-même (tmux en échec) — une fin, jamais retentée', async () => {
+  const { home, transport } = serveur();
+  const r = distant(transport, 'sa_s4b', 'claude');
+  r.driver.send('bonjour');
+  await r.attendre(type('turn_end'), 'premier tour');
+  transport.env!.FAKE_TMUX_FAIL = '1';
+  redemarrer(home, transport, 'sa_s4b');
+  await r.attendre(type('exit'), 'fin');
+  expect(r.compte(type('resume_failed'))).toBe(1);
+  expect(r.events.find((e) => e.type === 'resume_failed')).toMatchObject({
+    reason: 'aid-relay: tmux new-session a échoué',
+  });
+  const creations = r.created.length;
+  await new Promise((res) => setTimeout(res, 400));
+  expect(r.created.length).toBe(creations);
+});

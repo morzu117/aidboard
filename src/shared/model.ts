@@ -349,6 +349,8 @@ export interface ServerFsListing {
   truncated: boolean;
   /** Le dossier est dans un dépôt Git (badges disponibles). */
   git: boolean;
+  /** Chantier 19 (S.3) : `git status` n'a pas abouti (délai, échec, sortie coupée) — un fichier sans badge n'est pas forcément propre. */
+  gitPartial: boolean;
   readAt: string;
 }
 
@@ -390,4 +392,9 @@ export interface ServerAgent {
   effort: string | null;
   createdAt: string;
   updatedAt: string;
+  /**
+   * Chantier 19 (S.6) : la confirmation des commandes destructives du serveur a changé depuis le lancement de cet
+   * agent, qui tourne encore avec l'ancien réglage jusqu'à sa prochaine relance. Toujours rendu par le daemon.
+   */
+  staleConfirm?: boolean;
 }

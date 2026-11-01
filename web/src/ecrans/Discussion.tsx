@@ -268,6 +268,12 @@ function Contenu() {
           {erreur}
         </p>
       )}
+      {agentVue?.staleConfirm && (
+        <p className="texte-discret" role="status" data-node="discussion.confirmation-perimee">
+          Confirmation des commandes destructives modifiée sur ce serveur : cet agent garde l’ancien
+          réglage jusqu’à sa prochaine relance.
+        </p>
+      )}
       <div className="discussion-colonne">
         {agent && (
           <div className="discussion-agent" data-node="discussion.agent">
