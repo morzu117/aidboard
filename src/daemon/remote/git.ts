@@ -8,7 +8,7 @@ import type {
 import type { Server } from '../../shared/model.js';
 import { AidHttpError } from '../errors.js';
 import { LOG_FORMAT, parseLog } from '../git/inspect.js';
-import { command, records, visibleUnder } from './files.js';
+import { command, HIDDEN_CASE, HIDDEN_PAIR_CASE, records, visibleUnder } from './files.js';
 import type { ExecResult } from './transport.js';
 import { shQuote } from './transport.js';
 
@@ -59,6 +59,28 @@ if ! top=$(g rev-parse --show-toplevel 2>/dev/null) || [ -z "$top" ]; then
 fi
 case "$top" in "$b" | "$b"/*) ;; *) printf 'pasgit\\000'; exit 0 ;; esac
 printf 'depot\\000%s\\000' "$top"
+# chantier 20 : un secret non suivi ne compte plus parmi les modifiés — ni nom, ni contenu, ni présence (opérateur,
+# 2026-11-01). Motifs de noms du panneau Fichiers (ils couvrent aussi ses dossiers de secrets), sur chaque composant
+# du chemin ; chemin cité par git dé-cité.
+cache() {
+  sr=$1 sp=
+  case "$sr" in \\"*\\") sr=\${sr#\\"}; sr=\${sr%\\"} ;; esac
+  while [ -n "$sr" ]; do
+    sc=\${sr%%/*}
+    case "$sr" in */*) sr=\${sr#*/} ;; *) sr= ;; esac
+    case "$sc" in '' | .) continue ;; esac
+    case "$sc" in ${HIDDEN_CASE}) return 0 ;; esac
+    case "$sp/$sc" in ${HIDDEN_PAIR_CASE}) return 0 ;; esac
+    sp=$sc
+  done
+  return 1
+}
+sans_secrets() {
+  while IFS= read -r l || [ -n "$l" ]; do
+    case "$l" in '?? '*) cache "\${l#???}" && continue ;; esac
+    printf '%s\\n' "$l"
+  done
+}
 st() {
   br=$(g symbolic-ref --quiet HEAD 2>/dev/null) && br=\${br#refs/heads/} || br=
   hd=$(g rev-parse --verify --quiet HEAD 2>/dev/null) || hd=
@@ -80,7 +102,7 @@ st() {
   elif [ -f "$gd/BISECT_LOG" ]; then op=bisect
   fi
   # git status tué par son délai ou en échec : x, jamais un compte partiel lu « propre » (chantier 19, S.1)
-  ch=$( { g status --porcelain --untracked-files=normal 2>/dev/null; printf '\\nrc%s\\n' "$?"; } |
+  ch=$( { g status --porcelain --untracked-files=normal 2>/dev/null; printf '\\nrc%s\\n' "$?"; } | sans_secrets |
     awk '/^rc[0-9]+$/ { rc = substr($0, 3); next } NF { n++ } END { print (rc == "0" ? n + 0 : "x") }')
 }
 pr() {

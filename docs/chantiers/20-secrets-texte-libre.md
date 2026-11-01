@@ -123,3 +123,23 @@ Le labo est lancé à la fin (aucun script distant n'est modifié).
     - les mots de passe en argument de commande ;
     - les en-têtes `Authorization` génériques et les `CLE=valeur` ;
     - l'affichage d'un secret avec le mot de passe d'`aid-relay`.
+- **M.6 Secrets non suivis hors du compte des modifiés** (décision de l'opérateur du 2026-11-01, question ouverte
+  du chantier 19) : dans le script d'état Git, le filtre `sans_secrets` retire du compte les lignes `?? chemin`
+  dont un composant tombe sous un motif de nom ou de paire du panneau Fichiers. Le chemin est dé-cité quand git
+  le met entre guillemets. Un secret **suivi** et modifié compte toujours : il est déjà dans le dépôt. `dirty`
+  suit, comme depuis S.1.
+  - Les noms et paires des dossiers de secrets (`SECRET_DIRS`) sont tous couverts par les motifs de noms. Les
+    lignes qui les testaient en plus n'étaient attrapées par aucune mutation : retirées.
+  - Limite : `--untracked-files=normal` ne descend pas dans un dossier non suivi ordinaire. `brouillons/`, qui
+    contient un secret, compte pour une entrée, sans que rien de son contenu soit dit.
+  - Test, avec un vrai dépôt et `core.quotePath=true` forcé :
+    - `.env`, `id_ed25519`, `clé_secret.json` cité, `.aws/` et, sous des dossiers suivis, `gh/hosts.yml` et
+      `.config/gcloud/` : 0, `dirty` faux ;
+    - plus un fichier ordinaire et le secret suivi modifié : 2 ;
+    - plus un dossier ordinaire non suivi : 3.
+  - Mutations vérifiées : sans filtre, sans dé-citage, sans paires de noms, sans noms.
+  - Lignes existantes modifiées :
+    - le `ch=$(…)` du script, qui gagne `| sans_secrets` ;
+    - l'import de `files.js` ;
+    - `test/labo/fichiers.labo.ts` : `changes` passe de 4 à 2, avec son commentaire.
+  - Gate vert : 1283. Labo 17/17.

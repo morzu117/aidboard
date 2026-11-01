@@ -78,8 +78,8 @@ test('fichiers et git sur un vrai dépôt : liste, aperçu, secrets masqués, é
     root: '/home/aid/proj',
     branch: 'main',
     head,
-    // les deux secrets non suivis comptent : un nombre, ni nom ni contenu
-    changes: 4,
+    // chantier 20 : les deux secrets non suivis (`.env`, `id_ed25519`) ne comptent plus
+    changes: 2,
     origin: true,
     upstream: 'origin/main',
     aheadBehind: { ahead: 0, behind: 0 },
