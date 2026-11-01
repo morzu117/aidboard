@@ -1,9 +1,19 @@
-import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { afterEach, expect, test } from 'vitest';
 import type { Server } from '../src/shared/model.js';
 import {
+  PATH_SHIMS,
   remoteArgv,
   remoteCommand,
   remoteExec,
@@ -12,6 +22,7 @@ import {
 } from '../src/daemon/remote/transport.js';
 
 const FAKE_SSH = resolve(__dirname, 'fixtures/fake-ssh.sh');
+const P = PATH_SHIMS;
 
 type Conn = Pick<Server, 'mode' | 'target' | 'sshOptions' | 'loadProfile' | 'shell'>;
 const alias: Conn = {
@@ -39,7 +50,37 @@ function sandbox(extra: NodeJS.ProcessEnv = {}) {
 test('shQuote : tout est littéral, apostrophes comprises', () => {
   expect(shQuote('a b')).toBe(`'a b'`);
   expect(shQuote(`l'été $HOME`)).toBe(`'l'\\''été $HOME'`);
-  expect(remoteCommand({ shell: 'zsh' }, 'ls ~')).toBe(`'zsh' -lc 'ls ~'`);
+  expect(remoteCommand({ shell: 'zsh' }, 'ls ~')).toBe(`'zsh' -lc '${P}ls ~'`);
+});
+
+test('shims de mise : trouvés par le shell de connexion, en fin de PATH, dossier relocalisable', () => {
+  // le piège du VPS (chantier 21) : `mise activate` n'est lu qu'en shell interactif ; ici, aucun profil ne l'active
+  const home = mkdtempSync(join(tmpdir(), 'aid-shims-'));
+  homes.push(home);
+  const outil = (dir: string, sortie: string) => {
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, 'aid-outil-mise'), `#!/bin/sh\necho ${sortie}\n`);
+    chmodSync(join(dir, 'aid-outil-mise'), 0o755);
+  };
+  const lancer = (env: NodeJS.ProcessEnv = {}) =>
+    execFileSync('/bin/sh', ['-c', remoteCommand({ shell: 'sh' }, 'aid-outil-mise')], {
+      env: { HOME: home, PATH: '/usr/bin:/bin', ...env },
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+  outil(join(home, '.local/share/mise/shims'), 'shim');
+  expect(lancer()).toBe('shim\n');
+  // MISE_DATA_DIR, puis XDG_DATA_HOME, déplacent le dossier de mise
+  outil(join(home, 'xdg/mise/shims'), 'xdg');
+  expect(lancer({ XDG_DATA_HOME: join(home, 'xdg') })).toBe('xdg\n');
+  outil(join(home, 'data/shims'), 'data');
+  expect(lancer({ MISE_DATA_DIR: join(home, 'data'), XDG_DATA_HOME: join(home, 'xdg') })).toBe(
+    'data\n',
+  );
+  // un outil déjà sur le PATH du profil garde la priorité : les shims ne viennent qu'après
+  outil(join(home, 'bin'), 'profil');
+  writeFileSync(join(home, '.profile'), 'PATH="$HOME/bin:$PATH"\n');
+  expect(lancer()).toBe('profil\n');
 });
 
 test('argv par mode : options ssh avant `--`, destination ensuite, commande en un seul argument', () => {
@@ -53,7 +94,7 @@ test('argv par mode : options ssh avant `--`, destination ensuite, commande en u
       '-T',
       '--',
       'vps',
-      `'bash' -lc 'uptime'`,
+      `'bash' -lc '${P}uptime'`,
     ],
   });
   const host: Conn = {
@@ -79,7 +120,7 @@ test('argv par mode : options ssh avant `--`, destination ensuite, commande en u
     'bastion',
     '--',
     '203.0.113.10',
-    `'bash' -lc 'uptime'`,
+    `'bash' -lc '${P}uptime'`,
   ]);
   const cmd: Conn = {
     mode: 'command',
@@ -90,11 +131,11 @@ test('argv par mode : options ssh avant `--`, destination ensuite, commande en u
   };
   expect(remoteArgv(cmd, 'uptime', { env: { SHELL: '/bin/zsh' } })).toEqual({
     file: '/bin/zsh',
-    args: ['-ic', `ssh vps ''\\''bash'\\'' -lc '\\''uptime'\\'''`],
+    args: ['-ic', `ssh vps ''\\''bash'\\'' -lc '\\''${P}uptime'\\'''`],
   });
   expect(remoteArgv({ ...cmd, loadProfile: false }, 'uptime')).toEqual({
     file: '/bin/sh',
-    args: ['-c', `ssh vps ''\\''bash'\\'' -lc '\\''uptime'\\'''`],
+    args: ['-c', `ssh vps ''\\''bash'\\'' -lc '\\''${P}uptime'\\'''`],
   });
   // profil demandé mais SHELL inconnu : erreur dite, jamais un /bin/sh -ic qui ne le chargerait pas
   expect(() => remoteArgv(cmd, 'uptime', { env: {} })).toThrow(/SHELL absent/);
@@ -113,7 +154,7 @@ test('remoteExec : sortie, code, durée ; la commande arrive intacte sur le « s
   expect(r.stdout).toBe(`l'été ${s.home}\n`);
   expect(r.durationMs).toBeGreaterThanOrEqual(0);
   expect(readFileSync(s.log, 'utf8')).toBe(
-    `vps\t'bash' -lc 'printf '\\''%s'\\'' "l'\\''été" && echo " $HOME"'\n`,
+    `vps\t'bash' -lc '${P}printf '\\''%s'\\'' "l'\\''été" && echo " $HOME"'\n`,
   );
 
   const fail = await remoteExec(alias, 'echo non >&2; exit 3', { ssh: FAKE_SSH, env: s.env });
