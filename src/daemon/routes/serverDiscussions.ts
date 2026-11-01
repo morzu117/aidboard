@@ -4,6 +4,7 @@ import type { AgentSettings } from '../../shared/agentSettings.js';
 import type { Db } from '../db.js';
 import { AidHttpError } from '../errors.js';
 import { RemoteAgentManager, type RemoteAgentManagerDeps } from '../remote/agents.js';
+import { maskStoredSecrets } from '../remote/scrub.js';
 import { getServer } from '../remote/servers.js';
 
 const CreateBody = Type.Object(
@@ -164,6 +165,8 @@ export function registerServerDiscussionRoutes(
     manager.setSettings((req.params as { id: string }).id, req.body as Partial<AgentSettings>),
   );
 
+  // chantier 20 (DM6) : l'historique écrit avant le masquage à l'entrée, masqué une fois, avant tout rattachement
+  maskStoredSecrets(db);
   manager.reattachAll();
   return manager;
 }

@@ -722,3 +722,38 @@ test('chantier 19, S.2 : commits hors HEAD non relus — tronqué, journal de HE
   expect(log.commits.map((c) => c.message)).toEqual(['initial']);
   expect(log.commits[0]!.inHead).toBe(true);
 });
+
+test('chantier 20 : un secret non suivi ne compte pas parmi les modifiés ; suivi, il compte', async () => {
+  // git cite les noms non ASCII quelle que soit la config de l'opérateur : le script les dé-cite
+  const { home } = await avecGitDuServeur('exec "$VRAI" -c core.quotePath=true "$@"');
+  const { clone } = depot(home);
+  commitFile(clone, 'app_password.txt', 'v1\n', 'secret suivi');
+  // dossiers suivis : git descend dans leurs sous-dossiers non suivis, les motifs de paires s'appliquent
+  mkdirSync(join(clone, 'conf', 'gh'), { recursive: true });
+  mkdirSync(join(clone, '.config'));
+  commitFile(clone, 'conf/gh/LISEZMOI', 'x\n', 'gh suivi');
+  commitFile(clone, '.config/LISEZMOI', 'x\n', 'config suivi');
+  sh(clone, 'push', '-q', 'origin', 'main');
+  const s = await create();
+  expect((await status(s)).repo!.changes).toBe(0);
+  // non suivis : des noms, un dossier de secrets, un nom accentué que git cite entre guillemets
+  writeFileSync(join(clone, '.env'), 'SECRET=x\n');
+  writeFileSync(join(clone, 'id_ed25519'), 'x');
+  writeFileSync(join(clone, 'clé_secret.json'), '{}');
+  mkdirSync(join(clone, '.aws'));
+  writeFileSync(join(clone, '.aws', 'credentials'), 'x');
+  writeFileSync(join(clone, 'conf', 'gh', 'hosts.yml'), 'x');
+  mkdirSync(join(clone, '.config', 'gcloud'));
+  writeFileSync(join(clone, '.config', 'gcloud', 'active_config'), 'x');
+  expect((await status(s)).repo!.changes).toBe(0);
+  expect((await get(`/api/servers/${s.id}/git/log`)).json<ServerGitLog>().dirty).toBe(false);
+  // un fichier ordinaire non suivi et le secret suivi modifié comptent
+  writeFileSync(join(clone, 'notes.txt'), 'x');
+  writeFileSync(join(clone, 'app_password.txt'), 'v2\n');
+  expect((await status(s)).repo!.changes).toBe(2);
+  // un dossier ordinaire non suivi compte pour une entrée, même s'il contient un secret : git n'y descend pas,
+  // rien de ce qu'il contient n'est dit
+  mkdirSync(join(clone, 'brouillons', 'gh'), { recursive: true });
+  writeFileSync(join(clone, 'brouillons', 'gh', 'hosts.yml'), 'x');
+  expect((await status(s)).repo!.changes).toBe(3);
+});

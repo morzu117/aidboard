@@ -448,3 +448,65 @@ test('mode commande, étape 1 : le préfixe local cherché sur le PATH, un nom d
     await premier({ mode: 'command', target: 'aid-absent-xyz vps', loadProfile: true }),
   ).toMatchObject({ state: 'ok', detail: 'aid-absent-xyz (profil shell)' });
 });
+
+test('chantier 20, M.4 : un profil qui affiche un secret, une erreur qui en porte un — masqués dans le test publié', async () => {
+  t = await startTestDaemon();
+  remote(t.home, ['claude', 'tmux']);
+  const jeton = 'ghp_A1b2C3d4E5f6G7h8I9j0K1l2M3n4O5p6Q7r8';
+  writeFileSync(
+    join(t.home, '.bash_profile'),
+    `${readFileSync(join(t.home, '.bash_profile'), 'utf8')}echo "GH_TOKEN=${jeton}" >&2\nprintf -- '-----BEGIN OPENSSH PRIVATE KEY-----\\nb3BlbnNzaC1rZXk\\n-----END OPENSSH PRIVATE KEY-----\\n' >&2\n`,
+  );
+  const s = await create({ workdir: `~/depot-${jeton}` });
+  const got = listen();
+  await req('POST', `/api/servers/${s.id}/test`);
+  const done = await finished(got);
+  expect(done.steps.find((x) => x.id === 'workdir')!.state).toBe('failed');
+  expect(done.error).toContain('~/depot-ghp_[secret masqué] inaccessible');
+  expect(done.raw).toContain('GH_TOKEN=ghp_[secret masqué]');
+  expect(done.raw).toContain('clé privée [secret masqué]');
+  // rien ne sort du daemon : ni la publication, ni la lecture, ni l'état
+  const publie = JSON.stringify(got);
+  const lu = (await req('GET', `/api/servers/${s.id}/test`)).body;
+  for (const sortie of [publie, lu]) {
+    expect(sortie).not.toContain('A1b2C3');
+    expect(sortie).not.toContain('b3BlbnNzaC1rZXk');
+  }
+});
+
+test('chantier 20, M.4 : commande locale introuvable dont le nom porte un jeton — erreur et état masqués', async () => {
+  t = await startTestDaemon();
+  const s = await create({
+    mode: 'command',
+    target: 'outil-ghp_A1b2C3d4E5f6G7h8I9j0K1l2M3n4O5p6Q7r8',
+    loadProfile: false,
+  });
+  const got = listen();
+  await req('POST', `/api/servers/${s.id}/test`);
+  const done = await finished(got);
+  expect(done.steps[0]).toMatchObject({
+    id: 'command',
+    state: 'failed',
+    detail: "'outil-ghp_[secret masqué]' introuvable dans le PATH du daemon",
+  });
+  expect(done.error).toContain('outil-ghp_[secret masqué]');
+  const status = got.filter((m) => m.type === 'server.status').at(-1)!.status!;
+  expect(status).toMatchObject({ state: 'error' });
+  expect(status.reason).toContain('outil-ghp_[secret masqué]');
+  expect(JSON.stringify(got)).not.toContain('A1b2C3');
+});
+
+test('chantier 20, M.4 : la cause d’un état injoignable, tirée de la sortie de ssh, est masquée', async () => {
+  t = await startTestDaemon(undefined, {
+    remote: { ssh: FAKE_SSH, env: { ...process.env, FAKE_SSH_FAIL: '1' } },
+  });
+  // le faux ssh cite la cible dans son refus, comme le vrai
+  const s = await create({ target: 'vps-ghp_A1b2C3d4E5f6G7h8I9j0K1l2M3n4O5p6Q7r8' });
+  const got = listen();
+  const status = (await req('POST', `/api/servers/${s.id}/ping`)).json<ServerStatus>();
+  expect(status).toMatchObject({ state: 'unreachable' });
+  expect(status.reason).toBe(
+    'ssh: connect to host vps-ghp_[secret masqué] port 22: Connection refused',
+  );
+  expect(JSON.stringify(got)).not.toContain('A1b2C3');
+});

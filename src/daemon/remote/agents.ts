@@ -15,6 +15,7 @@ import { CodexDriver } from '../conversation/codex.js';
 import type { ConversationDriver, ConversationEvent } from '../conversation/driver.js';
 import type { Db } from '../db.js';
 import { AidHttpError } from '../errors.js';
+import { MASK, maskDeep, maskSecrets } from '../secrets.js';
 import { CONFIRM_OPTIONS, claudeConfirmSettings, isDestructive, rulePattern } from './confirm.js';
 import { RemoteDriver } from './driver.js';
 import { stripUserinfo } from './git.js';
@@ -772,6 +773,9 @@ export class RemoteAgentManager {
     driver.onEvent((ev) => {
       // pilote remplacé par une relance : l'ancien n'écrit plus rien
       if (this.live.get(row.id) !== live) return;
+      // chantier 20 (DM2) : masqué à l'entrée — ni la base, ni la carte, ni le navigateur ne voient le secret ;
+      // l'original ne reste que dans la sortie du relais, sur le serveur
+      ev = maskDeep(ev);
       try {
         this.onEvent(live, ev);
         // `thinking` n'est pas journalisé (D65) mais se diffuse ; le reste l'a été par `record`
@@ -870,6 +874,10 @@ export class RemoteAgentManager {
       options: CONFIRM_OPTIONS,
       confirm: { server: confirm.server },
     };
+    // chantier 20 (DM3) : une commande qui portait un secret n'écrit ni n'applique de règle — la règle serait le
+    // secret, et deux secrets masqués pareils partageraient la même
+    if (command.includes(MASK))
+      return { ...shown, options: CONFIRM_OPTIONS.filter((o) => o.answer !== 'always') };
     // règle illisible ou réponse impossible : la carte est présentée, rien ne passe en silence
     try {
       const server = this.serverOf(this.agentRow(live.id));
@@ -897,6 +905,8 @@ export class RemoteAgentManager {
 
   /** Une ligne du fil et l'offset sûr du relais, ensemble : un rattachement repart juste après cette ligne. */
   private record(live: LiveRemote, ev: ConversationEvent): void {
+    // DM4 : le message de l'opérateur est parti en clair à l'agent, il est masqué au fil (idempotent sinon)
+    ev = maskDeep(ev);
     const seq = ++live.seq;
     const now = new Date().toISOString();
     try {
@@ -936,7 +946,8 @@ export class RemoteAgentManager {
 
   /** S.7 (DS6) : une erreur attrapée laisse une trace, sans identifiants d'URL. */
   private trace(what: string, agentId: string, err: unknown): void {
-    const why = stripUserinfo(err instanceof Error ? err.message : String(err));
+    // DM5 : identifiants d'URL retirés, puis tout autre secret masqué
+    const why = maskSecrets(stripUserinfo(err instanceof Error ? err.message : String(err)));
     (this.deps.log ?? ((l: string) => console.error(l)))(
       `serveurs : ${what} (agent ${agentId}) : ${why}`,
     );
