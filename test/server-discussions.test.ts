@@ -11,7 +11,7 @@ import {
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import WebSocket from 'ws';
-import { afterEach, expect, test } from 'vitest';
+import { afterEach, expect, test, vi } from 'vitest';
 import type { ServerAgentView, ServerDiscussionView } from '../src/daemon/remote/agents.js';
 import type { TransportOptions } from '../src/daemon/remote/transport.js';
 import { issueRunToken } from '../src/daemon/security.js';
@@ -1267,4 +1267,57 @@ test('chantier 19, S.6 : confirmation changée pendant que l’agent tourne — 
   await envoyer(m, a.id, 'commande: rm -f x');
   await waitFor(() => ligne(m, a.id)?.status === 'needs_input', 15_000, 'carte');
   expect(await vue()).toBe(false);
+}, 30_000);
+
+test('chantier 19, S.7 : demande perdue en route — tracée sans identifiants, refusée auprès de l’agent, jamais en attente sans carte', async () => {
+  const lignes: string[] = [];
+  const espion = vi.spyOn(console, 'error').mockImplementation((l: unknown) => {
+    lignes.push(String(l));
+  });
+  nettoyages.push(() => espion.mockRestore());
+  const m = await daemon(serveur());
+  const s = await creerServeur(m);
+  const a = (await creerDiscussion(m, s.id)).agents[0]!;
+  // la base refuse le passage en attente : l'événement `request` lève en plein traitement
+  m.t.db.exec(
+    `CREATE TRIGGER panne BEFORE UPDATE OF status ON server_agents WHEN NEW.status = 'needs_input'
+     BEGIN SELECT RAISE(ABORT, 'panne simulée https://deploy:jeton-secret@git.exemple/x'); END`,
+  );
+  await envoyer(m, a.id, 'commande: ls');
+  await waitFor(() => assistant(m, a.id, 'refusée: ls') === 1, 15_000, 'refus');
+  expect(
+    (await m.req('GET', `/api/server-agents/${a.id}`)).json<ServerAgentView>().pending,
+  ).toBeNull();
+  const trace = lignes.find((l) => l.includes('événement request non traité'));
+  expect(trace).toBe(
+    `serveurs : événement request non traité (agent ${a.id}) : panne simulée https://git.exemple/x`,
+  );
+  expect(lignes.join('\n')).not.toContain('jeton-secret');
+}, 30_000);
+
+test('chantier 19, S.7 : écriture au fil en échec — tracée, le lien fermé, le message suivant relance', async () => {
+  const lignes: string[] = [];
+  const espion = vi.spyOn(console, 'error').mockImplementation((l: unknown) => {
+    lignes.push(String(l));
+  });
+  nettoyages.push(() => espion.mockRestore());
+  const m = await daemon(serveur());
+  const s = await creerServeur(m);
+  const a = (await creerDiscussion(m, s.id)).agents[0]!;
+  m.t.db.exec(
+    `CREATE TRIGGER panne BEFORE INSERT ON server_agent_messages WHEN json_extract(NEW.payload, '$.text') = 'echo: un'
+     BEGIN SELECT RAISE(ABORT, 'disque plein'); END`,
+  );
+  await envoyer(m, a.id, 'un');
+  await waitFor(
+    () => lignes.some((l) => l.startsWith('serveurs : écriture au fil (message)')),
+    15_000,
+    'trace',
+  );
+  expect(lignes.find((l) => l.startsWith('serveurs : écriture au fil'))).toBe(
+    `serveurs : écriture au fil (message) (agent ${a.id}) : disque plein`,
+  );
+  m.t.db.exec('DROP TRIGGER panne');
+  await envoyer(m, a.id, 'deux');
+  await waitFor(() => assistant(m, a.id, 'echo: deux') >= 1, 15_000, 'relancé');
 }, 30_000);

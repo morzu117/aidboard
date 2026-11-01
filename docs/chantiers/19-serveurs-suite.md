@@ -190,3 +190,26 @@ Un point = un commit. Après chaque point :
   - Deux mutations vérifiées, une côté daemon, une côté web.
   - Aucune ligne existante modifiée.
   - Gate vert (1265). Labo non lancé : S.6 ne touche ni scripts distants, ni relais, ni ssh.
+- **S.7 Erreurs tracées** :
+  - `RemoteAgentManagerDeps.log` (défaut : `console.error`, donc le journal du daemon, comme `memory/mirror.ts`).
+  - `trace()` écrit `serveurs : <contexte> (agent <id>) : <message>`, avec les identifiants d'URL retirés par
+    `stripUserinfo`.
+  - Tracés : `reattachAll` (ligne illisible, arrêt du relais codex), l'événement non traité dans `onEvent`,
+    l'écriture au fil, l'abonné en échec, la réponse d'office (codex en auto, règle du serveur), la réponse
+    « toujours » aux demandes en file, l'échec de la nouvelle tentative de S.5.
+  - Une **demande perdue** dans `onEvent` est retirée de l'attente et **refusée** auprès de l'agent.
+    - **Écart au plan, DS6** : refusée plutôt qu'interrompue. Le refus libère aussi l'agent, il se voit au fil
+      (« refusée: … »), et le faux claude ne finit jamais un tour sur une interruption pendant une demande.
+  - Restent muets, à dessein : les `catch` qui attendent un arrêt ou une relance déjà en cours (`stopAgentsOf`)
+    et ceux qui deviennent un code HTTP (`input`).
+  - Tests, avec des déclencheurs SQLite :
+    - le passage en `needs_input` refusé : trace exacte, URL sans identifiants, agent qui reçoit le refus, plus
+      de demande en attente ;
+    - l'insertion d'une ligne du fil refusée : trace exacte, puis le message suivant relance l'agent.
+  - Trois mutations vérifiées : sans refus, sans masquage, sans trace.
+  - Lignes existantes modifiées :
+    - 7 `catch {` devenus `catch (err) {` ;
+    - le `.catch` de l'arrêt du relais codex dans `reattachAll` ;
+    - le `p.catch` de `retryInverse` ;
+    - l'import de vitest du test (ajout de `vi`).
+  - Gate vert (1267). Labo non lancé : ni relais, ni scripts distants, ni ssh.

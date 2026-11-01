@@ -17,6 +17,7 @@ import type { Db } from '../db.js';
 import { AidHttpError } from '../errors.js';
 import { CONFIRM_OPTIONS, claudeConfirmSettings, isDestructive, rulePattern } from './confirm.js';
 import { RemoteDriver } from './driver.js';
+import { stripUserinfo } from './git.js';
 import { parseAlive, relayAlive, relayStop } from './relay.js';
 import { getServer } from './servers.js';
 import { SERVER_PERMISSION_MODES } from './servers.js';
@@ -96,6 +97,8 @@ export interface RemoteAgentManagerDeps {
   /** Binaire lancé sur le serveur, par agent ; défaut : son nom, cherché dans le PATH distant. Les tests y mettent les faux. */
   bins?: Partial<Record<RemoteKind, string>>;
   delaysMs?: readonly number[];
+  /** Chantier 19, S.7 (DS6) : une ligne par erreur attrapée ; défaut : la sortie d'erreur du daemon (son journal). */
+  log?: (line: string) => void;
 }
 
 const PREFIX = 'aid-';
@@ -421,8 +424,9 @@ export class RemoteAgentManager {
             auto: true,
           });
         }
-      } catch {
+      } catch (err) {
         // lien perdu : les demandes restantes suivent leur cours (annulées par le pilote, ou présentées)
+        this.trace('réponse « toujours » aux demandes en file', live.id, err);
       }
       this.nextPending(live);
       return;
@@ -591,11 +595,14 @@ export class RemoteAgentManager {
             this.setStatus(row.id, 'working');
           }
         } else {
-          void this.stopRelay(row).catch(() => undefined);
+          void this.stopRelay(row).catch((err: unknown) =>
+            this.trace('arrêt du relais codex au démarrage', row.id, err),
+          );
           this.setStatus(row.id, 'idle');
         }
-      } catch {
+      } catch (err) {
         // une ligne illisible n'empêche ni le daemon de démarrer ni les autres agents d'être rattachés
+        this.trace('rattachement au démarrage', row.id, err);
       }
     }
   }
@@ -651,7 +658,10 @@ export class RemoteAgentManager {
       })
       .finally(() => this.relaunching.delete(live.id));
     this.relaunching.set(live.id, p);
-    p.catch(() => this.setStatus(live.id, 'error'));
+    p.catch((err: unknown) => {
+      this.trace('nouvelle tentative de relance', live.id, err);
+      this.setStatus(live.id, 'error');
+    });
   }
 
   /** Une session n'existe chez l'agent qu'après un tour : avant, `--resume` échouerait en boucle (revue R.4). */
@@ -766,8 +776,11 @@ export class RemoteAgentManager {
         this.onEvent(live, ev);
         // `thinking` n'est pas journalisé (D65) mais se diffuse ; le reste l'a été par `record`
         if (ev.type === 'thinking') this.notify(live.id, ev);
-      } catch {
+      } catch (err) {
         // une écriture en base qui échoue ne remonte pas dans la lecture de la sortie du relais
+        this.trace(`événement ${ev.type} non traité`, live.id, err);
+        // S.7 : une demande perdue en route est refusée — sans carte, l'agent l'attendrait sans fin
+        if (ev.type === 'request') this.refuseLost(live, ev.request);
       }
     });
     driver.start();
@@ -847,7 +860,8 @@ export class RemoteAgentManager {
         // codex en auto : ce que `never` aurait laissé passer ; le fil en garde l'exécution (`tool_start`)
         live.driver.answer(request.id, 'yes');
         return null;
-      } catch {
+      } catch (err) {
+        this.trace('acceptation d’office (codex en auto)', live.id, err);
         return request;
       }
     }
@@ -862,7 +876,8 @@ export class RemoteAgentManager {
       const covered = (r: ServerRule) => r.cwd === live.cwd && r.pattern === rulePattern(command);
       if (!server.rules.some(covered)) return shown;
       live.driver.answer(request.id, 'yes');
-    } catch {
+    } catch (err) {
+      this.trace('réponse par une règle du serveur', live.id, err);
       return shown;
     }
     this.record(live, { type: 'request', request: shown });
@@ -898,6 +913,7 @@ export class RemoteAgentManager {
     } catch (err) {
       // discussion supprimée pendant que l'agent parlait encore : rien à écrire
       if ((err as { code?: string }).code === 'SQLITE_CONSTRAINT_FOREIGNKEY') return;
+      this.trace(`écriture au fil (${ev.type})`, live.id, err);
       // autre échec : la ligne n'est pas au fil et l'offset n'a pas avancé. Le lien est fermé pour que la
       // suite ne fasse pas avancer l'offset par-dessus ; le prochain message relance l'agent (revue R.4)
       if (this.live.get(live.id) === live) this.live.delete(live.id);
@@ -911,9 +927,29 @@ export class RemoteAgentManager {
     for (const cb of this.subscribers.get(agentId) ?? []) {
       try {
         cb(ev);
-      } catch {
+      } catch (err) {
         // un abonné en échec ne prive pas les autres de l'événement
+        this.trace('abonné du fil', agentId, err);
       }
+    }
+  }
+
+  /** S.7 (DS6) : une erreur attrapée laisse une trace, sans identifiants d'URL. */
+  private trace(what: string, agentId: string, err: unknown): void {
+    const why = stripUserinfo(err instanceof Error ? err.message : String(err));
+    (this.deps.log ?? ((l: string) => console.error(l)))(
+      `serveurs : ${what} (agent ${agentId}) : ${why}`,
+    );
+  }
+
+  /** S.7 : demande perdue en route — retirée de l'attente et refusée auprès de l'agent. */
+  private refuseLost(live: LiveRemote, request: PendingRequest): void {
+    live.queued = live.queued.filter((r) => r.id !== request.id);
+    if (live.pending?.id === request.id) live.pending = live.queued.shift() ?? null;
+    try {
+      live.driver.answer(request.id, 'no');
+    } catch (err) {
+      this.trace('refus d’une demande perdue', live.id, err);
     }
   }
 
