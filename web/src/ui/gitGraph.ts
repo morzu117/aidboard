@@ -29,8 +29,12 @@ export interface GraphRow {
 
 // Le commit dont les refs portent `origin/<base>` (ou `<base>` sans remote) : départ du fil
 // « premier parent » qui définit la voie 0. `null` si la base n'apparaît pas dans la fenêtre.
+// `git log` décore la branche courante `HEAD -> <branche>` : ce commit est à la fois `HEAD` et
+// `<branche>`. Sans ce dépliage, ni nœud courant ni ligne WIP dans l'onglet Git d'un sujet.
+const refNames = (r: string) => (r.startsWith('HEAD -> ') ? ['HEAD', r.slice(8)] : [r]);
 export function findRefTip(commits: GitLogCommit[], candidates: string[]): string | null {
-  for (const c of commits) if (c.refs.some((r) => candidates.includes(r))) return c.hash;
+  for (const c of commits)
+    if (c.refs.some((r) => refNames(r).some((n) => candidates.includes(n)))) return c.hash;
   return null;
 }
 

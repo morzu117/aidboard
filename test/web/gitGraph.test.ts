@@ -100,4 +100,17 @@ describe('layoutGraph', () => {
     const head = withWip.find((r) => r.hash === 'c2')!;
     expect(head.paths.some((p) => p.dashed)).toBe(true);
   });
+
+  test('décoration réelle de git, `HEAD -> <branche>` : HEAD repéré et ligne WIP (onglet Git d’un sujet)', () => {
+    const decores = COMMITS.map((c) => (c.hash === 'c2' ? { ...c, refs: ['HEAD -> feat/x'] } : c));
+    const rows = layoutGraph(decores, { baseRefs: ['origin/main', 'main'], dirty: true });
+    expect(rows[0]).toMatchObject({ hash: '', wip: true, lane: 1 });
+    expect(rows.filter((r) => r.isHead).map((r) => r.hash)).toEqual(['c2']);
+    // la branche reste une ref à part entière : base sur une branche courante
+    expect(findRefTip(decores, ['feat/x'])).toBe('c2');
+    const surMain = COMMITS.map((c) =>
+      c.hash === 'c4' ? { ...c, refs: ['HEAD -> main', 'origin/main'] } : c,
+    );
+    expect(findRefTip(surMain, ['main'])).toBe('c4');
+  });
 });
