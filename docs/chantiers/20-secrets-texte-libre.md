@@ -114,3 +114,12 @@ Le labo est lancé à la fin (aucun script distant n'est modifié).
     `test/web/accueil.test.tsx` (« default : une ligne par sujet », `expected 'fix/x' to be 'feat/s'`). Ce test
     échoue aussi 2 fois sur 3 quand il est lancé seul : c'est l'instabilité prouvée préexistante au chantier 17
     (RC.4). Troisième passage vert : 1282.
+- **Fin du chantier** :
+  - Labo 17/17 contre le vrai sshd, sans changement attendu (aucun script distant touché). colima arrêté.
+  - `test/web/accueil.test.tsx` rejoué 5 fois sur la base `b509857` et 5 fois sur la branche : vert partout. Son
+    échec ne revient que sous charge. Le diff du chantier ne touche ni `web/` ni `src/shared`.
+  - Restent hors périmètre, à trancher par l'opérateur (DM7) :
+    - les agents locaux ;
+    - les mots de passe en argument de commande ;
+    - les en-têtes `Authorization` génériques et les `CLE=valeur` ;
+    - l'affichage d'un secret avec le mot de passe d'`aid-relay`.
