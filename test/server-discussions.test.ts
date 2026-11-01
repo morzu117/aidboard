@@ -1182,3 +1182,56 @@ test('chantier 19, S.4 : Reconnecter un claude dont l’agent est arrêté sur l
   expect((await m2.req('POST', `/api/server-agents/${a.id}/reconnect`)).statusCode).toBe(202);
   expect(ligne(m2, a.id)!.tmux_session).not.toBe(`aid-${a.id}`);
 }, 30_000);
+
+test('chantier 19, S.5 : premier tour mort avant sa fin, session déjà créée — la relance reprend la session (--resume)', async () => {
+  const remote = serveur();
+  remote.transport.env.FAKE_CLAUDE_STRICT = '1';
+  const m = await daemon(remote);
+  const s = await creerServeur(m);
+  const a = (await creerDiscussion(m, s.id)).agents[0]!;
+  // l'agent meurt au premier message : la session existe chez claude, aucun `turn_end` au fil
+  await envoyer(m, a.id, 'crash');
+  await waitFor(() => ligne(m, a.id)?.status === 'error', 15_000, 'agent mort');
+  await envoyer(m, a.id, 'deux');
+  await waitFor(() => assistant(m, a.id, 'echo: deux') === 1, 15_000, 'réponse après relance');
+  await waitFor(() => ligne(m, a.id)?.status === 'idle', 15_000, 'idle');
+  expect(fil(m, a.id).filter((e) => (e as { type?: string }).type === 'exit')).toHaveLength(1);
+}, 30_000);
+
+test('chantier 19, S.5 : session inconnue du serveur malgré un tour fini — la relance repart sur une session neuve', async () => {
+  const remote = serveur();
+  remote.transport.env.FAKE_CLAUDE_STRICT = '1';
+  const m = await daemon(remote);
+  const s = await creerServeur(m);
+  const a = (await creerDiscussion(m, s.id)).agents[0]!;
+  await envoyer(m, a.id, 'bonjour');
+  await waitFor(() => ligne(m, a.id)?.status === 'idle', 15_000, 'idle');
+  // les sessions de claude effacées sur le serveur, puis l'agent arrêté
+  rmSync(join(remote.home, '.fake-claude-sessions'), { recursive: true, force: true });
+  await envoyer(m, a.id, 'crash');
+  await waitFor(() => ligne(m, a.id)?.status === 'error', 15_000, 'agent mort');
+  rmSync(join(remote.home, '.fake-claude-sessions'), { recursive: true, force: true });
+  await envoyer(m, a.id, 'trois');
+  await waitFor(() => assistant(m, a.id, 'echo: trois') === 1, 15_000, 'réponse après relance');
+}, 30_000);
+
+test('chantier 19, S.5 : relance refusée dans les deux sens — une seule nouvelle tentative, puis l’erreur', async () => {
+  const remote = serveur();
+  remote.transport.env.FAKE_CLAUDE_STRICT = '1';
+  const m = await daemon(remote);
+  const s = await creerServeur(m);
+  const a = (await creerDiscussion(m, s.id)).agents[0]!;
+  await envoyer(m, a.id, 'crash');
+  await waitFor(() => ligne(m, a.id)?.status === 'error', 15_000, 'agent mort');
+  // le binaire de reprise ne démarre plus du tout : ni --session-id ni --resume
+  remote.transport.env.FAKE_CLAUDE_REFUSE = '1';
+  await envoyer(m, a.id, 'deux');
+  await waitFor(
+    () => fil(m, a.id).filter((e) => (e as { type?: string }).type === 'exit').length === 2,
+    15_000,
+    'seconde fin',
+  );
+  await waitFor(() => ligne(m, a.id)?.status === 'error', 15_000, 'erreur');
+  await new Promise((r) => setTimeout(r, 1_000));
+  expect(fil(m, a.id).filter((e) => (e as { type?: string }).type === 'exit')).toHaveLength(2);
+}, 30_000);

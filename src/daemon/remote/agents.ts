@@ -74,6 +74,11 @@ export interface LiveRemote {
   /** Dossier de la discussion : une règle « Toujours autoriser » n'y vaut que là (décision du 2026-10-31) */
   cwd: string;
   subscribe(cb: (ev: ConversationEvent) => void): () => void;
+  /**
+   * Chantier 19, S.5 (DS4) : relance d'un claude dont le critère de reprise (`hasTurn`) peut se tromper. Tant que
+   * l'agent n'a rien dit, un refus au démarrage est retenté une fois avec le critère inverse, les messages renvoyés.
+   */
+  retry?: { resume: boolean; texts: string[] };
 }
 
 /** `autoApprove` : codex en mode auto, lancé en `untrusted` ; le daemon laisse passer ce qui n'est pas destructif. */
@@ -360,6 +365,7 @@ export class RemoteAgentManager {
     } catch {
       throw new AidHttpError(409, 'agent arrêté sur le serveur : message non transmis');
     }
+    live.retry?.texts.push(text);
     this.record(live, { type: 'message', role: 'user', text });
     this.setStatus(agentId, 'working');
   }
@@ -603,7 +609,7 @@ export class RemoteAgentManager {
    * L'ancien relais est arrêté d'abord, et attendu : sinon deux agents reprendraient la même session, et un
    * arrêt échoué perdrait de vue un agent dont `tmux_session` est la seule trace.
    */
-  private async relaunch(row: AgentRow): Promise<LiveRemote> {
+  private async relaunch(row: AgentRow, resume?: boolean): Promise<LiveRemote> {
     const res = await this.stopRelay(row).catch(() => null);
     if (res?.code !== 0)
       throw new AidHttpError(502, 'serveur injoignable : l’agent précédent n’a pas pu être arrêté');
@@ -616,9 +622,24 @@ export class RemoteAgentManager {
         'UPDATE server_agents SET tmux_session = ?, out_offset = 0, updated_at = ? WHERE id = ?',
       )
       .run(`${PREFIX}${relayId}`, new Date().toISOString(), row.id);
-    return this.mount(this.agentRow(row.id), {
-      resume: !!fresh.session_id && this.hasTurn(row.id),
-    });
+    const guess = !!fresh.session_id && this.hasTurn(row.id);
+    const live = this.mount(this.agentRow(row.id), { resume: resume ?? guess });
+    if (resume === undefined && row.kind === 'claude' && fresh.session_id)
+      live.retry = { resume: guess, texts: [] };
+    return live;
+  }
+
+  /** S.5 : le pilote relancé est remplacé par un autre, lancé avec le critère de reprise inverse. */
+  private retryInverse(live: LiveRemote, retry: { resume: boolean; texts: string[] }): void {
+    live.exited = true;
+    const p = this.relaunch(this.agentRow(live.id), !retry.resume)
+      .then((next) => {
+        for (const text of retry.texts) next.driver.send(text);
+        return next;
+      })
+      .finally(() => this.relaunching.delete(live.id));
+    this.relaunching.set(live.id, p);
+    p.catch(() => this.setStatus(live.id, 'error'));
   }
 
   /** Une session n'existe chez l'agent qu'après un tour : avant, `--resume` échouerait en boucle (revue R.4). */
@@ -744,6 +765,16 @@ export class RemoteAgentManager {
   }
 
   private onEvent(live: LiveRemote, ev: ConversationEvent): void {
+    if (live.retry) {
+      // S.5 : refus au démarrage, avant tout mot de l'agent — retenté une fois, la fin n'entre pas au fil
+      if (ev.type === 'exit' && ev.code !== 0 && !live.stopReason) {
+        const retry = live.retry;
+        live.retry = undefined;
+        return this.retryInverse(live, retry);
+      }
+      if (ev.type !== 'exit' && ev.type !== 'connection_lost' && ev.type !== 'connection_resumed')
+        live.retry = undefined;
+    }
     if (ev.type === 'request' && live.confirm && !ev.request.confirm) {
       const screened = this.screen(live, live.confirm, ev.request);
       if (screened !== ev.request) {

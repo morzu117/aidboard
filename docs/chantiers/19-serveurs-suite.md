@@ -151,3 +151,24 @@ Un point = un commit. Après chaque point :
     - `reattach` toujours faux.
   - Ligne existante modifiée : l'import de `relay.js` dans `agents.ts`.
   - Gate vert (1260). `gate:labo` vert (17/17).
+- **S.5 Critère de reprise** :
+  - Une relance de claude (`relaunch` sans critère imposé) garde `retry` : son critère `hasTurn` et les messages
+    envoyés depuis.
+  - Si l'agent finit en échec avant d'avoir rien dit, sa fin n'entre pas au fil. Il est relancé une fois avec le
+    critère inverse (`--resume` ↔ `--session-id`) et ses messages sont renvoyés.
+  - Un second refus est une fin ordinaire (`error`), sans nouvelle tentative.
+  - Faux claude : mode `FAKE_CLAUDE_STRICT`, comme le vrai claude. La session existe dès le premier message ;
+    `--session-id` d'une session existante et `--resume` d'une inconnue sont refusés. `FAKE_CLAUDE_REFUSE`
+    refuse tout démarrage.
+  - Tests :
+    - premier tour mort avant sa fin, d'où une reprise en `--resume` ;
+    - sessions effacées sur le serveur malgré un tour fini, d'où une session neuve ;
+    - refus dans les deux sens : une seule nouvelle tentative, deux fins au fil.
+  - Deux mutations vérifiées :
+    - sans nouvelle tentative, les deux premiers tests échouent ;
+    - avec des tentatives sans fin, le troisième échoue.
+  - Lignes existantes modifiées : la signature de `relaunch` et son `return this.mount(…)`.
+  - Gate vert (1263).
+  - `gate:labo` : un premier passage rouge, 3 tests en échec dont 1 en 399 s, tous sur une perte de lien avec le
+    conteneur. Parmi eux, `relais.labo.ts` (zsh, ssh en 255), qu'aucune ligne de S.5 ne touche. Puis trois
+    passages verts de suite (17/17, 22 s). Instabilité de l'environnement (colima), non reproduite.
