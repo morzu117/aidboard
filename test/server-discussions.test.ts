@@ -1321,3 +1321,54 @@ test('chantier 19, S.7 : écriture au fil en échec — tracée, le lien fermé,
   await envoyer(m, a.id, 'deux');
   await waitFor(() => assistant(m, a.id, 'echo: deux') >= 1, 15_000, 'relancé');
 }, 30_000);
+
+test('chantier 20, M.2 : un secret au fil est masqué — base, vue, socket ; l’agent l’a reçu en clair', async () => {
+  const m = await daemon(serveur());
+  const s = await creerServeur(m);
+  const a = (await creerDiscussion(m, s.id)).agents[0]!;
+  const jeton = 'ghp_A1b2C3d4E5f6G7h8I9j0K1l2M3n4O5p6Q7r8';
+  const masque = 'ghp_[secret masqué]';
+  const client = await Client.open(m, a.id);
+  const recus = () => client.texts.map((t) => JSON.stringify(t));
+
+  await envoyer(m, a.id, `mon jeton ${jeton}`);
+  await waitFor(() => assistant(m, a.id, `echo: mon jeton ${masque}`) === 1, 15_000, 'réponse');
+  await waitFor(() => ligne(m, a.id)?.status === 'idle', 15_000, 'idle');
+  // l'opérateur l'a tapé : masqué au fil (DM4)
+  expect(fil(m, a.id).find((e) => e.role === 'user')?.text).toBe(`mon jeton ${masque}`);
+  const brut = (
+    m.t.db.prepare('SELECT payload FROM server_agent_messages WHERE agent_id = ?').all(a.id) as {
+      payload: string;
+    }[]
+  )
+    .map((r) => r.payload)
+    .join('\n');
+  expect(brut).not.toContain('A1b2C3');
+  await waitFor(
+    () => recus().some((r) => r.includes(`echo: mon jeton ${masque}`)),
+    5_000,
+    'socket',
+  );
+  expect(recus().join('\n')).not.toContain('A1b2C3');
+
+  // l'agent l'a reçu en clair : sa réponse, sur le serveur, le porte ; seule la sortie du relais le garde
+  const relais = readdirSync(join(m.home, '.aid-remote/agents'));
+  const sorties = relais.map((r) =>
+    readFileSync(join(m.home, '.aid-remote/agents', r, 'out'), 'utf8'),
+  );
+  expect(sorties.join('')).toContain(`echo: mon jeton ${jeton}`);
+
+  // une carte : la commande masquée dans la vue de l'agent comme au fil
+  const v = await carte(m, a.id, `curl -H "Authorization: token ${jeton}" https://api.exemple`);
+  expect(v.pending!.command).toBe(`curl -H "Authorization: token ${masque}" https://api.exemple`);
+  expect(JSON.stringify(v)).not.toContain('A1b2C3');
+  await repondre(m, v, 'no');
+  await waitFor(() => ligne(m, a.id)?.status === 'idle', 15_000, 'idle');
+  expect(
+    (
+      m.t.db.prepare('SELECT payload FROM server_agent_messages WHERE agent_id = ?').all(a.id) as {
+        payload: string;
+      }[]
+    ).some((r) => r.payload.includes('A1b2C3')),
+  ).toBe(false);
+}, 40_000);

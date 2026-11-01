@@ -51,3 +51,13 @@ Le labo est lancé à la fin (aucun script distant n'est modifié).
   - Aucune ligne existante modifiée.
   - Gate vert : 1274.
   - codegraph indisponible (`statInode`) : lecture directe des fichiers.
+- **M.2 Le fil des agents distants** : chaque événement est masqué en entier (`maskDeep`) à la sortie du pilote,
+  avant `onEvent`. La demande en cours (`pending`) que rend la vue de l'agent est donc masquée elle aussi.
+  - `record` remasque ce qu'il écrit : couvre le message de l'opérateur, parti en clair à l'agent (DM4).
+    Le masquage est idempotent.
+  - Test : un jeton tapé par l'opérateur, répété par le faux claude, puis porté par une commande en carte.
+    - Masqué au fil, en base, dans la vue de l'agent et sur `/ws/server-agent`.
+    - La sortie du relais, sur le serveur, porte le jeton en clair : l'agent l'a bien reçu.
+  - Deux mutations vérifiées : sans masque à l'entrée, sans masque au fil.
+  - Aucune ligne existante modifiée.
+  - Gate vert : 1275.
