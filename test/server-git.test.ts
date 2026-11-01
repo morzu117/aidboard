@@ -666,3 +666,30 @@ test('review complète : traces git du profil retirées — rien de la trace ne 
   expect(readFileSync(vu, 'utf8')).toBe('[]');
   expect(r.body).not.toMatch(/trace:|packet:/);
 });
+
+test('chantier 19, S.1 : git status tué par son délai — modifiés inconnus, jamais « propre »', async () => {
+  // une sortie partielle, puis le code de `timeout` : le compte lu n'en est pas un
+  const { home } = await avecGitDuServeur(
+    `case " $* " in *" status "*) printf ' M a.txt\\n?? b' ; exit 124 ;; esac`,
+  );
+  const { clone } = depot(home);
+  const s = await create();
+  const st = await status(s);
+  expect(st.repo).toMatchObject({ branch: 'main', head: sh(clone, 'rev-parse', 'HEAD') });
+  expect(st.repo!.changes).toBeNull();
+  const log = (await get(`/api/servers/${s.id}/git/log`)).json<ServerGitLog>();
+  expect(log.repo.changes).toBeNull();
+  // DS2 : inconnu se montre comme du travail en cours
+  expect(log.dirty).toBe(true);
+});
+
+test('chantier 19, S.1 : git status abouti — le compte est celui des lignes, propre compris', async () => {
+  const { home } = await avecGitDuServeur('');
+  const { clone } = depot(home);
+  const s = await create();
+  expect((await status(s)).repo!.changes).toBe(0);
+  expect((await get(`/api/servers/${s.id}/git/log`)).json<ServerGitLog>().dirty).toBe(false);
+  writeFileSync(join(clone, 'sans fin de ligne'), 'x');
+  writeFileSync(join(clone, 'README.md'), 'changé\n');
+  expect((await status(s)).repo!.changes).toBe(2);
+});

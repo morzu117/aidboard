@@ -79,7 +79,9 @@ st() {
   elif [ -f "$gd/REVERT_HEAD" ]; then op=revert
   elif [ -f "$gd/BISECT_LOG" ]; then op=bisect
   fi
-  ch=$(g status --porcelain --untracked-files=normal 2>/dev/null | wc -l | tr -d ' ')
+  # git status tué par son délai ou en échec : x, jamais un compte partiel lu « propre » (chantier 19, S.1)
+  ch=$( { g status --porcelain --untracked-files=normal 2>/dev/null; printf '\\nrc%s\\n' "$?"; } |
+    awk '/^rc[0-9]+$/ { rc = substr($0, 3); next } NF { n++ } END { print (rc == "0" ? n + 0 : "x") }')
 }
 pr() {
   printf 'fait\\000br\\t%s\\000hd\\t%s\\000og\\t%s\\000up\\t%s\\000ab\\t%s\\000op\\t%s\\000ch\\t%s\\000' \\
@@ -279,7 +281,7 @@ function repoOf(root: string, recs: string[]): ServerGitRepo {
     root,
     branch: kv.get('br') || null,
     head: kv.get('hd') || null,
-    changes: Number(kv.get('ch') || 0),
+    changes: kv.get('ch') === 'x' ? null : Number(kv.get('ch') || 0),
     origin: kv.get('og') === '1',
     upstream: kv.get('up') || null,
     aheadBehind:
@@ -389,7 +391,8 @@ export function parseGitLog(
     scope,
     repo,
     commits,
-    dirty: repo.changes > 0,
+    // DS2 : modifiés inconnus = WIP affiché, jamais « propre » par défaut
+    dirty: repo.changes !== 0,
     live: {
       aheadBehind: repo.aheadBehind,
       rebaseInProgress: repo.operation === 'rebase',

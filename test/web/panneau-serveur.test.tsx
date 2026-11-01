@@ -1037,3 +1037,13 @@ test('Git : Échap ferme la carte de confirmation et le détail ; détail en éc
   expect(f.querySelector('.ajouts')?.textContent).toBe('');
   expect(f.querySelector('.suppressions')?.textContent).toBe('');
 });
+
+test('chantier 19, S.1 : modifiés inconnus (git status en échec) — dit tel quel, jamais « 0 modifié »', async () => {
+  ouvrir(
+    { open: true, tab: 'git' },
+    { [LOG('~/app')]: json(200, journal({ repo: depot({ changes: null }), dirty: true })) },
+  );
+  await waitFor(() =>
+    expect(node('discussion.panneau.git.modifies')?.textContent).toBe('modifiés : inconnu'),
+  );
+});

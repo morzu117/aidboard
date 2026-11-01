@@ -78,3 +78,21 @@ Un point = un commit. Après chaque point :
 - **S.8 Plafond et mots de secret.** DS7 et DS8. Tests : un dossier de plus de 2000 fichiers et quelques sous-dossiers, où les dossiers restent listés ; les noms `secrets.csv`, `password.bak`, `credentials.db`.
 
 ## Journal
+
+- **S.1 `git status` en échec → modifiés inconnus** :
+  - `st()` lit le code de sortie de `git status` (enregistrement `rc<N>` après la sortie, compté par `awk`).
+  - Un `git status` tué ou en échec donne `ch=x`, puis `changes: null`, puis « modifiés : inconnu » dans le
+    panneau, et `dirty` vrai (DS2).
+  - Tests :
+    - faux `git` du serveur qui écrit une sortie partielle puis sort en 124 ;
+    - compte exact d'un statut abouti, propre compris, avec un fichier sans fin de ligne ;
+    - test web de la stat.
+  - Mutation vérifiée : le compte rendu sans le code de sortie fait échouer le test.
+  - Lignes existantes modifiées, toutes déclarées :
+    - le calcul de `ch` ;
+    - `changes` dans `repoOf` ;
+    - `dirty` dans `parseGitLog` ;
+    - le type `changes` et sa doc dans `shared/git.ts` ;
+    - la stat du panneau.
+  - Gate vert (1249 passés). `gate:labo` vert (16/16) : `changes: 4` inchangé sur le vrai git.
+  - codegraph est indisponible (erreur interne `statInode`) : lecture directe.

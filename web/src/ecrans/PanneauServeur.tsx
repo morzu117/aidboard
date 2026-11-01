@@ -660,7 +660,9 @@ function OngletGitServeur({
             {repo.branch ?? 'HEAD détachée'}
           </span>
           <span className="stat" data-node="discussion.panneau.git.modifies">
-            {repo.changes} modifié{repo.changes > 1 ? 's' : ''}
+            {repo.changes === null
+              ? 'modifiés : inconnu'
+              : `${repo.changes} modifié${repo.changes > 1 ? 's' : ''}`}
           </span>
           <span className="stat" data-node="discussion.panneau.git.position">
             {positionTexte(repo)}

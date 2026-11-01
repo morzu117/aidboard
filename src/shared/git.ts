@@ -80,8 +80,8 @@ export interface ServerGitRepo {
   branch: string | null;
   /** null dans un dépôt sans commit. */
   head: string | null;
-  /** Fichiers modifiés ou non suivis. */
-  changes: number;
+  /** Fichiers modifiés ou non suivis ; null : `git status` n'a pas abouti (délai, échec), compte inconnu. */
+  changes: number | null;
   /** Le dépôt a un remote `origin`. */
   origin: boolean;
   /** `origin/<branche>` s'il existe ; null pour une branche jamais poussée. */
