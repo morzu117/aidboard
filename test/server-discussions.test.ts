@@ -1235,3 +1235,36 @@ test('chantier 19, S.5 : relance refusée dans les deux sens — une seule nouve
   await new Promise((r) => setTimeout(r, 1_000));
   expect(fil(m, a.id).filter((e) => (e as { type?: string }).type === 'exit')).toHaveLength(2);
 }, 30_000);
+
+test('chantier 19, S.6 : confirmation changée pendant que l’agent tourne — signalée, jusqu’à la relance qui la prend', async () => {
+  const remote = serveur();
+  const m = await daemon(remote);
+  const s = await creerServeur(m);
+  await reglerServeur(m, s.id, { confirmDestructive: false });
+  const a = (await creerDiscussion(m, s.id)).agents[0]!;
+  await envoyer(m, a.id, 'bonjour');
+  await waitFor(() => ligne(m, a.id)?.status === 'idle', 15_000, 'idle');
+  const vue = async () =>
+    (await m.req('GET', `/api/server-agents/${a.id}`)).json<ServerAgentView>().staleConfirm;
+  expect(await vue()).toBe(false);
+
+  await reglerServeur(m, s.id, { confirmDestructive: true });
+  expect(await vue()).toBe(true);
+  // la discussion rend la même vue
+  const d = (
+    await m.req('GET', `/api/servers/${s.id}/discussions/${a.discussionId}`)
+  ).json<ServerDiscussionView>();
+  expect(d.agents[0]!.staleConfirm).toBe(true);
+  // revenu au réglage du lancement : plus d'écart
+  await reglerServeur(m, s.id, { confirmDestructive: false });
+  expect(await vue()).toBe(false);
+
+  await reglerServeur(m, s.id, { confirmDestructive: true });
+  await envoyer(m, a.id, 'crash');
+  await waitFor(() => ligne(m, a.id)?.status === 'error', 15_000, 'agent mort');
+  // fini : rien ne tourne avec l'ancien réglage
+  expect(await vue()).toBe(false);
+  await envoyer(m, a.id, 'commande: rm -f x');
+  await waitFor(() => ligne(m, a.id)?.status === 'needs_input', 15_000, 'carte');
+  expect(await vue()).toBe(false);
+}, 30_000);

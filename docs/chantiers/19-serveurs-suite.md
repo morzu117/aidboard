@@ -172,3 +172,21 @@ Un point = un commit. Après chaque point :
   - `gate:labo` : un premier passage rouge, 3 tests en échec dont 1 en 399 s, tous sur une perte de lien avec le
     conteneur. Parmi eux, `relais.labo.ts` (zsh, ssh en 255), qu'aucune ligne de S.5 ne touche. Puis trois
     passages verts de suite (17/17, 22 s). Instabilité de l'environnement (colima), non reproduite.
+- **S.6 `confirmDestructive` changé en cours de route** :
+  - La vue d'un agent porte `staleConfirm`. Il est vrai quand l'agent tourne sous l'autre réglage que celui du
+    serveur aujourd'hui (comparaison de `live.confirm` au réglage lu en base) ; faux pour un agent fini.
+  - La discussion affiche alors au-dessus du fil : « Confirmation des commandes destructives modifiée sur ce
+    serveur : cet agent garde l'ancien réglage jusqu'à sa prochaine relance. » La vue est relue périodiquement,
+    comme le reste de l'agent.
+  - **Écart au plan, DS5** : pas de `staleAgents` dans la réponse du `PATCH` du serveur. Les routes du serveur
+    ne voient pas le gestionnaire des agents, et les brancher demandait de remanier `server.ts`. La vue de
+    l'agent suffit à l'opérateur.
+  - `staleConfirm` est optionnel dans `ServerAgent` pour ne pas toucher toutes les fixtures du web. Le daemon le
+    rend toujours.
+  - Tests :
+    - daemon : réglage changé, puis rétabli, puis changé ; agent fini ; relance qui prend le nouveau réglage
+      (carte de confirmation) ;
+    - web : bandeau présent, puis absent.
+  - Deux mutations vérifiées, une côté daemon, une côté web.
+  - Aucune ligne existante modifiée.
+  - Gate vert (1265). Labo non lancé : S.6 ne touche ni scripts distants, ni relais, ni ssh.

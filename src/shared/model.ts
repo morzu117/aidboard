@@ -392,4 +392,9 @@ export interface ServerAgent {
   effort: string | null;
   createdAt: string;
   updatedAt: string;
+  /**
+   * Chantier 19 (S.6) : la confirmation des commandes destructives du serveur a changé depuis le lancement de cet
+   * agent, qui tourne encore avec l'ancien réglage jusqu'à sa prochaine relance. Toujours rendu par le daemon.
+   */
+  staleConfirm?: boolean;
 }

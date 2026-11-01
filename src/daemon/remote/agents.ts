@@ -206,7 +206,19 @@ export class RemoteAgentManager {
       createdAt: r.created_at,
       updatedAt: r.updated_at,
       pending: this.live.get(r.id)?.pending ?? null,
+      staleConfirm: this.staleConfirm(r),
     };
+  }
+
+  /** S.6 (DS5) : agent vivant lancé sous l'autre réglage de confirmation que celui du serveur aujourd'hui. */
+  private staleConfirm(r: AgentRow): boolean {
+    const live = this.live.get(r.id);
+    if (!live || live.exited) return false;
+    try {
+      return (live.confirm !== null) !== this.serverOf(r).confirmDestructive;
+    } catch {
+      return false;
+    }
   }
 
   // ---- discussions
