@@ -125,3 +125,29 @@ Un point = un commit. Après chaque point :
   - Mutation vérifiée : `gitPartial` toujours faux fait échouer deux tests.
   - Ligne existante modifiée : l'appel de `badges` dans `parseListing`. Le reste est inséré.
   - Gate vert (1255). `gate:labo` vert (16/16, puis `fichiers.labo.ts` seul après l'assertion ajoutée).
+- **S.4 Agent en `error` faute de lien** :
+  - **Ce qui était réel, ce qui ne l'était pas.** Le scénario de la review « daemon démarré serveur éteint »
+    ne mène pas à `error`. Le rattachement au démarrage part d'un offset, il est donc tenu pour `started`
+    et retenté sans fin. Ce scénario devient un test de non-régression (faux ssh et labo).
+  - Le défaut réel : une **reprise après session perdue** (`replaceLost`) que le lien interrompt avant
+    son premier rattachement. Elle était traitée comme un échec de lancement, d'où `resume_failed`, `exit`
+    et `error`.
+  - Correctif dans `RemoteChild` : cette reprise est retentée, avec l'état du relais relu à chaque tentative.
+    Elle ne finit que sur un refus du serveur lui-même : code de `start` non nul, ni 255, ni délai.
+  - « Reconnecter » d'un claude dont l'agent tourne encore (`alive` = `vivant`) le rattache à son offset,
+    comme au démarrage, au lieu de le relancer (ce qui tuait le tour en cours). Sinon, la relance garde la main.
+  - Non fait, et dit : un `error` resté en base n'est pas rattaché d'office au démarrage. Il faudrait un
+    aller-retour ssh par agent fini, à chaque démarrage. « Reconnecter » le fait à la demande.
+  - Tests :
+    - pilote : reprise coupée par le lien (retentée, jamais de `exit`), reprise refusée par tmux (une fin,
+      jamais retentée) ;
+    - daemon : redémarrage serveur éteint ; Reconnecter rattaché (même pid, rien de rejoué) ; Reconnecter
+      relancé (agent arrêté) ;
+    - labo : redémarrage avec le vrai sshd coupé.
+  - Quatre mutations vérifiées, chacune fait échouer son test :
+    - reprise jamais retentée ;
+    - refus jamais posé (le test boucle et expire) ;
+    - rattachement au démarrage traité comme un lancement ;
+    - `reattach` toujours faux.
+  - Ligne existante modifiée : l'import de `relay.js` dans `agents.ts`.
+  - Gate vert (1260). `gate:labo` vert (17/17).

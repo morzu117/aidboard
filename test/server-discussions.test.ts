@@ -1117,3 +1117,68 @@ test('/ws/server-agent : l’agent s’arrête pendant l’abonnement — exit a
   expect(c2.find('hello')[0]).toMatchObject({ exited: true });
   expect(c2.find('exit')[0]).toMatchObject({ reason: 'exit' });
 });
+
+test('chantier 19, S.4 : daemon redémarré serveur éteint — claude jamais en erreur, rattaché au même relais une fois revenu', async () => {
+  const remote = serveur();
+  const m1 = await daemon(remote);
+  const s = await creerServeur(m1);
+  const a = (await creerDiscussion(m1, s.id)).agents[0]!;
+  await envoyer(m1, a.id, 'bonjour');
+  await waitFor(() => ligne(m1, a.id)?.status === 'idle', 15_000, 'idle');
+  await m1.t.d.stop();
+
+  remote.transport.env.FAKE_SSH_FAIL = '1';
+  const m2 = await daemon(remote, m1.t.home);
+  // plusieurs tentatives de rattachement échouent (1 s, 2 s…) : l'agent reste en cours, pas fini
+  await new Promise((r) => setTimeout(r, 3_500));
+  expect(ligne(m2, a.id)!.status).not.toBe('error');
+  expect(vivant(apid(m2, a.id))).toBe(true);
+  delete remote.transport.env.FAKE_SSH_FAIL;
+  await envoyer(m2, a.id, 'deux');
+  await waitFor(() => assistant(m2, a.id, 'echo: deux') === 1, 20_000, 'réponse');
+  // rattaché, pas relancé : même relais, l'agent d'avant a répondu
+  expect(ligne(m2, a.id)!.tmux_session).toBe(`aid-${a.id}`);
+  expect(assistant(m2, a.id, 'echo: bonjour')).toBe(1);
+}, 40_000);
+
+test('chantier 19, S.4 : Reconnecter un claude fini faute de lien qui tourne encore — rattaché à son offset, pas relancé', async () => {
+  const remote = serveur();
+  const m1 = await daemon(remote);
+  const s = await creerServeur(m1);
+  const a = (await creerDiscussion(m1, s.id)).agents[0]!;
+  await envoyer(m1, a.id, 'bonjour');
+  await waitFor(() => ligne(m1, a.id)?.status === 'idle', 15_000, 'idle');
+  // pilote sorti en erreur faute de lien : statut fini, agent toujours vivant sur le serveur
+  m1.t.db.prepare("UPDATE server_agents SET status = 'error' WHERE id = ?").run(a.id);
+  await m1.t.d.stop();
+
+  const m2 = await daemon(remote, m1.t.home);
+  const pid = readFileSync(apid(m2, a.id), 'utf8');
+  expect((await m2.req('POST', `/api/server-agents/${a.id}/reconnect`)).statusCode).toBe(202);
+  expect(ligne(m2, a.id)).toMatchObject({ status: 'idle', tmux_session: `aid-${a.id}` });
+  await envoyer(m2, a.id, 'deux');
+  await waitFor(() => assistant(m2, a.id, 'echo: deux') === 1, 15_000, 'réponse');
+  // le même agent : ni relancé, ni sa sortie déjà lue rejouée
+  expect(readFileSync(apid(m2, a.id), 'utf8')).toBe(pid);
+  expect(assistant(m2, a.id, 'echo: bonjour')).toBe(1);
+  // déjà rattaché : rien de plus
+  expect((await m2.req('POST', `/api/server-agents/${a.id}/reconnect`)).statusCode).toBe(202);
+  expect(ligne(m2, a.id)!.tmux_session).toBe(`aid-${a.id}`);
+}, 30_000);
+
+test('chantier 19, S.4 : Reconnecter un claude dont l’agent est arrêté sur le serveur — relancé sous un relais neuf', async () => {
+  const remote = serveur();
+  const m1 = await daemon(remote);
+  const s = await creerServeur(m1);
+  const a = (await creerDiscussion(m1, s.id)).agents[0]!;
+  await envoyer(m1, a.id, 'bonjour');
+  await waitFor(() => ligne(m1, a.id)?.status === 'idle', 15_000, 'idle');
+  m1.t.db.prepare("UPDATE server_agents SET status = 'error' WHERE id = ?").run(a.id);
+  await m1.t.d.stop();
+  tuer(apid(m1, a.id));
+
+  const m2 = await daemon(remote, m1.t.home);
+  await waitFor(() => !vivant(apid(m2, a.id)), 5_000, 'agent arrêté');
+  expect((await m2.req('POST', `/api/server-agents/${a.id}/reconnect`)).statusCode).toBe(202);
+  expect(ligne(m2, a.id)!.tmux_session).not.toBe(`aid-${a.id}`);
+}, 30_000);

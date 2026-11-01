@@ -17,7 +17,7 @@ import type { Db } from '../db.js';
 import { AidHttpError } from '../errors.js';
 import { CONFIRM_OPTIONS, claudeConfirmSettings, isDestructive, rulePattern } from './confirm.js';
 import { RemoteDriver } from './driver.js';
-import { relayStop } from './relay.js';
+import { parseAlive, relayAlive, relayStop } from './relay.js';
 import { getServer } from './servers.js';
 import { SERVER_PERMISSION_MODES } from './servers.js';
 import { remoteExec, type TransportOptions } from './transport.js';
@@ -436,7 +436,36 @@ export class RemoteAgentManager {
     const row = this.agentRow(agentId);
     this.assertOpen(row);
     const live = this.live.get(agentId);
+    if ((!live || live.exited) && (await this.reattach(row))) return;
     if (!live || live.exited) await this.relaunchOnce(row);
+  }
+
+  /**
+   * Chantier 19, S.4 (DS3) : un claude fini faute de lien dont l'agent tourne encore sur le serveur est rattaché à
+   * son offset, comme au démarrage du daemon — le relancer tuerait le tour en cours. Faux s'il n'y a rien à
+   * rattacher (agent arrêté, serveur muet) : la relance reprend la main.
+   */
+  private async reattach(row: AgentRow): Promise<boolean> {
+    if (row.kind !== 'claude' || !row.session_id) return false;
+    const r = await remoteExec(this.serverOf(row), relayAlive(relayOf(row)), {
+      ...this.deps.transport,
+      timeoutMs: 10_000,
+    }).catch(() => null);
+    let state: string | null = null;
+    try {
+      state = r?.code === 0 ? parseAlive(r.stdout).state : null;
+    } catch {
+      state = null;
+    }
+    if (state !== 'vivant') return false;
+    // un double clic : le premier a déjà rattaché
+    const other = this.live.get(row.id);
+    if (other && !other.exited) return true;
+    const fresh = this.agentRow(row.id);
+    this.live.delete(row.id);
+    this.mount(fresh, { resume: this.hasTurn(row.id), offset: fresh.out_offset });
+    this.setStatus(row.id, 'idle');
+    return true;
   }
 
   // ---- composer (R.6) : repères, mode, modèle et effort, comme pour un agent local

@@ -72,6 +72,8 @@ export class RemoteChild extends EventEmitter {
   private stableTimer: NodeJS.Timeout | null = null;
   /** Un `start` a été envoyé : en cas d'échec, l'agent est arrêté au mieux plutôt que laissé sans lien. */
   private launched = false;
+  /** Lancement refusé par le serveur lui-même (pas par le lien) : un échec, jamais retenté (chantier 19, S.4). */
+  private refused = false;
   private pending: Buffer[] = [];
   private ending = false;
   private finished = false;
@@ -158,6 +160,9 @@ export class RemoteChild extends EventEmitter {
       this.attachAt(this.received);
     } catch (err) {
       if (this.done) return;
+      // S.4 : la reprise d'une session perdue que le lien interrompt est retentée — l'état du relais relu à chaque
+      // tentative (vivant : rattaché ; perdu : relancé) ; elle ne finit que sur un refus du serveur
+      if (!this.started && this.opts.replaceLost && !this.refused) return this.disconnected();
       // jamais connecté à un agent existant : c'est un échec de lancement, pas une coupure
       if (!this.started) return void this.abandon((err as Error).message);
       this.disconnected();
@@ -180,6 +185,7 @@ export class RemoteChild extends EventEmitter {
   private async launch(): Promise<void> {
     this.launched = true;
     const r = await this.exec(relayStart(this.opts.relayId, this.cwd, this.argv));
+    if (r.code !== 0 && r.code !== null && r.code !== 255 && !r.timedOut) this.refused = true;
     if (r.code !== 0) throw new Error(lastLine(r.stderr) || `code ${r.code}`);
     this.received = 0;
     this.lineEnd = 0;

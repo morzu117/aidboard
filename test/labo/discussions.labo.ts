@@ -127,3 +127,25 @@ test('supprimer un serveur coupé : 409, l’agent tourne encore ; revenu, la su
   await waitFor(() => agentsDuServeur().length === 0, 20_000, 'agent arrêté');
   expect(sessions()).toEqual([]);
 });
+
+test('chantier 19, S.4 : daemon redémarré serveur coupé — claude jamais en erreur, rattaché au même agent une fois rétabli', async () => {
+  const m1 = await daemon();
+  const s = await creerServeur(m1);
+  const a = (await creerDiscussion(m1, s.id)).agents[0]!;
+  await envoyer(m1, a.id, 'bonjour');
+  await waitFor(() => ligne(m1, a.id)?.status === 'idle', 20_000, 'idle');
+  const pids = agentsDuServeur();
+  await arreter(m1);
+
+  b.labo().couper();
+  const m2 = await daemon(m1.t.home);
+  // plusieurs rattachements refusés par le vrai sshd : l'agent n'est pas fini
+  await new Promise((r) => setTimeout(r, 4_000));
+  expect(ligne(m2, a.id)!.status).not.toBe('error');
+  b.labo().retablir();
+  await envoyer(m2, a.id, 'deux');
+  await waitFor(() => assistant(m2, a.id, 'echo: deux') === 1, 30_000, 'réponse');
+  expect(agentsDuServeur()).toEqual(pids);
+  expect(ligne(m2, a.id)!.tmux_session).toBe(`aid-${a.id}`);
+  expect(assistant(m2, a.id, 'echo: bonjour')).toBe(1);
+});
