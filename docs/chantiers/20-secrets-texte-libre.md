@@ -1,0 +1,44 @@
+# Chantier 20 — Secrets masqués dans le texte libre des serveurs distants
+
+Branche `feat/secrets-texte-libre`, base `main` (`b509857`, chantier 19 mergé).
+
+## Pourquoi
+
+Décision de l'opérateur du 2026-10-31, après la review complète du chantier 17 (journal du 17,
+« Décisions opérateur », point 1) : le texte libre d'un serveur distant est masqué par un
+**détecteur de contenu côté daemon** (clés privées, `user:mdp@`, préfixes de jetons connus). Cela
+couvre le fil de l'agent, la commande d'une carte, les règles et la sortie du test de connexion.
+
+Aujourd'hui, seuls les **fichiers** sont masqués, par leur nom (D78, F.1 bis). En revanche, un jeton
+qu'un agent affiche, ou qu'une commande porte, arrive en clair :
+- dans `server_agent_messages` (SQLite) ;
+- dans la carte de confirmation ;
+- dans `server_rules` quand l'opérateur clique « Toujours autoriser » ;
+- dans la sortie brute du test de connexion.
+
+Le cas de `server_rules` contredit D76 : aucun secret en base.
+
+## Décisions
+
+| N° | Décision | Pourquoi |
+|---|---|---|
+| DM1 | Un détecteur unique, `src/daemon/secrets.ts` : `maskSecrets(text)` et `MASK`. Il reconnaît trois familles. **Clés privées** : bloc `-----BEGIN … PRIVATE KEY-----` jusqu'à son `END`, ou jusqu'à la fin du texte s'il est coupé. **Identifiants d'URL** : `schéma://…@` devient `schéma://[secret masqué]@`. **Jetons à préfixe connu** : GitHub, GitLab, Slack, AWS (`AKIA`/`ASIA`), OpenAI, Anthropic, Stripe, Google (`AIza`), npm, Hugging Face, JWT. Le préfixe reste visible (`ghp_[secret masqué]`), le reste disparaît. | La décision de l'opérateur fixe les trois familles. Le préfixe dit de quoi il s'agit sans rien livrer. Une longueur minimale par préfixe évite les faux positifs (`sk-` dans un mot ordinaire). |
+| DM2 | Masquage **à l'entrée**, irréversible, avant l'écriture en base et avant l'envoi au navigateur. L'original ne reste que sur le serveur, dans la sortie du relais. | D76 : A-I-D ne garde aucun secret. Le révéler avec le mot de passe d'`aid-relay` (journal du 17, D78) se fera depuis le serveur, sans copie dans A-I-D. |
+| DM3 | Une commande qui portait un secret n'offre que **Autoriser** et **Refuser**, jamais « Toujours autoriser ». Aucune règle ne s'y applique. | Une règle est la commande exacte (`rulePattern`) : l'écrire, c'est stocker le secret. Une fois masquée, deux commandes à secrets différents ne doivent pas partager une règle. |
+| DM4 | Les messages de l'opérateur partent **en clair à l'agent**, mais sont **masqués au fil**. | L'agent a besoin de ce que l'opérateur lui donne ; A-I-D n'a pas à le garder. |
+| DM5 | Le test de connexion masque sa sortie brute et le détail de ses étapes. Les traces du daemon (`trace`, chantier 19) passent par le même détecteur. | Mêmes fuites, mêmes règles. |
+| DM6 | Données existantes : au démarrage, une passe unique masque les `payload` de `server_agent_messages` et supprime les `server_rules` dont le motif porte un secret. Elle est marquée faite par une migration SQL (table `maintenance`). | Sans elle, l'historique déjà écrit reste en clair. Une règle à secret ne pourra plus jamais s'appliquer (DM3) : la garder, c'est garder le secret. |
+| DM7 | **Hors périmètre** : les agents **locaux** (fil et journaux PTY), les mots de passe en argument (`mysql -pX`, `sshpass -p`), les en-têtes `Authorization` génériques et les `CLE=valeur`. | La décision de l'opérateur vise le texte libre des serveurs et ces trois familles. Les cas génériques donnent beaucoup de faux positifs : ils sont listés comme candidats, à trancher. |
+
+## Points
+
+Un point = un commit. Après chaque point : `npm run gate` en entier et une vérification par mutation.
+Le labo est lancé à la fin (aucun script distant n'est modifié).
+
+- **M.1 Le détecteur.** `src/daemon/secrets.ts`. Tests sur un corpus : chaque famille, un bloc de clé coupé, une URL avec `@` dans le mot de passe, un masquage idempotent. Faux positifs exclus : `task-list`, `sk-` court, `AKIA` trop court, une URL sans identifiants, `user@host` sans schéma.
+- **M.2 Le fil des agents distants.** Chaque `ConversationEvent` est masqué en entier (textes, entrée d'outil en profondeur, sortie, demandes, raisons) avant `record` et `notify`, y compris les messages de l'opérateur (DM4). Tests par le daemon : un faux claude répète un jeton, le fil, la base et le socket ne le portent pas ; l'agent l'a bien reçu en clair.
+- **M.3 Cartes et règles.** DM3 : options sans `always`, aucune règle appliquée ni écrite, la carte montre la commande masquée. Tests : commande destructive avec jeton ; règle existante identique au caractère près ; « Toujours » refusé en 422.
+- **M.4 Test de connexion et traces.** DM5. Tests : un profil de connexion qui affiche un jeton ; une erreur tracée qui porte une clé.
+- **M.5 Données existantes.** DM6. Tests : une base peuplée avant la migration (messages et règle à secret), puis un démarrage : masquée et règle retirée, les autres intactes ; un second démarrage ne refait rien.
+
+## Journal
