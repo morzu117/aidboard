@@ -112,6 +112,12 @@ const DATA = [
   'cfg',
   'properties',
   'xml',
+  // chantier 19, S.8 : exports, sauvegardes et bases — `secrets.csv`, `password.bak`, `credentials.db`
+  'csv',
+  'bak',
+  'db',
+  'sqlite',
+  'log',
 ];
 const WORD_PATTERNS = [
   ...WORDS.flatMap((w) => [
@@ -304,12 +310,16 @@ const LIST = `[ -d "$r" ] || { printf 'pasdossier\\000'; exit 0; }
 cd "$r" 2>/dev/null || { printf 'illisible\\000'; exit 0; }
 printf 'ok\\000%s\\000%s\\000' "$r" "$b"
 n=0
+# les dossiers d'abord : le plafond coupe des fichiers, jamais un dossier qui deviendrait inatteignable (chantier 19, S.8)
+for tour in d f; do
 for e in * .[!.]* ..?*; do
   [ -e "$e" ] || [ -L "$e" ] || continue
-  n=$((n + 1)); [ "$n" -gt ${ENTRIES_MAX} ] && { printf 'plus\\000'; break; }
+  if [ -d "$e" ]; then k=d; else k=f; fi; [ "$k" = "$tour" ] || continue
+  n=$((n + 1)); [ "$n" -gt ${ENTRIES_MAX} ] && { printf 'plus\\000'; break 2; }
   if [ -d "$e" ]; then t=d; elif [ -f "$e" ]; then t=f; else t=o; fi
   [ -L "$e" ] && t="$t"l
   printf 'e\\t%s\\t%s\\000' "$t" "$e"
+done
 done
 if command -v git >/dev/null 2>&1 && [ "$(git rev-parse --is-inside-work-tree 2>/dev/null)" = true ]; then
   printf 'git\\t%s\\000' "$(git rev-parse --show-prefix)"

@@ -769,3 +769,48 @@ test('chantier 19, S.3 : sortie coupée par le transport — badges incomplets ;
     gitPartial: false,
   });
 });
+
+test('chantier 19, S.8 : au plafond, les dossiers restent listés — ce sont les fichiers qui manquent', async () => {
+  t = await startTestDaemon();
+  const p = join(t.home, 'proj');
+  mkdirSync(p);
+  for (let i = 0; i < ENTRIES_MAX + 50; i++) writeFileSync(join(p, `a${i}`), '');
+  // après tous les fichiers dans l'ordre du glob : sans les dossiers d'abord, le plafond les coupait
+  for (const d of ['zz-src', 'zz-docs', '~sauvegardes']) mkdirSync(join(p, d));
+  symlinkSync('zz-src', join(p, 'zz-lien'));
+  const s = await create();
+  const l = (await get(`/api/servers/${s.id}/fs`)).json<ServerFsListing>();
+  expect(l.truncated).toBe(true);
+  expect(l.entries).toHaveLength(ENTRIES_MAX);
+  const dossiers = l.entries.filter((e) => e.kind === 'dir').map((e) => e.name);
+  expect(dossiers.sort()).toEqual(['zz-docs', 'zz-lien', 'zz-src', '~sauvegardes']);
+  expect(l.entries.filter((e) => e.kind === 'file')).toHaveLength(ENTRIES_MAX - 4);
+});
+
+test('chantier 19, S.8 : mots de secret sur les exports, sauvegardes et bases', async () => {
+  t = await startTestDaemon();
+  const p = projet(t.home);
+  const secrets = [
+    'secrets.csv',
+    'password.bak',
+    'credentials.db',
+    'prod-secret.sqlite',
+    'api_key.log',
+  ];
+  for (const n of secrets) writeFileSync(join(p, n), 'XYZ');
+  // sans mot de secret, les mêmes extensions restent lisibles
+  for (const n of ['ventes.csv', 'app.log']) writeFileSync(join(p, n), 'ordinaire');
+  const s = await create();
+  const l = (await get(`/api/servers/${s.id}/fs`)).json<ServerFsListing>();
+  for (const n of secrets) {
+    expect(l.entries.find((e) => e.name === n)?.hidden, n).toBe(true);
+    const r = await get(`/api/servers/${s.id}/file?path=${q(`~/proj/${n}`)}`);
+    expect(r.statusCode, n).toBe(403);
+    expect(r.body, n).not.toContain('XYZ');
+  }
+  for (const n of ['ventes.csv', 'app.log']) {
+    expect(l.entries.find((e) => e.name === n)?.hidden, n).toBe(false);
+    const r = await get(`/api/servers/${s.id}/file?path=${q(`~/proj/${n}`)}`);
+    expect(r.json<ServerFilePreview>().content, n).toBe('ordinaire');
+  }
+});

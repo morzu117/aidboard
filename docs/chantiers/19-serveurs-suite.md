@@ -213,3 +213,25 @@ Un point = un commit. Après chaque point :
     - le `p.catch` de `retryInverse` ;
     - l'import de vitest du test (ajout de `vi`).
   - Gate vert (1267). Labo non lancé : ni relais, ni scripts distants, ni ssh.
+- **S.8 Plafond et mots de secret** :
+  - DS7 : le script LIST fait deux passes du même glob. Les dossiers d'abord, liens vers un dossier
+    compris ; le reste ensuite. Le plafond de 2000 entrées (`break 2`) ne coupe donc plus que des fichiers.
+  - DS8 : `csv`, `bak`, `db`, `sqlite`, `log` ajoutés aux extensions de données. Le test de parité
+    `case` / regex les couvre sans changement.
+    - Sans mot de secret, ces extensions restent lisibles : `ventes.csv`, `app.log`.
+    - La course `realpath` / lecture reste acceptée (DS8).
+  - Tests :
+    - 2050 fichiers et quatre dossiers rangés après eux dans l'ordre du glob (dont un lien et `~sauvegardes`) :
+      `truncated`, 2000 entrées, les quatre dossiers présents ;
+    - `secrets.csv`, `password.bak`, `credentials.db`, `prod-secret.sqlite`, `api_key.log` : masqués dans la
+      liste, 403 à la lecture, contenu jamais rendu.
+  - Mutations vérifiées :
+    - passes inversées (fichiers d'abord) ;
+    - `db` retiré ;
+    - `log` retiré.
+  - Ligne existante modifiée : celle du plafond (`break` devient `break 2`).
+  - Gate vert (1269). Un premier gate a eu un échec isolé dans `test/web/accueil.test.tsx` (« shells en
+    arrière-plan », `expected undefined to be '1 shell en arrière-plan'`) :
+    - hors du diff, vert 3 fois sur 3 seul, puis vert au gate suivant ;
+    - à surveiller comme test instable, rien n'a été sauté.
+  - Labo 17/17 : le nouveau script tourne sous le vrai sshd, en bash, zsh et dash.
