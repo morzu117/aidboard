@@ -73,3 +73,23 @@ Le labo est lancé à la fin (aucun script distant n'est modifié).
   - Mutations vérifiées : bloc DM3 retiré, mauvaise option retirée.
   - Aucune ligne existante modifiée.
   - Gate vert : 1276.
+- **M.4 Test de connexion et traces** : `ServerConnections` masque
+  - chaque morceau de la sortie brute avant de l'ajouter : un morceau est la sortie entière d'une commande, donc
+    un secret n'y est jamais coupé en deux, et le plafond de 64 Kio ne coupe que du texte déjà masqué ;
+  - le détail de chaque étape ;
+  - l'erreur du test, aux deux endroits où elle est écrite ;
+  - la cause de tout état publié : elle vient aussi des pings, tirée du stderr de ssh.
+
+  `trace` passe ce que `stripUserinfo` rend par `maskSecrets`.
+  - Tests :
+    - un `.bash_profile` qui affiche un jeton et une clé sur stderr, un `workdir` qui porte un jeton : masqués
+      dans la sortie brute, l'erreur, la publication et `GET …/test` ;
+    - une commande locale introuvable dont le nom porte un jeton : étape, erreur et état masqués ;
+    - un refus de ssh qui cite une cible à jeton : cause de l'état masquée ;
+    - une erreur tracée qui porte une clé AWS.
+  - Cinq mutations vérifiées : sortie brute, détail d'étape, erreur du test, cause d'état, trace.
+    - La cause d'état a d'abord survécu : elle passait déjà par l'erreur du test, masquée. D'où le test du ping.
+  - Lignes existantes modifiées :
+    - le `const why` de `trace` ;
+    - l'import de `secrets.js` dans `agents.ts`, celui de M.2, qui gagne `maskSecrets`.
+  - Gate vert : 1280.

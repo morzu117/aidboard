@@ -3,6 +3,7 @@ import type { Db } from '../db.js';
 import { AidHttpError } from '../errors.js';
 import type { EventStore } from '../events/store.js';
 import { resolveOnPath } from '../pty/spawn.js';
+import { maskSecrets } from '../secrets.js';
 import { listServers } from './servers.js';
 import { type ExecResult, remoteExec, shQuote, type TransportOptions } from './transport.js';
 
@@ -180,6 +181,7 @@ export class ServerConnections {
       // filet : `runTest` ne lève pas, mais un rejet non traité arrêterait le daemon
       test.ok = false;
       test.error ??= e instanceof Error ? e.message : String(e);
+      if (test.error) test.error = maskSecrets(test.error);
       test.finishedAt ??= new Date().toISOString();
     });
     return structuredClone(test);
@@ -271,6 +273,8 @@ export class ServerConnections {
         s.detail = (e as Error).message;
         throw e;
       } finally {
+        // chantier 20 (DM5) : un profil ou une erreur qui affiche un secret ne le fait pas sortir du daemon
+        if (s.detail !== null) s.detail = maskSecrets(s.detail);
         s.durationMs = Date.now() - started;
         this.publishTest(test);
       }
@@ -343,6 +347,7 @@ export class ServerConnections {
     } catch (e) {
       test.ok = false;
       test.error = (e as Error).message;
+      test.error = maskSecrets(test.error);
       for (const s of test.steps) if (s.state === 'pending') s.state = 'skipped';
       // l'étape `command` échoue avant tout aller-retour : l'état ne reste pas « connexion… » (review S.3)
       if (!this.orphan(test) && this.status(server.id).state === 'connecting')
@@ -410,6 +415,7 @@ export class ServerConnections {
       checkedAt:
         patch.state === 'connecting' ? this.status(serverId).checkedAt : new Date().toISOString(),
     };
+    if (next.reason) next.reason = maskSecrets(next.reason);
     if (this.disposed || !getServerSafe(this.deps.db, serverId)) return next;
     this.statuses.set(serverId, next);
     this.deps.store.emitEphemeral({ kind: 'ephemeral', type: 'server.status', status: next });
@@ -417,6 +423,8 @@ export class ServerConnections {
   }
 
   private appendRaw(test: ServerTest, chunk: string): void {
+    // DM5 : chaque morceau est la sortie entière d'une commande — un secret n'y est jamais coupé en deux
+    chunk = maskSecrets(chunk);
     test.raw = (test.raw + chunk).slice(-RAW_MAX);
   }
 

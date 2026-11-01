@@ -1406,3 +1406,28 @@ test('chantier 20, M.3 : une commande qui portait un secret — ni « Toujours a
   const ordinaire = await carte(m, a.id, 'sudo -n true');
   expect(ordinaire.pending!.options.map((o) => o.label)).toEqual(CONFIRMATION);
 }, 40_000);
+
+test('chantier 20, M.4 : une erreur tracée qui porte un jeton — masqué dans le journal du daemon', async () => {
+  const lignes: string[] = [];
+  const espion = vi.spyOn(console, 'error').mockImplementation((l: unknown) => {
+    lignes.push(String(l));
+  });
+  nettoyages.push(() => espion.mockRestore());
+  const m = await daemon(serveur());
+  const s = await creerServeur(m);
+  const a = (await creerDiscussion(m, s.id)).agents[0]!;
+  m.t.db.exec(
+    `CREATE TRIGGER panne BEFORE INSERT ON server_agent_messages WHEN json_extract(NEW.payload, '$.text') = 'echo: un'
+     BEGIN SELECT RAISE(ABORT, 'refusé pour AKIAIOSFODNN7EXAMPLE'); END`,
+  );
+  await envoyer(m, a.id, 'un');
+  await waitFor(
+    () => lignes.some((l) => l.startsWith('serveurs : écriture au fil (message)')),
+    15_000,
+    'trace',
+  );
+  expect(lignes.find((l) => l.startsWith('serveurs : écriture au fil'))).toBe(
+    `serveurs : écriture au fil (message) (agent ${a.id}) : refusé pour AKIA[secret masqué]`,
+  );
+  expect(lignes.join('\n')).not.toContain('IOSFODNN7');
+}, 30_000);

@@ -15,7 +15,7 @@ import { CodexDriver } from '../conversation/codex.js';
 import type { ConversationDriver, ConversationEvent } from '../conversation/driver.js';
 import type { Db } from '../db.js';
 import { AidHttpError } from '../errors.js';
-import { MASK, maskDeep } from '../secrets.js';
+import { MASK, maskDeep, maskSecrets } from '../secrets.js';
 import { CONFIRM_OPTIONS, claudeConfirmSettings, isDestructive, rulePattern } from './confirm.js';
 import { RemoteDriver } from './driver.js';
 import { stripUserinfo } from './git.js';
@@ -946,7 +946,8 @@ export class RemoteAgentManager {
 
   /** S.7 (DS6) : une erreur attrapée laisse une trace, sans identifiants d'URL. */
   private trace(what: string, agentId: string, err: unknown): void {
-    const why = stripUserinfo(err instanceof Error ? err.message : String(err));
+    // DM5 : identifiants d'URL retirés, puis tout autre secret masqué
+    const why = maskSecrets(stripUserinfo(err instanceof Error ? err.message : String(err)));
     (this.deps.log ?? ((l: string) => console.error(l)))(
       `serveurs : ${what} (agent ${agentId}) : ${why}`,
     );
