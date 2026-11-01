@@ -93,3 +93,24 @@ Le labo est lancé à la fin (aucun script distant n'est modifié).
     - le `const why` de `trace` ;
     - l'import de `secrets.js` dans `agents.ts`, celui de M.2, qui gagne `maskSecrets`.
   - Gate vert : 1280.
+- **M.5 Données existantes** :
+  - La migration `017_maintenance_secrets.sql` crée la table `maintenance` et y inscrit la tâche
+    `masquer-secrets-serveurs`.
+  - `src/daemon/remote/scrub.ts` (`maskStoredSecrets`) fait la passe une seule fois, au démarrage, avant le
+    rattachement des agents, en une transaction qui retire la tâche :
+    - les lignes du fil qui portent un secret sont relues en JSON, chaque chaîne masquée, puis réécrites. Les autres
+      ne sont pas touchées, au caractère près. La lecture se fait par lots de 500 selon le `rowid` ;
+    - une ligne illisible qui porte un secret est remplacée par un message `[secret masqué]` ;
+    - les règles dont le motif porte un secret sont retirées.
+  - Tests :
+    - daemon : un fil et des règles écrits en clair, la tâche redemandée, redémarrage. Messages et clé masqués,
+      ligne propre intacte, règle à secret retirée et l'autre gardée, agent rattaché. Un troisième démarrage ne
+      refait rien ;
+    - unitaire : ligne illisible, pagination au-delà de 500, passe consommée.
+  - Cinq mutations vérifiées : règles gardées, fil non réécrit, passe non consommée, un seul lot, passe non appelée.
+  - Ligne existante modifiée : `test/mesh-schema.test.ts:46`, la version du schéma passe de 16 à 17. Chaque
+    migration la met à jour, comme `1f12d11` et `dba7539`.
+  - Gate : un premier passage a échoué sur `mesh-schema` (la ligne ci-dessus), un deuxième sur
+    `test/web/accueil.test.tsx` (« default : une ligne par sujet », `expected 'fix/x' to be 'feat/s'`). Ce test
+    échoue aussi 2 fois sur 3 quand il est lancé seul : c'est l'instabilité prouvée préexistante au chantier 17
+    (RC.4). Troisième passage vert : 1282.

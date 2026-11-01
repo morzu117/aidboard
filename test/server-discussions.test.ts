@@ -1431,3 +1431,78 @@ test('chantier 20, M.4 : une erreur tracée qui porte un jeton — masqué dans 
   );
   expect(lignes.join('\n')).not.toContain('IOSFODNN7');
 }, 30_000);
+
+test('chantier 20, M.5 : historique écrit avant le masquage — masqué une fois au démarrage, règle à secret retirée', async () => {
+  const remote = serveur();
+  const m1 = await daemon(remote);
+  const s = await creerServeur(m1);
+  const d = await creerDiscussion(m1, s.id);
+  const a = d.agents[0]!;
+  await envoyer(m1, a.id, 'bonjour');
+  await waitFor(() => ligne(m1, a.id)?.status === 'idle', 15_000, 'idle');
+  // la première passe a eu lieu au premier démarrage (base vide) : on la redemande, comme la migration 017
+  expect(m1.t.db.prepare('SELECT COUNT(*) AS n FROM maintenance').get()).toEqual({ n: 0 });
+  const jeton = 'ghp_A1b2C3d4E5f6G7h8I9j0K1l2M3n4O5p6Q7r8';
+  const cle = '-----BEGIN RSA PRIVATE KEY-----\nMIIEowIBAAKCAQEA\n-----END RSA PRIVATE KEY-----';
+  const ecrire = m1.t.db.prepare(
+    'INSERT INTO server_agent_messages (agent_id, seq, kind, payload, at) VALUES (?, ?, ?, ?, ?)',
+  );
+  const avant: [number, object][] = [
+    [100, { type: 'message', role: 'user', text: `voici ${jeton}` }],
+    [
+      101,
+      { type: 'tool_start', toolId: 't1', name: 'Bash', input: { command: `cat ~/.ssh/id_rsa` } },
+    ],
+    [102, { type: 'tool_end', toolId: 't1', output: cle, isError: false }],
+  ];
+  for (const [seq, ev] of avant)
+    ecrire.run(a.id, seq, (ev as { type: string }).type, JSON.stringify(ev), 't');
+  const regle = m1.t.db.prepare(
+    'INSERT INTO server_rules (id, server_id, cwd, pattern, created_at) VALUES (?, ?, ?, ?, ?)',
+  );
+  regle.run('sr_secret', s.id, d.cwd, `sudo git push https://deploy:motdepasse@h/r`, 't');
+  regle.run('sr_ordinaire', s.id, d.cwd, 'sudo -n true', 't');
+  m1.t.db.prepare("INSERT INTO maintenance (task) VALUES ('masquer-secrets-serveurs')").run();
+  const ordinaire = (
+    m1.t.db
+      .prepare('SELECT payload FROM server_agent_messages WHERE agent_id = ? AND seq = 101')
+      .get(a.id) as { payload: string }
+  ).payload;
+  await m1.t.d.stop();
+
+  const m2 = await daemon(remote, m1.t.home);
+  const payload = (seq: number) =>
+    (
+      m2.t.db
+        .prepare('SELECT payload FROM server_agent_messages WHERE agent_id = ? AND seq = ?')
+        .get(a.id, seq) as { payload: string }
+    ).payload;
+  expect(JSON.parse(payload(100))).toEqual({
+    type: 'message',
+    role: 'user',
+    text: 'voici ghp_[secret masqué]',
+  });
+  expect(JSON.parse(payload(102))).toMatchObject({ output: 'clé privée [secret masqué]' });
+  // sans secret : la ligne n'est pas réécrite, au caractère près
+  expect(payload(101)).toBe(ordinaire);
+  const regles = (await m2.req('GET', `/api/servers/${s.id}`)).json<Server>().rules;
+  expect(regles.map((r) => r.id)).toEqual(['sr_ordinaire']);
+  expect(m2.t.db.prepare('SELECT COUNT(*) AS n FROM maintenance').get()).toEqual({ n: 0 });
+  // l'agent est rattaché comme avant, et le fil continue
+  await envoyer(m2, a.id, 'deux');
+  await waitFor(() => assistant(m2, a.id, 'echo: deux') === 1, 15_000, 'réponse');
+
+  // une seule fois : sans la ligne de `maintenance`, un démarrage suivant ne relit pas tout l'historique
+  m2.t.db
+    .prepare('UPDATE server_agent_messages SET payload = ? WHERE agent_id = ? AND seq = 100')
+    .run(JSON.stringify({ type: 'message', role: 'user', text: `voici ${jeton}` }), a.id);
+  await m2.t.d.stop();
+  const m3 = await daemon(remote, m1.t.home);
+  expect(
+    (
+      m3.t.db
+        .prepare('SELECT payload FROM server_agent_messages WHERE agent_id = ? AND seq = 100')
+        .get(a.id) as { payload: string }
+    ).payload,
+  ).toContain(jeton);
+}, 60_000);
