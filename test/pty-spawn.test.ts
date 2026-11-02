@@ -292,7 +292,9 @@ test('swarph-cell : une session par cell (409), MESH_GATEWAY_URL et SWARPH_STATE
   c.t.d.agents
     .get(shell.id)!
     .pty.write('echo "GW=[$MESH_GATEWAY_URL]"; echo "ST=[$SWARPH_STATE]"\n');
-  await waitFor(() => /ST=\[/.test(sh), 5000, 'shell');
+  // la ligne tapée revient d'abord en écho par le terminal (`echo "ST=[$SWARPH_STATE]"`) : on
+  // attend la ligne produite par le shell, en début de ligne et complète, pas l'écho de la commande
+  await waitFor(() => /\nST=\[.*\]\r?\n/.test(sh), 5000, 'shell');
   expect(sh).toContain('GW=[]');
   expect(sh).toContain('ST=[]');
   c.t.d.agents.get(agent.id)!.pty.write('quit\n');
