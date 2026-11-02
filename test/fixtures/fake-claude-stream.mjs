@@ -68,6 +68,38 @@ async function handleTurn(text) {
 
   emit({ type: 'system', subtype: 'init', session_id: sessionId, cwd: process.cwd() });
 
+  // Chantier 22 (A.1) : `system/init` tel que claude 2.1.308 l'envoie à chaque tour (extrait) — commandes
+  // intégrées, skills, plugins à namespace, noms internes, et celles qui n'ont de sens que dans un terminal.
+  if (text === 'commandes') {
+    emit({
+      type: 'system',
+      subtype: 'init',
+      session_id: sessionId,
+      cwd: process.cwd(),
+      slash_commands: [
+        'context',
+        'deep-research',
+        'databricks:doctor',
+        'compact',
+        'model',
+        'login',
+        'logout',
+        'doctor',
+        'color',
+        '__remote-workflow',
+        'context',
+      ],
+      terminal_slash_commands: ['doctor', 'color', 'focus', 'reload-plugins'],
+      skills: ['deep-research', 'databricks:databricks-core'],
+    });
+    emit({
+      type: 'assistant',
+      message: { role: 'assistant', content: [{ type: 'text', text: 'commandes annoncées' }] },
+    });
+    emit({ type: 'result', subtype: 'success', session_id: sessionId });
+    return;
+  }
+
   if (text === 'tour long') {
     emit({
       type: 'assistant',

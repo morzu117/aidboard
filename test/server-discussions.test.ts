@@ -777,6 +777,33 @@ test('options et réglages : modes du serveur, modèle et effort validés, écri
   expect((await m.req('GET', '/api/server-agents/sa_inconnu/options')).statusCode).toBe(404);
 });
 
+test('options (22 A.1) : les commandes de claude annoncées sur le serveur, après celles d’A-I-D', async () => {
+  const m = await daemon(serveur());
+  const s = await creerServeur(m);
+  const a = (await creerDiscussion(m, s.id)).agents[0]!;
+  const commandes = async () =>
+    (await m.req('GET', `/api/server-agents/${a.id}/options`)).json<{
+      commands: { name: string; description: string; source: string }[];
+    }>().commands;
+  const aid = ['model', 'effort', 'mode', 'compact', 'stop', 'aide'];
+  expect((await commandes()).map((x) => x.name)).toEqual(aid);
+
+  await envoyer(m, a.id, 'commandes');
+  await waitFor(() => assistant(m, a.id, 'commandes annoncées') === 1, 15_000, 'tour commandes');
+  const apres = await commandes();
+  expect(apres.map((x) => x.name)).toEqual([
+    ...aid,
+    'context',
+    'deep-research',
+    'databricks:doctor',
+  ]);
+  expect(apres.filter((x) => x.source === 'agent')).toEqual([
+    { name: 'context', description: 'Commande de claude', source: 'agent' },
+    { name: 'deep-research', description: 'Skill de claude', source: 'agent' },
+    { name: 'databricks:doctor', description: 'Commande de claude', source: 'agent' },
+  ]);
+});
+
 test('codex sous confirmation passé en auto depuis le composer : le daemon trie, le destructif reste en carte', async () => {
   const m = await daemon(serveur());
   const s = await creerServeur(m);

@@ -2,6 +2,7 @@ import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import { type AgentSettings, DEFAULT_SETTINGS } from '../../shared/agentSettings.js';
+import type { AgentCommand } from '../../shared/agentSettings.js';
 import type { PendingOption, PendingRequest } from '../../shared/model.js';
 import {
   type AttachedFile,
@@ -16,6 +17,8 @@ const SIGTERM_DELAY_MS = 2_000;
 const SIGKILL_DELAY_MS = 5_000;
 const STDERR_TAIL_MAX = 4_000;
 const OUT_BUFFER_MAX = 8 * 1024 * 1024;
+/** D83 : connexion et déconnexion demandent un terminal (constaté : « /login isn't available in this environment »). */
+const CLAUDE_HORS_TERMINAL = new Set(['login', 'logout']);
 
 const PERMISSION_OPTIONS: PendingOption[] = [
   { label: 'Autoriser', answer: 'yes' },
@@ -130,6 +133,7 @@ export class ClaudeDriver implements ConversationDriver {
   private exited = false;
   /** Erreur portée par un message de claude (`authentication_failed`…), rendue à la fin du tour. */
   private turnError: string | undefined;
+  private commandList: AgentCommand[] = [];
   private settings: AgentSettings;
 
   constructor(opts: ConversationDriverOptions) {
@@ -226,6 +230,7 @@ export class ClaudeDriver implements ConversationDriver {
     const o = parsed as Record<string, unknown>;
     if (o.type === 'system' && o.subtype === 'init' && typeof o.session_id === 'string') {
       this.emit({ type: 'session', sessionId: o.session_id });
+      this.readCommands(o);
     } else if (o.type === 'assistant') {
       this.handleAssistant(o);
     } else if (o.type === 'user') {
@@ -236,6 +241,35 @@ export class ClaudeDriver implements ConversationDriver {
       this.handleResult(o);
     }
     // hooks, rate_limit_event, thinking_tokens, permission_denied, control_response entrant… : ignorés.
+  }
+
+  /**
+   * D83 : `slash_commands` de `system/init` (claude 2.1.308, renvoyé à chaque tour), sans celles qui n'ont de
+   * sens que dans un terminal ni la connexion, et sans les noms internes (`__…`). Claude ne donne pas de description.
+   */
+  private readCommands(o: Record<string, unknown>): void {
+    if (!Array.isArray(o.slash_commands)) return;
+    const terminal = new Set(
+      Array.isArray(o.terminal_slash_commands) ? o.terminal_slash_commands : [],
+    );
+    const skills = new Set(Array.isArray(o.skills) ? o.skills : []);
+    this.commandList = o.slash_commands
+      .filter(
+        (n): n is string =>
+          typeof n === 'string' &&
+          /^[^_\s]\S*$/.test(n) &&
+          !terminal.has(n) &&
+          !CLAUDE_HORS_TERMINAL.has(n),
+      )
+      .map((name) => ({
+        name,
+        description: skills.has(name) ? 'Skill de claude' : 'Commande de claude',
+        source: 'agent' as const,
+      }));
+  }
+
+  commands(): AgentCommand[] {
+    return this.commandList;
   }
 
   private handleAssistant(o: Record<string, unknown>): void {
