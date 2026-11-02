@@ -36,12 +36,21 @@ export function shQuote(s: string): string {
 }
 
 /**
+ * Chantier 21 : les outils installés par mise (`mise use -g`, dont `claude`) sont trouvés hors shell
+ * interactif. `mise activate` est souvent dans un `.bashrc` qui s'arrête dès le début quand le shell n'est
+ * pas interactif (Debian) : le shell de connexion ne le lit donc jamais. Les shims vont **en fin** de PATH,
+ * pour qu'un outil déjà trouvé ailleurs garde la priorité. Un dossier absent n'a aucun effet.
+ */
+export const PATH_SHIMS =
+  'PATH="$PATH:${MISE_DATA_DIR:-${XDG_DATA_HOME:-$HOME/.local/share}/mise}/shims"; ';
+
+/**
  * La commande telle que le serveur la reçoit : toujours dans le shell distant configuré, en shell de
  * connexion (`-l`) pour que le PATH du profil (`~/.local/bin`…) soit celui où `claude` est installé.
  * Suppose un shell de connexion POSIX côté serveur (le `'\''` ne passe pas sous csh).
  */
 export function remoteCommand(server: Pick<Server, 'shell'>, cmd: string): string {
-  return `${shQuote(server.shell)} -lc ${shQuote(cmd)}`;
+  return `${shQuote(server.shell)} -lc ${shQuote(PATH_SHIMS + cmd)}`;
 }
 
 /** Argv local qui exécute `cmd` sur le serveur, par mode (D72). Jamais de concaténation ailleurs. */
