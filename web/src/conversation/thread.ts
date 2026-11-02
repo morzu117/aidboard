@@ -182,3 +182,18 @@ export function buildTurns(items: AgentStreamItem[]): Turn[] {
 export function tourInterrompu(error: string | undefined): boolean {
   return /interrompu|error_during_execution/i.test(error ?? '');
 }
+
+/**
+ * Constat du 2026-11-02 sur le VPS : claude dont la connexion a expiré finit son tour sur `authentication_failed`.
+ * A-I-D ne touche pas aux identifiants (D76) : il dit à l'opérateur quoi faire, là où l'agent tourne.
+ */
+export function tourNonConnecte(
+  error: string | undefined,
+  kind: string,
+  serveur?: string,
+): string | null {
+  if (error !== 'authentication_failed') return null;
+  return serveur
+    ? `${kind} n’est pas connecté sur ${serveur} : ouvre un terminal ssh sur ${serveur}, lance ${kind} puis /login, et renvoie ton message.`
+    : `${kind} n’est pas connecté : lance ${kind} dans un terminal puis /login, et renvoie ton message.`;
+}

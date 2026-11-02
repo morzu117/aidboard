@@ -128,6 +128,8 @@ export class ClaudeDriver implements ConversationDriver {
   private pendingPermissions = new Map<string, PendingPermission>();
   private stopResolvers: Array<() => void> = [];
   private exited = false;
+  /** Erreur portée par un message de claude (`authentication_failed`…), rendue à la fin du tour. */
+  private turnError: string | undefined;
   private settings: AgentSettings;
 
   constructor(opts: ConversationDriverOptions) {
@@ -237,6 +239,8 @@ export class ClaudeDriver implements ConversationDriver {
   }
 
   private handleAssistant(o: Record<string, unknown>): void {
+    // message synthétique de claude 2.1 (connexion expirée…) : le texte reste au fil, la fin du tour le dit en erreur
+    if (typeof o.error === 'string') this.turnError = o.error;
     const message = o.message as { content?: unknown } | undefined;
     const content = Array.isArray(message?.content) ? (message!.content as unknown[]) : [];
     for (const block of content) {
@@ -330,13 +334,16 @@ export class ClaudeDriver implements ConversationDriver {
   }
 
   private handleResult(o: Record<string, unknown>): void {
-    const ok = o.subtype === 'success';
+    // `success` avec `is_error` : constaté le 2026-11-02 sur une connexion OAuth expirée, le tour n'a pas eu lieu
+    const ok = o.subtype === 'success' && o.is_error !== true;
+    const turnError = this.turnError;
+    this.turnError = undefined;
     this.emit({
       type: 'turn_end',
       ok,
       costUsd: typeof o.total_cost_usd === 'number' ? o.total_cost_usd : undefined,
       durationMs: typeof o.duration_ms === 'number' ? o.duration_ms : undefined,
-      error: ok ? undefined : String(o.subtype ?? 'erreur'),
+      error: ok ? undefined : (turnError ?? String(o.subtype ?? 'erreur')),
     });
     this.cancelPendingPermissions();
   }

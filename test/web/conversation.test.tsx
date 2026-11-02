@@ -6,6 +6,7 @@ import type { Agent, PendingRequest } from '../../src/shared/model.js';
 import { AidClient } from '../../web/src/data/client.js';
 import { AidProvider } from '../../web/src/data/useAidState.js';
 import { Conversation } from '../../web/src/conversation/Conversation.js';
+import { tourNonConnecte } from '../../web/src/conversation/thread.js';
 import { agent, json, snapshot } from './helpers.js';
 
 class FakeWs {
@@ -726,4 +727,52 @@ test('bulle utilisateur : liste les noms des pièces jointes', async () => {
   });
   await screen.findByText('regarde');
   expect(screen.getByRole('list', { name: 'Pièces jointes' }).textContent).toContain('capture.png');
+});
+
+test('tourNonConnecte : consigne /login sur le serveur, consigne locale, null pour toute autre erreur', () => {
+  expect(tourNonConnecte('authentication_failed', 'claude', 'vps-ovh')).toBe(
+    'claude n’est pas connecté sur vps-ovh : ouvre un terminal ssh sur vps-ovh, lance claude puis /login, et renvoie ton message.',
+  );
+  expect(tourNonConnecte('authentication_failed', 'claude')).toBe(
+    'claude n’est pas connecté : lance claude dans un terminal puis /login, et renvoie ton message.',
+  );
+  expect(tourNonConnecte('success', 'claude', 'vps-ovh')).toBeNull();
+  expect(tourNonConnecte('interrompu', 'claude')).toBeNull();
+  expect(tourNonConnecte(undefined, 'claude')).toBeNull();
+});
+
+test('turn_end authentication_failed (local) : consigne /login à la place de « Tour en erreur »', async () => {
+  mount(streamAgent());
+  const ws = FakeWs.all.at(-1)!;
+  ws.onopen?.();
+  ws.text({
+    t: 'history',
+    truncated: false,
+    items: [
+      { seq: 1, at: 't1', event: { type: 'message', role: 'user', text: 'Q1' } },
+      {
+        seq: 2,
+        at: 't2',
+        event: {
+          type: 'message',
+          role: 'assistant',
+          text: 'Failed to authenticate: OAuth session expired and could not be refreshed',
+        },
+      },
+      {
+        seq: 3,
+        at: 't3',
+        event: { type: 'turn_end', ok: false, error: 'authentication_failed' },
+      },
+    ],
+  });
+  expect(
+    await screen.findByText(
+      'claude n’est pas connecté : lance claude dans un terminal puis /login, et renvoie ton message.',
+    ),
+  ).toBeTruthy();
+  expect(
+    screen.getByText('Failed to authenticate: OAuth session expired and could not be refreshed'),
+  ).toBeTruthy();
+  expect(screen.queryByText(/Tour en erreur/)).toBeNull();
 });

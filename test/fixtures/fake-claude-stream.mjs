@@ -81,6 +81,42 @@ async function handleTurn(text) {
     return;
   }
 
+  // Constat du 2026-11-02 (claude 2.1, connexion OAuth expirée) : message synthétique portant `error`,
+  // puis un `result` en `success` avec `is_error: true`. Lignes reprises telles que relevées sur le serveur.
+  if (text === 'connexion expiree') {
+    const echec = 'Failed to authenticate: OAuth session expired and could not be refreshed';
+    emit({
+      type: 'assistant',
+      error: 'authentication_failed',
+      message: {
+        model: '<synthetic>',
+        role: 'assistant',
+        content: [{ type: 'text', text: echec }],
+      },
+      session_id: sessionId,
+    });
+    emit({
+      type: 'result',
+      subtype: 'success',
+      is_error: true,
+      result: echec,
+      session_id: sessionId,
+      total_cost_usd: 0,
+      duration_ms: 3,
+    });
+    return;
+  }
+
+  // `success` avec `is_error: true` sans message `error` préalable.
+  if (text === 'is_error seul') {
+    emit({
+      type: 'assistant',
+      message: { role: 'assistant', content: [{ type: 'text', text: 'échec muet' }] },
+    });
+    emit({ type: 'result', subtype: 'success', is_error: true, session_id: sessionId });
+    return;
+  }
+
   if (text === 'demande permission') {
     const requestId = `req-${++reqCounter}`;
     const toolUseId = `tool-${reqCounter}`;
