@@ -1,8 +1,17 @@
 import { type ClipboardEvent, type DragEvent, type KeyboardEvent, useRef, useState } from 'react';
 import type { AgentSettings } from '../../../src/shared/agentSettings.js';
+import type { AgentCommand, AgentOptions } from '../../../src/shared/agentSettings.js';
 import type { AgentStatus } from '../../../src/shared/model.js';
 import { useAid } from '../data/useAidState.js';
 import { ComposerReglages } from './ComposerReglages.js';
+import {
+  aide,
+  commandeAid,
+  completer,
+  filtrerCommandes,
+  reglageDe,
+  saisieCommande,
+} from './commandes.js';
 import { useAgentRoutes } from './routes.js';
 
 const message = (err: unknown) => (err instanceof Error ? err.message : String(err));
@@ -52,12 +61,56 @@ export function Composer({
   const needsInput = status === 'needs_input';
   const working = status === 'working';
 
+  // Chantier 22 (D86) : le menu des commandes `/`, pour un agent `stream` (celui qui a des réglages)
+  const [commandes, setCommandes] = useState<AgentCommand[] | null>(null);
+  const [choix, setChoix] = useState(0);
+  const [menuFerme, setMenuFerme] = useState(false);
+  const [avis, setAvis] = useState<string | null>(null);
+  const requete = settings ? saisieCommande(text) : null;
+  const proposees =
+    requete !== null && !menuFerme && commandes ? filtrerCommandes(commandes, requete) : [];
+  const menuOuvert = requete !== null && !menuFerme && commandes !== null;
+  const choisie = proposees[Math.min(choix, proposees.length - 1)];
+  const lireOptions = () => call<AgentOptions>('GET', `${api}/${agentId}/options`);
+  // relu à chaque `/` tapé en tête : claude n'annonce ses commandes qu'à son premier tour (D83)
+  const chargerCommandes = () => {
+    lireOptions().then(
+      (o) => setCommandes(o.commands),
+      () => setCommandes((c) => c ?? []),
+    );
+  };
+
+  /** D81 : une commande A-I-D est exécutée ici et ne part jamais à l'agent ; `/compact` part, chaque pilote la sait. */
+  const executer = async (t: string): Promise<boolean> => {
+    const cmd = settings && pieces.length === 0 ? commandeAid(t) : null;
+    if (!cmd || cmd.name === 'compact') return false;
+    if (cmd.name === 'aide') {
+      setAvis(aide(commandes ?? (await lireOptions()).commands));
+    } else if (cmd.name === 'stop') {
+      if (working) await call('POST', `${api}/${agentId}/interrupt`);
+      setAvis(working ? 'Tour interrompu' : 'Aucun tour en cours');
+    } else {
+      const r = reglageDe(cmd, await lireOptions(), settings!);
+      if (!r) return false;
+      if ('erreur' in r) {
+        setErreur(r.erreur);
+        return true;
+      }
+      await call<AgentSettings>('PATCH', `${api}/${agentId}/settings`, r.patch);
+      setAvis(r.avis);
+    }
+    setText('');
+    return true;
+  };
+
   const envoyer = async () => {
     const t = text.trim();
     if ((!t && pieces.length === 0) || needsInput || busy) return;
     setBusy(true);
     setErreur(null);
+    setAvis(null);
     try {
+      if (await executer(t)) return;
       const attachments = await Promise.all(
         pieces.map(async (f) => ({
           name: f.name,
@@ -72,6 +125,9 @@ export function Composer({
       );
       setText('');
       setPieces([]);
+      // D81 : la compaction se fait sans message de l'agent (codex) : on dit qu'elle est partie
+      if (settings && attachments.length === 0 && commandeAid(t)?.name === 'compact')
+        setAvis('Compaction demandée à l’agent');
     } catch (err) {
       setErreur(message(err));
     } finally {
@@ -128,6 +184,27 @@ export function Composer({
   };
 
   const onKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
+    // D86 : ↑ ↓ choisissent, Tab ou Entrée complètent, Échap ferme ; Entrée sur un nom complet envoie
+    if (menuOuvert && proposees.length > 0 && !composingRef.current) {
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        const n = proposees.length;
+        setChoix((Math.min(choix, n - 1) + (e.key === 'ArrowDown' ? 1 : n - 1)) % n);
+        return;
+      }
+      const complet = choisie ? completer(choisie) : text;
+      if (e.key === 'Tab' || (e.key === 'Enter' && !e.shiftKey && complet.trim() !== text)) {
+        e.preventDefault();
+        setText(complet);
+        setChoix(0);
+        return;
+      }
+    }
+    if (menuOuvert && e.key === 'Escape') {
+      e.preventDefault();
+      setMenuFerme(true);
+      return;
+    }
     if (e.key === 'Enter' && !e.shiftKey && !composingRef.current) {
       e.preventDefault();
       void envoyer();
@@ -162,6 +239,44 @@ export function Composer({
           ))}
         </ul>
       )}
+      {menuOuvert && (
+        <ul
+          id={`${dataNode}-commandes`}
+          className="composer-commandes"
+          role="listbox"
+          aria-label="Commandes"
+          data-node={`${dataNode}.commandes`}
+        >
+          {proposees.map((c) => (
+            <li
+              key={`${c.source}-${c.name}`}
+              id={`${dataNode}-commande-${c.name}`}
+              role="option"
+              aria-selected={c === choisie}
+              className="composer-commande"
+              onMouseDown={(e) => {
+                // le champ garde le focus : la complétion se fait comme au clavier
+                e.preventDefault();
+                setText(completer(c));
+                setChoix(0);
+                taRef.current?.focus();
+              }}
+            >
+              <span className="composer-commande-nom">
+                /{c.name}
+                {c.args ? ` ${c.args}` : ''}
+              </span>
+              <span className="composer-commande-description">{c.description}</span>
+              {c.source === 'aid' && <span className="composer-commande-source">A-I-D</span>}
+            </li>
+          ))}
+          {proposees.length === 0 && (
+            <li className="composer-commande-vide" data-node={`${dataNode}.commandes.vide`}>
+              Aucune commande connue : le message part tel quel à {kind}.
+            </li>
+          )}
+        </ul>
+      )}
       <textarea
         ref={taRef}
         className="composer-champ"
@@ -175,7 +290,17 @@ export function Composer({
         onChange={(e) => {
           setText(e.target.value);
           onInput();
+          setAvis(null);
+          setChoix(0);
+          setMenuFerme(false);
+          const v = e.target.value;
+          if (settings && saisieCommande(v) !== null && (v === '/' || commandes === null))
+            chargerCommandes();
         }}
+        aria-controls={menuOuvert ? `${dataNode}-commandes` : undefined}
+        aria-activedescendant={
+          menuOuvert && choisie ? `${dataNode}-commande-${choisie.name}` : undefined
+        }
         onKeyDown={onKeyDown}
         onPaste={onPaste}
         onCompositionStart={() => (composingRef.current = true)}
@@ -256,6 +381,11 @@ export function Composer({
           ↑
         </button>
       </div>
+      {avis && (
+        <p className="composer-avis" role="status" data-node={`${dataNode}.avis`}>
+          {avis}
+        </p>
+      )}
       {erreur && (
         <p className="message-erreur" role="alert" data-node={`${dataNode}.erreur`}>
           {erreur}

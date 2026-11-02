@@ -109,3 +109,30 @@ faux agents `test/fixtures/fake-claude-stream.mjs` et `fake-codex-appserver.mjs`
     (e) sans la condition `files.length === 0`.
   - Lignes existantes modifiées : 2, les deux lignes de l'ancien libellé A.3 des points, réécrit (la route est
     abandonnée au profit de `send`).
+- **B.1 (2026-11-02) — menu et commandes A-I-D dans le composer.** `web/src/conversation/commandes.ts` porte la
+  logique pure : `saisieCommande` (un `/` en tête, pas encore d'espace), `filtrerCommandes` (préfixe, puis
+  sous-chaîne, l'ordre reçu gardé), `completer`, `commandeAid`, `reglageDe` et `aide`. `reglageDe` traduit
+  `/model`, `/effort` et `/mode` en patch de réglage : id ou libellé, sans tenir compte de la casse ;
+  `défaut`/`default` remet la valeur de la CLI ; un choix inconnu est refusé en listant les possibles. L'effort
+  est pris dans le modèle courant s'il en a. Le `Composer` n'ouvre le menu que pour un agent qui a des
+  réglages (`stream`) : aucun menu pour un agent PTY. Il relit `options` à chaque `/` tapé seul, puisque claude
+  n'annonce ses commandes qu'à son premier tour. ↑ et ↓ choisissent, Tab ou Entrée complètent (Entrée envoie
+  quand le texte est déjà le nom complet), Échap ferme, un clic complète. Sans commande correspondante, le menu
+  dit que le message part tel quel (D85). À l'envoi, sans pièce jointe, les commandes d'A-I-D sauf `/compact`
+  sont exécutées sur place et ne partent jamais à l'agent. `/aide` liste ; `/stop` interrompt le tour, ou dit
+  « Aucun tour en cours » ; `/model`, `/effort` et `/mode` passent par `PATCH settings`. Leur résultat s'affiche
+  sous le champ (`.avis`), l'erreur à la place habituelle. `/compact` et tout autre `/xxx` partent par
+  `input` ; après `/compact`, l'avis « Compaction demandée à l'agent ».
+  - Tests : `test/web/commandes.test.ts` (unitaires de chaque fonction, catalogue claude et catalogue à la codex
+    avec efforts par modèle), `e2e/commandes-slash.spec.ts`. Ce spec lance son propre daemon en `stream`
+    (AID_HOME temporaire, port `AID_E2E_PORT + 1` ou `AID_E2E_STREAM_PORT`), devant le faux claude structuré
+    de `test/fixtures/bin-stream`, puisque le daemon commun des e2e joue claude en PTY. Il couvre : menu et
+    ordre, filtrage, ↓ + Tab, Entrée sur un nom partiel, Échap, clic, `/model` par id, par libellé et
+    `défaut`, `/model inconnu`, `/mode`, `/aide`, `/stop` hors tour et pendant un tour long, `/inconnu` et
+    `/compact` qui partent à l'agent (et rien d'autre n'y part), puis les commandes de claude après le tour
+    `commandes`. Le faux claude n'a pas eu besoin d'être étendu.
+  - Mutations vérifiées, chacune casse au moins un test :
+    (a) Échap ne ferme pas ; (b) `executer` rend toujours `false` ; (c) `filtrerCommandes` sans le groupe
+    sous-chaîne, ou sans l'ordre préfixe d'abord ; (d) `reglageDe` sans la comparaison par libellé ;
+    (e) Entrée complète toujours.
+  - Lignes existantes modifiées : aucune.
