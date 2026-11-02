@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { Route, Routes, useLocation } from 'react-router';
 import { afterEach, expect, test, vi } from 'vitest';
 import type { NavGroup, NavPlacement, NavState } from '../../src/shared/model.js';
 import { LayoutCtx } from '../../web/src/ui/Layout.js';
@@ -442,4 +443,77 @@ test('hors mode édition : ni poignée, ni bouton ···, ni double-clic de reno
   expect(node('1-1.barre-gauche.groupe-ng_1.actions')).toBeNull();
   await userEvent.dblClick(node('1-1.barre-gauche.sujet-tp_1')!);
   expect(node('1-1.barre-gauche.sujet-tp_1.renommer')).toBeNull();
+});
+
+// fix/nav-edition-clic : chaque écran remonte sa Layout, donc Nav. Un clic sur un sujet qui change
+// d'écran en mode édition démonte la barre : le mode édition et le champ de renommage disparaissent.
+// Les routes ci-dessous reproduisent ce démontage — l'écran du sujet ne contient pas Nav.
+function Emplacement() {
+  return <p data-testid="emplacement">{useLocation().pathname}</p>;
+}
+
+const openAvecRoutes = (nav: NavState, extra: Record<string, (body: unknown) => Response> = {}) =>
+  setup(
+    <LayoutCtx.Provider
+      value={{ openNewTopic, openNewWorkspace: () => {}, overlay: 'aucun', setOverlay: () => {} }}
+    >
+      <Routes>
+        <Route path="/" element={<Nav screen="1-1" />} />
+        <Route path="/sujets/:topicId" element={<p data-testid="ecran-sujet">écran du sujet</p>} />
+      </Routes>
+      <Emplacement />
+    </LayoutCtx.Provider>,
+    basiqueSnap(),
+    '/',
+    { 'GET /api/nav': json(200, nav), ...extra },
+  );
+
+test('en mode édition, un clic sur un sujet ne change pas d’écran et garde le mode édition', async () => {
+  openAvecRoutes(navState());
+  await screen.findByText('feat/s');
+  await userEvent.click(node('1-1.barre-gauche.groupes.modifier')!);
+
+  await userEvent.click(node('1-1.barre-gauche.sujet-tp_1')!);
+  expect(screen.getByTestId('emplacement').textContent).toBe('/');
+  expect(screen.queryByTestId('ecran-sujet')).toBeNull();
+  const bascule = node('1-1.barre-gauche.groupes.modifier')!;
+  expect(bascule.textContent).toBe('Terminer');
+  expect(bascule.getAttribute('aria-pressed')).toBe('true');
+  expect(node('1-1.barre-gauche.sujet-tp_1.actions')).not.toBeNull();
+});
+
+test('hors mode édition, un clic sur un sujet ouvre /sujets/<id> (non-régression)', async () => {
+  openAvecRoutes(navState());
+  await screen.findByText('feat/s');
+  await userEvent.click(node('1-1.barre-gauche.sujet-tp_1')!);
+  await screen.findByTestId('ecran-sujet');
+  expect(screen.getByTestId('emplacement').textContent).toBe('/sujets/tp_1');
+});
+
+test('depuis un écran autre que le sujet, le double-clic en mode édition renomme : le champ reste, Entrée enregistre', async () => {
+  const h = openAvecRoutes(navState(), {
+    'PATCH /api/nav/placements/tp_1': json(200, {}),
+  });
+  await screen.findByText('feat/s');
+  await userEvent.click(node('1-1.barre-gauche.groupes.modifier')!);
+
+  await userEvent.dblClick(node('1-1.barre-gauche.sujet-tp_1')!);
+  const champRenommage = () => node('1-1.barre-gauche.sujet-tp_1.renommer') as HTMLInputElement;
+  expect(champRenommage()).not.toBeNull();
+  // toujours là une fois les rendus du double-clic écoulés : aucun changement d'écran ne l'a démonté
+  await waitFor(() => expect(screen.getByTestId('emplacement').textContent).toBe('/'));
+  expect(screen.queryByTestId('ecran-sujet')).toBeNull();
+  expect(champRenommage()).not.toBeNull();
+
+  await userEvent.clear(champRenommage());
+  await userEvent.type(champRenommage(), 'Renommé depuis l’accueil');
+  await userEvent.keyboard('{Enter}');
+  await waitFor(() => {
+    const appels = h.calls.filter(
+      (c) => c.method === 'PATCH' && c.url === '/api/nav/placements/tp_1',
+    );
+    expect(appels.at(-1)?.body).toEqual({ displayName: 'Renommé depuis l’accueil' });
+  });
+  expect(screen.getByTestId('emplacement').textContent).toBe('/');
+  await screen.findByText('Renommé depuis l’accueil');
 });
