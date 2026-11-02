@@ -1572,3 +1572,20 @@ test('options (22 A.2) : les skills de codex sur le serveur, après les commande
     'entrée skill sur le serveur',
   );
 });
+
+test('compact (22 A.3, D81) : `/compact` sur un codex du serveur compacte son thread, jamais envoyé en texte', async () => {
+  const m = await daemon(serveur());
+  const s = await creerServeur(m);
+  const a = (await creerDiscussion(m, s.id, 'codex')).agents[0]!;
+  await envoyer(m, a.id, '/compact');
+  await envoyer(m, a.id, 'compactions');
+  const vues = [{ threadId: 'thread-new-fixed', pendantTour: false }];
+  await waitFor(
+    () => assistant(m, a.id, `echo: compactions ${JSON.stringify(vues)}`) === 1,
+    15_000,
+    'compaction sur le serveur',
+  );
+  expect(
+    assistant(m, a.id, `echo: entree ${JSON.stringify([{ type: 'text', text: '/compact' }])}`),
+  ).toBe(0);
+});

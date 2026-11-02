@@ -112,6 +112,9 @@ export interface CodexDriverOptions extends ConversationDriverOptions {
   sandbox?: string;
 }
 
+/** D81 : `/compact` en file d'attente, reconnu par identité dans `startTurn` (jamais envoyé comme texte). */
+const COMPACTER: unknown[] = [];
+
 /** Construction des arguments : `app-server`, tout le reste passe par JSON-RPC sur stdio. */
 export function buildCodexArgs(opts: ConversationDriverOptions): string[] {
   return ['app-server', ...(opts.extraArgs ?? [])];
@@ -451,6 +454,7 @@ export class CodexDriver implements ConversationDriver {
   }
 
   private startTurn(input: unknown[]): void {
+    if (input === COMPACTER) return this.startCompaction();
     this.phase = 'turn';
     this.interruptRequested = false;
     this.sendRequest('turn/start', {
@@ -469,6 +473,20 @@ export class CodexDriver implements ConversationDriver {
         this.emit({ type: 'turn_end', ok: false, error: errorMessageOf(err) });
         this.advanceQueue();
       });
+  }
+
+  /**
+   * D81 : codex compacte dans un tour à lui (`ContextCompactedNotification` porte un `turnId`) : sa fin arrive par
+   * `turn/completed`, comme un tour normal. Un refus finit le tour en erreur.
+   */
+  private startCompaction(): void {
+    this.phase = 'turn';
+    this.interruptRequested = false;
+    this.sendRequest('thread/compact/start', { threadId: this.threadId }).catch((err: unknown) => {
+      if (this.exited) return;
+      this.emit({ type: 'turn_end', ok: false, error: errorMessageOf(err) });
+      this.advanceQueue();
+    });
   }
 
   /** D68 : `turn/start` porte le réglage courant, valable pour ce tour et les suivants. */
@@ -557,6 +575,12 @@ export class CodexDriver implements ConversationDriver {
 
   send(text: string, files: AttachedFile[] = []): void {
     if (this.exited) return;
+    // D81 : `/compact` est une commande A-I-D, que chaque pilote sait exécuter ; claude la reçoit telle quelle
+    if (text.trim() === '/compact' && files.length === 0) {
+      if (this.phase === 'ready') this.startTurn(COMPACTER);
+      else this.queue.push(COMPACTER);
+      return;
+    }
     // D84 : `/skill arguments` devient l'entrée `skill`, suivie du texte des arguments
     const appel = /^\/(\S+)(?:\s+([\s\S]*))?$/.exec(text.trim());
     const skill = appel ? this.skills.find((s) => s.name === appel[1]) : undefined;

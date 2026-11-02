@@ -522,3 +522,153 @@ test('skills (A.2) : `skills/list` en erreur (vieille version) → aucune skill,
   );
   expect(events.some((e) => e.type === 'message' && e.text === 'echo: bonjour')).toBe(true);
 });
+
+/** Chantier 22 (A.3, D81) : chaque `thread/compact/start` reçu par la fausse app-server, lu par son tour `compactions`. */
+type Compaction = { threadId: string | null; pendantTour: boolean };
+const COMPACTEE: Compaction = { threadId: 'thread-new-fixed', pendantTour: false };
+
+async function compactionsVues(d: CodexDriver, events: ConversationEvent[]): Promise<Compaction[]> {
+  const before = events.length;
+  await tour(d, events, 'compactions');
+  const m = events
+    .slice(before)
+    .find((e) => e.type === 'message' && e.text.startsWith('echo: compactions ')) as
+    Extract<ConversationEvent, { type: 'message' }> | undefined;
+  if (!m) throw new Error('aucun écho des compactions');
+  return JSON.parse(m.text.slice('echo: compactions '.length)) as Compaction[];
+}
+
+const finsDeTour = (events: ConversationEvent[]) =>
+  events.filter(
+    (e): e is Extract<ConversationEvent, { type: 'turn_end' }> => e.type === 'turn_end',
+  );
+
+function startAvec(env: Record<string, string>) {
+  const events: ConversationEvent[] = [];
+  driver = new CodexDriver({
+    bin: FAKE_CODEX,
+    cwd: process.cwd(),
+    env: { ...agentEnv(process.env, [], {}), ...env },
+    sessionId: randomUUID(),
+    resume: false,
+  });
+  driver.onEvent((e) => events.push(e));
+  driver.start();
+  return { driver, events };
+}
+
+test('compact (A.3, D81) : `/compact` sur un codex prêt → thread/compact/start sur son thread, jamais en texte ; fin ok, le tour suivant part', async () => {
+  const { driver: d, events } = start({ sessionId: randomUUID() });
+  await tour(d, events, 'bonjour');
+
+  const before = events.length;
+  d.send('/compact');
+  await waitFor(
+    () => events.slice(before).some((e) => e.type === 'turn_end'),
+    5000,
+    'fin de la compaction',
+  );
+  const compaction = events.slice(before);
+  expect(finsDeTour(compaction)).toHaveLength(1);
+  expect(finsDeTour(compaction)[0]).toMatchObject({ ok: true });
+  expect(finsDeTour(compaction)[0]!.error).toBeUndefined();
+  // codex ne dit rien d'une compaction : aucun message, aucun outil
+  expect(compaction.filter((e) => e.type !== 'turn_end')).toEqual([]);
+
+  // revenu prêt : le message suivant part tout de suite, en texte normal
+  expect(await tour(d, events, 'encore')).toBeUndefined();
+  expect(events.some((e) => e.type === 'message' && e.text === 'echo: encore')).toBe(true);
+  expect(await compactionsVues(d, events)).toEqual([COMPACTEE]);
+  // aucun `turn/start` n'a porté `/compact` (le faux renverrait son entrée en écho)
+  expect(events.some((e) => e.type === 'message' && e.text.startsWith('echo: entree '))).toBe(
+    false,
+  );
+  expect(events.some((e) => e.type === 'exit')).toBe(false);
+});
+
+test('compact (A.3) : un `/compact` envoyé pendant un tour attend sa fin, puis la file continue', async () => {
+  const { driver: d, events } = start({ sessionId: randomUUID() });
+  d.send('tour long');
+  await waitFor(() => events.some((e) => e.type === 'session'), 5000, 'session établie');
+  d.send('  /compact\n');
+  d.send('après');
+  expect(finsDeTour(events)).toEqual([]);
+
+  d.interrupt();
+  await waitFor(
+    () => events.some((e) => e.type === 'message' && e.text === 'echo: après'),
+    5000,
+    'file vidée après le tour long',
+  );
+  // le tour long interrompu, la compaction, puis `après`
+  expect(finsDeTour(events).map((e) => e.ok)).toEqual([false, true, true]);
+  expect(await compactionsVues(d, events)).toEqual([COMPACTEE]);
+});
+
+test('compact (A.3) : `/compact` avec une pièce jointe, avec des arguments ou au milieu du texte part en texte', async () => {
+  const { driver: d, events } = start({ sessionId: randomUUID() });
+  expect(await tour(d, events, '/compact maintenant')).toEqual([
+    { type: 'text', text: '/compact maintenant' },
+  ]);
+  expect(await tour(d, events, '/compactage')).toEqual([{ type: 'text', text: '/compactage' }]);
+
+  let before = events.length;
+  d.send('/compact', [{ path: '/tmp/b.pdf', name: 'b.pdf', type: 'application/pdf' }]);
+  await waitFor(() => events.slice(before).some((e) => e.type === 'turn_end'), 5000, 'tour pdf');
+  expect(entreeVue(events.slice(before))).toEqual([
+    { type: 'text', text: '/compact\n\nPièces jointes (à lire à ces chemins) :\n- /tmp/b.pdf' },
+  ]);
+
+  before = events.length;
+  d.send('/compact', [{ path: '/tmp/a.png', name: 'a.png', type: 'image/png' }]);
+  await waitFor(() => events.slice(before).some((e) => e.type === 'turn_end'), 5000, 'tour image');
+  expect(entreeVue(events.slice(before))).toEqual([
+    { type: 'text', text: '/compact' },
+    { type: 'localImage', path: '/tmp/a.png' },
+  ]);
+
+  expect(await tour(d, events, 'voir /compact')).toBeUndefined();
+  expect(events.some((e) => e.type === 'message' && e.text === 'echo: voir /compact')).toBe(true);
+  expect(await compactionsVues(d, events)).toEqual([]);
+});
+
+test('compact (A.3) : `thread/compact/start` refusé → fin de tour en erreur avec le message, la file avance, pas de sortie', async () => {
+  const { driver: d, events } = startAvec({ FAKE_CODEX_FAIL_COMPACT: '1' });
+  // tous deux en file pendant la poignée de main : le refus doit libérer le second
+  d.send('/compact');
+  d.send('bonjour');
+  await waitFor(
+    () => events.some((e) => e.type === 'message' && e.text === 'echo: bonjour'),
+    5000,
+    'message en file après le refus',
+  );
+  const fins = finsDeTour(events);
+  expect(fins).toHaveLength(2);
+  expect(fins[0]).toMatchObject({ ok: false, error: 'échec simulé thread/compact/start' });
+  expect(fins[1]).toMatchObject({ ok: true });
+
+  // depuis un pilote prêt : même refus, et il reste prêt
+  const before = events.length;
+  d.send('/compact');
+  await waitFor(() => events.slice(before).some((e) => e.type === 'turn_end'), 5000, 'refus');
+  expect(finsDeTour(events.slice(before))[0]).toMatchObject({
+    ok: false,
+    error: 'échec simulé thread/compact/start',
+  });
+  expect(await compactionsVues(d, events)).toEqual([]);
+  expect(events.some((e) => e.type === 'exit')).toBe(false);
+});
+
+test('compact (A.3, D81) : une skill de codex nommée `compact` ne masque pas la commande d’A-I-D', async () => {
+  const { driver: d, events } = startAvec({ FAKE_CODEX_SKILL_COMPACT: '1' });
+  await waitFor(() => d.commands().some((c) => c.name === 'compact'), 5000, 'skill compact');
+
+  expect(await tour(d, events, '/compact')).toBeUndefined();
+  expect(await compactionsVues(d, events)).toEqual([COMPACTEE]);
+  // avec des arguments, ce n'est plus la commande d'A-I-D : la skill homonyme reçoit l'appel
+  expect(await tour(d, events, '/compact maintenant')).toEqual([
+    { type: 'skill', name: 'compact', path: '/skills/compact/SKILL.md' },
+    { type: 'text', text: 'maintenant' },
+  ]);
+  expect(await compactionsVues(d, events)).toEqual([COMPACTEE]);
+});

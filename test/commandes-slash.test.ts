@@ -208,3 +208,20 @@ test('input (A.2) : `/skill-x des arguments` arrive à codex en entrée skill, `
   const texte = echo([{ type: 'text', text: '/inconnu foo' }]);
   await waitFor(() => assistantDit(agent.id, texte), 5000, 'texte tel quel');
 });
+
+test('input (A.3, D81) : `/compact` sur un codex local compacte son thread — jamais envoyé en texte', async () => {
+  const agent = await spawnCodex();
+  c!.t.d.agents.input(agent.id, '/compact');
+  c!.t.d.agents.input(agent.id, 'compactions');
+  const vues = `echo: compactions ${JSON.stringify([{ threadId: 'thread-new-fixed', pendantTour: false }])}`;
+  await waitFor(() => assistantDit(agent.id, vues), 5000, 'compaction du thread');
+  expect(
+    assistantDit(agent.id, `echo: entree ${JSON.stringify([{ type: 'text', text: '/compact' }])}`),
+  ).toBe(false);
+});
+
+test('input (A.3, D81) : claude reçoit `/compact` tel quel, comme tout message', async () => {
+  const agent = await spawnClaude();
+  c!.t.d.agents.input(agent.id, '/compact');
+  await waitFor(() => assistantDit(agent.id, 'echo: /compact'), 5000, '`/compact` reçu par claude');
+});

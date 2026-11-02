@@ -45,8 +45,8 @@ A-I-D, aujourd'hui, ne propose rien quand on tape `/` et ne dit pas ce qui est u
   - `commands` exposé dans `options`, en local et sur un serveur, avec les commandes A-I-D en tête.
 - **A.2 Commandes de codex.** `skills/list` après la poignée de main. `send` traduit `/skill arguments` en
   entrée `skill`.
-- **A.3 `/compact` pour tous.** `compact()` dans le contrat, implémenté par claude et codex, et exposé par la
-  route `POST …/compact`.
+- **A.3 `/compact` pour tous.** Le texte `/compact` passe par `send`, comme tout message : claude le reçoit tel
+  quel, codex le traduit en `thread/compact/start`. Pas de route dédiée ; un futur pilote fait de même.
 - **B.1 Menu et commandes A-I-D dans le composer.** Suggestions, complétion, exécution de `/model`,
   `/effort`, `/mode`, `/stop`, `/compact` et `/aide`. Tout le reste est envoyé tel quel.
 
@@ -86,3 +86,26 @@ faux agents `test/fixtures/fake-claude-stream.mjs` et `fake-codex-appserver.mjs`
     (a) sans le filtre `enabled !== false` ; (b) sans le dédoublonnage ; (c) `send` sans la branche skill ;
     (d) l'entrée skill sans le texte des arguments ; (e) `loadSkills()` non appelé.
   - Lignes existantes modifiées : aucune.
+- **A.3 (2026-11-02) — `/compact` pour tous.** Pas de route ni de `compact()` dans le contrat : `/compact` passe
+  par `send`, comme tout message (D81). Claude le reçoit tel quel, sans code nouveau. Dans `CodexDriver.send`, le
+  texte exactement `/compact` (aux espaces près), sans pièce jointe, est reconnu avant la branche skill d'A.2 :
+  une skill homonyme ne masque pas la commande d'A-I-D. Il part tout de suite si le pilote est prêt, sinon il
+  attend dans la file sous une sentinelle (`COMPACTER`) que `startTurn` reconnaît par identité. `startCompaction`
+  passe en tour et envoie `thread/compact/start { threadId }`. Un refus finit le tour en erreur avec son message
+  et fait avancer la file. `/compact maintenant`, ou `/compact` avec une pièce jointe, part en texte, ou en
+  entrée skill si une skill `compact` existe.
+  - Sonde manuelle de codex 0.157 : `thread/compact/start` répond `{}`, puis codex émet `turn/started` et
+    `turn/completed` (`turn.items` vide, `status: completed`). La fin de la compaction passe donc par le
+    `turn/completed` déjà géré.
+  - Tests : `test/conversation-codex.test.ts` (« compact (A.3) » : codex prêt, pendant un tour, pièce jointe et
+    arguments, refus, skill homonyme), `test/commandes-slash.test.ts` (codex local, et claude qui reçoit
+    `/compact` tel quel), `test/server-discussions.test.ts` (« compact (22 A.3) »). Le faux codex répond à
+    `thread/compact/start` comme le vrai, en erreur sous `FAKE_CODEX_FAIL_COMPACT=1`. Il ajoute une skill
+    `compact` sous `FAKE_CODEX_SKILL_COMPACT=1` et note chaque compaction (`threadId`, arrivée pendant un tour
+    long), relue par son tour `compactions`.
+  - Mutations vérifiées, chacune casse au moins un test :
+    (a) `send` sans la branche `/compact` ; (b) `startTurn` sans le test `input === COMPACTER` ;
+    (c) le refus sans `advanceQueue()` ; (d) la branche `/compact` après la branche skill ;
+    (e) sans la condition `files.length === 0`.
+  - Lignes existantes modifiées : 2, les deux lignes de l'ancien libellé A.3 des points, réécrit (la route est
+    abandonnée au profit de `send`).

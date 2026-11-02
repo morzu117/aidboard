@@ -51,6 +51,7 @@ export function withAttachmentPaths(text: string, files: AttachedFile[]): string
 export interface ConversationDriver {
   readonly sessionId: string;
   start(): void;
+  /** D81 : `/compact` compacte la conversation, chaque pilote à sa façon ; ses propres commandes (D82) aussi. */
   send(text: string, files?: AttachedFile[]): void;
   interrupt(): void;
   answer(requestId: string, decision: PendingOption['answer']): void;
