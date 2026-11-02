@@ -2142,6 +2142,12 @@ body {
   height: auto;
   min-height: 0;
 }
+/* Constat opérateur du 2026-11-02 : sans hauteur bornée, une barre gauche longue étirait la page et poussait
+   le champ de saisie sous la fenêtre. Comme l'écran Sujet, la page ne défile pas ; la barre défile seule. */
+.cadre:has(.discussion) {
+  height: 100dvh;
+  overflow: hidden;
+}
 /* Le nom du serveur à côté de l'agent sur chaque tour distant. */
 .message-agent-serveur {
   font-family: ui-monospace, monospace;
