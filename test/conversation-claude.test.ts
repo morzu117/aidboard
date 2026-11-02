@@ -287,3 +287,52 @@ test('réglages à chaud (D68) : configure() change mode, modèle et effort sans
   );
   expect(reglagesVus(events.slice(before))).toEqual({ mode: 'plan', model: null, effort: 'max' });
 });
+
+const turnEnds = (events: ConversationEvent[]) =>
+  events.filter(
+    (e): e is Extract<ConversationEvent, { type: 'turn_end' }> => e.type === 'turn_end',
+  );
+
+test('connexion expirée (constat du 2026-11-02) : le texte reste au fil, fin de tour en erreur authentication_failed', async () => {
+  const { driver: d, events } = start({ sessionId: randomUUID() });
+
+  d.send('connexion expiree');
+  await waitFor(() => turnEnds(events).length === 1, 5000, 'fin du tour');
+  expect(events).toContainEqual({
+    type: 'message',
+    role: 'assistant',
+    text: 'Failed to authenticate: OAuth session expired and could not be refreshed',
+  });
+  expect(turnEnds(events)[0]).toMatchObject({ ok: false, error: 'authentication_failed' });
+  // le message précède la fin du tour
+  const iMessage = events.findIndex((e) => e.type === 'message' && e.role === 'assistant');
+  const iFin = events.findIndex((e) => e.type === 'turn_end');
+  expect(iMessage).toBeLessThan(iFin);
+});
+
+test('result success avec is_error: true sans error préalable : ok false, error = subtype', async () => {
+  const { driver: d, events } = start({ sessionId: randomUUID() });
+
+  d.send('is_error seul');
+  await waitFor(() => turnEnds(events).length === 1, 5000, 'fin du tour');
+  expect(turnEnds(events)[0]).toMatchObject({ ok: false, error: 'success' });
+});
+
+test('non-régression : un success normal reste ok, et l’erreur d’un tour ne déborde pas sur le suivant', async () => {
+  const { driver: d, events } = start({ sessionId: randomUUID() });
+
+  d.send('connexion expiree');
+  await waitFor(() => turnEnds(events).length === 1, 5000, 'tour en erreur');
+  expect(turnEnds(events)[0]).toMatchObject({ ok: false, error: 'authentication_failed' });
+
+  d.send('bonjour');
+  await waitFor(() => turnEnds(events).length === 2, 5000, 'tour normal');
+  expect(turnEnds(events)[1]).toMatchObject({ ok: true, error: undefined });
+
+  // is_error sans error préalable juste après : l'erreur mémorisée du premier tour ne revient pas
+  d.send('connexion expiree');
+  await waitFor(() => turnEnds(events).length === 3, 5000, 'second tour en erreur');
+  d.send('is_error seul');
+  await waitFor(() => turnEnds(events).length === 4, 5000, 'is_error seul');
+  expect(turnEnds(events)[3]).toMatchObject({ ok: false, error: 'success' });
+});

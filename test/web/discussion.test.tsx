@@ -458,3 +458,27 @@ test('chantier 19, S.6 : confirmation modifiée pendant que l’agent tourne —
   await waitFor(() => expect(node('discussion.titre')?.textContent).toBe('Déploiement'));
   expect(node('discussion.confirmation-perimee')).toBeNull();
 });
+
+test('turn_end authentication_failed (distant) : consigne /login sur le serveur à la place de « Tour en erreur »', async () => {
+  ouvrir('/serveurs/srv_1/discussions/sd_1');
+  const s = await fil();
+  pousser(s, [
+    { seq: 1, at: 't', event: { type: 'message', role: 'user', text: 'Q' } },
+    {
+      seq: 2,
+      at: 't',
+      event: {
+        type: 'message',
+        role: 'assistant',
+        text: 'Failed to authenticate: OAuth session expired and could not be refreshed',
+      },
+    },
+    { seq: 3, at: 't', event: { type: 'turn_end', ok: false, error: 'authentication_failed' } },
+  ]);
+  expect(
+    await screen.findByText(
+      'claude n’est pas connecté sur vps-ovh : ouvre un terminal ssh sur vps-ovh, lance claude puis /login, et renvoie ton message.',
+    ),
+  ).toBeTruthy();
+  expect(screen.queryByText(/Tour en erreur/)).toBeNull();
+});

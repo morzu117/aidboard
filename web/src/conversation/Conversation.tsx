@@ -21,7 +21,7 @@ import { MarkRail, type QuestionRepere } from './MarkRail.js';
 import { Message } from './Message.js';
 import { useAgentRoutes } from './routes.js';
 import { ToolCallGroup } from './ToolCallGroup.js';
-import { buildTurns, tourInterrompu } from './thread.js';
+import { buildTurns, tourInterrompu, tourNonConnecte } from './thread.js';
 import type { Block } from './thread.js';
 
 const message = (err: unknown) => (err instanceof Error ? err.message : String(err));
@@ -482,7 +482,8 @@ export function Conversation({
                       <p className="texte-discret" key={bn} data-node={bn}>
                         {tourInterrompu(b.error)
                           ? 'Tour interrompu'
-                          : `Tour en erreur : ${b.error}`}
+                          : (tourNonConnecte(b.error, agent.kind, distant?.serveur) ??
+                            `Tour en erreur : ${b.error}`)}
                       </p>
                     );
                   case 'exit':
