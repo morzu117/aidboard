@@ -181,6 +181,53 @@ test('pause : le groupe est stoppé (état T), reprise, refus en double ; arrêt
   expect(Date.now() - t0).toBeLessThan(2500);
 });
 
+test('pause perdue : un agent en pause qui écrit encore est restoppé ; repris, il n’est plus restoppé', async () => {
+  const { live, inject, out } = await spawn('shell');
+  const pid = live.pty.pid;
+  const stat = () => execFileSync('ps', ['-o', 'stat=', '-p', String(pid)], { encoding: 'utf8' });
+  const ticks = () => out().match(/tick \d+/g)?.length ?? 0;
+  try {
+    // `exec` : le shell devient un écrivain continu, sans contrôle de tâches (même groupe que ses `sleep`)
+    live.pty.write(
+      `exec /bin/sh -c 'i=0; while :; do i=$((i+1)); echo "tick $i"; sleep 0.05; done'\r`,
+    );
+    await waitFor(() => ticks() >= 3, 5000, 'écrit en continu');
+    expect((await inject('POST', 'pause')).statusCode).toBe(202);
+    await waitFor(() => stat().includes('T'), 3000, 'stoppé');
+    // le signal perdu, simulé : le groupe repart sans qu'A-I-D le sache
+    const avant = ticks();
+    process.kill(-pid, 'SIGCONT');
+    await waitFor(() => ticks() > avant, 3000, 'réécrit après le SIGCONT extérieur');
+    await waitFor(() => stat().includes('T'), 3000, 'restoppé par A-I-D');
+    await new Promise((r) => setTimeout(r, 200));
+    const fige = ticks();
+    await new Promise((r) => setTimeout(r, 500));
+    expect(ticks()).toBe(fige);
+    expect(stat()).toContain('T');
+    // la reprise par l'API relance, et un agent repris qui écrit n'est pas restoppé
+    expect((await inject('POST', 'resume')).statusCode).toBe(202);
+    let vuT = false;
+    await waitFor(
+      () => {
+        if (stat().includes('T')) vuT = true;
+        return ticks() >= fige + 20;
+      },
+      5000,
+      '20 nouvelles lignes après la reprise',
+    );
+    expect(vuT).toBe(false);
+    expect(stat()).not.toContain('T');
+    expect(live.paused).toBe(false);
+  } finally {
+    try {
+      process.kill(-pid, 'SIGKILL');
+    } catch {
+      // déjà sorti
+    }
+  }
+  // le démarrage du daemon de test, sous la charge du gate, mange déjà une bonne part des 5 s par défaut
+}, 15_000);
+
 test('un agent ne pilote rien : ces routes refusent le token de run', async () => {
   const { agent, inject } = await spawn('shell');
   const h = {
