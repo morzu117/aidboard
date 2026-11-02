@@ -357,6 +357,9 @@ export class AgentManager {
     };
     const log = new LogWriter(join(paths.logs, `${agentId}.log`), config.terminal.logMaxBytes);
     pty.onData((chunk) => {
+      // un agent en pause qui écrit encore n'est pas stoppé : sous macOS, un SIGSTOP reçu pendant
+      // l'exec du spawn-helper de node-pty est perdu. Le signal est renvoyé (sans effet s'il l'est déjà).
+      if (live.paused) signalGroup(live, 'SIGSTOP');
       live.lastOutputAt = Date.now();
       log.write(chunk);
       live.mirror.write(chunk);
