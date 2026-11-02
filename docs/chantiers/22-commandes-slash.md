@@ -136,3 +136,16 @@ faux agents `test/fixtures/fake-claude-stream.mjs` et `fake-codex-appserver.mjs`
     sous-chaîne, ou sans l'ordre préfixe d'abord ; (d) `reglageDe` sans la comparaison par libellé ;
     (e) Entrée complète toujours.
   - Lignes existantes modifiées : aucune.
+- **B.1 bis (2026-11-02) — `/model` remet l'effort au défaut, comme le chip.** Le daemon local valide les
+  réglages fusionnés : `{ model }` seul, vers un modèle qui ne connaît pas l'effort courant, répondait 422
+  « effort inconnu ». Le menu du chip envoie déjà `effort: null` dans ce cas. `reglageDe` fait désormais de même :
+  si un effort est posé et que le nouveau modèle annonce des efforts qui ne le contiennent pas, le patch est
+  `{ model, effort: null }` et l'avis « Modèle : <libellé> (effort : par défaut) ». Seul codex local était touché :
+  les modèles de claude partagent leurs efforts, et le daemon distant ne valide que les champs envoyés.
+  - Tests : `test/web/commandes.test.ts` (effort inconnu du nouveau modèle, effort connu, modèle sans efforts,
+    aucun effort courant), `test/commandes-slash.test.ts` (« settings (B.1 bis) » : sur un codex local, `{ model }`
+    seul répond 422, le patch de `reglageDe` est accepté). Sous `FAKE_CODEX_MODELE_MINI=1`, le faux codex annonce
+    un second modèle visible, `gpt-mini`, qui ne connaît que `low`.
+  - Mutations vérifiées, chacune casse au moins un test :
+    (a) sans la condition `!m.efforts.includes(courant.effort)` ; (b) sans le bloc entier.
+  - Lignes existantes modifiées : aucune.

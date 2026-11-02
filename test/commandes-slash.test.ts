@@ -8,6 +8,7 @@ import {
 } from '../src/shared/agentSettings.js';
 import { waitFor } from './helpers/daemon.js';
 import { type Ctx, makeTopic, setupWorkspace } from './helpers/topics.js';
+import { reglageDe } from '../web/src/conversation/commandes.js';
 
 /** Chantier 22 (A.1) : le contrat des commandes `/` et les commandes de claude exposées dans `options`. */
 const STREAM_BIN = join(import.meta.dirname, 'fixtures/bin-stream');
@@ -224,4 +225,45 @@ test('input (A.3, D81) : claude reçoit `/compact` tel quel, comme tout message'
   const agent = await spawnClaude();
   c!.t.d.agents.input(agent.id, '/compact');
   await waitFor(() => assistantDit(agent.id, 'echo: /compact'), 5000, '`/compact` reçu par claude');
+});
+
+test('settings (B.1 bis) : le patch de `/model` vers un modèle qui ne connaît pas l’effort courant est accepté', async () => {
+  process.env.FAKE_CODEX_MODELE_MINI = '1';
+  try {
+    const agent = await spawnCodex();
+    await waitFor(
+      () => c!.t.d.agents.options(agent.id).models.length === 2,
+      5000,
+      'catalogue à deux modèles',
+    );
+    const patch = (payload: unknown) =>
+      c!.t.d.app.inject({
+        method: 'PATCH',
+        url: `/api/agents/${agent.id}/settings`,
+        headers: c!.t.headers,
+        payload: payload as never,
+      });
+    const courant = { mode: 'default' as const, model: 'gpt-fake', effort: 'high' };
+    expect((await patch({ model: 'gpt-fake', effort: 'high' })).statusCode).toBe(200);
+
+    // `{ model }` seul garderait `high`, que gpt-mini ne connaît pas : le daemon refuse
+    const seul = await patch({ model: 'gpt-mini' });
+    expect(seul.statusCode).toBe(422);
+    expect(seul.body).toContain('effort inconnu : high');
+
+    const r = reglageDe(
+      { name: 'model', args: 'gpt-mini' },
+      c!.t.d.agents.options(agent.id),
+      courant,
+    );
+    expect(r).toEqual({
+      patch: { model: 'gpt-mini', effort: null },
+      avis: 'Modèle : GPT-MINI (effort : par défaut)',
+    });
+    const ok = await patch((r as { patch: unknown }).patch);
+    expect(ok.statusCode).toBe(200);
+    expect(ok.json()).toEqual({ mode: 'default', model: 'gpt-mini', effort: null });
+  } finally {
+    delete process.env.FAKE_CODEX_MODELE_MINI;
+  }
 });

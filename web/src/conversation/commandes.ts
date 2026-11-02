@@ -57,6 +57,12 @@ export function reglageDe(c: CommandeAid, o: AgentOptions, courant: AgentSetting
       return {
         erreur: `Modèle inconnu : ${c.args}. Possibles : ${['défaut', ...possibles].join(', ')}`,
       };
+    // comme le chip : un effort que le nouveau modèle ne connaît pas repasse au défaut (sinon 422)
+    if (courant.effort && m.efforts.length > 0 && !m.efforts.includes(courant.effort))
+      return {
+        patch: { model: m.id, effort: null },
+        avis: `Modèle : ${m.label} (effort : par défaut)`,
+      };
     return { patch: { model: m.id }, avis: `Modèle : ${m.label}` };
   }
   if (c.name === 'effort') {

@@ -138,6 +138,29 @@ test('reglageDe /model : défaut, default ou Défaut remettent le modèle de la 
     });
 });
 
+test('reglageDe /model : un effort que le nouveau modèle ne connaît pas repasse au défaut, comme le chip', () => {
+  const haut = { ...DEFAUT, model: 'gpt-nu', effort: 'high' };
+  expect(reglageDe(cmd('model', 'gpt-mini'), CODEX, haut)).toEqual({
+    patch: { model: 'gpt-mini', effort: null },
+    avis: 'Modèle : GPT Mini (effort : par défaut)',
+  });
+  // effort connu du nouveau modèle : il reste, le patch n'y touche pas
+  expect(reglageDe(cmd('model', 'gpt-mini'), CODEX, { ...haut, effort: 'low' })).toEqual({
+    patch: { model: 'gpt-mini' },
+    avis: 'Modèle : GPT Mini',
+  });
+  // nouveau modèle sans efforts annoncés : ceux de l'agent valent, l'effort reste
+  expect(reglageDe(cmd('model', 'gpt-nu'), CODEX, { ...haut, model: 'gpt-mini' })).toEqual({
+    patch: { model: 'gpt-nu' },
+    avis: 'Modèle : GPT nu',
+  });
+  // pas d'effort courant : rien à remettre
+  expect(reglageDe(cmd('model', 'gpt-mini'), CODEX, { ...haut, effort: null })).toEqual({
+    patch: { model: 'gpt-mini' },
+    avis: 'Modèle : GPT Mini',
+  });
+});
+
 test('reglageDe /model : inconnu ou sans argument, une erreur qui liste les possibles', () => {
   expect(reglageDe(cmd('model', 'gpt'), CLAUDE, DEFAUT)).toEqual({
     erreur: 'Modèle inconnu : gpt. Possibles : défaut, fable, opus, sonnet, haiku',

@@ -15,6 +15,8 @@ const FAIL_SKILLS_LIST = process.env.FAKE_CODEX_FAIL_SKILLS_LIST === '1';
 const FAIL_COMPACT = process.env.FAKE_CODEX_FAIL_COMPACT === '1';
 // Chantier 22 (A.3) : une skill nommée `compact` s'ajoute à `skills/list` — la commande d'A-I-D doit primer.
 const SKILL_COMPACT = process.env.FAKE_CODEX_SKILL_COMPACT === '1';
+// Chantier 22 (B.1 bis) : un second modèle visible, `gpt-mini`, qui ne connaît que l'effort `low`.
+const MODELE_MINI = process.env.FAKE_CODEX_MODELE_MINI === '1';
 
 // Chantier 22 (A.2) : les skills annoncées, au format de `skills/list` — une activée avec `interface.shortDescription`,
 // une avec la seule `shortDescription`, une avec la seule `description`, une sans description, une désactivée, un
@@ -432,6 +434,13 @@ rl.on('line', (line) => {
       defaultReasoningEffort: 'low',
       supportedReasoningEfforts: efforts,
     });
+    if (MODELE_MINI) {
+      const mini = { ...model('gpt-mini', false), isDefault: false };
+      mini.supportedReasoningEfforts = [efforts[0]];
+      const data = [model('gpt-fake', false), mini, model('gpt-cache', true)];
+      emit({ id: msg.id, result: { data, nextCursor: null } });
+      return;
+    }
     emit({
       id: msg.id,
       result: { data: [model('gpt-fake', false), model('gpt-cache', true)], nextCursor: null },
