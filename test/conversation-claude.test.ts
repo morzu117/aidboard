@@ -336,3 +336,52 @@ test('non-régression : un success normal reste ok, et l’erreur d’un tour ne
   await waitFor(() => turnEnds(events).length === 4, 5000, 'is_error seul');
   expect(turnEnds(events)[3]).toMatchObject({ ok: false, error: 'success' });
 });
+
+test('is_error avec un texte result et sans error préalable : error = ce texte, sans les espaces aux extrémités', async () => {
+  const { driver: d, events } = start({ sessionId: randomUUID() });
+
+  d.send('is_error texte');
+  await waitFor(() => turnEnds(events).length === 1, 5000, 'fin du tour');
+  expect(turnEnds(events)[0]).toMatchObject({ ok: false, error: 'Credit balance is too low' });
+});
+
+test('is_error avec un result vide, fait d’espaces ou qui n’est pas une chaîne : error = subtype', async () => {
+  const { driver: d, events } = start({ sessionId: randomUUID() });
+
+  d.send('is_error vide');
+  await waitFor(() => turnEnds(events).length === 1, 5000, 'result vide');
+  d.send('is_error espaces');
+  await waitFor(() => turnEnds(events).length === 2, 5000, 'result fait d’espaces');
+  d.send('is_error non texte');
+  await waitFor(() => turnEnds(events).length === 3, 5000, 'result pas une chaîne');
+  for (const fin of turnEnds(events)) expect(fin).toMatchObject({ ok: false, error: 'success' });
+});
+
+test('subtype d’échec sans is_error ni result : error = subtype, comme avant', async () => {
+  const { driver: d, events } = start({ sessionId: randomUUID() });
+
+  d.send('max turns');
+  await waitFor(() => turnEnds(events).length === 1, 5000, 'fin du tour');
+  expect(turnEnds(events)[0]).toMatchObject({ ok: false, error: 'error_max_turns' });
+});
+
+test('authentication_failed reste prioritaire sur le texte result, et un texte ne déborde pas sur le tour suivant', async () => {
+  const { driver: d, events } = start({ sessionId: randomUUID() });
+
+  d.send('is_error texte');
+  await waitFor(() => turnEnds(events).length === 1, 5000, 'texte result');
+  d.send('connexion expiree');
+  await waitFor(() => turnEnds(events).length === 2, 5000, 'connexion expirée');
+  expect(turnEnds(events)[1]).toMatchObject({ ok: false, error: 'authentication_failed' });
+  d.send('is_error seul');
+  await waitFor(() => turnEnds(events).length === 3, 5000, 'is_error seul');
+  expect(turnEnds(events)[2]).toMatchObject({ ok: false, error: 'success' });
+});
+
+test('success sans is_error, même avec un texte result : ok, sans erreur', async () => {
+  const { driver: d, events } = start({ sessionId: randomUUID() });
+
+  d.send('success avec texte');
+  await waitFor(() => turnEnds(events).length === 1, 5000, 'fin du tour');
+  expect(turnEnds(events)[0]).toMatchObject({ ok: true, error: undefined });
+});

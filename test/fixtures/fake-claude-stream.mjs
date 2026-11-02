@@ -117,6 +117,40 @@ async function handleTurn(text) {
     return;
   }
 
+  // `is_error: true` sans `error` préalable, avec un `result` : texte, vide, espaces seuls ou pas une chaîne.
+  const resultsEnErreur = {
+    'is_error texte': '  Credit balance is too low\n',
+    'is_error vide': '',
+    'is_error espaces': '   \n\t ',
+    'is_error non texte': { message: 'pas une chaîne' },
+  };
+  if (Object.hasOwn(resultsEnErreur, text)) {
+    emit({
+      type: 'result',
+      subtype: 'success',
+      is_error: true,
+      result: resultsEnErreur[text],
+      session_id: sessionId,
+    });
+    return;
+  }
+
+  // `subtype` d'échec sans `is_error` ni `result`.
+  if (text === 'max turns') {
+    emit({ type: 'result', subtype: 'error_max_turns', session_id: sessionId });
+    return;
+  }
+
+  // `success` normal accompagné d'un texte `result`, sans `is_error`.
+  if (text === 'success avec texte') {
+    emit({
+      type: 'assistant',
+      message: { role: 'assistant', content: [{ type: 'text', text: 'fait' }] },
+    });
+    emit({ type: 'result', subtype: 'success', result: 'fait', session_id: sessionId });
+    return;
+  }
+
   if (text === 'demande permission') {
     const requestId = `req-${++reqCounter}`;
     const toolUseId = `tool-${reqCounter}`;
