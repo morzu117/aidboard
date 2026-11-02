@@ -1533,3 +1533,42 @@ test('chantier 20, M.5 : historique écrit avant le masquage — masqué une foi
     ).payload,
   ).toContain(jeton);
 }, 60_000);
+
+test('options (22 A.2) : les skills de codex sur le serveur, après les commandes d’A-I-D ; `/skill-x` en entrée skill', async () => {
+  const m = await daemon(serveur());
+  const s = await creerServeur(m);
+  const a = (await creerDiscussion(m, s.id, 'codex')).agents[0]!;
+  const commandes = async () =>
+    (await m.req('GET', `/api/server-agents/${a.id}/options`)).json<{
+      commands: { name: string; description: string; source: string }[];
+    }>().commands;
+  const aid = ['model', 'effort', 'mode', 'compact', 'stop', 'aide'];
+  // `skills/list` part après la poignée de main du relais : la route est interrogée jusqu'à ce qu'elles arrivent
+  let vues = await commandes();
+  for (const debut = Date.now(); vues.length <= aid.length && Date.now() - debut < 15_000;)
+    vues = await new Promise((r) => setTimeout(r, 50)).then(commandes);
+  expect(vues.map((x) => x.name)).toEqual([
+    ...aid,
+    'skill-x',
+    'courte',
+    'longue-seule',
+    'sans-description',
+  ]);
+  expect(vues.filter((x) => x.source === 'agent')).toEqual([
+    { name: 'skill-x', description: 'Fait x', source: 'agent' },
+    { name: 'courte', description: 'Résumé court', source: 'agent' },
+    { name: 'longue-seule', description: 'Seulement la longue', source: 'agent' },
+    { name: 'sans-description', description: 'Skill de codex', source: 'agent' },
+  ]);
+
+  await envoyer(m, a.id, '/skill-x des arguments');
+  const entree = [
+    { type: 'skill', name: 'skill-x', path: '/skills/skill-x/SKILL.md' },
+    { type: 'text', text: 'des arguments' },
+  ];
+  await waitFor(
+    () => assistant(m, a.id, `echo: entree ${JSON.stringify(entree)}`) === 1,
+    15_000,
+    'entrée skill sur le serveur',
+  );
+});

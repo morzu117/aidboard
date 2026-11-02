@@ -9,6 +9,72 @@ const emit = (obj) => process.stdout.write(JSON.stringify(obj) + '\n');
 // Déclenché par variable d'env : `thread/start` répond une erreur JSON-RPC au lieu d'un résultat
 // (review A.2, bloquant — reproduit un `cwd` invalide ou une `approvalPolicy` rejetée).
 const FAIL_THREAD_START = process.env.FAKE_CODEX_FAIL_THREAD_START === '1';
+// Chantier 22 (A.2) : `skills/list` répond une erreur JSON-RPC, comme une version de codex qui ne la connaît pas.
+const FAIL_SKILLS_LIST = process.env.FAKE_CODEX_FAIL_SKILLS_LIST === '1';
+
+// Chantier 22 (A.2) : les skills annoncées, au format de `skills/list` — une activée avec `interface.shortDescription`,
+// une avec la seule `shortDescription`, une avec la seule `description`, une sans description, une désactivée, un
+// doublon, et des entrées invalides que le pilote doit écarter.
+const SKILLS = [
+  {
+    name: 'skill-x',
+    description: 'Description longue de skill-x',
+    shortDescription: 'Courte héritée',
+    interface: { displayName: 'Skill X', shortDescription: 'Fait x' },
+    path: '/skills/skill-x/SKILL.md',
+    scope: 'user',
+    enabled: true,
+  },
+  {
+    name: 'courte',
+    description: 'Longue de courte',
+    shortDescription: 'Résumé court',
+    interface: null,
+    path: '/skills/courte/SKILL.md',
+    scope: 'repo',
+    enabled: true,
+  },
+  {
+    name: 'longue-seule',
+    description: 'Seulement la longue',
+    interface: { shortDescription: '  ' },
+    path: '/skills/longue-seule/SKILL.md',
+    scope: 'user',
+    enabled: true,
+  },
+  {
+    name: 'sans-description',
+    description: '',
+    path: '/skills/sans-description/SKILL.md',
+    scope: 'repo',
+    enabled: true,
+  },
+  {
+    name: 'desactivee',
+    description: 'Désactivée',
+    path: '/skills/desactivee/SKILL.md',
+    scope: 'user',
+    enabled: false,
+  },
+  {
+    name: 'skill-x',
+    description: 'Doublon',
+    interface: { shortDescription: 'Doublon de skill-x' },
+    path: '/systeme/skill-x/SKILL.md',
+    scope: 'system',
+    enabled: true,
+  },
+  {
+    name: 'avec espace',
+    description: 'Nom invalide',
+    path: '/skills/avec-espace/SKILL.md',
+    enabled: true,
+  },
+  { name: 'sans-chemin', description: 'Pas de path', enabled: true },
+  { description: 'Pas de nom', path: '/skills/anonyme/SKILL.md', enabled: true },
+  null,
+  'pas un objet',
+];
 
 // Ligne reconnaissable pour que le test vérifie les arguments reçus (`app-server` + extraArgs).
 emit({ type: 'fake_args', args: process.argv.slice(2) });
@@ -357,9 +423,28 @@ rl.on('line', (line) => {
     return;
   }
 
+  // chantier 22 (A.2) : une entrée par dossier demandé ; sans `cwds`, aucune skill.
+  if (msg.method === 'skills/list') {
+    if (FAIL_SKILLS_LIST) {
+      emit({ id: msg.id, error: { code: -32601, message: 'Method not found: skills/list' } });
+      return;
+    }
+    const cwds = Array.isArray(msg.params?.cwds) ? msg.params.cwds : [];
+    emit({
+      id: msg.id,
+      result: { data: cwds.map((cwd) => ({ cwd, errors: [], skills: SKILLS })) },
+    });
+    return;
+  }
+
   if (msg.method === 'turn/start') {
     const text = msg.params?.input?.[0]?.text;
     turnApprovalPolicy = msg.params?.approvalPolicy ?? null;
+    // chantier 22 (A.2) : une entrée `skill`, ou un texte en `/`, renvoie l'`input` reçu tel quel pour que le test le lise.
+    if ((msg.params?.input ?? []).some((i) => i.type === 'skill') || text?.startsWith('/')) {
+      void runTurn(msg.id, msg.params.threadId, `entree ${JSON.stringify(msg.params.input)}`);
+      return;
+    }
     const images = (msg.params?.input ?? []).filter((i) => i.type === 'localImage');
     if (images.length > 0) {
       const vus = images.map((i) => i.path).join(',');

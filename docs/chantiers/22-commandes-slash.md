@@ -68,3 +68,21 @@ faux agents `test/fixtures/fake-claude-stream.mjs` et `fake-codex-appserver.mjs`
     (e) sans `!live.exited` dans `manager.ts` (casse les tests « agent arrêté » et « pilote sorti »).
   - Lignes existantes modifiées : 4, toutes en production. Ce sont la signature et le `return`
     d'`agentOptions`, l'appel dans `pty/manager.ts` et l'appel dans `remote/agents.ts`.
+- **A.2 (2026-11-02) — commandes de codex.** `CodexDriver.loadSkills()` part après `loadCatalog()` à la poignée
+  de main : `skills/list { cwds: [cwd] }`. Il garde les skills activées, au nom sans espace, avec un `path`, sans
+  doublon. La description est `interface.shortDescription`, sinon `shortDescription`, sinon `description`, sinon
+  « Skill de codex ». Un échec de la requête est silencieux : seules les commandes d'A-I-D restent.
+  `commands()` rend les skills sans leur chemin. Dans `send`, `/<skill connue> arguments` devient l'entrée
+  `turn/start` `[{ type: 'skill', name, path }, { type: 'text', text: arguments }, …localImage]`. Le texte est
+  omis s'il est vide et porte les chemins des pièces jointes. La file d'attente est respectée ; un `/inconnu`
+  part en texte tel quel (D85).
+  - Tests : `test/conversation-codex.test.ts` (« skills (A.2) » : liste filtrée, entrée skill avec et sans
+    arguments, texte tel quel, pièces jointes, file pendant un tour, `skills/list` en erreur),
+    `test/commandes-slash.test.ts` (options et entrée skill d'un codex local, agent arrêté),
+    `test/server-discussions.test.ts` (« options (22 A.2) »). Le faux codex répond à `skills/list`, en erreur
+    sous `FAKE_CODEX_FAIL_SKILLS_LIST=1`, et renvoie en écho l'`input` d'un `turn/start` qui porte une skill
+    ou commence par `/`.
+  - Mutations vérifiées, chacune casse au moins un test :
+    (a) sans le filtre `enabled !== false` ; (b) sans le dédoublonnage ; (c) `send` sans la branche skill ;
+    (d) l'entrée skill sans le texte des arguments ; (e) `loadSkills()` non appelé.
+  - Lignes existantes modifiées : aucune.

@@ -388,3 +388,137 @@ test('commande d’une approbation (revue R.5) : enveloppe ouverte, sinon telle 
   expect(commandOf({ commandActions: [] })).toBeUndefined();
   expect(commandOf(undefined)).toBeUndefined();
 });
+
+/** Chantier 22 (A.2, D84) : les skills de `skills/list`, filtrées, et ce que la fausse app-server lit au `turn/start`. */
+const SKILLS_ATTENDUES = [
+  { name: 'skill-x', description: 'Fait x', source: 'agent' },
+  { name: 'courte', description: 'Résumé court', source: 'agent' },
+  { name: 'longue-seule', description: 'Seulement la longue', source: 'agent' },
+  { name: 'sans-description', description: 'Skill de codex', source: 'agent' },
+];
+const SKILL_X = { type: 'skill', name: 'skill-x', path: '/skills/skill-x/SKILL.md' };
+
+/** L'`input` reçu par le faux `turn/start`, renvoyé en écho par le fixture (dernier tour d'abord). */
+const entreeVue = (events: ConversationEvent[]): unknown[] | undefined => {
+  const m = events.findLast((e) => e.type === 'message' && e.text.startsWith('echo: entree ')) as
+    Extract<ConversationEvent, { type: 'message' }> | undefined;
+  return m ? (JSON.parse(m.text.slice('echo: entree '.length)) as unknown[]) : undefined;
+};
+
+async function avecSkills() {
+  const r = start({ sessionId: randomUUID() });
+  await waitFor(() => r.driver.commands().length > 0, 5000, 'skills de codex');
+  return r;
+}
+
+async function tour(d: CodexDriver, events: ConversationEvent[], text: string) {
+  const before = events.length;
+  d.send(text);
+  await waitFor(
+    () => events.slice(before).some((e) => e.type === 'turn_end'),
+    5000,
+    `tour « ${text} »`,
+  );
+  return entreeVue(events.slice(before));
+}
+
+test('skills (A.2) : skills/list après la poignée de main, désactivées, doublons et invalides écartés', async () => {
+  const { driver: d } = await avecSkills();
+  expect(d.commands()).toEqual(SKILLS_ATTENDUES);
+  // le chemin, utile au seul `turn/start`, ne sort pas du pilote
+  expect(d.commands().some((c) => 'path' in c)).toBe(false);
+});
+
+test('skills (A.2) : `/skill-x des arguments` → entrée skill puis texte ; `/skill-x` seul → skill sans texte', async () => {
+  const { driver: d, events } = await avecSkills();
+  expect(await tour(d, events, '/skill-x des arguments')).toEqual([
+    SKILL_X,
+    { type: 'text', text: 'des arguments' },
+  ]);
+  expect(await tour(d, events, '  /skill-x\n  sur deux\nlignes  ')).toEqual([
+    SKILL_X,
+    { type: 'text', text: 'sur deux\nlignes' },
+  ]);
+  expect(await tour(d, events, '/skill-x')).toEqual([SKILL_X]);
+  expect(await tour(d, events, '/skill-x   ')).toEqual([SKILL_X]);
+  expect(await tour(d, events, '/sans-description go')).toEqual([
+    { type: 'skill', name: 'sans-description', path: '/skills/sans-description/SKILL.md' },
+    { type: 'text', text: 'go' },
+  ]);
+});
+
+test('skills (A.2, D85) : `/inconnu foo`, une skill désactivée ou un `/` seul partent en texte tel quel', async () => {
+  const { driver: d, events } = await avecSkills();
+  expect(await tour(d, events, '/inconnu foo')).toEqual([{ type: 'text', text: '/inconnu foo' }]);
+  expect(await tour(d, events, '/desactivee bar')).toEqual([
+    { type: 'text', text: '/desactivee bar' },
+  ]);
+  expect(await tour(d, events, '/ skill-x')).toEqual([{ type: 'text', text: '/ skill-x' }]);
+  // le nom au milieu du texte n'est pas une commande
+  expect(await tour(d, events, 'voir /skill-x')).toBeUndefined();
+  expect(events.some((e) => e.type === 'message' && e.text === 'echo: voir /skill-x')).toBe(true);
+});
+
+test('skills (A.2) : les pièces jointes suivent l’entrée skill — chemins dans le texte, images en localImage', async () => {
+  const { driver: d, events } = await avecSkills();
+  const files = [
+    { path: '/tmp/a.png', name: 'a.png', type: 'image/png' },
+    { path: '/tmp/b.pdf', name: 'b.pdf', type: 'application/pdf' },
+  ];
+  const before = events.length;
+  d.send('/skill-x lis', files);
+  await waitFor(() => events.slice(before).some((e) => e.type === 'turn_end'), 5000, 'tour');
+  expect(entreeVue(events.slice(before))).toEqual([
+    SKILL_X,
+    { type: 'text', text: 'lis\n\nPièces jointes (à lire à ces chemins) :\n- /tmp/b.pdf' },
+    { type: 'localImage', path: '/tmp/a.png' },
+  ]);
+});
+
+test('skills (A.2) : un `/skill-x` envoyé pendant un tour part au tour suivant, en entrée skill', async () => {
+  const { driver: d, events } = await avecSkills();
+  d.send('tour long');
+  await waitFor(() => events.some((e) => e.type === 'session'), 5000, 'session établie');
+  d.send('/skill-x en file');
+  expect(entreeVue(events)).toBeUndefined();
+
+  d.interrupt();
+  await waitFor(
+    () => entreeVue(events) !== undefined,
+    5000,
+    'skill en file envoyée après le tour long',
+  );
+  expect(entreeVue(events)).toEqual([SKILL_X, { type: 'text', text: 'en file' }]);
+  const fin = events.findIndex((e) => e.type === 'turn_end' && e.ok === false);
+  const echo = events.findIndex((e) => e.type === 'message' && e.text.startsWith('echo: entree '));
+  expect(fin).toBeGreaterThanOrEqual(0);
+  expect(echo).toBeGreaterThan(fin);
+});
+
+test('skills (A.2) : `skills/list` en erreur (vieille version) → aucune skill, le pilote continue', async () => {
+  const events: ConversationEvent[] = [];
+  driver = new CodexDriver({
+    bin: FAKE_CODEX,
+    cwd: process.cwd(),
+    env: { ...agentEnv(process.env, [], {}), FAKE_CODEX_FAIL_SKILLS_LIST: '1' },
+    sessionId: randomUUID(),
+    resume: false,
+  });
+  driver.onEvent((e) => events.push(e));
+  driver.start();
+  // la réponse en erreur précède celle du premier `turn/start` : à la fin du tour, elle est arrivée
+  expect(await tour(driver, events, '/skill-x des arguments')).toEqual([
+    { type: 'text', text: '/skill-x des arguments' },
+  ]);
+  expect(driver.commands()).toEqual([]);
+  expect(events.some((e) => e.type === 'exit')).toBe(false);
+  await waitFor(() => driver!.catalog().length > 0, 5000, 'catalogue malgré l’erreur');
+  const before = events.length;
+  driver.send('bonjour');
+  await waitFor(
+    () => events.slice(before).some((e) => e.type === 'turn_end'),
+    5000,
+    'tour suivant',
+  );
+  expect(events.some((e) => e.type === 'message' && e.text === 'echo: bonjour')).toBe(true);
+});

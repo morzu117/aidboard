@@ -162,3 +162,49 @@ test('options (A.1) : un agent dont le pilote est sorti n’a plus que les comma
   await waitFor(() => c!.t.d.agents.getStream(agent.id)?.exited === true, 5000, 'sortie');
   expect(await commandsOf(agent.id)).toEqual(AID_COMMANDS);
 });
+
+/** Chantier 22 (A.2, D84) : ce que la fausse app-server annonce à `skills/list`, une fois filtré (désactivée, doublon, invalides). */
+const CODEX_ATTENDUES: AgentCommand[] = [
+  { name: 'skill-x', description: 'Fait x', source: 'agent' },
+  { name: 'courte', description: 'Résumé court', source: 'agent' },
+  { name: 'longue-seule', description: 'Seulement la longue', source: 'agent' },
+  { name: 'sans-description', description: 'Skill de codex', source: 'agent' },
+];
+
+async function spawnCodex() {
+  process.env.PATH = `${STREAM_BIN}${delimiter}${saved.PATH}`;
+  c = await setupWorkspace({ config: { agents: { transport: 'stream' } } });
+  const topic = await makeTopic(c);
+  const agent = c.t.d.agents.spawn({ topicId: topic.topicId, kind: 'codex' });
+  await waitFor(
+    () => c!.t.d.agents.options(agent.id).commands.length > AID_COMMANDS.length,
+    5000,
+    'skills de codex',
+  );
+  return agent;
+}
+
+test('options (A.2) : un codex vivant a les commandes d’A-I-D puis ses skills, filtrées, avec leur description', async () => {
+  const agent = await spawnCodex();
+  const commands = await commandsOf(agent.id);
+  expect(commands).toEqual([...AID_COMMANDS, ...CODEX_ATTENDUES]);
+  expect(new Set(commands.map((x) => x.name)).size).toBe(commands.length);
+  expect(commands.map((x) => x.name)).not.toContain('desactivee');
+
+  await c!.t.d.agents.stop(agent.id, 'user');
+  expect(await commandsOf(agent.id)).toEqual(AID_COMMANDS);
+});
+
+test('input (A.2) : `/skill-x des arguments` arrive à codex en entrée skill, `/inconnu foo` en texte', async () => {
+  const agent = await spawnCodex();
+  const skill = { type: 'skill', name: 'skill-x', path: '/skills/skill-x/SKILL.md' };
+  const echo = (entree: unknown[]) => `echo: entree ${JSON.stringify(entree)}`;
+
+  c!.t.d.agents.input(agent.id, '/skill-x des arguments');
+  const avecTexte = echo([skill, { type: 'text', text: 'des arguments' }]);
+  await waitFor(() => assistantDit(agent.id, avecTexte), 5000, 'entrée skill');
+
+  c!.t.d.agents.input(agent.id, '/inconnu foo');
+  const texte = echo([{ type: 'text', text: '/inconnu foo' }]);
+  await waitFor(() => assistantDit(agent.id, texte), 5000, 'texte tel quel');
+});
