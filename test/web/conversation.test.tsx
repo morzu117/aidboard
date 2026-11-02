@@ -776,3 +776,22 @@ test('turn_end authentication_failed (local) : consigne /login à la place de «
   ).toBeTruthy();
   expect(screen.queryByText(/Tour en erreur/)).toBeNull();
 });
+
+test('turn_end dont l’erreur est un texte libre : « Tour en erreur : <texte> »', async () => {
+  mount(streamAgent());
+  const ws = FakeWs.all.at(-1)!;
+  ws.onopen?.();
+  ws.text({
+    t: 'history',
+    truncated: false,
+    items: [
+      { seq: 1, at: 't1', event: { type: 'message', role: 'user', text: 'Q1' } },
+      {
+        seq: 2,
+        at: 't2',
+        event: { type: 'turn_end', ok: false, error: 'Credit balance is too low' },
+      },
+    ],
+  });
+  expect(await screen.findByText('Tour en erreur : Credit balance is too low')).toBeTruthy();
+});

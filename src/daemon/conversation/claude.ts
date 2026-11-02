@@ -336,7 +336,12 @@ export class ClaudeDriver implements ConversationDriver {
   private handleResult(o: Record<string, unknown>): void {
     // `success` avec `is_error` : constaté le 2026-11-02 sur une connexion OAuth expirée, le tour n'a pas eu lieu
     const ok = o.subtype === 'success' && o.is_error !== true;
-    const turnError = this.turnError;
+    // sans code d'erreur, le texte que claude a mis dans `result` dit mieux que « success » ce qui s'est passé
+    const turnError =
+      this.turnError ??
+      (o.is_error === true && typeof o.result === 'string' && o.result.trim()
+        ? o.result.trim()
+        : undefined);
     this.turnError = undefined;
     this.emit({
       type: 'turn_end',
