@@ -38,6 +38,12 @@ const maj = (over: Record<string, unknown> = {}) => ({
   ...over,
 });
 
+// `topic()` date `updatedAt` de l'instant de l'appel. La table trie par activité, la plus récente
+// d'abord : deux sujets créés à une milliseconde d'écart (fréquent sous charge) échangent leurs
+// lignes. Les tests qui lisent l'ordre des lignes donnent donc la même date à tous leurs sujets.
+const memeInstant = (topics: Topic[]): Topic[] =>
+  topics.map((t) => ({ ...t, updatedAt: topics[0]!.updatedAt }));
+
 const placement = (over: Partial<NavPlacement> = {}): NavPlacement => ({
   topicId: 'tp_1',
   groupId: 'ng_1',
@@ -106,10 +112,10 @@ test('default : une ligne par sujet, avec nom affiché, projet, agent et lien', 
   open(
     snapshot({
       workspaces: [ws(), ws({ id: 'ws_2', name: 'project_1' })],
-      topics: [
+      topics: memeInstant([
         topic(),
         topic({ id: 'tp_2', workspaceId: 'ws_2', branch: 'fix/x', title: 'Autre', slug: 'x' }),
-      ],
+      ]),
       runs: [{ id: 'run_1', topicId: 'tp_1', mode: 'standard', state: 'open', createdAt: 't' }],
       agents: [agent({ status: 'working' })],
     }),
@@ -140,11 +146,11 @@ test('agent : « au travail », « libre », « arrêté » selon le statut, jam
   open(
     snapshot({
       workspaces: [ws()],
-      topics: [
+      topics: memeInstant([
         topic({ id: 'tp_1' }),
         topic({ id: 'tp_2', branch: 'feat/t', slug: 't' }),
         topic({ id: 'tp_3', branch: 'feat/u', slug: 'u' }),
-      ],
+      ]),
       runs: [
         { id: 'run_1', topicId: 'tp_1', mode: 'standard', state: 'open', createdAt: 't' },
         { id: 'run_2', topicId: 'tp_2', mode: 'standard', state: 'open', createdAt: 't' },
@@ -434,10 +440,10 @@ test('shells en arrière-plan : le sujet qui n’affiche plus rien porte l’ic�
   open(
     snapshot({
       workspaces: [ws(), ws({ id: 'ws_2', name: 'project_1' })],
-      topics: [
+      topics: memeInstant([
         topic(),
         topic({ id: 'tp_2', workspaceId: 'ws_2', branch: 'fix/x', title: 'Autre', slug: 'x' }),
-      ],
+      ]),
       runs: [{ id: 'run_1', topicId: 'tp_1', mode: 'standard', state: 'open', createdAt: 't' }],
       agents: [agent({ status: 'working' })],
     }),

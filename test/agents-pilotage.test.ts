@@ -158,6 +158,10 @@ test('pause : le groupe est stoppé (état T), reprise, refus en double ; arrêt
   const { agent, live, inject } = await spawn('shell');
   const stat = () =>
     execFileSync('ps', ['-o', 'stat=', '-p', String(live.pty.pid)], { encoding: 'utf8' });
+  // le pid est d'abord le spawn-helper de node-pty, qui exécute ensuite le shell : sous macOS, un
+  // SIGSTOP reçu pendant cet exec est perdu (la seconde pause ne stoppait rien). On pause un shell
+  // démarré, c'est-à-dire qui a déjà écrit sur son terminal.
+  await waitFor(() => live.mirror.screen().some((l) => l.trim()), 5000, 'shell démarré');
   expect((await inject('POST', 'pause')).statusCode).toBe(202);
   await waitFor(() => stat().includes('T'), 3000, 'stoppé');
   expect((await inject('POST', 'pause')).statusCode).toBe(409);
