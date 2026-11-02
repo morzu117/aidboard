@@ -799,7 +799,13 @@ export class AgentManager {
       const catalog = s.kind === 'codex' ? s.driver.catalog?.() : undefined;
       if (catalog?.length) this.codexCatalog = catalog;
     }
-    return agentOptions(kind, this.codexCatalog);
+    // D82 : les commandes du pilote vivant ; un agent en veille n'a que celles d'A-I-D jusqu'à sa relance
+    const live = this.streams.get(agentId);
+    return agentOptions(
+      kind,
+      this.codexCatalog,
+      live && !live.exited ? live.driver.commands?.() : undefined,
+    );
   }
 
   /** D68/D69 : journalisé, puis appliqué au pilote vivant ; un agent en veille le prend à sa relance. */

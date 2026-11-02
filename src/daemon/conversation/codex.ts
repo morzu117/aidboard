@@ -5,6 +5,7 @@ import {
   type ModelOption,
 } from '../../shared/agentSettings.js';
 import type { PendingOption, PendingRequest } from '../../shared/model.js';
+import type { AgentCommand } from '../../shared/agentSettings.js';
 import {
   type AttachedFile,
   type ConversationDriver,
@@ -111,6 +112,9 @@ export interface CodexDriverOptions extends ConversationDriverOptions {
   sandbox?: string;
 }
 
+/** D81 : `/compact` en file d'attente, reconnu par identité dans `startTurn` (jamais envoyé comme texte). */
+const COMPACTER: unknown[] = [];
+
 /** Construction des arguments : `app-server`, tout le reste passe par JSON-RPC sur stdio. */
 export function buildCodexArgs(opts: ConversationDriverOptions): string[] {
   return ['app-server', ...(opts.extraArgs ?? [])];
@@ -137,6 +141,8 @@ export class CodexDriver implements ConversationDriver {
   private interruptRequested = false;
   private settings: AgentSettings;
   private models: ModelOption[] = [];
+  /** D84 : les skills annoncées par `skills/list`, et leur chemin pour l'entrée `skill` de `turn/start`. */
+  private skills: Array<AgentCommand & { path: string }> = [];
 
   constructor(opts: CodexDriverOptions) {
     this.opts = opts;
@@ -205,6 +211,7 @@ export class CodexDriver implements ConversationDriver {
       }
       this.emit({ type: 'session', sessionId: this.threadId });
       this.loadCatalog();
+      this.loadSkills();
       this.advanceQueue();
     } catch (err) {
       if (this.exited) return;
@@ -447,6 +454,7 @@ export class CodexDriver implements ConversationDriver {
   }
 
   private startTurn(input: unknown[]): void {
+    if (input === COMPACTER) return this.startCompaction();
     this.phase = 'turn';
     this.interruptRequested = false;
     this.sendRequest('turn/start', {
@@ -465,6 +473,20 @@ export class CodexDriver implements ConversationDriver {
         this.emit({ type: 'turn_end', ok: false, error: errorMessageOf(err) });
         this.advanceQueue();
       });
+  }
+
+  /**
+   * D81 : codex compacte dans un tour à lui (`ContextCompactedNotification` porte un `turnId`) : sa fin arrive par
+   * `turn/completed`, comme un tour normal. Un refus finit le tour en erreur.
+   */
+  private startCompaction(): void {
+    this.phase = 'turn';
+    this.interruptRequested = false;
+    this.sendRequest('thread/compact/start', { threadId: this.threadId }).catch((err: unknown) => {
+      if (this.exited) return;
+      this.emit({ type: 'turn_end', ok: false, error: errorMessageOf(err) });
+      this.advanceQueue();
+    });
   }
 
   /** D68 : `turn/start` porte le réglage courant, valable pour ce tour et les suivants. */
@@ -506,12 +528,75 @@ export class CodexDriver implements ConversationDriver {
     return this.models;
   }
 
+  /** D84 : les skills de codex pour le dossier de l'agent ; une skill désactivée n'est pas proposée. */
+  private loadSkills(): void {
+    this.sendRequest('skills/list', { cwds: [this.opts.cwd] })
+      .then((result) => {
+        const data = (result as { data?: unknown } | undefined)?.data;
+        if (!Array.isArray(data)) return;
+        const vus = new Set<string>();
+        this.skills = (data as { skills?: unknown }[])
+          .flatMap((entry) => (Array.isArray(entry?.skills) ? (entry.skills as unknown[]) : []))
+          .filter(
+            (s): s is Record<string, unknown> =>
+              !!s &&
+              typeof s === 'object' &&
+              typeof (s as Record<string, unknown>).name === 'string' &&
+              /^\S+$/.test((s as Record<string, unknown>).name as string) &&
+              typeof (s as Record<string, unknown>).path === 'string' &&
+              (s as Record<string, unknown>).enabled !== false,
+          )
+          .filter((s) => !vus.has(s.name as string) && Boolean(vus.add(s.name as string)))
+          .map((s) => {
+            const ui = s.interface as { shortDescription?: unknown } | null | undefined;
+            const courte = [ui?.shortDescription, s.shortDescription, s.description].find(
+              (d): d is string => typeof d === 'string' && d.trim() !== '',
+            );
+            return {
+              name: s.name as string,
+              description: courte ?? 'Skill de codex',
+              source: 'agent' as const,
+              path: s.path as string,
+            };
+          });
+      })
+      .catch(() => {
+        // pas de `skills/list` sur cette version : seules les commandes d'A-I-D sont proposées
+      });
+  }
+
+  commands(): AgentCommand[] {
+    return this.skills.map(({ name, description, source }) => ({ name, description, source }));
+  }
+
   configure(settings: AgentSettings): void {
     this.settings = settings;
   }
 
   send(text: string, files: AttachedFile[] = []): void {
     if (this.exited) return;
+    // D81 : `/compact` est une commande A-I-D, que chaque pilote sait exécuter ; claude la reçoit telle quelle
+    if (text.trim() === '/compact' && files.length === 0) {
+      if (this.phase === 'ready') this.startTurn(COMPACTER);
+      else this.queue.push(COMPACTER);
+      return;
+    }
+    // D84 : `/skill arguments` devient l'entrée `skill`, suivie du texte des arguments
+    const appel = /^\/(\S+)(?:\s+([\s\S]*))?$/.exec(text.trim());
+    const skill = appel ? this.skills.find((s) => s.name === appel[1]) : undefined;
+    if (skill) {
+      const reste = withAttachmentPaths((appel![2] ?? '').trim(), files);
+      const entree = [
+        { type: 'skill', name: skill.name, path: skill.path },
+        ...(reste ? [{ type: 'text', text: reste }] : []),
+        ...files
+          .filter((f) => INLINE_IMAGE_TYPES.has(f.type))
+          .map((f) => ({ type: 'localImage', path: f.path })),
+      ];
+      if (this.phase === 'ready') this.startTurn(entree);
+      else this.queue.push(entree);
+      return;
+    }
     // D70 : `localImage` pour une image, le chemin dans le texte pour le reste
     const input = [
       { type: 'text', text: withAttachmentPaths(text, files) },

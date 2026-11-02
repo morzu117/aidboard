@@ -1,4 +1,5 @@
 import type { AgentSettings, ModelOption } from '../../shared/agentSettings.js';
+import type { AgentCommand } from '../../shared/agentSettings.js';
 import type { PendingOption } from '../../shared/model.js';
 import type {
   AttachedFile,
@@ -169,6 +170,10 @@ export class RemoteDriver implements ConversationDriver {
 
   catalog(): ModelOption[] {
     return this.inner?.catalog?.() ?? [];
+  }
+
+  commands(): AgentCommand[] {
+    return this.inner?.commands?.() ?? [];
   }
 
   stop(): Promise<void> {

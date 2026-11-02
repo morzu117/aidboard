@@ -9,6 +9,87 @@ const emit = (obj) => process.stdout.write(JSON.stringify(obj) + '\n');
 // Déclenché par variable d'env : `thread/start` répond une erreur JSON-RPC au lieu d'un résultat
 // (review A.2, bloquant — reproduit un `cwd` invalide ou une `approvalPolicy` rejetée).
 const FAIL_THREAD_START = process.env.FAKE_CODEX_FAIL_THREAD_START === '1';
+// Chantier 22 (A.2) : `skills/list` répond une erreur JSON-RPC, comme une version de codex qui ne la connaît pas.
+const FAIL_SKILLS_LIST = process.env.FAKE_CODEX_FAIL_SKILLS_LIST === '1';
+// Chantier 22 (A.3) : `thread/compact/start` répond une erreur JSON-RPC au lieu de compacter.
+const FAIL_COMPACT = process.env.FAKE_CODEX_FAIL_COMPACT === '1';
+// Chantier 22 (A.3) : une skill nommée `compact` s'ajoute à `skills/list` — la commande d'A-I-D doit primer.
+const SKILL_COMPACT = process.env.FAKE_CODEX_SKILL_COMPACT === '1';
+// Chantier 22 (B.1 bis) : un second modèle visible, `gpt-mini`, qui ne connaît que l'effort `low`.
+const MODELE_MINI = process.env.FAKE_CODEX_MODELE_MINI === '1';
+
+// Chantier 22 (A.2) : les skills annoncées, au format de `skills/list` — une activée avec `interface.shortDescription`,
+// une avec la seule `shortDescription`, une avec la seule `description`, une sans description, une désactivée, un
+// doublon, et des entrées invalides que le pilote doit écarter.
+const SKILLS = [
+  {
+    name: 'skill-x',
+    description: 'Description longue de skill-x',
+    shortDescription: 'Courte héritée',
+    interface: { displayName: 'Skill X', shortDescription: 'Fait x' },
+    path: '/skills/skill-x/SKILL.md',
+    scope: 'user',
+    enabled: true,
+  },
+  {
+    name: 'courte',
+    description: 'Longue de courte',
+    shortDescription: 'Résumé court',
+    interface: null,
+    path: '/skills/courte/SKILL.md',
+    scope: 'repo',
+    enabled: true,
+  },
+  {
+    name: 'longue-seule',
+    description: 'Seulement la longue',
+    interface: { shortDescription: '  ' },
+    path: '/skills/longue-seule/SKILL.md',
+    scope: 'user',
+    enabled: true,
+  },
+  {
+    name: 'sans-description',
+    description: '',
+    path: '/skills/sans-description/SKILL.md',
+    scope: 'repo',
+    enabled: true,
+  },
+  {
+    name: 'desactivee',
+    description: 'Désactivée',
+    path: '/skills/desactivee/SKILL.md',
+    scope: 'user',
+    enabled: false,
+  },
+  {
+    name: 'skill-x',
+    description: 'Doublon',
+    interface: { shortDescription: 'Doublon de skill-x' },
+    path: '/systeme/skill-x/SKILL.md',
+    scope: 'system',
+    enabled: true,
+  },
+  {
+    name: 'avec espace',
+    description: 'Nom invalide',
+    path: '/skills/avec-espace/SKILL.md',
+    enabled: true,
+  },
+  { name: 'sans-chemin', description: 'Pas de path', enabled: true },
+  { description: 'Pas de nom', path: '/skills/anonyme/SKILL.md', enabled: true },
+  null,
+  'pas un objet',
+];
+if (SKILL_COMPACT) {
+  SKILLS.push({
+    name: 'compact',
+    description: 'Skill homonyme de /compact',
+    path: '/skills/compact/SKILL.md',
+    scope: 'user',
+    enabled: true,
+  });
+}
 
 // Ligne reconnaissable pour que le test vérifie les arguments reçus (`app-server` + extraArgs).
 emit({ type: 'fake_args', args: process.argv.slice(2) });
@@ -21,6 +102,9 @@ const pendingUnknownResolvers = new Map();
 let longAbort = null;
 // politique d'approbation du dernier `turn/start` (chantier 17, R.5)
 let turnApprovalPolicy = null;
+// chantier 22 (A.3) : chaque `thread/compact/start` reçu — son `threadId`, et s'il est arrivé pendant un tour long.
+// Le tour `compactions` le renvoie en écho pour que le test le lise.
+const compactions = [];
 
 function makeTurnId() {
   return `turn-${++turnCounter}`;
@@ -350,6 +434,13 @@ rl.on('line', (line) => {
       defaultReasoningEffort: 'low',
       supportedReasoningEfforts: efforts,
     });
+    if (MODELE_MINI) {
+      const mini = { ...model('gpt-mini', false), isDefault: false };
+      mini.supportedReasoningEfforts = [efforts[0]];
+      const data = [model('gpt-fake', false), mini, model('gpt-cache', true)];
+      emit({ id: msg.id, result: { data, nextCursor: null } });
+      return;
+    }
     emit({
       id: msg.id,
       result: { data: [model('gpt-fake', false), model('gpt-cache', true)], nextCursor: null },
@@ -357,9 +448,58 @@ rl.on('line', (line) => {
     return;
   }
 
+  // chantier 22 (A.2) : une entrée par dossier demandé ; sans `cwds`, aucune skill.
+  if (msg.method === 'skills/list') {
+    if (FAIL_SKILLS_LIST) {
+      emit({ id: msg.id, error: { code: -32601, message: 'Method not found: skills/list' } });
+      return;
+    }
+    const cwds = Array.isArray(msg.params?.cwds) ? msg.params.cwds : [];
+    emit({
+      id: msg.id,
+      result: { data: cwds.map((cwd) => ({ cwd, errors: [], skills: SKILLS })) },
+    });
+    return;
+  }
+
+  // chantier 22 (A.3) : comme codex 0.157 (sondé à la main) — la requête répond `{}`, puis la compaction passe par
+  // un tour à elle, `turn/started` puis `turn/completed` sans item.
+  if (msg.method === 'thread/compact/start') {
+    if (FAIL_COMPACT) {
+      emit({ id: msg.id, error: { code: -32600, message: 'échec simulé thread/compact/start' } });
+      return;
+    }
+    const compactThreadId = msg.params?.threadId ?? null;
+    compactions.push({ threadId: compactThreadId, pendantTour: longAbort !== null });
+    emit({ id: msg.id, result: {} });
+    const turnId = makeTurnId();
+    emit({
+      method: 'turn/started',
+      params: { threadId: compactThreadId, turn: { id: turnId, items: [], status: 'inProgress' } },
+    });
+    emit({
+      method: 'turn/completed',
+      params: {
+        threadId: compactThreadId,
+        turn: { id: turnId, items: [], status: 'completed', error: null },
+      },
+    });
+    return;
+  }
+
   if (msg.method === 'turn/start') {
     const text = msg.params?.input?.[0]?.text;
+    // chantier 22 (A.3) : le journal des compactions, en écho.
+    if (text === 'compactions') {
+      void runTurn(msg.id, msg.params.threadId, `compactions ${JSON.stringify(compactions)}`);
+      return;
+    }
     turnApprovalPolicy = msg.params?.approvalPolicy ?? null;
+    // chantier 22 (A.2) : une entrée `skill`, ou un texte en `/`, renvoie l'`input` reçu tel quel pour que le test le lise.
+    if ((msg.params?.input ?? []).some((i) => i.type === 'skill') || text?.startsWith('/')) {
+      void runTurn(msg.id, msg.params.threadId, `entree ${JSON.stringify(msg.params.input)}`);
+      return;
+    }
     const images = (msg.params?.input ?? []).filter((i) => i.type === 'localImage');
     if (images.length > 0) {
       const vus = images.map((i) => i.path).join(',');

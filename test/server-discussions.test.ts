@@ -777,6 +777,33 @@ test('options et réglages : modes du serveur, modèle et effort validés, écri
   expect((await m.req('GET', '/api/server-agents/sa_inconnu/options')).statusCode).toBe(404);
 });
 
+test('options (22 A.1) : les commandes de claude annoncées sur le serveur, après celles d’A-I-D', async () => {
+  const m = await daemon(serveur());
+  const s = await creerServeur(m);
+  const a = (await creerDiscussion(m, s.id)).agents[0]!;
+  const commandes = async () =>
+    (await m.req('GET', `/api/server-agents/${a.id}/options`)).json<{
+      commands: { name: string; description: string; source: string }[];
+    }>().commands;
+  const aid = ['model', 'effort', 'mode', 'compact', 'stop', 'aide'];
+  expect((await commandes()).map((x) => x.name)).toEqual(aid);
+
+  await envoyer(m, a.id, 'commandes');
+  await waitFor(() => assistant(m, a.id, 'commandes annoncées') === 1, 15_000, 'tour commandes');
+  const apres = await commandes();
+  expect(apres.map((x) => x.name)).toEqual([
+    ...aid,
+    'context',
+    'deep-research',
+    'databricks:doctor',
+  ]);
+  expect(apres.filter((x) => x.source === 'agent')).toEqual([
+    { name: 'context', description: 'Commande de claude', source: 'agent' },
+    { name: 'deep-research', description: 'Skill de claude', source: 'agent' },
+    { name: 'databricks:doctor', description: 'Commande de claude', source: 'agent' },
+  ]);
+});
+
 test('codex sous confirmation passé en auto depuis le composer : le daemon trie, le destructif reste en carte', async () => {
   const m = await daemon(serveur());
   const s = await creerServeur(m);
@@ -1506,3 +1533,59 @@ test('chantier 20, M.5 : historique écrit avant le masquage — masqué une foi
     ).payload,
   ).toContain(jeton);
 }, 60_000);
+
+test('options (22 A.2) : les skills de codex sur le serveur, après les commandes d’A-I-D ; `/skill-x` en entrée skill', async () => {
+  const m = await daemon(serveur());
+  const s = await creerServeur(m);
+  const a = (await creerDiscussion(m, s.id, 'codex')).agents[0]!;
+  const commandes = async () =>
+    (await m.req('GET', `/api/server-agents/${a.id}/options`)).json<{
+      commands: { name: string; description: string; source: string }[];
+    }>().commands;
+  const aid = ['model', 'effort', 'mode', 'compact', 'stop', 'aide'];
+  // `skills/list` part après la poignée de main du relais : la route est interrogée jusqu'à ce qu'elles arrivent
+  let vues = await commandes();
+  for (const debut = Date.now(); vues.length <= aid.length && Date.now() - debut < 15_000;)
+    vues = await new Promise((r) => setTimeout(r, 50)).then(commandes);
+  expect(vues.map((x) => x.name)).toEqual([
+    ...aid,
+    'skill-x',
+    'courte',
+    'longue-seule',
+    'sans-description',
+  ]);
+  expect(vues.filter((x) => x.source === 'agent')).toEqual([
+    { name: 'skill-x', description: 'Fait x', source: 'agent' },
+    { name: 'courte', description: 'Résumé court', source: 'agent' },
+    { name: 'longue-seule', description: 'Seulement la longue', source: 'agent' },
+    { name: 'sans-description', description: 'Skill de codex', source: 'agent' },
+  ]);
+
+  await envoyer(m, a.id, '/skill-x des arguments');
+  const entree = [
+    { type: 'skill', name: 'skill-x', path: '/skills/skill-x/SKILL.md' },
+    { type: 'text', text: 'des arguments' },
+  ];
+  await waitFor(
+    () => assistant(m, a.id, `echo: entree ${JSON.stringify(entree)}`) === 1,
+    15_000,
+    'entrée skill sur le serveur',
+  );
+});
+
+test('compact (22 A.3, D81) : `/compact` sur un codex du serveur compacte son thread, jamais envoyé en texte', async () => {
+  const m = await daemon(serveur());
+  const s = await creerServeur(m);
+  const a = (await creerDiscussion(m, s.id, 'codex')).agents[0]!;
+  await envoyer(m, a.id, '/compact');
+  await envoyer(m, a.id, 'compactions');
+  const vues = [{ threadId: 'thread-new-fixed', pendantTour: false }];
+  await waitFor(
+    () => assistant(m, a.id, `echo: compactions ${JSON.stringify(vues)}`) === 1,
+    15_000,
+    'compaction sur le serveur',
+  );
+  expect(
+    assistant(m, a.id, `echo: entree ${JSON.stringify([{ type: 'text', text: '/compact' }])}`),
+  ).toBe(0);
+});

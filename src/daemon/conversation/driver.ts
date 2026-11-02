@@ -1,5 +1,6 @@
 import type { ChildProcessWithoutNullStreams } from 'node:child_process';
 import type { AgentSettings, ModelOption } from '../../shared/agentSettings.js';
+import type { AgentCommand } from '../../shared/agentSettings.js';
 import type { PendingOption } from '../../shared/model.js';
 /** Défini dans le partagé (D65) : le front en dépend sans dépendre du daemon. */
 import type { ConversationEvent } from '../../shared/conversation.js';
@@ -50,6 +51,7 @@ export function withAttachmentPaths(text: string, files: AttachedFile[]): string
 export interface ConversationDriver {
   readonly sessionId: string;
   start(): void;
+  /** D81 : `/compact` compacte la conversation, chaque pilote à sa façon ; ses propres commandes (D82) aussi. */
   send(text: string, files?: AttachedFile[]): void;
   interrupt(): void;
   answer(requestId: string, decision: PendingOption['answer']): void;
@@ -57,6 +59,8 @@ export interface ConversationDriver {
   configure(settings: AgentSettings): void;
   /** D71 : modèles annoncés par la CLI, vide tant qu'elle n'a rien dit. */
   catalog?(): ModelOption[];
+  /** Chantier 22 (D82) : les commandes `/` propres à l'agent, vide tant qu'il n'a rien annoncé. */
+  commands?(): AgentCommand[];
   stop(): Promise<void>;
   onEvent(cb: (event: ConversationEvent) => void): () => void;
 }

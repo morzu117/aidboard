@@ -524,7 +524,13 @@ export class RemoteAgentManager {
     }
     // le catalogue de cet agent d'abord : deux serveurs peuvent avoir deux versions de codex (revue R.6)
     const propre = this.live.get(agentId)?.driver.catalog() ?? [];
-    const options = agentOptions(row.kind, propre.length ? propre : this.codexCatalog);
+    // D82 : les commandes du pilote vivant ; un agent arrêté n'a que celles d'A-I-D jusqu'à sa relance
+    const vivant = this.live.get(agentId);
+    const options = agentOptions(
+      row.kind,
+      propre.length ? propre : this.codexCatalog,
+      vivant && !vivant.exited ? vivant.driver.commands() : undefined,
+    );
     const sansAuto = claudeSansAuto(row.kind, this.serverOf(row));
     return {
       ...options,

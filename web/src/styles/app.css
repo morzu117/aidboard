@@ -983,6 +983,69 @@ body {
   width: 1em;
   color: var(--acc);
 }
+/* Chantier 22 (D86) : menu des commandes `/`, au-dessus du champ */
+.composer:has(> .composer-commandes) {
+  position: relative;
+}
+.composer-commandes {
+  position: absolute;
+  bottom: calc(100% + var(--sp-2));
+  left: 0;
+  right: 0;
+  max-height: 280px;
+  overflow-y: auto;
+  margin: 0;
+  list-style: none;
+  box-sizing: border-box;
+  background: var(--surface-3);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-l);
+  padding: var(--sp-1);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.55);
+  z-index: 2;
+}
+.composer-commande {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-2);
+  border-radius: var(--r-s);
+  padding: var(--sp-1) var(--sp-2);
+  color: var(--text-2);
+  font-size: var(--fs-m);
+  cursor: pointer;
+}
+.composer-commande[aria-selected='true'],
+.composer-commande:hover {
+  background: var(--surface-4);
+  color: var(--text);
+}
+.composer-commande-nom {
+  font-family: var(--mono);
+  white-space: nowrap;
+}
+.composer-commande-description {
+  flex: 1;
+  min-width: 0;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.composer-commande-source {
+  color: var(--acc);
+  font-size: var(--fs-s);
+}
+.composer-commande-vide {
+  padding: var(--sp-1) var(--sp-2);
+  color: var(--muted);
+  font-size: var(--fs-m);
+}
+.composer-avis {
+  margin: 0;
+  color: var(--text-2);
+  font-size: var(--fs-s);
+  white-space: pre-line;
+}
 .message-utilisateur-ligne {
   align-self: flex-end;
   max-width: 80%;
