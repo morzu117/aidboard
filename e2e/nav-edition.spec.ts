@@ -134,3 +134,60 @@ test('la ligne de sujet tient sur une seule ligne même avec un nom long, en mod
   await node(page, '1-1.barre-gauche.groupes.modifier').click();
   await verifie();
 });
+
+// fix/nav-edition-clic : depuis l'accueil, le premier clic du double-clic ouvrait le sujet ; l'écran
+// changé remontait Nav, qui perdait le mode édition et le champ de renommage. En mode édition, un
+// clic sur un sujet ne navigue plus.
+test('depuis l’accueil, double-clic en mode édition : même écran, le champ tient, le nom persiste', async ({
+  browser,
+}) => {
+  const page = await openApp(await browser.newContext({ viewport: { width: 1440, height: 900 } }));
+  await registerWorkspace(page, newRepo('depot-nav-double-clic'));
+  const topicId = await createTopic(page, 'Sujet un');
+  await page.goto(url());
+  const sujet = node(page, `1-1.barre-gauche.sujet-${topicId}`);
+  await expect(sujet).toBeVisible();
+  const urlAccueil = page.url();
+
+  // l'écran du sujet lit son journal git dès son montage : aucune de ces requêtes ne doit partir
+  const journalGit: string[] = [];
+  page.on('request', (r) => {
+    if (r.url().includes(`/api/topics/${topicId}/git/log`)) journalGit.push(r.url());
+  });
+
+  await node(page, '1-1.barre-gauche.groupes.modifier').click();
+  await sujet.dblclick();
+  const champ = node(page, `1-1.barre-gauche.sujet-${topicId}.renommer`);
+  await expect(champ).toBeVisible();
+  await expect(page).toHaveURL(urlAccueil);
+
+  // au-delà d'un changement d'écran : deux frames rendues, puis un aller-retour complet au daemon —
+  // tout ce qu'un écran monté entre-temps aurait demandé est parti avant que celui-ci revienne
+  await page.evaluate(
+    () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(() => r(null)))),
+  );
+  await page.evaluate(async () =>
+    (await fetch('/api/state', { credentials: 'same-origin' })).json(),
+  );
+  expect(journalGit).toEqual([]);
+  await expect(page).toHaveURL(urlAccueil);
+  await expect(champ).toBeVisible();
+  await expect(node(page, '1-1.barre-gauche.groupes.modifier')).toHaveText('Terminer');
+
+  const enregistre = page.waitForResponse(
+    (r) => r.request().method() === 'PATCH' && r.url().endsWith(`/api/nav/placements/${topicId}`),
+  );
+  await champ.fill('Renommé depuis l’accueil');
+  await champ.press('Enter');
+  expect((await enregistre).ok()).toBe(true);
+  await expect(champ).toBeHidden();
+  await expect(sujet.locator('.barre-gauche-sujet-nom')).toHaveText('Renommé depuis l’accueil');
+  await expect(page).toHaveURL(urlAccueil);
+
+  await page.reload();
+  await expect(
+    node(page, `1-1.barre-gauche.sujet-${topicId}`).locator('.barre-gauche-sujet-nom'),
+  ).toHaveText('Renommé depuis l’accueil');
+  // suite e2e à un seul worker, aucun teardown entre fichiers : fermer ce contexte (finding 9)
+  await page.context().close();
+});

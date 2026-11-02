@@ -936,6 +936,11 @@ export function Nav({ screen }: { screen: EcranId }) {
                                   data-node={n(`sujet-${t.id}`)}
                                   title={t.branch}
                                   aria-current={actif ? 'page' : undefined}
+                                  // en mode édition, le clic n'ouvre pas le sujet : le premier clic d'un
+                                  // double-clic changerait d'écran, et Nav remontée perdrait l'édition
+                                  onClick={(e) => {
+                                    if (edit) e.preventDefault();
+                                  }}
                                   onDoubleClick={(e) => {
                                     if (!edit) return;
                                     e.preventDefault();
