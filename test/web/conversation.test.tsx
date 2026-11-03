@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import type { Agent, PendingRequest } from '../../src/shared/model.js';
@@ -794,4 +795,194 @@ test('turn_end dont l’erreur est un texte libre : « Tour en erreur : <texte> 
     ],
   });
   expect(await screen.findByText('Tour en erreur : Credit balance is too low')).toBeTruthy();
+});
+
+// ---- Chantier 23 (B.1, D91) : le chip « Remote » à côté du modèle
+
+const RC = '/api/agents/ag_1/remote-control';
+const URL_SESSION = 'https://claude.ai/code/session_fake1';
+const chipRemote = () => document.querySelector<HTMLElement>('[data-node$=".composer.remote"]');
+const lecturesRemote = (calls: Array<{ method: string; url: string }>) =>
+  calls.filter((c) => c.method === 'GET' && c.url === RC).length;
+
+/**
+ * Comme mount(), mais l'état du remote-control est servi dès le premier rendu (le chip le lit au montage,
+ * avant que mount() ne rende la main) ; `lecture.etat` se change en cours de test.
+ */
+function mountRemote(etat: object | (() => Response), over: Partial<Agent> = {}) {
+  const lecture = { etat };
+  const calls: Array<{ method: string; url: string; body: unknown }> = [];
+  const respond = new Map<string, () => Response>();
+  respond.set(`GET ${RC}`, () =>
+    typeof lecture.etat === 'function'
+      ? (lecture.etat as () => Response)()
+      : new Response(JSON.stringify(lecture.etat), { status: 200 }),
+  );
+  respond.set('GET /api/agents/ag_1/options', json(200, OPTIONS_CLAUDE));
+  const fetchImpl = vi.fn(async (url: string, init?: RequestInit) => {
+    const method = init?.method ?? 'GET';
+    const body = init?.body ? JSON.parse(String(init.body)) : undefined;
+    calls.push({ method, url, body });
+    if (url === '/api/state') return new Response(JSON.stringify(snapshot()), { status: 200 });
+    const custom = respond.get(`${method} ${url}`);
+    return custom ? custom() : new Response('{}', { status: 200 });
+  }) as unknown as typeof fetch;
+  const client = new AidClient({
+    fetchImpl,
+    socketFactory: () => ({ close() {} }) as unknown as WebSocket,
+    backoffMs: [20],
+    debounceMs: 5,
+  });
+  render(
+    <AidProvider client={client}>
+      <Conversation
+        agent={streamAgent({ status: 'idle', permissionMode: 'default', ...over })}
+        visible
+        actionsHost={null}
+      />
+    </AidProvider>,
+  );
+  return { calls, respond, lecture };
+}
+
+test('chip Remote : absent pour codex, sans même lire l’état', async () => {
+  const { calls } = mountRemote({ status: 'off' }, { kind: 'codex' });
+  await waitFor(() => expect(calls.some((c) => c.url === '/api/agents/ag_1/options')).toBe(true));
+  await screen.findByRole('button', { name: /^Modèle/ });
+  expect(chipRemote()).toBeNull();
+  expect(lecturesRemote(calls)).toBe(0);
+});
+
+test('chip Remote : absent si l’état est `unsupported` ou si la lecture échoue', async () => {
+  const a = mountRemote({ status: 'unsupported' });
+  await waitFor(() => expect(lecturesRemote(a.calls)).toBe(1));
+  await screen.findByRole('button', { name: /^Modèle/ });
+  expect(chipRemote()).toBeNull();
+  cleanup();
+
+  const b = mountRemote(() => new Response(JSON.stringify({ error: 'boom' }), { status: 500 }));
+  await waitFor(() => expect(lecturesRemote(b.calls)).toBe(1));
+  await screen.findByRole('button', { name: /^Modèle/ });
+  expect(chipRemote()).toBeNull();
+});
+
+test.each([
+  ['off', 'Remote'],
+  ['connecting', 'Remote · connexion…'],
+  ['connected', 'Remote · connecté'],
+  ['error', 'Remote · erreur'],
+] as const)('chip Remote : état %s → « %s »', async (status, libelle) => {
+  mountRemote({ status, url: status === 'off' || status === 'error' ? undefined : URL_SESSION });
+  await waitFor(() => expect(chipRemote()?.textContent).toBe(libelle));
+  expect(chipRemote()!.getAttribute('data-etat')).toBe(status);
+  expect(screen.getByRole('button', { name: `Remote-control : ${libelle}` })).toBe(chipRemote());
+});
+
+test('chip Remote : Activer → POST {enabled:true}, bouton désactivé pendant la requête, puis lien vers la session', async () => {
+  const { calls, respond } = mountRemote({ status: 'off' });
+  let repondre: (r: Response) => void = () => {};
+  respond.set(
+    `POST ${RC}`,
+    () => new Promise<Response>((r) => (repondre = r)) as unknown as Response,
+  );
+  await waitFor(() => expect(chipRemote()?.textContent).toBe('Remote'));
+  await userEvent.click(chipRemote()!);
+  const menu = await screen.findByRole('menu', { name: 'Remote-control' });
+  expect(menu.querySelector('[data-node$=".remote-etat"]')?.textContent).toContain(
+    'claude.ai/code',
+  );
+  expect(menu.querySelector('[data-node$=".remote-lien"]')).toBeNull();
+  const bascule = screen.getByRole('menuitem', { name: 'Activer' });
+  await userEvent.click(bascule);
+  await waitFor(() =>
+    expect(calls.find((c) => c.method === 'POST' && c.url === RC)?.body).toEqual({ enabled: true }),
+  );
+  expect((bascule as HTMLButtonElement).disabled).toBe(true);
+  repondre(
+    new Response(JSON.stringify({ status: 'connected', url: URL_SESSION }), { status: 200 }),
+  );
+  await waitFor(() => expect(chipRemote()?.textContent).toBe('Remote · connecté'));
+  const lien = screen.getByRole('menuitem', { name: /Ouvrir la session/ }) as HTMLAnchorElement;
+  expect(lien.getAttribute('href')).toBe(URL_SESSION);
+  expect(lien.getAttribute('target')).toBe('_blank');
+  const desactiver = screen.getByRole('menuitem', { name: 'Désactiver' }) as HTMLButtonElement;
+  expect(desactiver.disabled).toBe(false);
+  // même mécanique que les autres menus : Échap ferme
+  await userEvent.keyboard('{Escape}');
+  expect(screen.queryByRole('menu')).toBeNull();
+});
+
+test('chip Remote : Désactiver → POST {enabled:false}, le lien disparaît', async () => {
+  const { calls, respond } = mountRemote({ status: 'connected', url: URL_SESSION });
+  respond.set(`POST ${RC}`, json(200, { status: 'off' }));
+  await waitFor(() => expect(chipRemote()?.textContent).toBe('Remote · connecté'));
+  await userEvent.click(chipRemote()!);
+  expect(await screen.findByRole('menuitem', { name: /Ouvrir la session/ })).toBeTruthy();
+  await userEvent.click(screen.getByRole('menuitem', { name: 'Désactiver' }));
+  await waitFor(() => expect(chipRemote()?.textContent).toBe('Remote'));
+  expect(calls.filter((c) => c.method === 'POST' && c.url === RC).map((c) => c.body)).toEqual([
+    { enabled: false },
+  ]);
+  expect(screen.queryByRole('menuitem', { name: /Ouvrir la session/ })).toBeNull();
+  expect(screen.getByRole('menuitem', { name: 'Activer' })).toBeTruthy();
+});
+
+test('chip Remote : état `error` → message et « Réessayer », sans lien', async () => {
+  // un `bridge_state` `failed` garde l'url de la session : le lien n'est pas proposé pour autant
+  const { calls, respond } = mountRemote({
+    status: 'error',
+    url: URL_SESSION,
+    error: 'refusé par claude',
+  });
+  respond.set(`POST ${RC}`, json(200, { status: 'connecting', url: URL_SESSION }));
+  await waitFor(() => expect(chipRemote()?.textContent).toBe('Remote · erreur'));
+  await userEvent.click(chipRemote()!);
+  const menu = await screen.findByRole('menu', { name: 'Remote-control' });
+  await waitFor(() =>
+    expect(menu.querySelector('[data-node$=".remote-etat"]')?.textContent).toBe(
+      'refusé par claude',
+    ),
+  );
+  expect(menu.querySelector('[data-node$=".remote-lien"]')).toBeNull();
+  await userEvent.click(screen.getByRole('menuitem', { name: 'Réessayer' }));
+  await waitFor(() => expect(chipRemote()?.textContent).toBe('Remote · connexion…'));
+  expect(calls.find((c) => c.method === 'POST' && c.url === RC)?.body).toEqual({ enabled: true });
+  expect(screen.getByRole('menuitem', { name: /Ouvrir la session/ })).toBeTruthy();
+});
+
+test('chip Remote : un POST refusé passe par l’erreur du composer et relit l’état', async () => {
+  const { calls, respond } = mountRemote({ status: 'off' });
+  respond.set(`POST ${RC}`, json(502, { error: 'claude n’a pas répondu au remote_control' }));
+  await waitFor(() => expect(chipRemote()?.textContent).toBe('Remote'));
+  await userEvent.click(chipRemote()!);
+  await screen.findByRole('menu', { name: 'Remote-control' });
+  await waitFor(() => expect(lecturesRemote(calls)).toBe(2));
+  await userEvent.click(screen.getByRole('menuitem', { name: 'Activer' }));
+  expect((await screen.findByRole('alert')).textContent).toContain(
+    'claude n’a pas répondu au remote_control',
+  );
+  await waitFor(() => expect(lecturesRemote(calls)).toBe(3));
+  expect(chipRemote()?.textContent).toBe('Remote');
+  expect((screen.getByRole('menuitem', { name: 'Activer' }) as HTMLButtonElement).disabled).toBe(
+    false,
+  );
+});
+
+test('chip Remote : relu toutes les 3 s tant qu’il est en connexion, plus une fois connecté', async () => {
+  vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
+  try {
+    const { calls, lecture } = mountRemote({ status: 'connecting', url: URL_SESSION });
+    await waitFor(() => expect(chipRemote()?.textContent).toBe('Remote · connexion…'));
+    expect(lecturesRemote(calls)).toBe(1);
+    await act(async () => vi.advanceTimersByTime(3_000));
+    await waitFor(() => expect(lecturesRemote(calls)).toBe(2));
+    lecture.etat = { status: 'connected', url: URL_SESSION };
+    await act(async () => vi.advanceTimersByTime(3_000));
+    await waitFor(() => expect(chipRemote()?.textContent).toBe('Remote · connecté'));
+    expect(lecturesRemote(calls)).toBe(3);
+    await act(async () => vi.advanceTimersByTime(12_000));
+    expect(lecturesRemote(calls)).toBe(3);
+  } finally {
+    vi.useRealTimers();
+  }
 });

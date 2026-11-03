@@ -1,5 +1,6 @@
 import type { AgentSettings, ModelOption } from '../../shared/agentSettings.js';
 import type { AgentCommand } from '../../shared/agentSettings.js';
+import type { RemoteControlState } from '../../shared/agentSettings.js';
 import type { PendingOption } from '../../shared/model.js';
 import type {
   AttachedFile,
@@ -174,6 +175,16 @@ export class RemoteDriver implements ConversationDriver {
 
   commands(): AgentCommand[] {
     return this.inner?.commands?.() ?? [];
+  }
+
+  /** D87 : celui du pilote interne ; une reprise de session le remonte éteint (D89). */
+  remoteControl(enabled: boolean, name: string): Promise<RemoteControlState> {
+    if (!this.inner?.remoteControl) return Promise.resolve({ status: 'unsupported' });
+    return this.inner.remoteControl(enabled, name);
+  }
+
+  remoteControlState(): RemoteControlState {
+    return this.inner?.remoteControlState?.() ?? { status: 'unsupported' };
   }
 
   stop(): Promise<void> {

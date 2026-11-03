@@ -482,3 +482,24 @@ test('turn_end authentication_failed (distant) : consigne /login sur le serveur 
   ).toBeTruthy();
   expect(screen.queryByText(/Tour en erreur/)).toBeNull();
 });
+
+test('chantier 23 (B.1) : le chip Remote d’un agent distant lit et bascule par les routes distantes', async () => {
+  const h = ouvrir('/serveurs/srv_1/discussions/sd_1');
+  h.respond.set('GET /api/server-agents/sa_1/remote-control', json(200, { status: 'off' }));
+  h.respond.set(
+    'POST /api/server-agents/sa_1/remote-control',
+    json(200, { status: 'connected', url: 'https://claude.ai/code/session_fake1' }),
+  );
+  await fil();
+  const chip = await screen.findByRole('button', { name: 'Remote-control : Remote' });
+  fireEvent.click(chip);
+  fireEvent.click(await screen.findByRole('menuitem', { name: 'Activer' }));
+  expect(await screen.findByRole('button', { name: 'Remote-control : Remote · connecté' })).toBe(
+    chip,
+  );
+  expect(
+    h.calls.find((c) => c.method === 'POST' && c.url === '/api/server-agents/sa_1/remote-control')
+      ?.body,
+  ).toEqual({ enabled: true });
+  expect(h.calls.some((c) => c.url.startsWith('/api/agents/'))).toBe(false);
+});

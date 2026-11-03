@@ -1,6 +1,7 @@
 import type { ChildProcessWithoutNullStreams } from 'node:child_process';
 import type { AgentSettings, ModelOption } from '../../shared/agentSettings.js';
 import type { AgentCommand } from '../../shared/agentSettings.js';
+import type { RemoteControlState } from '../../shared/agentSettings.js';
 import type { PendingOption } from '../../shared/model.js';
 /** Défini dans le partagé (D65) : le front en dépend sans dépendre du daemon. */
 import type { ConversationEvent } from '../../shared/conversation.js';
@@ -61,6 +62,10 @@ export interface ConversationDriver {
   catalog?(): ModelOption[];
   /** Chantier 22 (D82) : les commandes `/` propres à l'agent, vide tant qu'il n'a rien annoncé. */
   commands?(): AgentCommand[];
+  /** Chantier 23 (D87) : ouvre ou ferme le remote-control du process vivant ; rejeté si l'agent le refuse. */
+  remoteControl?(enabled: boolean, name: string): Promise<RemoteControlState>;
+  /** D87 : l'état courant ; jamais persisté (D89). */
+  remoteControlState?(): RemoteControlState;
   stop(): Promise<void>;
   onEvent(cb: (event: ConversationEvent) => void): () => void;
 }

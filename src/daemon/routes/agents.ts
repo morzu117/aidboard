@@ -45,6 +45,7 @@ const AnswerBody = Type.Object(
   { additionalProperties: false },
 );
 const MarkBody = Type.Object({ marked: Type.Boolean() }, { additionalProperties: false });
+const RemoteControlBody = Type.Object({ enabled: Type.Boolean() }, { additionalProperties: false });
 const SettingsBody = Type.Object(
   {
     mode: Type.Optional(Type.String({ minLength: 1, maxLength: 32 })),
@@ -141,6 +142,21 @@ export function registerAgentRoutes(
     deps.agents.interrupt(id);
     return reply.code(202).send({ id });
   });
+
+  // Chantier 23 (D90) : le remote-control d'un agent conversationnel, depuis le composer.
+  app.get('/api/agents/:id/remote-control', async (req) => {
+    const { id } = req.params as { id: string };
+    return deps.agents.remoteControlState(id);
+  });
+
+  app.post(
+    '/api/agents/:id/remote-control',
+    { schema: { body: RemoteControlBody } },
+    async (req) => {
+      const { id } = req.params as { id: string };
+      return deps.agents.setRemoteControl(id, (req.body as { enabled: boolean }).enabled);
+    },
+  );
 
   // Chantier 16 (D66-D71) : mode, modèle et effort d'un agent conversationnel, depuis le composer.
   app.get('/api/agents/:id/options', async (req) => {

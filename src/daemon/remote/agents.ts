@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { monotonicFactory } from 'ulid';
 import type { AgentSettings, PermissionMode } from '../../shared/agentSettings.js';
 import { agentOptions, type AgentOptions, type ModelOption } from '../../shared/agentSettings.js';
+import { REMOTE_CONTROL, type RemoteControlState } from '../../shared/agentSettings.js';
 import type {
   AgentStatus,
   PendingRequest,
@@ -538,6 +539,34 @@ export class RemoteAgentManager {
         (m) => SERVER_PERMISSION_MODES.includes(m.id) && !(sansAuto && m.id === 'auto'),
       ),
     };
+  }
+
+  /** Chantier 23 (D87, D89) : celui du pilote vivant ; un agent arrêté sur le serveur est éteint. */
+  remoteControlState(agentId: string): RemoteControlState {
+    const row = this.agentRow(agentId);
+    if (!REMOTE_CONTROL[row.kind]) return { status: 'unsupported' };
+    const live = this.live.get(agentId);
+    if (!live || live.exited) return { status: 'off' };
+    return live.driver.remoteControlState();
+  }
+
+  /** D90 : activer relance un agent arrêté, comme un message ; la session porte le nom de la discussion. */
+  async setRemoteControl(agentId: string, enabled: boolean): Promise<RemoteControlState> {
+    const row = this.agentRow(agentId);
+    if (!REMOTE_CONTROL[row.kind])
+      throw new AidHttpError(409, `remote-control non pris en charge par ${row.kind}`);
+    let live = this.live.get(agentId);
+    if (!enabled && (!live || live.exited)) return { status: 'off' };
+    this.assertOpen(row);
+    if (!live || live.exited) live = await this.relaunchOnce(row);
+    const d = this.deps.db
+      .prepare('SELECT name FROM server_discussions WHERE id = ?')
+      .get(row.discussion_id) as { name: string } | undefined;
+    try {
+      return await live.driver.remoteControl(enabled, `A-I-D · ${d?.name ?? agentId}`);
+    } catch (err) {
+      throw new AidHttpError(502, err instanceof Error ? err.message : String(err));
+    }
   }
 
   /** Écrit sur l'agent, appliqué au pilote vivant ; un agent arrêté le prend à sa relance. */

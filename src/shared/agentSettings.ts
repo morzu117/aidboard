@@ -60,6 +60,17 @@ export function withAidCommands(agent: AgentCommand[]): AgentCommand[] {
   return [...AID_COMMANDS, ...propres];
 }
 
+/** Chantier 23 (D87) : le remote-control d'un agent ; `unsupported` : son pilote ne le propose pas. */
+export interface RemoteControlState {
+  status: 'unsupported' | 'off' | 'connecting' | 'connected' | 'error';
+  /** Où reprendre la conversation (claude : la session claude.ai/code). */
+  url?: string;
+  error?: string;
+}
+
+/** D87 : les pilotes qui ont le remote-control ; un agent en veille se dit `off` ou `unsupported` d'après lui. */
+export const REMOTE_CONTROL: Record<'claude' | 'codex', boolean> = { claude: true, codex: false };
+
 export const DEFAULT_SETTINGS: AgentSettings = { mode: 'default', model: null, effort: null };
 
 const CLAUDE_EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max'];
