@@ -488,7 +488,8 @@ test('réglages (16.3) : options du kind, PATCH appliqué à chaud, défaut rete
   expect(r.json()).toEqual({ mode: 'auto', model: 'opus', effort: null });
   c!.t.d.agents.input(agent.id, 'reglages');
   await waitFor(() => reglagesVus(agent.id) !== undefined, 5000, 'réglages vus par claude');
-  expect(reglagesVus(agent.id)).toEqual({ mode: 'auto', model: 'opus', effort: null });
+  // correctif autonomie : le mode A-I-D `auto` se traduit chez claude en `bypassPermissions`, jamais en `auto`
+  expect(reglagesVus(agent.id)).toEqual({ mode: 'bypassPermissions', model: 'opus', effort: null });
 
   expect((await patchSettings(agent.id, { mode: 'bypassPermissions' })).statusCode).toBe(422);
   expect((await patchSettings(agent.id, { model: 'gpt-x' })).statusCode).toBe(422);
@@ -497,7 +498,9 @@ test('réglages (16.3) : options du kind, PATCH appliqué à chaud, défaut rete
 
   const second = c!.t.d.agents.spawn({ topicId: topic.topicId, kind: 'claude' });
   expect(second).toMatchObject({ permissionMode: 'auto', model: 'opus', effort: 'max' });
-  expect(second.command.join(' ')).toContain('--permission-mode auto --model opus --effort max');
+  expect(second.command.join(' ')).toContain(
+    '--permission-mode bypassPermissions --model opus --effort max',
+  );
 });
 
 test('réglages et relance (A.6) : changés pendant la veille, repris par les arguments de lancement', async () => {
@@ -526,6 +529,7 @@ test('réglages codex (D66, D71) : deux modes, catalogue de model/list, approval
   await waitFor(() => reglagesVus(agent.id) !== undefined, 5000, 'réglages vus par codex');
   expect(reglagesVus(agent.id)).toEqual({
     approvalPolicy: 'never',
+    sandboxPolicy: { type: 'dangerFullAccess' },
     model: 'gpt-fake',
     effort: 'high',
   });

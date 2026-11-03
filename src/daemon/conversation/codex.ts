@@ -62,6 +62,26 @@ export function commandOf(
   return typeof params?.command === 'string' ? { command: params.command } : undefined;
 }
 
+/**
+ * Correctif autonomie : `thread/start`/`thread/resume` prennent `sandbox` en chaîne `SandboxMode`
+ * (observé, codex 0.166.0, `generate-json-schema`), `turn/start` prend `sandboxPolicy`, un objet
+ * distinct. Une chaîne non reconnue ne reçoit aucune policy plutôt que d'en inventer une.
+ */
+export function sandboxPolicyOf(mode: string, cwd: string): Record<string, unknown> | undefined {
+  if (mode === 'danger-full-access') return { type: 'dangerFullAccess' };
+  if (mode === 'read-only') return { type: 'readOnly', networkAccess: false };
+  if (mode === 'workspace-write') {
+    return {
+      type: 'workspaceWrite',
+      writableRoots: [cwd],
+      networkAccess: false,
+      excludeTmpdirEnvVar: false,
+      excludeSlashTmp: false,
+    };
+  }
+  return undefined;
+}
+
 function summarize(value: unknown): string {
   return typeof value === 'string' ? value.slice(0, 160) : JSON.stringify(value).slice(0, 160);
 }
@@ -197,13 +217,15 @@ export class CodexDriver implements ConversationDriver {
       });
       if (this.exited) return;
       this.sendNotification('initialized');
+      const { approvalPolicy, sandbox } = this.approvalAndSandbox();
       const result = this.opts.resume
-        ? await this.sendRequest('thread/resume', { threadId: this.threadId })
-        : await this.sendRequest('thread/start', {
+        ? await this.sendRequest('thread/resume', {
+            threadId: this.threadId,
             cwd: this.opts.cwd,
-            approvalPolicy: this.opts.approvalPolicy ?? 'on-request',
-            sandbox: this.opts.sandbox ?? 'workspace-write',
-          });
+            approvalPolicy,
+            sandbox,
+          })
+        : await this.sendRequest('thread/start', { cwd: this.opts.cwd, approvalPolicy, sandbox });
       if (this.exited) return;
       if (!this.opts.resume) {
         const thread = (result as { thread?: { id?: unknown } } | undefined)?.thread;
@@ -489,12 +511,28 @@ export class CodexDriver implements ConversationDriver {
     });
   }
 
+  /**
+   * Correctif autonomie : en Auto, `never` et l'accès complet ; sinon les réglages explicites
+   * (`opts`), ou leurs défauts. Repris à l'identique par le handshake (`thread/start`,
+   * `thread/resume`) et par `turnSettings()`, pour que sortir d'Auto revienne bien en arrière.
+   */
+  private approvalAndSandbox(): { approvalPolicy: string; sandbox: string } {
+    if (this.settings.mode === 'auto')
+      return { approvalPolicy: 'never', sandbox: 'danger-full-access' };
+    return {
+      approvalPolicy: this.opts.approvalPolicy ?? 'on-request',
+      sandbox: this.opts.sandbox ?? 'workspace-write',
+    };
+  }
+
   /** D68 : `turn/start` porte le réglage courant, valable pour ce tour et les suivants. */
   private turnSettings(): Record<string, unknown> {
     const s = this.settings;
+    const { approvalPolicy, sandbox } = this.approvalAndSandbox();
     // jamais le `isDefault` du catalogue : il passerait devant le modèle de ~/.codex/config.toml
     return {
-      approvalPolicy: s.mode === 'auto' ? 'never' : (this.opts.approvalPolicy ?? 'on-request'),
+      approvalPolicy,
+      sandboxPolicy: sandboxPolicyOf(sandbox, this.opts.cwd),
       ...(s.model && { model: s.model }),
       ...(s.effort && { effort: s.effort }),
     };

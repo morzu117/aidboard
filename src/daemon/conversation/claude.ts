@@ -1,7 +1,11 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
-import { type AgentSettings, DEFAULT_SETTINGS } from '../../shared/agentSettings.js';
+import {
+  type AgentSettings,
+  DEFAULT_SETTINGS,
+  type PermissionMode,
+} from '../../shared/agentSettings.js';
 import type { AgentCommand } from '../../shared/agentSettings.js';
 import type { RemoteControlState } from '../../shared/agentSettings.js';
 import type { PendingOption, PendingRequest } from '../../shared/model.js';
@@ -94,18 +98,36 @@ function askQuestionsOf(input: unknown): AskQuestion[] | null {
   return questions;
 }
 
-/** Réglages au lancement (D67) : rien de plus que les arguments d'avant quand rien n'est réglé. */
+/** Correctif autonomie : le mode A-I-D `auto` contourne toutes les permissions chez claude (`bypassPermissions`) ; les autres passent tels quels, claude les connaissant déjà sous ce nom. */
+function claudePermissionMode(mode: PermissionMode): string {
+  return mode === 'auto' ? 'bypassPermissions' : mode;
+}
+
+/**
+ * Réglages au lancement (D67) : rien de plus que les arguments d'avant quand rien n'est réglé.
+ * Re-dev 1/2 (correctif autonomie) : `--permission-mode` est explicite dès que des réglages sont
+ * connus (y compris `default`), et aussi en reprise sans réglages connus (repli sur
+ * `DEFAULT_SETTINGS.mode`) — sinon une reprise en Demander omettrait le flag et la CLI pourrait
+ * reprendre une permission `bypassPermissions` persistée par une session Auto précédente. Sans
+ * réglages et hors reprise, le comportement d'avant ce correctif est gardé (rien à hériter).
+ */
 function settingsArgs(opts: ConversationDriverOptions): string[] {
   const s = opts.settings;
+  const mode = s ? s.mode : opts.resume ? DEFAULT_SETTINGS.mode : undefined;
   return [
-    ...(s && s.mode !== 'default' ? ['--permission-mode', s.mode] : []),
+    ...(mode !== undefined ? ['--permission-mode', claudePermissionMode(mode)] : []),
     ...(s?.model ? ['--model', s.model] : []),
     ...(s?.effort ? ['--effort', s.effort] : []),
     ...(opts.attachmentsDir ? ['--add-dir', opts.attachmentsDir] : []),
   ];
 }
 
-/** Construction des arguments D60, séparée du spawn pour être testable sans process réel. */
+/**
+ * Construction des arguments D60, séparée du spawn pour être testable sans process réel.
+ * Correctif autonomie : `--allow-dangerously-skip-permissions` est systématique — il autorise la
+ * capacité de passer en `bypassPermissions` (`configure()`, au changement à chaud) sans l'activer
+ * lui-même ; un process lancé hors Auto ne bascule en bypass qu'au `set_permission_mode` suivant.
+ */
 export function buildClaudeArgs(opts: ConversationDriverOptions): string[] {
   return [
     '--print',
@@ -116,6 +138,7 @@ export function buildClaudeArgs(opts: ConversationDriverOptions): string[] {
     '--verbose',
     '--permission-prompt-tool',
     'stdio',
+    '--allow-dangerously-skip-permissions',
     ...settingsArgs(opts),
     opts.resume ? '--resume' : '--session-id',
     opts.sessionId,
@@ -503,7 +526,8 @@ export class ClaudeDriver implements ConversationDriver {
     this.settings = next;
     const control = (request: Record<string, unknown>) =>
       this.write({ type: 'control_request', request_id: randomUUID(), request });
-    if (next.mode !== prev.mode) control({ subtype: 'set_permission_mode', mode: next.mode });
+    if (next.mode !== prev.mode)
+      control({ subtype: 'set_permission_mode', mode: claudePermissionMode(next.mode) });
     if (next.model !== prev.model)
       control({ subtype: 'set_model', ...(next.model && { model: next.model }) });
     if (next.effort !== prev.effort)

@@ -255,18 +255,53 @@ const reglagesVus = (events: ConversationEvent[]) => {
 
 test('buildClaudeArgs (D67) : mode, modèle, effort et dossier des pièces jointes au lancement', () => {
   const base = { bin: 'claude', cwd: '/w', env: {}, sessionId: 's1', resume: false };
+  // sans réglages connus et hors reprise : rien à hériter, comportement d'avant ce correctif.
   expect(buildClaudeArgs(base)).not.toContain('--permission-mode');
+  // correctif autonomie : systématique, pour qu'un changement à chaud vers Auto puisse ensuite passer en bypass
+  expect(buildClaudeArgs(base)).toContain('--allow-dangerously-skip-permissions');
+  // re-dev 1/2 : réglages connus avec mode `default` → le flag est désormais explicite, même au
+  // lancement, pour que « Demander » ne dépende jamais de ce que la CLI aurait d'autre à hériter.
   expect(
     buildClaudeArgs({ ...base, settings: { mode: 'default', model: null, effort: null } }),
-  ).not.toContain('--permission-mode');
+  ).toEqual(expect.arrayContaining(['--permission-mode', 'default']));
+  // re-dev 1/2 : reprise sans réglages connus (repli DEFAULT_SETTINGS) → default explicite aussi.
+  expect(buildClaudeArgs({ ...base, resume: true })).toEqual(
+    expect.arrayContaining(['--permission-mode', 'default']),
+  );
   const args = buildClaudeArgs({
     ...base,
     settings: { mode: 'auto', model: 'opus', effort: 'high' },
     attachmentsDir: '/aid/attachments/ag_1',
   });
+  // correctif autonomie : le mode A-I-D `auto` lance claude en `bypassPermissions`, jamais en `auto` (D66 révisée)
   expect(args.join(' ')).toContain(
-    '--permission-mode auto --model opus --effort high --add-dir /aid/attachments/ag_1',
+    '--permission-mode bypassPermissions --model opus --effort high --add-dir /aid/attachments/ag_1',
   );
+});
+
+test('reprise (re-dev 1/2) : réglage default explicite en reprise, sans hériter de l’ancienne permission simulée', async () => {
+  const sid = randomUUID();
+  const { driver: d, events } = start({
+    sessionId: sid,
+    resume: true,
+    settings: { mode: 'default', model: null, effort: null },
+  });
+  d.send('reglages');
+  await waitFor(() => reglagesVus(events) !== undefined, 5000, 'réglages après reprise');
+  // sans le correctif, le flag serait omis et la fixture simulerait `bypassPermissions` persisté.
+  expect(reglagesVus(events)).toEqual({ mode: 'default', model: null, effort: null });
+});
+
+test('reprise (re-dev 1/2) : réglage auto explicite en reprise, bypassPermissions', async () => {
+  const sid = randomUUID();
+  const { driver: d, events } = start({
+    sessionId: sid,
+    resume: true,
+    settings: { mode: 'auto', model: null, effort: null },
+  });
+  d.send('reglages');
+  await waitFor(() => reglagesVus(events) !== undefined, 5000, 'réglages après reprise');
+  expect(reglagesVus(events)).toEqual({ mode: 'bypassPermissions', model: null, effort: null });
 });
 
 test('réglages à chaud (D68) : configure() change mode, modèle et effort sans relancer', async () => {
@@ -276,7 +311,7 @@ test('réglages à chaud (D68) : configure() change mode, modèle et effort sans
   });
   d.send('reglages');
   await waitFor(() => reglagesVus(events) !== undefined, 5000, 'réglages du lancement');
-  expect(reglagesVus(events)).toEqual({ mode: 'auto', model: 'opus', effort: null });
+  expect(reglagesVus(events)).toEqual({ mode: 'bypassPermissions', model: 'opus', effort: null });
 
   d.configure({ mode: 'plan', model: null, effort: 'max' });
   const before = events.length;
@@ -287,6 +322,41 @@ test('réglages à chaud (D68) : configure() change mode, modèle et effort sans
     'réglages changés',
   );
   expect(reglagesVus(events.slice(before))).toEqual({ mode: 'plan', model: null, effort: 'max' });
+});
+
+test('correctif autonomie : claude default → auto → default, bypassPermissions au contrôle à chaud puis retour', async () => {
+  const { driver: d, events } = start({ sessionId: randomUUID() });
+  d.send('reglages');
+  await waitFor(() => reglagesVus(events) !== undefined, 5000, 'réglages par défaut');
+  expect(reglagesVus(events)).toEqual({ mode: 'default', model: null, effort: null });
+
+  d.configure({ mode: 'auto', model: null, effort: null });
+  let before = events.length;
+  d.send('reglages');
+  await waitFor(
+    () => events.length > before && reglagesVus(events.slice(before)) !== undefined,
+    5000,
+    'passage en auto',
+  );
+  expect(reglagesVus(events.slice(before))).toEqual({
+    mode: 'bypassPermissions',
+    model: null,
+    effort: null,
+  });
+
+  d.configure({ mode: 'default', model: null, effort: null });
+  before = events.length;
+  d.send('reglages');
+  await waitFor(
+    () => events.length > before && reglagesVus(events.slice(before)) !== undefined,
+    5000,
+    'retour au défaut',
+  );
+  expect(reglagesVus(events.slice(before))).toEqual({
+    mode: 'default',
+    model: null,
+    effort: null,
+  });
 });
 
 const turnEnds = (events: ConversationEvent[]) =>
