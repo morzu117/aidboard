@@ -73,7 +73,33 @@ Tests écrits par un agent Claude, jamais avec le vrai `claude` ni `codex` : le 
     sur le serveur ; (f) `RemoteDriver.remoteControlState` toujours `unsupported` ; (g) la remise à `off` avant
     le rejet des attentes.
   - Réserves : `{ enabled: 1 }` est accepté comme `true`, par la coercition d'Ajv commune à toutes les routes
-    (gardée, décision de l'opérateur). La réactivation d'un agent déjà connecté n'est pas couverte : le bouton ne
+    (gardée, comme pour les autres routes). La réactivation d'un agent déjà connecté n'est pas couverte : le bouton ne
     la propose pas, et le comportement du vrai claude n'a pas été observé.
   - Lignes existantes modifiées : 1, le commentaire « control_response entrant… : ignorés » de `claude.ts`,
     devenu faux. La puce A.2 du plan est réécrite (le fichier du chantier est nouveau dans ce commit).
+- **B.1 (2026-11-03) — chip « Remote ».** Dans `ComposerReglages`, à droite du chip modèle, pour un pilote dont
+  `REMOTE_CONTROL` est vrai (claude) : l'état est lu au montage par la route de l'agent (`useAgentRoutes`, donc
+  locale ou distante), relu à chaque ouverture du menu et toutes les 3 s tant qu'il est `connecting`. Le chip est
+  absent si l'état est `unsupported` ou si la lecture échoue. Libellés « Remote », « Remote · connexion… »,
+  « Remote · connecté », « Remote · erreur » (attribut `data-etat`). Le menu, même mécanique que mode et modèle
+  (clic dehors et Échap ferment), dit l'état, donne « Ouvrir la session » (nouvel onglet) en connexion ou connecté
+  avec une url, et un bouton « Activer » / « Désactiver » / « Réessayer » désactivé pendant le `POST` ; un `POST`
+  refusé passe par l'erreur du composer et relit l'état.
+  - Tests : `test/web/conversation.test.tsx` (« chip Remote » : absent pour codex sans lecture, absent si
+    `unsupported` ou si le `GET` échoue, libellé par état, Activer → `{ enabled: true }` puis lien, bouton
+    désactivé pendant la requête, Échap, Désactiver → `{ enabled: false }`, erreur sans lien même avec une url,
+    Réessayer, `POST` refusé → alerte et relecture, relecture toutes les 3 s en connexion arrêtée une fois connecté
+    sous fake timers), `test/web/discussion.test.tsx` (agent distant : lecture et bascule par
+    `/api/server-agents`), `e2e/remote-control.spec.ts` (deux daemons `stream` dédiés devant le faux claude :
+    Activer → « Remote · connecté » et lien `session_fake<n>`, Désactiver → « Remote » ; le second porte
+    `FAKE_CLAUDE_RC_REFUSE` : refus affiché, « Remote · erreur », « Réessayer »).
+  - Mutations vérifiées, chacune casse au moins un test : (a) chip lu et affiché aussi pour codex ; (b) pas de
+    relecture en connexion ; (c) bascule qui envoie toujours `enabled: true` ; (d) lien affiché hors connexion ;
+    (e) erreur de `POST` avalée sans `onErreur`.
+  - Réserves : un `connected` qui retombe (`failed` côté claude) n'est vu qu'à la prochaine ouverture du menu ou au
+    prochain montage, la relecture ne tournant qu'en connexion. Une relecture en vol peut, en théorie, revenir
+    après la réponse d'un `POST` et afficher l'état d'avant jusqu'à la lecture suivante. Le composant ne remet pas
+    l'état à zéro si `agentId` change sans remontage : sans effet aujourd'hui, `Conversation` étant remontée par
+    `key={agent.id}` dans Sujet et Discussion.
+  - Lignes existantes modifiées : 2, le type `Menu` de `ComposerReglages.tsx` (ajout de `'remote'`) et la
+    réserve du Journal A.1, qui attribuait à tort la coercition d'Ajv à une décision de l'opérateur.

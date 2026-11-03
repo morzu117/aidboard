@@ -983,6 +983,24 @@ body {
   width: 1em;
   color: var(--acc);
 }
+/* Chantier 23 (D91) : le chip et le menu du remote-control */
+.composer-chip-remote[data-etat='connected'] {
+  border-color: var(--s-ok);
+  color: var(--s-ok);
+}
+.composer-chip-remote[data-etat='error'] {
+  color: var(--s-erreur);
+}
+.composer-menu-texte {
+  margin: 0;
+  padding: var(--sp-1) var(--sp-2);
+  color: var(--muted);
+  font-size: var(--fs-s);
+  white-space: normal;
+}
+a.composer-menu-ligne {
+  text-decoration: none;
+}
 /* Chantier 22 (D86) : menu des commandes `/`, au-dessus du champ */
 .composer:has(> .composer-commandes) {
   position: relative;
