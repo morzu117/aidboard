@@ -1589,3 +1589,94 @@ test('compact (22 A.3, D81) : `/compact` sur un codex du serveur compacte son th
     assistant(m, a.id, `echo: entree ${JSON.stringify([{ type: 'text', text: '/compact' }])}`),
   ).toBe(0);
 });
+
+// ---- chantier 23 (A.1, D87-D90) : remote-control d'un agent de serveur, avec le faux claude
+
+async function etatRc(m: Monte, agentId: string): Promise<{ status: string; url?: string }> {
+  const r = await m.req('GET', `/api/server-agents/${agentId}/remote-control`);
+  expect(r.statusCode).toBe(200);
+  return r.json();
+}
+
+async function attendreRc(m: Monte, agentId: string, status: string): Promise<void> {
+  const t0 = Date.now();
+  while ((await etatRc(m, agentId)).status !== status) {
+    if (Date.now() - t0 > 15_000) throw new Error(`délai dépassé : remote-control ${status}`);
+    await new Promise((r) => setTimeout(r, 50));
+  }
+}
+
+test('remote-control (23 A.1) : claude du serveur activé → url puis connecté, nommé d’après la discussion ; désactivé → off', async () => {
+  const m = await daemon(serveur());
+  const s = await creerServeur(m);
+  const a = (await creerDiscussion(m, s.id)).agents[0]!;
+  expect(await etatRc(m, a.id)).toEqual({ status: 'off' });
+
+  const on = await m.req('POST', `/api/server-agents/${a.id}/remote-control`, { enabled: true });
+  expect(on.statusCode).toBe(200);
+  expect(on.json()).toEqual({ status: 'connecting', url: 'https://claude.ai/code/session_fake1' });
+  await attendreRc(m, a.id, 'connected');
+  expect(await etatRc(m, a.id)).toEqual({
+    status: 'connected',
+    url: 'https://claude.ai/code/session_fake1',
+  });
+
+  await envoyer(m, a.id, 'remote-control');
+  const vu = `echo: remote-control ${JSON.stringify({ enabled: true, name: 'A-I-D · Essai' })}`;
+  await waitFor(() => assistant(m, a.id, vu) === 1, 15_000, 'nom de la session');
+
+  const off = await m.req('POST', `/api/server-agents/${a.id}/remote-control`, { enabled: false });
+  expect(off.statusCode).toBe(200);
+  expect(off.json()).toEqual({ status: 'off' });
+  expect(await etatRc(m, a.id)).toEqual({ status: 'off' });
+}, 30_000);
+
+test('remote-control (23 A.1) : agent du serveur arrêté — désactiver sans relance, activer le relance', async () => {
+  const m = await daemon(serveur());
+  const s = await creerServeur(m);
+  const a = (await creerDiscussion(m, s.id)).agents[0]!;
+  await envoyer(m, a.id, 'crash');
+  await waitFor(() => ligne(m, a.id)?.status === 'error', 15_000, 'agent mort');
+  const relais = ligne(m, a.id)!.tmux_session;
+  expect(await etatRc(m, a.id)).toEqual({ status: 'off' });
+
+  const off = await m.req('POST', `/api/server-agents/${a.id}/remote-control`, { enabled: false });
+  expect(off.json()).toEqual({ status: 'off' });
+  expect(ligne(m, a.id)!.tmux_session).toBe(relais);
+  expect(ligne(m, a.id)!.status).toBe('error');
+
+  const on = await m.req('POST', `/api/server-agents/${a.id}/remote-control`, { enabled: true });
+  expect(on.statusCode).toBe(200);
+  expect(on.json()).toEqual({ status: 'connecting', url: 'https://claude.ai/code/session_fake1' });
+  expect(ligne(m, a.id)!.tmux_session).not.toBe(relais);
+}, 30_000);
+
+test('remote-control (23 A.1) : codex unsupported et 409, corps invalide 400, inconnu 404, token de run 403', async () => {
+  const m = await daemon(serveur());
+  const s = await creerServeur(m);
+  const claude = (await creerDiscussion(m, s.id)).agents[0]!;
+  const codex = (await creerDiscussion(m, s.id, 'codex')).agents[0]!;
+  expect(await etatRc(m, codex.id)).toEqual({ status: 'unsupported' });
+  const r = await m.req('POST', `/api/server-agents/${codex.id}/remote-control`, { enabled: true });
+  expect(r.statusCode).toBe(409);
+
+  for (const payload of [{}, { enabled: 'oui' }, { enabled: true, name: 'x' }])
+    expect(
+      (await m.req('POST', `/api/server-agents/${claude.id}/remote-control`, payload)).statusCode,
+    ).toBe(400);
+  expect((await m.req('GET', '/api/server-agents/sa_inconnu/remote-control')).statusCode).toBe(404);
+
+  const headers = { ...m.t.headers, authorization: `Bearer ${issueRunToken(m.t.d.auth, 'run_1')}` };
+  for (const method of ['GET', 'POST'] as const)
+    expect(
+      (
+        await m.t.d.app.inject({
+          method,
+          url: `/api/server-agents/${claude.id}/remote-control`,
+          headers,
+          ...(method === 'POST' && { payload: { enabled: true } }),
+        })
+      ).statusCode,
+    ).toBe(403);
+  expect(await etatRc(m, claude.id)).toEqual({ status: 'off' });
+});

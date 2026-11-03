@@ -2,6 +2,7 @@ import { spawnSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { join } from 'node:path';
 import { afterEach, expect, test } from 'vitest';
+import { vi } from 'vitest';
 import { buildClaudeArgs, ClaudeDriver } from '../src/daemon/conversation/claude.js';
 import type { ConversationEvent } from '../src/daemon/conversation/driver.js';
 import { agentEnv } from '../src/daemon/pty/spawn.js';
@@ -384,4 +385,184 @@ test('success sans is_error, même avec un texte result : ok, sans erreur', asyn
   d.send('success avec texte');
   await waitFor(() => turnEnds(events).length === 1, 5000, 'fin du tour');
   expect(turnEnds(events)[0]).toMatchObject({ ok: true, error: undefined });
+});
+
+// ---- Chantier 23 (A.1, D87-D89) : remote-control par le `control_request` `remote_control`
+
+/** Lancé avec des options du faux claude, retirées de l'environnement du test aussitôt copiées. */
+function startRc(env: Record<string, string> = {}) {
+  Object.assign(process.env, env);
+  try {
+    return start({ sessionId: randomUUID() });
+  } finally {
+    for (const k of Object.keys(env)) delete process.env[k];
+  }
+}
+
+/** Ce que le faux claude a reçu à la dernière demande de remote-control (tour « remote-control »). */
+async function demandeVue(d: ClaudeDriver, events: ConversationEvent[]): Promise<unknown> {
+  const prefix = 'echo: remote-control ';
+  const avant = events.length;
+  d.send('remote-control');
+  const m = await waitFor(
+    () =>
+      events
+        .slice(avant)
+        .find(
+          (e): e is Extract<ConversationEvent, { type: 'message' }> =>
+            e.type === 'message' && e.role === 'assistant' && e.text.startsWith(prefix),
+        ),
+    5000,
+    'demande vue par claude',
+  );
+  return JSON.parse(m.text.slice(prefix.length));
+}
+
+async function tour(d: ClaudeDriver, events: ConversationEvent[], text: string): Promise<void> {
+  const avant = events.length;
+  d.send(text);
+  await waitFor(
+    () => events.slice(avant).some((e) => e.type === 'turn_end'),
+    5000,
+    `tour « ${text} »`,
+  );
+}
+
+const URL1 = 'https://claude.ai/code/session_fake1';
+
+test('remote-control : éteint au départ ; activé → url et connexion, puis connecté ; le nom est envoyé', async () => {
+  const { driver: d, events } = startRc();
+  expect(d.remoteControlState()).toEqual({ status: 'off' });
+
+  const r = await d.remoteControl(true, 'A-I-D · Mon sujet');
+  // `bridge_state ready` est arrivé avant la réponse, `connected` après : la réponse rend « connexion »
+  expect(r).toEqual({ status: 'connecting', url: URL1 });
+  await waitFor(() => d.remoteControlState().status === 'connected', 5000, 'connecté');
+  expect(d.remoteControlState()).toEqual({ status: 'connected', url: URL1 });
+  expect(await demandeVue(d, events)).toEqual({ enabled: true, name: 'A-I-D · Mon sujet' });
+
+  // un autre état du pont que connected/failed : « connexion », l'url gardée
+  await tour(d, events, 'bridge_state reconnecting');
+  expect(d.remoteControlState()).toEqual({ status: 'connecting', url: URL1 });
+});
+
+test('remote-control : désactivé → off sans nom envoyé ; un bridge_state ensuite est ignoré', async () => {
+  const { driver: d, events } = startRc();
+  await d.remoteControl(true, 'A-I-D · S');
+  await waitFor(() => d.remoteControlState().status === 'connected', 5000, 'connecté');
+
+  expect(await d.remoteControl(false, 'A-I-D · S')).toEqual({ status: 'off' });
+  expect(d.remoteControlState()).toEqual({ status: 'off' });
+  expect(await demandeVue(d, events)).toEqual({ enabled: false });
+
+  await tour(d, events, 'bridge_state connected');
+  await tour(d, events, 'bridge_state failed');
+  expect(d.remoteControlState()).toEqual({ status: 'off' });
+});
+
+test('remote-control : refusé par claude → rejet avec son message, état en erreur', async () => {
+  const refus = 'Remote Control is not enabled for this account';
+  const { driver: d } = startRc({ FAKE_CLAUDE_RC_REFUSE: refus });
+  await expect(d.remoteControl(true, 'A-I-D · S')).rejects.toThrow(refus);
+  expect(d.remoteControlState()).toEqual({ status: 'error', error: refus });
+});
+
+test('remote-control : désactivation refusée → rejet, l’état d’avant est gardé', async () => {
+  const refus = 'désactivation impossible';
+  const { driver: d } = startRc({ FAKE_CLAUDE_RC_REFUSE: refus });
+  await expect(d.remoteControl(false, 'A-I-D · S')).rejects.toThrow(refus);
+  expect(d.remoteControlState()).toEqual({ status: 'off' });
+});
+
+test('remote-control : sans réponse de claude → rejet après 30 s, état en erreur', async () => {
+  const { driver: d, events } = startRc({ FAKE_CLAUDE_RC_SILENT: '1' });
+  const realSetTimeout = globalThis.setTimeout;
+  const attendre = async (check: () => boolean, what: string) => {
+    const t0 = Date.now();
+    while (!check()) {
+      if (Date.now() - t0 > 5000) throw new Error(`délai dépassé : ${what}`);
+      await new Promise((r) => realSetTimeout(r, 25));
+    }
+  };
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+  try {
+    let issue: string | undefined;
+    d.remoteControl(true, 'A-I-D · S').then(
+      () => (issue = 'résolu'),
+      (e: Error) => (issue = e.message),
+    );
+    expect(d.remoteControlState()).toEqual({ status: 'connecting' });
+    // un tour passé après la demande : claude l'a lue et n'y a pas répondu
+    d.send('bonjour');
+    await attendre(() => events.some((e) => e.type === 'turn_end'), 'tour après la demande');
+    vi.advanceTimersByTime(29_999);
+    await Promise.resolve();
+    expect(issue).toBeUndefined();
+    expect(d.remoteControlState()).toEqual({ status: 'connecting' });
+    vi.advanceTimersByTime(1);
+    await attendre(() => issue !== undefined, 'rejet');
+    expect(issue).toBe('claude n’a pas répondu à la demande de remote-control');
+    expect(d.remoteControlState()).toEqual({ status: 'error', error: 'claude n’a pas répondu' });
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+test('remote-control : bridge_state failed une fois connecté → erreur avec son detail, l’url gardée', async () => {
+  const detail = 'session expirée côté claude.ai';
+  const { driver: d } = startRc({ FAKE_CLAUDE_RC_FAIL: detail });
+  await d.remoteControl(true, 'A-I-D · S');
+  await waitFor(() => d.remoteControlState().status === 'error', 5000, 'échec du pont');
+  expect(d.remoteControlState()).toEqual({ status: 'error', url: URL1, error: detail });
+});
+
+test('remote-control : bridge_state failed sans detail → message par défaut', async () => {
+  const { driver: d, events } = startRc();
+  await d.remoteControl(true, 'A-I-D · S');
+  await waitFor(() => d.remoteControlState().status === 'connected', 5000, 'connecté');
+  await tour(d, events, 'bridge_state failed');
+  expect(d.remoteControlState()).toEqual({
+    status: 'error',
+    url: URL1,
+    error: 'remote-control déconnecté',
+  });
+});
+
+test('remote-control : le process sort pendant une demande → rejet, état éteint', async () => {
+  const { driver: d, events } = startRc({ FAKE_CLAUDE_RC_SILENT: '1' });
+  const demande = d.remoteControl(true, 'A-I-D · S');
+  const issue = demande.then(
+    () => 'résolu',
+    (e: Error) => e.message,
+  );
+  d.send('crash');
+  await waitFor(() => events.some((e) => e.type === 'exit'), 5000, 'sortie');
+  expect(await issue).toBe('agent arrêté');
+  expect(d.remoteControlState()).toEqual({ status: 'off' });
+  await expect(d.remoteControl(true, 'A-I-D · S')).rejects.toThrow('agent arrêté');
+});
+
+test('remote-control : le process sort une fois connecté → état éteint', async () => {
+  const { driver: d, events } = startRc();
+  await d.remoteControl(true, 'A-I-D · S');
+  await waitFor(() => d.remoteControlState().status === 'connected', 5000, 'connecté');
+  d.send('crash');
+  await waitFor(() => events.some((e) => e.type === 'exit'), 5000, 'sortie');
+  expect(d.remoteControlState()).toEqual({ status: 'off' });
+});
+
+test('remote-control : une control_response inattendue est ignorée, la demande en cours attend toujours', async () => {
+  const { driver: d, events } = startRc({ FAKE_CLAUDE_RC_SILENT: '1' });
+  let issue: string | undefined;
+  const demande = d.remoteControl(true, 'A-I-D · S');
+  demande.then(
+    () => (issue = 'résolu'),
+    (e: Error) => (issue = e.message),
+  );
+  // les réglages répondent aussi par control_response, à d'autres request_id
+  d.configure({ mode: 'plan', model: 'opus', effort: 'high' });
+  await tour(d, events, 'control_response inconnue');
+  expect(issue).toBeUndefined();
+  expect(d.remoteControlState()).toEqual({ status: 'connecting' });
+  expect(events.some((e) => e.type === 'exit')).toBe(false);
 });

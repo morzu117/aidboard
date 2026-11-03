@@ -7,6 +7,8 @@ import { RemoteAgentManager, type RemoteAgentManagerDeps } from '../remote/agent
 import { maskStoredSecrets } from '../remote/scrub.js';
 import { getServer } from '../remote/servers.js';
 
+const RemoteControlBody = Type.Object({ enabled: Type.Boolean() }, { additionalProperties: false });
+
 const CreateBody = Type.Object(
   {
     name: Type.String({ minLength: 1, maxLength: 200 }),
@@ -163,6 +165,21 @@ export function registerServerDiscussionRoutes(
 
   app.patch('/api/server-agents/:id/settings', { schema: { body: SettingsBody } }, async (req) =>
     manager.setSettings((req.params as { id: string }).id, req.body as Partial<AgentSettings>),
+  );
+
+  // Chantier 23 (D90) : le remote-control d'un agent distant, comme en local
+  app.get('/api/server-agents/:id/remote-control', async (req) =>
+    manager.remoteControlState((req.params as { id: string }).id),
+  );
+
+  app.post(
+    '/api/server-agents/:id/remote-control',
+    { schema: { body: RemoteControlBody } },
+    async (req) =>
+      manager.setRemoteControl(
+        (req.params as { id: string }).id,
+        (req.body as { enabled: boolean }).enabled,
+      ),
   );
 
   // chantier 20 (DM6) : l'historique écrit avant le masquage à l'entrée, masqué une fois, avant tout rattachement

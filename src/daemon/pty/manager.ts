@@ -50,6 +50,7 @@ import {
 import { meshPaths } from '../mesh/paths.js';
 import { homedir } from 'node:os';
 import { poseUneQuestion } from '../../shared/question.js';
+import { REMOTE_CONTROL, type RemoteControlState } from '../../shared/agentSettings.js';
 
 const ulid = monotonicFactory();
 /** D70 : bornes des pièces jointes d'un message. */
@@ -838,6 +839,37 @@ export class AgentManager {
     const live = this.streams.get(agentId);
     if (live && !live.exited) live.driver.configure(next);
     return next;
+  }
+
+  /** Chantier 23 (D87, D89) : l'état du process vivant ; un agent en veille est éteint. */
+  remoteControlState(agentId: string): RemoteControlState {
+    const kind = this.streamKindOr409(agentId);
+    if (!REMOTE_CONTROL[kind]) return { status: 'unsupported' };
+    const live = this.streams.get(agentId);
+    if (!live || live.exited) return { status: 'off' };
+    return live.driver.remoteControlState?.() ?? { status: 'unsupported' };
+  }
+
+  /** D90 : activer réveille un agent en veille ; la session porte le titre du sujet. */
+  async setRemoteControl(agentId: string, enabled: boolean): Promise<RemoteControlState> {
+    const kind = this.streamKindOr409(agentId);
+    if (!REMOTE_CONTROL[kind])
+      throw new AidHttpError(409, `remote-control non pris en charge par ${kind}`);
+    const existing = this.streams.get(agentId);
+    if (!enabled && (!existing || existing.exited)) return { status: 'off' };
+    const live = this.streamOrResume(agentId);
+    if (!live.driver.remoteControl)
+      throw new AidHttpError(409, `remote-control non pris en charge par ${kind}`);
+    const topic = this.deps.db
+      .prepare(
+        'SELECT t.title FROM agents a JOIN runs r ON r.id = a.run_id JOIN topics t ON t.id = r.topic_id WHERE a.id = ?',
+      )
+      .get(agentId) as { title: string } | undefined;
+    try {
+      return await live.driver.remoteControl(enabled, `A-I-D · ${topic?.title ?? agentId}`);
+    } catch (err) {
+      throw new AidHttpError(502, err instanceof Error ? err.message : String(err));
+    }
   }
 
   private streamOr409(agentId: string): LiveStream {

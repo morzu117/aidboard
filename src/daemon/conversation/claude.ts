@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import { type AgentSettings, DEFAULT_SETTINGS } from '../../shared/agentSettings.js';
 import type { AgentCommand } from '../../shared/agentSettings.js';
+import type { RemoteControlState } from '../../shared/agentSettings.js';
 import type { PendingOption, PendingRequest } from '../../shared/model.js';
 import {
   type AttachedFile,
@@ -19,6 +20,8 @@ const STDERR_TAIL_MAX = 4_000;
 const OUT_BUFFER_MAX = 8 * 1024 * 1024;
 /** D83 : connexion et déconnexion demandent un terminal (constaté : « /login isn't available in this environment »). */
 const CLAUDE_HORS_TERMINAL = new Set(['login', 'logout']);
+/** D88 : la réponse à `remote_control` arrive après l'inscription de la session chez claude.ai (constaté : ~1 s). */
+const REMOTE_CONTROL_TIMEOUT_MS = 30_000;
 
 const PERMISSION_OPTIONS: PendingOption[] = [
   { label: 'Autoriser', answer: 'yes' },
@@ -135,6 +138,9 @@ export class ClaudeDriver implements ConversationDriver {
   private turnError: string | undefined;
   private commandList: AgentCommand[] = [];
   private settings: AgentSettings;
+  /** D87-D89 : l'état du remote-control de ce process, et les `control_response` attendus par leur `request_id`. */
+  private remote: RemoteControlState = { status: 'off' };
+  private controlWaiters = new Map<string, (response: Record<string, unknown>) => void>();
 
   constructor(opts: ConversationDriverOptions) {
     this.opts = opts;
@@ -186,6 +192,12 @@ export class ClaudeDriver implements ConversationDriver {
     if (this.exited) return;
     this.exited = true;
     this.cancelPendingPermissions();
+    // D89 : le remote-control meurt avec le process ; une demande en cours n'aura pas de réponse
+    const waiters = [...this.controlWaiters.values()];
+    this.controlWaiters.clear();
+    for (const w of waiters) w({ subtype: 'error', error: 'agent arrêté' });
+    // après les attentes : leur échec poserait `error`
+    this.remote = { status: 'off' };
     this.emit({
       type: 'exit',
       code,
@@ -237,10 +249,14 @@ export class ClaudeDriver implements ConversationDriver {
       this.handleUser(o);
     } else if (o.type === 'control_request') {
       this.handleControlRequest(o);
+    } else if (o.type === 'control_response') {
+      this.handleControlResponse(o);
+    } else if (o.type === 'system' && o.subtype === 'bridge_state') {
+      this.readBridgeState(o);
     } else if (o.type === 'result') {
       this.handleResult(o);
     }
-    // hooks, rate_limit_event, thinking_tokens, permission_denied, control_response entrant… : ignorés.
+    // hooks, rate_limit_event, thinking_tokens, permission_denied… : ignorés.
   }
 
   /**
@@ -270,6 +286,74 @@ export class ClaudeDriver implements ConversationDriver {
 
   commands(): AgentCommand[] {
     return this.commandList;
+  }
+
+  /** Réponse à une demande d'A-I-D : seules celles qu'on attend (`remote_control`) ont une suite. */
+  private handleControlResponse(o: Record<string, unknown>): void {
+    const response = o.response as Record<string, unknown> | undefined;
+    const requestId = response?.request_id;
+    if (typeof requestId !== 'string') return;
+    const waiter = this.controlWaiters.get(requestId);
+    if (!waiter) return;
+    this.controlWaiters.delete(requestId);
+    waiter(response!);
+  }
+
+  /** D88 : `connected` connecté, `failed` en erreur, tout autre état en connexion ; rien tant qu'il est éteint. */
+  private readBridgeState(o: Record<string, unknown>): void {
+    if (this.remote.status === 'off' || this.remote.status === 'unsupported') return;
+    const { url } = this.remote;
+    if (o.state === 'connected') this.remote = { status: 'connected', ...(url && { url }) };
+    else if (o.state === 'failed')
+      this.remote = {
+        status: 'error',
+        ...(url && { url }),
+        error: typeof o.detail === 'string' && o.detail ? o.detail : 'remote-control déconnecté',
+      };
+    else this.remote = { status: 'connecting', ...(url && { url }) };
+  }
+
+  remoteControlState(): RemoteControlState {
+    return this.remote;
+  }
+
+  /** D88 : le `control_request` `remote_control` de claude 2.1.308, sans relancer le process. */
+  remoteControl(enabled: boolean, name: string): Promise<RemoteControlState> {
+    if (this.exited || !this.child) return Promise.reject(new Error('agent arrêté'));
+    const requestId = randomUUID();
+    const avant = this.remote;
+    if (enabled && avant.status !== 'connected') this.remote = { status: 'connecting' };
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        this.controlWaiters.delete(requestId);
+        if (enabled) this.remote = { status: 'error', error: 'claude n’a pas répondu' };
+        reject(new Error('claude n’a pas répondu à la demande de remote-control'));
+      }, REMOTE_CONTROL_TIMEOUT_MS);
+      this.controlWaiters.set(requestId, (r) => {
+        clearTimeout(timer);
+        if (r.subtype !== 'success') {
+          const error = typeof r.error === 'string' && r.error ? r.error : 'remote-control refusé';
+          this.remote = enabled ? { status: 'error', error } : avant;
+          reject(new Error(error));
+          return;
+        }
+        const payload = (r.response ?? {}) as Record<string, unknown>;
+        const url = typeof payload.session_url === 'string' ? payload.session_url : undefined;
+        // `bridge_state` peut avoir dit `connected` avant la réponse : l'état déjà connu est gardé
+        this.remote = enabled
+          ? {
+              status: this.remote.status === 'connected' ? 'connected' : 'connecting',
+              ...(url && { url }),
+            }
+          : { status: 'off' };
+        resolve(this.remote);
+      });
+      this.write({
+        type: 'control_request',
+        request_id: requestId,
+        request: { subtype: 'remote_control', enabled, ...(enabled && name && { name }) },
+      });
+    });
   }
 
   private handleAssistant(o: Record<string, unknown>): void {

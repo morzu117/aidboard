@@ -6,6 +6,7 @@ import { Buffer } from 'node:buffer';
 import { createInterface } from 'node:readline';
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { setTimeout } from 'node:timers';
 
 const args = process.argv.slice(2);
 const argAfter = (flag) => {
@@ -55,6 +56,59 @@ let reqCounter = 0;
 const pendingControl = new Map();
 let longAbort = null;
 
+// Chantier 23 (A.1) : le `control_request` `remote_control` de claude 2.1.308, sans réseau. `bridge_state` `ready`
+// avant la réponse, `connected` après ; la désactivation répond `success` seul. FAKE_CLAUDE_RC_REFUSE=<message>
+// refuse, FAKE_CLAUDE_RC_SILENT=1 ne répond jamais, FAKE_CLAUDE_RC_FAIL=<detail> passe en `failed` une fois connecté.
+// Le tour « remote-control » renvoie la dernière demande reçue ; « bridge_state <état> » émet cet état.
+let remoteSessions = 0;
+let remoteDemande = null;
+const bridgeState = (state, detail) =>
+  emit({ type: 'system', subtype: 'bridge_state', state, ...(detail && { detail }) });
+function handleRemoteControl(msg) {
+  const { enabled, name } = msg.request;
+  remoteDemande = { enabled, ...(name !== undefined && { name }) };
+  if (process.env.FAKE_CLAUDE_RC_SILENT) return;
+  if (process.env.FAKE_CLAUDE_RC_REFUSE) {
+    emit({
+      type: 'control_response',
+      response: {
+        subtype: 'error',
+        request_id: msg.request_id,
+        error: process.env.FAKE_CLAUDE_RC_REFUSE,
+      },
+    });
+    return;
+  }
+  if (!enabled) {
+    emit({
+      type: 'control_response',
+      response: { subtype: 'success', request_id: msg.request_id },
+    });
+    return;
+  }
+  const n = ++remoteSessions;
+  bridgeState('ready');
+  emit({
+    type: 'control_response',
+    response: {
+      subtype: 'success',
+      request_id: msg.request_id,
+      response: {
+        session_url: `https://claude.ai/code/session_fake${n}`,
+        connect_url: `https://claude.ai/code/connect_fake${n}`,
+        environment_id: '',
+        bridge_epoch: n,
+        bridge_session_id: `cse_fake${n}`,
+      },
+    },
+  });
+  setTimeout(() => {
+    bridgeState('connected');
+    const detail = process.env.FAKE_CLAUDE_RC_FAIL;
+    if (detail) setTimeout(() => bridgeState('failed', detail), 20);
+  }, 20);
+}
+
 async function handleTurn(text) {
   if (process.env.FAKE_CLAUDE_STRICT && sessionFile) {
     mkdirSync(sessions, { recursive: true });
@@ -65,6 +119,17 @@ async function handleTurn(text) {
     return;
   }
   if (text === 'reglages') text = `reglages ${JSON.stringify(settings)}`;
+  if (text === 'remote-control') text = `remote-control ${JSON.stringify(remoteDemande)}`;
+  if (text.startsWith('bridge_state ')) bridgeState(text.slice('bridge_state '.length));
+  // réponses qu'A-I-D n'attend pas : un `request_id` inconnu, sans `response`, ou qui n'est pas une chaîne
+  if (text === 'control_response inconnue') {
+    emit({
+      type: 'control_response',
+      response: { subtype: 'success', request_id: 'inconnu', response: { session_url: 'x' } },
+    });
+    emit({ type: 'control_response' });
+    emit({ type: 'control_response', response: { subtype: 'error', request_id: 42, error: 'x' } });
+  }
 
   emit({ type: 'system', subtype: 'init', session_id: sessionId, cwd: process.cwd() });
 
@@ -456,6 +521,10 @@ rl.on('line', (line) => {
       type: 'control_response',
       response: { subtype: 'success', request_id: msg.request_id },
     });
+    return;
+  }
+  if (msg.type === 'control_request' && msg.request?.subtype === 'remote_control') {
+    handleRemoteControl(msg);
     return;
   }
   if (msg.type === 'control_request' && msg.request?.subtype === 'interrupt') {
