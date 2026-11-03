@@ -103,11 +103,19 @@ function claudePermissionMode(mode: PermissionMode): string {
   return mode === 'auto' ? 'bypassPermissions' : mode;
 }
 
-/** Réglages au lancement (D67) : rien de plus que les arguments d'avant quand rien n'est réglé. */
+/**
+ * Réglages au lancement (D67) : rien de plus que les arguments d'avant quand rien n'est réglé.
+ * Re-dev 1/2 (correctif autonomie) : `--permission-mode` est explicite dès que des réglages sont
+ * connus (y compris `default`), et aussi en reprise sans réglages connus (repli sur
+ * `DEFAULT_SETTINGS.mode`) — sinon une reprise en Demander omettrait le flag et la CLI pourrait
+ * reprendre une permission `bypassPermissions` persistée par une session Auto précédente. Sans
+ * réglages et hors reprise, le comportement d'avant ce correctif est gardé (rien à hériter).
+ */
 function settingsArgs(opts: ConversationDriverOptions): string[] {
   const s = opts.settings;
+  const mode = s ? s.mode : opts.resume ? DEFAULT_SETTINGS.mode : undefined;
   return [
-    ...(s && s.mode !== 'default' ? ['--permission-mode', claudePermissionMode(s.mode)] : []),
+    ...(mode !== undefined ? ['--permission-mode', claudePermissionMode(mode)] : []),
     ...(s?.model ? ['--model', s.model] : []),
     ...(s?.effort ? ['--effort', s.effort] : []),
     ...(opts.attachmentsDir ? ['--add-dir', opts.attachmentsDir] : []),

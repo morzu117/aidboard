@@ -69,7 +69,7 @@ export function commandOf(
  */
 export function sandboxPolicyOf(mode: string, cwd: string): Record<string, unknown> | undefined {
   if (mode === 'danger-full-access') return { type: 'dangerFullAccess' };
-  if (mode === 'read-only') return { type: 'readOnly' };
+  if (mode === 'read-only') return { type: 'readOnly', networkAccess: false };
   if (mode === 'workspace-write') {
     return {
       type: 'workspaceWrite',

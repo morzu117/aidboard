@@ -1,7 +1,12 @@
 import { randomUUID } from 'node:crypto';
 import { join } from 'node:path';
 import { afterEach, expect, test } from 'vitest';
-import { buildCodexArgs, CodexDriver, commandOf } from '../src/daemon/conversation/codex.js';
+import {
+  buildCodexArgs,
+  CodexDriver,
+  commandOf,
+  sandboxPolicyOf,
+} from '../src/daemon/conversation/codex.js';
 import type { ConversationEvent } from '../src/daemon/conversation/driver.js';
 import { agentEnv } from '../src/daemon/pty/spawn.js';
 import type { AgentSettings } from '../src/shared/agentSettings.js';
@@ -497,6 +502,18 @@ test('commande d’une approbation (revue R.5) : enveloppe ouverte, sinon telle 
   expect(commandOf({ command: '', commandActions: 'pas une liste' })).toEqual({ command: '' });
   expect(commandOf({ commandActions: [] })).toBeUndefined();
   expect(commandOf(undefined)).toBeUndefined();
+});
+
+test('sandboxPolicyOf (re-dev 1/2, triage review 1) : readOnly porte networkAccess: false', () => {
+  // conformité au type généré (ThreadResumeParams/TurnStartParams, codex 0.166.0) : la forme explicite
+  // est documentée même si le serveur accepte aussi l'omission (diagnostic réel, non un rejet prouvé).
+  expect(sandboxPolicyOf('read-only', process.cwd())).toEqual({
+    type: 'readOnly',
+    networkAccess: false,
+  });
+  expect(sandboxPolicyOf('danger-full-access', process.cwd())).toEqual(DANGER_FULL_ACCESS);
+  expect(sandboxPolicyOf('workspace-write', process.cwd())).toEqual(WORKSPACE_WRITE);
+  expect(sandboxPolicyOf('inconnu', process.cwd())).toBeUndefined();
 });
 
 /** Chantier 22 (A.2, D84) : les skills de `skills/list`, filtrées, et ce que la fausse app-server lit au `turn/start`. */

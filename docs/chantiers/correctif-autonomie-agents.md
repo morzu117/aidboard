@@ -108,3 +108,71 @@ ou d'une doc interne — à revérifier si la CLI embarquée par le paquet diff�
 de la CLI locale utilisée pour ce diagnostic. Aucun credential GitHub utilisé,
 aucun push, aucune PR, aucun merge : commit local sur `fix/codex-git-permissions`
 uniquement.
+
+## Review 1 et triage — 2026-11-03
+
+Review Claude Sonnet 5 indépendante, aucun outil/MCP, diff en ligne, coût 0,206185 $.
+P1 retenu : la reprise Claude en Demander omet encore le flag de permission ;
+le mode courant doit être explicite et le cas couvert par un test de reprise.
+P2 de conformité : ajouter `networkAccess: false` au variant `readOnly`.
+Le diagnostic réel Codex 0.166.0 accepte aussi l'omission (donc le rejet du
+payload évoqué par la review n'est pas reproduit), mais la forme explicite
+respecte le type généré et documente le choix. `ThreadResumeParams` généré
+localement confirme `cwd`, `approvalPolicy` et `sandbox` : pas d'incertitude
+restante sur ces champs.
+
+Gate e2e complet du commit 81b8448 : paquet installable validé, 55 parcours
+navigateur passés. La nouvelle révision devra repasser les gates.
+Diagnostic réel complémentaire : HTTP GitHub sous workspaceWrite échoue
+(DNS, code 6) ; sous dangerFullAccess, la même requête retourne HTTP 200.
+
+## Re-dev 1/2 — 2026-11-03
+
+Deux points du triage, un commit additionnel (pas d'amend) sur
+`fix/codex-git-permissions`.
+
+**P1 (claude, `settingsArgs()`)** — `--permission-mode` est désormais explicite
+dès que des réglages sont connus (y compris `default`), à tout lancement et
+à toute reprise ; et aussi en reprise sans réglages connus, par repli sur
+`DEFAULT_SETTINGS.mode` (`'default'`). Sans réglages et hors reprise, rien de
+plus qu'avant ce correctif (rien à hériter). Ainsi « Demander » ne dépend
+jamais de ce que `claude --resume` aurait pu hériter d'un réglage persistant
+d'une session Auto précédente. `claudePermissionMode()`, `buildClaudeArgs()`
+et les autres modes/modèle/effort restent inchangés.
+
+**P2 (codex, `sandboxPolicyOf()`)** — le variant `read-only` porte maintenant
+`networkAccess: false`, conforme à `ThreadResumeParams`/`TurnStartParams`
+générés localement (codex 0.166.0). Le triage note que le serveur accepte
+aussi l'omission (pas un rejet prouvé) : le changement est de conformité au
+type généré, pas un correctif de bug reproduit.
+
+**Tests** — `test/fixtures/fake-claude-stream.mjs` : sans `--permission-mode`
+explicite, une reprise simule désormais une ancienne permission
+`bypassPermissions` persistée (au lieu de `default`) — pour qu'un test de
+reprise échoue si le flag venait à être omis. Deux nouveaux tests dans
+`test/conversation-claude.test.ts`, invocation réelle du faux process :
+reprise avec réglage `default` (vérifie `default` explicite, pas
+`bypassPermissions` hérité) et reprise avec réglage `auto` (`bypassPermissions`
+explicite). Assertions existantes de `buildClaudeArgs` (D67) mises à jour
+précisément : le cas réglages connus + mode `default` attend maintenant le
+flag ; un nouveau cas couvre la reprise sans réglages connus. Dans
+`test/conversation-codex.test.ts` : nouveau test unitaire direct de
+`sandboxPolicyOf()` (exporté), les quatre branches — `read-only` (avec
+`networkAccess: false`), `danger-full-access`, `workspace-write`, et une
+valeur non reconnue (`undefined`). Pas de test ajouté pour `read-only` au
+niveau tour/reprise : aucun appelant de production ne positionne
+`sandbox: 'read-only'` aujourd'hui (seul `approvalAndSandbox()` produit
+`danger-full-access`/`workspace-write` ; `read-only` ne viendrait que d'un
+`opts.sandbox` explicite, jamais défini en dehors des tests) — le test
+unitaire de la fonction pure couvre ce que ce correctif change réellement.
+
+**Validation** — `npm run gate` complet, vert : typecheck, lint
+(`prettier --check` inclus), build, 1377 tests passés (1374 + 3 nouveaux ;
+2 skip pré-existants, non touchés, non retirés). Aucun seuil abaissé, aucune
+assertion affaiblie — toujours `toEqual`/égalité exacte sur les cas touchés.
+`gate:e2e` et le gate Node 24 laissés à l'orchestrateur, comme demandé.
+
+**Limites** — mêmes repli déclarés que le dev initial : CodeGraph absent de
+ce worktree (lecture ciblée), gbrain et mémoire A-I-D injoignables (rien
+écrit hors ce document). Aucun credential GitHub, aucun push, aucune PR,
+aucun merge : commit local uniquement.

@@ -16,8 +16,11 @@ const argAfter = (flag) => {
 const resume = args.includes('--resume');
 const sessionId = resume ? argAfter('--resume') : argAfter('--session-id');
 // Réglages (chantier 16) : ceux du lancement, puis ceux des `control_request` reçus ; « reglages » les renvoie.
+// Re-dev 1/2 (correctif autonomie) : sans `--permission-mode` explicite, une reprise simule une
+// ancienne permission `bypassPermissions` restée persistée d'une session Auto précédente — comme
+// ferait la vraie CLI en l'absence du flag — pour démasquer toute reprise qui omettrait le flag.
 const settings = {
-  mode: argAfter('--permission-mode') ?? 'default',
+  mode: argAfter('--permission-mode') ?? (resume ? 'bypassPermissions' : 'default'),
   model: argAfter('--model') ?? null,
   effort: argAfter('--effort') ?? null,
 };
