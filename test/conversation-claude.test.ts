@@ -256,6 +256,8 @@ const reglagesVus = (events: ConversationEvent[]) => {
 test('buildClaudeArgs (D67) : mode, modèle, effort et dossier des pièces jointes au lancement', () => {
   const base = { bin: 'claude', cwd: '/w', env: {}, sessionId: 's1', resume: false };
   expect(buildClaudeArgs(base)).not.toContain('--permission-mode');
+  // correctif autonomie : systématique, pour qu'un changement à chaud vers Auto puisse ensuite passer en bypass
+  expect(buildClaudeArgs(base)).toContain('--allow-dangerously-skip-permissions');
   expect(
     buildClaudeArgs({ ...base, settings: { mode: 'default', model: null, effort: null } }),
   ).not.toContain('--permission-mode');
@@ -264,8 +266,9 @@ test('buildClaudeArgs (D67) : mode, modèle, effort et dossier des pièces joint
     settings: { mode: 'auto', model: 'opus', effort: 'high' },
     attachmentsDir: '/aid/attachments/ag_1',
   });
+  // correctif autonomie : le mode A-I-D `auto` lance claude en `bypassPermissions`, jamais en `auto` (D66 révisée)
   expect(args.join(' ')).toContain(
-    '--permission-mode auto --model opus --effort high --add-dir /aid/attachments/ag_1',
+    '--permission-mode bypassPermissions --model opus --effort high --add-dir /aid/attachments/ag_1',
   );
 });
 
@@ -276,7 +279,7 @@ test('réglages à chaud (D68) : configure() change mode, modèle et effort sans
   });
   d.send('reglages');
   await waitFor(() => reglagesVus(events) !== undefined, 5000, 'réglages du lancement');
-  expect(reglagesVus(events)).toEqual({ mode: 'auto', model: 'opus', effort: null });
+  expect(reglagesVus(events)).toEqual({ mode: 'bypassPermissions', model: 'opus', effort: null });
 
   d.configure({ mode: 'plan', model: null, effort: 'max' });
   const before = events.length;
@@ -287,6 +290,41 @@ test('réglages à chaud (D68) : configure() change mode, modèle et effort sans
     'réglages changés',
   );
   expect(reglagesVus(events.slice(before))).toEqual({ mode: 'plan', model: null, effort: 'max' });
+});
+
+test('correctif autonomie : claude default → auto → default, bypassPermissions au contrôle à chaud puis retour', async () => {
+  const { driver: d, events } = start({ sessionId: randomUUID() });
+  d.send('reglages');
+  await waitFor(() => reglagesVus(events) !== undefined, 5000, 'réglages par défaut');
+  expect(reglagesVus(events)).toEqual({ mode: 'default', model: null, effort: null });
+
+  d.configure({ mode: 'auto', model: null, effort: null });
+  let before = events.length;
+  d.send('reglages');
+  await waitFor(
+    () => events.length > before && reglagesVus(events.slice(before)) !== undefined,
+    5000,
+    'passage en auto',
+  );
+  expect(reglagesVus(events.slice(before))).toEqual({
+    mode: 'bypassPermissions',
+    model: null,
+    effort: null,
+  });
+
+  d.configure({ mode: 'default', model: null, effort: null });
+  before = events.length;
+  d.send('reglages');
+  await waitFor(
+    () => events.length > before && reglagesVus(events.slice(before)) !== undefined,
+    5000,
+    'retour au défaut',
+  );
+  expect(reglagesVus(events.slice(before))).toEqual({
+    mode: 'default',
+    model: null,
+    effort: null,
+  });
 });
 
 const turnEnds = (events: ConversationEvent[]) =>

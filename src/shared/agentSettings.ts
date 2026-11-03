@@ -1,4 +1,4 @@
-/** Mode d'exécution d'un agent conversationnel (D66) : jamais de contournement total des permissions. */
+/** Mode d'exécution d'un agent conversationnel (D66) : `auto` contourne toutes les permissions (correctif autonomie, 2026-11-03). */
 export type PermissionMode = 'default' | 'acceptEdits' | 'auto' | 'plan';
 
 /** Réglages d'un agent `stream` (D67) : `null` = la valeur par défaut de la CLI. */

@@ -96,6 +96,9 @@ emit({ type: 'fake_args', args: process.argv.slice(2) });
 
 let threadId = null;
 let turnCounter = 0;
+// correctif autonomie : les réglages reçus par le dernier `thread/start` / `thread/resume`, lus par le tour « session_params ».
+let lastThreadStart = null;
+let lastThreadResume = null;
 let approvalCounter = 0;
 const pendingApprovalResolvers = new Map();
 const pendingUnknownResolvers = new Map();
@@ -408,12 +411,22 @@ rl.on('line', (line) => {
       return;
     }
     threadId = 'thread-new-fixed';
+    lastThreadStart = {
+      cwd: msg.params?.cwd,
+      approvalPolicy: msg.params?.approvalPolicy,
+      sandbox: msg.params?.sandbox,
+    };
     emit({ id: msg.id, result: { thread: { id: threadId } } });
     return;
   }
 
   if (msg.method === 'thread/resume') {
     threadId = msg.params.threadId;
+    lastThreadResume = {
+      cwd: msg.params?.cwd,
+      approvalPolicy: msg.params?.approvalPolicy,
+      sandbox: msg.params?.sandbox,
+    };
     emit({ id: msg.id, result: { thread: { id: threadId } } });
     return;
   }
@@ -507,9 +520,15 @@ rl.on('line', (line) => {
       return;
     }
     if (text === 'reglages') {
-      const { approvalPolicy, model, effort } = msg.params;
-      const vus = JSON.stringify({ approvalPolicy, model, effort });
+      const { approvalPolicy, model, effort, sandboxPolicy } = msg.params;
+      const vus = JSON.stringify({ approvalPolicy, model, effort, sandboxPolicy });
       void runTurn(msg.id, msg.params.threadId, `reglages ${vus}`);
+      return;
+    }
+    // correctif autonomie : la session courante lit ce qu'a reçu le dernier thread/start et thread/resume.
+    if (text === 'session_params') {
+      const vus = JSON.stringify({ lastThreadStart, lastThreadResume });
+      void runTurn(msg.id, msg.params.threadId, `session_params ${vus}`);
       return;
     }
     if (text === 'crash') {

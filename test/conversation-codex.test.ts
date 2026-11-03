@@ -337,11 +337,30 @@ const reglagesVus = (events: ConversationEvent[]) => {
   return m ? JSON.parse(m.text.slice('echo: reglages '.length)) : undefined;
 };
 
+const WORKSPACE_WRITE = {
+  type: 'workspaceWrite',
+  writableRoots: [process.cwd()],
+  networkAccess: false,
+  excludeTmpdirEnvVar: false,
+  excludeSlashTmp: false,
+};
+const DANGER_FULL_ACCESS = { type: 'dangerFullAccess' };
+
+const sessionParamsVus = (events: ConversationEvent[]) => {
+  const m = events.findLast(
+    (e) => e.type === 'message' && e.text.startsWith('echo: session_params '),
+  ) as Extract<ConversationEvent, { type: 'message' }> | undefined;
+  return m ? JSON.parse(m.text.slice('echo: session_params '.length)) : undefined;
+};
+
 test('réglages (D66, D68) : turn/start porte approvalPolicy, modèle et effort du réglage courant', async () => {
   const { driver: d, events } = start({ sessionId: randomUUID() });
   d.send('reglages');
   await waitFor(() => reglagesVus(events) !== undefined, 5000, 'réglages par défaut');
-  expect(reglagesVus(events)).toEqual({ approvalPolicy: 'on-request' });
+  expect(reglagesVus(events)).toEqual({
+    approvalPolicy: 'on-request',
+    sandboxPolicy: WORKSPACE_WRITE,
+  });
 
   d.configure({ mode: 'auto', model: 'gpt-fake', effort: 'high' });
   const before = events.length;
@@ -353,8 +372,99 @@ test('réglages (D66, D68) : turn/start porte approvalPolicy, modèle et effort 
   );
   expect(reglagesVus(events.slice(before))).toEqual({
     approvalPolicy: 'never',
+    sandboxPolicy: DANGER_FULL_ACCESS,
     model: 'gpt-fake',
     effort: 'high',
+  });
+});
+
+test('correctif autonomie : Auto → défaut → Auto, turn/start reprend chaque fois la bonne sandboxPolicy', async () => {
+  const { driver: d, events } = start({ sessionId: randomUUID() });
+
+  d.configure({ mode: 'auto', model: null, effort: null });
+  let before = events.length;
+  d.send('reglages');
+  await waitFor(
+    () => events.length > before && reglagesVus(events.slice(before)) !== undefined,
+    5000,
+    'auto',
+  );
+  expect(reglagesVus(events.slice(before))).toEqual({
+    approvalPolicy: 'never',
+    sandboxPolicy: DANGER_FULL_ACCESS,
+  });
+
+  d.configure({ mode: 'default', model: null, effort: null });
+  before = events.length;
+  d.send('reglages');
+  await waitFor(
+    () => events.length > before && reglagesVus(events.slice(before)) !== undefined,
+    5000,
+    'retour au défaut',
+  );
+  expect(reglagesVus(events.slice(before))).toEqual({
+    approvalPolicy: 'on-request',
+    sandboxPolicy: WORKSPACE_WRITE,
+  });
+
+  d.configure({ mode: 'auto', model: null, effort: null });
+  before = events.length;
+  d.send('reglages');
+  await waitFor(
+    () => events.length > before && reglagesVus(events.slice(before)) !== undefined,
+    5000,
+    'second passage en auto',
+  );
+  expect(reglagesVus(events.slice(before))).toEqual({
+    approvalPolicy: 'never',
+    sandboxPolicy: DANGER_FULL_ACCESS,
+  });
+});
+
+test('correctif autonomie : thread/start en Auto porte déjà never et danger-full-access', async () => {
+  const { driver: d, events } = start({
+    sessionId: randomUUID(),
+    settings: { mode: 'auto', model: null, effort: null },
+  });
+  expect(await tour(d, events, 'session_params')).toBeUndefined();
+  expect(sessionParamsVus(events)).toEqual({
+    lastThreadStart: {
+      cwd: process.cwd(),
+      approvalPolicy: 'never',
+      sandbox: 'danger-full-access',
+    },
+    lastThreadResume: null,
+  });
+});
+
+test('correctif autonomie : thread/resume en Auto porte never, danger-full-access, et reçoit le cwd', async () => {
+  const sid = randomUUID();
+  const { driver: d, events } = start({
+    sessionId: sid,
+    resume: true,
+    settings: { mode: 'auto', model: null, effort: null },
+  });
+  expect(await tour(d, events, 'session_params')).toBeUndefined();
+  expect(sessionParamsVus(events)).toEqual({
+    lastThreadStart: null,
+    lastThreadResume: {
+      cwd: process.cwd(),
+      approvalPolicy: 'never',
+      sandbox: 'danger-full-access',
+    },
+  });
+});
+
+test('correctif autonomie : thread/start hors Auto garde approvalPolicy/sandbox explicites (opts)', async () => {
+  const { driver: d, events } = start({ sessionId: randomUUID() });
+  expect(await tour(d, events, 'session_params')).toBeUndefined();
+  expect(sessionParamsVus(events)).toEqual({
+    lastThreadStart: {
+      cwd: process.cwd(),
+      approvalPolicy: 'on-request',
+      sandbox: 'workspace-write',
+    },
+    lastThreadResume: null,
   });
 });
 
