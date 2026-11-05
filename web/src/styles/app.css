@@ -2964,3 +2964,15 @@ a.composer-menu-ligne {
   color: var(--acc);
   overflow-wrap: anywhere;
 }
+/* les cellules ne se coupent pas au milieu d'un mot : le tableau défile dans son bloc ; seul `state` se replie */
+.carte-board-table th,
+.carte-board-table td {
+  white-space: nowrap;
+  overflow-wrap: normal;
+  word-break: normal;
+}
+.carte-board-table td.carte-board-etat {
+  min-width: 16em;
+  white-space: normal;
+  overflow-wrap: break-word;
+}

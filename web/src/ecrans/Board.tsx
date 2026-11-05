@@ -190,9 +190,12 @@ function Cartes({
       <div className={`board-colonnes${etroit ? ' board-colonnes--une' : ''}`}>
         {(etroit ? [visible!] : cols).map(([s, l]) => (
           <section className="board-colonne" key={s} data-node={`board.colonne-${s}`}>
-            <h2 className="board-colonne-titre">
-              {s} <span className="compteur">{l.length}</span>
-            </h2>
+            {/* en petite largeur, l'onglet actif tient lieu de titre */}
+            {!etroit && (
+              <h2 className="board-colonne-titre">
+                {s} <span className="compteur">{l.length}</span>
+              </h2>
+            )}
             <ul className="board-cartes">
               {l.map((c) => (
                 <CarteResume key={c.id} c={c} slug={slug} />
