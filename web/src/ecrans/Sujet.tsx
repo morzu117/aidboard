@@ -951,6 +951,7 @@ function Contenu({
                       agent={a}
                       visible={a.id === active?.id}
                       actionsHost={ongletsActionsEl}
+                      topicId={topicId}
                     />
                   ) : (
                     <Terminal key={a.id} agentId={a.id} visible={a.id === active?.id} />

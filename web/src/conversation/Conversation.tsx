@@ -53,9 +53,12 @@ export function Conversation({
   agent,
   visible,
   actionsHost,
+  topicId,
 }: {
   agent: Agent;
   visible: boolean;
+  /** Chantier 26 (D118) : le sujet de l'agent, pour le menu `@` du composer. */
+  topicId?: string;
   // correctif 3 (recette) : emplacement fourni par Sujet dans la rangée d'onglets, porté par
   // createPortal uniquement quand cette instance est l'agent actif — l'état reste ici.
   actionsHost?: HTMLDivElement | null;
@@ -562,6 +565,7 @@ export function Conversation({
         status={agent.status}
         settings={settingsOf(agent)}
         dataNode={`${dn}.composer`}
+        topicId={topicId}
       />
     </div>
   );
