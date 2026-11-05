@@ -11,6 +11,7 @@ import { tmpdir } from 'node:os';
 import { delimiter, join } from 'node:path';
 import { expect, test } from '@playwright/test';
 import { node, openApp } from './helpers.js';
+import { fermerContextes } from './helpers.js';
 
 // 24.9 : le board swarph en lecture seule, de bout en bout sur le faux swarph et les fixtures synthétiques
 // (global-setup : FAKE_SWARPH_BOARD, FAKE_SWARPH_BOARD_ERROR_FILE). Aucun réseau, aucun vrai swarph.
@@ -35,6 +36,7 @@ test.beforeAll(() => {
   avant = { log: lignes().length, inbox: inbox() };
 });
 test.afterAll(() => erreur(null));
+test.afterAll(({ browser }) => fermerContextes(browser));
 
 test('le board du projet de test : lien dans la barre, colonnes dans l’ordre reçu, cartes', async ({
   browser,
