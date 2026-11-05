@@ -37,15 +37,6 @@ export interface BarreMesh {
   checkedAt?: string | null;
 }
 
-const dureeDepuis = (iso: string, now = Date.now()) => {
-  const m = Math.max(0, Math.round((now - Date.parse(iso)) / 60_000));
-  if (m < 1) return "moins d'une minute";
-  if (m < 60) return `${m} min`;
-  const h = Math.round(m / 60);
-  if (h < 24) return `${h} h`;
-  return `${Math.round(h / 24)} j`;
-};
-
 /** Pourquoi « rejoindre » est impossible, ou null. Tailscale ne se monte que si `mesh.tailscale.manage` (D37). */
 export function meshBloque(m: BarreMesh): string | null {
   if (m.state.connected || m.enCours) return null;
@@ -54,13 +45,6 @@ export function meshBloque(m: BarreMesh): string | null {
   if (m.state.tailscale === 'stopped' && !m.tailscaleManage)
     return 'Tailscale est arrêté : le démarrer d’abord (ou mesh.tailscale.manage: true dans config.yaml)';
   return null;
-}
-
-export function meshTexte(m: BarreMesh, now = Date.now()): string {
-  const s = m.state;
-  if (m.enCours) return s.connected ? 'mesh · déconnexion…' : 'mesh · connexion…';
-  if (s.connected) return `mesh · ${m.aTraiter} à traiter`;
-  return s.since ? `hors mesh depuis ${dureeDepuis(s.since, now)}` : 'hors mesh';
 }
 
 /** D101 : « 12 s », « 3 min » ; le board se relit toutes les 60 s */

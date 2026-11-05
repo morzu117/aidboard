@@ -30,6 +30,11 @@ test('D103 : sans agent vivant, en pause ; un shell vivant seul, en cours', () =
   expect(sectionDe([agent({ kind: 'shell', status: 'working' })])).toBe('en-cours');
 });
 
+test('D107 : une attente range le sujet dans À décider, même celle d’un shell, comme la vue', () => {
+  expect(sectionDe([agent({ status: 'needs_input' })])).toBe('a-decider');
+  expect(sectionDe([agent({ status: 'working' })])).toBe('en-cours');
+});
+
 test('D108 : la prochaine chose, de la question à la phase', () => {
   const t = topic({ phase: 'review' });
   const question = agent({

@@ -1,14 +1,15 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router';
 import type { Agent, NavState, Topic, UpdateInfo } from '../../../src/shared/model.js';
 import { DecisionCard } from '../conversation/DecisionCard.js';
 import { AidApiError } from '../data/api.js';
 import { useAid } from '../data/useAidState.js';
-import { meshTexte } from '../ui/Barre.js';
 import { depuis } from '../ui/depuis.js';
 import { A_TRAITER, Layout, useLayout } from '../ui/Layout.js';
 import { getNavCacheSnapshot } from '../ui/Nav.js';
 import { compteVue, topicsForVue, VUES, type VueId } from '../ui/navVues.js';
+import { etatMonitor } from '../ui/pastille.js';
+import { prochaineChose, SECTIONS, type SectionId, sectionDe } from '../ui/rangement.js';
 import { isAlive, mostUrgent, Point, type Tone, topicView } from '../ui/Statut.js';
 import { ShellsEnArriere } from '../ui/Statut.js';
 import { Volet } from '../ui/Volet.js';
@@ -347,8 +348,6 @@ function Legende() {
   );
 }
 
-type Tri = 'activite' | 'nom' | 'projet';
-
 // DS7 côté board : le même champ relu en direct, jamais la lifecycle `indexState` du sujet.
 function indexPastille(topic: Topic): string {
   const idx = topic.index;
@@ -377,30 +376,39 @@ function etatAgent(agents: Agent[]): string {
 
 const accentInsensible = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
 
+// Même agent que la colonne Agent (mostUrgent) quand il est en attente, sinon le premier en attente.
+function decideurDe(agents: Agent[]): Agent | undefined {
+  const urgent = mostUrgent(agents);
+  return urgent?.pending && urgent.status === 'needs_input'
+    ? urgent
+    : agents.find((a) => a.pending && a.status === 'needs_input');
+}
+
 // « Trancher » (décision en attente) / « Reprendre » (agent existant) / « Lancer » (aucun agent) — brief §5.4.
+// Chantier 25 (D107, D108) : Trancher déplie la décision sous la ligne ; Relire et Suivre selon la section.
 function ActionLigne({
   topic,
   agents,
   dataNode,
   archive,
   onDesarchive,
+  onTrancher,
+  deplie,
 }: {
   topic: Topic;
   agents: Agent[];
   dataNode: string;
   archive?: boolean;
   onDesarchive?: () => void;
+  onTrancher?: () => void;
+  deplie?: boolean;
 }) {
   const { call } = useAid();
   const navigate = useNavigate();
   const [busy, setBusy] = useState(false);
   const [erreur, setErreur] = useState<string | null>(null);
-  // Même agent que la colonne Agent (mostUrgent) quand il est en attente, sinon on garde le find.
   const urgent = mostUrgent(agents);
-  const decideur =
-    urgent?.pending && urgent.status === 'needs_input'
-      ? urgent
-      : agents.find((a) => a.pending && a.status === 'needs_input');
+  const decideur = decideurDe(agents);
   const neRemonte = (e: { stopPropagation: () => void }) => e.stopPropagation();
 
   if (archive) {
@@ -441,14 +449,45 @@ function ActionLigne({
 
   if (decideur) {
     return (
-      <Link
+      <button
         className="bouton bouton--primaire"
         data-node={dataNode}
         data-action="sujet.trancher"
-        to={`/sujets/${topic.id}?agent=${decideur.id}`}
-        onClick={neRemonte}
+        type="button"
+        aria-expanded={!!deplie}
+        onClick={(e) => {
+          neRemonte(e);
+          onTrancher?.();
+        }}
       >
         Trancher
+      </button>
+    );
+  }
+  const section = sectionDe(agents);
+  if (urgent && section === 'a-relire') {
+    return (
+      <Link
+        className="bouton"
+        data-node={dataNode}
+        data-action="sujet.relire"
+        to={`/sujets/${topic.id}?agent=${urgent.id}`}
+        onClick={neRemonte}
+      >
+        Relire
+      </Link>
+    );
+  }
+  if (section === 'en-cours') {
+    return (
+      <Link
+        className="bouton"
+        data-node={dataNode}
+        data-action="sujet.suivre"
+        to={`/sujets/${topic.id}`}
+        onClick={neRemonte}
+      >
+        Suivre
       </Link>
     );
   }
@@ -509,7 +548,8 @@ function Contenu() {
   const vueParam = params.get('vue');
   const vue: VueId = VUES.some((v) => v.id === vueParam) ? (vueParam as VueId) : 'tous';
   const [filtreTexte, setFiltreTexte] = useState('');
-  const [tri, setTri] = useState<Tri>('activite');
+  // D107 : la ligne dont la décision est dépliée sous elle
+  const [deplie, setDeplie] = useState<string | null>(null);
   const down = daemon === 'injoignable' || daemon === 'session-expiree';
 
   // Mêmes placements que Nav (D56, point 5) : lus depuis son cache de module au premier rendu
@@ -565,10 +605,6 @@ function Contenu() {
     const runIds = state.runs.filter((r) => r.topicId === topicId).map((r) => r.id);
     return state.agents.filter((a) => runIds.includes(a.runId));
   };
-  const topicOf = (a: Agent) => {
-    const run = state.runs.find((r) => r.id === a.runId);
-    return run ? state.topics.find((t) => t.id === run.topicId) : undefined;
-  };
   const placementByTopic = new Map((nav.placements ?? []).map((p) => [p.topicId, p]));
   // Même « nom affiché » que la barre gauche (D55) : la branche, sauf renommage explicite du placement.
   const nomAffiche = (t: Topic) => placementByTopic.get(t.id)?.displayName ?? t.branch;
@@ -584,10 +620,6 @@ function Contenu() {
     month: 'long',
   });
 
-  const decisions = state.agents.filter((a) => a.pending && a.status === 'needs_input');
-  const decisionsVisibles = decisions.slice(0, 3);
-  const decisionsRestantes = decisions.length - decisionsVisibles.length;
-
   // Un worktree manquant est une erreur à régler, pas un sujet à trier par vue (D56) : il sort
   // de la table et de son décompte, et s'affiche toujours dans sa propre section plus bas.
   const topicsSains = state.topics.filter((t) => !t.worktreeMissing);
@@ -601,21 +633,17 @@ function Contenu() {
       filtreNorm,
     );
   });
-  const aDecider = (t: Topic) => agentsOf(t.id).some((a) => a.status === 'needs_input');
   const activiteAt = (t: Topic) => {
     const a = mostUrgent(agentsOf(t.id));
     return Date.parse(a?.statusAt ?? t.updatedAt);
   };
-  const tries = [...visibles].sort((a, b) => {
-    const da = aDecider(a);
-    const db = aDecider(b);
-    if (da !== db) return da ? -1 : 1;
-    if (tri === 'nom') return nomAffiche(a).localeCompare(nomAffiche(b), 'fr');
-    if (tri === 'projet')
-      return (wsOf(a.workspaceId)?.name ?? '').localeCompare(wsOf(b.workspaceId)?.name ?? '', 'fr');
-    return activiteAt(b) - activiteAt(a);
-  });
-  const sains = tries;
+  // D107 : une section par état, dans l'ordre de D103, la plus récente activité d'abord dans chacune ;
+  // les lignes sont numérotées dans l'ordre d'affichage, À décider en tête comme avant
+  const parSection = new Map<SectionId, Topic[]>(SECTIONS.map((s) => [s.id, []]));
+  for (const t of visibles) parSection.get(sectionDe(agentsOf(t.id)))!.push(t);
+  for (const liste of parSection.values()) liste.sort((a, b) => activiteAt(b) - activiteAt(a));
+  const sains = SECTIONS.flatMap((s) => parSection.get(s.id)!);
+  const numero = new Map(sains.map((t, i) => [t.id, i + 1]));
 
   const vueActuelle = VUES.find((v) => v.id === vue);
   const compteTable = compteVue(vue, topicsSains, placementByTopic, agentsOf, state.agents);
@@ -640,45 +668,6 @@ function Contenu() {
         </section>
       )}
       {!down && <BandeauMaj />}
-      {decisionsVisibles.length > 0 && (
-        <section className="liste" aria-label="Décisions en attente" data-node="1-1.decisions">
-          <h2 className="titre-zone" data-node="1-1.decisions.titre">
-            Décisions en attente
-          </h2>
-          {decisionsVisibles.map((a, i) => {
-            const topic = topicOf(a);
-            if (!topic || !a.pending) return null;
-            const ws = wsOf(topic.workspaceId);
-            const id = `1-1.decisions.decision-${i + 1}`;
-            return (
-              <div key={a.id} className="groupe" data-node={id}>
-                <p className="texte-faible" data-node={`${id}.contexte`}>
-                  {ws?.name ?? '?'} · {topic.branch} · {depuis(topic.updatedAt)}
-                </p>
-                <DecisionCard
-                  agentId={a.id}
-                  request={a.pending}
-                  resolved={false}
-                  dataNode={`${id}.carte`}
-                />
-                <Link
-                  className="lien"
-                  data-node={`${id}.ouvrir`}
-                  data-action="sujet.ouvrir"
-                  to={`/sujets/${topic.id}`}
-                >
-                  Ouvrir le sujet →
-                </Link>
-              </div>
-            );
-          })}
-          {decisionsRestantes > 0 && (
-            <Link className="lien" data-node="1-1.decisions.autres" to="/boite">
-              voir les {decisionsRestantes} autres →
-            </Link>
-          )}
-        </section>
-      )}
       <div className="accueil-disposition" data-node="1-1.disposition">
         <section className="accueil-table" aria-label="Tous les sujets" data-node="1-1.table">
           <div className="entete">
@@ -698,21 +687,9 @@ function Contenu() {
                 value={filtreTexte}
                 onChange={(e) => setFiltreTexte(e.target.value)}
               />
-              <label className="texte-faible" htmlFor="accueil-tri">
-                Tri
-              </label>
-              <select
-                id="accueil-tri"
-                className="selecteur"
-                data-node="1-1.table.tri"
-                data-action="tri.choisir"
-                value={tri}
-                onChange={(e) => setTri(e.target.value as Tri)}
-              >
-                <option value="activite">Activité récente</option>
-                <option value="nom">Nom</option>
-                <option value="projet">Projet</option>
-              </select>
+              <span className="texte-faible" data-node="1-1.table.compte" data-bind="table.compte">
+                {sains.length} sujet{sains.length > 1 ? 's' : ''}
+              </span>
             </div>
           </div>
           {state.topics.length === 0 ? (
@@ -764,73 +741,123 @@ function Contenu() {
                     </th>
                   </tr>
                 </thead>
-                <tbody>
-                  {sains.map((t, i) => {
-                    const agents = agentsOf(t.id);
-                    const view = topicView(agents);
-                    const urgent = mostUrgent(agents);
-                    const rowId = `1-1.table.ligne-${i + 1}`;
-                    return (
-                      <tr
-                        key={t.id}
-                        className="ligne-sujet"
-                        data-node={rowId}
-                        onClick={(e) => {
-                          if ((e.target as Element).closest('a,button')) return;
-                          navigate(`/sujets/${t.id}`);
-                        }}
-                      >
-                        <td data-node={`${rowId}.sujet`}>
-                          <Link
-                            className="ligne-sujet-lien"
-                            data-action="sujet.ouvrir"
-                            to={`/sujets/${t.id}`}
-                          >
-                            <Point
-                              tone={view.tone}
-                              label={view.label}
-                              estimated={view.estimated}
-                              dataNode={`${rowId}.statut`}
-                            />
-                            <span data-node={`${rowId}.nom`} data-bind="sujet.nom_affiche">
-                              {nomAffiche(t)}
-                            </span>
-                            <ShellsEnArriere agents={agents} dataNode={`${rowId}.shells`} />
-                            {t.phase && <span className="md-code-ligne">{t.phase}</span>}
-                          </Link>
-                          <span className="texte-faible" data-node={`${rowId}.index`}>
-                            {indexPastille(t)}
-                          </span>
-                        </td>
-                        <td data-node={`${rowId}.projet`} data-bind="workspace.nom">
-                          {wsOf(t.workspaceId)?.name ?? '?'}
-                        </td>
-                        <td data-node={`${rowId}.agent`}>
-                          {urgent ? `${urgent.kind} · ${etatAgent(agents)}` : 'Aucun agent'}
-                        </td>
-                        <td className="colonne-activite" data-node={`${rowId}.activite`}>
-                          {activite(urgent, t)}
-                        </td>
-                        <td data-node={`${rowId}.action`}>
-                          <ActionLigne
-                            topic={t}
-                            agents={agents}
-                            dataNode={`${rowId}.action.bouton`}
-                            archive={vue === 'archives'}
-                            onDesarchive={() =>
-                              setNav((cur) => ({
-                                ...cur,
-                                placements: (cur.placements ?? []).map((p) =>
-                                  p.topicId === t.id ? { ...p, archived: false } : p,
-                                ),
-                              }))
-                            }
-                          />
-                        </td>
+                {SECTIONS.map((section) => {
+                  const lignes = parSection.get(section.id)!;
+                  if (lignes.length === 0) return null;
+                  return (
+                    <tbody key={section.id} data-node={`1-1.table.section-${section.id}`}>
+                      <tr className="table-sujets-section">
+                        <th
+                          colSpan={5}
+                          scope="colgroup"
+                          data-node={`1-1.table.section-${section.id}.titre`}
+                        >
+                          {section.label} · {lignes.length}
+                        </th>
                       </tr>
-                    );
-                  })}
-                </tbody>
+                      {lignes.map((t) => {
+                        const agents = agentsOf(t.id);
+                        const view = topicView(agents);
+                        const urgent = mostUrgent(agents);
+                        const rowId = `1-1.table.ligne-${numero.get(t.id)}`;
+                        const decideur = decideurDe(agents);
+                        const ouvert = deplie === t.id && !!decideur?.pending;
+                        return (
+                          <Fragment key={t.id}>
+                            <tr
+                              className="ligne-sujet"
+                              data-node={rowId}
+                              onClick={(e) => {
+                                if ((e.target as Element).closest('a,button')) return;
+                                navigate(`/sujets/${t.id}`);
+                              }}
+                            >
+                              <td data-node={`${rowId}.sujet`}>
+                                <Link
+                                  className="ligne-sujet-lien"
+                                  data-action="sujet.ouvrir"
+                                  to={`/sujets/${t.id}`}
+                                >
+                                  <Point
+                                    tone={view.tone}
+                                    label={view.label}
+                                    estimated={view.estimated}
+                                    dataNode={`${rowId}.statut`}
+                                  />
+                                  <span data-node={`${rowId}.nom`} data-bind="sujet.nom_affiche">
+                                    {nomAffiche(t)}
+                                  </span>
+                                  <ShellsEnArriere agents={agents} dataNode={`${rowId}.shells`} />
+                                  {t.phase && <span className="md-code-ligne">{t.phase}</span>}
+                                </Link>
+                                <span
+                                  className="texte-discret accueil-prochaine"
+                                  data-node={`${rowId}.prochaine`}
+                                  data-bind="sujet.prochaine_chose"
+                                >
+                                  {prochaineChose(t, agents)}
+                                </span>
+                                <span className="texte-faible" data-node={`${rowId}.index`}>
+                                  <span className="badge accueil-lieu" data-node={`${rowId}.lieu`}>
+                                    local
+                                  </span>{' '}
+                                  {indexPastille(t)}
+                                </span>
+                              </td>
+                              <td data-node={`${rowId}.projet`} data-bind="workspace.nom">
+                                {wsOf(t.workspaceId)?.name ?? '?'}
+                              </td>
+                              <td data-node={`${rowId}.agent`}>
+                                {urgent ? `${urgent.kind} · ${etatAgent(agents)}` : 'Aucun agent'}
+                              </td>
+                              <td className="colonne-activite" data-node={`${rowId}.activite`}>
+                                {activite(urgent, t)}
+                              </td>
+                              <td data-node={`${rowId}.action`}>
+                                <ActionLigne
+                                  topic={t}
+                                  agents={agents}
+                                  dataNode={`${rowId}.action.bouton`}
+                                  archive={vue === 'archives'}
+                                  onDesarchive={() =>
+                                    setNav((cur) => ({
+                                      ...cur,
+                                      placements: (cur.placements ?? []).map((p) =>
+                                        p.topicId === t.id ? { ...p, archived: false } : p,
+                                      ),
+                                    }))
+                                  }
+                                  deplie={ouvert}
+                                  onTrancher={() => setDeplie(ouvert ? null : t.id)}
+                                />
+                              </td>
+                            </tr>
+                            {ouvert && decideur?.pending && (
+                              <tr className="accueil-decision" data-node={`${rowId}.decision`}>
+                                <td colSpan={5}>
+                                  <DecisionCard
+                                    agentId={decideur.id}
+                                    request={decideur.pending}
+                                    resolved={false}
+                                    dataNode={`${rowId}.decision.carte`}
+                                  />
+                                  <Link
+                                    className="lien"
+                                    data-node={`${rowId}.decision.ouvrir`}
+                                    data-action="sujet.ouvrir"
+                                    to={`/sujets/${t.id}?agent=${decideur.id}`}
+                                  >
+                                    Ouvrir le sujet →
+                                  </Link>
+                                </td>
+                              </tr>
+                            )}
+                          </Fragment>
+                        );
+                      })}
+                    </tbody>
+                  );
+                })}
               </table>
             </div>
           )}
@@ -856,16 +883,26 @@ function Contenu() {
                 <p className="texte-discret" data-node="1-1.aside.etat.daemon">
                   {daemon === 'connecte' ? 'daemon joignable' : 'daemon injoignable'}
                 </p>
-                {mesh && (
+                {mesh ? (
                   <p className="texte-discret" data-node="1-1.aside.etat.mesh">
-                    {meshTexte({
-                      state: mesh.state,
-                      aTraiter: mesh.inbox.filter((d) => !d.seenAt && A_TRAITER.has(d.kind)).length,
-                      tailscaleManage: mesh.tailscaleManage,
-                      enCours: false,
-                      onToggle: () => {},
-                    })}
+                    <Link to="/reglages#mesh" data-action="nav.reglages-mesh">
+                      {etatMonitor(
+                        mesh.state,
+                        mesh.inbox.filter((d) => !d.seenAt && A_TRAITER.has(d.kind)).length,
+                        false,
+                      )}
+                    </Link>
                   </p>
+                ) : (
+                  // D107 : sans swarph, l'encart dit ce que la connexion ajoute et mène à la page qui l'explique
+                  <div data-node="1-1.aside.etat.swarph">
+                    <p className="texte-discret">
+                      Sans swarph, A-I-D reste local : ni mesh, ni DM, ni board partagé.
+                    </p>
+                    <Link className="lien" to="/swarph" data-action="nav.swarph">
+                      Connecter à swarph →
+                    </Link>
+                  </div>
                 )}
               </div>
             </div>

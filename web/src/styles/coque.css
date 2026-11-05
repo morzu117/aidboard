@@ -152,3 +152,21 @@ a.marque {
   align-self: flex-start;
   text-decoration: none;
 }
+
+/* D107 : l'accueil en sections */
+.table-sujets-section th {
+  padding-top: var(--sp-4);
+  color: var(--muted);
+  font-size: var(--fs-s);
+  font-weight: var(--fw-sb);
+  text-align: left;
+}
+.accueil-prochaine {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.accueil-decision td {
+  padding-bottom: var(--sp-4);
+}

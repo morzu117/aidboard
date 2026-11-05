@@ -18,6 +18,8 @@ export const SECTIONS: readonly { id: SectionId; label: string }[] = [
  * statut suivi (shell, veille d'un agent vivant) reste en cours ; sans agent vivant, le sujet est en pause.
  */
 export function sectionDe(agents: Agent[]): SectionId {
+  // comme la vue « À décider » et le titre de l'accueil : une attente compte, même celle d'un shell
+  if (agents.some((x) => x.status === 'needs_input')) return 'a-decider';
   const a = mostUrgent(agents);
   if (!a) return 'en-pause';
   switch (agentView(a).tone) {
