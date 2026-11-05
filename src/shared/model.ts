@@ -237,7 +237,14 @@ export interface NavPlacement {
 
 export interface NavPrefs {
   reduit: boolean;
+  /**
+   * Chantier 25 (D104) : la barre gauche range par état (V4) ou par les groupes du chantier 15. Le daemon
+   * l'envoie toujours, `'etat'` par défaut ; absent seulement d'une réponse simulée, lu alors `'groupes'`.
+   */
+  rangement?: NavRangement;
 }
+
+export type NavRangement = 'etat' | 'groupes';
 
 export interface NavState {
   groups: NavGroup[];

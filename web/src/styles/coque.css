@@ -40,3 +40,63 @@ a.bouton-mesh,
 a.marque {
   text-decoration: none;
 }
+
+/* D103-D105 : la barre gauche par état */
+.nav-etat-projets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-1);
+  padding: 0 var(--sp-2);
+}
+.nav-etat-tuile {
+  width: 26px;
+  height: 26px;
+  border: 1px solid transparent;
+  border-radius: var(--r-s);
+  font-family: var(--font);
+  font-size: var(--fs-s);
+  font-weight: var(--fw-sb);
+  cursor: pointer;
+}
+.nav-etat-tuile[aria-pressed='true'] {
+  outline: 2px solid var(--line-3);
+  outline-offset: 1px;
+}
+.nav-etat-sections {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+.nav-etat-sujet-texte {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-width: 0;
+}
+.nav-etat-sujet-projet {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: var(--fs-xs);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* le gras veut dire « ça t'attend », comme un message non lu ; le grisé, en pause */
+.nav-etat-sujet--a-decider .barre-gauche-sujet-nom {
+  font-weight: var(--fw-sb);
+}
+.nav-etat-sujet--en-pause {
+  opacity: 0.6;
+}
+.nav-etat-vues {
+  display: flex;
+  gap: var(--sp-3);
+  padding: 0 var(--sp-2);
+  font-size: var(--fs-s);
+}
+.nav-etat-vues a {
+  color: var(--muted);
+  text-decoration: none;
+}
+.nav-etat-meshes {
+  padding: 0 var(--sp-2);
+}

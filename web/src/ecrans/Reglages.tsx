@@ -9,6 +9,8 @@ import { useLocation } from 'react-router';
 import { meshBloque } from '../ui/Barre.js';
 import { A_TRAITER } from '../ui/Layout.js';
 import { ageLecture, etatMonitor } from '../ui/pastille.js';
+import type { NavPrefs, NavRangement, NavState } from '../../../src/shared/model.js';
+import { annoncerPrefsNav, getNavCacheSnapshot } from '../ui/Nav.js';
 
 interface HooksState {
   path: string;
@@ -359,6 +361,63 @@ function Mesh() {
   );
 }
 
+// Chantier 25 (D104) : la barre gauche range par état ; on peut garder ses groupes du chantier 15.
+function BarreGauche() {
+  const { call } = useAid();
+  const [rangement, setRangement] = useState<NavRangement | null>(
+    () => getNavCacheSnapshot()?.prefs?.rangement ?? null,
+  );
+  const [erreur, setErreur] = useState<string | null>(null);
+  useEffect(() => {
+    call<Partial<NavState>>('GET', '/api/nav').then(
+      (r) => setRangement(r.prefs?.rangement ?? 'groupes'),
+      () => {},
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  if (!rangement) return null;
+  const basculer = async (groupes: boolean) => {
+    const voulu: NavRangement = groupes ? 'groupes' : 'etat';
+    setErreur(null);
+    try {
+      const prefs = await call<Partial<NavPrefs>>('PATCH', '/api/nav/prefs', { rangement: voulu });
+      const r = prefs.rangement ?? voulu;
+      setRangement(r);
+      annoncerPrefsNav({ rangement: r });
+    } catch (err) {
+      setErreur(message(err));
+    }
+  };
+  return (
+    <section className="groupe" data-node="reglages.barre-gauche" aria-label="Barre gauche">
+      <div className="groupe-entete">
+        <h2 className="titre-zone">Barre gauche</h2>
+      </div>
+      <article className="element">
+        <label className="element-entete">
+          <input
+            type="checkbox"
+            data-node="reglages.barre-gauche.groupes"
+            data-action="nav.rangement"
+            checked={rangement === 'groupes'}
+            onChange={(e) => void basculer(e.target.checked)}
+          />{' '}
+          Ranger par mes groupes
+        </label>
+        <p className="element-detail">
+          Par défaut, la barre range les sujets par ce qu’ils attendent de toi : À décider, À
+          relire, En cours, En pause. Tes groupes restent tels quels dans les deux cas.
+        </p>
+        {erreur && (
+          <p className="message-erreur" role="alert" data-node="reglages.barre-gauche.erreur">
+            {erreur}
+          </p>
+        )}
+      </article>
+    </section>
+  );
+}
+
 type Permission = NotificationPermission | 'absent';
 const permissionActuelle = (): Permission =>
   typeof Notification === 'undefined' ? 'absent' : Notification.permission;
@@ -457,6 +516,7 @@ function Contenu() {
         <div className="liste">
           <Projets />
           <Mesh />
+          <BarreGauche />
           <Hooks />
           <Notifications />
           <Version />
