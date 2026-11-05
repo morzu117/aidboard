@@ -18,6 +18,8 @@ export type EcranId =
   | 'consignes'
   | 'reglages'
   | 'serveurs'
+  // chantier 25 (D102) : la page « Connecter à swarph »
+  | 'swarph'
   // chantier 24 : le board swarph en lecture seule
   | 'board';
 

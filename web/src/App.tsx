@@ -10,6 +10,7 @@ import { Reglages } from './ecrans/Reglages.js';
 import { ServeurConfig } from './ecrans/ServeurConfig.js';
 import { Serveurs } from './ecrans/Serveurs.js';
 import { Sujet } from './ecrans/Sujet.js';
+import { Swarph } from './ecrans/Swarph.js';
 import { Notifieur } from './ui/Notifieur.js';
 
 export function App() {
@@ -21,6 +22,8 @@ export function App() {
         <Route path="/boite" element={<Boite />} />
         <Route path="/consignes" element={<Consignes />} />
         <Route path="/reglages" element={<Reglages />} />
+        {/* chantier 25 (D102) */}
+        <Route path="/swarph" element={<Swarph />} />
         <Route path="/board" element={<Board />} />
         <Route path="/board/cartes/:cardId" element={<CarteBoard />} />
         <Route path="/serveurs" element={<Serveurs />} />
