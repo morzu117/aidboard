@@ -78,11 +78,11 @@ unitaires de la barre, de l'accueil et de `/swarph`.
 - [ ] 25.11.9 Les mêmes points 25.11.1, 25.11.3, 25.11.6 sous Node 24 (`node --version` : _à noter_).
   - Constat : _à remplir_
 
-## À valider par Julien
+## Validé par Julien (5 novembre)
 
-- [ ] D99 bis, rév. 2 : l'heure de lecture du monitor part en éphémère `mesh.checked` et n'est pas
+- [x] D99 bis, rév. 2 : l'heure de lecture du monitor part en éphémère `mesh.checked` et n'est pas
   stockée ; `mesh.state` reste émis au seul changement (2 880 lignes par jour évitées).
-- [ ] 25.7 : la carte par serveur est dans `web/src/ui/NavVps.tsx`, nouveau, plutôt que dans
+- [x] 25.7 : la carte par serveur est dans `web/src/ui/NavVps.tsx`, nouveau, plutôt que dans
   `NavServeurs.tsx` comme l'écrivait le plan ; `NavServeurs` reste celui du mode `groupes`, inchangé.
 
 ## Ce qui n'est pas couvert
