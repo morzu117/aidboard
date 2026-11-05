@@ -13,7 +13,10 @@ import {
   terminalText,
   typeInTerminal,
   url,
+  fermerContextes,
 } from './helpers.js';
+
+test.afterAll(({ browser }) => fermerContextes(browser));
 
 test('une permission passe du hook à l’Accueil et à la boîte, on y répond sans ouvrir le terminal', async ({
   browser,

@@ -8,7 +8,10 @@ import {
   registerWorkspace,
   terminalText,
   typeInTerminal,
+  fermerContextes,
 } from './helpers.js';
+
+test.afterAll(({ browser }) => fermerContextes(browser));
 
 // La maquette définit déjà .terminal (boîte de 128 px) : xterm pose la même classe sur sa racine et se retrouvait écrasé.
 for (const [width, height] of [

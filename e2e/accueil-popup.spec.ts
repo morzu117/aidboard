@@ -1,5 +1,15 @@
 import { expect, test, type Page } from '@playwright/test';
-import { createTopic, newRepo, node, openApp, registerWorkspace, url } from './helpers.js';
+import {
+  createTopic,
+  newRepo,
+  node,
+  openApp,
+  registerWorkspace,
+  url,
+  fermerContextes,
+} from './helpers.js';
+
+test.afterAll(({ browser }) => fermerContextes(browser));
 
 // recette (chantier 15, point 2) : sous 1280 px, `.accueil-aside` (Activité + État) ne se repliait
 // pas — elle restait à côté de la table (flex: 0 0 280px, jamais de media query), qui s'écrasait

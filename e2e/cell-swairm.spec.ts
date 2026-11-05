@@ -10,7 +10,10 @@ import {
   state,
   terminalText,
   typeInTerminal,
+  fermerContextes,
 } from './helpers.js';
+
+test.afterAll(({ browser }) => fermerContextes(browser));
 
 // 14.6 : la cell Swairm de bout en bout sur le faux CLI (global-setup : `swairm.bin` =
 // test/fixtures/fake-swairm.sh). Jamais le vrai swairm, aucun réseau, aucun board lu.

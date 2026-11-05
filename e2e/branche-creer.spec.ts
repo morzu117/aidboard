@@ -1,6 +1,15 @@
 import { expect, test } from '@playwright/test';
 import { sh } from '../test/helpers/git.js';
-import { createTopic, newRepo, node, openApp, registerWorkspace } from './helpers.js';
+import {
+  createTopic,
+  newRepo,
+  node,
+  openApp,
+  registerWorkspace,
+  fermerContextes,
+} from './helpers.js';
+
+test.afterAll(({ browser }) => fermerContextes(browser));
 
 // branches-libres (point 2) : la zone « Nouvelle branche depuis <base> » du sélecteur appelle
 // branche.creer — le sujet doit basculer sur la nouvelle branche, créée depuis origin/<base>.

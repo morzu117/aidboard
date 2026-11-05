@@ -1,5 +1,15 @@
 import { expect, test } from '@playwright/test';
-import { createTopic, newRepo, node, openApp, registerWorkspace, url } from './helpers.js';
+import {
+  createTopic,
+  newRepo,
+  node,
+  openApp,
+  registerWorkspace,
+  url,
+  fermerContextes,
+} from './helpers.js';
+
+test.afterAll(({ browser }) => fermerContextes(browser));
 
 // C.2 (chantier 15) : fil d'activité récente de l'Accueil — heure en colonne fixe, type et
 // contexte sur deux lignes propres (constat recette : « 14:57 » et « topic.state » coupés en deux).

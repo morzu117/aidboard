@@ -1,6 +1,15 @@
 import { expect, test } from '@playwright/test';
 import { commitFile, sh } from '../test/helpers/git.js';
-import { createTopic, newRepo, node, openApp, registerWorkspace } from './helpers.js';
+import {
+  createTopic,
+  newRepo,
+  node,
+  openApp,
+  registerWorkspace,
+  fermerContextes,
+} from './helpers.js';
+
+test.afterAll(({ browser }) => fermerContextes(browser));
 
 // correctif 4 (recette) : jsdom n'applique pas le CSS — seul un e2e vérifie que l'onglet Git
 // du panneau (~360 px à 1440 px de fenêtre) ne déborde plus horizontalement et que le détail

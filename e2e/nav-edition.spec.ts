@@ -1,5 +1,15 @@
 import { expect, type Page, test } from '@playwright/test';
-import { createTopic, newRepo, node, openApp, registerWorkspace, url } from './helpers.js';
+import {
+  createTopic,
+  newRepo,
+  node,
+  openApp,
+  registerWorkspace,
+  url,
+  fermerContextes,
+} from './helpers.js';
+
+test.afterAll(({ browser }) => fermerContextes(browser));
 
 // B.3 (chantier 15) : mode édition de la barre gauche — glisser un sujet vers un autre groupe
 // (souris) puis la même action par le menu « Déplacer vers… » (alternative clavier, §2.4) ;

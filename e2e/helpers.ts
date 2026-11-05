@@ -1,7 +1,7 @@
 import { mkdtempSync, realpathSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { expect, type BrowserContext, type Page } from '@playwright/test';
+import { expect, type Browser, type BrowserContext, type Page } from '@playwright/test';
 import { makeOriginAndClone } from '../test/helpers/git.js';
 
 export const url = () => process.env.AID_E2E_URL!;
@@ -11,6 +11,13 @@ interface ApiState {
   topics: Array<{ id: string; branch: string }>;
   runs: Array<{ id: string; topicId: string }>;
   agents: Array<{ id: string; status: string; pid: number; runId: string }>;
+}
+
+/** Ferme les contextes ouverts par les épreuves d'un fichier (`test.afterAll`) : sinon chaque page reste connectée et
+ * relit l'état à chaque événement jusqu'à la fin de la suite — 27 pages vivantes à la fin, la charge qui faisait
+ * dépasser `launchShell`. */
+export async function fermerContextes(browser: Browser): Promise<void> {
+  await Promise.all(browser.contexts().map((c) => c.close()));
 }
 
 /** Ouvre le lien d'ouverture (échangé contre le cookie) et expose les terminaux au test. */

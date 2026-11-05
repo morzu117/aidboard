@@ -9,7 +9,10 @@ import {
   state,
   terminalText,
   typeInTerminal,
+  fermerContextes,
 } from './helpers.js';
+
+test.afterAll(({ browser }) => fermerContextes(browser));
 
 test('trois sujets tournent en parallèle, chacun avec son terminal dans son worktree', async ({
   browser,

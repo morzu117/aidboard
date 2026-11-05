@@ -1,7 +1,9 @@
 import { join } from 'node:path';
 import { expect, test } from '@playwright/test';
 import Database from 'better-sqlite3';
-import { node, openApp, url } from './helpers.js';
+import { node, openApp, url, fermerContextes } from './helpers.js';
+
+test.afterAll(({ browser }) => fermerContextes(browser));
 
 // Constat opérateur du 2026-11-02 sur le VPS : sur l'écran Discussion, la page défilait et le champ de
 // saisie restait sous le bas de la fenêtre. jsdom n'applique pas le CSS : seul un e2e le voit.
