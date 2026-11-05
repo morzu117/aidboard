@@ -1,4 +1,5 @@
 import { type KeyboardEvent, useCallback, useEffect, useRef, useState } from 'react';
+import { useLayoutEffect } from 'react';
 import type { FsListing } from '../../../src/shared/fs.js';
 import { AidApiError } from '../data/api.js';
 import { useAid } from '../data/useAidState.js';
@@ -24,6 +25,10 @@ export function SelecteurDossier({
   const latest = useRef(0);
   // un chemin tapé depuis la demande : la liste s'affiche, le champ garde la saisie
   const typed = useRef(false);
+  // le champ qui a le focus à la réponse : le chemin y est posé sélectionné, la frappe qui suit le remplace au lieu
+  // de s'ajouter derrière (un `fill` de Playwright, une frappe rapide entre le focus et la réponse)
+  const gotoRef = useRef<HTMLInputElement>(null);
+  const selectGoto = useRef(false);
   const open = useCallback(
     (path: string | undefined, showHidden: boolean) => {
       const mine = ++latest.current;
@@ -36,6 +41,8 @@ export function SelecteurDossier({
           if (mine !== latest.current) return;
           setListing(l);
           if (!typed.current) setGoto(l.path);
+          if (!typed.current && document.activeElement === gotoRef.current)
+            selectGoto.current = true;
           setError(null);
         },
         (err: unknown) => {
@@ -64,6 +71,12 @@ export function SelecteurDossier({
     submitGoto();
   }
 
+  useLayoutEffect(() => {
+    if (!selectGoto.current) return;
+    selectGoto.current = false;
+    gotoRef.current?.select();
+  }, [goto]);
+
   return (
     <div className="selecteur-dossier" role="group" aria-label="Choisir le dossier du dépôt">
       <div className="selecteur-dossier__barre">
@@ -76,11 +89,7 @@ export function SelecteurDossier({
             setGoto(e.target.value);
           }}
           onKeyDown={onGotoKey}
-          // le champ pris en main avant la réponse n'est plus écrasé : sans quoi la saisie s'ajoute derrière le chemin
-          // posé entre le focus et la frappe (un `fill` de Playwright, une frappe rapide)
-          onFocus={() => {
-            typed.current = true;
-          }}
+          ref={gotoRef}
           spellCheck={false}
         />
         <button className="bouton" type="button" onClick={submitGoto}>

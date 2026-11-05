@@ -145,7 +145,7 @@ test('un chemin tapé avant le premier chargement n’est pas écrasé par sa r�
   expect((champ as HTMLInputElement).value).toBe('/srv/code');
 });
 
-test('un champ pris en main avant le premier chargement n’est pas rempli par sa réponse', async () => {
+test('un champ pris en main avant le premier chargement reçoit le chemin sélectionné, la frappe le remplace', async () => {
   const h = setup(<Accueil />, snapshot());
   let release!: () => void;
   const first = new Promise<void>((r) => (release = r));
@@ -162,7 +162,16 @@ test('un champ pris en main avant le premier chargement n’est pas rempli par s
   await userEvent.click(champ);
   release();
   await screen.findByText('mon-depot');
-  expect(champ.value).toBe('');
-  await userEvent.type(champ, '/srv/code');
+  expect(champ.value).toBe(listing().path);
+  expect([champ.selectionStart, champ.selectionEnd]).toEqual([0, listing().path.length]);
+  await userEvent.keyboard('/srv/code');
   expect(champ.value).toBe('/srv/code');
+});
+
+test('un champ sans le focus à la réponse reçoit le chemin, sans sélection', async () => {
+  setup(<Accueil />, snapshot());
+  await userEvent.click(await boutonNouveauSujet());
+  const champ = (await screen.findByLabelText('Aller au dossier')) as HTMLInputElement;
+  await waitFor(() => expect(champ.value).toBe(listing().path));
+  expect(document.activeElement).not.toBe(champ);
 });
