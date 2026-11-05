@@ -15,7 +15,7 @@ Rappels qui valent pour toute la recette :
   travail sans l'accord de Julien ;
 - **Déconnecter arrête le monitor de la cell** : toutes les sessions de `morzu-mac`, Claude compris,
   ne sont plus réveillées par les DM jusqu'à la reconnexion. L'étape 25.11.4 ne se fait que si Julien
-  l'accepte sur le moment ; sinon elle reste couverte par `e2e/coque.spec.ts` et `e2e/mesh.spec.ts` ;
+  l'accepte sur le moment ; sinon elle reste couverte par `e2e/mesh.spec.ts` ;
 - ne jamais lancer `swarph mesh inbox` : il consomme la boîte ; `tailscale.manage` reste `false`.
 
 ## Couverture automatique (état à la PR)
@@ -32,7 +32,7 @@ Rappels qui valent pour toute la recette :
 | Accueil en sections, Trancher déplie la décision, Relire, Suivre, Reprendre, « local », compteur ; sans swarph, l'encart mène à `/swarph` (D107, D108) | `test/web/accueil.test.tsx` |
 | Ce qui a bougé en phrases ; un type ou un cas inconnu n'est pas affiché (D109) | `test/web/fil-activite.test.tsx` |
 | Bandeaux : Board indisponible au-dessus du message (dernière lecture réussie, Réessayer) ; Suivi coupé, Session perdue, Machine injoignable sur la discussion (D110) | `test/web/board.test.tsx`, `test/web/carte-board.test.tsx`, `test/web/discussion.test.tsx` |
-| De bout en bout : sections de la barre et de l'accueil, bascule des groupes aller-retour, pastille vers Réglages, Connecter et Déconnecter avec confirmation, `/swarph` avec mesh, bloc VPS sur le faux serveur et Diagnostiquer | `e2e/coque.spec.ts` ; la Boîte et les DM restent dans `e2e/mesh.spec.ts` |
+| De bout en bout : sections de la barre et de l'accueil, bascule des groupes aller-retour, pastille vers Réglages sans bascule, `/swarph` avec mesh, bloc VPS sur le faux serveur et Diagnostiquer | `e2e/coque.spec.ts` ; Connecter et Déconnecter avec confirmation, la Boîte et les DM : `e2e/mesh.spec.ts` |
 
 Non couvert en e2e : « sans swarph » (le daemon des e2e a un mesh configuré) ; couvert par les tests
 unitaires de la barre, de l'accueil et de `/swarph`.

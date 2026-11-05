@@ -1,5 +1,3 @@
-import { mkdirSync } from 'node:fs';
-import { join } from 'node:path';
 import { expect, test } from '@playwright/test';
 import {
   createTopic,
@@ -77,25 +75,17 @@ test('« Ranger par mes groupes » dans Réglages, aller et retour', async ({ br
   await expect(node(page, 'reglages.barre-gauche.etat.sections')).toBeVisible();
 });
 
-test('la pastille mène à Réglages ; connecter, puis déconnecter après confirmation ; /swarph renvoie au réglage', async ({
+test('la pastille mène à Réglages, section Mesh, sans rien basculer ; /swarph renvoie au réglage', async ({
   browser,
 }) => {
   const page = await openApp(await browser.newContext());
-  const inbox = join(process.env.AID_E2E_HOME!, 'swarph_state', 'morzu-mac', 'mesh-sidecar');
-  mkdirSync(inbox, { recursive: true });
+  const avant = await node(page, '1-1.barre.mesh.texte').textContent();
   await node(page, '1-1.barre.mesh').click();
   await expect(page).toHaveURL(/\/reglages#mesh$/);
   await expect(node(page, 'reglages.mesh')).toBeInViewport();
-  await node(page, 'reglages.mesh.connecter').click();
-  await expect(node(page, 'reglages.mesh.etat')).toHaveText(/^monitor actif/);
-  await expect(node(page, 'reglages.barre.mesh.texte')).toHaveText(/^monitor actif/);
-
-  await node(page, 'reglages.mesh.deconnecter').click();
-  await expect(node(page, 'reglages.mesh.confirmation')).toContainText(
-    'Toutes les sessions de cette cell',
-  );
-  await node(page, 'reglages.mesh.confirmer').click();
-  await expect(node(page, 'reglages.barre.mesh.texte')).toHaveText(/^hors mesh/);
+  await expect(node(page, 'reglages.barre.mesh.texte')).toHaveText(avant!);
+  // Connecter et Déconnecter avec confirmation : e2e/mesh.spec.ts, qui lit le journal du faux swarph depuis
+  // un monitor jamais arrêté ; les refaire ici y laisserait un « monitor stop » avant son tour
 
   // le mesh de ce daemon est configuré : la page d'explication renvoie au réglage plutôt qu'aux étapes
   await page.goto(`${url()}/swarph`);
