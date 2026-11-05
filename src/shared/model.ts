@@ -307,6 +307,22 @@ export interface ServerStatus {
   checkedAt: string | null;
   /** Cause lisible d'un état `unreachable` ou `error`. */
   reason: string | null;
+  /** Chantier 25 (D106) : les agents du serveur, agrégés pour le bloc VPS ; absent des clients d'avant le 25. */
+  agents?: ServerAgentsSummary;
+}
+
+/** Chantier 25 (D106) : le « suivi coupé » n'existe que par agent ; le bloc VPS le lit par serveur. */
+export interface ServerAgentsSummary {
+  /** agents dont le pilote tourne encore */
+  vivants: number;
+  /** lien perdu, pas encore repris : l'agent continue peut-être sur le serveur */
+  suiviCoupe: number;
+  /** reprise de session échouée, sans message ni reprise depuis */
+  repriseEchouee: number;
+  /** dernier événement reçu d'un agent du serveur */
+  dernierEvenement: string | null;
+  /** la discussion du dernier suivi coupé ou de la dernière reprise échouée, celle que le bloc ouvre */
+  discussion: string | null;
 }
 
 export type ServerTestStepId = 'command' | 'shell' | 'workdir' | 'agents' | 'session';

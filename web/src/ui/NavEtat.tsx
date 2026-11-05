@@ -4,7 +4,7 @@ import type { Agent, NavPlacement, Topic } from '../../../src/shared/model.js';
 import { useAid } from '../data/useAidState.js';
 import { depuis, depuisCourt } from './depuis.js';
 import { A_TRAITER, useLayout } from './Layout.js';
-import { NavServeurs } from './NavServeurs.js';
+import { NavVps } from './NavVps.js';
 import { etatMonitor } from './pastille.js';
 import { SECTIONS, type SectionId, sectionDe, tuileProjet } from './rangement.js';
 import { Point, ShellsEnArriere, topicView } from './Statut.js';
@@ -192,7 +192,7 @@ export function NavEtat({
           </Link>
         ))}
       </div>
-      <NavServeurs n={n} />
+      <NavVps n={n} />
       <div className="nav-etat-meshes" data-node={n('etat.meshes')}>
         {mesh ? (
           <Link

@@ -100,3 +100,55 @@ a.marque {
 .nav-etat-meshes {
   padding: 0 var(--sp-2);
 }
+
+/* D106 : le bloc VPS, une carte par serveur */
+.nav-vps {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+.nav-vps-carte {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  margin: 0 var(--sp-2);
+  padding: var(--sp-2);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-m);
+}
+.nav-vps-carte--suivi-coupe,
+.nav-vps-carte--session-perdue,
+.nav-vps-carte--reconnexion {
+  border-color: var(--s-attente-line);
+}
+.nav-vps-carte--injoignable {
+  border-color: var(--s-erreur-line);
+}
+.nav-vps-entete {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  color: inherit;
+  text-decoration: none;
+}
+.nav-vps-etat {
+  margin-left: auto;
+  font-size: var(--fs-xs);
+}
+.nav-vps-carte--suivi-coupe .nav-vps-etat,
+.nav-vps-carte--session-perdue .nav-vps-etat,
+.nav-vps-carte--reconnexion .nav-vps-etat {
+  color: var(--s-attente);
+}
+.nav-vps-carte--injoignable .nav-vps-etat {
+  color: var(--s-erreur);
+}
+.nav-vps-detail {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--fs-xs);
+}
+.nav-vps-action {
+  align-self: flex-start;
+  text-decoration: none;
+}

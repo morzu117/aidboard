@@ -11,6 +11,7 @@ import type {
   ServerDiscussion,
   ServerRule,
 } from '../../shared/model.js';
+import type { ServerAgentsSummary } from '../../shared/model.js';
 import { ClaudeDriver } from '../conversation/claude.js';
 import { CodexDriver } from '../conversation/codex.js';
 import type { ConversationDriver, ConversationEvent } from '../conversation/driver.js';
@@ -91,6 +92,8 @@ interface Confirm {
 }
 
 export type ServerAgentView = ServerAgent & { pending: PendingRequest | null };
+/** Chantier 25 (D106) */
+type Suivi = 'ok' | 'coupe' | 'echec';
 export type ServerDiscussionView = ServerDiscussion & { agents: ServerAgentView[] };
 
 export interface RemoteAgentManagerDeps {
@@ -150,6 +153,10 @@ export class RemoteAgentManager {
   private relaunching = new Map<string, Promise<LiveRemote>>();
   /** dernier catalogue de modèles codex vu sur un pilote vivant (D71) */
   private codexCatalog: ModelOption[] = [];
+  /** Chantier 25 (D106) : le suivi de chaque agent depuis ce démarrage du daemon, en mémoire seulement */
+  private suivi = new Map<string, { discussionId: string; etat: Suivi; at: string }>();
+  /** Chantier 25 (D106) : appelé quand le suivi d'un agent change d'état, avec son serveur */
+  onSuivi: ((serverId: string) => void) | null = null;
 
   constructor(private readonly deps: RemoteAgentManagerDeps) {}
 
@@ -172,6 +179,35 @@ export class RemoteAgentManager {
 
   getLive(agentId: string): LiveRemote | undefined {
     return this.live.get(agentId);
+  }
+
+  /** Chantier 25 (D106) : les agents d'un serveur pour le bloc VPS, sans rien lire sur le serveur. */
+  resumeServeur(serverId: string): ServerAgentsSummary {
+    const rows = this.deps.db
+      .prepare('SELECT id FROM server_discussions WHERE server_id = ?')
+      .all(serverId) as { id: string }[];
+    const discussions = new Set(rows.map((r) => r.id));
+    const r: ServerAgentsSummary = {
+      vivants: 0,
+      suiviCoupe: 0,
+      repriseEchouee: 0,
+      dernierEvenement: null,
+      discussion: null,
+    };
+    let dernierIncident = '';
+    for (const live of this.live.values())
+      if (discussions.has(live.discussionId) && !live.exited) r.vivants++;
+    for (const s of this.suivi.values()) {
+      if (!discussions.has(s.discussionId)) continue;
+      if (s.etat === 'coupe') r.suiviCoupe++;
+      else if (s.etat === 'echec') r.repriseEchouee++;
+      if (s.etat !== 'ok' && s.at >= dernierIncident) {
+        dernierIncident = s.at;
+        r.discussion = s.discussionId;
+      }
+      if (r.dernierEvenement === null || s.at > r.dernierEvenement) r.dernierEvenement = s.at;
+    }
+    return r;
   }
 
   private discussionRow(serverId: string, discussionId: string): DiscussionRow {
@@ -828,6 +864,32 @@ export class RemoteAgentManager {
     return live;
   }
 
+  /**
+   * Chantier 25 (D106) : une perte de lien coupe le suivi jusqu'à sa reprise ; un échec de reprise reste ouvert
+   * jusqu'au prochain événement de l'agent (relance réussie, message), comme la ligne d'échec de la discussion.
+   */
+  private noterSuivi(live: LiveRemote, ev: ConversationEvent): void {
+    const avant = this.suivi.get(live.id)?.etat ?? 'ok';
+    const etat: Suivi =
+      ev.type === 'connection_lost'
+        ? 'coupe'
+        : ev.type === 'resume_failed'
+          ? 'echec'
+          : ev.type === 'exit'
+            ? avant
+            : 'ok';
+    this.suivi.set(live.id, {
+      discussionId: live.discussionId,
+      etat,
+      at: new Date().toISOString(),
+    });
+    if (etat === avant || !this.onSuivi) return;
+    const row = this.deps.db
+      .prepare('SELECT server_id FROM server_discussions WHERE id = ?')
+      .get(live.discussionId) as { server_id: string } | undefined;
+    if (row) this.onSuivi(row.server_id);
+  }
+
   private onEvent(live: LiveRemote, ev: ConversationEvent): void {
     if (live.retry) {
       // S.5 : refus au démarrage, avant tout mot de l'agent — retenté une fois, la fin n'entre pas au fil
@@ -846,6 +908,7 @@ export class RemoteAgentManager {
         return;
       }
     }
+    this.noterSuivi(live, ev);
     if (ev.type !== 'thinking') this.record(live, ev);
     switch (ev.type) {
       case 'session':
