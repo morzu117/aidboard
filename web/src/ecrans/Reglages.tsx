@@ -389,7 +389,7 @@ function BarreGauche() {
     }
   };
   return (
-    <section className="groupe" data-node="reglages.barre-gauche" aria-label="Barre gauche">
+    <section className="groupe" data-node="reglages.rangement" aria-label="Barre gauche">
       <div className="groupe-entete">
         <h2 className="titre-zone">Barre gauche</h2>
       </div>
@@ -397,7 +397,7 @@ function BarreGauche() {
         <label className="element-entete">
           <input
             type="checkbox"
-            data-node="reglages.barre-gauche.groupes"
+            data-node="reglages.rangement.groupes"
             data-action="nav.rangement"
             checked={rangement === 'groupes'}
             onChange={(e) => void basculer(e.target.checked)}
@@ -409,7 +409,7 @@ function BarreGauche() {
           relire, En cours, En pause. Tes groupes restent tels quels dans les deux cas.
         </p>
         {erreur && (
-          <p className="message-erreur" role="alert" data-node="reglages.barre-gauche.erreur">
+          <p className="message-erreur" role="alert" data-node="reglages.rangement.erreur">
             {erreur}
           </p>
         )}

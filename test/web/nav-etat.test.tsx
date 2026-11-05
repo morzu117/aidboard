@@ -199,7 +199,7 @@ test('D104 : Réglages, « Ranger par mes groupes » enregistre et la barre affi
   );
   await waitFor(() => expect(node('reglages.barre-gauche.etat.sections')).not.toBeNull());
   const caseGroupes = (await waitFor(() => {
-    const e = node('reglages.barre-gauche.groupes');
+    const e = node('reglages.rangement.groupes');
     expect(e).not.toBeNull();
     return e!;
   })) as HTMLInputElement;
@@ -211,5 +211,8 @@ test('D104 : Réglages, « Ranger par mes groupes » enregistre et la barre affi
   ]);
   await waitFor(() => expect(node('reglages.barre-gauche.vues')).not.toBeNull());
   expect(node('reglages.barre-gauche.etat.sections')).toBeNull();
+  // la case n'a pas le data-node des groupes de la barre, qui sont maintenant sur l'écran
+  expect(node('reglages.barre-gauche.groupes')).not.toBe(caseGroupes);
+  expect(node('reglages.rangement.groupes')).toBe(caseGroupes);
   expect(screen.getByText('Ranger par mes groupes')).not.toBeNull();
 });
