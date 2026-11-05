@@ -1,0 +1,63 @@
+{
+  "menu": {
+    "source": "fleet",
+    "version": 1
+  },
+  "menu_version": 1,
+  "labels": [],
+  "steps": [
+    {
+      "step": "build",
+      "mandatory": true,
+      "state": "open (taken 2026-11-05T07:00:00Z)",
+      "default": null,
+      "holder": "peer-b",
+      "hours": 24,
+      "delivery": "ref",
+      "evidence": null,
+      "row": 9000,
+      "needs": [],
+      "due": null,
+      "retries": null,
+      "events": [],
+      "eligible": [],
+      "prior_rows": []
+    },
+    {
+      "step": "validate",
+      "mandatory": true,
+      "state": "unstaffable (no registered peer holds an explicit execute grant on project 42 outside distinct_from — grant one, then ask)",
+      "default": null,
+      "holder": null,
+      "hours": 24,
+      "delivery": "ref",
+      "evidence": null,
+      "row": null,
+      "needs": [],
+      "due": null,
+      "retries": null,
+      "events": [],
+      "eligible": [],
+      "prior_rows": []
+    }
+  ],
+  "unstepped": [],
+  "missing": ["validate"],
+  "flow": {
+    "confirmed": true,
+    "unconfirmed": [],
+    "defaults": {},
+    "confirm_with": "…"
+  },
+  "grandfathered": null,
+  "stage_implied": "build",
+  "gate": {
+    "mode": "enforce"
+  },
+  "review_routing": "both",
+  "judge": null,
+  "as_of": "2026-11-04T07:10:56.879631+00:00",
+  "card_id": 102,
+  "stage": "idea",
+  "assignee": null
+}
