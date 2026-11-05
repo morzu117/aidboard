@@ -68,7 +68,8 @@ test('la fiche : corps brut, graphe, fil, obligation retirée fermée', async ({
   await expect(page.locator('.carte-board-fil script')).toHaveCount(0);
   await expect(node(page, 'carte-board.obligation-9101')).toContainText('withdrawn');
   await node(page, 'carte-board.retour').click();
-  await expect(page).toHaveURL(/\/board$/);
+  // retour au projet de la carte
+  await expect(page).toHaveURL(/\/board\?projet=42$/);
 });
 
 test('403 : « Tu ne peux pas lire cette carte », retour au board', async ({ browser }) => {

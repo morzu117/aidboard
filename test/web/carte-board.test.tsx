@@ -73,6 +73,8 @@ test('carte 101 : corps brut, graphe complet, obligation retirée fermée, fil e
   await ouvrir('/board/cartes/101', { 101: fiche(101) });
   await waitFor(() => expect(node('carte-board.corps.texte')).not.toBeNull());
   expect(node('carte-board.titre')!.textContent).toBe('Carte de test sans responsable');
+  // le fil d'Ariane ramène au projet de la carte
+  expect(node('carte-board.retour')!.getAttribute('href')).toBe('/board?projet=42');
   expect(node('carte-board.meta')!.textContent).toContain('sans responsable');
   expect(node('carte-board.meta')!.textContent).toContain('sans échéance');
   // corps : texte brut

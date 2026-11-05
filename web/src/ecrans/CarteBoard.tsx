@@ -275,7 +275,11 @@ function Contenu({ cardId }: { cardId: number }) {
   return (
     <main className="page carte-board" data-node="carte-board">
       <nav className="carte-board-ariane" aria-label="Fil d’Ariane" data-node="carte-board.ariane">
-        <Link to="/board" data-node="carte-board.retour">
+        {/* retour au projet de la carte, pas au premier de la liste */}
+        <Link
+          to={c?.projectId != null ? `/board?projet=${c.projectId}` : '/board'}
+          data-node="carte-board.retour"
+        >
           Board
         </Link>
         <span aria-hidden="true"> › </span>
