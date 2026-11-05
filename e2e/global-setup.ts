@@ -39,6 +39,9 @@ export default async function globalSetup() {
     SHELL: '/bin/sh',
     PATH,
     FAKE_SWARPH_LOG: join(home, 'swarph.log'),
+    // 24.9 : le board sur les fixtures synthétiques ; l'erreur simulée se change par ce fichier en cours de test
+    FAKE_SWARPH_BOARD: join(fixtures, 'board'),
+    FAKE_SWARPH_BOARD_ERROR_FILE: join(home, 'board-error'),
     FAKE_TAILSCALE_STATEFILE: join(home, 'tailscale.state'),
     FAKE_TAILSCALE_LOG: join(home, 'tailscale.log'),
     FAKE_SWAIRM_LOG: join(home, 'swairm.log'),

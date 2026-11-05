@@ -313,12 +313,12 @@ test('mesh (12.2) : désactivé = une ligne ✓ et rien d’autre ; configuré e
   const on = await runChecks({
     ...good,
     mesh: async () => meshOk,
-    version: async (bin) => (bin === 'swarph' ? '0.72.25' : 'git version 2.54.0'),
+    version: async (bin) => (bin === 'swarph' ? '0.72.40' : 'git version 2.54.0'),
   });
   expect(on.filter((c) => c.level !== 'ok')).toEqual([]);
   expect(on.map((c) => c.label)).toEqual(
     expect.arrayContaining([
-      'swarph 0.72.25',
+      'swarph 0.72.40',
       'cell morzu-mac (/home/j/.config/swarph/cells/morzu-mac.yaml)',
       'token de morzu-mac présent',
       'gateway http://mesh-gw.example.ts.net:8788',

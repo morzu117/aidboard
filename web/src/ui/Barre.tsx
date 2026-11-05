@@ -9,7 +9,15 @@ const DAEMON_TEXT: Record<DaemonLink, string> = {
   'session-expiree': 'session expirée',
 };
 
-export type EcranId = '1-1' | '1-2' | '1-3' | 'consignes' | 'reglages' | 'serveurs';
+export type EcranId =
+  | '1-1'
+  | '1-2'
+  | '1-3'
+  | 'consignes'
+  | 'reglages'
+  | 'serveurs'
+  // chantier 24 : le board swarph en lecture seule
+  | 'board';
 
 /** La pastille « Mesh » de la barre (12.5) : absente quand `mesh.cell` n'est pas configuré. */
 export interface BarreMesh {
@@ -139,6 +147,18 @@ export function Barre({
             </Link>
           );
         })}
+        {/* chantier 24 : le lien n'existe que si le mesh est configuré */}
+        {mesh && (
+          <Link
+            className={`nav-lien${pathname.startsWith('/board') ? ' est-actif' : ''}`}
+            data-node={n('nav-board')}
+            data-action="nav.board"
+            to="/board"
+            aria-current={pathname === '/board' ? 'page' : undefined}
+          >
+            Board
+          </Link>
+        )}
       </nav>
       <div className="barre-droite">
         {mesh && (

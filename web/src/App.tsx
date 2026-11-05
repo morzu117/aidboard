@@ -1,6 +1,8 @@
 import { Navigate, Route, Routes } from 'react-router';
 import { AidProvider } from './data/useAidState.js';
 import { Accueil } from './ecrans/Accueil.js';
+import { Board } from './ecrans/Board.js';
+import { CarteBoard } from './ecrans/CarteBoard.js';
 import { Boite } from './ecrans/Boite.js';
 import { Consignes } from './ecrans/Consignes.js';
 import { Discussion, OuvrirDiscussion } from './ecrans/Discussion.js';
@@ -19,6 +21,8 @@ export function App() {
         <Route path="/boite" element={<Boite />} />
         <Route path="/consignes" element={<Consignes />} />
         <Route path="/reglages" element={<Reglages />} />
+        <Route path="/board" element={<Board />} />
+        <Route path="/board/cartes/:cardId" element={<CarteBoard />} />
         <Route path="/serveurs" element={<Serveurs />} />
         <Route path="/serveurs/nouveau" element={<ServeurConfig />} />
         <Route path="/serveurs/:id/configuration" element={<ServeurConfig />} />
