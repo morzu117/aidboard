@@ -1,5 +1,5 @@
 import { existsSync } from 'node:fs';
-import { currentBranch } from '../git/inspect.js';
+import { currentBranchFast } from '../git/inspect.js';
 import type { Db } from '../db.js';
 import type { EventStore } from '../events/store.js';
 
@@ -19,8 +19,11 @@ export async function syncTopicBranches(db: Db, store: EventStore): Promise<void
   await Promise.all(
     topics.map(async (t) => {
       if (!existsSync(t.worktree)) return;
-      const head = await currentBranch(t.worktree);
-      if (head && head !== t.branch) {
+      const head = await currentBranchFast(t.worktree);
+      // relue juste avant d'écrire : une relecture simultanée (deux GET, un rattachement) a pu l'écrire pendant l'attente
+      const now = db.prepare('SELECT branch FROM topics WHERE id = ?').get(t.id) as
+        { branch: string } | undefined;
+      if (head && now && head !== now.branch) {
         store.append({
           source: 'daemon',
           type: 'topic.branch',

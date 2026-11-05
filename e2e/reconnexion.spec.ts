@@ -10,6 +10,9 @@ import {
   terminalText,
   typeInTerminal,
 } from './helpers.js';
+import { fermerContextes } from './helpers.js';
+
+test.afterAll(({ browser }) => fermerContextes(browser));
 
 test('fermer puis rouvrir le navigateur : les agents tournent, l’historique est intact, la sortie produite entre-temps est là', async ({
   browser,

@@ -2,6 +2,9 @@ import { execFileSync } from 'node:child_process';
 import { join } from 'node:path';
 import { expect, test } from '@playwright/test';
 import { createTopic, newRepo, node, openApp, registerWorkspace } from './helpers.js';
+import { fermerContextes } from './helpers.js';
+
+test.afterAll(({ browser }) => fermerContextes(browser));
 
 const CLI = join(import.meta.dirname, '../dist/cli/aid.js');
 

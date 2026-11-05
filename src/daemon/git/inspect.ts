@@ -1,5 +1,5 @@
-import { existsSync, readFileSync, realpathSync } from 'node:fs';
-import { join } from 'node:path';
+import { existsSync, readFileSync, realpathSync, statSync } from 'node:fs';
+import { join, resolve } from 'node:path';
 import { parse } from 'yaml';
 import type {
   GitBranch,
@@ -75,8 +75,41 @@ export async function remoteBranchExists(root: string, branch: string): Promise<
 
 // null en détached HEAD : pas une branche, rien à rapprocher de topic.branch.
 export async function currentBranch(root: string): Promise<string | null> {
-  const r = await git(root, ['symbolic-ref', '--quiet', '--short', 'HEAD']);
-  return r.ok ? r.stdout : null;
+  // sans --short : git abrège en heads/<nom> une branche homonyme d'un tag, la lecture sur le disque donne <nom>
+  const r = await git(root, ['symbolic-ref', '--quiet', 'HEAD']);
+  // une HEAD hors refs/heads (refs/remotes/…) n'est pas une branche
+  return r.ok && r.stdout.startsWith('refs/heads/') ? r.stdout.slice('refs/heads/'.length) : null;
+}
+
+// Ce que le disque peut rendre sans git : ASCII sans `..`, sans tiret en tête. Le reste (accents compris) passe par git.
+const NOM_SUR = /^(?!-)(?!.*\.\.)[A-Za-z0-9._/#+@-]+$/;
+
+// HEAD lu sur le disque, sans lancer git : GET /api/state relit la branche de chaque sujet à chaque appel, et chaque
+// page ouverte relit l'état à chaque événement. `null` = HEAD détachée ; `undefined` = forme inhabituelle (reftable,
+// ref hors refs/heads, .git illisible) : l'appelant repasse par git.
+export function headBranchOnDisk(worktree: string): string | null | undefined {
+  try {
+    let gitDir = join(worktree, '.git');
+    if (statSync(gitDir).isFile()) {
+      const m = /^gitdir: (.+)$/m.exec(readFileSync(gitDir, 'utf8'));
+      if (!m) return undefined;
+      gitDir = resolve(worktree, m[1]!.trim());
+    }
+    const head = readFileSync(join(gitDir, 'HEAD'), 'utf8').trim();
+    if (/^[0-9a-f]{40}([0-9a-f]{24})?$/.test(head)) return null;
+    const ref = /^ref: refs\/heads\/(.+)$/.exec(head)?.[1];
+    // un nom que git refuserait (`..`, espace : HEAD abîmée ou réécrite) n'est jamais cru sur parole, git tranche
+    return ref && ref !== '.invalid' && NOM_SUR.test(ref) ? ref : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+export async function currentBranchFast(root: string): Promise<string | null> {
+  const disk = headBranchOnDisk(root);
+  const branch = disk === undefined ? await currentBranch(root) : disk;
+  // un nom en tiret passe git mais irait jusqu'aux scripts (AID_BRANCH) comme une option : jamais rendu
+  return branch?.startsWith('-') ? null : branch;
 }
 
 // D16 : avance/retard et rebase en cours ne sont jamais stockés — relus en direct à chaque

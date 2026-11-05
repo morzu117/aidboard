@@ -1,5 +1,8 @@
 import { expect, test } from '@playwright/test';
 import { node, openApp } from './helpers.js';
+import { fermerContextes } from './helpers.js';
+
+test.afterAll(({ browser }) => fermerContextes(browser));
 
 // recette (chantier 15, point 1) : sous 1280 px, .bouton-volant--nav (position fixed, même coin
 // que la marque) recouvrait le logo de la barre (constat opérateur) — la barre réserve sa place.

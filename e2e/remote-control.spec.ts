@@ -4,6 +4,9 @@ import { tmpdir } from 'node:os';
 import { delimiter, join } from 'node:path';
 import { type Browser, expect, type Page, test } from '@playwright/test';
 import { createTopic, newRepo, node, registerWorkspace } from './helpers.js';
+import { fermerContextes } from './helpers.js';
+
+test.afterAll(({ browser }) => fermerContextes(browser));
 
 // Chantier 23 (B.1) : le chip « Remote » du composer, sur un agent claude `stream`. Comme commandes-slash.spec.ts,
 // ce spec lance ses daemons, en `stream`, devant le faux claude structuré (test/fixtures/bin-stream), qui répond au

@@ -2,6 +2,9 @@ import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { expect, test } from '@playwright/test';
 import { createTopic, newRepo, node, openApp, registerWorkspace } from './helpers.js';
+import { fermerContextes } from './helpers.js';
+
+test.afterAll(({ browser }) => fermerContextes(browser));
 
 test('nettoyer un sujet avec des modifications non commitées est refusé, rien n’est supprimé', async ({
   browser,

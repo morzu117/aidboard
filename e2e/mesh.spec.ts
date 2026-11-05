@@ -10,6 +10,9 @@ import {
   state,
   terminalText,
 } from './helpers.js';
+import { fermerContextes } from './helpers.js';
+
+test.afterAll(({ browser }) => fermerContextes(browser));
 
 // 12.7 : le mesh swarph de bout en bout sur les faux binaires (global-setup : `mesh.cell` morzu-mac,
 // fake-swarph.sh, fake-tailscale.sh). Aucun réseau, aucun token, aucun vrai swarph.

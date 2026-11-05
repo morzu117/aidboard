@@ -4,6 +4,9 @@ import { tmpdir } from 'node:os';
 import { delimiter, join } from 'node:path';
 import { type Browser, expect, type Page, test } from '@playwright/test';
 import { createTopic, newRepo, node, registerWorkspace } from './helpers.js';
+import { fermerContextes } from './helpers.js';
+
+test.afterAll(({ browser }) => fermerContextes(browser));
 
 // Chantier 22 (B.1) : le menu des commandes `/` du composer, sur un agent `stream`. Le daemon commun des e2e
 // joue claude en PTY (global-setup) : ce spec lance le sien, en `stream`, devant le faux claude structuré

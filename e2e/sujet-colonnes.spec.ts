@@ -9,6 +9,9 @@ import {
   state,
   url,
 } from './helpers.js';
+import { fermerContextes } from './helpers.js';
+
+test.afterAll(({ browser }) => fermerContextes(browser));
 
 // review D (findings 2/3/4, re-dev 2) : jsdom n'applique pas le CSS — seul un e2e vérifie la
 // grille 17/58/25 sans défilement de page, et le popup de navigation non vide sous 1180 px.
