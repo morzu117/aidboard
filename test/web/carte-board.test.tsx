@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { act, cleanup, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
 import { Route, Routes } from 'react-router';
 import { afterEach, expect, test } from 'vitest';
 import {
@@ -178,4 +178,23 @@ test('identifiant invalide : retour au board ; sans mesh : retour à l’accueil
   cleanup();
   await ouvrir('/board/cartes/101', {}, snapshot());
   await screen.findByText('accueil');
+});
+
+test('D110 : la carte ne se lit pas (gateway muet) : « Board indisponible » ; une partie refusée n’en a pas', async () => {
+  const s = fiche(101);
+  const h = await ouvrir('/board/cartes/101', {
+    101: { ...s, card: { ok: false, kind: 'unreachable', readAt: READ_AT } },
+  });
+  await waitFor(() => expect(node('carte-board.bandeau')).not.toBeNull());
+  expect(node('carte-board.bandeau.constat')!.textContent).toBe('Board indisponible');
+  h.respond.set('GET /api/board/cards/101?fresh=1', json(200, s));
+  fireEvent.click(node('carte-board.bandeau.action')!);
+  await waitFor(() => expect(node('carte-board.bandeau')).toBeNull());
+  expect(h.calls.some((c) => c.url === '/api/board/cards/101?fresh=1')).toBe(true);
+  cleanup();
+  await ouvrir('/board/cartes/101', {
+    101: { ...s, graph: { ok: false, kind: 'unreachable', readAt: READ_AT } },
+  });
+  await waitFor(() => expect(node('carte-board.graphe.message')).not.toBeNull());
+  expect(node('carte-board.bandeau')).toBeNull();
 });

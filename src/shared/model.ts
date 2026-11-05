@@ -420,4 +420,6 @@ export interface ServerAgent {
    * agent, qui tourne encore avec l'ancien réglage jusqu'à sa prochaine relance. Toujours rendu par le daemon.
    */
   staleConfirm?: boolean;
+  /** Chantier 25 (D110) : lien perdu sans reprise (`coupe`), reprise échouée (`echec`) ; absent quand tout suit */
+  suivi?: 'coupe' | 'echec';
 }

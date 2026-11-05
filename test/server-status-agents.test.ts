@@ -105,3 +105,17 @@ test('D106 : l’état de connexion porte l’agrégat ; annoncer le renvoie en 
   expect(recus.map((s) => [s.serverId, s.agents?.vivants])).toEqual([['srv_a', 2]]);
   connections.dispose();
 });
+
+test('D110 : la vue d’un agent porte son suivi seulement quand il a lâché', () => {
+  const { manager, vivant, evenement } = monter();
+  const vue = (id: string) =>
+    (manager as unknown as { suiviVue: (id: string) => object }).suiviVue.call(manager, id);
+  const a = vivant('ag_1', 'sd_1');
+  expect(vue('ag_1')).toEqual({});
+  evenement(a, { type: 'connection_lost', at: 'x' });
+  expect(vue('ag_1')).toEqual({ suivi: 'coupe' });
+  evenement(a, { type: 'resume_failed', reason: 'session introuvable' });
+  expect(vue('ag_1')).toEqual({ suivi: 'echec' });
+  evenement(a, { type: 'connection_resumed', at: 'x', afterMs: 5, sessionFound: true });
+  expect(vue('ag_1')).toEqual({});
+});

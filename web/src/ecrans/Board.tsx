@@ -8,6 +8,7 @@ import type {
 } from '../../../src/shared/board.js';
 import { useBoardCards, useBoardProjects } from '../data/board.js';
 import { useAid } from '../data/useAidState.js';
+import { Bandeau } from '../ui/Bandeau.js';
 import { Layout } from '../ui/Layout.js';
 import { useViewport } from '../ui/useViewport.js';
 
@@ -69,6 +70,52 @@ export function MessageBoard({
         </p>
       )}
     </div>
+  );
+}
+
+/** Chantier 25 (D110) : les erreurs où le board ne répond pas, par opposition à un refus ou une carte absente. */
+const INDISPONIBLE: ReadonlySet<BoardErrorKind> = new Set(['unreachable', 'timeout', 'unknown']);
+
+export function boardIndisponible(
+  result: { ok: boolean; kind?: BoardErrorKind } | null | undefined,
+  erreur: string | null,
+): boolean {
+  // la requête a échoué : le résultat encore affiché, s'il y en a un, date de la dernière lecture réussie
+  if (erreur) return true;
+  return !!result && !result.ok && !!result.kind && INDISPONIBLE.has(result.kind);
+}
+
+/**
+ * Chantier 25 (D110) : « Board indisponible », au-dessus du `MessageBoard` qui ne change pas : l'heure de la
+ * dernière lecture réussie, ce qui marche encore, et Réessayer (la même relecture fraîche que Relire).
+ */
+export function BandeauBoard({
+  reussieA,
+  enLecture,
+  onReessayer,
+  node,
+}: {
+  reussieA: string | null | undefined;
+  enLecture: boolean;
+  onReessayer: () => void;
+  node: string;
+}) {
+  const age = useAge(reussieA ?? null);
+  const heure = reussieA
+    ? new Date(reussieA).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
+    : null;
+  return (
+    <Bandeau
+      ton="ambre"
+      constat="Board indisponible"
+      continue="Le reste d’A-I-D continue : sujets, agents et serveurs ne dépendent pas du board."
+      action={{ label: 'Réessayer', onClick: onReessayer, enCours: enLecture }}
+      node={node}
+    >
+      {heure && age !== null
+        ? `Dernière lecture réussie à ${heure} (il y a ${ageTexte(age)}).`
+        : 'Aucune lecture réussie depuis l’ouverture de l’écran.'}
+    </Bandeau>
   );
 }
 
@@ -154,7 +201,7 @@ function Cartes({
   projet: BoardProject;
   onLecture: (l: { enLecture: boolean; luA: string | null; relire: () => void }) => void;
 }) {
-  const { result, enLecture, luA, erreur, relire } = useBoardCards(projet.id);
+  const { result, enLecture, luA, erreur, relire, reussieA } = useBoardCards(projet.id);
   const viewport = useViewport();
   const [choisie, setChoisie] = useState<string | null>(null);
   useEffect(() => onLecture({ enLecture, luA, relire: () => void relire() }), [enLecture, luA]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -166,21 +213,35 @@ function Cartes({
     [],
   );
   const slug = projet.slug ?? String(projet.id);
+  const bandeau = boardIndisponible(result, erreur) && (
+    <BandeauBoard
+      reussieA={reussieA}
+      enLecture={enLecture}
+      onReessayer={() => void relire()}
+      node="board.cartes.bandeau"
+    />
+  );
   if (erreur && !result)
     return (
-      <p className="message-erreur" role="alert" data-node="board.cartes.erreur">
-        {erreur}
-      </p>
+      <>
+        {bandeau}
+        <p className="message-erreur" role="alert" data-node="board.cartes.erreur">
+          {erreur}
+        </p>
+      </>
     );
   if (!result) return null;
   if (!result.ok)
     return (
-      <MessageBoard
-        kind={result.kind}
-        node="board.cartes.message"
-        onRelire={relire}
-        refus="Tu ne peux pas lire ce projet"
-      />
+      <>
+        {bandeau}
+        <MessageBoard
+          kind={result.kind}
+          node="board.cartes.message"
+          onRelire={relire}
+          refus="Tu ne peux pas lire ce projet"
+        />
+      </>
     );
   const cols = colonnes(result.data);
   if (cols.length === 0)
@@ -276,6 +337,14 @@ function Contenu({ cell }: { cell: string }) {
           </button>
         </div>
       </div>
+      {boardIndisponible(r, projets.erreur) && (
+        <BandeauBoard
+          reussieA={projets.reussieA}
+          enLecture={enLecture}
+          onReessayer={relire}
+          node="board.bandeau"
+        />
+      )}
       {projets.erreur && !r && (
         <p className="message-erreur" role="alert" data-node="board.erreur">
           {projets.erreur}

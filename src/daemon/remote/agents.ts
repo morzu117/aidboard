@@ -248,7 +248,14 @@ export class RemoteAgentManager {
       updatedAt: r.updated_at,
       pending: this.live.get(r.id)?.pending ?? null,
       staleConfirm: this.staleConfirm(r),
+      ...this.suiviVue(r.id),
     };
+  }
+
+  /** Chantier 25 (D110) : le suivi n'apparaît dans la vue que quand il a lâché, pour le bandeau de la discussion. */
+  private suiviVue(agentId: string): { suivi?: 'coupe' | 'echec' } {
+    const etat = this.suivi.get(agentId)?.etat;
+    return etat === 'coupe' || etat === 'echec' ? { suivi: etat } : {};
   }
 
   /** S.6 (DS5) : agent vivant lancé sous l'autre réglage de confirmation que celui du serveur aujourd'hui. */
