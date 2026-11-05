@@ -50,3 +50,8 @@
 .sujet-prochaine.est-attente {
   color: var(--s-attente);
 }
+
+/* D115 : l'état d'un onglet d'agent, en mots */
+.agent-etat {
+  color: var(--text-3);
+}

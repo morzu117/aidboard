@@ -16,7 +16,7 @@ import { Memoire } from '../ui/Memoire.js';
 import { agentView, Point } from '../ui/Statut.js';
 import { Volet } from '../ui/Volet.js';
 import { prochaineChose } from '../ui/rangement.js';
-import { etapesPhase } from '../ui/sujetVue.js';
+import { etapesPhase, etatOnglet } from '../ui/sujetVue.js';
 import type { ArchivedTopic } from './useArchive.js';
 import { useArchive } from './useArchive.js';
 import { PanneauContexte } from './PanneauContexte.js';
@@ -854,14 +854,23 @@ function Contenu({
                         >
                           {a.kind}
                         </span>
+                        {/* D115 : l'état en mots ; le rôle seulement pour un agent de la chaîne, pas pour celui lancé à la main */}
                         <span
-                          className="agent-role"
-                          data-node={`1-3.terminaux.onglet-${i + 1}.role`}
-                          data-bind="agent.role"
+                          className="agent-etat"
+                          data-node={`1-3.terminaux.onglet-${i + 1}.etat`}
+                          data-bind="agent.etat"
                         >
-                          {/* « libre » est le rôle d'un agent lancé à la main : à côté de la pastille il se lisait comme son statut */}
-                          {a.role === 'free' ? v.label : roleLabel(a.role)}
+                          {etatOnglet(a)}
                         </span>
+                        {a.role !== 'free' && (
+                          <span
+                            className="agent-role"
+                            data-node={`1-3.terminaux.onglet-${i + 1}.role`}
+                            data-bind="agent.role"
+                          >
+                            {roleLabel(a.role)}
+                          </span>
+                        )}
                       </button>
                     );
                   })}

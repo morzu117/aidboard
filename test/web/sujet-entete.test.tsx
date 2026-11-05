@@ -219,3 +219,21 @@ test('D114 : sous une phase, sans question, la prochaine chose ne répète pas l
   expect(node('1-3.entete.prochaine')?.textContent).toBe('En cours');
   expect(node('1-3.entete.prochaine')?.classList.contains('est-attente')).toBe(false);
 });
+
+test('D115 : chaque onglet dit l’état de son agent en mots ; le rôle seulement pour la chaîne', async () => {
+  open(
+    placement(),
+    {},
+    state({
+      runs: [run],
+      agents: [
+        agent({ id: 'ag_1', kind: 'claude', transport: 'stream', role: 'free', status: 'idle' }),
+        agent({ id: 'ag_2', kind: 'codex', transport: 'stream', role: 'dev', status: 'working' }),
+      ],
+    }),
+  );
+  await waitFor(() => expect(node('1-3.terminaux.onglet-1.etat')?.textContent).toBe('libre'));
+  expect(node('1-3.terminaux.onglet-1.role')).toBeNull();
+  expect(node('1-3.terminaux.onglet-2.etat')?.textContent).toBe('au travail');
+  expect(node('1-3.terminaux.onglet-2.role')?.textContent).toBe('dev');
+});
