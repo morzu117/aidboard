@@ -90,7 +90,12 @@ test('un message à un shell dans son terminal, puis pause et reprise depuis l�
   // de la carte portée là-bas avant la table ; son champ de message désactivé pendant la pause n'a
   // plus d'équivalent — rien d'autre à vérifier ici).
   await page.goto(url());
-  await expect(node(page, '1-1.table.ligne-1.statut')).toHaveAttribute('aria-label', 'En pause');
+  // chantier 25 (D107) : les sujets des autres specs (même daemon) passent avant, section par section ; on lit
+  // la ligne de ce sujet dans En pause, plus la première ligne
+  const ligne = node(page, '1-1.table.section-en-pause').locator('tr', {
+    has: page.locator(`a[href="/sujets/${id}"]`),
+  });
+  await expect(ligne.locator('[data-node$=".statut"]')).toHaveAttribute('aria-label', 'En pause');
   await page.goto(`${url()}/sujets/${id}`);
   const pid = (await state(page)).agents.find((a) => a.id === agent)!.pid;
   const stat = () => execFileSync('ps', ['-o', 'stat=', '-p', String(pid)], { encoding: 'utf8' });
