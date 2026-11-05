@@ -20,7 +20,10 @@ export async function syncTopicBranches(db: Db, store: EventStore): Promise<void
     topics.map(async (t) => {
       if (!existsSync(t.worktree)) return;
       const head = await currentBranchFast(t.worktree);
-      if (head && head !== t.branch) {
+      // relue juste avant d'écrire : une relecture simultanée (deux GET, un rattachement) a pu l'écrire pendant l'attente
+      const now = db.prepare('SELECT branch FROM topics WHERE id = ?').get(t.id) as
+        { branch: string } | undefined;
+      if (head && now && head !== now.branch) {
         store.append({
           source: 'daemon',
           type: 'topic.branch',
@@ -31,16 +34,4 @@ export async function syncTopicBranches(db: Db, store: EventStore): Promise<void
       }
     }),
   );
-}
-
-// Les GET /api/state simultanés (plusieurs onglets ; chaque page relit l'état à chaque événement) partagent la
-// relecture en cours au lieu d'en lancer une chacun.
-const enCours = new WeakMap<Db, Promise<void>>();
-export function syncTopicBranchesShared(db: Db, store: EventStore): Promise<void> {
-  let p = enCours.get(db);
-  if (!p) {
-    p = syncTopicBranches(db, store).finally(() => enCours.delete(db));
-    enCours.set(db, p);
-  }
-  return p;
 }

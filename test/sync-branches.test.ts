@@ -3,13 +3,12 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, expect, test } from 'vitest';
 import { currentBranch, currentBranchFast, headBranchOnDisk } from '../src/daemon/git/inspect.js';
-import { syncTopicBranchesShared } from '../src/daemon/state/syncBranches.js';
 import type { StateSnapshot } from '../src/shared/state.js';
 import { startTestDaemon, waitFor, type TestDaemon } from './helpers/daemon.js';
 import { makeOriginAndClone, sh } from './helpers/git.js';
 
-// GET /api/state relit la branche de chaque sujet : HEAD est lu sur le disque, et les lectures simultanées partagent
-// la relecture en cours.
+// GET /api/state relit la branche de chaque sujet : HEAD est lu sur le disque, et deux relectures simultanées
+// n'écrivent qu'un topic.branch.
 
 let t: TestDaemon | undefined;
 afterEach(async () => {
@@ -55,18 +54,15 @@ test('forme inhabituelle : undefined, et currentBranchFast repasse par git', asy
   expect(headBranchOnDisk(gitdirIllisible)).toBeUndefined();
 });
 
-test('lectures simultanées : une seule relecture partagée, une nouvelle une fois finie', async () => {
-  t = await startTestDaemon();
-  const a = syncTopicBranchesShared(t.db, t.store);
-  const b = syncTopicBranchesShared(t.db, t.store);
-  expect(b).toBe(a);
-  await a;
-  const c = syncTopicBranchesShared(t.db, t.store);
-  expect(c).not.toBe(a);
-  await c;
+test('une branche homonyme d’un tag : même nom sur le disque et par git', async () => {
+  const { clone } = makeOriginAndClone(tmp());
+  sh(clone, 'tag', 'v1.0');
+  sh(clone, 'checkout', '-q', '-b', 'v1.0');
+  expect(headBranchOnDisk(clone)).toBe('v1.0');
+  expect(await currentBranch(clone)).toBe('v1.0');
 });
 
-test('la branche changée hors d’A-I-D est toujours relue par GET /api/state', async () => {
+test('la branche changée hors d’A-I-D est relue par deux GET /api/state simultanés, un seul topic.branch', async () => {
   t = await startTestDaemon();
   const daemon = t;
   const { clone } = makeOriginAndClone(tmp());

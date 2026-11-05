@@ -75,8 +75,9 @@ export async function remoteBranchExists(root: string, branch: string): Promise<
 
 // null en détached HEAD : pas une branche, rien à rapprocher de topic.branch.
 export async function currentBranch(root: string): Promise<string | null> {
-  const r = await git(root, ['symbolic-ref', '--quiet', '--short', 'HEAD']);
-  return r.ok ? r.stdout : null;
+  // sans --short : git abrège en heads/<nom> une branche homonyme d'un tag, la lecture sur le disque donne <nom>
+  const r = await git(root, ['symbolic-ref', '--quiet', 'HEAD']);
+  return r.ok ? r.stdout.replace(/^refs\/heads\//, '') : null;
 }
 
 // HEAD lu sur le disque, sans lancer git : GET /api/state relit la branche de chaque sujet à chaque appel, et chaque
