@@ -3,7 +3,8 @@ import { mkdtempSync, readFileSync, realpathSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os';
 import { delimiter, join } from 'node:path';
 import { type Browser, expect, type Page, test } from '@playwright/test';
-import { createTopic, newRepo, node, registerWorkspace, fermerContextes } from './helpers.js';
+import { createTopic, newRepo, node, registerWorkspace } from './helpers.js';
+import { fermerContextes } from './helpers.js';
 
 test.afterAll(({ browser }) => fermerContextes(browser));
 

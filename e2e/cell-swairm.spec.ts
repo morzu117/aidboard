@@ -10,8 +10,8 @@ import {
   state,
   terminalText,
   typeInTerminal,
-  fermerContextes,
 } from './helpers.js';
+import { fermerContextes } from './helpers.js';
 
 test.afterAll(({ browser }) => fermerContextes(browser));
 

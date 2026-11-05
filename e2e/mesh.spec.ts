@@ -9,8 +9,8 @@ import {
   registerWorkspace,
   state,
   terminalText,
-  fermerContextes,
 } from './helpers.js';
+import { fermerContextes } from './helpers.js';
 
 test.afterAll(({ browser }) => fermerContextes(browser));
 

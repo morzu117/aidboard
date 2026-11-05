@@ -1,7 +1,8 @@
 import { mkdtempSync, realpathSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { expect, type Browser, type BrowserContext, type Page } from '@playwright/test';
+import { expect, type BrowserContext, type Page } from '@playwright/test';
+import type { Browser } from '@playwright/test';
 import { makeOriginAndClone } from '../test/helpers/git.js';
 
 export const url = () => process.env.AID_E2E_URL!;

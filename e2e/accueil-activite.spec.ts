@@ -1,13 +1,6 @@
 import { expect, test } from '@playwright/test';
-import {
-  createTopic,
-  newRepo,
-  node,
-  openApp,
-  registerWorkspace,
-  url,
-  fermerContextes,
-} from './helpers.js';
+import { createTopic, newRepo, node, openApp, registerWorkspace, url } from './helpers.js';
+import { fermerContextes } from './helpers.js';
 
 test.afterAll(({ browser }) => fermerContextes(browser));
 

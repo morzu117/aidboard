@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
-import { node, openApp, fermerContextes } from './helpers.js';
+import { node, openApp } from './helpers.js';
+import { fermerContextes } from './helpers.js';
 
 test.afterAll(({ browser }) => fermerContextes(browser));
 

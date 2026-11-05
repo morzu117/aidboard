@@ -1,7 +1,8 @@
 import { join } from 'node:path';
 import { expect, test } from '@playwright/test';
 import Database from 'better-sqlite3';
-import { node, openApp, url, fermerContextes } from './helpers.js';
+import { node, openApp, url } from './helpers.js';
+import { fermerContextes } from './helpers.js';
 
 test.afterAll(({ browser }) => fermerContextes(browser));
 
