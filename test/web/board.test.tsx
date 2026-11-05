@@ -159,6 +159,34 @@ test('erreur sur les cartes : les projets restent, le message prend la place des
   expect(node('board.projet')!.textContent).toContain('projet-test');
 });
 
+test('les cartes retirées pendant leur lecture ne laissent pas « Lecture du board… » affiché', async () => {
+  const h = setup(app, avecMesh, '/board', {
+    ...NAV,
+    'GET /api/board/projects': json(200, ok([projet])),
+    // la lecture des cartes ne répond jamais
+    'GET /api/board/projects/42/cards': () => new Promise(() => {}) as unknown as Response,
+    'GET /api/board/projects/42/cards?fresh=1': () => new Promise(() => {}) as unknown as Response,
+    'GET /api/board/projects?fresh=1': json(200, {
+      ok: false,
+      kind: 'unreachable',
+      readAt: READ_AT,
+    }),
+  });
+  await joindre();
+  await waitFor(() => expect(node('board.projet')).not.toBeNull());
+  await waitFor(() => expect(node('board.pastille')!.textContent).toBe('Lecture du board…'));
+  // les projets relus en erreur : plus de projet, les cartes disparaissent en pleine lecture
+  fireEvent.click(node('board.relire')!);
+  await waitFor(() => expect(node('board.message')).not.toBeNull());
+  expect(node('board.pastille')!.textContent).not.toBe('Lecture du board…');
+  // Relire depuis le message relit encore les cartes en fresh : sans quoi elles retombent sur l'erreur en cache
+  const fraiches = () =>
+    h.calls.filter((c) => c.url === '/api/board/projects/42/cards?fresh=1').length;
+  const avant = fraiches();
+  fireEvent.click(node('board.message.relire')!);
+  await waitFor(() => expect(fraiches()).toBe(avant + 1));
+});
+
 test('petite largeur : une colonne à la fois, choisie par onglet', async () => {
   const largeur = window.innerWidth;
   Object.defineProperty(window, 'innerWidth', { configurable: true, value: 400 });

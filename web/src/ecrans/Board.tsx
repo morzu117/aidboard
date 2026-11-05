@@ -149,6 +149,13 @@ function Cartes({
   const viewport = useViewport();
   const [choisie, setChoisie] = useState<string | null>(null);
   useEffect(() => onLecture({ enLecture, luA, relire: () => void relire() }), [enLecture, luA]); // eslint-disable-line react-hooks/exhaustive-deps
+  // retirées en pleine lecture (projets relus en erreur) : le parent ne garde pas « Lecture du board… », mais garde
+  // la relecture fraîche des cartes, sans quoi elles retombent à leur retour sur l'erreur gardée 5 s par le daemon
+  useEffect(
+    () => () => onLecture({ enLecture: false, luA: null, relire: () => void relire() }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [],
+  );
   const slug = projet.slug ?? String(projet.id);
   if (erreur && !result)
     return (
