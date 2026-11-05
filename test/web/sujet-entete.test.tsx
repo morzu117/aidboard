@@ -81,3 +81,66 @@ test('D111 : un nom changé ailleurs atteint l’en-tête et la barre affichée'
   await waitFor(() => expect(node('1-3.entete.titre')?.textContent).toBe('Renommé'));
   await waitFor(() => expect(lien.textContent).toContain('Renommé'));
 });
+
+const ouvrirMenu = async () => {
+  const plus = await waitFor(() => {
+    const b = node('1-3.actions.plus');
+    expect(b).not.toBeNull();
+    return b!;
+  });
+  fireEvent.click(plus);
+};
+
+test('D112 : Renommer depuis le menu ⋯ change le nom affiché, Échap annule, vide revient au titre', async () => {
+  const h = open(placement(), { 'PATCH /api/nav/placements/tp_1': json(200, {}) });
+  await waitFor(() => expect(node('1-3.entete.titre')?.textContent).toBe('Mon sujet'));
+  await ouvrirMenu();
+  fireEvent.click(node('1-3.actions.renommer')!);
+  const champ = node('1-3.entete.titre.champ') as HTMLInputElement;
+  expect(champ.value).toBe('Mon sujet');
+  fireEvent.change(champ, { target: { value: 'Abandonné' } });
+  fireEvent.keyDown(champ, { key: 'Escape' });
+  expect(node('1-3.entete.titre')?.textContent).toBe('Mon sujet');
+  expect(h.calls.some((c) => c.method === 'PATCH')).toBe(false);
+
+  await ouvrirMenu();
+  fireEvent.click(node('1-3.actions.renommer')!);
+  fireEvent.change(node('1-3.entete.titre.champ')!, { target: { value: '  Nouveau nom ' } });
+  fireEvent.keyDown(node('1-3.entete.titre.champ')!, { key: 'Enter' });
+  await waitFor(() => expect(node('1-3.entete.titre')?.textContent).toBe('Nouveau nom'));
+  const patch = h.calls.find((c) => c.method === 'PATCH');
+  expect(patch?.url).toBe('/api/nav/placements/tp_1');
+  expect(patch?.body).toEqual({ displayName: 'Nouveau nom' });
+
+  await ouvrirMenu();
+  fireEvent.click(node('1-3.actions.renommer')!);
+  fireEvent.change(node('1-3.entete.titre.champ')!, { target: { value: '' } });
+  fireEvent.keyDown(node('1-3.entete.titre.champ')!, { key: 'Enter' });
+  await waitFor(() => expect(node('1-3.entete.titre')?.textContent).toBe('Mon sujet'));
+  expect(h.calls.filter((c) => c.method === 'PATCH').at(-1)?.body).toEqual({ displayName: null });
+});
+
+test('D112 : Épingler et Archiver passent par le placement, et reviennent en arrière sur un refus', async () => {
+  const h = open(placement(), {
+    'PATCH /api/nav/placements/tp_1': (body) =>
+      (body as { archived?: boolean }).archived !== undefined
+        ? json(500, { error: 'refusé' })()
+        : json(200, {})(),
+  });
+  await ouvrirMenu();
+  expect(node('1-3.actions.epingler')?.textContent).toBe('Épingler');
+  fireEvent.click(node('1-3.actions.epingler')!);
+  await waitFor(() =>
+    expect(
+      h.calls.some((c) => c.method === 'PATCH' && (c.body as { pinned?: boolean }).pinned),
+    ).toBe(true),
+  );
+  await ouvrirMenu();
+  await waitFor(() => expect(node('1-3.actions.epingler')?.textContent).toBe('Désépingler'));
+
+  fireEvent.click(node('1-3.actions.archiver')!);
+  await screen.findByRole('alert');
+  await ouvrirMenu();
+  await waitFor(() => expect(node('1-3.actions.archiver')?.textContent).toBe('Archiver'));
+  expect(h.calls.some((c) => (c.body as { archived?: boolean } | undefined)?.archived)).toBe(true);
+});

@@ -6,7 +6,7 @@ import type { Agent, IndexState, Topic } from '../../../src/shared/model.js';
 import { Conversation } from '../conversation/Conversation.js';
 import { AidApiError } from '../data/api.js';
 import { fetchGitLog } from '../data/git.js';
-import { usePlacement } from '../data/placement.js';
+import { changerPlacement, usePlacement } from '../data/placement.js';
 import { useAid } from '../data/useAidState.js';
 import { ConfirmerNettoyage } from '../dialogues/ConfirmerNettoyage.js';
 import { SelecteurBranche } from '../dialogues/SelecteurBranche.js';
@@ -83,6 +83,8 @@ function Contenu({
   const { state, outputs, daemon, retry, call } = useAid();
   const navigate = useNavigate();
   const placement = usePlacement(topicId);
+  // D112 : le titre devient un champ pendant un renommage depuis le menu ⋯
+  const [renomme, setRenomme] = useState<string | null>(null);
   const [menu, setMenu] = useState<'aucun' | 'agent' | 'plus'>('aucun');
   const [selecteurBranche, setSelecteurBranche] = useState(false);
   const [erreur, setErreur] = useState<string | null>(null);
@@ -350,6 +352,25 @@ function Contenu({
     }
   }
 
+  // D112 : renommer, épingler, archiver passent par le placement de la barre, qui suit tout de suite.
+  async function placer(patch: Parameters<typeof changerPlacement>[2]) {
+    setErreur(null);
+    try {
+      await changerPlacement(call, topicId, patch);
+    } catch (err) {
+      setErreur(err instanceof AidApiError ? err.message : String(err));
+    }
+  }
+
+  function finirRenommage(garder: boolean) {
+    if (renomme === null) return;
+    const nom = renomme.trim();
+    setRenomme(null);
+    // un nom vide ou égal au titre retire le nom affiché
+    if (garder && nom !== (placement?.displayName ?? topic?.title))
+      void placer({ displayName: nom === '' || nom === topic?.title ? null : nom });
+  }
+
   // review db76a41 : remet « copié » à faux et annule le minuteur en attente à la fermeture du menu ⋯.
   function fermerMenuPlus() {
     setWorktreeCopie(false);
@@ -418,9 +439,25 @@ function Contenu({
               </Link>{' '}
               / sujet
             </p>
-            <h1 className="titre-ecran" data-node="1-3.entete.titre" data-bind="sujet.titre">
-              {placement?.displayName ?? topic.title}
-            </h1>
+            {renomme !== null ? (
+              <input
+                className="titre-ecran sujet-titre-champ"
+                data-node="1-3.entete.titre.champ"
+                aria-label="Nom affiché du sujet"
+                autoFocus
+                value={renomme}
+                onChange={(e) => setRenomme(e.target.value)}
+                onBlur={() => finirRenommage(true)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') finirRenommage(true);
+                  if (e.key === 'Escape') finirRenommage(false);
+                }}
+              />
+            ) : (
+              <h1 className="titre-ecran" data-node="1-3.entete.titre" data-bind="sujet.titre">
+                {placement?.displayName ?? topic.title}
+              </h1>
+            )}
           </div>
           <div className="sujet-actions" data-node="1-3.actions">
             <button
@@ -451,6 +488,49 @@ function Contenu({
             )}
             {menu === 'plus' && (topic.state !== 'draft' || !topic.worktreeMissing) && (
               <>
+                {placement && (
+                  <>
+                    <button
+                      className="bouton bouton--fantome"
+                      data-node="1-3.actions.renommer"
+                      data-action="sujet.renommer"
+                      type="button"
+                      onClick={() => {
+                        fermerMenuPlus();
+                        setMenu('aucun');
+                        setRenomme(placement.displayName ?? topic.title);
+                      }}
+                    >
+                      Renommer
+                    </button>
+                    <button
+                      className="bouton bouton--fantome"
+                      data-node="1-3.actions.epingler"
+                      data-action="sujet.epingler"
+                      type="button"
+                      onClick={() => {
+                        fermerMenuPlus();
+                        setMenu('aucun');
+                        void placer({ pinned: !placement.pinned });
+                      }}
+                    >
+                      {placement.pinned ? 'Désépingler' : 'Épingler'}
+                    </button>
+                    <button
+                      className="bouton bouton--fantome"
+                      data-node="1-3.actions.archiver"
+                      data-action="sujet.archiver"
+                      type="button"
+                      onClick={() => {
+                        fermerMenuPlus();
+                        setMenu('aucun');
+                        void placer({ archived: !placement.archived });
+                      }}
+                    >
+                      {placement.archived ? 'Désarchiver' : 'Archiver'}
+                    </button>
+                  </>
+                )}
                 {topic.state !== 'draft' && (
                   <button
                     className="bouton bouton--danger"

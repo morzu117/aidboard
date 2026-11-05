@@ -1,0 +1,14 @@
+/* Chantier 26 : styles de l'écran Sujet V4. Jamais dans maquette.css, dont l'empreinte est comparée aux maquettes
+   design/maquettes/aid-1-*.html (test/web/maquette-css.test.ts). */
+
+/* D112 : le titre pendant un renommage */
+.sujet-titre-champ {
+  width: 100%;
+  margin: 0;
+  padding: 0 var(--sp-2);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-m);
+  background: var(--surface-input);
+  color: var(--text);
+  font-family: var(--font);
+}
