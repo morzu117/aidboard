@@ -49,9 +49,30 @@ test('forme inhabituelle : undefined, et currentBranchFast repasse par git', asy
   writeFileSync(join(horsHeads, '.git', 'HEAD'), 'ref: refs/remotes/origin/main\n');
   expect(headBranchOnDisk(horsHeads)).toBeUndefined();
 
+  // noms que git refuse : jamais rendus par le disque, et git répond null
+  for (const nom of ['../../evil', 'a b']) {
+    const abime = tmp();
+    mkdirSync(join(abime, '.git'));
+    writeFileSync(join(abime, '.git', 'HEAD'), `ref: refs/heads/${nom}\n`);
+    expect(headBranchOnDisk(abime)).toBeUndefined();
+  }
+  const { clone: avecAbime } = makeOriginAndClone(tmp());
+  writeFileSync(join(avecAbime, '.git', 'HEAD'), 'ref: refs/heads/../../evil\n');
+  expect(await currentBranchFast(avecAbime)).toBeNull();
+
   const gitdirIllisible = tmp();
   writeFileSync(join(gitdirIllisible, '.git'), 'pas un gitdir\n');
   expect(headBranchOnDisk(gitdirIllisible)).toBeUndefined();
+});
+
+test('un nom en tiret, accepté par git, n’est jamais rendu ; un nom accentué passe par git', async () => {
+  const { clone } = makeOriginAndClone(tmp());
+  sh(clone, 'checkout', '-q', '-b', 'feat/réglage');
+  expect(headBranchOnDisk(clone)).toBeUndefined();
+  expect(await currentBranchFast(clone)).toBe('feat/réglage');
+  writeFileSync(join(clone, '.git', 'HEAD'), 'ref: refs/heads/--upload-pack=x\n');
+  expect(headBranchOnDisk(clone)).toBeUndefined();
+  expect(await currentBranchFast(clone)).toBeNull();
 });
 
 test('une branche homonyme d’un tag : même nom sur le disque et par git', async () => {
