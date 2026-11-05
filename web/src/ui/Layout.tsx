@@ -1,6 +1,7 @@
 import { createContext, type ReactNode, useContext, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import type { MeshDmKind } from '../../../src/shared/model.js';
+import { useBoardLuA } from '../data/board.js';
 import { useAid } from '../data/useAidState.js';
 import { type MeshBascule, useMeshBascule } from '../data/useMeshBascule.js';
 import { NouveauSujet } from '../dialogues/NouveauSujet.js';
@@ -73,6 +74,8 @@ export function Layout({ screen, children }: { screen: EcranId; children: ReactN
   const waiting = state?.agents.filter((a) => a.status === 'needs_input').length ?? 0;
   // Pastille mesh (12.5) : la bascule vit dans useMeshBascule (D100), partagée avec Réglages par le contexte.
   const meshBascule = useMeshBascule();
+  // D101 : l'âge du board, lu par les écrans du board eux-mêmes
+  const boardLuA = useBoardLuA();
   const { mesh, enCours } = meshBascule;
   const barreMesh = mesh
     ? {
@@ -80,7 +83,7 @@ export function Layout({ screen, children }: { screen: EcranId; children: ReactN
         aTraiter: mesh.inbox.filter((d) => !d.seenAt && A_TRAITER.has(d.kind)).length,
         tailscaleManage: mesh.tailscaleManage,
         enCours,
-        onToggle: () => meshBascule.basculer(!mesh.state.connected),
+        checkedAt: meshBascule.checkedAt,
       }
     : null;
   const names = new Map(state?.workspaces.map((w) => [w.id, w.name]));
@@ -116,6 +119,8 @@ export function Layout({ screen, children }: { screen: EcranId; children: ReactN
           onNewTopic={() => openNewTopic()}
           onPalette={() => setPalette(true)}
           mesh={barreMesh}
+          boardLuA={screen === 'board' ? boardLuA : null}
+          sansSwarph={!!state && !state.mesh}
         />
         <div
           className={`corps-ecran${screen === '1-3' ? ' corps-ecran--sujet' : ''}`}

@@ -34,3 +34,9 @@
 .bandeau--rouge .bandeau-ton {
   color: var(--s-erreur);
 }
+
+/* D99 : la pastille et le logo deviennent des liens */
+a.bouton-mesh,
+a.marque {
+  text-decoration: none;
+}

@@ -1,6 +1,8 @@
+import { useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router';
 import type { MeshState } from '../../../src/shared/model.js';
 import type { DaemonLink } from '../data/types.js';
+import { ageLecture, etatMonitor } from './pastille.js';
 
 const DAEMON_TEXT: Record<DaemonLink, string> = {
   connecte: 'daemon local',
@@ -27,7 +29,10 @@ export interface BarreMesh {
   tailscaleManage: boolean;
   /** un connect/disconnect est parti et son résultat n'est pas encore arrivé par `mesh.state` */
   enCours: boolean;
-  onToggle: () => void;
+  /** chantier 25 (D99) : la barre ne bascule plus rien, la bascule est dans Réglages */
+  onToggle?: () => void;
+  /** D99 bis : dernière lecture de `monitor status` */
+  checkedAt?: string | null;
 }
 
 const dureeDepuis = (iso: string, now = Date.now()) => {
@@ -56,6 +61,12 @@ export function meshTexte(m: BarreMesh, now = Date.now()): string {
   return s.since ? `hors mesh depuis ${dureeDepuis(s.since, now)}` : 'hors mesh';
 }
 
+/** D101 : « 12 s », « 3 min » ; le board se relit toutes les 60 s */
+const ageCourt = (iso: string, now: number) => {
+  const sec = Math.max(0, Math.round((now - Date.parse(iso)) / 1000));
+  return sec < 60 ? `${sec} s` : `${Math.round(sec / 60)} min`;
+};
+
 const LIENS = [
   { id: 'accueil', to: '/', label: 'Accueil' },
   { id: 'boite', to: '/boite', label: 'Boîte de réception' },
@@ -72,6 +83,8 @@ export function Barre({
   onNewTopic,
   onPalette,
   mesh,
+  boardLuA,
+  sansSwarph,
 }: {
   screen: EcranId;
   daemon: DaemonLink;
@@ -80,14 +93,30 @@ export function Barre({
   onNewTopic: () => void;
   onPalette: () => void;
   mesh?: BarreMesh | null;
+  /** chantier 25 (D99, D101) : `readAt` de la dernière lecture du board, passé sur les écrans du board seulement */
+  boardLuA?: string | null;
+  /** chantier 25 (D102) : l'instantané est arrivé sans mesh configuré */
+  sansSwarph?: boolean;
 }) {
   const n = (rest: string) => `${screen}.barre.${rest}`;
   const { pathname } = useLocation();
+  // les âges affichés (lecture du monitor, du board) vieillissent même quand rien n'arrive
+  const [now, setNow] = useState(Date.now);
+  const vieillit = !!boardLuA || !!mesh?.state.connected;
+  useEffect(() => {
+    if (!vieillit) return;
+    const t = setInterval(() => setNow(Date.now()), 10_000);
+    return () => clearInterval(t);
+  }, [vieillit]);
+  const ageMesh = mesh ? ageLecture(mesh.state, mesh.checkedAt ?? null, now) : null;
   return (
     <header className="barre" data-node={`${screen}.barre`}>
-      <span
+      <Link
+        to="/"
         className="marque"
         data-node={n('marque')}
+        data-action="nav.accueil"
+        aria-label="Accueil"
         style={{ display: 'inline-flex', alignItems: 'center' }}
       >
         <svg
@@ -121,7 +150,7 @@ export function Barre({
             />
           </g>
         </svg>
-      </span>
+      </Link>
       <nav className="nav" data-node={n('nav')} aria-label="Navigation principale">
         {LIENS.map((l) => {
           const actif = pathname === l.to;
@@ -162,28 +191,41 @@ export function Barre({
       </nav>
       <div className="barre-droite">
         {mesh && (
-          <button
+          <Link
             className="bouton-mesh"
             data-node={n('mesh')}
-            data-action={mesh.state.connected ? 'mesh.deconnecter' : 'mesh.connecter'}
-            type="button"
-            disabled={mesh.enCours || meshBloque(mesh) !== null}
-            title={
-              meshBloque(mesh) ??
-              (mesh.state.connected
-                ? `Quitter le mesh (cell ${mesh.state.cell})`
-                : `Rejoindre le mesh (cell ${mesh.state.cell})`)
-            }
-            onClick={mesh.onToggle}
+            data-action="nav.reglages-mesh"
+            to="/reglages#mesh"
+            title={`Mesh de la cell ${mesh.state.cell} : état, connexion et déconnexion dans Réglages`}
           >
             <span
-              className={`point point--${mesh.state.connected ? 'ok' : mesh.enCours ? 'attente' : 'inactif'}`}
+              className={`point point--${mesh.state.connected && !ageMesh ? 'ok' : mesh.enCours || mesh.state.monitor === 'stale' || ageMesh ? 'attente' : 'inactif'}`}
               aria-hidden="true"
             />
             <span data-node={n('mesh.texte')} data-bind="mesh.etat">
-              {meshTexte(mesh)}
+              {etatMonitor(mesh.state, mesh.aTraiter, mesh.enCours, now)}
             </span>
-          </button>
+            {ageMesh && (
+              <span className="texte-faible" data-node={n('mesh.age')}>
+                · {ageMesh}
+              </span>
+            )}
+          </Link>
+        )}
+        {!mesh && sansSwarph && (
+          <Link
+            className="bouton-mesh"
+            data-node={n('swarph')}
+            data-action="nav.swarph"
+            to="/swarph"
+          >
+            Connecter à swarph
+          </Link>
+        )}
+        {boardLuA && (
+          <span className="texte-faible" data-node={n('board-lu')} data-bind="board.luA">
+            board lu il y a {ageCourt(boardLuA, now)}
+          </span>
         )}
         <span className="etat-daemon" data-node={n('daemon')}>
           <span

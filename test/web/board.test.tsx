@@ -281,3 +281,29 @@ test('colonnes() : ordre d’apparition, stage absent regroupé', () => {
     ['a', [3]],
   ]);
 });
+
+test('D101 : la barre dit l’âge du board sur son écran, et plus ailleurs', async () => {
+  const h = setup(
+    <Routes>
+      <Route path="/board" element={<Board />} />
+      <Route path="/consignes" element={<Consignes />} />
+    </Routes>,
+    avecMesh,
+    '/board',
+    {
+      ...NAV,
+      'GET /api/board/projects': json(200, ok([projet])),
+      'GET /api/board/projects/42/cards': json(200, ok([])),
+    },
+  );
+  await joindre();
+  await waitFor(() =>
+    expect(node('board.barre.board-lu')?.textContent).toMatch(/^board lu il y a \d+ s$/),
+  );
+  const lectures = h.calls.filter((c) => c.url.startsWith('/api/board')).length;
+  fireEvent.click(node('board.barre.nav-consignes')!);
+  await waitFor(() => expect(node('consignes.barre')).not.toBeNull());
+  expect(node('consignes.barre.board-lu')).toBeNull();
+  // la barre ne lit rien elle-même
+  expect(h.calls.filter((c) => c.url.startsWith('/api/board'))).toHaveLength(lectures);
+});
