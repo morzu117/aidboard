@@ -27,6 +27,8 @@ export const MESSAGES_BOARD: Record<BoardErrorKind, { texte: string; action: Act
   credential: { texte: 'Swarph ne trouve pas l’identifiant de cette cell', action: 'doctor' },
   timeout: { texte: 'Le board met trop de temps à répondre', action: 'relire' },
   format: { texte: 'Réponse du board illisible', action: null },
+  // un fil de 1000 messages peut dépasser le tampon : relire ne changerait rien (D95 bis)
+  'too-large': { texte: 'Trop volumineux pour être affiché (plus de 4 Mo)', action: null },
   unknown: { texte: 'Lecture du board impossible', action: 'relire' },
 };
 

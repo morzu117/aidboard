@@ -153,6 +153,18 @@ test.each([
   if (action === 'doctor') expect(m.textContent).toContain('aid doctor');
 });
 
+test('trop volumineux : message dédié, sans action (D95 bis)', async () => {
+  await ouvrir({ ok: false, kind: 'too-large', readAt: READ_AT });
+  const m = await waitFor(() => {
+    const e = node('board.message');
+    expect(e).not.toBeNull();
+    return e!;
+  });
+  expect(m.textContent).toContain('Trop volumineux pour être affiché (plus de 4 Mo)');
+  for (const action of ['retour', 'relire', 'doctor'])
+    expect(node(`board.message.${action}`)).toBeNull();
+});
+
 test('erreur sur les cartes : les projets restent, le message prend la place des colonnes', async () => {
   await ouvrir(ok([projet]), { ok: false, kind: 'unreachable', readAt: READ_AT });
   await waitFor(() => expect(node('board.cartes.message')).not.toBeNull());

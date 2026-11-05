@@ -44,7 +44,7 @@ export const isBoardId = (v: unknown): v is number =>
 export function classify(r: MeshExecResult): BoardErrorKind | null {
   if (r.ok) return null;
   if (r.spawnErrorCode === 'ENOENT' || r.spawnErrorCode === 'EACCES') return 'absent';
-  if (r.spawnErrorCode === 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER') return 'format';
+  if (r.spawnErrorCode === 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER') return 'too-large';
   if (r.timedOut) return 'timeout';
   if (r.exitCode === 2) return 'too-old';
   const err = r.stderr;
