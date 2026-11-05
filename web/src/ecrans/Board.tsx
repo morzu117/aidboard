@@ -37,13 +37,19 @@ export function MessageBoard({
   kind,
   node,
   onRelire,
+  refus,
 }: {
   kind: BoardErrorKind;
   node: string;
   onRelire: () => void;
+  /** sur /board, ce qui est refusé (D95 bis) : ce texte, et pas de lien de retour vers la page où l'on est */
+  refus?: string;
 }) {
   // un kind que cette version ne connaît pas se lit comme `unknown` (D96)
-  const m = MESSAGES_BOARD[kind] ?? MESSAGES_BOARD.unknown;
+  const m =
+    kind === 'forbidden' && refus
+      ? { texte: refus, action: null }
+      : (MESSAGES_BOARD[kind] ?? MESSAGES_BOARD.unknown);
   return (
     <div className="board-message" role="alert" data-node={node} data-kind={kind}>
       <p className="board-message-texte">{m.texte}</p>
@@ -168,7 +174,14 @@ function Cartes({
     );
   if (!result) return null;
   if (!result.ok)
-    return <MessageBoard kind={result.kind} node="board.cartes.message" onRelire={relire} />;
+    return (
+      <MessageBoard
+        kind={result.kind}
+        node="board.cartes.message"
+        onRelire={relire}
+        refus="Tu ne peux pas lire ce projet"
+      />
+    );
   const cols = colonnes(result.data);
   if (cols.length === 0)
     return (
@@ -268,7 +281,14 @@ function Contenu({ cell }: { cell: string }) {
           {projets.erreur}
         </p>
       )}
-      {r && !r.ok && <MessageBoard kind={r.kind} node="board.message" onRelire={relire} />}
+      {r && !r.ok && (
+        <MessageBoard
+          kind={r.kind}
+          node="board.message"
+          onRelire={relire}
+          refus="Tu ne peux pas lire les projets du board"
+        />
+      )}
       {r?.ok && liste.length === 0 && (
         <p className="texte-discret" data-node="board.projets.vide">
           Aucun projet lisible par cette cell.
