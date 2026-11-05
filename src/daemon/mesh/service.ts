@@ -51,6 +51,8 @@ export class MeshService {
   private refreshTimer: NodeJS.Timeout | null = null;
   private tailscaleUpByUs = false;
   private busy: Promise<void> = Promise.resolve();
+  /** D99 bis : heure de la dernière lecture de `monitor status`, tenue en mémoire seulement */
+  private checked: string | null = null;
   private readonly paths;
 
   constructor(private readonly deps: MeshServiceDeps) {
@@ -67,6 +69,11 @@ export class MeshService {
 
   current(): MeshState {
     return { ...this.state };
+  }
+
+  /** D99 bis : quand `monitor status` a été lu pour la dernière fois, pour dire l'âge de l'état affiché. */
+  checkedAt(): string | null {
+    return this.checked;
   }
 
   /**
@@ -280,6 +287,13 @@ export class MeshService {
       '--as',
       this.deps.config.cell,
     ]);
+    // D99 bis : relayé aux sockets sans être stocké, `mesh.state` reste émis au seul changement
+    this.checked = this.now();
+    this.deps.store.emitEphemeral({
+      kind: 'ephemeral',
+      type: 'mesh.checked',
+      checkedAt: this.checked,
+    });
     if (r.spawnErrorCode === 'ENOENT') return { monitor: 'absent', pending: 0 };
     // `status` peut sortir en code 1 quand rien ne tourne, avec un JSON lisible quand même
     return parseMonitorStatus(r.stdout);

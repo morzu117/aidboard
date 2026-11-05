@@ -296,3 +296,23 @@ test('daemon : le service existe seulement avec une cell, relit l’état au dé
   expect(state).toMatchObject({ connected: false, monitor: 'stopped', cell: 'morzu-mac' });
   await avec.d.stop();
 });
+
+test('D99 bis : chaque lecture de monitor status date checkedAt et part en éphémère, sans mesh.state stocké', async () => {
+  const t = setup();
+  const checked: unknown[] = [];
+  t.store.on('ephemeral', (m: { type: string; checkedAt?: string }) => {
+    if (m.type === 'mesh.checked') checked.push(m.checkedAt);
+  });
+  expect(t.svc.checkedAt()).toBeNull();
+  await t.svc.connect();
+  const etats = t.states().length;
+  const lus = checked.length;
+  expect(lus).toBeGreaterThan(0);
+  await t.svc.refresh();
+  expect(t.svc.checkedAt()).toBe('T');
+  expect(checked).toHaveLength(lus + 1);
+  expect(checked.at(-1)).toBe('T');
+  // l'état n'a pas changé : rien de plus dans le journal des événements
+  expect(t.states()).toHaveLength(etats);
+  t.svc.dispose();
+});
