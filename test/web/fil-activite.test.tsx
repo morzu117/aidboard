@@ -3,7 +3,7 @@ import { act, cleanup, waitFor, within } from '@testing-library/react';
 import { afterEach, expect, test } from 'vitest';
 import type { StoredEvent } from '../../src/shared/events.js';
 import type { StateSnapshot } from '../../src/shared/state.js';
-import { FilActivite } from '../../web/src/ecrans/FilActivite.js';
+import { FilActivite, phraseActivite } from '../../web/src/ecrans/FilActivite.js';
 import { FakeSocket, json, setup, snapshot } from './helpers.js';
 
 afterEach(cleanup);
@@ -19,7 +19,7 @@ const ev = (over: Partial<StoredEvent> = {}): StoredEvent => ({
   ts: '2026-10-27T10:15:00.000Z',
   source: 'daemon',
   type: 'topic.state',
-  data: {},
+  data: { state: 'active' },
   ...over,
 });
 
@@ -37,7 +37,7 @@ test('une ligne avec sujet affiche heure, type, contexte et lie vers le sujet', 
   ouvrir([e]);
   await waitFor(() => expect(node('1-1.activite.ligne-1')).not.toBeNull());
   expect(node('1-1.activite.ligne-1.heure')?.textContent).toBe(heure(e.ts));
-  expect(node('1-1.activite.ligne-1.type')?.textContent).toBe('topic.state');
+  expect(node('1-1.activite.ligne-1.type')?.textContent).toBe('Sujet ouvert');
   expect(node('1-1.activite.ligne-1.contexte')?.textContent).toBe('feat/x · proj');
   const lien = within(node('1-1.activite.ligne-1') as HTMLElement).getByRole('link');
   expect(lien.getAttribute('href')).toBe('/sujets/tp_1');
@@ -65,13 +65,13 @@ test('erreur de lecture : ligne discrète « Activité indisponible »', async (
 
 test('un changement de lastEventId relit le fil, sans nouvel abonnement socket', async () => {
   const h = ouvrir([ev({ id: 'ev_1', type: 'topic.state' })], { lastEventId: 'E1' });
-  await waitFor(() => expect(node('1-1.activite.ligne-1.type')?.textContent).toBe('topic.state'));
+  await waitFor(() => expect(node('1-1.activite.ligne-1.type')?.textContent).toBe('Sujet ouvert'));
   const nbSockets = FakeSocket.all.length;
 
   h.state = snapshot({ lastEventId: 'E2' });
   h.respond.set(
     'GET /api/events/recent?limit=20',
-    json(200, { events: [ev({ id: 'ev_2', type: 'topic.phase' })] }),
+    json(200, { events: [ev({ id: 'ev_2', type: 'topic.phase', data: { phase: 'dev' } })] }),
   );
   await act(async () => {
     FakeSocket.all[0]!.open();
@@ -79,6 +79,37 @@ test('un changement de lastEventId relit le fil, sans nouvel abonnement socket',
     await new Promise((r) => setTimeout(r, 40));
   });
 
-  await waitFor(() => expect(node('1-1.activite.ligne-1.type')?.textContent).toBe('topic.phase'));
+  await waitFor(() =>
+    expect(node('1-1.activite.ligne-1.type')?.textContent).toBe('Phase : Développement'),
+  );
   expect(FakeSocket.all.length).toBe(nbSockets);
+});
+
+test('D109 : une phrase par type ; un type ou un cas que la table ne sait pas dire n’est pas affiché', async () => {
+  const p = (type: string, data: Record<string, unknown> = {}) =>
+    phraseActivite(ev({ type: type as StoredEvent['type'], data }));
+  expect(p('agent.spawned', { kind: 'claude' })).toBe('Claude lancé');
+  expect(p('agent.exited', { exitCode: null, reason: 'daemon_restart' })).toBe(
+    'Agent arrêté par le redémarrage du daemon',
+  );
+  expect(p('agent.exited', { exitCode: 0 })).toBe('Agent terminé');
+  expect(p('agent.exited', { exitCode: 2 })).toBe('Agent sorti en erreur');
+  expect(p('topic.state', { state: 'merged' })).toBe('Sujet fusionné');
+  expect(p('topic.state', { indexState: 'indexing' })).toBeNull();
+  expect(p('topic.pr', { prNumber: 12 })).toBe('PR #12 ouverte');
+  expect(p('action.finished', { outcome: 'failed' })).toBe('Action échouée');
+  expect(p('mesh.dm', { from: 'lab-ovh', kind: 'question' })).toBe('Question de lab-ovh');
+  expect(p('mesh.dm', { from: 'lab-ovh', kind: 'fyi' })).toBe('DM de lab-ovh');
+  expect(p('approval.requested')).toBe('Une autorisation t’attend');
+  expect(p('agent.tool', { name: 'Bash' })).toBeNull();
+  // une ligne muette ne laisse pas de trou dans la numérotation
+  ouvrir([
+    ev({ id: 'ev_1', type: 'cost' as StoredEvent['type'] }),
+    ev({ id: 'ev_2', type: 'plan.updated' }),
+  ]);
+  await waitFor(() =>
+    expect(node('1-1.activite.ligne-1.type')?.textContent).toBe('Plan mis à jour'),
+  );
+  expect(node('1-1.activite.ligne-1.type')?.getAttribute('data-type')).toBe('plan.updated');
+  expect(node('1-1.activite.ligne-2')).toBeNull();
 });

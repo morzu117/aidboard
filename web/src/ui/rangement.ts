@@ -37,7 +37,7 @@ export function sectionDe(agents: Agent[]): SectionId {
   }
 }
 
-const PHASES: Record<Phase, string> = {
+export const PHASES: Record<Phase, string> = {
   plan: 'Plan',
   dev: 'Développement',
   review: 'Revue',
