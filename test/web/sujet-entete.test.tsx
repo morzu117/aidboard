@@ -5,7 +5,7 @@ import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import type { NavPlacement, NavState } from '../../src/shared/model.js';
 import { Sujet } from '../../web/src/ecrans/Sujet.js';
 import { annoncerPlacementNav, resetNavCacheForTests } from '../../web/src/ui/Nav.js';
-import { json, setup, snapshot, topic, ws } from './helpers.js';
+import { agent, json, setup, snapshot, topic, ws } from './helpers.js';
 
 // Chantier 26 : l'en-tête de l'écran Sujet (D111 à D114).
 
@@ -42,14 +42,29 @@ const nav = (p: NavPlacement): NavState => ({
   placements: [p],
   prefs: { reduit: false, rangement: 'etat' },
 });
-const state = () =>
-  snapshot({ workspaces: [ws()], topics: [topic({ id: 'tp_1', title: 'Mon sujet' })] });
-const open = (p: NavPlacement, routes: Record<string, (body: unknown) => Response> = {}) =>
+const run = {
+  id: 'run_1',
+  topicId: 'tp_1',
+  mode: 'standard' as const,
+  state: 'open',
+  createdAt: 't',
+};
+const state = (over: Partial<ReturnType<typeof snapshot>> = {}) =>
+  snapshot({
+    workspaces: [ws()],
+    topics: [topic({ id: 'tp_1', title: 'Mon sujet' })],
+    ...over,
+  });
+const open = (
+  p: NavPlacement,
+  routes: Record<string, (body: unknown) => Response> = {},
+  snap = state(),
+) =>
   setup(
     <Routes>
       <Route path="/sujets/:topicId" element={<Sujet />} />
     </Routes>,
-    state(),
+    snap,
     '/sujets/tp_1',
     { 'GET /api/nav': json(200, nav(p)), ...routes },
   );
@@ -143,4 +158,64 @@ test('D112 : Épingler et Archiver passent par le placement, et reviennent en ar
   await ouvrirMenu();
   await waitFor(() => expect(node('1-3.actions.archiver')?.textContent).toBe('Archiver'));
   expect(h.calls.some((c) => (c.body as { archived?: boolean } | undefined)?.archived)).toBe(true);
+});
+
+test('D113, D114 : sans phase, pas de barre ; la prochaine chose est toujours là', async () => {
+  open(placement());
+  await waitFor(() =>
+    expect(node('1-3.entete.prochaine')?.textContent).toBe('Aucun agent sur ce sujet'),
+  );
+  expect(node('1-3.entete.etape.ligne')).toBeNull();
+  expect(document.querySelector('.sujet-etape-segment')).toBeNull();
+});
+
+test('D113, D114 : la phase en cinq segments ; une question en attente passe la phase et la prochaine chose en ambre', async () => {
+  const enAttente = agent({
+    kind: 'claude',
+    transport: 'stream',
+    status: 'needs_input',
+    pending: {
+      id: 'pr_1',
+      kind: 'question',
+      question: 'Inclure la migration ?',
+      options: [{ label: 'Oui', answer: 'yes' }],
+    },
+  });
+  open(
+    placement(),
+    {},
+    state({ topics: [topic({ id: 'tp_1', phase: 'dev' })], runs: [run], agents: [enAttente] }),
+  );
+  await waitFor(() =>
+    expect(node('1-3.entete.etape.ligne')?.textContent).toBe('Phase 2 sur 5 · Développement'),
+  );
+  const segments = [...document.querySelectorAll('.sujet-etape-segment')];
+  expect(segments.map((e) => e.className.split(' ')[1])).toEqual([
+    'sujet-etape-segment--fait',
+    'sujet-etape-segment--en-cours',
+    'sujet-etape-segment--a-venir',
+    'sujet-etape-segment--a-venir',
+    'sujet-etape-segment--a-venir',
+  ]);
+  expect(segments[1]!.classList.contains('est-attente')).toBe(true);
+  const prochaine = node('1-3.entete.prochaine')!;
+  expect(prochaine.textContent).toBe('Inclure la migration ?');
+  expect(prochaine.classList.contains('est-attente')).toBe(true);
+});
+
+test('D114 : sous une phase, sans question, la prochaine chose ne répète pas la phase', async () => {
+  open(
+    placement(),
+    {},
+    state({
+      topics: [topic({ id: 'tp_1', phase: 'review' })],
+      runs: [run],
+      agents: [agent({ kind: 'claude', transport: 'stream', status: 'working' })],
+    }),
+  );
+  await waitFor(() =>
+    expect(node('1-3.entete.etape.ligne')?.textContent).toBe('Phase 3 sur 5 · Revue'),
+  );
+  expect(node('1-3.entete.prochaine')?.textContent).toBe('En cours');
+  expect(node('1-3.entete.prochaine')?.classList.contains('est-attente')).toBe(false);
 });

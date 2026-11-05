@@ -12,3 +12,41 @@
   color: var(--text);
   font-family: var(--font);
 }
+
+/* D113, D114 : la barre des cinq phases, sa ligne, et la prochaine chose */
+.sujet-etape {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2) var(--sp-4);
+  margin-top: var(--sp-2);
+  font-size: var(--fs-m);
+}
+.sujet-etape-barre {
+  display: inline-flex;
+  gap: var(--sp-1);
+}
+.sujet-etape-segment {
+  width: var(--sp-6);
+  height: 4px;
+  border-radius: 2px;
+  background: var(--line-2);
+}
+.sujet-etape-segment--fait {
+  background: var(--acc);
+}
+.sujet-etape-segment--en-cours {
+  background: var(--s-cours);
+}
+.sujet-etape-segment--en-cours.est-attente {
+  background: var(--s-attente);
+}
+.sujet-etape-ligne {
+  color: var(--text);
+}
+.sujet-prochaine {
+  color: var(--text-3);
+}
+.sujet-prochaine.est-attente {
+  color: var(--s-attente);
+}

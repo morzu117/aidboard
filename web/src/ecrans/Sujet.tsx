@@ -15,6 +15,8 @@ import { Layout, useLayout } from '../ui/Layout.js';
 import { Memoire } from '../ui/Memoire.js';
 import { agentView, Point } from '../ui/Statut.js';
 import { Volet } from '../ui/Volet.js';
+import { prochaineChose } from '../ui/rangement.js';
+import { etapesPhase } from '../ui/sujetVue.js';
 import type { ArchivedTopic } from './useArchive.js';
 import { useArchive } from './useArchive.js';
 import { PanneauContexte } from './PanneauContexte.js';
@@ -317,6 +319,10 @@ function Contenu({
   const runIds = state.runs.filter((r) => r.topicId === topic.id).map((r) => r.id);
   const agents: Agent[] = state.agents.filter((a) => runIds.includes(a.runId));
   const active = agents.find((a) => a.id === selectedAgent) ?? agents.at(-1);
+  // D113, D114 : la phase en segments, et ce qui attend ; sous une phase, la prochaine chose ne la répète pas
+  const etapes = etapesPhase(topic.phase);
+  const enAttente = agents.some((a) => a.pending);
+  const prochaine = prochaineChose(etapes ? { ...topic, phase: null } : topic, agents);
   const kinds = [
     ...KINDS,
     ...(state.mesh ? [KIND_CELL] : []),
@@ -571,6 +577,30 @@ function Contenu({
               </>
             )}
           </div>
+        </div>
+        <div className="sujet-etape" data-node="1-3.entete.etape">
+          {etapes && (
+            <>
+              <span className="sujet-etape-barre" aria-hidden="true">
+                {etapes.segments.map((seg) => (
+                  <span
+                    key={seg.phase}
+                    className={`sujet-etape-segment sujet-etape-segment--${seg.etat}${seg.etat === 'en-cours' && enAttente ? ' est-attente' : ''}`}
+                  />
+                ))}
+              </span>
+              <span className="sujet-etape-ligne" data-node="1-3.entete.etape.ligne">
+                {etapes.ligne}
+              </span>
+            </>
+          )}
+          <span
+            className={`sujet-prochaine${enAttente ? ' est-attente' : ''}`}
+            data-node="1-3.entete.prochaine"
+            data-bind="sujet.prochaine"
+          >
+            {prochaine}
+          </span>
         </div>
         <div className="sujet-meta">
           <span
