@@ -30,12 +30,14 @@ import { registerStateRoutes } from './routes/state.js';
 import { registerMemoryRoutes } from './routes/memory.js';
 import { registerStructuralRoutes } from './routes/structural.js';
 import { registerMeshRoutes } from './routes/mesh.js';
+import { registerBoardRoutes } from './routes/board.js';
 import { registerNavRoutes } from './routes/nav.js';
 import { registerServerRoutes } from './routes/servers.js';
 import { registerServerDiscussionRoutes } from './routes/serverDiscussions.js';
 import type { RemoteKind } from './remote/agents.js';
 import type { TransportOptions } from './remote/transport.js';
 import type { MeshService } from './mesh/service.js';
+import type { BoardReader } from './mesh/board.js';
 import type { MemoryProposals } from './memory/maintain.js';
 import type { MemoryService } from './memory/service.js';
 import { type AuthState, registerSecurity, writeSessionToken } from './security.js';
@@ -66,6 +68,8 @@ export interface ServerDeps {
   install?: () => { mode: InstallMode; version: string };
   /** 12.4 : null ou absent = mesh désactivé, les routes /api/mesh répondent 404 */
   mesh?: MeshService | null;
+  /** chantier 24 : null ou absent = mesh désactivé, les routes /api/board répondent 404 */
+  board?: BoardReader | null;
   devOrigin?: string;
   /** Chantier 17 : binaire `ssh` et environnement du transport distant ; un faux ssh en test (D79). */
   remote?: TransportOptions;
@@ -147,6 +151,7 @@ export async function buildServer(deps: ServerDeps): Promise<FastifyInstance> {
     !!deps.config.swairm.bin,
   );
   registerMeshRoutes(app, { mesh: deps.mesh ?? null });
+  registerBoardRoutes(app, { board: deps.board ?? null });
   registerDaemonRoutes(app, {
     db: deps.db,
     requestStop: deps.requestStop ?? (() => undefined),

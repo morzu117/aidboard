@@ -27,6 +27,7 @@ import { MemoryWorker } from './memory/worker.js';
 import { MemoryService } from './memory/service.js';
 import { MemoryStore } from './memory/store.js';
 import { MeshService } from './mesh/service.js';
+import { BoardReader } from './mesh/board.js';
 import { acquireLock } from './lock.js';
 import { ensureHome, resolvePaths } from './paths.js';
 import { reconcile } from './reconcile.js';
@@ -228,6 +229,8 @@ export async function startDaemon(
           log,
         })
       : null;
+    // chantier 24 : les lectures du board passent par le même service, donc n'existent qu'avec lui
+    const board = mesh ? new BoardReader({ mesh, cell: config.mesh.cell, log }) : null;
     // 08.8 : construit ici, et non dans buildServer, pour lancer le rattrapage après `listen`
     const indexer = new Indexer({ store, paths, engine: structural });
     const app = await buildServer({
@@ -242,6 +245,7 @@ export async function startDaemon(
       structural,
       indexer,
       mesh,
+      board,
       requestStop: opts.onStopRequested,
       requestUpdate: opts.onUpdateRequested,
       requestCycle: opts.onCycleRequested,
