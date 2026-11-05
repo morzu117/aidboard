@@ -31,9 +31,13 @@ test('une permission passe du hook à l’Accueil et à la boîte, on y répond 
   // le prompt de permission est encore dans le terminal de l'écran Sujet avant toute réponse
   await expect.poll(() => terminalText(page, agent)).toContain('Do you want to proceed?');
 
-  // piste A (D56) : la décision se lit sur le bandeau de l'Accueil, pas sur une carte par sujet
+  // chantier 25 (D107) : la décision est la prochaine chose de sa ligne, Trancher la déplie dessous
   await page.goto(url());
-  await expect(node(page, '1-1.decisions.decision-1.carte.question')).toContainText(
+  await expect(node(page, '1-1.table.ligne-1.prochaine')).toContainText(
+    'autoriser Bash(npm test -- pty) ?',
+  );
+  await node(page, '1-1.table.ligne-1.action.bouton').click();
+  await expect(node(page, '1-1.table.ligne-1.decision.carte.question')).toContainText(
     'autoriser Bash(npm test -- pty) ?',
   );
   await expect(node(page, '1-1.barre.nav-boite.compte')).toHaveText('1');
@@ -86,7 +90,12 @@ test('un message à un shell dans son terminal, puis pause et reprise depuis l�
   // de la carte portée là-bas avant la table ; son champ de message désactivé pendant la pause n'a
   // plus d'équivalent — rien d'autre à vérifier ici).
   await page.goto(url());
-  await expect(node(page, '1-1.table.ligne-1.statut')).toHaveAttribute('aria-label', 'En pause');
+  // chantier 25 (D107) : les sujets des autres specs (même daemon) passent avant, section par section ; on lit
+  // la ligne de ce sujet dans En pause, plus la première ligne
+  const ligne = node(page, '1-1.table.section-en-pause').locator('tr', {
+    has: page.locator(`a[href="/sujets/${id}"]`),
+  });
+  await expect(ligne.locator('[data-node$=".statut"]')).toHaveAttribute('aria-label', 'En pause');
   await page.goto(`${url()}/sujets/${id}`);
   const pid = (await state(page)).agents.find((a) => a.id === agent)!.pid;
   const stat = () => execFileSync('ps', ['-o', 'stat=', '-p', String(pid)], { encoding: 'utf8' });

@@ -281,3 +281,68 @@ test('colonnes() : ordre d’apparition, stage absent regroupé', () => {
     ['a', [3]],
   ]);
 });
+
+test('D101 : la barre dit l’âge du board sur son écran, et plus ailleurs', async () => {
+  const h = setup(
+    <Routes>
+      <Route path="/board" element={<Board />} />
+      <Route path="/consignes" element={<Consignes />} />
+    </Routes>,
+    avecMesh,
+    '/board',
+    {
+      ...NAV,
+      'GET /api/board/projects': json(200, ok([projet])),
+      'GET /api/board/projects/42/cards': json(200, ok([])),
+    },
+  );
+  await joindre();
+  await waitFor(() =>
+    expect(node('board.barre.board-lu')?.textContent).toMatch(/^board lu il y a \d+ s$/),
+  );
+  const lectures = h.calls.filter((c) => c.url.startsWith('/api/board')).length;
+  fireEvent.click(node('board.barre.nav-consignes')!);
+  await waitFor(() => expect(node('consignes.barre')).not.toBeNull());
+  expect(node('consignes.barre.board-lu')).toBeNull();
+  // la barre ne lit rien elle-même
+  expect(h.calls.filter((c) => c.url.startsWith('/api/board'))).toHaveLength(lectures);
+});
+
+test('D110 : le board ne répond pas, « Board indisponible » au-dessus du message ; Réessayer relit en frais', async () => {
+  const h = await ouvrir({ ok: false, kind: 'unreachable', readAt: READ_AT });
+  await waitFor(() => expect(node('board.bandeau')).not.toBeNull());
+  expect(node('board.bandeau.constat')!.textContent).toBe('Board indisponible');
+  expect(node('board.bandeau.ton')!.textContent).toBe('À surveiller');
+  expect(node('board.bandeau.detail')!.textContent).toBe(
+    'Aucune lecture réussie depuis l’ouverture de l’écran.',
+  );
+  // le message classé du chantier 24 reste dessous, tel quel
+  expect(node('board.message')!.textContent).toContain('Le gateway ne répond pas');
+  h.respond.set('GET /api/board/projects?fresh=1', json(200, ok([projet])));
+  fireEvent.click(node('board.bandeau.action')!);
+  await waitFor(() => expect(node('board.bandeau')).toBeNull());
+  expect(h.calls.some((c) => c.url === '/api/board/projects?fresh=1')).toBe(true);
+});
+
+test('D110 : après une lecture réussie, le bandeau en donne l’heure ; un refus n’est pas une panne', async () => {
+  const h = await ouvrir(ok([projet]), ok([carte({})]));
+  await waitFor(() => expect(node('board.carte-101')).not.toBeNull());
+  expect(node('board.bandeau')).toBeNull();
+  h.respond.set(
+    'GET /api/board/projects/42/cards?fresh=1',
+    json(200, { ok: false, kind: 'timeout', readAt: new Date().toISOString() }),
+  );
+  fireEvent.click(node('board.relire')!);
+  await waitFor(() => expect(node('board.cartes.bandeau')).not.toBeNull());
+  const heure = new Date(READ_AT).toLocaleTimeString('fr-FR', {
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+  expect(node('board.cartes.bandeau.detail')!.textContent).toContain(
+    `Dernière lecture réussie à ${heure}`,
+  );
+  cleanup();
+  await ouvrir({ ok: false, kind: 'forbidden', readAt: READ_AT });
+  await waitFor(() => expect(node('board.message')).not.toBeNull());
+  expect(node('board.bandeau')).toBeNull();
+});

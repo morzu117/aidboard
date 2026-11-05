@@ -164,9 +164,10 @@ test('agent : « au travail », « libre », « arrêté » selon le statut, jam
     }),
   );
   await attendreTable();
+  // D107 : les deux shells vivants sont En cours, le shell sorti En pause, après eux
   expect(text('1-1.table.ligne-1.agent')).toContain('libre');
-  expect(text('1-1.table.ligne-2.agent')).toContain('arrêté');
-  expect(text('1-1.table.ligne-3.agent')).toContain('au travail');
+  expect(text('1-1.table.ligne-2.agent')).toContain('au travail');
+  expect(text('1-1.table.ligne-3.agent')).toContain('arrêté');
 });
 
 test('décision en attente : la carte de décision est reprise, répondre appelle /answer', async () => {
@@ -188,8 +189,12 @@ test('décision en attente : la carte de décision est reprise, répondre appell
       ],
     }),
   );
-  await screen.findByText('Continuer ?');
-  expect(text('1-1.decisions.decision-1.contexte')).toContain('feat/s');
+  // D107 : la question est la prochaine chose de la ligne ; Trancher déplie la carte dessous
+  await waitFor(() => expect(text('1-1.table.ligne-1.prochaine')).toBe('Continuer ?'));
+  expect(text('1-1.table.section-a-decider.titre')).toBe('À décider · 1');
+  await userEvent.click(node('1-1.table.ligne-1.action.bouton')!);
+  expect(node('1-1.table.ligne-1.action.bouton')!.getAttribute('aria-expanded')).toBe('true');
+  expect(text('1-1.table.ligne-1.decision.carte.question')).toBe('Continuer ?');
   await userEvent.click(screen.getByText('Oui'));
   await waitFor(() =>
     expect(
@@ -205,7 +210,7 @@ test('décision en attente : la carte de décision est reprise, répondre appell
   expect(node('1-1.table.ligne-1.action.bouton')?.textContent).toBe('Trancher');
 });
 
-test('décision en attente : au-delà de 3, un lien « voir les N autres » renvoie à la boîte', async () => {
+test('D107 : plus de bloc à part, chaque décision est une ligne de À décider, sans plafond', async () => {
   const topics = [1, 2, 3, 4].map((n) =>
     topic({ id: `tp_${n}`, branch: `feat/${n}`, slug: `s${n}` }),
   );
@@ -236,10 +241,10 @@ test('décision en attente : au-delà de 3, un lien « voir les N autres » renv
     }),
     navDefaut(topics),
   );
-  await screen.findByText('Décision 1');
-  expect(screen.queryByText('Décision 4')).toBeNull();
-  const lien = await screen.findByText('voir les 1 autres →');
-  expect(lien.getAttribute('href')).toBe('/boite');
+  await waitFor(() => expect(text('1-1.table.section-a-decider.titre')).toBe('À décider · 4'));
+  for (const n of [1, 2, 3, 4]) expect(screen.getByText(`Décision ${n}`)).not.toBeNull();
+  expect(node('1-1.decisions')).toBeNull();
+  expect(node('1-1.table.tri')).toBeNull();
 });
 
 test('ligne « Lancer » : aucun agent, lance un agent claude puis ouvre le sujet', async () => {
@@ -261,7 +266,7 @@ test('ligne « Lancer » : aucun agent, lance un agent claude puis ouvre le suje
   );
 });
 
-test('ligne « Reprendre » : un agent existe sans décision en attente', async () => {
+test('ligne « Suivre » : un agent au travail, sans décision en attente (D108)', async () => {
   open(
     snapshot({
       workspaces: [ws()],
@@ -271,7 +276,36 @@ test('ligne « Reprendre » : un agent existe sans décision en attente', async 
     }),
   );
   await attendreTable();
-  expect(node('1-1.table.ligne-1.action.bouton')?.textContent).toBe('Reprendre');
+  expect(node('1-1.table.ligne-1.action.bouton')?.textContent).toBe('Suivre');
+  expect(node('1-1.table.ligne-1.action.bouton')?.getAttribute('href')).toBe('/sujets/tp_1');
+});
+
+test('D108 : « Relire » ouvre l’agent qui a fini son tour ; « Reprendre » reste pour le sujet en pause', async () => {
+  open(
+    snapshot({
+      workspaces: [ws()],
+      topics: memeInstant([topic(), topic({ id: 'tp_2', branch: 'feat/p', slug: 'p' })]),
+      runs: [
+        { id: 'run_1', topicId: 'tp_1', mode: 'standard', state: 'open', createdAt: 't' },
+        { id: 'run_2', topicId: 'tp_2', mode: 'standard', state: 'open', createdAt: 't' },
+      ],
+      agents: [
+        agent({ id: 'ag_1', kind: 'claude', transport: 'stream', status: 'idle' }),
+        agent({ id: 'ag_2', runId: 'run_2', status: 'done' }),
+      ],
+    }),
+  );
+  await attendreTable();
+  expect(text('1-1.table.section-a-relire.titre')).toBe('À relire · 1');
+  expect(text('1-1.table.section-en-pause.titre')).toBe('En pause · 1');
+  expect(node('1-1.table.section-a-decider')).toBeNull();
+  expect(node('1-1.table.ligne-1.action.bouton')?.textContent).toBe('Relire');
+  expect(node('1-1.table.ligne-1.action.bouton')?.getAttribute('href')).toBe(
+    '/sujets/tp_1?agent=ag_1',
+  );
+  expect(node('1-1.table.ligne-2.action.bouton')?.textContent).toBe('Reprendre');
+  expect(text('1-1.table.ligne-1.lieu')).toBe('local');
+  expect(text('1-1.table.compte')).toBe('2 sujets');
 });
 
 test('le filtre texte, insensible aux accents, filtre sur le nom affiché, le projet et l’étape', async () => {
@@ -409,7 +443,9 @@ test('action de ligne : « Trancher » vise le même agent que la colonne Agent 
     }),
   );
   await attendreTable();
-  expect(node('1-1.table.ligne-1.action.bouton')?.getAttribute('href')).toBe(
+  await userEvent.click(node('1-1.table.ligne-1.action.bouton')!);
+  expect(text('1-1.table.ligne-1.decision.carte.question')).toBe('Continuer ?');
+  expect(node('1-1.table.ligne-1.decision.ouvrir')?.getAttribute('href')).toBe(
     '/sujets/tp_1?agent=ag_claude',
   );
 });

@@ -14,6 +14,7 @@ import { AidApiError } from '../data/api.js';
 import { ecrirePanneau, lirePanneau, type PanneauPref } from '../data/panneauServeur.js';
 import { suivreOutils, type SuiviOutils } from '../data/panneauServeur.js';
 import { statutInconnu, useServeurs } from '../data/serveurs.js';
+import { Bandeau } from '../ui/Bandeau.js';
 import { useAidClient } from '../data/useAidState.js';
 import { Layout } from '../ui/Layout.js';
 import { ETAT_SERVEUR } from '../ui/Serveur.js';
@@ -84,6 +85,55 @@ const etatTexte = (s: ServerStatus) =>
   s.state === 'connected' && s.latencyMs !== null
     ? `${ETAT_SERVEUR[s.state]} · ${s.latencyMs} ms`
     : ETAT_SERVEUR[s.state];
+
+/**
+ * Chantier 25 (D110) : l'état du lien en bandeau commun, en plus des lignes du fil. Les actions restent où elles
+ * sont (Reconnecter sur la ligne d'échec, et sous le fil quand le serveur ne répond pas) : le bandeau dit où.
+ */
+function BandeauSuivi({
+  injoignable,
+  raison,
+  suivi,
+}: {
+  injoignable: boolean;
+  raison: string | null;
+  suivi: 'coupe' | 'echec' | undefined;
+}) {
+  if (injoignable)
+    return (
+      <Bandeau
+        ton="rouge"
+        constat="Machine injoignable"
+        continue="L’agent continue peut-être sur le serveur. Reconnecter, sous le fil, relance un contrôle ; les messages partiront au retour du lien."
+        node="discussion.bandeau"
+      >
+        {raison}
+      </Bandeau>
+    );
+  if (suivi === 'echec')
+    return (
+      <Bandeau
+        ton="rouge"
+        constat="Session perdue"
+        continue="Le fil garde tout ce qui a été reçu. Reconnecter, sur la ligne d’échec, relance l’agent sur sa session."
+        node="discussion.bandeau"
+      >
+        La reprise de la session a échoué.
+      </Bandeau>
+    );
+  if (suivi === 'coupe')
+    return (
+      <Bandeau
+        ton="ambre"
+        constat="Suivi coupé"
+        continue="L’agent continue peut-être sur le serveur ; A-I-D reprend le lien seul et le fil se complète à la reprise."
+        node="discussion.bandeau"
+      >
+        A-I-D ne reçoit plus le fil de cet agent.
+      </Bandeau>
+    );
+  return null;
+}
 
 function Contenu() {
   const { id = '', discussionId = '' } = useParams();
@@ -263,6 +313,7 @@ function Contenu() {
           </span>
         )}
       </div>
+      <BandeauSuivi injoignable={injoignable} raison={status.reason} suivi={agentVue?.suivi} />
       {erreur && (
         <p className="message-erreur" role="alert" data-node="discussion.erreur">
           {erreur}

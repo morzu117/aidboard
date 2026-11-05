@@ -6,6 +6,7 @@ import { BrowserRouter } from 'react-router';
 import { App } from './App.js';
 import './styles/maquette.css';
 import './styles/app.css';
+import './styles/coque.css';
 
 // Coquille hors-ligne : permet à l'app de s'afficher (bandeau + CTA « Démarrer le daemon »)
 // même quand le daemon est totalement injoignable — sinon c'est lui qui sert ce fichier.

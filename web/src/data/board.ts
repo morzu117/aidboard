@@ -19,7 +19,15 @@ export interface BoardLecture<T> {
   luA: string | null;
   /** échec de la requête elle-même (mesh désactivé, daemon perdu), pas une erreur de swarph */
   erreur: string | null;
+  /** Chantier 25 (D110) : `readAt` de la dernière lecture réussie, pour le bandeau « Board indisponible » */
+  reussieA?: string | null;
 }
+
+/** Un résultat de swarph qui a abouti ; la fiche d'une carte réussit quand sa carte a été lue. */
+const reussiParDefaut = (t: unknown): boolean => {
+  const r = t as { ok?: unknown; card?: { ok?: unknown } } | null;
+  return r?.ok === true || r?.card?.ok === true;
+};
 
 /**
  * Une lecture du board, un magasin par chemin et par client, sur le modèle de `ServeursStore` : lecture au
@@ -65,6 +73,8 @@ export class BoardStore<T> {
         if (n < this.appliquee) return;
         this.appliquee = n;
         this.publier({ result, luA: this.lu(result), erreur: null });
+        if (reussiParDefaut(result)) this.publier({ reussieA: this.etat.luA });
+        noterLu(this.client, this.etat.luA);
       })
       .catch((err: unknown) => {
         if (n < this.appliquee) return;
@@ -115,6 +125,39 @@ export class BoardStore<T> {
     this.etat = { ...this.etat, ...patch };
     for (const cb of this.abonnes) cb();
   }
+}
+
+/**
+ * D101 : la dernière lecture du board, tous chemins confondus, pour « board lu il y a N s » dans la barre du
+ * haut. Nourrie par les magasins, elle ne lit jamais rien elle-même.
+ */
+const derniersLus = new WeakMap<AidClient, { luA: string | null; abonnes: Set<() => void> }>();
+
+function dernierLu(client: AidClient) {
+  let d = derniersLus.get(client);
+  if (!d) {
+    d = { luA: null, abonnes: new Set() };
+    derniersLus.set(client, d);
+  }
+  return d;
+}
+
+function noterLu(client: AidClient, luA: string | null): void {
+  const d = dernierLu(client);
+  if (!luA || (d.luA !== null && Date.parse(d.luA) >= Date.parse(luA))) return;
+  d.luA = luA;
+  for (const cb of d.abonnes) cb();
+}
+
+export function useBoardLuA(): string | null {
+  const d = dernierLu(useAidClient());
+  return useSyncExternalStore(
+    (cb) => {
+      d.abonnes.add(cb);
+      return () => void d.abonnes.delete(cb);
+    },
+    () => d.luA,
+  );
 }
 
 const magasins = new WeakMap<AidClient, Map<string, BoardStore<unknown>>>();

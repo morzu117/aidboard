@@ -1,7 +1,7 @@
 import { Type } from '@sinclair/typebox';
 import type { FastifyInstance } from 'fastify';
 import { monotonicFactory } from 'ulid';
-import type { NavGroup, NavPlacement, NavState } from '../../shared/model.js';
+import type { NavGroup, NavPlacement, NavPrefs, NavState } from '../../shared/model.js';
 import type { Db } from '../db.js';
 import { AidHttpError } from '../errors.js';
 
@@ -114,9 +114,20 @@ function readState(db: Db): NavState {
   const placements = (db.prepare('SELECT * FROM nav_placement').all() as PlacementRow[]).map(
     placementFromRow,
   );
-  const reduit = db.prepare("SELECT value FROM nav_pref WHERE key = 'reduit'").get() as
-    { value: string } | undefined;
-  return { groups, placements, prefs: { reduit: reduit?.value === '1' } };
+  return { groups, placements, prefs: readPrefs(db) };
+}
+
+/** Chantier 25 (D104) : `rangement` vaut `'etat'` tant que rien n'est enregistré. */
+function readPrefs(db: Db): NavPrefs {
+  const pref = (key: string) =>
+    (
+      db.prepare('SELECT value FROM nav_pref WHERE key = ?').get(key) as
+        { value: string } | undefined
+    )?.value;
+  return {
+    reduit: pref('reduit') === '1',
+    rangement: pref('rangement') === 'groupes' ? 'groupes' : 'etat',
+  };
 }
 
 const GroupBody = Type.Object(
@@ -150,7 +161,14 @@ const GroupTopicsBody = Type.Object(
   { topicIds: Type.Array(Type.String({ minLength: 1 })) },
   { additionalProperties: false },
 );
-const PrefsBody = Type.Object({ reduit: Type.Boolean() }, { additionalProperties: false });
+// chantier 25 (D104) : chaque préférence est facultative, au moins une est donnée
+const PrefsBody = Type.Object(
+  {
+    reduit: Type.Optional(Type.Boolean()),
+    rangement: Type.Optional(Type.Union([Type.Literal('etat'), Type.Literal('groupes')])),
+  },
+  { additionalProperties: false, minProperties: 1 },
+);
 
 export function registerNavRoutes(app: FastifyInstance, deps: { db: Db }): void {
   const { db } = deps;
@@ -319,10 +337,12 @@ export function registerNavRoutes(app: FastifyInstance, deps: { db: Db }): void 
 
   app.patch('/api/nav/prefs', { schema: { body: PrefsBody } }, async (req, reply) => {
     ensureNavDefaults(db);
-    const { reduit } = req.body as { reduit: boolean };
-    db.prepare(
+    const { reduit, rangement } = req.body as Partial<NavPrefs>;
+    const ecrire = db.prepare(
       'INSERT INTO nav_pref (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value',
-    ).run('reduit', reduit ? '1' : '0');
-    return reply.code(200).send({ reduit });
+    );
+    if (reduit !== undefined) ecrire.run('reduit', reduit ? '1' : '0');
+    if (rangement !== undefined) ecrire.run('rangement', rangement);
+    return reply.code(200).send(readPrefs(db));
   });
 }

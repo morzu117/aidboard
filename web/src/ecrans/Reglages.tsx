@@ -1,9 +1,16 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { Workspace } from '../../../src/shared/model.js';
 import { useAid } from '../data/useAidState.js';
 import { Dialogue } from '../dialogues/Dialogue.js';
 import { Layout, useLayout } from '../ui/Layout.js';
 import type { UpdateInfo } from '../../../src/shared/model.js';
+import type { MeshTailscale } from '../../../src/shared/model.js';
+import { useLocation } from 'react-router';
+import { meshBloque } from '../ui/Barre.js';
+import { A_TRAITER } from '../ui/Layout.js';
+import { ageLecture, etatMonitor } from '../ui/pastille.js';
+import type { NavPrefs, NavRangement, NavState } from '../../../src/shared/model.js';
+import { annoncerPrefsNav, getNavCacheSnapshot } from '../ui/Nav.js';
 
 interface HooksState {
   path: string;
@@ -237,6 +244,180 @@ function Hooks() {
   );
 }
 
+const TAILSCALE_TEXTE: Record<MeshTailscale, string> = {
+  running: 'Tailscale actif',
+  stopped: 'Tailscale arrêté',
+  absent: 'Tailscale introuvable',
+};
+
+// Chantier 25 (D100) : connecter et déconnecter le mesh, sortis de la pastille de la barre. Déconnecter arrête le
+// monitor de la cell, pas seulement la vue d'A-I-D : la confirmation le dit.
+function Mesh() {
+  const { meshBascule } = useLayout();
+  const { hash } = useLocation();
+  const ref = useRef<HTMLElement>(null);
+  const [confirmer, setConfirmer] = useState(false);
+  useEffect(() => {
+    if (hash === '#mesh') ref.current?.scrollIntoView?.({ block: 'start' });
+  }, [hash]);
+  if (!meshBascule) return null;
+  const { mesh, checkedAt, enCours, basculer } = meshBascule;
+  const aTraiter = mesh?.inbox.filter((d) => !d.seenAt && A_TRAITER.has(d.kind)).length ?? 0;
+  const bloque =
+    mesh &&
+    meshBloque({
+      state: mesh.state,
+      aTraiter,
+      tailscaleManage: mesh.tailscaleManage,
+      enCours,
+      onToggle: () => {},
+    });
+  const age = mesh && ageLecture(mesh.state, checkedAt);
+  return (
+    <section ref={ref} id="mesh" className="groupe" data-node="reglages.mesh" aria-label="Mesh">
+      <div className="groupe-entete">
+        <h2 className="titre-zone">Mesh</h2>
+      </div>
+      {mesh ? (
+        <article className="element">
+          <div className="element-entete">
+            <span className="identifiant" data-node="reglages.mesh.etat" data-bind="mesh.monitor">
+              {etatMonitor(mesh.state, aTraiter, enCours)}
+            </span>
+            {age && (
+              <span className="texte-faible" data-node="reglages.mesh.age">
+                {age}
+              </span>
+            )}
+          </div>
+          <p className="element-detail" data-node="reglages.mesh.detail">
+            Cell {mesh.state.cell} · {TAILSCALE_TEXTE[mesh.state.tailscale]} ·{' '}
+            {pluriel(mesh.state.pending, 'DM')} en attente côté monitor
+          </p>
+          {bloque && (
+            <p className="texte-faible" data-node="reglages.mesh.bloque">
+              {bloque}
+            </p>
+          )}
+          <div className="element-actions">
+            {mesh.state.connected ? (
+              <button
+                className="bouton bouton--danger"
+                data-node="reglages.mesh.deconnecter"
+                data-action="mesh.deconnecter"
+                type="button"
+                disabled={enCours}
+                onClick={() => setConfirmer(true)}
+              >
+                Déconnecter
+              </button>
+            ) : (
+              <button
+                className="bouton"
+                data-node="reglages.mesh.connecter"
+                data-action="mesh.connecter"
+                type="button"
+                disabled={enCours || !!bloque}
+                onClick={() => basculer(true)}
+              >
+                Connecter
+              </button>
+            )}
+          </div>
+        </article>
+      ) : (
+        <article className="element">
+          <p className="element-detail" data-node="reglages.mesh.absent">
+            Aucune cell configurée : A-I-D ne suit pas de mesh swarph. Renseigne{' '}
+            <code>mesh.cell</code> dans <code>config.yaml</code>.
+          </p>
+        </article>
+      )}
+      {confirmer && mesh && (
+        <Dialogue titre="Déconnecter le mesh ?" onClose={() => setConfirmer(false)}>
+          <p className="texte-discret" data-node="reglages.mesh.confirmation">
+            Le monitor de la cell {mesh.state.cell} s’arrête. Toutes les sessions de cette cell,
+            Claude compris, ne seront plus réveillées par les DM jusqu’à la reconnexion.
+          </p>
+          <div className="dialogue-actions">
+            <button className="bouton" type="button" onClick={() => setConfirmer(false)}>
+              Annuler
+            </button>
+            <button
+              className="bouton bouton--danger"
+              data-node="reglages.mesh.confirmer"
+              type="button"
+              onClick={() => {
+                setConfirmer(false);
+                basculer(false);
+              }}
+            >
+              Déconnecter
+            </button>
+          </div>
+        </Dialogue>
+      )}
+    </section>
+  );
+}
+
+// Chantier 25 (D104) : la barre gauche range par état ; on peut garder ses groupes du chantier 15.
+function BarreGauche() {
+  const { call } = useAid();
+  const [rangement, setRangement] = useState<NavRangement | null>(
+    () => getNavCacheSnapshot()?.prefs?.rangement ?? null,
+  );
+  const [erreur, setErreur] = useState<string | null>(null);
+  useEffect(() => {
+    call<Partial<NavState>>('GET', '/api/nav').then(
+      (r) => setRangement(r.prefs?.rangement ?? 'groupes'),
+      () => {},
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  if (!rangement) return null;
+  const basculer = async (groupes: boolean) => {
+    const voulu: NavRangement = groupes ? 'groupes' : 'etat';
+    setErreur(null);
+    try {
+      const prefs = await call<Partial<NavPrefs>>('PATCH', '/api/nav/prefs', { rangement: voulu });
+      const r = prefs.rangement ?? voulu;
+      setRangement(r);
+      annoncerPrefsNav({ rangement: r });
+    } catch (err) {
+      setErreur(message(err));
+    }
+  };
+  return (
+    <section className="groupe" data-node="reglages.rangement" aria-label="Barre gauche">
+      <div className="groupe-entete">
+        <h2 className="titre-zone">Barre gauche</h2>
+      </div>
+      <article className="element">
+        <label className="element-entete">
+          <input
+            type="checkbox"
+            data-node="reglages.rangement.groupes"
+            data-action="nav.rangement"
+            checked={rangement === 'groupes'}
+            onChange={(e) => void basculer(e.target.checked)}
+          />{' '}
+          Ranger par mes groupes
+        </label>
+        <p className="element-detail">
+          Par défaut, la barre range les sujets par ce qu’ils attendent de toi : À décider, À
+          relire, En cours, En pause. Tes groupes restent tels quels dans les deux cas.
+        </p>
+        {erreur && (
+          <p className="message-erreur" role="alert" data-node="reglages.rangement.erreur">
+            {erreur}
+          </p>
+        )}
+      </article>
+    </section>
+  );
+}
+
 type Permission = NotificationPermission | 'absent';
 const permissionActuelle = (): Permission =>
   typeof Notification === 'undefined' ? 'absent' : Notification.permission;
@@ -334,6 +515,8 @@ function Contenu() {
       {state ? (
         <div className="liste">
           <Projets />
+          <Mesh />
+          <BarreGauche />
           <Hooks />
           <Notifications />
           <Version />

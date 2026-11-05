@@ -35,18 +35,20 @@ const dm = (id: number, kind: string, content: string) =>
     related_task_id: null,
   }) + '\n';
 
-test('connecter depuis la barre, trois DM arrivent dans la Boîte, « Vu », déconnecter', async ({
+test('connecter depuis Réglages, trois DM arrivent dans la Boîte, « Vu », déconnecter après confirmation', async ({
   browser,
 }) => {
   const page = await openApp(await browser.newContext());
-  const pastille = node(page, '1-1.barre.mesh');
-  await expect(node(page, '1-1.barre.mesh.texte')).toHaveText(/^hors mesh/);
-  await expect(pastille).toBeEnabled();
+  await expect(node(page, '1-1.barre.mesh.texte')).toHaveText(/^(hors mesh|monitor arrêté)/);
 
   // le dossier du sidecar existe avant la connexion : le suiveur s'y abonne (sinon il sonde toutes les 5 s)
   mkdirSync(join(inboxLog(), '..'), { recursive: true });
-  await pastille.click();
-  await expect(node(page, '1-1.barre.mesh.texte')).toHaveText('mesh · 0 à traiter');
+  // 25.4 (D99) : la pastille ne bascule plus rien, elle mène à Réglages, section Mesh (D100)
+  await node(page, '1-1.barre.mesh').click();
+  await expect(page).toHaveURL(/\/reglages#mesh$/);
+  await node(page, 'reglages.mesh.connecter').click();
+  await expect(node(page, 'reglages.barre.mesh.texte')).toHaveText('monitor actif · 0 à traiter');
+  await expect(node(page, 'reglages.mesh.etat')).toHaveText('monitor actif · 0 à traiter');
   // le monitor a bien été lancé pour cette cell, en mode pull, par le faux swarph
   expect(readFileSync(join(home(), 'swarph.log'), 'utf8')).toContain(
     'monitor start --as morzu-mac --deliver pull',
@@ -58,9 +60,9 @@ test('connecter depuis la barre, trois DM arrivent dans la Boîte, « Vu », dé
       dm(2, 'fyi', 'monitor du VPS relancé') +
       dm(3, 'unblock', '<b>pas du HTML</b>'),
   );
-  await expect(node(page, '1-1.barre.mesh.texte')).toHaveText('mesh · 2 à traiter');
+  await expect(node(page, 'reglages.barre.mesh.texte')).toHaveText('monitor actif · 2 à traiter');
 
-  await node(page, '1-1.barre.nav-boite').click();
+  await node(page, 'reglages.barre.nav-boite').click();
   await expect(page).toHaveURL(/\/boite$/);
   await expect(node(page, '1-2.mesh')).toHaveAttribute('aria-label', 'Mesh · morzu-mac');
   await expect(node(page, '1-2.mesh.etat')).toHaveText('connecté');
@@ -75,12 +77,20 @@ test('connecter depuis la barre, trois DM arrivent dans la Boîte, « Vu », dé
   await expect(node(page, '1-2.mesh.dm-3.type')).toHaveText('Info');
 
   await node(page, '1-2.mesh.dm-1.vu').click();
-  await expect(node(page, '1-2.barre.mesh.texte')).toHaveText('mesh · 1 à traiter');
+  await expect(node(page, '1-2.barre.mesh.texte')).toHaveText('monitor actif · 1 à traiter');
   await expect(node(page, '1-2.mesh.groupe-a-traiter.compte')).toHaveText('1');
   await expect(node(page, '1-2.mesh.dm-1.type')).toHaveText('Déblocage');
 
+  // déconnecter arrête le monitor de la cell : la confirmation le dit avant d'agir (D100)
   await node(page, '1-2.barre.mesh').click();
-  await expect(node(page, '1-2.barre.mesh.texte')).toHaveText(/^hors mesh/);
+  await node(page, 'reglages.mesh.deconnecter').click();
+  await expect(node(page, 'reglages.mesh.confirmation')).toContainText(
+    'Le monitor de la cell morzu-mac s’arrête.',
+  );
+  expect(readFileSync(join(home(), 'swarph.log'), 'utf8')).not.toContain('monitor stop');
+  await node(page, 'reglages.mesh.confirmer').click();
+  await expect(node(page, 'reglages.barre.mesh.texte')).toHaveText(/^hors mesh/);
+  await node(page, 'reglages.barre.nav-boite').click();
   await expect(node(page, '1-2.mesh.etat')).toHaveText('hors mesh');
   expect(readFileSync(join(home(), 'swarph.log'), 'utf8')).toContain('monitor stop');
   // Tailscale a été lu, jamais monté ni descendu (manage: false)

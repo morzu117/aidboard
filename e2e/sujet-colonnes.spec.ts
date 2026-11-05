@@ -10,7 +10,11 @@ import {
   url,
 } from './helpers.js';
 import { fermerContextes } from './helpers.js';
+import { rangerLaBarre } from './helpers.js';
 
+// chantier 25 (D104) : ces épreuves visent la barre des groupes du chantier 15
+test.beforeAll(rangerLaBarre('groupes'));
+test.afterAll(rangerLaBarre('etat'));
 test.afterAll(({ browser }) => fermerContextes(browser));
 
 // review D (findings 2/3/4, re-dev 2) : jsdom n'applique pas le CSS — seul un e2e vérifie la

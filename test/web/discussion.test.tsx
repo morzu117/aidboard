@@ -503,3 +503,40 @@ test('chantier 23 (B.1) : le chip Remote d’un agent distant lit et bascule par
   ).toEqual({ enabled: true });
   expect(h.calls.some((c) => c.url.startsWith('/api/agents/'))).toBe(false);
 });
+
+test('D110 : suivi coupé, session perdue, machine injoignable, en bandeau au-dessus du fil', async () => {
+  ouvrir('/serveurs/srv_1/discussions/sd_1', {
+    d: discussion({ agents: [agentVue({ suivi: 'coupe' })] }),
+  });
+  await fil();
+  await waitFor(() => expect(node('discussion.bandeau')).not.toBeNull());
+  expect(node('discussion.bandeau.constat')!.textContent).toBe('Suivi coupé');
+  expect(node('discussion.bandeau')!.getAttribute('data-ton')).toBe('ambre');
+  expect(node('discussion.bandeau.action')).toBeNull();
+  cleanup();
+  ouvrir('/serveurs/srv_1/discussions/sd_1', {
+    d: discussion({ agents: [agentVue({ suivi: 'echec' })] }),
+  });
+  await fil();
+  await waitFor(() =>
+    expect(node('discussion.bandeau.constat')?.textContent).toBe('Session perdue'),
+  );
+  expect(node('discussion.bandeau.continue')!.textContent).toContain('ligne d’échec');
+  cleanup();
+  // le serveur muet passe avant le suivi de l'agent
+  ouvrir('/serveurs/srv_1/discussions/sd_1', {
+    status: etat({ state: 'unreachable', latencyMs: null, reason: 'Connection refused' }),
+    d: discussion({ agents: [agentVue({ suivi: 'coupe' })] }),
+  });
+  await fil();
+  await waitFor(() =>
+    expect(node('discussion.bandeau.constat')?.textContent).toBe('Machine injoignable'),
+  );
+  expect(node('discussion.bandeau.detail')!.textContent).toBe('Connection refused');
+  expect(node('discussion.bandeau')!.getAttribute('data-ton')).toBe('rouge');
+  cleanup();
+  ouvrir('/serveurs/srv_1/discussions/sd_1');
+  await fil();
+  await waitFor(() => expect(node('discussion.agent')).not.toBeNull());
+  expect(node('discussion.bandeau')).toBeNull();
+});

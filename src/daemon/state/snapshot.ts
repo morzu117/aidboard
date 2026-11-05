@@ -138,7 +138,12 @@ export async function buildSnapshot(
     ...(swairmEnabled && { swairm: { enabled: true as const } }),
     // 12.4 : présent seulement quand une cell est configurée (D39)
     ...(mesh && {
-      mesh: { state: mesh.current(), inbox: mesh.inbox(), tailscaleManage: mesh.tailscaleManage },
+      mesh: {
+        state: mesh.current(),
+        inbox: mesh.inbox(),
+        tailscaleManage: mesh.tailscaleManage,
+        checkedAt: mesh.checkedAt(),
+      },
     }),
   };
 }

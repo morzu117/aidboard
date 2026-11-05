@@ -10,5 +10,11 @@ export interface StateSnapshot {
   /** présent seulement quand `swairm.bin` est configuré (D43) */
   swairm?: { enabled: true };
   /** présent seulement quand `mesh.cell` est configuré (chantier 12) */
-  mesh?: { state: MeshState; inbox: MeshDm[]; tailscaleManage: boolean };
+  mesh?: {
+    state: MeshState;
+    inbox: MeshDm[];
+    tailscaleManage: boolean;
+    /** chantier 25 (D99 bis) : dernière lecture de `monitor status`, null avant la première */
+    checkedAt?: string | null;
+  };
 }

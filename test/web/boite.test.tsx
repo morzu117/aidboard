@@ -246,16 +246,13 @@ test('mesh : « À traiter » (les plus anciens d’abord) puis « Informations 
   expect(contenu.textContent).toContain('donnée d’un pair du mesh');
   await userEvent.click(node('1-2.mesh.dm-1.vu')!);
   expect(h.calls.some((c) => c.method === 'POST' && c.url === '/api/mesh/dm/11/seen')).toBe(true);
-  // la pastille compte les question/unblock non vus
-  expect(text('1-2.barre.mesh.texte')).toBe('mesh · 2 à traiter');
-  expect(node('1-2.barre.mesh')?.getAttribute('data-action')).toBe('mesh.deconnecter');
-  await userEvent.click(node('1-2.barre.mesh')!);
-  expect(h.calls.some((c) => c.method === 'POST' && c.url === '/api/mesh/disconnect')).toBe(true);
-  expect(text('1-2.barre.mesh.texte')).toBe('mesh · déconnexion…');
+  // la pastille compte les question/unblock non vus ; elle mène à Réglages, qui bascule (25.4, D99)
+  expect(text('1-2.barre.mesh.texte')).toBe('monitor actif · 2 à traiter');
+  expect(node('1-2.barre.mesh')?.getAttribute('href')).toBe('/reglages#mesh');
 });
 
-test('mesh hors ligne : « hors mesh depuis », connexion au clic ; Tailscale arrêté sans manage ⇒ bouton désactivé', async () => {
-  const h = setup(<Boite />, {
+test('mesh hors ligne : « hors mesh depuis » ; sans date, « monitor arrêté » (connexion : Réglages, 25.3)', async () => {
+  setup(<Boite />, {
     ...snapshot({ workspaces: [ws()], topics: [topic()] }),
     mesh: { ...meshEtat({ connected: false, monitor: 'stopped' }), inbox: [] },
   });
@@ -263,27 +260,13 @@ test('mesh hors ligne : « hors mesh depuis », connexion au clic ; Tailscale ar
   expect(text('1-2.mesh.vide')).toBe('Aucun message à lire.');
   expect(text('1-2.mesh.etat')).toBe('hors mesh');
   expect(text('1-2.barre.mesh.texte')).toBe('hors mesh depuis 30 min');
-  expect(node('1-2.barre.mesh')?.hasAttribute('disabled')).toBe(false);
-  await userEvent.click(node('1-2.barre.mesh')!);
-  expect(h.calls.some((c) => c.method === 'POST' && c.url === '/api/mesh/connect')).toBe(true);
-  expect(text('1-2.barre.mesh.texte')).toBe('mesh · connexion…');
   cleanup();
   setup(<Boite />, {
     ...snapshot({ workspaces: [ws()], topics: [topic()] }),
     mesh: meshEtat({ connected: false, tailscale: 'stopped', monitor: 'stopped', since: null }),
   });
   await screen.findByText(/Rien à traiter/);
-  expect(text('1-2.barre.mesh.texte')).toBe('hors mesh');
-  expect(node('1-2.barre.mesh')?.hasAttribute('disabled')).toBe(true);
-  expect(node('1-2.barre.mesh')?.getAttribute('title')).toContain('Tailscale est arrêté');
-  cleanup();
-  // avec manage: true, A-I-D monte Tailscale lui-même : le bouton reste actif
-  setup(<Boite />, {
-    ...snapshot({ workspaces: [ws()], topics: [topic()] }),
-    mesh: meshEtat({ connected: false, tailscale: 'stopped', monitor: 'stopped' }, true),
-  });
-  await screen.findByText(/Rien à traiter/);
-  expect(node('1-2.barre.mesh')?.hasAttribute('disabled')).toBe(false);
+  expect(text('1-2.barre.mesh.texte')).toBe('monitor arrêté');
 });
 
 test('sans mesh configuré : ni section ni pastille', async () => {

@@ -7,7 +7,9 @@ import { ContextMenu, type MenuItem } from './ContextMenu.js';
 import { depuis, depuisCourt } from './depuis.js';
 import { useLayout } from './Layout.js';
 import { compteVue, VUES, type VueId } from './navVues.js';
+import { NavEtat } from './NavEtat.js';
 import { NavServeurs } from './NavServeurs.js';
+import type { NavPrefs } from '../../../src/shared/model.js';
 import { Point, topicView } from './Statut.js';
 import { ShellsEnArriere } from './Statut.js';
 
@@ -53,6 +55,16 @@ export function getNavCacheSnapshot(): Partial<NavState> | null {
   return navCache;
 }
 
+// Chantier 25 (D104) : Réglages change le rangement pendant qu'une barre est affichée.
+const ecouteursPrefs = new Set<(prefs: Partial<NavPrefs>) => void>();
+
+/** Chantier 25 (D104) : une préférence enregistrée ailleurs que dans la barre ; le cache et la barre affichée la prennent. */
+export function annoncerPrefsNav(prefs: Partial<NavPrefs>): void {
+  if (navCache)
+    navCache = { ...navCache, prefs: { ...(navCache.prefs ?? { reduit: false }), ...prefs } };
+  for (const cb of ecouteursPrefs) cb(prefs);
+}
+
 /** Groupe B (D55) : barre gauche, lecture (B.2) et mode édition (B.3) — glisser-déposer, menu, renommage. */
 export function Nav({ screen }: { screen: EcranId }) {
   const { state, daemon, call } = useAid();
@@ -83,6 +95,13 @@ export function Nav({ screen }: { screen: EcranId }) {
       return next;
     });
   };
+
+  useEffect(() => {
+    const cb = (prefs: Partial<NavPrefs>) =>
+      updateNav((cur) => ({ ...cur, prefs: { ...(cur.prefs ?? { reduit: false }), ...prefs } }));
+    ecouteursPrefs.add(cb);
+    return () => void ecouteursPrefs.delete(cb);
+  }, []);
 
   const [edit, setEdit] = useState(false);
   const [renommage, setRenommage] = useState<Renommage | null>(null);
@@ -607,6 +626,21 @@ export function Nav({ screen }: { screen: EcranId }) {
       ? `mesh · cell ${mesh.state.cell}`
       : 'mesh hors ligne'
     : null;
+
+  // Chantier 25 (D104) : la barre par état. Les groupes du 15 restent intacts en `rangement: 'groupes'`, en mode
+  // réduit (la V4 n'en a pas) et avant la première lecture de /api/nav.
+  if (!rail && nav.prefs?.rangement === 'etat')
+    return (
+      <NavEtat
+        n={n}
+        couleurs={COULEURS_GROUPE}
+        placements={placements}
+        agentsOf={agentsOf}
+        erreur={erreur}
+        onReduire={toggleReduit}
+        piedRef={piedBasculeRef}
+      />
+    );
 
   return (
     <nav

@@ -1,4 +1,5 @@
 import type { Server, ServerStatus, ServerTest, ServerTestStepId } from '../../shared/model.js';
+import type { ServerAgentsSummary } from '../../shared/model.js';
 import type { Db } from '../db.js';
 import { AidHttpError } from '../errors.js';
 import type { EventStore } from '../events/store.js';
@@ -100,7 +101,29 @@ export class ServerConnections {
 
   constructor(private readonly deps: ServerConnectionsDeps) {}
 
+  /** Chantier 25 (D106) : les agents de chaque serveur, branchés par le daemon une fois les discussions montées. */
+  private agentsDe: ((serverId: string) => ServerAgentsSummary) | null = null;
+
+  suivreAgents(agentsDe: (serverId: string) => ServerAgentsSummary): void {
+    this.agentsDe = agentsDe;
+  }
+
+  /** Chantier 25 (D106) : le suivi d'un agent a changé ; l'état du serveur repart en éphémère, agrégat à jour. */
+  annoncer(serverId: string): void {
+    if (this.disposed || !getServerSafe(this.deps.db, serverId)) return;
+    this.deps.store.emitEphemeral({
+      kind: 'ephemeral',
+      type: 'server.status',
+      status: this.status(serverId),
+    });
+  }
+
   status(serverId: string): ServerStatus {
+    const st = this.statusSansAgents(serverId);
+    return this.agentsDe ? { ...st, agents: this.agentsDe(serverId) } : st;
+  }
+
+  private statusSansAgents(serverId: string): ServerStatus {
     return (
       this.statuses.get(serverId) ?? {
         serverId,

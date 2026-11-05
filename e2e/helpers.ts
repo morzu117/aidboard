@@ -108,3 +108,27 @@ export async function typeInTerminal(page: Page, text: string): Promise<void> {
   await page.keyboard.type(text);
   await page.keyboard.press('Enter');
 }
+
+/**
+ * Chantier 25 (D104) : la barre gauche range par état par défaut. Les épreuves des groupes du chantier 15 la
+ * remettent en `groupes` avant de commencer, et en `etat` à la fin, par l'API et sous le cookie d'une page ouverte.
+ */
+export function rangerLaBarre(rangement: 'etat' | 'groupes') {
+  return async ({ browser }: { browser: Browser }) => {
+    const page = await openApp(await browser.newContext());
+    const status = await page.evaluate(
+      async (r) =>
+        (
+          await fetch('/api/nav/prefs', {
+            method: 'PATCH',
+            credentials: 'same-origin',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ rangement: r }),
+          })
+        ).status,
+      rangement,
+    );
+    expect(status).toBe(200);
+    await page.context().close();
+  };
+}

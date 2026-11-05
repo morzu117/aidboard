@@ -28,7 +28,7 @@ test('défauts : un groupe par projet, un sujet par défaut dans le groupe de so
   expect(first.placements).toEqual([
     expect.objectContaining({ topicId, groupId: first.groups[0]!.id }),
   ]);
-  expect(first.prefs).toEqual({ reduit: false });
+  expect(first.prefs).toEqual({ reduit: false, rangement: 'etat' });
 
   // un second appel ne recrée rien : même groupe, même placement
   const second = (await get()).json<NavState>();
@@ -158,9 +158,22 @@ test('PUT ordre des groupes et des sujets d’un groupe : jeu complet exigé, si
 test('PATCH /api/nav/prefs : persiste reduit', async () => {
   c = await setupWorkspace();
   await makeTopic(c);
-  expect((await get()).json<NavState>().prefs).toEqual({ reduit: false });
+  expect((await get()).json<NavState>().prefs).toEqual({ reduit: false, rangement: 'etat' });
   const r = await patch('/api/nav/prefs', { reduit: true });
   expect(r.statusCode).toBe(200);
-  expect(r.json()).toEqual({ reduit: true });
-  expect((await get()).json<NavState>().prefs).toEqual({ reduit: true });
+  expect(r.json()).toEqual({ reduit: true, rangement: 'etat' });
+  expect((await get()).json<NavState>().prefs).toEqual({ reduit: true, rangement: 'etat' });
+});
+
+test('D104 : PATCH /api/nav/prefs persiste rangement sans toucher à reduit ; valeur inconnue ou corps vide refusés', async () => {
+  c = await setupWorkspace();
+  await makeTopic(c);
+  await patch('/api/nav/prefs', { reduit: true });
+  const r = await patch('/api/nav/prefs', { rangement: 'groupes' });
+  expect(r.statusCode).toBe(200);
+  expect(r.json()).toEqual({ reduit: true, rangement: 'groupes' });
+  expect((await get()).json<NavState>().prefs).toEqual({ reduit: true, rangement: 'groupes' });
+  expect((await patch('/api/nav/prefs', { rangement: 'dossiers' })).statusCode).toBe(400);
+  expect((await patch('/api/nav/prefs', {})).statusCode).toBe(400);
+  expect((await get()).json<NavState>().prefs.rangement).toBe('groupes');
 });

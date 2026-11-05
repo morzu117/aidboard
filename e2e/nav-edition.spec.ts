@@ -1,7 +1,11 @@
 import { expect, type Page, test } from '@playwright/test';
 import { createTopic, newRepo, node, openApp, registerWorkspace, url } from './helpers.js';
 import { fermerContextes } from './helpers.js';
+import { rangerLaBarre } from './helpers.js';
 
+// chantier 25 (D104) : ces épreuves visent la barre des groupes du chantier 15
+test.beforeAll(rangerLaBarre('groupes'));
+test.afterAll(rangerLaBarre('etat'));
 test.afterAll(({ browser }) => fermerContextes(browser));
 
 // B.3 (chantier 15) : mode édition de la barre gauche — glisser un sujet vers un autre groupe

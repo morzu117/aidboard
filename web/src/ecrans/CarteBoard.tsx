@@ -11,7 +11,13 @@ import type {
 import { useBoardCard } from '../data/board.js';
 import { useAid } from '../data/useAidState.js';
 import { Layout } from '../ui/Layout.js';
-import { ageTexte, MessageBoard, PastilleLecture } from './Board.js';
+import {
+  ageTexte,
+  BandeauBoard,
+  boardIndisponible,
+  MessageBoard,
+  PastilleLecture,
+} from './Board.js';
 
 /**
  * Chantier 24 (24.8) : la fiche d'une carte du board, en lecture seule. Quatre lectures indépendantes : une
@@ -270,7 +276,7 @@ function Fiche({ s, relire }: { s: BoardCardSheet; relire: () => void }) {
 }
 
 function Contenu({ cardId }: { cardId: number }) {
-  const { result, enLecture, luA, erreur, relire } = useBoardCard(cardId);
+  const { result, enLecture, luA, erreur, relire, reussieA } = useBoardCard(cardId);
   const c = result?.card.ok ? result.card.data : null;
   return (
     <main className="page carte-board" data-node="carte-board">
@@ -307,6 +313,14 @@ function Contenu({ cardId }: { cardId: number }) {
           </button>
         </div>
       </div>
+      {boardIndisponible(result?.card, erreur) && (
+        <BandeauBoard
+          reussieA={reussieA}
+          enLecture={enLecture}
+          onReessayer={() => void relire()}
+          node="carte-board.bandeau"
+        />
+      )}
       {erreur && !result && (
         <p className="message-erreur" role="alert" data-node="carte-board.erreur">
           {erreur}

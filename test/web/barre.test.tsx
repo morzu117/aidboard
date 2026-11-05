@@ -164,3 +164,67 @@ test('filtrage : tous les mots, sans accents', () => {
   expect(filterItems(items, '  ').map((i) => i.id)).toEqual(['a', 'b']);
   expect(filterItems(items, 'xyz')).toEqual([]);
 });
+
+// Chantier 25 (D99, D102) : la barre affiche ce qu'elle mesure et mène ailleurs, elle ne bascule plus rien.
+const avecMesh = (checkedAt: string | null = null) =>
+  state({
+    mesh: {
+      state: {
+        connected: true,
+        tailscale: 'running',
+        monitor: 'running',
+        pending: 0,
+        since: null,
+        cell: 'morzu-mac',
+      },
+      inbox: [],
+      tailscaleManage: false,
+      checkedAt,
+    },
+  });
+const attendre = (id: string) =>
+  waitFor(() => {
+    const e = node(id);
+    expect(e).not.toBeNull();
+    return e!;
+  });
+
+test('D99 : le logo mène à l’accueil', async () => {
+  setup(app, state(), '/boite');
+  const logo = await attendre('1-2.barre.marque');
+  expect(logo.tagName).toBe('A');
+  expect(logo.getAttribute('href')).toBe('/');
+  await userEvent.click(logo);
+  await attendre('1-1.barre');
+});
+
+test('D99 : la pastille mène à Réglages, section Mesh, sans rien appeler', async () => {
+  const h = setup(app, avecMesh(), '/boite');
+  const pastille = await attendre('1-2.barre.mesh');
+  expect(pastille.tagName).toBe('A');
+  expect(pastille.getAttribute('href')).toBe('/reglages#mesh');
+  expect(pastille.getAttribute('data-action')).toBe('nav.reglages-mesh');
+  expect(node('1-2.barre.mesh.texte')!.textContent).toBe('monitor actif · 0 à traiter');
+  expect(node('1-2.barre.mesh.age')).toBeNull();
+  await userEvent.click(pastille);
+  await attendre('reglages.mesh.etat');
+  expect(h.calls.some((c) => c.url.startsWith('/api/mesh/'))).toBe(false);
+});
+
+test('D99 : une lecture du monitor vieille de plus de 90 s se voit, point en attente', async () => {
+  setup(app, avecMesh(new Date(Date.now() - 5 * 60_000).toISOString()), '/boite');
+  await waitFor(() => expect(node('1-2.barre.mesh.age')?.textContent).toBe('· lu il y a 5 min'));
+  expect(node('1-2.barre.mesh')!.querySelector('.point')!.className).toContain('point--attente');
+});
+
+test('D102 : sans mesh configuré, « Connecter à swarph » mène à /swarph ; rien avant l’instantané', async () => {
+  setup(app, state(), '/boite');
+  const lien = await attendre('1-2.barre.swarph');
+  expect(lien.textContent).toBe('Connecter à swarph');
+  expect(lien.getAttribute('href')).toBe('/swarph');
+  expect(node('1-2.barre.mesh')).toBeNull();
+  cleanup();
+  setup(app, 'down', '/boite');
+  await attendre('1-2.barre');
+  expect(node('1-2.barre.swarph')).toBeNull();
+});

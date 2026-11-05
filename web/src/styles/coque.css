@@ -1,0 +1,172 @@
+/* Chantier 25 : styles de la coque V4. Jamais dans maquette.css, dont l'empreinte est comparée aux maquettes
+   design/maquettes/aid-1-*.html (test/web/maquette-css.test.ts). */
+
+/* D110 : bandeau d'état commun */
+.bandeau {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--sp-3) var(--sp-4);
+  padding: var(--sp-3) var(--sp-4);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-xl);
+  background: var(--surface-2);
+}
+.bandeau--ambre {
+  border-color: var(--s-attente-line);
+  background: var(--surface-alerte);
+}
+.bandeau--rouge {
+  border-color: var(--s-erreur-line);
+  background: var(--surface-erreur);
+}
+.bandeau-constat {
+  font-weight: var(--fw-sb);
+}
+.bandeau-ton {
+  font-size: var(--fs-s);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.bandeau--ambre .bandeau-ton {
+  color: var(--s-attente);
+}
+.bandeau--rouge .bandeau-ton {
+  color: var(--s-erreur);
+}
+
+/* D99 : la pastille et le logo deviennent des liens */
+a.bouton-mesh,
+a.marque {
+  text-decoration: none;
+}
+
+/* D103-D105 : la barre gauche par état */
+.nav-etat-projets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-1);
+  padding: 0 var(--sp-2);
+}
+.nav-etat-tuile {
+  width: 26px;
+  height: 26px;
+  border: 1px solid transparent;
+  border-radius: var(--r-s);
+  font-family: var(--font);
+  font-size: var(--fs-s);
+  font-weight: var(--fw-sb);
+  cursor: pointer;
+}
+.nav-etat-tuile[aria-pressed='true'] {
+  outline: 2px solid var(--line-3);
+  outline-offset: 1px;
+}
+.nav-etat-sections {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+.nav-etat-sujet-texte {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-width: 0;
+}
+.nav-etat-sujet-projet {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: var(--fs-xs);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* le gras veut dire « ça t'attend », comme un message non lu ; le grisé, en pause */
+.nav-etat-sujet--a-decider .barre-gauche-sujet-nom {
+  font-weight: var(--fw-sb);
+}
+.nav-etat-sujet--en-pause {
+  opacity: 0.6;
+}
+.nav-etat-vues {
+  display: flex;
+  gap: var(--sp-3);
+  padding: 0 var(--sp-2);
+  font-size: var(--fs-s);
+}
+.nav-etat-vues a {
+  color: var(--muted);
+  text-decoration: none;
+}
+.nav-etat-meshes {
+  padding: 0 var(--sp-2);
+}
+
+/* D106 : le bloc VPS, une carte par serveur */
+.nav-vps {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+.nav-vps-carte {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  margin: 0 var(--sp-2);
+  padding: var(--sp-2);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-m);
+}
+.nav-vps-carte--suivi-coupe,
+.nav-vps-carte--session-perdue,
+.nav-vps-carte--reconnexion {
+  border-color: var(--s-attente-line);
+}
+.nav-vps-carte--injoignable {
+  border-color: var(--s-erreur-line);
+}
+.nav-vps-entete {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  color: inherit;
+  text-decoration: none;
+}
+.nav-vps-etat {
+  margin-left: auto;
+  font-size: var(--fs-xs);
+}
+.nav-vps-carte--suivi-coupe .nav-vps-etat,
+.nav-vps-carte--session-perdue .nav-vps-etat,
+.nav-vps-carte--reconnexion .nav-vps-etat {
+  color: var(--s-attente);
+}
+.nav-vps-carte--injoignable .nav-vps-etat {
+  color: var(--s-erreur);
+}
+.nav-vps-detail {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--fs-xs);
+}
+.nav-vps-action {
+  align-self: flex-start;
+  text-decoration: none;
+}
+
+/* D107 : l'accueil en sections */
+.table-sujets-section th {
+  padding-top: var(--sp-4);
+  color: var(--muted);
+  font-size: var(--fs-s);
+  font-weight: var(--fw-sb);
+  text-align: left;
+}
+.accueil-prochaine {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.accueil-decision td {
+  padding-bottom: var(--sp-4);
+}

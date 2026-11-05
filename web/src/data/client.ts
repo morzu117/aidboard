@@ -16,6 +16,8 @@ export interface ClientSnapshot {
   /** Chantier 17 (S.4) : derniers `server.status` / `server.test` éphémères reçus, par serveur. */
   serverStatuses?: Readonly<Record<string, ServerStatus>>;
   serverTests?: Readonly<Record<string, ServerTest>>;
+  /** Chantier 25 (D99 bis) : dernier `mesh.checked` éphémère reçu */
+  meshCheckedAt?: string;
 }
 
 export interface ClientOptions {
@@ -130,6 +132,7 @@ export class AidClient {
       line?: string;
       status?: ServerStatus;
       test?: ServerTest;
+      checkedAt?: string;
     };
     try {
       msg = JSON.parse(raw);
@@ -155,6 +158,8 @@ export class AidClient {
     } else if (msg.kind === 'ephemeral' && msg.type === 'server.test' && msg.test) {
       const id = msg.test.serverId;
       this.set({ serverTests: { ...this.snap.serverTests, [id]: msg.test } });
+    } else if (msg.kind === 'ephemeral' && msg.type === 'mesh.checked' && msg.checkedAt) {
+      this.set({ meshCheckedAt: msg.checkedAt });
     }
   }
 

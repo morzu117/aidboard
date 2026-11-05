@@ -237,7 +237,14 @@ export interface NavPlacement {
 
 export interface NavPrefs {
   reduit: boolean;
+  /**
+   * Chantier 25 (D104) : la barre gauche range par état (V4) ou par les groupes du chantier 15. Le daemon
+   * l'envoie toujours, `'etat'` par défaut ; absent seulement d'une réponse simulée, lu alors `'groupes'`.
+   */
+  rangement?: NavRangement;
 }
+
+export type NavRangement = 'etat' | 'groupes';
 
 export interface NavState {
   groups: NavGroup[];
@@ -300,6 +307,22 @@ export interface ServerStatus {
   checkedAt: string | null;
   /** Cause lisible d'un état `unreachable` ou `error`. */
   reason: string | null;
+  /** Chantier 25 (D106) : les agents du serveur, agrégés pour le bloc VPS ; absent des clients d'avant le 25. */
+  agents?: ServerAgentsSummary;
+}
+
+/** Chantier 25 (D106) : le « suivi coupé » n'existe que par agent ; le bloc VPS le lit par serveur. */
+export interface ServerAgentsSummary {
+  /** agents dont le pilote tourne encore */
+  vivants: number;
+  /** lien perdu, pas encore repris : l'agent continue peut-être sur le serveur */
+  suiviCoupe: number;
+  /** reprise de session échouée, sans message ni reprise depuis */
+  repriseEchouee: number;
+  /** dernier événement reçu d'un agent du serveur */
+  dernierEvenement: string | null;
+  /** la discussion du dernier suivi coupé ou de la dernière reprise échouée, celle que le bloc ouvre */
+  discussion: string | null;
 }
 
 export type ServerTestStepId = 'command' | 'shell' | 'workdir' | 'agents' | 'session';
@@ -397,4 +420,6 @@ export interface ServerAgent {
    * agent, qui tourne encore avec l'ancien réglage jusqu'à sa prochaine relance. Toujours rendu par le daemon.
    */
   staleConfirm?: boolean;
+  /** Chantier 25 (D110) : lien perdu sans reprise (`coupe`), reprise échouée (`echec`) ; absent quand tout suit */
+  suivi?: 'coupe' | 'echec';
 }
