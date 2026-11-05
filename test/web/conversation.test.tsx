@@ -118,6 +118,8 @@ test('history puis event : bulle utilisateur, message assistant, groupe d’outi
   );
   expect(document.querySelector('img')).toBeNull();
   expect(screen.getByText('2 commandes')).toBeTruthy();
+  // chantier 26 (D120) : hors d'une discussion de serveur, la réponse dit « Mac local »
+  expect(document.querySelector('.message-agent-serveur')?.textContent).toBe('Mac local');
   // doublon (reconnexion) : le même seq renvoyé en direct ne crée pas une seconde ligne
   ws.text({
     t: 'event',
