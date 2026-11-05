@@ -3,13 +3,15 @@ import type { MemoryPage } from '../../../src/shared/memory.js';
 import { fetchSubjectMemory, type MemoryKind } from '../data/memory.js';
 import { useAid } from '../data/useAidState.js';
 import { Memoire } from '../ui/Memoire.js';
+import { mostUrgent } from '../ui/Statut.js';
 import { OngletFichiers } from './OngletFichiers.js';
 import { OngletGit } from './OngletGit.js';
 
 type OngletId = 'plan' | 'git' | 'fichiers' | 'review' | 'retro' | 'dev-handoff';
 
 const ONGLETS_FIXES: Array<{ id: OngletId; label: string }> = [
-  { id: 'plan', label: 'Plan' },
+  // chantier 26 (D119) : l'onglet du sujet ; son id et son data-node restent `plan`
+  { id: 'plan', label: 'Sujet' },
   { id: 'git', label: 'Git' },
   { id: 'fichiers', label: 'Fichiers' },
 ];
@@ -38,6 +40,7 @@ export function PanneauContexte({
   remote,
   activeAgentId,
   initialOnglet,
+  onVoirAgent,
 }: {
   namespace: string;
   topicSlug: string;
@@ -46,6 +49,8 @@ export function PanneauContexte({
   remote: string | null;
   activeAgentId: string | null;
   initialOnglet?: 'git' | 'fichiers';
+  /** Chantier 26 (D119) : « Voir la question » sélectionne l'onglet de cet agent. */
+  onVoirAgent?: (agentId: string) => void;
 }) {
   const { state, call } = useAid();
   const [pages, setPages] = useState<Partial<Record<MemoryKind, MemoryPage>> | null>(null);
@@ -83,6 +88,12 @@ export function PanneauContexte({
     // redéclencherait la lecture à l'infini.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [namespace, topicSlug, state]);
+
+  // D119 : la question en attente la plus urgente du sujet, un shell compris
+  const runIds = (state?.runs ?? []).filter((r) => r.topicId === topicId).map((r) => r.id);
+  const decision = mostUrgent(
+    (state?.agents ?? []).filter((a) => runIds.includes(a.runId) && a.pending),
+  );
 
   const onglets = [
     ...ONGLETS_FIXES,
@@ -169,12 +180,43 @@ export function PanneauContexte({
         tabIndex={0}
       >
         {actif === 'plan' && (
-          <Memoire
-            only="plan"
-            namespace={namespace}
-            topicSlug={topicSlug}
-            emptyMessage="Plan pas encore écrit"
-          />
+          <>
+            <section
+              className="sujet-decision"
+              data-node="1-3.panneau.decision"
+              aria-label="Prochaine décision"
+            >
+              <p className="sujet-decision-titre">Prochaine décision</p>
+              {decision?.pending ? (
+                <>
+                  <p className="sujet-decision-question" data-node="1-3.panneau.decision.question">
+                    {decision.pending.question}
+                  </p>
+                  {onVoirAgent && (
+                    <button
+                      className="bouton bouton--fantome"
+                      data-node="1-3.panneau.decision.voir"
+                      data-action="agent.voir-question"
+                      type="button"
+                      onClick={() => onVoirAgent(decision.id)}
+                    >
+                      Voir la question
+                    </button>
+                  )}
+                </>
+              ) : (
+                <p className="texte-discret" data-node="1-3.panneau.decision.aucune">
+                  Aucune décision en attente
+                </p>
+              )}
+            </section>
+            <Memoire
+              only="plan"
+              namespace={namespace}
+              topicSlug={topicSlug}
+              emptyMessage="Plan pas encore écrit"
+            />
+          </>
         )}
         {actif === 'git' && <OngletGit topicId={topicId} base={base} remote={remote} />}
         {actif === 'fichiers' && <OngletFichiers topicId={topicId} activeAgentId={activeAgentId} />}

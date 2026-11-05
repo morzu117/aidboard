@@ -4,7 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { useState } from 'react';
 import { afterEach, expect, test } from 'vitest';
 import { PanneauContexte } from '../../web/src/ecrans/PanneauContexte.js';
-import { json, setup, snapshot } from './helpers.js';
+import { agent, json, setup, snapshot } from './helpers.js';
 
 afterEach(cleanup);
 
@@ -38,9 +38,9 @@ const pageMemoire = (slug: string, body: string) => ({
   updatedAt: 't',
 });
 
-test('onglets fixes toujours présents ; Plan vide affiche « Plan pas encore écrit »', async () => {
+test('onglets fixes toujours présents ; l’onglet Sujet (ex-Plan) vide affiche « Plan pas encore écrit »', async () => {
   setup(panneau(), snapshot());
-  expect(await screen.findByRole('tab', { name: 'Plan' })).toBeTruthy();
+  expect(await screen.findByRole('tab', { name: 'Sujet' })).toBeTruthy();
   expect(screen.getByRole('tab', { name: 'Git' })).toBeTruthy();
   expect(screen.getByRole('tab', { name: 'Fichiers' })).toBeTruthy();
   expect(screen.queryByRole('tab', { name: 'Revue' })).toBeNull();
@@ -76,14 +76,14 @@ test('sélection initiale via prop (reprend ?onglet=git) : Git affiché sans cli
 
 test('flèches gauche/droite : déplacent le focus et la sélection entre onglets', async () => {
   setup(panneau(), snapshot(), '/', { 'GET /api/topics/tp_1/git/log': GIT_LOG_VIDE });
-  const plan = await screen.findByRole('tab', { name: 'Plan' });
+  const plan = await screen.findByRole('tab', { name: 'Sujet' });
   plan.focus();
   await userEvent.keyboard('{ArrowRight}');
   const git = screen.getByRole('tab', { name: 'Git' });
   expect(document.activeElement).toBe(git);
   expect(git.getAttribute('aria-selected')).toBe('true');
   await userEvent.keyboard('{ArrowLeft}');
-  expect(document.activeElement).toBe(screen.getByRole('tab', { name: 'Plan' }));
+  expect(document.activeElement).toBe(screen.getByRole('tab', { name: 'Sujet' }));
 });
 
 // review D, finding 6 : l'aside et sa tablist ne doivent pas partager le même libellé — sinon
@@ -98,7 +98,7 @@ test('libellés distincts pour l’aside et la tablist', async () => {
 // aria-controls des autres onglets ne doit pas pointer vers un id absent.
 test('aria-controls seulement sur l’onglet sélectionné', async () => {
   setup(panneau(), snapshot());
-  const plan = await screen.findByRole('tab', { name: 'Plan' });
+  const plan = await screen.findByRole('tab', { name: 'Sujet' });
   const git = screen.getByRole('tab', { name: 'Git' });
   const fichiers = screen.getByRole('tab', { name: 'Fichiers' });
   expect(plan.getAttribute('aria-controls')).toBe('panneau-tabpanel-plan');
@@ -154,7 +154,7 @@ test('réponse tardive de l’ancien sujet ignorée après un changement de suje
       return new Response(JSON.stringify({ slugs: [] }), { status: 200 });
     },
   });
-  await screen.findByRole('tab', { name: 'Plan' });
+  await screen.findByRole('tab', { name: 'Sujet' });
   expect(screen.queryByRole('tab', { name: 'Revue' })).toBeNull();
   // force une nouvelle requête pour le premier sujet, cette fois lente, encore en vol au
   // moment du changement de sujet plus bas.
@@ -185,7 +185,7 @@ test('repli sur Plan quand l’onglet mémoire sélectionné disparaît, et y re
   h.respond.set('GET /api/memory/pages?prefix=aid%2F', json(200, { slugs: [] }));
   await h.client.refresh();
   await waitFor(() => expect(screen.queryByRole('tab', { name: 'Revue' })).toBeNull());
-  const plan = screen.getByRole('tab', { name: 'Plan' });
+  const plan = screen.getByRole('tab', { name: 'Sujet' });
   expect(plan.getAttribute('aria-selected')).toBe('true');
   expect(document.activeElement).toBe(plan);
 });
@@ -223,8 +223,58 @@ test('changement de sujet : le repli sur Plan ne vole pas le focus resté à l�
   h.respond.set('GET /api/memory/pages?prefix=aid%2F', json(200, { slugs: [] }));
   fireEvent.click(screen.getByTestId('basculer-sans-focus'));
   await waitFor(() => expect(screen.queryByRole('tab', { name: 'Revue' })).toBeNull());
-  const plan = screen.getByRole('tab', { name: 'Plan' });
+  const plan = screen.getByRole('tab', { name: 'Sujet' });
   expect(plan.getAttribute('aria-selected')).toBe('true');
   expect(document.activeElement).toBe(champExterieur);
   champExterieur.remove();
+});
+
+const run = {
+  id: 'run_1',
+  topicId: 'tp_1',
+  mode: 'standard' as const,
+  state: 'open',
+  createdAt: 't',
+};
+const question = (id: string, q: string) =>
+  agent({
+    id,
+    kind: 'claude',
+    transport: 'stream',
+    status: 'needs_input',
+    pending: { id: `pr_${id}`, kind: 'question', question: q, options: [] },
+  });
+
+test('D119 : l’onglet Sujet montre d’abord la prochaine décision ; « Voir la question » choisit son agent', async () => {
+  const vus: string[] = [];
+  setup(
+    panneau({ onVoirAgent: (id) => vus.push(id) }),
+    snapshot({
+      runs: [run, { ...run, id: 'run_2', topicId: 'tp_autre' }],
+      agents: [
+        agent({ id: 'ag_1', kind: 'claude', transport: 'stream', status: 'working' }),
+        question('ag_2', 'Inclure la migration ?'),
+        { ...question('ag_3', 'Question d’un autre sujet'), runId: 'run_2' },
+      ],
+    }),
+  );
+  await waitFor(() =>
+    expect(document.querySelector('[data-node="1-3.panneau.decision.question"]')?.textContent).toBe(
+      'Inclure la migration ?',
+    ),
+  );
+  await userEvent.click(screen.getByRole('button', { name: 'Voir la question' }));
+  expect(vus).toEqual(['ag_2']);
+  // le plan suit, tel qu'avant
+  expect(await screen.findByText('Plan pas encore écrit')).toBeTruthy();
+});
+
+test('D119 : sans question en attente, l’onglet Sujet le dit', async () => {
+  setup(panneau(), snapshot({ runs: [run], agents: [] }));
+  await waitFor(() =>
+    expect(document.querySelector('[data-node="1-3.panneau.decision.aucune"]')?.textContent).toBe(
+      'Aucune décision en attente',
+    ),
+  );
+  expect(screen.queryByRole('button', { name: 'Voir la question' })).toBeNull();
 });

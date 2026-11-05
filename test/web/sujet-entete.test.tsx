@@ -237,3 +237,31 @@ test('D115 : chaque onglet dit l’état de son agent en mots ; le rôle seuleme
   expect(node('1-3.terminaux.onglet-2.etat')?.textContent).toBe('au travail');
   expect(node('1-3.terminaux.onglet-2.role')?.textContent).toBe('dev');
 });
+
+test('D119 : « Voir la question » du panneau sélectionne l’onglet de l’agent qui attend', async () => {
+  open(
+    placement(),
+    {},
+    state({
+      runs: [run],
+      agents: [
+        agent({
+          id: 'ag_1',
+          kind: 'claude',
+          transport: 'stream',
+          status: 'needs_input',
+          pending: { id: 'pr_1', kind: 'question', question: 'On fusionne ?', options: [] },
+        }),
+        agent({ id: 'ag_2', kind: 'codex', transport: 'stream', status: 'working' }),
+      ],
+    }),
+  );
+  // le dernier agent est actif par défaut
+  await waitFor(() =>
+    expect(node('1-3.terminaux.onglet-2')?.getAttribute('aria-selected')).toBe('true'),
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Voir la question' }));
+  await waitFor(() =>
+    expect(node('1-3.terminaux.onglet-1')?.getAttribute('aria-selected')).toBe('true'),
+  );
+});

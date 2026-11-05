@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router';
 import type { StoredEvent } from '../../../src/shared/events.js';
 import type { GitLogResponse } from '../../../src/shared/git.js';
-import type { Agent, IndexState, Topic } from '../../../src/shared/model.js';
+import type { Agent, Topic } from '../../../src/shared/model.js';
 import { Conversation } from '../conversation/Conversation.js';
 import { AidApiError } from '../data/api.js';
 import { fetchGitLog } from '../data/git.js';
@@ -47,13 +47,6 @@ function libelleEvenement(e: StoredEvent): string {
       return e.type;
   }
 }
-
-const INDEX_LABEL: Record<IndexState, string> = {
-  disabled: 'index absent : lecture directe',
-  indexing: 'indexation en cours',
-  ready: 'index prêt',
-  failed: 'index en échec : lecture directe',
-};
 
 const LIVE = ['starting', 'working', 'needs_input', 'idle'];
 type Kind = 'claude' | 'codex' | 'shell' | 'swarph-cell' | 'swairm-cell';
@@ -628,15 +621,6 @@ function Contenu({
               {workspace?.remote ? `${workspace.remote}/${topic.base}` : topic.base}
             </span>
           </span>
-          {topic.indexState !== 'ready' && (
-            <span
-              className="pastille pastille--discret"
-              data-node="1-3.entete.index"
-              data-bind="sujet.index"
-            >
-              {INDEX_LABEL[topic.indexState]}
-            </span>
-          )}
         </div>
       </div>
       {live && !live.onTopicBranch && (
@@ -1153,6 +1137,10 @@ function SujetPanneau({
           remote={remote}
           activeAgentId={activeAgentId}
           initialOnglet={initialOnglet}
+          onVoirAgent={(id) => {
+            onSelectAgent(id);
+            setOverlay('aucun');
+          }}
         />
       </Volet>
       <button

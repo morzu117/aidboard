@@ -227,23 +227,38 @@ test('en-tête d’un projet sans remote : la base est la branche locale, sans �
   expect(text('1-3.entete.base.branche')).toBe('main');
 });
 
+const ARBRE_VIDE = json(200, { tree: [], total: 0, modified: 0, truncated: false });
+
 test.each([
   ['disabled', 'index absent : lecture directe'],
   ['indexing', 'indexation en cours'],
   ['failed', 'index en échec : lecture directe'],
 ] as const)(
-  'index %s : « %s » (le repli est déclaré, jamais silencieux)',
+  'index %s : « %s » en tête de l’onglet Fichiers (le repli est déclaré, jamais silencieux)',
   async (indexState, label) => {
-    open(snapshot({ workspaces: [ws()], topics: [topic({ indexState })], runs: [run] }));
+    open(snapshot({ workspaces: [ws()], topics: [topic({ indexState })], runs: [run] }), 'tp_1', {
+      'GET /api/topics/tp_1/files?scope=tout': ARBRE_VIDE,
+    });
     await screen.findByText('Mon sujet');
-    expect(text('1-3.entete.index')).toBe(label);
+    // chantier 26 (D119) : plus dans l'en-tête, c'est un état des fichiers
+    expect(node('1-3.entete.index')).toBeNull();
+    await userEvent.click(node('1-3.onglets.fichiers')!);
+    await waitFor(() => expect(text('3-4.index')).toBe(label));
   },
 );
 
 test('index prêt : aucune pastille (rien à signaler quand tout va bien)', async () => {
-  open(snapshot({ workspaces: [ws()], topics: [topic({ indexState: 'ready' })], runs: [run] }));
+  open(
+    snapshot({ workspaces: [ws()], topics: [topic({ indexState: 'ready' })], runs: [run] }),
+    'tp_1',
+    {
+      'GET /api/topics/tp_1/files?scope=tout': ARBRE_VIDE,
+    },
+  );
   await screen.findByText('Mon sujet');
-  expect(node('1-3.entete.index')).toBeNull();
+  await userEvent.click(node('1-3.onglets.fichiers')!);
+  await waitFor(() => expect(node('3-4.explorateur')).not.toBeNull());
+  expect(node('3-4.index')).toBeNull();
 });
 
 test('sans agent : trois façons de démarrer, et le lancement appelle POST /api/agents', async () => {
