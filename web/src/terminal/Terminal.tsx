@@ -84,11 +84,18 @@ export function Terminal({ agentId, visible }: { agentId: string; visible: boole
     const claim = () => !ownerRef.current && sock.claim();
     const el = host.current!;
     for (const ev of ['focusin', 'keydown', 'paste', 'pointerdown']) el.addEventListener(ev, claim);
+    // Un TUI qui capte la souris (tmux de la cell swarph) ou l'écran alternatif reçoit la molette comme une saisie,
+    // ignorée hors propriétaire : on prend la main en capture, avant que xterm n'envoie le premier cran.
+    const claimWheel = () =>
+      (term.modes.mouseTrackingMode !== 'none' || term.buffer.active.type === 'alternate') &&
+      claim();
+    el.addEventListener('wheel', claimWheel, { capture: true, passive: true });
     const observer = new ResizeObserver(fitAndSend);
     observer.observe(el);
     return () => {
       for (const ev of ['focusin', 'keydown', 'paste', 'pointerdown'])
         el.removeEventListener(ev, claim);
+      el.removeEventListener('wheel', claimWheel, { capture: true });
       observer.disconnect();
       sock.close();
       term.dispose();
