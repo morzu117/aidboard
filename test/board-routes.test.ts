@@ -129,9 +129,9 @@ test('chaque erreur de swarph : 200 et un kind, jamais le texte de stderr', asyn
     expect(r.body).not.toContain('swarph board:');
   }
   delete process.env.FAKE_SWARPH_BOARD_ERROR;
-  // carte absente des fixtures : le faux swarph répond 404 en code 1, classé unknown
+  // carte absente des fixtures : le faux swarph répond 404 en code 1, classé not-found (D95 bis)
   const sheet = (await get('/api/board/cards/999')).json<BoardCardSheet>();
-  expect(sheet.card).toMatchObject({ ok: false, kind: 'unknown' });
+  expect(sheet.card).toMatchObject({ ok: false, kind: 'not-found' });
 });
 
 test('un token de run est refusé sur /api/board', async () => {

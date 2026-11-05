@@ -109,6 +109,13 @@ test('classification : chaque erreur connue, et unknown jamais confondu avec unr
     classify(fail({ stderr: "cannot resolve a mesh credential for 'morzu-mac'", exitCode: 1 })),
   ).toBe('credential');
   expect(classify(fail({ stderr: 'gateway 500: internal error', exitCode: 1 }))).toBe('unknown');
+  // D95 bis : texte réel du gateway pour une carte absente ; un jeton révoqué est un problème d'identifiant
+  expect(
+    classify(fail({ stderr: 'swarph board: gateway 404: card 99999999 not found', exitCode: 1 })),
+  ).toBe('not-found');
+  expect(classify(fail({ stderr: 'swarph board: gateway 401: invalid token', exitCode: 1 }))).toBe(
+    'credential',
+  );
   expect(classify(fail({ stderr: 'error: argument: invalid choice', exitCode: 2 }))).toBe(
     'too-old',
   );

@@ -51,6 +51,9 @@ export function classify(r: MeshExecResult): BoardErrorKind | null {
   if (err.includes('no read grant') || err.includes('gateway 403')) return 'forbidden';
   if (err.includes('gateway unreachable')) return 'unreachable';
   if (err.includes('cannot resolve a mesh credential')) return 'credential';
+  // D95 bis : « card N not found », et un jeton révoqué ; « Relire » n'aboutirait ni à l'un ni à l'autre
+  if (err.includes('gateway 404')) return 'not-found';
+  if (err.includes('gateway 401')) return 'credential';
   return 'unknown';
 }
 

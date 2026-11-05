@@ -30,6 +30,7 @@ export const MESSAGES_BOARD: Record<BoardErrorKind, { texte: string; action: Act
   // un fil de 1000 messages peut dépasser le tampon : relire ne changerait rien (D95 bis)
   'too-large': { texte: 'Trop volumineux pour être affiché (plus de 4 Mo)', action: null },
   unknown: { texte: 'Lecture du board impossible', action: 'relire' },
+  'not-found': { texte: 'Cette carte n’existe pas', action: 'retour' },
 };
 
 export function MessageBoard({

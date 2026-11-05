@@ -147,6 +147,17 @@ test('une partie en échec affiche son message à sa place, le reste s’affiche
   expect(node('carte-board.obligations.tronquee')).not.toBeNull();
 });
 
+test('carte inexistante (404) : « Cette carte n’existe pas », retour au board, pas de Relire', async () => {
+  const absente: BoardResult<never> = { ok: false, kind: 'not-found', readAt: READ_AT };
+  await ouvrir('/board/cartes/103', {
+    103: { card: absente, graph: absente, thread: absente, obligations: absente },
+  });
+  await waitFor(() => expect(node('carte-board.corps.message')).not.toBeNull());
+  expect(node('carte-board.corps.message')!.textContent).toContain('Cette carte n’existe pas');
+  expect(node('carte-board.corps.message.retour')!.getAttribute('href')).toBe('/board');
+  expect(node('carte-board.corps.message.relire')).toBeNull();
+});
+
 test('lien d’un pair hors GitHub : affiché en texte, jamais cliquable', async () => {
   const s = fiche(102);
   const card = s.card.ok
