@@ -144,3 +144,52 @@ test('un chemin tapé avant le premier chargement n’est pas écrasé par sa r�
   await screen.findByText('mon-depot');
   expect((champ as HTMLInputElement).value).toBe('/srv/code');
 });
+
+test('un champ pris en main avant le premier chargement reçoit le chemin sélectionné, la frappe le remplace', async () => {
+  const h = setup(<Accueil />, snapshot());
+  let release!: () => void;
+  const first = new Promise<void>((r) => (release = r));
+  h.respond.set(
+    'GET /api/fs/dirs',
+    () =>
+      first.then(
+        () => new Response(JSON.stringify(listing()), { status: 200 }),
+      ) as unknown as Response,
+  );
+  await userEvent.click(await boutonNouveauSujet());
+  const champ = (await screen.findByLabelText('Aller au dossier')) as HTMLInputElement;
+  // ce que fait `fill` : focus, sélection du champ vide, puis la réponse arrive avant l'insertion
+  await userEvent.click(champ);
+  release();
+  await screen.findByText('mon-depot');
+  expect(champ.value).toBe(listing().path);
+  expect([champ.selectionStart, champ.selectionEnd]).toEqual([0, listing().path.length]);
+  await userEvent.keyboard('/srv/code');
+  expect(champ.value).toBe('/srv/code');
+});
+
+test('un champ sans le focus à la réponse reçoit le chemin, sans sélection', async () => {
+  setup(<Accueil />, snapshot());
+  await userEvent.click(await boutonNouveauSujet());
+  const champ = (await screen.findByLabelText('Aller au dossier')) as HTMLInputElement;
+  await waitFor(() => expect(champ.value).toBe(listing().path));
+  expect(document.activeElement).not.toBe(champ);
+});
+
+test.each([
+  ['le même chemin', '/srv/code'],
+  ['un chemin normalisé', '/srv/code/'],
+])(
+  'après « Entrée », réponse avec %s : la saisie continue en fin de chemin',
+  async (_cas, tape) => {
+    const h = await ouvrir(setup(<Accueil />, snapshot()));
+    h.respond.set('GET /api/fs/dirs', reponse(listing({ path: '/srv/code', entries: [] })));
+    const champ = (await screen.findByLabelText('Aller au dossier')) as HTMLInputElement;
+    await userEvent.clear(champ);
+    await userEvent.type(champ, `${tape}{Enter}`);
+    await waitFor(() => expect(champ.value).toBe('/srv/code'));
+    await new Promise((r) => setTimeout(r, 30));
+    await userEvent.keyboard('/sub');
+    expect(champ.value).toBe('/srv/code/sub');
+  },
+);
