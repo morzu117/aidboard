@@ -6,6 +6,7 @@ import type { Agent, IndexState, Topic } from '../../../src/shared/model.js';
 import { Conversation } from '../conversation/Conversation.js';
 import { AidApiError } from '../data/api.js';
 import { fetchGitLog } from '../data/git.js';
+import { usePlacement } from '../data/placement.js';
 import { useAid } from '../data/useAidState.js';
 import { ConfirmerNettoyage } from '../dialogues/ConfirmerNettoyage.js';
 import { SelecteurBranche } from '../dialogues/SelecteurBranche.js';
@@ -81,6 +82,7 @@ function Contenu({
 }) {
   const { state, outputs, daemon, retry, call } = useAid();
   const navigate = useNavigate();
+  const placement = usePlacement(topicId);
   const [menu, setMenu] = useState<'aucun' | 'agent' | 'plus'>('aucun');
   const [selecteurBranche, setSelecteurBranche] = useState(false);
   const [erreur, setErreur] = useState<string | null>(null);
@@ -417,7 +419,7 @@ function Contenu({
               / sujet
             </p>
             <h1 className="titre-ecran" data-node="1-3.entete.titre" data-bind="sujet.titre">
-              {topic.title}
+              {placement?.displayName ?? topic.title}
             </h1>
           </div>
           <div className="sujet-actions" data-node="1-3.actions">
