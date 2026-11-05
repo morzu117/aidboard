@@ -144,8 +144,13 @@ test('un dépôt sans origin s’enregistre ; son sujet se crée, tourne et se n
   await node(page, '1-3.actions.plus').click();
 
   const agent = await launchShell(page);
-  await typeInTerminal(page, 'git rev-parse --abbrev-ref HEAD; git remote | wc -l');
-  await expect.poll(() => terminalText(page, agent)).toMatch(/sujet-sans-remote\s+0/);
+  // le compte dans un $(…) : un pipeline lancé au prompt fait poser un groupe de processus au /bin/sh de macOS, qui
+  // écrit parfois « sh: child setpgid (…): Operation not permitted » entre la branche et le 0 ; un sous-shell n'en pose pas
+  await typeInTerminal(
+    page,
+    'git rev-parse --abbrev-ref HEAD; echo "remotes=$(git remote | wc -l | tr -d " ")"',
+  );
+  await expect.poll(() => terminalText(page, agent)).toMatch(/feat\/sujet-sans-remote\s+remotes=0/);
   await typeInTerminal(page, 'exit');
 
   await node(page, '1-3.actions.plus').click();
