@@ -193,3 +193,26 @@ test.each([
     expect(champ.value).toBe('/srv/code/sub');
   },
 );
+
+test('premier chargement dépassé : la réponse à « Entrée » ne sélectionne pas le chemin', async () => {
+  const h = setup(<Accueil />, snapshot());
+  let release!: () => void;
+  const first = new Promise<void>((r) => (release = r));
+  let n = 0;
+  h.respond.set('GET /api/fs/dirs', () => {
+    const lent = n++ === 0;
+    const body = lent ? listing() : listing({ path: '/srv/code', entries: [] });
+    return (lent ? first.then(() => body) : Promise.resolve(body)).then(
+      (b) => new Response(JSON.stringify(b), { status: 200 }),
+    ) as unknown as Response;
+  });
+  await userEvent.click(await boutonNouveauSujet());
+  const champ = (await screen.findByLabelText('Aller au dossier')) as HTMLInputElement;
+  await userEvent.type(champ, '/srv/code{Enter}');
+  await waitFor(() => expect(fsCalls(h).at(-1)).toBe('/api/fs/dirs?path=/srv/code'));
+  await new Promise((r) => setTimeout(r, 30));
+  release();
+  await new Promise((r) => setTimeout(r, 30));
+  await userEvent.keyboard('/sub');
+  expect(champ.value).toBe('/srv/code/sub');
+});

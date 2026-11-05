@@ -34,6 +34,8 @@ export function SelecteurDossier({
   const open = useCallback(
     (path: string | undefined, showHidden: boolean) => {
       const mine = ++latest.current;
+      // toute demande après la première clôt le premier chargement, même si la première a été dépassée ou a échoué
+      if (mine > 1) premier.current = false;
       typed.current = false;
       const qs = new URLSearchParams();
       if (path) qs.set('path', path);
