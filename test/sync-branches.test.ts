@@ -60,6 +60,12 @@ test('forme inhabituelle : undefined, et currentBranchFast repasse par git', asy
   writeFileSync(join(avecAbime, '.git', 'HEAD'), 'ref: refs/heads/../../evil\n');
   expect(await currentBranchFast(avecAbime)).toBeNull();
 
+  // HEAD sur une ref distante, dans un vrai dépôt : ni le disque ni git n'y voient une branche
+  const { clone: surDistante } = makeOriginAndClone(tmp());
+  writeFileSync(join(surDistante, '.git', 'HEAD'), 'ref: refs/remotes/origin/main\n');
+  expect(headBranchOnDisk(surDistante)).toBeUndefined();
+  expect(await currentBranch(surDistante)).toBeNull();
+
   const gitdirIllisible = tmp();
   writeFileSync(join(gitdirIllisible, '.git'), 'pas un gitdir\n');
   expect(headBranchOnDisk(gitdirIllisible)).toBeUndefined();

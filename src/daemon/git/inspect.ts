@@ -77,7 +77,8 @@ export async function remoteBranchExists(root: string, branch: string): Promise<
 export async function currentBranch(root: string): Promise<string | null> {
   // sans --short : git abrège en heads/<nom> une branche homonyme d'un tag, la lecture sur le disque donne <nom>
   const r = await git(root, ['symbolic-ref', '--quiet', 'HEAD']);
-  return r.ok ? r.stdout.replace(/^refs\/heads\//, '') : null;
+  // une HEAD hors refs/heads (refs/remotes/…) n'est pas une branche
+  return r.ok && r.stdout.startsWith('refs/heads/') ? r.stdout.slice('refs/heads/'.length) : null;
 }
 
 // Ce que le disque peut rendre sans git : ASCII sans `..`, sans tiret en tête. Le reste (accents compris) passe par git.
