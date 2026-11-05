@@ -69,6 +69,15 @@ export class MeshService {
     return { ...this.state };
   }
 
+  /**
+   * Lecture du board (chantier 24, D92) : même environnement et même délai que les autres appels, mais
+   * hors de la file `serial()` — une lecture de 3 s ne retarde ni `connect` ni `refresh`. Les arguments
+   * viennent de `BoardReader`, qui n'en construit que six formes (D93).
+   */
+  read(args: string[]) {
+    return this.run(this.deps.config.bin, args);
+  }
+
   get inboxLog(): string {
     return this.paths.inboxLog;
   }

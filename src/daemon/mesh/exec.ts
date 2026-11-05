@@ -7,6 +7,8 @@ export interface MeshExecResult {
   stderr: string;
   /** présent seulement quand le binaire lui-même n'a pas pu être lancé (ex. ENOENT) */
   spawnErrorCode?: string;
+  /** code de sortie du processus quand il s'est terminé en erreur (2 : arguments refusés) */
+  exitCode?: number;
 }
 
 export type MeshExec = (
@@ -40,6 +42,7 @@ export const meshExec: MeshExec = (bin, args, opts) =>
           stdout: String(stdout ?? ''),
           stderr: String(stderr ?? e.message),
           spawnErrorCode: typeof e.code === 'string' ? e.code : undefined,
+          exitCode: typeof e.code === 'number' ? e.code : undefined,
         });
       },
     );

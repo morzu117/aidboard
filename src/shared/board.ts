@@ -105,6 +105,14 @@ export interface BoardThread {
   capped: boolean;
 }
 
+/** La fiche d'une carte : quatre lectures indépendantes, une partie en échec n'empêche pas les autres. */
+export interface BoardCardSheet {
+  card: BoardResult<BoardCard>;
+  graph: BoardResult<BoardGraph>;
+  thread: BoardResult<BoardThread>;
+  obligations: BoardResult<BoardObligations>;
+}
+
 export interface Parsed<T> {
   value: T;
   schemaVersion: string | null;
