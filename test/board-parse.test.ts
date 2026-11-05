@@ -92,6 +92,15 @@ test('obligations : status fait foi, withdrawn + requested est fermée (#1456), 
   // fallback_fired reste ouverte
   const ff = parseObligations({ obligations: [{ id: 1, status: 'fallback_fired' }] });
   expect(ff?.value.obligations[0]?.closed).toBe(false);
+  // un closed_at resté sur une obligation rouverte ne la ferme pas ; sans status, closed_at décide
+  const rouverte = parseObligations({
+    obligations: [{ id: 2, status: 'open', closed_at: '2026-11-01T00:00:00Z' }],
+  });
+  expect(rouverte?.value.obligations[0]?.closed).toBe(false);
+  const sansStatus = parseObligations({
+    obligations: [{ id: 3, closed_at: '2026-11-01T00:00:00Z' }],
+  });
+  expect(sansStatus?.value.obligations[0]?.closed).toBe(true);
 });
 
 test('JSON dans une chaîne : valide décodé, invalide gardé tel quel', () => {

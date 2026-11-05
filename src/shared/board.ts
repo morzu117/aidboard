@@ -241,7 +241,8 @@ const parseObligation = (o: unknown): BoardObligation | null => {
     holder: str(o.holder),
     status,
     state: str(o.state),
-    closed: closedAt !== null || (status !== null && CLOSED_STATUSES.has(status)),
+    // status fait foi (#1456) : closed_at ne décide que sans status
+    closed: status !== null ? CLOSED_STATUSES.has(status) : closedAt !== null,
     closedAt,
     closeOutcome: str(o.close_outcome),
     closeEvidence: str(o.close_evidence),
