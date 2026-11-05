@@ -219,6 +219,8 @@ function Contenu({ cell }: { cell: string }) {
   const projet = liste.find((p) => p.id === voulu) ?? liste[0] ?? null;
   const enLecture = projets.enLecture || (cartes?.enLecture ?? false);
   const luA = cartes?.luA ?? projets.luA;
+  // projets et cartes ensemble, aussi depuis le message d'erreur : sinon les cartes, relues sans fresh à leur
+  // retour, retombent sur l'erreur gardée 5 s par le daemon
   const relire = () => {
     void projets.relire();
     cartes?.relire();
@@ -253,9 +255,7 @@ function Contenu({ cell }: { cell: string }) {
           {projets.erreur}
         </p>
       )}
-      {r && !r.ok && (
-        <MessageBoard kind={r.kind} node="board.message" onRelire={() => void projets.relire()} />
-      )}
+      {r && !r.ok && <MessageBoard kind={r.kind} node="board.message" onRelire={relire} />}
       {r?.ok && liste.length === 0 && (
         <p className="texte-discret" data-node="board.projets.vide">
           Aucun projet lisible par cette cell.

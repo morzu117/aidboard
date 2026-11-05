@@ -84,6 +84,10 @@ if [ "$1" = "board" ]; then
   # FAKE_SWARPH_BOARD_ERROR : forbidden | unreachable | credential | other (code 1), too-old (code 2).
   # FAKE_SWARPH_BOARD_SLEEP : secondes d'attente avant de répondre.
   [ -n "${FAKE_SWARPH_BOARD_SLEEP:-}" ] && sleep "${FAKE_SWARPH_BOARD_SLEEP}"
+  # FAKE_SWARPH_BOARD_ERROR_FILE : même rôle, relu à chaque appel (daemon déjà lancé, e2e 24.9).
+  if [ -z "${FAKE_SWARPH_BOARD_ERROR:-}" ] && [ -n "${FAKE_SWARPH_BOARD_ERROR_FILE:-}" ] && [ -f "$FAKE_SWARPH_BOARD_ERROR_FILE" ]; then
+    FAKE_SWARPH_BOARD_ERROR=$(head -n 1 "$FAKE_SWARPH_BOARD_ERROR_FILE")
+  fi
   case "${FAKE_SWARPH_BOARD_ERROR:-}" in
     forbidden) echo "swarph board: gateway 403: no read grant on this project" >&2; exit 1 ;;
     unreachable) echo "swarph board: gateway unreachable: <urlopen error [Errno 8] nodename nor servname provided, or not known>" >&2; exit 1 ;;
