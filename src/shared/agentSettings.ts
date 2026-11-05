@@ -76,15 +76,16 @@ export const DEFAULT_SETTINGS: AgentSettings = { mode: 'default', model: null, e
 const CLAUDE_EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max'];
 
 export const MODES: Record<'claude' | 'codex', ModeOption[]> = {
+  // chantier 26 (D117) : des libellés de permissions, distincts de la conduite de la V4
   claude: [
-    { id: 'default', label: 'Demander' },
-    { id: 'acceptEdits', label: 'Modifs auto' },
-    { id: 'auto', label: 'Auto' },
-    { id: 'plan', label: 'Plan' },
+    { id: 'default', label: "Demander avant d'écrire" },
+    { id: 'acceptEdits', label: 'Modifier sans demander' },
+    { id: 'auto', label: 'Tout accepter' },
+    { id: 'plan', label: 'Plan seulement' },
   ],
   codex: [
-    { id: 'default', label: 'Demander' },
-    { id: 'auto', label: 'Auto' },
+    { id: 'default', label: "Demander avant d'écrire" },
+    { id: 'auto', label: 'Tout accepter' },
   ],
 };
 

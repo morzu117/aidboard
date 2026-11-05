@@ -83,7 +83,7 @@ export function reglageDe(c: CommandeAid, o: AgentOptions, courant: AgentSetting
     if (!c.args) return { erreur: `/mode <id> : ${possibles.join(', ')}` };
     const m = o.modes.find((x) => egal(x.id, c.args) || egal(x.label, c.args));
     if (!m) return { erreur: `Mode inconnu : ${c.args}. Possibles : ${possibles.join(', ')}` };
-    return { patch: { mode: m.id }, avis: `Mode : ${m.label}` };
+    return { patch: { mode: m.id }, avis: `Permissions : ${m.label}` };
   }
   return null;
 }

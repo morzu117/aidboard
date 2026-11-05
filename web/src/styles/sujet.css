@@ -55,3 +55,20 @@
 .agent-etat {
   color: var(--text-3);
 }
+
+/* D117 : le chip Profil, agent · modèle · machine */
+.composer-profil {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.composer-profil-part {
+  color: var(--text-3);
+  font-size: 12px;
+}
+.composer-profil-part:first-child::after {
+  content: ' ·';
+}
+.composer-profil-part:last-child::before {
+  content: '· ';
+}

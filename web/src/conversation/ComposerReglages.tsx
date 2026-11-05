@@ -38,7 +38,7 @@ export function ComposerReglages({
   dataNode: string;
 }) {
   const { call } = useAid();
-  const { api } = useAgentRoutes();
+  const { api, distant } = useAgentRoutes();
   const [options, setOptions] = useState<AgentOptions | null>(null);
   // réglage affiché avant que l'instantané ne le confirme ; l'instantané reprend la main dès qu'il change
   const [attente, setAttente] = useState<AgentSettings | null>(null);
@@ -138,6 +138,7 @@ export function ComposerReglages({
   const modele = models.find((m) => m.id === courant.model);
   const efforts = modele?.efforts.length ? modele.efforts : (options?.efforts ?? []);
   const libelleMode = modes.find((m) => m.id === courant.mode)?.label ?? courant.mode;
+  const machine = distant?.serveur ?? 'Mac local';
   const libelleModele = `${modele?.label ?? courant.model ?? PAR_DEFAUT}${courant.effort ? ` · ${courant.effort}` : ''}`;
 
   const ligne = (key: string, label: string, checked: boolean, onClick: () => void) => (
@@ -165,22 +166,34 @@ export function ComposerReglages({
         type="button"
         aria-haspopup="menu"
         aria-expanded={menu === 'mode'}
-        aria-label={`Mode : ${libelleMode}`}
+        aria-label={`Permissions : ${libelleMode}`}
         onClick={() => ouvrir('mode')}
       >
         ▸▸ {libelleMode}
       </button>
-      <button
-        className="composer-chip"
-        data-node={`${dataNode}.modele`}
-        type="button"
-        aria-haspopup="menu"
-        aria-expanded={menu === 'modele'}
-        aria-label={`Modèle : ${libelleModele}`}
-        onClick={() => ouvrir('modele')}
+      {/* chantier 26 (D117) : le profil en résumé, agent · modèle · machine ; seul le modèle se règle ici */}
+      <span
+        className="composer-profil"
+        data-node={`${dataNode}.profil`}
+        role="group"
+        aria-label="Profil"
       >
-        {libelleModele}
-      </button>
+        <span className="composer-profil-part">{kind}</span>
+        <button
+          className="composer-chip"
+          data-node={`${dataNode}.modele`}
+          type="button"
+          aria-haspopup="menu"
+          aria-expanded={menu === 'modele'}
+          aria-label={`Modèle : ${libelleModele}`}
+          onClick={() => ouvrir('modele')}
+        >
+          {libelleModele}
+        </button>
+        <span className="composer-profil-part" data-node={`${dataNode}.profil.machine`}>
+          {machine}
+        </span>
+      </span>
       {remote && remote.status !== 'unsupported' && (
         <button
           className="composer-chip composer-chip-remote"
@@ -196,7 +209,12 @@ export function ComposerReglages({
         </button>
       )}
       {menu === 'mode' && (
-        <div className="composer-menu" role="menu" aria-label="Mode" data-node={`${dataNode}.menu`}>
+        <div
+          className="composer-menu"
+          role="menu"
+          aria-label="Permissions"
+          data-node={`${dataNode}.menu`}
+        >
           {modes.map((m) =>
             ligne(
               `mode-${m.id}`,

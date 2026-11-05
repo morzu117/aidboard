@@ -367,7 +367,7 @@ export function Composer({
             disabled={arretBusy}
             onClick={() => void arreter()}
           >
-            Arrêter
+            Interrompre
           </button>
         )}
         <button

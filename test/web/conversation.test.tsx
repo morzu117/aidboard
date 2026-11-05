@@ -304,7 +304,7 @@ test('DecisionCard : options réelles, réponse → POST answer, carte résolue 
   expect(screen.getByText('Réponse : Oui')).toBeTruthy();
 });
 
-test('Composer : agent au travail — envoi possible, « Arrêter » → POST interrupt, champ vide désactive l’envoi', async () => {
+test('Composer : agent au travail — envoi possible, « Interrompre » → POST interrupt, champ vide désactive l’envoi', async () => {
   const h = mount(streamAgent({ status: 'working' }));
   h.respond.set('POST /api/agents/ag_1/input', json(200, { id: 'ag_1' }));
   h.respond.set('POST /api/agents/ag_1/interrupt', json(200, { id: 'ag_1' }));
@@ -313,7 +313,7 @@ test('Composer : agent au travail — envoi possible, « Arrêter » → POST in
   expect(envoyer.disabled).toBe(true);
   await userEvent.type(champ, 'Bonjour');
   expect(envoyer.disabled).toBe(false);
-  await userEvent.click(screen.getByRole('button', { name: 'Arrêter' }));
+  await userEvent.click(screen.getByRole('button', { name: 'Interrompre' }));
   await waitFor(() =>
     expect(h.calls.some((c) => c.method === 'POST' && c.url === '/api/agents/ag_1/interrupt')).toBe(
       true,
@@ -524,10 +524,10 @@ test('DecisionCard : un second clic après une réponse envoyée avec succès n�
   expect(h.calls.filter((c) => c.url === '/api/agents/ag_1/answer')).toHaveLength(1);
 });
 
-test('Composer : double clic sur « Arrêter » n’envoie qu’un seul POST interrupt', async () => {
+test('Composer : double clic sur « Interrompre » n’envoie qu’un seul POST interrupt', async () => {
   const h = mount(streamAgent({ status: 'working' }));
   h.respond.set('POST /api/agents/ag_1/interrupt', json(200, { id: 'ag_1' }));
-  const bouton = screen.getByRole('button', { name: 'Arrêter' });
+  const bouton = screen.getByRole('button', { name: 'Interrompre' });
   fireEvent.click(bouton);
   fireEvent.click(bouton);
   await waitFor(() =>
@@ -537,10 +537,10 @@ test('Composer : double clic sur « Arrêter » n’envoie qu’un seul POST int
 
 const OPTIONS_CLAUDE = {
   modes: [
-    { id: 'default', label: 'Demander' },
-    { id: 'acceptEdits', label: 'Modifs auto' },
-    { id: 'auto', label: 'Auto' },
-    { id: 'plan', label: 'Plan' },
+    { id: 'default', label: "Demander avant d'écrire" },
+    { id: 'acceptEdits', label: 'Modifier sans demander' },
+    { id: 'auto', label: 'Tout accepter' },
+    { id: 'plan', label: 'Plan seulement' },
   ],
   models: [
     { id: 'opus', label: 'Opus 5.5', efforts: ['low', 'high', 'max'] },
@@ -565,21 +565,29 @@ function mountReglages(over: Partial<Agent> = {}) {
 
 test('chip mode (16.5) : affiche le mode de l’agent, le menu liste les modes, un choix envoie le PATCH', async () => {
   const { calls } = mountReglages();
-  const chip = await screen.findByRole('button', { name: 'Mode : Demander' });
+  const chip = await screen.findByRole('button', { name: "Permissions : Demander avant d'écrire" });
   await waitFor(() => expect(calls.some((c) => c.url === '/api/agents/ag_1/options')).toBe(true));
+  // chantier 26 (D117) : le profil résume agent · modèle · machine
+  const profil = screen.getByRole('group', { name: 'Profil' });
+  expect(profil.textContent).toBe('claudePar défautMac local');
   await userEvent.click(chip);
-  const menu = await screen.findByRole('menu', { name: 'Mode' });
+  const menu = await screen.findByRole('menu', { name: 'Permissions' });
   expect(
     Array.from(menu.querySelectorAll('[role="menuitemradio"]')).map((b) => b.textContent),
-  ).toEqual(['✓Demander', 'Modifs auto', 'Auto', 'Plan']);
-  await userEvent.click(screen.getByRole('menuitemradio', { name: 'Auto' }));
+  ).toEqual([
+    "✓Demander avant d'écrire",
+    'Modifier sans demander',
+    'Tout accepter',
+    'Plan seulement',
+  ]);
+  await userEvent.click(screen.getByRole('menuitemradio', { name: 'Tout accepter' }));
   await waitFor(() =>
     expect(calls.find((c) => c.method === 'PATCH')).toMatchObject({
       url: '/api/agents/ag_1/settings',
       body: { mode: 'auto' },
     }),
   );
-  expect(await screen.findByRole('button', { name: 'Mode : Auto' })).toBeTruthy();
+  expect(await screen.findByRole('button', { name: 'Permissions : Tout accepter' })).toBeTruthy();
   expect(screen.queryByRole('menu')).toBeNull();
 });
 
@@ -620,24 +628,30 @@ test('réglage refusé par le daemon : le chip revient à l’état de l’agent
     () =>
       new Response(JSON.stringify({ error: 'mode inconnu pour claude : plan' }), { status: 422 }),
   );
-  await userEvent.click(await screen.findByRole('button', { name: 'Mode : Demander' }));
-  await userEvent.click(await screen.findByRole('menuitemradio', { name: 'Plan' }));
+  await userEvent.click(
+    await screen.findByRole('button', { name: "Permissions : Demander avant d'écrire" }),
+  );
+  await userEvent.click(await screen.findByRole('menuitemradio', { name: 'Plan seulement' }));
   expect((await screen.findByRole('alert')).textContent).toContain('mode inconnu');
-  expect(screen.getByRole('button', { name: 'Mode : Demander' })).toBeTruthy();
+  expect(
+    screen.getByRole('button', { name: "Permissions : Demander avant d'écrire" }),
+  ).toBeTruthy();
 });
 
 test('l’instantané fait foi : un réglage changé ailleurs met le chip à jour', async () => {
   const { rerenderWith } = mountReglages();
-  await screen.findByRole('button', { name: 'Mode : Demander' });
+  await screen.findByRole('button', { name: "Permissions : Demander avant d'écrire" });
   rerenderWith(streamAgent({ status: 'idle', permissionMode: 'plan', model: 'sonnet' }));
-  expect(await screen.findByRole('button', { name: 'Mode : Plan' })).toBeTruthy();
+  expect(await screen.findByRole('button', { name: 'Permissions : Plan seulement' })).toBeTruthy();
   expect(await screen.findByRole('button', { name: 'Modèle : Sonnet 5.5' })).toBeTruthy();
 });
 
 test('Échap ferme le menu de réglage', async () => {
   mountReglages();
-  await userEvent.click(await screen.findByRole('button', { name: 'Mode : Demander' }));
-  await screen.findByRole('menu', { name: 'Mode' });
+  await userEvent.click(
+    await screen.findByRole('button', { name: "Permissions : Demander avant d'écrire" }),
+  );
+  await screen.findByRole('menu', { name: 'Permissions' });
   await userEvent.keyboard('{Escape}');
   expect(screen.queryByRole('menu')).toBeNull();
 });

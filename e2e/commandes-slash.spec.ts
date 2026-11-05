@@ -163,14 +163,14 @@ test.describe.serial('commandes `/` du composer (22 B.1)', () => {
     await expect(node(page, `${DN}.modele`)).toHaveText('Par défaut');
   });
 
-  test('`/mode plan` change le chip mode', async () => {
+  test('`/mode plan` change le chip Permissions', async () => {
     await taper('/mode plan');
     await champ().press('Enter');
-    await expect(avis()).toHaveText('Mode : Plan');
-    await expect(node(page, `${DN}.mode`)).toHaveText('▸▸ Plan');
+    await expect(avis()).toHaveText('Permissions : Plan seulement');
+    await expect(node(page, `${DN}.mode`)).toHaveText('▸▸ Plan seulement');
     await taper('/mode default');
     await champ().press('Enter');
-    await expect(node(page, `${DN}.mode`)).toHaveText('▸▸ Demander');
+    await expect(node(page, `${DN}.mode`)).toHaveText("▸▸ Demander avant d'écrire");
   });
 
   test('`/aide` liste les commandes d’A-I-D ; Entrée sur le nom complet exécute', async () => {
