@@ -2743,3 +2743,124 @@ a.composer-menu-ligne {
 .panneau-serveur-age[data-ancien] {
   color: var(--s-attente);
 }
+
+/* Chantier 24 : board swarph en lecture seule */
+.board-lecture {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+}
+.board-pastille {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  color: var(--muted);
+  font-size: 13px;
+}
+.board-message {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-4);
+  border: 1px solid var(--s-attente-line);
+  border-radius: var(--r-xl);
+  background: var(--surface-alerte);
+}
+.board-message-texte {
+  margin: 0;
+  color: var(--text);
+  font-weight: 500;
+}
+.board-projets,
+.board-onglets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+}
+.board-projet,
+.board-onglet {
+  padding: var(--sp-1) var(--sp-3);
+  border: 1px solid var(--line);
+  border-radius: var(--r-xl);
+  background: var(--surface-1);
+  color: var(--text-2);
+  cursor: pointer;
+}
+.board-projet.est-actif,
+.board-onglet.est-actif {
+  border-color: var(--acc);
+  color: var(--text);
+}
+.board-projet-seul {
+  margin: 0;
+  color: var(--text-2);
+}
+.board-colonnes-zone {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  min-width: 0;
+}
+.board-colonnes {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(240px, 1fr);
+  gap: var(--sp-4);
+  overflow-x: auto;
+}
+.board-colonnes--une {
+  grid-auto-flow: row;
+  grid-auto-columns: auto;
+}
+.board-colonne {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  min-width: 0;
+}
+.board-colonne-titre {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 600;
+}
+.board-cartes {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.board-carte {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  padding: var(--sp-4);
+  border: 1px solid var(--line);
+  border-radius: var(--r-xl);
+  background: var(--surface-1);
+  color: var(--text);
+  text-decoration: none;
+}
+.board-carte:hover,
+.board-carte:focus-visible {
+  border-color: var(--line-2);
+  background: var(--surface-2);
+}
+.board-carte-ref {
+  color: var(--faint);
+  font-size: 12px;
+}
+.board-carte-titre {
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+.board-carte-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2) var(--sp-3);
+  color: var(--muted);
+  font-size: 12px;
+}
