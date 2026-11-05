@@ -144,3 +144,25 @@ test('un chemin tapé avant le premier chargement n’est pas écrasé par sa r�
   await screen.findByText('mon-depot');
   expect((champ as HTMLInputElement).value).toBe('/srv/code');
 });
+
+test('un champ pris en main avant le premier chargement n’est pas rempli par sa réponse', async () => {
+  const h = setup(<Accueil />, snapshot());
+  let release!: () => void;
+  const first = new Promise<void>((r) => (release = r));
+  h.respond.set(
+    'GET /api/fs/dirs',
+    () =>
+      first.then(
+        () => new Response(JSON.stringify(listing()), { status: 200 }),
+      ) as unknown as Response,
+  );
+  await userEvent.click(await boutonNouveauSujet());
+  const champ = (await screen.findByLabelText('Aller au dossier')) as HTMLInputElement;
+  // ce que fait `fill` : focus, sélection du champ vide, puis la réponse arrive avant l'insertion
+  await userEvent.click(champ);
+  release();
+  await screen.findByText('mon-depot');
+  expect(champ.value).toBe('');
+  await userEvent.type(champ, '/srv/code');
+  expect(champ.value).toBe('/srv/code');
+});

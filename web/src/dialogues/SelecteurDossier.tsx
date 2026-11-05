@@ -76,6 +76,11 @@ export function SelecteurDossier({
             setGoto(e.target.value);
           }}
           onKeyDown={onGotoKey}
+          // le champ pris en main avant la réponse n'est plus écrasé : sans quoi la saisie s'ajoute derrière le chemin
+          // posé entre le focus et la frappe (un `fill` de Playwright, une frappe rapide)
+          onFocus={() => {
+            typed.current = true;
+          }}
           spellCheck={false}
         />
         <button className="bouton" type="button" onClick={submitGoto}>
