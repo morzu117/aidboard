@@ -1,5 +1,5 @@
-import { existsSync, readFileSync, realpathSync } from 'node:fs';
-import { join } from 'node:path';
+import { existsSync, readFileSync, realpathSync, statSync } from 'node:fs';
+import { join, resolve } from 'node:path';
 import { parse } from 'yaml';
 import type {
   GitBranch,
@@ -77,6 +77,31 @@ export async function remoteBranchExists(root: string, branch: string): Promise<
 export async function currentBranch(root: string): Promise<string | null> {
   const r = await git(root, ['symbolic-ref', '--quiet', '--short', 'HEAD']);
   return r.ok ? r.stdout : null;
+}
+
+// HEAD lu sur le disque, sans lancer git : GET /api/state relit la branche de chaque sujet à chaque appel, et chaque
+// page ouverte relit l'état à chaque événement. `null` = HEAD détachée ; `undefined` = forme inhabituelle (reftable,
+// ref hors refs/heads, .git illisible) : l'appelant repasse par git.
+export function headBranchOnDisk(worktree: string): string | null | undefined {
+  try {
+    let gitDir = join(worktree, '.git');
+    if (statSync(gitDir).isFile()) {
+      const m = /^gitdir: (.+)$/m.exec(readFileSync(gitDir, 'utf8'));
+      if (!m) return undefined;
+      gitDir = resolve(worktree, m[1]!.trim());
+    }
+    const head = readFileSync(join(gitDir, 'HEAD'), 'utf8').trim();
+    if (/^[0-9a-f]{40}([0-9a-f]{24})?$/.test(head)) return null;
+    const ref = /^ref: refs\/heads\/(.+)$/.exec(head)?.[1];
+    return ref && ref !== '.invalid' ? ref : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+export async function currentBranchFast(root: string): Promise<string | null> {
+  const disk = headBranchOnDisk(root);
+  return disk === undefined ? currentBranch(root) : disk;
 }
 
 // D16 : avance/retard et rebase en cours ne sont jamais stockés — relus en direct à chaque

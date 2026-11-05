@@ -1,5 +1,5 @@
 import { existsSync } from 'node:fs';
-import { currentBranch } from '../git/inspect.js';
+import { currentBranchFast } from '../git/inspect.js';
 import type { Db } from '../db.js';
 import type { EventStore } from '../events/store.js';
 
@@ -19,7 +19,7 @@ export async function syncTopicBranches(db: Db, store: EventStore): Promise<void
   await Promise.all(
     topics.map(async (t) => {
       if (!existsSync(t.worktree)) return;
-      const head = await currentBranch(t.worktree);
+      const head = await currentBranchFast(t.worktree);
       if (head && head !== t.branch) {
         store.append({
           source: 'daemon',
@@ -31,4 +31,16 @@ export async function syncTopicBranches(db: Db, store: EventStore): Promise<void
       }
     }),
   );
+}
+
+// Les GET /api/state simultanés (plusieurs onglets ; chaque page relit l'état à chaque événement) partagent la
+// relecture en cours au lieu d'en lancer une chacun.
+const enCours = new WeakMap<Db, Promise<void>>();
+export function syncTopicBranchesShared(db: Db, store: EventStore): Promise<void> {
+  let p = enCours.get(db);
+  if (!p) {
+    p = syncTopicBranches(db, store).finally(() => enCours.delete(db));
+    enCours.set(db, p);
+  }
+  return p;
 }
