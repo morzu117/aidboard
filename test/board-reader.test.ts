@@ -109,6 +109,13 @@ test('classification : chaque erreur connue, et unknown jamais confondu avec unr
     classify(fail({ stderr: "cannot resolve a mesh credential for 'morzu-mac'", exitCode: 1 })),
   ).toBe('credential');
   expect(classify(fail({ stderr: 'gateway 500: internal error', exitCode: 1 }))).toBe('unknown');
+  // D95 bis : texte réel du gateway pour une carte absente ; un jeton révoqué est un problème d'identifiant
+  expect(
+    classify(fail({ stderr: 'swarph board: gateway 404: card 99999999 not found', exitCode: 1 })),
+  ).toBe('not-found');
+  expect(classify(fail({ stderr: 'swarph board: gateway 401: invalid token', exitCode: 1 }))).toBe(
+    'credential',
+  );
   expect(classify(fail({ stderr: 'error: argument: invalid choice', exitCode: 2 }))).toBe(
     'too-old',
   );
@@ -116,7 +123,7 @@ test('classification : chaque erreur connue, et unknown jamais confondu avec unr
     'absent',
   );
   expect(classify(fail({ timedOut: true }))).toBe('timeout');
-  expect(classify(fail({ spawnErrorCode: 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER' }))).toBe('format');
+  expect(classify(fail({ spawnErrorCode: 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER' }))).toBe('too-large');
 });
 
 test('JSON illisible ou de forme inattendue : format, et le stderr va au journal, jamais au résultat', async () => {
@@ -147,7 +154,7 @@ test('une sortie au-delà de 4 Mo est refusée et signalée, le tampon n’est p
     cell: 'morzu-mac',
     log: (l) => log.push(l),
   });
-  expect(await reader.projects()).toMatchObject({ ok: false, kind: 'format' });
+  expect(await reader.projects()).toMatchObject({ ok: false, kind: 'too-large' });
   expect(log.join('\n')).toContain('ERR_CHILD_PROCESS_STDIO_MAXBUFFER');
 });
 

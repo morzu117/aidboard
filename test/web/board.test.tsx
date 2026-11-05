@@ -137,7 +137,6 @@ test('Relire relit projets et cartes avec ?fresh=1', async () => {
 });
 
 test.each([
-  ['forbidden', 'Tu ne peux pas lire cette carte', 'retour'],
   ['unreachable', 'Le gateway ne répond pas', 'relire'],
   ['too-old', 'Mets à jour swarph', 'doctor'],
   ['absent', 'Swarph est introuvable', 'doctor'],
@@ -151,6 +150,36 @@ test.each([
   expect(m.textContent).toContain(texte);
   expect(node(`board.message.${action}`)).not.toBeNull();
   if (action === 'doctor') expect(m.textContent).toContain('aid doctor');
+});
+
+test('refus sur la liste des projets : le texte dit ce qui est refusé, sans lien vers la page où l’on est (D95 bis)', async () => {
+  await ouvrir({ ok: false, kind: 'forbidden', readAt: READ_AT });
+  const m = await waitFor(() => {
+    const e = node('board.message');
+    expect(e).not.toBeNull();
+    return e!;
+  });
+  expect(m.textContent).toBe('Tu ne peux pas lire les projets du board');
+  expect(node('board.message.retour')).toBeNull();
+});
+
+test('refus sur les cartes d’un projet : « Tu ne peux pas lire ce projet », sans lien de retour', async () => {
+  await ouvrir(ok([projet]), { ok: false, kind: 'forbidden', readAt: READ_AT });
+  await waitFor(() => expect(node('board.cartes.message')).not.toBeNull());
+  expect(node('board.cartes.message')!.textContent).toBe('Tu ne peux pas lire ce projet');
+  expect(node('board.cartes.message.retour')).toBeNull();
+});
+
+test('trop volumineux : message dédié, sans action (D95 bis)', async () => {
+  await ouvrir({ ok: false, kind: 'too-large', readAt: READ_AT });
+  const m = await waitFor(() => {
+    const e = node('board.message');
+    expect(e).not.toBeNull();
+    return e!;
+  });
+  expect(m.textContent).toContain('Trop volumineux pour être affiché (plus de 4 Mo)');
+  for (const action of ['retour', 'relire', 'doctor'])
+    expect(node(`board.message.${action}`)).toBeNull();
 });
 
 test('erreur sur les cartes : les projets restent, le message prend la place des colonnes', async () => {

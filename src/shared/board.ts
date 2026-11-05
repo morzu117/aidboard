@@ -11,6 +11,10 @@ export type BoardErrorKind =
   | 'too-old'
   | 'absent'
   | 'format'
+  // sortie de swarph au-delà du tampon de 4 Mo : refusée, mais nommée (D95 bis)
+  | 'too-large'
+  // `gateway 404` : la carte n'existe pas (D95 bis)
+  | 'not-found'
   | 'unknown';
 
 /** Réponse de chaque route `/api/board/…` (D95) : toujours 200, un résultat discriminé. */
