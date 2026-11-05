@@ -1,0 +1,36 @@
+/* Chantier 25 : styles de la coque V4. Jamais dans maquette.css, dont l'empreinte est comparée aux maquettes
+   design/maquettes/aid-1-*.html (test/web/maquette-css.test.ts). */
+
+/* D110 : bandeau d'état commun */
+.bandeau {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--sp-3) var(--sp-4);
+  padding: var(--sp-3) var(--sp-4);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-xl);
+  background: var(--surface-2);
+}
+.bandeau--ambre {
+  border-color: var(--s-attente-line);
+  background: var(--surface-alerte);
+}
+.bandeau--rouge {
+  border-color: var(--s-erreur-line);
+  background: var(--surface-erreur);
+}
+.bandeau-constat {
+  font-weight: var(--fw-sb);
+}
+.bandeau-ton {
+  font-size: var(--fs-s);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.bandeau--ambre .bandeau-ton {
+  color: var(--s-attente);
+}
+.bandeau--rouge .bandeau-ton {
+  color: var(--s-erreur);
+}
