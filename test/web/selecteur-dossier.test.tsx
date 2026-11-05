@@ -175,3 +175,21 @@ test('un champ sans le focus à la réponse reçoit le chemin, sans sélection',
   await waitFor(() => expect(champ.value).toBe(listing().path));
   expect(document.activeElement).not.toBe(champ);
 });
+
+test.each([
+  ['le même chemin', '/srv/code'],
+  ['un chemin normalisé', '/srv/code/'],
+])(
+  'après « Entrée », réponse avec %s : la saisie continue en fin de chemin',
+  async (_cas, tape) => {
+    const h = await ouvrir(setup(<Accueil />, snapshot()));
+    h.respond.set('GET /api/fs/dirs', reponse(listing({ path: '/srv/code', entries: [] })));
+    const champ = (await screen.findByLabelText('Aller au dossier')) as HTMLInputElement;
+    await userEvent.clear(champ);
+    await userEvent.type(champ, `${tape}{Enter}`);
+    await waitFor(() => expect(champ.value).toBe('/srv/code'));
+    await new Promise((r) => setTimeout(r, 30));
+    await userEvent.keyboard('/sub');
+    expect(champ.value).toBe('/srv/code/sub');
+  },
+);

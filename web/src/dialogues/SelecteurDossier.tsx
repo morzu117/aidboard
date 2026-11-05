@@ -25,10 +25,12 @@ export function SelecteurDossier({
   const latest = useRef(0);
   // un chemin tapé depuis la demande : la liste s'affiche, le champ garde la saisie
   const typed = useRef(false);
-  // le champ qui a le focus à la réponse : le chemin y est posé sélectionné, la frappe qui suit le remplace au lieu
-  // de s'ajouter derrière (un `fill` de Playwright, une frappe rapide entre le focus et la réponse)
+  // le champ qui a le focus au premier chargement : le chemin y est posé sélectionné, la frappe qui suit le remplace
+  // au lieu de s'ajouter derrière (un `fill` de Playwright, une frappe rapide entre le focus et la réponse). Ensuite,
+  // après « Entrée » ou un dossier ouvert, le curseur reste en fin de chemin pour continuer la saisie.
   const gotoRef = useRef<HTMLInputElement>(null);
-  const selectGoto = useRef(false);
+  const premier = useRef(true);
+  const [aSelectionner, setASelectionner] = useState(0);
   const open = useCallback(
     (path: string | undefined, showHidden: boolean) => {
       const mine = ++latest.current;
@@ -41,8 +43,9 @@ export function SelecteurDossier({
           if (mine !== latest.current) return;
           setListing(l);
           if (!typed.current) setGoto(l.path);
-          if (!typed.current && document.activeElement === gotoRef.current)
-            selectGoto.current = true;
+          if (premier.current && !typed.current && document.activeElement === gotoRef.current)
+            setASelectionner((n) => n + 1);
+          premier.current = false;
           setError(null);
         },
         (err: unknown) => {
@@ -71,11 +74,10 @@ export function SelecteurDossier({
     submitGoto();
   }
 
+  // un compteur et non la valeur : la sélection se fait même quand le chemin posé est déjà celui du champ
   useLayoutEffect(() => {
-    if (!selectGoto.current) return;
-    selectGoto.current = false;
-    gotoRef.current?.select();
-  }, [goto]);
+    if (aSelectionner) gotoRef.current?.select();
+  }, [aSelectionner]);
 
   return (
     <div className="selecteur-dossier" role="group" aria-label="Choisir le dossier du dépôt">
