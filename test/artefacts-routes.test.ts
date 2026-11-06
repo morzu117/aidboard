@@ -1,7 +1,8 @@
-import { writeFileSync } from 'node:fs';
+import { mkdirSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterEach, expect, test } from 'vitest';
-import type { EtatArtefacts, LienArtefact } from '../src/shared/artefacts.js';
+import type { ArtefactsResponse, EtatArtefacts, LienArtefact } from '../src/shared/artefacts.js';
+import { commitFile, sh } from './helpers/git.js';
 import { type Ctx, makeTopic, setupWorkspace } from './helpers/topics.js';
 
 // Chantier 30 (D162, D163, D166) : le lien est émis par le port principal, authentifié ;
@@ -99,4 +100,53 @@ test('D166 : la page du cockpit n’encadre que le port des artefacts', async ()
   const csp = String(r.headers['content-security-policy']);
   expect(csp).toContain(`frame-src http://127.0.0.1:${port} http://localhost:${port};`);
   expect(csp).toContain("frame-ancestors 'none'");
+});
+
+const liste = async (topicId: string) =>
+  c.t.d.app.inject({ url: `/api/topics/${topicId}/artefacts`, headers: c.t.headers });
+
+test('D161 : HTML, Markdown et SVG changés par le sujet, commités ou non, du plus récent au plus ancien', async () => {
+  c = await setupWorkspace();
+  const t = await makeTopic(c);
+  // commité par l'agent : il reste un artefact (diff depuis la base, comme la Livraison)
+  commitFile(t.wt, 'rapport.html', '<h1>r</h1>');
+  mkdirSync(join(t.wt, 'notes'));
+  writeFileSync(join(t.wt, 'notes', 'synthese.md'), '# s');
+  writeFileSync(join(t.wt, 'schema.SVG'), '<svg xmlns="http://www.w3.org/2000/svg"/>');
+  writeFileSync(join(t.wt, 'donnees.json'), '{}');
+  const heure = (f: string, s: number) => utimesSync(join(t.wt, f), s, s);
+  heure('rapport.html', 1_800_000_000);
+  heure('notes/synthese.md', 1_800_000_100);
+  heure('schema.SVG', 1_799_000_000);
+
+  const r = await liste(t.topicId);
+  expect(r.statusCode).toBe(200);
+  const body = r.json<ArtefactsResponse>();
+  expect(body.artefacts.map((a) => [a.path, a.type, a.status])).toEqual([
+    ['notes/synthese.md', 'md', 'U'],
+    ['rapport.html', 'html', 'A'],
+    ['schema.SVG', 'svg', 'U'],
+  ]);
+  expect(body.artefacts[0]!.name).toBe('synthese.md');
+  expect(body.artefacts[1]!.modifieA).toBe(new Date(1_800_000_000_000).toISOString());
+  expect(body.etat.disponible).toBe(true);
+});
+
+test('D161 : un fichier inchangé ou supprimé n’est pas un artefact', async () => {
+  c = await setupWorkspace();
+  const t = await makeTopic(c);
+  commitFile(t.wt, 'vieux.html', '<p>v</p>');
+  sh(t.wt, 'push', '-q', 'origin', 'HEAD:main');
+  sh(t.wt, 'fetch', '-q', 'origin');
+  rmSync(join(t.wt, 'vieux.html'));
+  const body = (await liste(t.topicId)).json<ArtefactsResponse>();
+  expect(body.artefacts).toEqual([]);
+});
+
+test('D161 : sujet inconnu 404, worktree absent 409', async () => {
+  c = await setupWorkspace();
+  const t = await makeTopic(c);
+  expect((await liste('tp_inconnu')).statusCode).toBe(404);
+  rmSync(t.wt, { recursive: true, force: true });
+  expect((await liste(t.topicId)).statusCode).toBe(409);
 });

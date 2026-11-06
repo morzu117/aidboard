@@ -14,3 +14,19 @@ export interface LienArtefact {
   /** ISO 8601 */
   expireA: string;
 }
+
+/** Un artefact de la liste (D161) : un fichier du worktree, modifié ou ajouté par le sujet. */
+export interface Artefact {
+  path: string;
+  name: string;
+  type: 'html' | 'md' | 'svg';
+  /** A ajouté, M modifié, U non suivi (lettres de l'onglet Fichiers) */
+  status: 'A' | 'M' | 'U' | 'R';
+  /** ISO 8601, heure de modification du fichier */
+  modifieA: string;
+}
+
+export interface ArtefactsResponse {
+  artefacts: Artefact[];
+  etat: EtatArtefacts;
+}
