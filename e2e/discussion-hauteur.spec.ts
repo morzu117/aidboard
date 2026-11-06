@@ -50,6 +50,10 @@ test('écran Discussion : la page ne défile pas, le champ de saisie est dans la
   const champ = page.locator('.discussion .composer-champ');
   await expect(champ).toBeVisible();
   await expect(node(page, 'discussion.agent.nom')).toHaveText('claude');
+  // chantier 30 : les vingt serveurs arrivent dans la barre après la discussion ; mesurer avant, c'était une course
+  await expect(
+    page.locator('.barre-gauche').getByText('e2e-hauteur-19', { exact: true }),
+  ).toBeVisible();
 
   const mesures = await page.evaluate(() => {
     const composer = document.querySelector('.discussion .composer')!.getBoundingClientRect();

@@ -5,6 +5,7 @@ import { AidApiError } from '../data/api.js';
 import { fetchFileContent, fetchFileTree } from '../data/files.js';
 import { useAid } from '../data/useAidState.js';
 import { renderMarkdown } from '../ui/markdown.js';
+import { typeArtefact } from './OngletArtefacts.js';
 
 const fold = (s: string) => s.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
 
@@ -119,9 +120,12 @@ const INDEX_LABEL: Record<IndexState, string> = {
 export function OngletFichiers({
   topicId,
   activeAgentId,
+  onOuvrirArtefact,
 }: {
   topicId: string;
   activeAgentId: string | null;
+  /** chantier 30 (D168) : sélectionne l'onglet Artefacts et ce fichier */
+  onOuvrirArtefact?: (path: string) => void;
 }) {
   const { call, state } = useAid();
   const indexState = state?.topics.find((t) => t.id === topicId)?.indexState;
@@ -392,6 +396,16 @@ export function OngletFichiers({
                   >
                     Ouvrir dans l’éditeur
                   </button>
+                  {onOuvrirArtefact && typeArtefact(selected) && (
+                    <button
+                      className="bouton"
+                      type="button"
+                      data-action="fichiers.ouvrir-artefact"
+                      onClick={() => onOuvrirArtefact(selected)}
+                    >
+                      Ouvrir dans Artefacts
+                    </button>
+                  )}
                 </div>
               </div>
               {mentionErreur && (

@@ -327,7 +327,13 @@ test('chantier 27 (D133) : onglet Livraison aprÃ¨s Fichiers ; il relit la PR, rÃ
     },
   );
   const onglets = await screen.findAllByRole('tab');
-  expect(onglets.map((o) => o.textContent)).toEqual(['Sujet', 'Git', 'Fichiers', 'Livraison']);
+  expect(onglets.map((o) => o.textContent)).toEqual([
+    'Sujet',
+    'Git',
+    'Fichiers',
+    'Artefacts',
+    'Livraison',
+  ]);
   expect(h.calls.some((c) => c.url.includes('pr.rafraichir'))).toBe(false);
   await userEvent.click(screen.getByRole('tab', { name: 'Livraison' }));
   await waitFor(() => expect(h.calls.some((c) => c.url.includes('pr.rafraichir'))).toBe(true));

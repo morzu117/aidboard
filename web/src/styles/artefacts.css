@@ -1,0 +1,79 @@
+/* Chantier 30 (D167) : l'onglet Artefacts du panneau du sujet. */
+.artefacts {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+}
+
+.artefacts-liste {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+}
+
+.artefact {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  width: 100%;
+  padding: var(--sp-2);
+  border: 0;
+  border-radius: var(--r-s);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.artefact:hover,
+.artefact.est-actif {
+  background: var(--surface-3);
+}
+
+.artefact-nom {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.artefact-type {
+  font-size: 0.85em;
+  opacity: 0.75;
+}
+
+.artefact-entete {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2);
+}
+
+.artefact-entete .fil-ariane {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* hauteur réglable : le cadre suit la poignée de redimensionnement de son conteneur */
+.artefact-cadre {
+  resize: vertical;
+  overflow: hidden;
+  height: 60vh;
+  min-height: 160px;
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-s);
+  background: #fff;
+}
+
+.artefact-cadre iframe {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
