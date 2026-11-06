@@ -311,3 +311,25 @@
   color: var(--text);
   font: inherit;
 }
+
+/* D133 : l'onglet Livraison du panneau */
+.onglet-livraison {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--sp-3);
+}
+.onglet-livraison-liste {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--sp-1) var(--sp-3);
+  margin: 0;
+  font-size: var(--fs-s);
+}
+.onglet-livraison-liste dt {
+  color: var(--muted);
+}
+.onglet-livraison-liste dd {
+  margin: 0;
+  font-family: ui-monospace, monospace;
+}
