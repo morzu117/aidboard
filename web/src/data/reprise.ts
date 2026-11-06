@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import type { GitTransfert } from '../../../src/shared/git.js';
 import type { Processus } from '../ui/repriseVue.js';
 import { useAidClient } from './useAidState.js';
 
@@ -35,5 +36,37 @@ export function useSonde(serverAgentId: string | null): {
   return {
     sonde: lu?.tour === tour ? lu.sonde : null,
     verifier: () => setTour((t) => t + 1),
+  };
+}
+
+/** D149 : la branche que Transférer confie, lue à l'ouverture et relue après « Pousser d'abord ». */
+export function useTransfert(topicId: string | null): {
+  git: GitTransfert | null;
+  erreur: string | null;
+  relire: () => void;
+} {
+  const client = useAidClient();
+  const [tour, setTour] = useState(0);
+  const [lu, setLu] = useState<{
+    tour: number;
+    git: GitTransfert | null;
+    erreur: string | null;
+  } | null>(null);
+  useEffect(() => {
+    if (!topicId) return;
+    let actif = true;
+    client
+      .request<GitTransfert>('GET', `/api/topics/${topicId}/git/transfert`)
+      .then((git) => actif && setLu({ tour, git, erreur: null }))
+      .catch((err: unknown) => actif && setLu({ tour, git: null, erreur: String(err) }));
+    return () => {
+      actif = false;
+    };
+  }, [client, topicId, tour]);
+  const courant = lu?.tour === tour ? lu : null;
+  return {
+    git: courant?.git ?? null,
+    erreur: courant?.erreur ?? null,
+    relire: () => setTour((t) => t + 1),
   };
 }

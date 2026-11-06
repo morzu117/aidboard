@@ -1,11 +1,11 @@
 // @vitest-environment jsdom
-import { cleanup, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Route, Routes, useLocation } from 'react-router';
 import { afterEach, expect, test, vi } from 'vitest';
 import type { ServerAgent } from '../../src/shared/model.js';
 import { type AReprendre, Reprendre } from '../../web/src/dialogues/Reprendre.js';
-import { agent, json, setup, snapshot, topic } from './helpers.js';
+import { agent, FakeSocket, json, setup, snapshot, topic, ws } from './helpers.js';
 
 // Chantier 28 (D146, D147, D148) : le dialogue Reprendre.
 
@@ -50,7 +50,7 @@ function ouvrir(
       </Routes>
       <Lieu />
     </>,
-    snapshot(),
+    snapshot({ workspaces: [ws()], topics: [topic()] }),
     '/boite',
     routes,
   );
@@ -109,7 +109,7 @@ test('local : un agent du terminal ne se reprend pas, Transférer reste possible
     'Cet agent ne se reprend pas : il est mort avec son terminal.',
   );
   expect(radio('transferer').checked).toBe(true);
-  expect(valider().textContent).toBe('Transférer');
+  expect(valider().textContent).toBe('Transférer à codex');
 });
 
 test('local : une reprise refusée s’affiche, le dialogue reste', async () => {
@@ -187,4 +187,134 @@ test('serveur injoignable : rien n’est possible ; « Vérifier à nouveau » r
   await userEvent.click(node('reprendre.verifier')!);
   await waitFor(() => expect(radio('reconnecter').checked).toBe(true));
   expect(h.calls.filter((c) => c.url === '/api/server-agents/sa_1/processus')).toHaveLength(2);
+});
+
+// --- 28.9 : Transférer à un autre agent (D149)
+
+const TRANSFERT = 'GET /api/topics/tp_1/git/transfert';
+const git = (over = {}) => ({
+  branche: 'feat/s',
+  base: 'main',
+  commits: ['second', 'premier'],
+  nonPousses: 2,
+  dirty: true,
+  ...over,
+});
+const routesTransfert = {
+  [TRANSFERT]: json(200, git()),
+  'POST /api/agents': json(201, { id: 'ag_9' }),
+  'GET /api/memory/pages?prefix=aid%2F': json(200, { slugs: ['aid/plan/s', 'aid/review/s'] }),
+};
+const pty = () => agent({ kind: 'claude', transport: 'pty', status: 'stopped' });
+
+test('D149 : alerte, choix de l’agent, puis le nouvel agent reçoit la branche et les pages', async () => {
+  const { h, onClose } = ouvrir({ lieu: 'local', agent: pty(), topic: topic() }, routesTransfert);
+  expect(radio('transferer').checked).toBe(true);
+  expect((node('reprendre.transfert.agent') as HTMLSelectElement).value).toBe('codex');
+  await waitFor(() =>
+    expect(text('reprendre.transfert.non-pousses')).toBe('2 commits non poussés. Pousser d’abord'),
+  );
+  expect(text('reprendre.transfert.non-commites')).toBe(
+    'Des fichiers ne sont pas commités : le nouvel agent les verra, sans leur raison.',
+  );
+  // rien ne bloque
+  expect(valider().disabled).toBe(false);
+  await userEvent.selectOptions(node('reprendre.transfert.agent')!, 'claude');
+  expect(valider().textContent).toBe('Transférer à claude');
+  await userEvent.click(valider());
+  await waitFor(() => expect(lieu()).toBe('/sujets/tp_1?agent=ag_9'));
+  expect(onClose).toHaveBeenCalled();
+  // un agent qui ne vit plus n'est pas arrêté
+  expect(h.calls.some((c) => c.method === 'DELETE')).toBe(false);
+  expect(h.calls.find((c) => c.url === '/api/agents')?.body).toEqual({
+    topicId: 'tp_1',
+    kind: 'claude',
+  });
+  const texte = (h.calls.find((c) => c.url === '/api/agents/ag_9/input')?.body as { text: string })
+    .text;
+  expect(texte).toContain('La conversation de l’agent précédent ne te suit pas.');
+  expect(texte).toContain('Branche feat/s, base main.');
+  expect(texte).toContain('- second');
+  expect(texte).toContain('regarde git status');
+  expect(texte).toContain('Lis d’abord les pages mémoire : aid/plan/s.');
+});
+
+test('D149 : un agent qui vit encore est arrêté avant que le nouveau parte', async () => {
+  const vif = agent({ kind: 'codex', transport: 'stream', status: 'idle', sessionId: null });
+  const { h } = ouvrir(
+    { lieu: 'local', agent: vif, topic: topic() },
+    {
+      ...routesTransfert,
+      [TRANSFERT]: json(200, git({ nonPousses: 0, dirty: false, commits: [] })),
+    },
+  );
+  // sans session, la reprise est grisée : Transférer par défaut, vers claude
+  expect(radio('transferer').checked).toBe(true);
+  expect(valider().textContent).toBe('Transférer à claude');
+  await waitFor(() =>
+    expect(h.calls.some((c) => c.url === '/api/topics/tp_1/git/transfert')).toBe(true),
+  );
+  expect(node('reprendre.transfert.non-pousses')).toBeNull();
+  expect(node('reprendre.transfert.non-commites')).toBeNull();
+  await userEvent.click(valider());
+  await waitFor(() => expect(lieu()).toBe('/sujets/tp_1?agent=ag_9'));
+  const ordre = h.calls.filter((c) => c.method !== 'GET').map((c) => `${c.method} ${c.url}`);
+  expect(ordre).toEqual([
+    'DELETE /api/agents/ag_1',
+    'POST /api/agents',
+    'POST /api/agents/ag_9/input',
+  ]);
+  expect(
+    (h.calls.find((c) => c.url === '/api/agents/ag_9/input')?.body as { text: string }).text,
+  ).toContain('Aucun commit depuis main.');
+});
+
+test('D149 : « Pousser d’abord » lance git.pousser, puis la branche est relue', async () => {
+  const { h } = ouvrir(
+    { lieu: 'local', agent: pty(), topic: topic() },
+    {
+      ...routesTransfert,
+      'POST /api/topics/tp_1/actions/git.pousser': json(202, { actionId: 'ac_p' }),
+    },
+  );
+  await waitFor(() => expect(node('reprendre.transfert.pousser')).not.toBeNull());
+  h.respond.set(TRANSFERT, json(200, git({ nonPousses: 0 })));
+  await userEvent.click(node('reprendre.transfert.pousser')!);
+  expect(h.calls.some((c) => c.url === '/api/topics/tp_1/actions/git.pousser')).toBe(true);
+  h.state = snapshot({
+    workspaces: [ws()],
+    topics: [topic()],
+    actions: [
+      {
+        id: 'ac_p',
+        topicId: 'tp_1',
+        workspaceId: 'ws_1',
+        action: 'git.pousser',
+        state: 'succeeded',
+        exitCode: 0,
+        result: null,
+        startedAt: 't',
+        finishedAt: 't',
+      },
+    ],
+  });
+  await act(async () => {
+    FakeSocket.all[0]!.open();
+    FakeSocket.all[0]!.push({ kind: 'event', event: { id: 'E1', type: 'cost', data: {} } });
+    await new Promise((r) => setTimeout(r, 40));
+  });
+  await waitFor(() => expect(node('reprendre.transfert.non-pousses')).toBeNull());
+  expect(h.calls.filter((c) => c.url === '/api/topics/tp_1/git/transfert')).toHaveLength(2);
+  // les fichiers non commités restent signalés
+  expect(node('reprendre.transfert.non-commites')).not.toBeNull();
+});
+
+test('D149 : le message refusé, le sujet s’ouvre sur le nouvel agent avec l’erreur', async () => {
+  ouvrir(
+    { lieu: 'local', agent: pty(), topic: topic() },
+    { ...routesTransfert, 'POST /api/agents/ag_9/input': json(409, { error: 'agent arrêté' }) },
+  );
+  await waitFor(() => expect(node('reprendre.transfert.non-pousses')).not.toBeNull());
+  await userEvent.click(valider());
+  await waitFor(() => expect(lieu()).toBe('/sujets/tp_1?agent=ag_9'));
 });
