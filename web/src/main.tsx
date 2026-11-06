@@ -11,6 +11,7 @@ import './styles/sujet.css';
 import './styles/livraison.css';
 import './styles/boite.css';
 import './styles/nouveau-sujet.css';
+import './styles/reprendre.css';
 
 // Coquille hors-ligne : permet à l'app de s'afficher (bandeau + CTA « Démarrer le daemon »)
 // même quand le daemon est totalement injoignable — sinon c'est lui qui sert ce fichier.

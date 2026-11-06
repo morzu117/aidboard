@@ -1,0 +1,67 @@
+/* Chantier 28 (D146, D147) : le dialogue Reprendre. Jamais dans maquette.css, dont l'empreinte est comparée aux
+   maquettes design/maquettes/aid-1-*.html (test/web/maquette-css.test.ts). */
+
+.reprendre {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+}
+
+.reprendre-situation {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  margin: 0;
+  padding: var(--sp-3) var(--sp-4);
+  border: 1px solid var(--line);
+  border-radius: var(--r-m);
+  list-style: none;
+  color: var(--text-2);
+  font-size: var(--fs-m);
+}
+
+.reprendre-verifier {
+  align-self: flex-start;
+}
+
+.reprendre-options {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.reprendre-options > legend {
+  margin-bottom: var(--sp-2);
+  color: var(--text);
+  font-weight: 500;
+}
+
+.reprendre-option {
+  display: flex;
+  gap: var(--sp-3);
+  padding: var(--sp-3) var(--sp-4);
+  border: 1px solid var(--line);
+  border-radius: var(--r-m);
+  cursor: pointer;
+}
+.reprendre-option:has(input:checked) {
+  border-color: var(--acc);
+  background: var(--acc-soft);
+}
+.reprendre-option--grisee {
+  cursor: default;
+  opacity: 0.6;
+}
+.reprendre-option-corps {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  color: var(--muted);
+  font-size: var(--fs-m);
+}
+.reprendre-option-titre {
+  color: var(--text);
+  font-weight: 500;
+}
