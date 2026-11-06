@@ -182,7 +182,12 @@ export async function buildServer(deps: ServerDeps): Promise<FastifyInstance> {
   // chantier 25 (D106) : l'état de connexion de chaque serveur porte l'agrégat de ses agents
   connections.suivreAgents((id) => serverAgents.resumeServeur(id));
   serverAgents.onSuivi = (id) => connections.annoncer(id);
-  registerMachineRoutes(app, { config: deps.config, agents: deps.agents });
+  registerMachineRoutes(app, {
+    config: deps.config,
+    agents: deps.agents,
+    db: deps.db,
+    connections,
+  });
   registerFsRoutes(app);
   registerFileRoutes(app, { db: deps.db });
   registerHookRoutes(app, () => process.env);
