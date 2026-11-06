@@ -21,6 +21,7 @@ import {
   gitLiveInfo,
   gitLivraison,
   gitLog,
+  gitTransfert,
   hasUncommittedChanges,
   hasUncommittedOrOperationInProgress,
   liberationTarget,
@@ -350,6 +351,17 @@ export function registerTopicRoutes(app: FastifyInstance, deps: TopicRouteDeps):
     if (!row) throw new AidHttpError(404, 'sujet inconnu');
     if (!existsSync(row.worktree)) throw new AidHttpError(409, 'worktree introuvable');
     return gitLivraison(row.worktree, row.base, revue);
+  });
+
+  // Chantier 28 (D148) : la branche que Transférer confie à un autre agent. Lecture seule.
+  app.get('/api/topics/:id/git/transfert', async (req) => {
+    const { id } = req.params as { id: string };
+    const row = deps.db
+      .prepare('SELECT worktree, branch, base FROM topics WHERE id = ?')
+      .get(id) as { worktree: string; branch: string; base: string } | undefined;
+    if (!row) throw new AidHttpError(404, 'sujet inconnu');
+    if (!existsSync(row.worktree)) throw new AidHttpError(409, 'worktree introuvable');
+    return gitTransfert(row.worktree, row.branch, row.base);
   });
 
   app.post('/api/topics/:id/actions/:actionId', async (req, reply) => {

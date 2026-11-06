@@ -1680,3 +1680,86 @@ test('remote-control (23 A.1) : codex unsupported et 409, corps invalide 400, in
     ).toBe(403);
   expect(await etatRc(m, claude.id)).toEqual({ status: 'off' });
 });
+
+// --- chantier 28 (D148) : la sonde du dialogue Reprendre, puis rattacher ou relancer, l'un sans l'autre
+
+test('D148 : la sonde dit vivant, puis arrêté, puis injoignable ; relancer un vivant est refusé', async () => {
+  const remote = serveur();
+  const m = await daemon(remote);
+  const s = await creerServeur(m);
+  const a = (await creerDiscussion(m, s.id)).agents[0]!;
+  await envoyer(m, a.id, 'bonjour');
+  await waitFor(() => ligne(m, a.id)?.status === 'idle', 15_000, 'idle');
+
+  const sonde = async () =>
+    (await m.req('GET', `/api/server-agents/${a.id}/processus`)).json() as {
+      etat: string;
+      dernierEvenement: string | null;
+    };
+  const vif = await sonde();
+  expect(vif.etat).toBe('vivant');
+  expect(vif.dernierEvenement).not.toBeNull();
+  const relance = await m.req('POST', `/api/server-agents/${a.id}/relancer`);
+  expect(relance.statusCode).toBe(409);
+  expect(relance.json<{ error: string }>().error).toBe(
+    'le processus répond : le relancer couperait son tour',
+  );
+  // rien n'a bougé : même relais
+  expect(ligne(m, a.id)!.tmux_session).toBe(`aid-${a.id}`);
+
+  tuer(apid(m, a.id));
+  await waitFor(() => !vivant(apid(m, a.id)), 5_000, 'agent arrêté');
+  // le relais voit la fin de l'agent : quelques sondes au plus
+  let etat = (await sonde()).etat;
+  for (let i = 0; etat !== 'arrete' && i < 20; i++) {
+    await new Promise((r) => setTimeout(r, 250));
+    etat = (await sonde()).etat;
+  }
+  expect(etat).toBe('arrete');
+  const rattache = await m.req('POST', `/api/server-agents/${a.id}/rattacher`);
+  expect(rattache.statusCode).toBe(409);
+  expect(rattache.json<{ error: string }>().error).toBe(
+    'rien à rattacher : le processus ne répond pas sur le serveur',
+  );
+
+  remote.transport.env.FAKE_SSH_FAIL = '1';
+  expect((await sonde()).etat).toBe('injoignable');
+  delete remote.transport.env.FAKE_SSH_FAIL;
+  expect((await m.req('GET', '/api/server-agents/sa_inconnu/processus')).statusCode).toBe(404);
+}, 40_000);
+
+test('D148 : relancer un agent arrêté reprend sa session sous un relais neuf ; sans tour, refusé', async () => {
+  const remote = serveur();
+  const m = await daemon(remote);
+  const s = await creerServeur(m);
+  const neuf = (await creerDiscussion(m, s.id)).agents[0]!;
+  const sansTour = await m.req('POST', `/api/server-agents/${neuf.id}/relancer`);
+  expect(sansTour.statusCode).toBe(409);
+  expect(sansTour.json<{ error: string }>().error).toBe('aucune session à reprendre');
+
+  await envoyer(m, neuf.id, 'bonjour');
+  await waitFor(() => ligne(m, neuf.id)?.status === 'idle', 15_000, 'idle');
+  tuer(apid(m, neuf.id));
+  await waitFor(() => !vivant(apid(m, neuf.id)), 5_000, 'agent arrêté');
+  expect((await m.req('POST', `/api/server-agents/${neuf.id}/relancer`)).statusCode).toBe(202);
+  expect(ligne(m, neuf.id)!.tmux_session).not.toBe(`aid-${neuf.id}`);
+  await envoyer(m, neuf.id, 'deux');
+  await waitFor(() => assistant(m, neuf.id, 'echo: deux') === 1, 20_000, 'réponse après relance');
+}, 40_000);
+
+test('D148 : rattacher un claude fini faute de lien qui tourne encore, sans le relancer', async () => {
+  const remote = serveur();
+  const m1 = await daemon(remote);
+  const s = await creerServeur(m1);
+  const a = (await creerDiscussion(m1, s.id)).agents[0]!;
+  await envoyer(m1, a.id, 'bonjour');
+  await waitFor(() => ligne(m1, a.id)?.status === 'idle', 15_000, 'idle');
+  m1.t.db.prepare("UPDATE server_agents SET status = 'error' WHERE id = ?").run(a.id);
+  await m1.t.d.stop();
+
+  const m2 = await daemon(remote, m1.t.home);
+  const pid = readFileSync(apid(m2, a.id), 'utf8');
+  expect((await m2.req('POST', `/api/server-agents/${a.id}/rattacher`)).statusCode).toBe(202);
+  expect(ligne(m2, a.id)).toMatchObject({ status: 'idle', tmux_session: `aid-${a.id}` });
+  expect(readFileSync(apid(m2, a.id), 'utf8')).toBe(pid);
+}, 30_000);

@@ -1,3 +1,5 @@
+import type { GitTransfert } from '../../../src/shared/git.js';
+
 // Chantier 28 : les règles du dialogue Reprendre, sans rendu (D146, D147, D149).
 
 export type OptionReprise = 'reconnecter' | 'reprendre' | 'transferer';
@@ -122,13 +124,7 @@ export function boutonReprise(o: OptionReprise, versAgent?: string): string {
 }
 
 /** Ce que lit `GET /api/topics/:id/git/transfert` (D148). */
-export interface GitTransfert {
-  branche: string;
-  base: string;
-  commits: string[];
-  nonPousses: number;
-  dirty: boolean;
-}
+export type { GitTransfert };
 
 /** D149 : l'alerte, seulement avec Transférer. Rien n'y est bloquant. */
 export function alerteTransfert(g: Pick<GitTransfert, 'nonPousses' | 'dirty'>): {

@@ -97,6 +97,13 @@ export function registerAgentRoutes(
     },
   );
 
+  // Chantier 28 (D148) : reprendre la session d'un agent conversationnel arrêté, sans message
+  app.post('/api/agents/:id/reprendre', async (req, reply) => {
+    const { id } = req.params as { id: string };
+    deps.agents.reprendre(id);
+    return reply.code(202).send({ id });
+  });
+
   app.post('/api/agents/:id/answer', { schema: { body: AnswerBody } }, async (req, reply) => {
     const { id } = req.params as { id: string };
     const body = req.body as { pendingId: string; answer: string };

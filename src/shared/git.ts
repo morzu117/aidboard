@@ -142,3 +142,14 @@ export interface ServerGitLog extends GitLogResponse {
   truncated: boolean;
   readAt: string;
 }
+
+/** Chantier 28 (D148) : `GET /api/topics/:id/git/transfert`, ce que le dialogue Reprendre dit d'une branche. */
+export interface GitTransfert {
+  branche: string;
+  base: string;
+  /** les sujets des commits `origin/<base>..HEAD`, du plus récent, 20 au plus */
+  commits: string[];
+  /** `origin/<branche>..HEAD`, ou tous les commits depuis la base sans `origin/<branche>` */
+  nonPousses: number;
+  dirty: boolean;
+}

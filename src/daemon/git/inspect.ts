@@ -8,6 +8,7 @@ import type {
   GitFileChange,
   GitLiveInfo,
   GitLogCommit,
+  GitTransfert,
   LivraisonGit,
 } from '../../shared/git.js';
 import type { FileStatus } from '../../shared/files.js';
@@ -440,6 +441,30 @@ export async function gitLivraison(
     out.revue = { commit, connu: commit !== null, ancetre, retard };
   }
   return out;
+}
+
+// Chantier 28 (D148) : ce qu'un agent repreneur doit savoir de la branche. Lecture seule, sans fetch.
+export async function gitTransfert(
+  worktree: string,
+  branche: string,
+  base: string,
+): Promise<GitTransfert> {
+  const existe = async (ref: string) =>
+    (await git(worktree, ['rev-parse', '--verify', '--quiet', `${ref}^{commit}`])).ok;
+  const depuisBase = (await existe(`origin/${base}`)) ? `origin/${base}` : base;
+  const depuis = (await existe(`origin/${branche}`)) ? `origin/${branche}` : depuisBase;
+  const [log, n, dirty] = await Promise.all([
+    git(worktree, ['log', '--format=%s', '-n', '20', `${depuisBase}..HEAD`]),
+    git(worktree, ['rev-list', '--count', `${depuis}..HEAD`]),
+    hasUncommittedChanges(worktree),
+  ]);
+  return {
+    branche,
+    base,
+    commits: log.ok ? log.stdout.split('\n').filter(Boolean) : [],
+    nonPousses: n.ok ? Number(n.stdout) : 0,
+    dirty,
+  };
 }
 
 // 11.11 (D32) : contenu d'un fichier à une révision donnée, pour diff.ouvrir-fichier — null

@@ -611,6 +611,23 @@ export class AgentManager {
     return this.resumeStream(agentId, row);
   }
 
+  /**
+   * Chantier 28 (D148) : « Reprendre la session » d'un agent conversationnel qui ne vit plus, sans message. Le pilote
+   * repart sur sa session et attend, comme un agent neuf.
+   */
+  reprendre(agentId: string): void {
+    const row = this.deps.db
+      .prepare('SELECT transport, closed_at FROM agents WHERE id = ?')
+      .get(agentId) as { transport: string; closed_at: string | null } | undefined;
+    if (!row) throw new AidHttpError(404, 'agent inconnu');
+    if (row.transport !== 'stream')
+      throw new AidHttpError(409, 'reprise réservée aux agents conversationnels');
+    if (row.closed_at) throw new AidHttpError(409, 'cet agent est fermé');
+    const s = this.streams.get(agentId);
+    if (s && !s.exited) throw new AidHttpError(409, 'cet agent tourne encore');
+    this.streamOrResume(agentId);
+  }
+
   /** Nouveau `LiveStream` sous le même agentId (A.6) : même construction que `spawnStream`, `resume: true` si une session existe déjà. */
   private resumeStream(
     agentId: string,

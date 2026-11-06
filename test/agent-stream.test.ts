@@ -670,3 +670,42 @@ test('un tour qui finit sur une question : statut idle, raison question ; le mes
   await waitFor(() => row(agent.id).status === 'idle', 5000, 'fin du tour suivant');
   expect(reason()).toBeNull();
 });
+
+// --- chantier 28 (D148) : « Reprendre la session » sans message
+
+const reprendre = (agentId: string) =>
+  c!.t.d.app.inject({
+    method: 'POST',
+    url: `/api/agents/${agentId}/reprendre`,
+    headers: c!.t.headers,
+  });
+
+test('D148 : reprendre un claude sorti relance sa session sans rien lui envoyer ; vivant, refusé', async () => {
+  const { agent } = await spawnStream('claude');
+  await waitFor(() => row(agent.id).session_id === agent.sessionId, 5000, 'session claude');
+  const vif = await reprendre(agent.id);
+  expect(vif.statusCode).toBe(409);
+  expect(vif.json().error).toBe('cet agent tourne encore');
+
+  c!.t.d.agents.input(agent.id, 'crash');
+  await waitFor(() => c!.t.d.agents.getStream(agent.id)?.exited === true, 5000, 'sortie');
+  const avant = messages(agent.id, 'message').length;
+  expect((await reprendre(agent.id)).statusCode).toBe(202);
+  expect(c!.t.d.agents.getStream(agent.id)?.exited).toBe(false);
+  expect(
+    c!.t.store.since(null).filter((e) => e.type === 'agent.resumed' && e.agentId === agent.id),
+  ).toHaveLength(1);
+  // aucun message envoyé : le fil n'a pas bougé, la session est la même
+  expect(messages(agent.id, 'message')).toHaveLength(avant);
+  expect(row(agent.id).session_id).toBe(agent.sessionId);
+  c!.t.d.agents.input(agent.id, 'bonjour');
+  await waitFor(() => row(agent.id).status === 'idle', 5000, 'tour après reprise');
+});
+
+test('D148 : reprendre un agent du terminal est refusé, un agent inconnu est un 404', async () => {
+  const { agent } = await spawnPty('claude');
+  const r = await reprendre(agent.id);
+  expect(r.statusCode).toBe(409);
+  expect(r.json().error).toBe('reprise réservée aux agents conversationnels');
+  expect((await reprendre('ag_inconnu')).statusCode).toBe(404);
+});
