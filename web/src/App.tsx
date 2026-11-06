@@ -6,6 +6,7 @@ import { CarteBoard } from './ecrans/CarteBoard.js';
 import { Boite } from './ecrans/Boite.js';
 import { Consignes } from './ecrans/Consignes.js';
 import { Discussion, OuvrirDiscussion } from './ecrans/Discussion.js';
+import { Livraison } from './ecrans/Livraison.js';
 import { Reglages } from './ecrans/Reglages.js';
 import { ServeurConfig } from './ecrans/ServeurConfig.js';
 import { Serveurs } from './ecrans/Serveurs.js';
@@ -32,6 +33,8 @@ export function App() {
         <Route path="/serveurs/:id/discussion" element={<OuvrirDiscussion />} />
         <Route path="/serveurs/:id/discussions/:discussionId" element={<Discussion />} />
         <Route path="/sujets/:topicId" element={<Sujet />} />
+        {/* chantier 27 (D121) */}
+        <Route path="/sujets/:topicId/livraison" element={<Livraison />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </AidProvider>
