@@ -196,3 +196,30 @@ test('diff.ouvrir-fichier : hash ou chemin manquant (422), chemin hors du worktr
       .statusCode,
   ).toBe(422);
 });
+
+test('D135 : diff.ouvrir-fichier avec « depuis », avant pris à cette révision', async () => {
+  const codeDir = mkdtempSync(join(tmpdir(), 'aid-code-'));
+  copyFileSync(FAKE, join(codeDir, 'code'));
+  chmodSync(join(codeDir, 'code'), 0o755);
+  process.env.PATH = `${codeDir}${delimiter}${process.env.PATH ?? ''}`;
+  process.env.FAKE_EDITOR_OUT = out;
+  c = await setupWorkspace({ editor: ['code', '{path}'] });
+  const { wt, topicId } = await makeTopic(c);
+  commitFile(wt, 'a.txt', 'v1\n');
+  const depuis = sh(wt, 'rev-parse', 'HEAD');
+  commitFile(wt, 'a.txt', 'v2\n', 'v2');
+  commitFile(wt, 'a.txt', 'v3\n', 'v3');
+  const hash = sh(wt, 'rev-parse', 'HEAD');
+
+  const r = await postAction(c, topicId, 'diff.ouvrir-fichier', { hash, path: 'a.txt', depuis });
+  expect(r.statusCode).toBe(204);
+  await waitFor(() => existsSync(out), 3000, 'argv écrit');
+  const argv = readFileSync(out, 'utf8').split('\n');
+  expect(readFileSync(argv[1]!, 'utf8')).toBe('v1');
+  expect(readFileSync(argv[2]!, 'utf8')).toBe('v3');
+  for (const bad of ['HEAD~1', '--output=x'])
+    expect(
+      (await postAction(c, topicId, 'diff.ouvrir-fichier', { hash, path: 'a.txt', depuis: bad }))
+        .statusCode,
+    ).toBe(422);
+});

@@ -5,6 +5,7 @@ import { afterEach, expect, test } from 'vitest';
 import type { StateSnapshot } from '../src/shared/state.js';
 import { startTestDaemon, waitFor, type TestDaemon } from './helpers/daemon.js';
 import { makeOriginAndClone } from './helpers/git.js';
+import { sh } from './helpers/git.js';
 
 let t: TestDaemon;
 afterEach(async () => {
@@ -110,4 +111,30 @@ test('topic.test : worktree manquant, 409', async () => {
   });
   expect(run.statusCode).toBe(409);
   await finished(created.actionId);
+});
+
+test('D124 : topic.test publie la tête testée, même quand le test est rouge', async () => {
+  const { ws } = await setup();
+  const created = (
+    await t.d.app.inject({
+      method: 'POST',
+      url: '/api/topics',
+      headers: t.headers,
+      payload: { workspaceId: ws.id, title: 'Tête testée', type: 'feat' },
+    })
+  ).json<{ actionId: string; slug: string }>();
+  await finished(created.actionId);
+  const topicId = (await state()).topics[0]?.id;
+  if (!topicId) throw new Error('sujet manquant');
+  const head = sh(join(ws.worktreesDir, created.slug), 'rev-parse', 'HEAD');
+
+  process.env.FAKE_NPM_EXIT = '1';
+  const run = await t.d.app.inject({
+    method: 'POST',
+    url: `/api/topics/${topicId}/actions/topic.test`,
+    headers: t.headers,
+  });
+  const id = run.json<{ actionId: string }>().actionId;
+  expect((await finished(id)).data.outcome).toBe('failed');
+  expect((await state()).actions.find((a) => a.id === id)?.result).toMatchObject({ head });
 });

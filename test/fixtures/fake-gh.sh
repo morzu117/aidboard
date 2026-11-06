@@ -22,9 +22,11 @@ fi
 if [ "$1" = "pr" ] && [ "$2" = "view" ]; then
   case "$5" in
     *statusCheckRollup*)
-      printf '{"statusCheckRollup": %s, "reviews": [], "mergeable": "%s", "title": "t", "body": "b", "url": "%s"}\n' \
-        "${FAKE_GH_CHECKS:-[]}" "${FAKE_GH_MERGEABLE:-MERGEABLE}" \
-        "${FAKE_GH_PR_URL:-https://github.com/test/test/pull/7}"
+      printf '{"statusCheckRollup": %s, "reviews": %s, "mergeable": "%s", "title": "t", "body": "b", "url": "%s", "headRefOid": "%s", "state": "%s", "number": %s, "baseRefName": "main", "headRefName": "%s"}\n' \
+        "${FAKE_GH_CHECKS:-[]}" "${FAKE_GH_REVIEWS:-[]}" "${FAKE_GH_MERGEABLE:-MERGEABLE}" \
+        "${FAKE_GH_PR_URL:-https://github.com/test/test/pull/7}" \
+        "${FAKE_GH_HEAD:-$(git rev-parse HEAD 2>/dev/null)}" "${FAKE_GH_STATE:-OPEN}" \
+        "${FAKE_GH_PR_NUMBER:-7}" "$(git branch --show-current 2>/dev/null)"
       ;;
     *)
       printf '{"number": %s, "url": "%s"}\n' \

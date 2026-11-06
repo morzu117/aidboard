@@ -420,8 +420,11 @@ export function registerTopicRoutes(app: FastifyInstance, deps: TopicRouteDeps):
     // version) ; sinon repli déclaré sur l'ouverture simple du fichier courant — pas un échec.
     if (actionId === 'diff.ouvrir-fichier') {
       if (!existsSync(topic.worktree)) throw new AidHttpError(409, 'worktree introuvable');
-      const body = (req.body ?? {}) as { hash?: string; path?: string };
+      const body = (req.body ?? {}) as { hash?: string; path?: string; depuis?: string };
       if (!body.hash || !body.path) throw new AidHttpError(422, 'hash et chemin requis');
+      // Chantier 27 (D135) : « avant » à une révision donnée (la base commune de la livraison)
+      if (body.depuis !== undefined && !/^[0-9a-f]{4,40}$/i.test(body.depuis))
+        throw new AidHttpError(422, 'révision « depuis » invalide');
       if (isTraversal(body.path)) throw new AidHttpError(422, `${body.path} sort du worktree`);
       const cmd = editorCommand(deps.config.editor);
       const diff = diffCommand(cmd);
@@ -438,7 +441,7 @@ export function registerTopicRoutes(app: FastifyInstance, deps: TopicRouteDeps):
         return reply.code(204).send();
       }
       const [before, after] = await Promise.all([
-        fileAtRevision(topic.worktree, `${body.hash}^`, body.path),
+        fileAtRevision(topic.worktree, body.depuis ?? `${body.hash}^`, body.path),
         fileAtRevision(topic.worktree, body.hash, body.path),
       ]);
       const tmp = mkdtempSync(join(tmpdir(), 'aid-diff-'));
