@@ -12,6 +12,7 @@ afterEach(async () => {
   delete process.env.FAKE_GH_MERGE_REFUSED;
   delete process.env.FAKE_GH_MERGE_LOG;
   delete process.env.FAKE_GH_PR_NUMBER;
+  delete process.env.FAKE_GH_HEAD_MOVED;
   await t?.d.stop();
 });
 
@@ -176,4 +177,38 @@ test('topic.merge : sans PR ouverte, 409 ; sans stratégie, 422 ; déjà fusionn
     (await merge(topicId2, { strategy: 'squash' })).json<{ actionId: string }>().actionId,
   );
   expect((await merge(topicId2, { strategy: 'squash' })).statusCode).toBe(409);
+});
+
+// Chantier 27 (D123) : le merge vise la tête que l'écran a montrée.
+const TETE = '3f2a91c0000000000000000000000000000000aa';
+
+test('D123 : la tête passée part en --match-head-commit ; sans tête, rien ne change', async () => {
+  const { ws } = await setup();
+  const log = join(tmp(), 'merge.log');
+  process.env.FAKE_GH_MERGE_LOG = log;
+  const a = await createWithPr(ws, 'Sur une tête');
+  const r = await merge(a.topicId, { strategy: 'merge', head: TETE });
+  expect(r.statusCode).toBe(202);
+  expect((await finished(r.json<{ actionId: string }>().actionId)).data.outcome).toBe('succeeded');
+  const b = await createWithPr(ws, 'Sans tête');
+  await finished(
+    (await merge(b.topicId, { strategy: 'merge' })).json<{ actionId: string }>().actionId,
+  );
+  const [avec, sans] = readFileSync(log, 'utf8').trim().split('\n');
+  expect(avec).toContain(`--match-head-commit ${TETE}`);
+  expect(sans).not.toContain('--match-head-commit');
+});
+
+test('D123 : tête invalide, 422 ; tête bougée sur GitHub, refus remonté (needs_human)', async () => {
+  const { ws } = await setup();
+  const { topicId } = await createWithPr(ws, 'Tête bougée');
+  for (const head of ['3f2a91c', TETE.toUpperCase(), `${TETE}0`, '--admin'])
+    expect((await merge(topicId, { strategy: 'merge', head })).statusCode).toBe(422);
+
+  process.env.FAKE_GH_HEAD_MOVED = '1';
+  const r = await merge(topicId, { strategy: 'merge', head: TETE });
+  const fin = await finished(r.json<{ actionId: string }>().actionId);
+  expect(fin.data).toMatchObject({ outcome: 'needs_human', exitCode: 2 });
+  expect((fin.data.tail as string[]).join(' ')).toContain('Head branch was modified');
+  expect((await state()).topics).toMatchObject([{ state: 'review' }]);
 });

@@ -768,8 +768,12 @@ export function registerTopicRoutes(app: FastifyInstance, deps: TopicRouteDeps):
         message?: string;
         deleteBranch?: boolean;
         cleanupAfter?: boolean;
+        head?: string;
       };
       if (!mergeBody.strategy) throw new AidHttpError(422, 'stratégie de fusion requise');
+      // Chantier 27 (D123) : la tête affichée, en entier ; sans elle, le merge d'avant
+      if (mergeBody.head !== undefined && !/^[0-9a-f]{40}$/.test(mergeBody.head))
+        throw new AidHttpError(422, 'tête invalide : 40 caractères hexadécimaux');
       const { actionId: runId } = startAction(deps.actions, {
         workspaceId: ws.id,
         topicId: id,
@@ -782,6 +786,7 @@ export function registerTopicRoutes(app: FastifyInstance, deps: TopicRouteDeps):
           AID_MERGE_STRATEGY: mergeBody.strategy,
           ...(mergeBody.message && { AID_MERGE_MESSAGE: mergeBody.message }),
           ...(mergeBody.deleteBranch && { AID_MERGE_DELETE_BRANCH: '1' }),
+          ...(mergeBody.head && { AID_MERGE_HEAD: mergeBody.head }),
         }),
         afterSuccess: () => {
           deps.actions.store.append({

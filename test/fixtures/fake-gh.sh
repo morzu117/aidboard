@@ -2,6 +2,10 @@
 # Faux gh : auth status / pr create / pr view / pr merge. Jamais le vrai gh en test.
 if [ "$1" = "pr" ] && [ "$2" = "merge" ]; then
   printf '%s\n' "$*" >>"${FAKE_GH_MERGE_LOG:-/dev/null}"
+  if [ "${FAKE_GH_HEAD_MOVED:-0}" != "0" ] && [[ " $* " == *" --match-head-commit "* ]]; then
+    echo "Head branch was modified. Review and try the merge again." >&2
+    exit 1
+  fi
   if [ "${FAKE_GH_MERGE_REFUSED:-0}" != "0" ]; then
     echo "pull request not mergeable: protection de branche active" >&2
     exit 1
