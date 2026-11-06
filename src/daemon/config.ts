@@ -13,11 +13,17 @@ export interface AidConfig {
   mesh: MeshConfig;
   swairm: SwairmConfig;
   agents: AgentsConfig;
+  artefacts: ArtefactsConfig;
 }
 
 /** Bascule progressive D63 : `stream` passe `claude`/`codex` par pilote structuré plutôt que PTY. */
 export interface AgentsConfig {
   transport: 'pty' | 'stream';
+}
+
+/** Chantier 30 (D162) : le second port, réservé aux artefacts. `null` = port du daemon + 10. */
+export interface ArtefactsConfig {
+  port: number | null;
 }
 
 /** Cell Swairm (14.1, D43) : binaire vide = désactivée. */
@@ -81,6 +87,7 @@ export const DEFAULT_CONFIG: AidConfig = {
     stateRoot: '',
     tailscale: { manage: false, bin: DEFAULT_TAILSCALE_BIN },
   },
+  artefacts: { port: null },
 };
 
 export class ConfigError extends Error {}
@@ -129,6 +136,7 @@ export function parseConfig(text: string): AidConfig {
       'mesh',
       'swairm',
       'agents',
+      'artefacts',
     ],
     '',
   );
@@ -165,6 +173,14 @@ export function parseConfig(text: string): AidConfig {
   if (doc.mesh !== undefined) parseMesh(doc.mesh, cfg.mesh);
   if (doc.swairm !== undefined) parseSwairm(doc.swairm, cfg.swairm);
   if (doc.agents !== undefined) parseAgents(doc.agents, cfg.agents);
+  if (doc.artefacts !== undefined) {
+    if (!isRecord(doc.artefacts))
+      throw new ConfigError('config.yaml : artefacts doit être un objet');
+    rejectUnknown(doc.artefacts, ['port'], 'artefacts.');
+    if (doc.artefacts.port !== undefined) {
+      cfg.artefacts.port = positiveInt(doc.artefacts.port, 'artefacts.port', 65535);
+    }
+  }
   return cfg;
 }
 
@@ -339,4 +355,10 @@ const DEFAULT_FILE = `# Configuration d'A-I-D. Tout est facultatif : ce sont les
 
 export function writeDefaultConfigIfAbsent(p: AidPaths): void {
   if (!existsSync(p.config)) writeFileSync(p.config, DEFAULT_FILE, { mode: 0o600 });
+}
+
+/** Chantier 30 (D162) : le port des artefacts ; un daemon sur un port libre (0, tests) donne 0. */
+export function portArtefacts(config: AidConfig): number {
+  if (config.artefacts.port !== null) return config.artefacts.port;
+  return config.port === 0 ? 0 : config.port + 10;
 }

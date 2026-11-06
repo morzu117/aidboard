@@ -35,6 +35,7 @@ import { registerNavRoutes } from './routes/nav.js';
 import { registerServerRoutes } from './routes/servers.js';
 import { registerServerDiscussionRoutes } from './routes/serverDiscussions.js';
 import { registerMachineRoutes } from './routes/machines.js';
+import { type ArtefactsDeps, registerArtefactRoutes } from './routes/artefacts.js';
 import type { RemoteKind } from './remote/agents.js';
 import type { TransportOptions } from './remote/transport.js';
 import type { MeshService } from './mesh/service.js';
@@ -78,6 +79,8 @@ export interface ServerDeps {
   remoteBins?: Partial<Record<RemoteKind, string>>;
   webRoot?: string | null;
   logger?: boolean;
+  /** chantier 30 : les jetons et l'état du second port ; absent = artefacts indisponibles */
+  artefacts?: ArtefactsDeps;
 }
 
 export function redactToken(url: string | undefined): string {
@@ -132,6 +135,10 @@ export async function buildServer(deps: ServerDeps): Promise<FastifyInstance> {
   registerSecurity(app, deps.auth, {
     getPort: () => (app.server.address() as AddressInfo | null)?.port ?? deps.config.port,
     devOrigin: deps.devOrigin,
+    getArtefactsPort: () => {
+      const e = deps.artefacts?.etat();
+      return e?.disponible ? e.port : null;
+    },
   });
   app.setErrorHandler((err, _req, reply) => {
     if (err instanceof AidHttpError)
@@ -190,6 +197,7 @@ export async function buildServer(deps: ServerDeps): Promise<FastifyInstance> {
   });
   registerFsRoutes(app);
   registerFileRoutes(app, { db: deps.db });
+  registerArtefactRoutes(app, { db: deps.db, artefacts: deps.artefacts });
   registerHookRoutes(app, () => process.env);
   const indexer =
     deps.indexer ??

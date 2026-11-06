@@ -8,6 +8,8 @@ import { accessSync, constants, existsSync, readFileSync, statSync } from 'node:
 import { onPath } from '../../daemon/actions/editor.js';
 import { readProcVersion } from '../../daemon/routes/workspaces.js';
 import { loadConfig } from '../../daemon/config.js';
+import { portArtefacts } from '../../daemon/config.js';
+import type { EtatArtefacts } from '../../shared/artefacts.js';
 import { meshPaths } from '../../daemon/mesh/paths.js';
 import { tailscaleState } from '../../daemon/mesh/tailscale.js';
 import { resolveOnPath } from '../../daemon/pty/spawn.js';
@@ -56,6 +58,8 @@ export interface Probes {
   loadSqlite(): Promise<string | null>;
   homeMode(): number | null; // null = ~/.aid absent
   port(): Promise<{ port: number; state: 'aid' | 'libre' | 'occupe' }>;
+  /** chantier 30 (D162) : le second port, celui des artefacts ; `aid` = ouvert par le daemon */
+  artefactsPort(): Promise<{ port: number; state: 'aid' | 'libre' | 'occupe'; raison?: string }>;
   claudeHooks(): boolean; // les hooks d'A-I-D sont-ils dans la configuration de Claude Code ?
   memoryHealth(): Promise<MemoryHealth | null>; // null = daemon arrêté ou injoignable
   mcpRegistration(): boolean; // true si `aid-memory` (06.5) est encore enregistré dans ~/.claude.json (DS10)
@@ -216,6 +220,19 @@ export async function runChecks(p: Probes): Promise<Check[]> {
       level: 'ko',
       label: `port ${port.port} occupé`,
       detail: 'par autre chose qu’A-I-D : changer `port` dans ~/.aid/config.yaml',
+    },
+  );
+
+  const artefacts = await p.artefactsPort();
+  verify(
+    artefacts.state !== 'occupe',
+    artefacts.state === 'aid'
+      ? `port des artefacts ${artefacts.port} : ouvert par le daemon`
+      : `port des artefacts ${artefacts.port} libre`,
+    {
+      level: 'warn',
+      label: `port des artefacts ${artefacts.port} indisponible`,
+      detail: `${artefacts.raison ?? 'occupé'} : l’onglet Artefacts ne s’affichera pas ; changer \`artefacts.port\` dans ~/.aid/config.yaml`,
     },
   );
 
@@ -382,6 +399,28 @@ export function realProbes(paths: AidPaths): Probes {
     async port() {
       const { port } = loadConfig(paths);
       if (await runningDaemon(paths)) return { port, state: 'aid' };
+      return new Promise((resolve) => {
+        const s = createServer();
+        s.once('error', () => resolve({ port, state: 'occupe' }));
+        s.listen(port, '127.0.0.1', () => s.close(() => resolve({ port, state: 'libre' })));
+      });
+    },
+    async artefactsPort() {
+      const port = portArtefacts(loadConfig(paths));
+      const info = await runningDaemon(paths);
+      if (info) {
+        try {
+          const { status, json } = await daemonFetch(info, 'GET', '/api/artefacts/etat');
+          const e = json as unknown as EtatArtefacts;
+          if (status === 200) {
+            return e.disponible
+              ? { port: e.port ?? port, state: 'aid' }
+              : { port: e.port ?? port, state: 'occupe', raison: e.raison };
+          }
+        } catch {
+          // daemon d'avant le chantier 30 ou injoignable : on teste le port comme s'il était arrêté
+        }
+      }
       return new Promise((resolve) => {
         const s = createServer();
         s.once('error', () => resolve({ port, state: 'occupe' }));

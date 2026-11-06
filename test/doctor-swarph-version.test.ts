@@ -28,6 +28,7 @@ const probes = (swarph: string | null): Probes => ({
   loadSqlite: async () => null,
   homeMode: () => 0o40700,
   port: async () => ({ port: 4870, state: 'libre' }),
+  artefactsPort: async () => ({ port: 4880, state: 'libre' }),
   claudeHooks: () => true,
   memoryHealth: async () => null,
   mcpRegistration: () => false,

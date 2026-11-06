@@ -168,3 +168,19 @@ export function registerFileRoutes(app: FastifyInstance, deps: { db: Db }): void
     },
   );
 }
+
+// Chantier 30 (D163) : la lecture d'un artefact passe par les mêmes gardes que
+// `files/content` (worktree, 1 Mo, binaire refusé), et rend les octets lus.
+export function readTopicFile(db: Db, topicId: string, relPath: string): Buffer {
+  const row = db.prepare('SELECT worktree FROM topics WHERE id = ?').get(topicId) as
+    { worktree: string } | undefined;
+  if (!row) throw new AidHttpError(404, 'sujet inconnu');
+  if (!existsSync(row.worktree)) throw new AidHttpError(409, 'worktree introuvable');
+  const full = resolveUnderWorktree(row.worktree, relPath);
+  const st = statOrNotFound(full, relPath);
+  if (!st.isFile()) throw new AidHttpError(404, `${relPath} est introuvable`);
+  if (st.size > MAX_CONTENT_BYTES) throw new AidHttpError(422, `${relPath} est trop volumineux`);
+  const buf = readFileSync(full);
+  if (isBinary(buf)) throw new AidHttpError(422, `${relPath} est un fichier binaire`);
+  return buf;
+}

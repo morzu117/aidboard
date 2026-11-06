@@ -25,6 +25,7 @@ const good: Probes = {
   loadSqlite: async () => null,
   homeMode: () => 0o40700,
   port: async () => ({ port: 4870, state: 'libre' }),
+  artefactsPort: async () => ({ port: 4880, state: 'libre' }),
   claudeHooks: () => true,
   memoryHealth: async () => null,
   mcpRegistration: () => false,
@@ -482,4 +483,20 @@ test('swairm (14.5) : un nom nu résolu dans le PATH du shell = ⚠ « pas un ch
   expect(w.detail).toContain(swairmOk.resolved!);
   const absolu = await runChecks({ ...good, swairm: async () => swairmOk });
   expect(absolu.some((c) => c.label === 'swairm.bin n’est pas un chemin absolu')).toBe(false);
+});
+
+test('chantier 30 (D162) : port des artefacts ouvert, libre, ou indisponible (⚠, avec sa raison)', async () => {
+  expect(await levels({ artefactsPort: async () => ({ port: 4880, state: 'aid' }) })).toContain(
+    'ok:port des artefacts 4880 : ouvert par le daemon',
+  );
+  expect(await levels({})).toContain('ok:port des artefacts 4880 libre');
+  expect(
+    await levels({
+      artefactsPort: async () => ({
+        port: 4880,
+        state: 'occupe',
+        raison: 'le port 4880 est occupé',
+      }),
+    }),
+  ).toContain('warn:port des artefacts 4880 indisponible');
 });
