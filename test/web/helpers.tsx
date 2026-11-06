@@ -1,6 +1,6 @@
 import { render } from '@testing-library/react';
 import type { ReactElement } from 'react';
-import { MemoryRouter } from 'react-router';
+import { MemoryRouter, useLocation } from 'react-router';
 import { vi } from 'vitest';
 import type { Agent, Topic, Workspace } from '../../src/shared/model.js';
 import type { FsListing } from '../../src/shared/fs.js';
@@ -159,6 +159,14 @@ export function setup(
   );
   return h;
 }
+
+/** Chantier 28 (D141) : le chemin courant, pour suivre une navigation sans monter l'écran d'arrivée. */
+export function Chemin() {
+  const l = useLocation();
+  return <p data-testid="chemin-courant">{`${l.pathname}${l.search}`}</p>;
+}
+export const cheminCourant = () =>
+  document.querySelector('[data-testid="chemin-courant"]')?.textContent;
 
 // 204 n'autorise aucun corps (le constructeur Response le refuse même vide) : on l'omet.
 export const json = (status: number, body: object) => () =>

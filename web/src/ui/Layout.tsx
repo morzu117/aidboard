@@ -1,10 +1,9 @@
 import { createContext, type ReactNode, useContext, useEffect, useRef, useState } from 'react';
-import { useNavigate } from 'react-router';
+import { useLocation, useNavigate } from 'react-router';
 import type { MeshDmKind } from '../../../src/shared/model.js';
 import { useBoardLuA } from '../data/board.js';
 import { useAid } from '../data/useAidState.js';
 import { type MeshBascule, useMeshBascule } from '../data/useMeshBascule.js';
-import { NouveauSujet } from '../dialogues/NouveauSujet.js';
 import { NouveauWorkspace } from '../dialogues/NouveauWorkspace.js';
 import { Barre, type EcranId } from './Barre.js';
 import { decisionsEnAttente } from './boiteVue.js';
@@ -13,7 +12,7 @@ import { isPaletteShortcut, Palette, type PaletteItem } from './Palette.js';
 import { Shell } from './Shell.js';
 import { Volet } from './Volet.js';
 
-type Dialog = 'none' | 'workspace' | 'sujet';
+type Dialog = 'none' | 'workspace';
 /** les kinds de DM qui demandent quelque chose (12.5) : partagé avec la Boîte et le Notifieur */
 export const A_TRAITER = new Set<MeshDmKind>(['question', 'unblock']);
 /** B.2 (chantier 15, D55) : un seul popup à la fois sur l'écran — « panneau » appartient à l'écran qui le rend (Sujet, puis Accueil). */
@@ -21,6 +20,8 @@ type Overlay = 'aucun' | 'nav' | 'panneau';
 export const LayoutCtx = createContext<{
   openNewTopic: (workspaceId?: string) => void;
   openNewWorkspace: () => void;
+  /** chantier 28 (D141) : « Ajouter un projet… » de l'écran Nouveau sujet, qui y revient */
+  addWorkspaceThenTopic?: () => void;
   overlay: Overlay;
   setOverlay: (o: Overlay) => void;
   /** chantier 25 (D100) */
@@ -36,6 +37,7 @@ export function useLayout() {
 export function Layout({ screen, children }: { screen: EcranId; children: ReactNode }) {
   const { daemon, state } = useAid();
   const navigate = useNavigate();
+  const location = useLocation();
   const [dialog, setDialog] = useState<Dialog>('none');
   const [palette, setPalette] = useState(false);
   const [overlay, setOverlay] = useState<Overlay>('aucun');
@@ -58,19 +60,29 @@ export function Layout({ screen, children }: { screen: EcranId; children: ReactN
     return () => window.removeEventListener('keydown', onKey);
   }, []);
   // Un projet existe sans sujet : l'enregistrer ne force pas la création d'un sujet. Seul « Nouveau sujet » sans aucun
-  // projet enchaîne les deux (ou « Ajouter un projet… » depuis le dialogue de sujet, qui y revient).
+  // projet enchaîne les deux (ou « Ajouter un projet… » depuis l'écran Nouveau sujet, qui y revient).
   const [thenTopic, setThenTopic] = useState(false);
-  const [preselected, setPreselected] = useState<string | undefined>();
+  // chantier 28 (D141) : Nouveau sujet est un écran, le projet présélectionné passe par l'URL
   const openNewTopic = (workspaceId?: string) => {
-    setPreselected(workspaceId);
     if (state && state.workspaces.length === 0) {
       setThenTopic(true);
       setDialog('workspace');
-    } else setDialog('sujet');
+    } else
+      navigate(`/sujets/nouveau${workspaceId ? `?projet=${encodeURIComponent(workspaceId)}` : ''}`);
   };
   const openNewWorkspace = () => {
     setThenTopic(false);
     setDialog('workspace');
+  };
+  const addWorkspaceThenTopic = () => {
+    setThenTopic(true);
+    setDialog('workspace');
+  };
+  // sans `?projet`, l'écran prend le dernier projet enregistré : celui qu'on vient d'ajouter
+  const projetEnregistre = () => {
+    setDialog('none');
+    if (thenTopic)
+      navigate('/sujets/nouveau', { replace: location.pathname === '/sujets/nouveau' });
   };
   // chantier 28 (D140) : la même définition que la section Décisions de la Boîte
   const waiting = state ? decisionsEnAttente(state) : 0;
@@ -111,7 +123,14 @@ export function Layout({ screen, children }: { screen: EcranId; children: ReactN
   ];
   return (
     <LayoutCtx.Provider
-      value={{ openNewTopic, openNewWorkspace, overlay, setOverlay, meshBascule }}
+      value={{
+        openNewTopic,
+        openNewWorkspace,
+        addWorkspaceThenTopic,
+        overlay,
+        setOverlay,
+        meshBascule,
+      }}
     >
       <Shell>
         <Barre
@@ -172,21 +191,7 @@ export function Layout({ screen, children }: { screen: EcranId; children: ReactN
         </div>
         {palette && <Palette items={items} onClose={() => setPalette(false)} />}
         {dialog === 'workspace' && (
-          <NouveauWorkspace
-            onClose={() => setDialog('none')}
-            onDone={() => setDialog(thenTopic ? 'sujet' : 'none')}
-          />
-        )}
-        {dialog === 'sujet' && (
-          <NouveauSujet
-            initialWorkspaceId={preselected}
-            onClose={() => setDialog('none')}
-            onAddWorkspace={() => {
-              setPreselected(undefined);
-              setThenTopic(true);
-              setDialog('workspace');
-            }}
-          />
+          <NouveauWorkspace onClose={() => setDialog('none')} onDone={projetEnregistre} />
         )}
       </Shell>
     </LayoutCtx.Provider>

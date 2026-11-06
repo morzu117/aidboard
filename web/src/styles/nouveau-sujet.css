@@ -1,0 +1,89 @@
+/* Chantier 28 (D141, D142) : l'écran Nouveau sujet. Jamais dans maquette.css, dont l'empreinte est comparée aux
+   maquettes design/maquettes/aid-1-*.html (test/web/maquette-css.test.ts). */
+
+.nouveau-sujet {
+  padding-bottom: calc(var(--sp-7) * 3);
+}
+
+/* deux colonnes, une sur un écran étroit */
+.nouveau-sujet-colonnes {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr));
+  gap: var(--sp-5);
+  align-items: start;
+}
+
+.nouveau-sujet-carte {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+  padding: var(--sp-5);
+  border: 1px solid var(--line);
+  border-radius: var(--r-l);
+  background: var(--surface-2);
+}
+.nouveau-sujet-carte > .titre-zone {
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: var(--fs-s);
+}
+
+.nouveau-sujet-ligne {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr));
+  gap: var(--sp-3);
+}
+.nouveau-sujet-champ {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  color: var(--muted);
+  font-size: var(--fs-m);
+}
+.nouveau-sujet-ajouter {
+  align-self: flex-start;
+}
+
+.nouveau-sujet-git {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-4);
+  color: var(--muted);
+  font-size: var(--fs-m);
+}
+.nouveau-sujet-git code {
+  color: var(--text-2);
+  overflow-wrap: anywhere;
+}
+
+.nouveau-sujet-local {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  padding: var(--sp-3) var(--sp-4);
+  border: 1px solid var(--line);
+  border-radius: var(--r-m);
+  font-size: var(--fs-m);
+}
+.nouveau-sujet-local-badge {
+  color: var(--faint);
+  font-family: ui-monospace, monospace;
+  font-size: var(--fs-s);
+}
+
+/* le pied reste visible au bas de l'écran */
+.nouveau-sujet-pied {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-3);
+  margin-top: var(--sp-5);
+  padding: var(--sp-4) 0;
+  border-top: 1px solid var(--line);
+  background: var(--bg);
+}
+.nouveau-sujet-pied > p {
+  margin-right: auto;
+}

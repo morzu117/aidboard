@@ -8,6 +8,7 @@ import type { StateSnapshot } from '../../src/shared/state.js';
 import { Accueil } from '../../web/src/ecrans/Accueil.js';
 import { Boite } from '../../web/src/ecrans/Boite.js';
 import { Consignes } from '../../web/src/ecrans/Consignes.js';
+import { NouveauSujet } from '../../web/src/ecrans/NouveauSujet.js';
 import { Reglages } from '../../web/src/ecrans/Reglages.js';
 import { Sujet } from '../../web/src/ecrans/Sujet.js';
 import { filterItems, isPaletteShortcut } from '../../web/src/ui/Palette.js';
@@ -27,6 +28,7 @@ const app = (
     <Route path="/boite" element={<Boite />} />
     <Route path="/consignes" element={<Consignes />} />
     <Route path="/reglages" element={<Reglages />} />
+    <Route path="/sujets/nouveau" element={<NouveauSujet />} />
     <Route path="/sujets/:topicId" element={<Sujet />} />
   </Routes>
 );
@@ -124,7 +126,7 @@ test('palette : ⌘K l’ouvre, la saisie filtre, les flèches et Entrée ouvren
   expect(await screen.findByText('Exporter en CSV', { selector: 'h1' })).toBeTruthy();
 });
 
-test('palette : le bouton l’ouvre, Échap la ferme, « Nouveau sujet » ouvre le dialogue', async () => {
+test('palette : le bouton l’ouvre, Échap la ferme, « Nouveau sujet » ouvre l’écran (D141)', async () => {
   ouvrir();
   await attendreTable();
   await userEvent.click(node('1-1.barre.recherche')!);
@@ -135,7 +137,7 @@ test('palette : le bouton l’ouvre, Échap la ferme, « Nouveau sujet » ouvre 
   await userEvent.type(within(palette).getByRole('combobox'), 'nouveau');
   expect(within(palette).getAllByRole('option')).toHaveLength(1);
   await userEvent.keyboard('{Enter}');
-  expect(await screen.findByRole('dialog', { name: 'Nouveau sujet' })).toBeTruthy();
+  expect(await screen.findByText('Nouveau sujet', { selector: 'h1' })).toBeTruthy();
 });
 
 test('⌘K n’est pas capté dans un terminal : Ctrl+K y efface la fin de ligne', () => {

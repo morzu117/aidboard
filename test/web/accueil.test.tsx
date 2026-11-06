@@ -99,13 +99,13 @@ test('empty : aucun sujet, le bouton ouvre d’abord « Nouveau projet » quand 
   expect(await screen.findByRole('dialog', { name: 'Nouveau projet' })).toBeTruthy();
 });
 
-test('empty avec un dépôt : « Nouveau sujet » ouvre la création de sujet', async () => {
+test('empty avec un dépôt : « Nouveau sujet » ouvre l’écran de création (D141)', async () => {
   open(snapshot({ workspaces: [ws()] }));
   // Nav pose aussi un bouton « Nouveau sujet » (B.2, finding 7) : findByRole serait ambigu, viser
   // l'id du CTA de l'écran vide directement.
   await waitFor(() => expect(node('1-1.vide.creer')).not.toBeNull());
   await userEvent.click(node('1-1.vide.creer')!);
-  expect(await screen.findByRole('dialog', { name: 'Nouveau sujet' })).toBeTruthy();
+  expect(navigateSpy).toHaveBeenCalledWith('/sujets/nouveau');
 });
 
 test('default : une ligne par sujet, avec nom affiché, projet, agent et lien', async () => {
