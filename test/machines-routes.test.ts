@@ -2,18 +2,20 @@ import { chmodSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, delimiter, join } from 'node:path';
 import { afterEach, expect, test } from 'vitest';
 import { resolveOnPath } from '../src/daemon/pty/spawn.js';
-import type { MachineLocale, MachineServeur, Server } from '../src/shared/model.js';
+import type { Fournisseurs, MachineLocale, MachineServeur, Server } from '../src/shared/model.js';
 import { startTestDaemon, type TestDaemon } from './helpers/daemon.js';
 
 // Chantier 29 : les routes de l'écran Machines. Jamais le vrai claude ni le vrai codex : le PATH ne garde que les
 // faux (test/fixtures/bin-stream), git et le système.
 const STREAM_BIN = join(import.meta.dirname, 'fixtures/bin-stream');
-const saved = { PATH: process.env.PATH };
+const saved = { PATH: process.env.PATH, CODEX_HOME: process.env.CODEX_HOME };
 const SYS = [dirname(resolveOnPath('git', saved.PATH ?? '')!), '/usr/bin', '/bin'].join(delimiter);
 let t: TestDaemon | undefined;
 
 afterEach(async () => {
   process.env.PATH = saved.PATH;
+  if (saved.CODEX_HOME === undefined) delete process.env.CODEX_HOME;
+  else process.env.CODEX_HOME = saved.CODEX_HOME;
   await t?.d.stop();
   t = undefined;
 });
@@ -131,4 +133,18 @@ test('D155 : jamais diagnostiqué, inconnu, puis supprimé avec le serveur', asy
   expect((await req('DELETE', `/api/servers/${s.id}`)).statusCode).toBe(204);
   expect((await req('GET', '/api/machines/serveurs')).json<MachineServeur[]>()).toEqual([]);
   expect(t.db.prepare('SELECT count(*) AS n FROM server_diagnostics').get()).toEqual({ n: 0 });
+});
+
+test('D159 : les fournisseurs, sans valeur de secret ; le dossier de codex vient de CODEX_HOME', async () => {
+  t = await startTestDaemon();
+  process.env.CODEX_HOME = join(t.home, 'codex');
+  mkdirSync(process.env.CODEX_HOME);
+  writeFileSync(join(process.env.CODEX_HOME, 'auth.json'), '{"token":"synthetique-0000"}');
+  const r = await req('GET', '/api/machines/fournisseurs');
+  expect(r.statusCode).toBe(200);
+  const f = r.json<Fournisseurs>();
+  // la recherche mémoire du daemon de test est coupée : pas d'Ollama
+  expect(f.fournisseurs.map((x) => x.id)).toEqual(['anthropic', 'openai']);
+  expect(f.alertes.map((a) => a.id)).toContain('codex:auth.json');
+  expect(r.body).not.toContain('synthetique-0000');
 });

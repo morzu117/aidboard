@@ -1,9 +1,10 @@
 import type { FastifyInstance } from 'fastify';
-import type { MachineLocale, MachineServeur } from '../../shared/model.js';
+import type { Fournisseurs, MachineLocale, MachineServeur } from '../../shared/model.js';
 import type { AidConfig } from '../config.js';
 import type { Db } from '../db.js';
 import { AidHttpError } from '../errors.js';
 import { MachineDiagnostics } from '../machines/diagnostic.js';
+import { codexHome, fournisseurs } from '../machines/fournisseurs.js';
 import { memoireLocale } from '../machines/memoire.js';
 import { agentsDisponibles } from '../pty/disponibles.js';
 import type { AgentManager } from '../pty/manager.js';
@@ -15,6 +16,8 @@ export interface MachineRouteDeps {
   agents: Pick<AgentManager, 'codexModels'>;
   db: Db;
   connections: ServerConnections;
+  /** l'environnement du daemon, lu par présence seulement (D159) */
+  env?: () => NodeJS.ProcessEnv;
 }
 
 // Chantier 29 : l'écran Machines. Lecture seule ; rien ne tourne en fond (D160).
@@ -47,5 +50,16 @@ export function registerMachineRoutes(app: FastifyInstance, deps: MachineRouteDe
     const server = getServer(deps.db, id);
     if (!server) throw new AidHttpError(404, `serveur ${id} inconnu`);
     return diagnostics.diagnostiquer(server);
+  });
+
+  // D159 : les accès aux modèles et les secrets en clair, par présence seulement
+  app.get('/api/machines/fournisseurs', async (): Promise<Fournisseurs> => {
+    const env = deps.env?.() ?? process.env;
+    return fournisseurs({
+      env,
+      strip: deps.config.env.strip,
+      ollama: deps.config.memory.embeddings.provider === 'ollama',
+      codexHome: codexHome(env),
+    });
   });
 }
