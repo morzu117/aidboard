@@ -1,0 +1,190 @@
+/* Chantier 29 (D151 à D159) : l'écran Machines. Jamais dans maquette.css, dont l'empreinte est comparée aux
+   maquettes design/maquettes/aid-1-*.html (test/web/maquette-css.test.ts). */
+
+.machines {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-5);
+}
+
+.machines-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+}
+
+.machines-section-entete {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-3);
+}
+
+.machines-appareils {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  margin: 0;
+  padding: var(--sp-3) var(--sp-4);
+  border: 1px solid var(--line);
+  border-radius: var(--r-m);
+  list-style: none;
+}
+.machines-appareils > li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+  align-items: baseline;
+}
+
+.machine-carte {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  padding: var(--sp-4) var(--sp-5);
+  border: 1px solid var(--line);
+  border-radius: var(--r-xl);
+  background: var(--surface-1);
+}
+
+.machine-carte-entete,
+.machine-etat,
+.machine-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2);
+}
+.machine-carte-entete {
+  gap: var(--sp-3);
+}
+
+.machine-carte-nom {
+  color: var(--text);
+  font-weight: 500;
+}
+
+.machine-cases {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+  gap: var(--sp-3);
+  margin: 0;
+}
+.machine-case {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  min-width: 0;
+}
+.machine-case > dt {
+  color: var(--muted);
+  font-size: var(--fs-xs);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.machine-case > dd {
+  margin: 0;
+  color: var(--text-2);
+  font-size: var(--fs-m);
+  overflow-wrap: anywhere;
+}
+.machine-case > dd[data-ok='true'] {
+  color: var(--text);
+}
+
+/* La matrice des combinaisons (D158) : défile seule, la page ne déborde pas. */
+.combinaisons-filtres {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+}
+.combinaisons-defile {
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--r-m);
+}
+.combinaisons {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--fs-s);
+}
+.combinaisons th,
+.combinaisons td {
+  padding: var(--sp-2) var(--sp-3);
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  white-space: nowrap;
+}
+.combinaisons th {
+  color: var(--muted);
+  font-weight: 500;
+}
+.combinaisons td.marque {
+  text-align: center;
+}
+.combinaisons td.marque[data-marque='–'] {
+  color: var(--muted);
+}
+.combinaisons td.marque[data-marque='?'] {
+  color: var(--s-attente);
+}
+.combinaisons tr:last-child td {
+  border-bottom: 0;
+}
+
+.machines-legende {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--fs-s);
+}
+
+/* Les fournisseurs (D159). */
+.fournisseurs {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--r-m);
+  list-style: none;
+}
+.fournisseur {
+  display: grid;
+  grid-template-columns: minmax(8rem, 1fr) minmax(12rem, 2fr) minmax(12rem, 2fr);
+  gap: var(--sp-3);
+  padding: var(--sp-3) var(--sp-4);
+  border-bottom: 1px solid var(--line);
+}
+.fournisseur:last-child {
+  border-bottom: 0;
+}
+.fournisseur-acces[data-usage='true'] {
+  color: var(--s-attente);
+}
+@media (max-width: 640px) {
+  .fournisseur {
+    grid-template-columns: 1fr;
+  }
+}
+
+.alerte-secret {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  padding: var(--sp-3) var(--sp-4);
+  border: 1px solid var(--s-attente-line);
+  border-radius: var(--r-m);
+  background: var(--s-attente-bg);
+}
+.alerte-secret-titre {
+  color: var(--s-attente);
+  font-weight: 500;
+}
+.alerte-secret ol {
+  margin: 0;
+  padding-left: var(--sp-5);
+  color: var(--text-2);
+}
+.alerte-secret code {
+  overflow-wrap: anywhere;
+}

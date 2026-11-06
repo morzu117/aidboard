@@ -106,7 +106,7 @@ test('une carte par serveur : état, cible, indicateurs (§11.1)', async () => {
   expect(node('serveurs.ajout')).not.toBeNull();
   expect(node('serveurs.vide')).toBeNull();
   // lien « Serveurs » de la barre du haut, actif ici
-  expect(node('serveurs.barre.nav-serveurs')?.getAttribute('aria-current')).toBe('page');
+  expect(node('serveurs.barre.nav-machines')?.getAttribute('aria-current')).toBe('page');
 });
 
 test('état vide : une seule carte pointillée qui mène à la création', async () => {
