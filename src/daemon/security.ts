@@ -146,6 +146,15 @@ export function registerSecurity(
       if ((req.method !== 'GET' || isSocket) && origin === undefined) {
         return reply.code(403).send({ error: 'origine absente' });
       }
+      // chantier 30 (D165) : un artefact, sur le second port, peut naviguer son cadre vers
+      // l'API. Une navigation n'envoie pas d'Origin, et le cookie ignore le port : seul
+      // Sec-Fetch-Site dit que la requête ne vient pas du cockpit. Absent (CLI, agents en
+      // bearer, client hors navigateur), il ne refuse rien ; le dev passe par le proxy de
+      // Vite, donc en same-origin.
+      const site = req.headers['sec-fetch-site'];
+      if ((path.startsWith('/api/') || isSocket) && site !== undefined && site !== 'same-origin') {
+        return reply.code(403).send({ error: 'requête inter-site' });
+      }
     }
   });
 
@@ -167,7 +176,7 @@ export function registerSecurity(
     reply.header(
       'Content-Security-Policy',
       `default-src 'self'; connect-src 'self' ws://127.0.0.1:${port} ws://localhost:${port} http://127.0.0.1:4871; ` +
-        "style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'",
+        "style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; frame-ancestors 'none'",
     );
     reply.header('X-Content-Type-Options', 'nosniff');
     reply.header('Referrer-Policy', 'no-referrer');
