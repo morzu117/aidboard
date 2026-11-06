@@ -441,3 +441,57 @@ export interface AgentsDisponibles {
   agents: AgentDisponible[];
   baseEnRetard: number | null;
 }
+
+/** Chantier 29 (D156) : la mémoire disponible d'une machine, mesurée au diagnostic seulement. */
+export interface Memoire {
+  octets: number;
+  mesureA: string;
+}
+
+/** D154 : `GET /api/machines/local`, recalculé à chaque appel. */
+export interface MachineLocale {
+  agents: AgentDisponible[];
+  transport: 'pty' | 'stream';
+  /** null si la mesure a échoué */
+  memoire: Memoire | null;
+  mesureA: string;
+}
+
+/** D155 : le dernier diagnostic d'un serveur ; tout est null tant qu'il n'a jamais été diagnostiqué. */
+export interface MachineServeur {
+  serverId: string;
+  /** le dernier test de connexion connu du daemon (en mémoire, perdu au redémarrage) */
+  test: ServerTest | null;
+  /** version de chaque agent trouvé, null quand `--version` n'a rien rendu */
+  versions: Record<string, string | null> | null;
+  memoire: Memoire | null;
+  mesureA: string | null;
+}
+
+/** D159 : un accès aux modèles qu'un agent d'A-I-D utilise vraiment. Jamais une valeur de secret. */
+export interface Fournisseur {
+  id: 'anthropic' | 'openai' | 'ollama';
+  nom: string;
+  /** l'agent qui passe par lui, null pour la recherche de la mémoire */
+  agent: 'claude' | 'codex' | null;
+  acces: string;
+  /** facturation à l'usage possible : affiché en ambre */
+  usage: boolean;
+  secret: string;
+  /** l'alerte qui le concerne, s'il y en a une */
+  alerte: string | null;
+}
+
+/** D159 : un secret en clair, nommé, jamais montré. */
+export interface AlerteSecret {
+  id: string;
+  /** « ANTHROPIC_API_KEY dans l'environnement du daemon » */
+  titre: string;
+  /** la marche à suivre de « Comment la déplacer » */
+  etapes: string[];
+}
+
+export interface Fournisseurs {
+  fournisseurs: Fournisseur[];
+  alertes: AlerteSecret[];
+}
