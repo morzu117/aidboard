@@ -66,19 +66,28 @@ test('connecter depuis Réglages, trois DM arrivent dans la Boîte, « Vu », d�
   await expect(page).toHaveURL(/\/boite$/);
   await expect(node(page, '1-2.mesh')).toHaveAttribute('aria-label', 'Mesh · morzu-mac');
   await expect(node(page, '1-2.mesh.etat')).toHaveText('connecté');
-  await expect(node(page, '1-2.mesh.groupe-a-traiter.compte')).toHaveText('2');
-  await expect(node(page, '1-2.mesh.groupe-informations.compte')).toHaveText('1');
-  await expect(node(page, '1-2.mesh.dm-1.type')).toHaveText('Question');
-  await expect(node(page, '1-2.mesh.dm-1.emetteur')).toHaveText('mesh-gw');
-  await expect(node(page, '1-2.mesh.dm-2.type')).toHaveText('Déblocage');
+  await expect(node(page, '1-2.mesh.compte')).toHaveText('3');
+  // D136 : les DM informent, les plus récents d'abord ; une demande rappelle que rien n'a été lancé
+  await expect(node(page, '1-2.mesh.dm-1.type')).toHaveText('Déblocage');
+  await expect(node(page, '1-2.mesh.dm-1.rappel')).toContainText('Rien n’a été lancé.');
   // texte brut : la balise d'un pair s'affiche, elle n'est jamais interprétée
-  await expect(node(page, '1-2.mesh.dm-2.contenu').locator('pre')).toHaveText('<b>pas du HTML</b>');
-  await expect(node(page, '1-2.mesh.dm-2.contenu').locator('b')).toHaveCount(0);
-  await expect(node(page, '1-2.mesh.dm-3.type')).toHaveText('Info');
+  await expect(node(page, '1-2.mesh.dm-1.contenu').locator('pre')).toHaveText('<b>pas du HTML</b>');
+  await expect(node(page, '1-2.mesh.dm-1.contenu').locator('b')).toHaveCount(0);
+  await expect(node(page, '1-2.mesh.dm-2.type')).toHaveText('Info');
+  await expect(node(page, '1-2.mesh.dm-3.type')).toHaveText('Question');
+  await expect(node(page, '1-2.mesh.dm-3.emetteur')).toHaveText('mesh-gw');
+
+  // D137 : « En faire une décision » la passe dans les Décisions, en tête ; rien ne part vers le pair
+  await node(page, '1-2.mesh.dm-3.decision').click();
+  await expect(
+    node(page, '1-2.liste.groupe-decision').locator('[data-node="1-2.mesh.dm-1"]'),
+  ).toContainText('Tu lis le board swarph depuis A-I-D ?');
+  await expect(node(page, '1-2.mesh.dm-1.decision')).toHaveCount(0);
+  expect(readFileSync(join(home(), 'swarph.log'), 'utf8')).not.toMatch(/\b(send|reply|ack)\b/);
 
   await node(page, '1-2.mesh.dm-1.vu').click();
   await expect(node(page, '1-2.barre.mesh.texte')).toHaveText('monitor actif · 1 à traiter');
-  await expect(node(page, '1-2.mesh.groupe-a-traiter.compte')).toHaveText('1');
+  await expect(node(page, '1-2.mesh.compte')).toHaveText('2');
   await expect(node(page, '1-2.mesh.dm-1.type')).toHaveText('Déblocage');
 
   // déconnecter arrête le monitor de la cell : la confirmation le dit avant d'agir (D100)

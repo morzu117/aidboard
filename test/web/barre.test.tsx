@@ -82,16 +82,16 @@ test('liens : chacun mène à son écran, l’actif suit la route', async () => 
   expect(document.querySelector('[data-node$=".barre.relais"]')).toBeNull();
 });
 
-test('compteur : les agents qui attendent une réponse, caché à zéro', async () => {
+test('compteur : les décisions en attente (D140), caché à zéro', async () => {
   ouvrir();
   await attendreTable();
   expect(node('1-1.barre.nav-boite.compte')).toBeNull();
   cleanup();
   ouvrir({
     agents: [
-      agent({ status: 'needs_input' }),
-      agent({ id: 'ag_2', status: 'needs_input' }),
-      agent({ id: 'ag_3', status: 'working' }),
+      agent({ kind: 'claude', status: 'needs_input' }),
+      agent({ id: 'ag_2', kind: 'claude', status: 'needs_input' }),
+      agent({ id: 'ag_3', kind: 'claude', status: 'working' }),
     ],
   });
   await attendreTable();

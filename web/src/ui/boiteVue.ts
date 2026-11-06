@@ -1,8 +1,8 @@
-import type { Agent, MeshDm } from '../../../src/shared/model.js';
+import type { Agent, MeshDm, Topic } from '../../../src/shared/model.js';
 import type { StateSnapshot } from '../../../src/shared/state.js';
 import { agentView } from './Statut.js';
 
-// Chantier 28 : les règles de la Boîte de réception, sans rendu (D136, D140).
+// Chantier 28 : les règles de la Boîte de réception, sans rendu (D136, D139, D140).
 
 export type Nature = 'decision' | 'relire' | 'information';
 
@@ -41,17 +41,27 @@ export function natureDm(dm: Pick<MeshDm, 'seenAt' | 'decidedAt'>): Nature | nul
 export function agentsDeLaBoite(
   state: StateSnapshot,
   projet: string | null = null,
-): { agent: Agent; nature: Nature }[] {
+): { agent: Agent; topic: Topic; nature: Nature }[] {
   const topicOfRun = new Map(state.runs.map((r) => [r.id, r.topicId]));
   const topics = new Map(state.topics.map((t) => [t.id, t]));
-  const out: { agent: Agent; nature: Nature }[] = [];
+  const out: { agent: Agent; topic: Topic; nature: Nature }[] = [];
   for (const agent of state.agents) {
     const topic = topics.get(topicOfRun.get(agent.runId) ?? '');
     if (!topic || (projet && topic.workspaceId !== projet)) continue;
     const nature = natureAgent(agent);
-    if (nature) out.push({ agent, nature });
+    if (nature) out.push({ agent, topic, nature });
   }
   return out;
+}
+
+/** D139 : le résumé d'un tour à relire, la première ligne non vide du dernier message, 140 caractères au plus. */
+export function resumeTour(message: string | null): string | null {
+  const ligne = message
+    ?.split('\n')
+    .map((l) => l.trim())
+    .find((l) => l.length > 0);
+  if (!ligne) return null;
+  return ligne.length > 140 ? `${ligne.slice(0, 139)}…` : ligne;
 }
 
 /** Les compteurs des filtres ; `tout` additionne les trois natures. */

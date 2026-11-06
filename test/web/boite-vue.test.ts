@@ -6,6 +6,7 @@ import {
   decisionsEnAttente,
   natureAgent,
   natureDm,
+  resumeTour,
 } from '../../web/src/ui/boiteVue.js';
 import { agent, snapshot, topic } from './helpers.js';
 
@@ -71,6 +72,13 @@ test('les agents de la Boîte : sujet connu, filtre par projet', () => {
     ['b', 'relire'],
   ]);
   expect(agentsDeLaBoite(state, 'ws_2').map((e) => e.agent.id)).toEqual(['b']);
+});
+
+test('D139 : le résumé d’un tour, première ligne non vide, 140 caractères au plus', () => {
+  expect(resumeTour('\n  Tests verts.\nDétails plus bas')).toBe('Tests verts.');
+  expect(resumeTour('x'.repeat(200))).toBe(`${'x'.repeat(139)}…`);
+  expect(resumeTour(null)).toBeNull();
+  expect(resumeTour('  \n ')).toBeNull();
 });
 
 test('compteurs des filtres', () => {

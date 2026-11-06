@@ -7,6 +7,7 @@ import { type MeshBascule, useMeshBascule } from '../data/useMeshBascule.js';
 import { NouveauSujet } from '../dialogues/NouveauSujet.js';
 import { NouveauWorkspace } from '../dialogues/NouveauWorkspace.js';
 import { Barre, type EcranId } from './Barre.js';
+import { decisionsEnAttente } from './boiteVue.js';
 import { Nav } from './Nav.js';
 import { isPaletteShortcut, Palette, type PaletteItem } from './Palette.js';
 import { Shell } from './Shell.js';
@@ -71,7 +72,8 @@ export function Layout({ screen, children }: { screen: EcranId; children: ReactN
     setThenTopic(false);
     setDialog('workspace');
   };
-  const waiting = state?.agents.filter((a) => a.status === 'needs_input').length ?? 0;
+  // chantier 28 (D140) : la même définition que la section Décisions de la Boîte
+  const waiting = state ? decisionsEnAttente(state) : 0;
   // Pastille mesh (12.5) : la bascule vit dans useMeshBascule (D100), partagée avec Réglages par le contexte.
   const meshBascule = useMeshBascule();
   // D101 : l'âge du board, lu par les écrans du board eux-mêmes

@@ -49,7 +49,7 @@ test('une permission passe du hook à l’Accueil et à la boîte, on y répond 
 
   await node(page, '1-1.barre.nav-boite').click();
   await expect(page).toHaveURL(/\/boite$/);
-  await expect(node(page, '1-2.liste.groupe-attente.compte')).toHaveText('1');
+  await expect(node(page, '1-2.liste.groupe-decision.compte')).toHaveText('1');
   await expect(node(page, '1-2.liste.element-1.question')).toHaveText(
     'autoriser Bash(npm test -- pty) ?',
   );

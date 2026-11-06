@@ -3,25 +3,35 @@ import { Link, useNavigate } from 'react-router';
 import type { Agent, MeshDm, Topic, Workspace } from '../../../src/shared/model.js';
 import type { StateSnapshot } from '../../../src/shared/state.js';
 import { useAid } from '../data/useAidState.js';
+import {
+  agentsDeLaBoite,
+  compterNatures,
+  NATURES,
+  type Nature,
+  natureDm,
+  resumeTour,
+} from '../ui/boiteVue.js';
 import { depuis } from '../ui/depuis.js';
 import { A_TRAITER, Layout, useLayout } from '../ui/Layout.js';
 import { agentView, isAlive, type StatusView, type Tone } from '../ui/Statut.js';
 
 type Groupe = Exclude<Tone, 'inactif'>;
-const GROUPES: { tone: Groupe; titre: string }[] = [
-  { tone: 'attente', titre: 'Attend une réponse' },
-  { tone: 'erreur', titre: 'Erreur' },
-  { tone: 'relire', titre: 'À relire' },
-  { tone: 'cours', titre: 'En cours' },
-  { tone: 'pause', titre: 'En pause' },
-];
-// l'attente et les erreurs les plus anciennes d'abord : ce sont elles qui bloquent depuis le plus longtemps
-const PLUS_ANCIEN_DABORD = new Set<Groupe>(['attente', 'erreur']);
+
+// Chantier 28 (D136) : trois sections par nature. Décisions et À relire à gauche, Informations à droite.
+const SOUS_TITRE: Record<Nature, string> = {
+  decision: 'toi seul peux les prendre',
+  relire: 'tours terminés',
+  information: 'rien à faire de ton côté',
+};
+
+const RAPPEL_PAIR =
+  'Rien n’a été lancé. Un message de pair ne vaut pas autorisation, et sa cell n’a aucun accès à ta machine ni à tes sessions.';
 
 interface Element {
   agent: Agent;
   topic: Topic;
   workspace: Workspace | undefined;
+  nature: Nature;
   view: StatusView;
   at: string;
 }
@@ -53,8 +63,12 @@ function detail(e: Element): string | null {
   if (a.status === 'idle' && e.view.estimated && a.statusDetail?.silenceMs !== undefined)
     return `Terminal silencieux depuis ${duree(a.statusDetail.silenceMs)}`;
   if (a.status === 'working') return a.lastTool ?? a.statusMessage;
-  return a.statusMessage;
+  // D139 : un tour à relire se résume par la première ligne de son dernier message
+  return resumeTour(a.statusMessage);
 }
+
+/** Une décision d'agent porte une question : en attente, ou un tour fini sur une question (D136). */
+const estQuestion = (a: Agent) => a.status === 'needs_input' || a.statusReason === 'question';
 
 function Article({ n, e }: { n: number; e: Element }) {
   const { call } = useAid();
@@ -65,6 +79,9 @@ function Article({ n, e }: { n: number; e: Element }) {
   const tone = e.view.tone as Groupe;
   const texte = detail(e);
   const options = a.status === 'needs_input' && !a.pausedAt ? (a.pending?.options ?? []) : [];
+  const versAgent = `/sujets/${e.topic.id}?agent=${a.id}`;
+  // D139 : une PR ouverte se livre (D134), sinon le tour se relit
+  const livrer = e.topic.prNumber !== null && e.topic.state !== 'merged';
   const agir = async (path: string, body?: unknown) => {
     setBusy(true);
     setErreur(null);
@@ -110,12 +127,22 @@ function Article({ n, e }: { n: number; e: Element }) {
             {e.topic.branch}
           </span>
         </span>
+        {e.nature === 'decision' && (
+          <span className="boite-repere" data-node={id('repere')}>
+            {e.topic.phase && (
+              <span data-node={id('etape')} data-bind="sujet.phase">
+                étape {e.topic.phase} ·{' '}
+              </span>
+            )}
+            <span data-node={id('machine')}>Mac local</span>
+          </span>
+        )}
         <span className="element-moment" data-node={id('moment')} data-bind="evenement.moment">
           {depuis(e.at)}
         </span>
       </div>
       {texte &&
-        (a.status === 'needs_input' ? (
+        (e.nature === 'decision' && estQuestion(a) ? (
           <p className="element-question" data-node={id('question')} data-bind="demande.question">
             {texte}
           </p>
@@ -124,6 +151,11 @@ function Article({ n, e }: { n: number; e: Element }) {
             {texte}
           </p>
         ))}
+      {tone === 'cours' && (
+        <p className="texte-faible" data-node={id('rien')}>
+          Rien à faire de ton côté.
+        </p>
+      )}
       {tone !== 'cours' && (
         <div className="element-actions">
           {options.map((o, i) => (
@@ -151,14 +183,41 @@ function Article({ n, e }: { n: number; e: Element }) {
             >
               Reprendre
             </button>
-          ) : (
+          ) : e.nature === 'decision' ? (
+            <Link
+              className="lien boite-contexte"
+              data-node={id('contexte')}
+              data-action="sujet.contexte"
+              to={versAgent}
+            >
+              Voir le contexte
+            </Link>
+          ) : tone === 'erreur' ? (
             <Link
               className="lien"
               data-node={id('ouvrir')}
               data-action="terminal.ouvrir"
-              to={`/sujets/${e.topic.id}?agent=${a.id}`}
+              to={versAgent}
             >
               Ouvrir le terminal →
+            </Link>
+          ) : livrer ? (
+            <Link
+              className="bouton"
+              data-node={id('livrer')}
+              data-action="sujet.livrer"
+              to={`/sujets/${e.topic.id}/livraison`}
+            >
+              Livrer
+            </Link>
+          ) : (
+            <Link
+              className="bouton"
+              data-node={id('relire')}
+              data-action="tour.relire"
+              to={versAgent}
+            >
+              Relire
             </Link>
           )}
         </div>
@@ -264,20 +323,22 @@ function OuvrirCell({ n, state }: { n: number; state: StateSnapshot }) {
 
 /**
  * Un DM du mesh (12.5). Le contenu est une donnée d'un pair : rendu en texte brut dans un bloc encadré,
- * jamais interprété (même raison que D30). « Vu » le retire de la Boîte (12.4) ; « Ouvrir la cell » arrive en 12.6.
+ * jamais interprété (même raison que D30). « Vu » le retire de la Boîte (12.4). Chantier 28 (D137) : il garde
+ * son origine ; une demande rappelle que rien n'a été lancé, et « En faire une décision » la passe en Décisions.
  */
 function ArticleMesh({ n, dm, state }: { n: number; dm: MeshDm; state: StateSnapshot }) {
   const { call, refresh } = useAid();
   const [busy, setBusy] = useState(false);
   const [erreur, setErreur] = useState<string | null>(null);
   const id = (rest: string) => `1-2.mesh.dm-${n}.${rest}`;
-  const urgent = A_TRAITER.has(dm.kind);
-  const vu = async () => {
+  const enDecision = natureDm(dm) === 'decision';
+  const urgent = enDecision || A_TRAITER.has(dm.kind);
+  const marquer = async (marque: 'seen' | 'decision') => {
     setBusy(true);
     setErreur(null);
     try {
-      await call('POST', `/api/mesh/dm/${dm.id}/seen`);
-      // la marque « vu » est locale (12.4) : aucun événement ne la porte, l'instantané se relit ici
+      await call('POST', `/api/mesh/dm/${dm.id}/${marque}`);
+      // les marques sont locales (12.4, D137) : aucun événement ne les porte, l'instantané se relit ici
       await refresh();
     } catch (err) {
       setErreur(err instanceof Error ? err.message : String(err));
@@ -299,6 +360,9 @@ function ArticleMesh({ n, dm, state }: { n: number; dm: MeshDm; state: StateSnap
         >
           {KIND_LABEL[dm.kind]}
         </span>
+        <span className="texte-faible" data-node={id('source')}>
+          mesh
+        </span>
         <span className="identifiant" data-node={id('emetteur')} data-bind="mesh.emetteur">
           {dm.from}
         </span>
@@ -319,14 +383,31 @@ function ArticleMesh({ n, dm, state }: { n: number; dm: MeshDm; state: StateSnap
           {dm.content}
         </pre>
       </div>
+      {urgent && (
+        <p className="boite-rappel" data-node={id('rappel')}>
+          {RAPPEL_PAIR}
+        </p>
+      )}
       <div className="element-actions">
+        {!enDecision && (
+          <button
+            className="bouton"
+            data-node={id('decision')}
+            data-action="mesh.decision"
+            type="button"
+            disabled={busy}
+            onClick={() => void marquer('decision')}
+          >
+            En faire une décision
+          </button>
+        )}
         <button
           className="bouton"
           data-node={id('vu')}
           data-action="mesh.vu"
           type="button"
           disabled={busy}
-          onClick={() => void vu()}
+          onClick={() => void marquer('seen')}
         >
           Vu
         </button>
@@ -341,75 +422,74 @@ function ArticleMesh({ n, dm, state }: { n: number; dm: MeshDm; state: StateSnap
   );
 }
 
-/** La section Mesh de la Boîte : « À traiter » (question, unblock) puis « Informations » ; les DM vus n'y sont plus. */
-function SectionMesh({ state }: { state: StateSnapshot }) {
+/** L'état du mesh, en tête des Informations : la cell, les DM non vus, la connexion. */
+function EtatMesh({ state }: { state: StateSnapshot }) {
   const mesh = state.mesh!;
-  const nonVus = mesh.inbox.filter((d) => !d.seenAt);
-  const groupes = [
-    {
-      id: 'a-traiter',
-      titre: 'À traiter',
-      tone: 'attente',
-      // les plus anciens d'abord : ce sont eux qui bloquent un pair depuis le plus longtemps
-      items: nonVus.filter((d) => A_TRAITER.has(d.kind)).sort((x, y) => x.id - y.id),
-    },
-    {
-      id: 'informations',
-      titre: 'Informations',
-      tone: 'inactif',
-      items: nonVus.filter((d) => !A_TRAITER.has(d.kind)).sort((x, y) => y.id - x.id),
-    },
-  ].filter((g) => g.items.length > 0);
-  const numero = new Map(groupes.flatMap((g) => g.items).map((d, i) => [d.id, i + 1]));
+  const nonVus = mesh.inbox.filter((d) => !d.seenAt).length;
   return (
-    <section className="groupe" data-node="1-2.mesh" aria-label={`Mesh · ${mesh.state.cell}`}>
-      <div className="groupe-entete">
-        <h2 className="titre-zone" data-node="1-2.mesh.titre">
-          Mesh · {mesh.state.cell}
-        </h2>
-        <span className="texte-faible" data-node="1-2.mesh.compte">
-          {nonVus.length}
+    <div
+      className="groupe-entete boite-mesh"
+      data-node="1-2.mesh"
+      aria-label={`Mesh · ${mesh.state.cell}`}
+    >
+      <span className="titre-zone" data-node="1-2.mesh.titre">
+        Mesh · {mesh.state.cell}
+      </span>
+      <span className="texte-faible" data-node="1-2.mesh.compte">
+        {nonVus}
+      </span>
+      <span className="texte-faible" data-node="1-2.mesh.etat" data-bind="mesh.etat">
+        {mesh.state.connected ? 'connecté' : 'hors mesh'}
+      </span>
+      {nonVus === 0 && (
+        <span className="texte-discret" data-node="1-2.mesh.vide">
+          Aucun message à lire.
         </span>
-        <span className="texte-faible" data-node="1-2.mesh.etat" data-bind="mesh.etat">
-          {mesh.state.connected ? 'connecté' : 'hors mesh'}
+      )}
+    </div>
+  );
+}
+
+function Section({
+  nature,
+  compte,
+  children,
+}: {
+  nature: Nature;
+  compte: number;
+  children: ReactNode;
+}) {
+  const titre = NATURES.find((x) => x.id === nature)!.titre;
+  return (
+    <section
+      className={`groupe boite-section boite-section--${nature}`}
+      data-node={`1-2.liste.groupe-${nature}`}
+      aria-label={titre}
+    >
+      <div className="groupe-entete">
+        <h2
+          className="titre-zone boite-section-titre"
+          data-node={`1-2.liste.groupe-${nature}.titre`}
+        >
+          {titre} · {SOUS_TITRE[nature]}
+        </h2>
+        <span className="texte-faible" data-node={`1-2.liste.groupe-${nature}.compte`}>
+          {compte}
         </span>
       </div>
-      {groupes.length === 0 && (
-        <p className="texte-discret" data-node="1-2.mesh.vide">
-          Aucun message à lire.
-        </p>
-      )}
-      {groupes.map((g) => (
-        <section
-          key={g.id}
-          className="groupe"
-          data-node={`1-2.mesh.groupe-${g.id}`}
-          aria-label={g.titre}
-        >
-          <div className="groupe-entete">
-            <h3
-              className={`titre-zone titre-zone--${g.tone}`}
-              data-node={`1-2.mesh.groupe-${g.id}.titre`}
-            >
-              {g.titre}
-            </h3>
-            <span className="texte-faible" data-node={`1-2.mesh.groupe-${g.id}.compte`}>
-              {g.items.length}
-            </span>
-          </div>
-          {g.items.map((d) => (
-            <ArticleMesh key={d.id} n={numero.get(d.id)!} dm={d} state={state} />
-          ))}
-        </section>
-      ))}
+      {children}
     </section>
   );
 }
+
+const plusAncien = (x: Element, y: Element) => x.at.localeCompare(y.at);
+const plusRecent = (x: Element, y: Element) => y.at.localeCompare(x.at);
 
 function Contenu() {
   const { state, daemon, retry } = useAid();
   const { openNewTopic } = useLayout();
   const [filtre, setFiltre] = useState<string | null>(null);
+  const [nature, setNature] = useState<Nature | 'tout'>('tout');
   const down = daemon === 'injoignable' || daemon === 'session-expiree';
   const entete = (resume: ReactNode, filtres?: ReactNode) => (
     <div className="entete" data-node="1-2.entete">
@@ -486,77 +566,110 @@ function Contenu() {
     );
   }
 
-  const topicOfRun = new Map(state.runs.map((r) => [r.id, r.topicId]));
-  const topics = new Map(state.topics.map((t) => [t.id, t]));
-  const elements: Element[] = [];
-  for (const a of state.agents) {
-    const topic = topics.get(topicOfRun.get(a.runId) ?? '');
-    if (!topic || (filtre && topic.workspaceId !== filtre)) continue;
-    // un agent vivant, ou sorti en erreur d'un sujet encore ouvert : terminé ou arrêté, un agent est
-    // « inactif », comme un shell vivant, et n'a rien à dire ici
-    const view = agentView(a, 'boite');
-    if (view.tone === 'inactif') continue;
-    elements.push({
-      agent: a,
-      topic,
-      workspace: state.workspaces.find((w) => w.id === topic.workspaceId),
-      view,
-      at: (a.pausedAt && isAlive(a) ? a.pausedAt : a.statusAt) ?? a.updatedAt,
-    });
-  }
-  const groupes = GROUPES.map((g) => ({
-    ...g,
-    items: elements
-      .filter((e) => e.view.tone === g.tone)
-      .sort((x, y) => (PLUS_ANCIEN_DABORD.has(g.tone) ? 1 : -1) * x.at.localeCompare(y.at)),
-  })).filter((g) => g.items.length > 0);
-  // numérotation continue d'un groupe à l'autre, comme dans la maquette
-  const numero = new Map(groupes.flatMap((g) => g.items).map((e, i) => [e.agent.id, i + 1]));
-  const nSujets = new Set(elements.map((e) => e.topic.id)).size;
-  const filtres = state.workspaces.length > 0 && (
+  const elements: Element[] = agentsDeLaBoite(state, filtre).map(({ agent: a, topic, nature }) => ({
+    agent: a,
+    topic,
+    workspace: state.workspaces.find((w) => w.id === topic.workspaceId),
+    nature,
+    view: agentView(a, 'boite'),
+    at: (a.pausedAt && isAlive(a) ? a.pausedAt : a.statusAt) ?? a.updatedAt,
+  }));
+  // les DM ne sont rattachés à aucun projet : le filtre de projet ne les touche pas
+  const dms = (state.mesh?.inbox ?? []).filter((d) => natureDm(d) !== null);
+  const deNature = (n: Nature) => elements.filter((e) => e.nature === n);
+  // D136 : l'attente la plus ancienne d'abord ; à relire, les erreurs puis les tours les plus récents ;
+  // en information, le travail en cours puis les pauses
+  const agentsPar: Record<Nature, Element[]> = {
+    decision: deNature('decision').sort(plusAncien),
+    relire: [
+      ...deNature('relire')
+        .filter((e) => e.view.tone === 'erreur')
+        .sort(plusAncien),
+      ...deNature('relire')
+        .filter((e) => e.view.tone !== 'erreur')
+        .sort(plusRecent),
+    ],
+    information: [
+      ...deNature('information')
+        .filter((e) => e.view.tone === 'cours')
+        .sort(plusRecent),
+      ...deNature('information')
+        .filter((e) => e.view.tone === 'pause')
+        .sort(plusRecent),
+    ],
+  };
+  const dmsPar: Record<Nature, MeshDm[]> = {
+    decision: dms.filter((d) => natureDm(d) === 'decision').sort((x, y) => x.id - y.id),
+    relire: [],
+    information: dms.filter((d) => natureDm(d) === 'information').sort((x, y) => y.id - x.id),
+  };
+  const comptes = compterNatures([
+    ...elements.map((e) => e.nature),
+    ...dms.map((d) => natureDm(d)!),
+  ]);
+  // numérotation continue d'une section à l'autre, comme dans la maquette
+  const ordre: Nature[] = ['decision', 'relire', 'information'];
+  const numero = new Map(ordre.flatMap((n) => agentsPar[n]).map((e, i) => [e.agent.id, i + 1]));
+  const numeroDm = new Map(ordre.flatMap((n) => dmsPar[n]).map((d, i) => [d.id, i + 1]));
+  const visible = (n: Nature) => nature === 'tout' || nature === n;
+
+  const filtres = (
     <div className="filtres" data-node="1-2.filtres">
-      <div className="groupe-filtres" role="group" aria-label="Filtrer par workspace">
-        <button
-          className={`puce-filtre${filtre === null ? ' est-actif' : ''}`}
-          data-node="1-2.filtres.workspace-tous"
-          data-action="filtre.workspace"
-          type="button"
-          aria-pressed={filtre === null}
-          onClick={() => setFiltre(null)}
-        >
-          Tous
-        </button>
-        {state.workspaces.map((w, i) => (
+      <div className="groupe-filtres" role="group" aria-label="Filtrer par nature">
+        {[{ id: 'tout' as const, titre: 'Tout' }, ...NATURES].map((x) => (
           <button
-            key={w.id}
-            className={`puce-filtre${filtre === w.id ? ' est-actif' : ''}`}
-            data-node={`1-2.filtres.workspace-${i + 1}`}
-            data-action="filtre.workspace"
+            key={x.id}
+            className={`puce-filtre${nature === x.id ? ' est-actif' : ''}`}
+            data-node={`1-2.filtres.nature-${x.id}`}
+            data-action="filtre.nature"
             type="button"
-            aria-pressed={filtre === w.id}
-            onClick={() => setFiltre(w.id)}
+            aria-pressed={nature === x.id}
+            onClick={() => setNature(x.id)}
           >
-            <span data-node={`1-2.filtres.workspace-${i + 1}.nom`} data-bind="workspace.nom">
-              {w.name}
+            {x.titre}{' '}
+            <span className="texte-faible" data-node={`1-2.filtres.nature-${x.id}.compte`}>
+              {comptes[x.id]}
             </span>
           </button>
         ))}
       </div>
+      {state.workspaces.length > 0 && (
+        <div className="groupe-filtres" role="group" aria-label="Filtrer par workspace">
+          <button
+            className={`puce-filtre${filtre === null ? ' est-actif' : ''}`}
+            data-node="1-2.filtres.workspace-tous"
+            data-action="filtre.workspace"
+            type="button"
+            aria-pressed={filtre === null}
+            onClick={() => setFiltre(null)}
+          >
+            Tous
+          </button>
+          {state.workspaces.map((w, i) => (
+            <button
+              key={w.id}
+              className={`puce-filtre${filtre === w.id ? ' est-actif' : ''}`}
+              data-node={`1-2.filtres.workspace-${i + 1}`}
+              data-action="filtre.workspace"
+              type="button"
+              aria-pressed={filtre === w.id}
+              onClick={() => setFiltre(w.id)}
+            >
+              <span data-node={`1-2.filtres.workspace-${i + 1}.nom`} data-bind="workspace.nom">
+                {w.name}
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
+  const sousTitre = state.mesh ? 'Agents de ce Mac et messages du mesh' : 'Agents de ce Mac';
 
-  if (elements.length === 0) {
+  if (comptes.tout === 0) {
     return (
       <main className="page">
-        {entete(
-          <>
-            <span data-node="1-2.entete.resume.elements" data-bind="resume.elements">
-              0
-            </span>{' '}
-            élément
-          </>,
-          filtres,
-        )}
+        {entete(sousTitre, filtres)}
         <section className="vide" data-node="1-2.vide">
           <p className="vide-message" data-node="1-2.vide.message">
             Rien à traiter : aucun agent n’attend ta réponse.
@@ -576,59 +689,45 @@ function Contenu() {
             </Link>
           </div>
         </section>
-        {state.mesh && (
-          <div className="boite-colonnes">
-            <div className="liste" data-node="1-2.liste">
-              <SectionMesh state={state} />
-            </div>
-          </div>
-        )}
+        {state.mesh && <EtatMesh state={state} />}
       </main>
     );
   }
 
+  const section = (n: Nature) =>
+    visible(n) && (
+      <Section key={n} nature={n} compte={comptes[n]}>
+        {n === 'information' && state.mesh && <EtatMesh state={state} />}
+        {comptes[n] === 0 && (
+          <p className="texte-discret" data-node={`1-2.liste.groupe-${n}.vide`}>
+            Rien ici pour le moment.
+          </p>
+        )}
+        {dmsPar[n].map((d) => (
+          <ArticleMesh key={`dm-${d.id}`} n={numeroDm.get(d.id)!} dm={d} state={state} />
+        ))}
+        {agentsPar[n].map((e) => (
+          <Article key={e.agent.id} n={numero.get(e.agent.id)!} e={e} />
+        ))}
+      </Section>
+    );
+  const gauche = visible('decision') || visible('relire');
+  const droite = visible('information');
   return (
     <main className="page">
-      {entete(
-        <>
-          <span data-node="1-2.entete.resume.elements" data-bind="resume.elements">
-            {elements.length}
-          </span>{' '}
-          élément{elements.length > 1 ? 's' : ''} sur{' '}
-          <span data-node="1-2.entete.resume.sujets" data-bind="resume.sujets">
-            {nSujets}
-          </span>{' '}
-          sujet{nSujets > 1 ? 's' : ''} · triés par urgence
-        </>,
-        filtres,
-      )}
-      <div className="boite-colonnes">
-        <div className="liste" data-node="1-2.liste">
-          {groupes.map((g) => (
-            <section
-              key={g.tone}
-              className="groupe"
-              data-node={`1-2.liste.groupe-${g.tone}`}
-              aria-label={g.titre}
-            >
-              <div className="groupe-entete">
-                <h2
-                  className={`titre-zone titre-zone--${g.tone}`}
-                  data-node={`1-2.liste.groupe-${g.tone}.titre`}
-                >
-                  {g.titre}
-                </h2>
-                <span className="texte-faible" data-node={`1-2.liste.groupe-${g.tone}.compte`}>
-                  {g.items.length}
-                </span>
-              </div>
-              {g.items.map((e) => (
-                <Article key={e.agent.id} n={numero.get(e.agent.id)!} e={e} />
-              ))}
-            </section>
-          ))}
-          {state.mesh && <SectionMesh state={state} />}
-        </div>
+      {entete(sousTitre, filtres)}
+      <div className={`boite-colonnes${gauche && droite ? '' : ' boite-colonnes--une'}`}>
+        {gauche && (
+          <div className="liste" data-node="1-2.liste">
+            {section('decision')}
+            {section('relire')}
+          </div>
+        )}
+        {droite && (
+          <div className="liste" data-node="1-2.infos">
+            {section('information')}
+          </div>
+        )}
       </div>
     </main>
   );
