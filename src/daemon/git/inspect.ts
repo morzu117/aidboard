@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { existsSync, readFileSync, realpathSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { parse } from 'yaml';
@@ -7,6 +8,7 @@ import type {
   GitFileChange,
   GitLiveInfo,
   GitLogCommit,
+  LivraisonGit,
 } from '../../shared/git.js';
 import type { FileStatus } from '../../shared/files.js';
 import { isValidNamespace } from '../memory/slug.js';
@@ -377,6 +379,67 @@ export async function gitCommitDetail(
     inHead: ancestor.ok,
     files,
   };
+}
+
+// Chantier 27 (D125) : le changement que la livraison porte, `origin/<base>...HEAD`, et la place du
+// commit d'une revue par rapport à HEAD. L'empreinte se calcule sur `diff --raw` (les blobs avant et
+// après de chaque fichier) : elle identifie le changement sans lire un diff de plusieurs mégaoctets.
+export async function gitLivraison(
+  worktree: string,
+  base: string,
+  revue?: string,
+): Promise<LivraisonGit> {
+  const [head, mb] = await Promise.all([
+    git(worktree, ['rev-parse', '--verify', '--quiet', 'HEAD']),
+    git(worktree, ['merge-base', `origin/${base}`, 'HEAD']),
+  ]);
+  const out: LivraisonGit = {
+    head: head.ok && head.stdout ? head.stdout : null,
+    base,
+    mergeBase: mb.ok && mb.stdout ? mb.stdout : null,
+    files: [],
+    additions: 0,
+    deletions: 0,
+    empreinte: null,
+  };
+  if (out.head && out.mergeBase) {
+    const [numstat, nameStatus, raw] = await Promise.all([
+      git(worktree, ['diff', '--numstat', '--no-renames', out.mergeBase, out.head]),
+      git(worktree, ['diff', '--name-status', '--no-renames', out.mergeBase, out.head]),
+      git(worktree, ['diff', '--raw', '--no-renames', '--no-abbrev', out.mergeBase, out.head]),
+    ]);
+    const statusByPath = new Map<string, GitFileChange['status']>();
+    for (const line of nameStatus.ok ? nameStatus.stdout.split('\n').filter(Boolean) : []) {
+      const [code, ...rest] = line.split('\t');
+      const letter = code?.[0] as GitFileChange['status'] | undefined;
+      statusByPath.set(rest.join('\t'), letter && ['A', 'M', 'D'].includes(letter) ? letter : '?');
+    }
+    for (const line of numstat.ok ? numstat.stdout.split('\n').filter(Boolean) : []) {
+      const [a, d, ...rest] = line.split('\t');
+      const path = rest.join('\t');
+      const additions = a === '-' ? null : Number(a);
+      const deletions = d === '-' ? null : Number(d);
+      out.files.push({ path, status: statusByPath.get(path) ?? '?', additions, deletions });
+      out.additions += additions ?? 0;
+      out.deletions += deletions ?? 0;
+    }
+    if (raw.ok) out.empreinte = createHash('sha1').update(raw.stdout).digest('hex').slice(0, 8);
+  }
+  if (revue !== undefined) {
+    const r = await git(worktree, ['rev-parse', '--verify', '--quiet', `${revue}^{commit}`]);
+    const commit = r.ok && r.stdout ? r.stdout : null;
+    let ancetre = false;
+    let retard = 0;
+    if (commit && out.head) {
+      ancetre = (await git(worktree, ['merge-base', '--is-ancestor', commit, out.head])).ok;
+      if (ancetre) {
+        const n = await git(worktree, ['rev-list', '--count', `${commit}..${out.head}`]);
+        retard = n.ok ? Number(n.stdout) : 0;
+      }
+    }
+    out.revue = { commit, connu: commit !== null, ancetre, retard };
+  }
+  return out;
 }
 
 // 11.11 (D32) : contenu d'un fichier à une révision donnée, pour diff.ouvrir-fichier — null

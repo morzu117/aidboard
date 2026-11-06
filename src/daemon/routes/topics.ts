@@ -19,6 +19,7 @@ import {
   gitBranches,
   gitCommitDetail,
   gitLiveInfo,
+  gitLivraison,
   gitLog,
   hasUncommittedChanges,
   hasUncommittedOrOperationInProgress,
@@ -336,6 +337,19 @@ export function registerTopicRoutes(app: FastifyInstance, deps: TopicRouteDeps):
     const commit = await gitCommitDetail(row.worktree, hash);
     if (!commit) throw new AidHttpError(404, 'commit inconnu');
     return commit;
+  });
+
+  // Chantier 27 (D125) : le changement livré et la place du commit d'une revue, relus à chaque appel.
+  app.get('/api/topics/:id/git/livraison', async (req) => {
+    const { id } = req.params as { id: string };
+    const { revue } = req.query as { revue?: string };
+    if (revue !== undefined && !/^[0-9a-f]{4,40}$/i.test(revue))
+      throw new AidHttpError(422, 'commit de revue invalide');
+    const row = deps.db.prepare('SELECT worktree, base FROM topics WHERE id = ?').get(id) as
+      { worktree: string; base: string } | undefined;
+    if (!row) throw new AidHttpError(404, 'sujet inconnu');
+    if (!existsSync(row.worktree)) throw new AidHttpError(409, 'worktree introuvable');
+    return gitLivraison(row.worktree, row.base, revue);
   });
 
   app.post('/api/topics/:id/actions/:actionId', async (req, reply) => {
