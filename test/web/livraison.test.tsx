@@ -258,3 +258,175 @@ test('D121 : sujet inconnu, worktree absent, sujet fusionné', async () => {
   );
   expect(node('livraison.tete-locale')).toBeNull();
 });
+
+// 27.6 : contrôles et revue (Q2, Q7, D126, D130, D131).
+
+const pages = (slugs: string[]) => ({
+  [`GET /api/memory/pages?prefix=${encodeURIComponent('aid/')}`]: json(200, { slugs }),
+});
+const pageRevue = (body: string, frontmatter: Record<string, unknown> = {}) => ({
+  ...pages(['aid/review/s']),
+  'GET /api/memory/pages/aid/review/s': json(200, {
+    slug: 'aid/review/s',
+    namespace: 'aid',
+    title: 'Revue',
+    frontmatter,
+    body,
+    revision: 1,
+    author: 'codex',
+    createdAt: 't',
+    updatedAt: 't',
+  }),
+});
+const avecRevue = (commit: string, revue: Partial<NonNullable<LivraisonGit['revue']>>) => ({
+  [`GET /api/topics/tp_1/git/livraison?revue=${commit}`]: json(
+    200,
+    gitLu({ revue: { commit, connu: true, ancetre: true, retard: 0, ...revue } }),
+  ),
+});
+
+test('Q7, D130 : tuile et liste des contrôles ; un test local sur une autre tête est grisé et ne compte pas', async () => {
+  const h = ouvrir(avecPr, {
+    'POST /api/topics/tp_1/actions/topic.test': json(202, { actionId: 'ac_t2' }),
+  });
+  await arrive(h, [
+    lecture({
+      statusCheckRollup: [
+        {
+          name: 'ci',
+          status: 'COMPLETED',
+          conclusion: 'SUCCESS',
+          startedAt: '2026-11-06T10:00:00Z',
+          completedAt: '2026-11-06T10:00:42Z',
+          detailsUrl: 'https://ci/1',
+        },
+        { name: 'lint', status: 'COMPLETED', conclusion: 'FAILURE' },
+      ],
+    }),
+    {
+      ...lecture({}),
+      id: 'ac_t1',
+      action: 'topic.test',
+      result: { head: LOCALE },
+      startedAt: '2026-11-06T09:00:00.000Z',
+      finishedAt: '2026-11-06T09:02:05.000Z',
+    },
+  ]);
+  await waitFor(() =>
+    expect(node('livraison.tuile-controles.valeur')?.textContent).toBe('1 passé · 1 panne'),
+  );
+  expect(node('livraison.tuile-controles')?.dataset.ton).toBe('rouge');
+  expect(node('livraison.tuile-controles.note')?.textContent).toBe('Exécutés sur 3f2a91c');
+  expect(node('livraison.controles.compte')?.textContent).toBe(' · 1 sur 2');
+  expect(node('livraison.controles.controle-0')?.textContent).toBe('✓ passéci3f2a91c · 42 s');
+  expect(node('livraison.controles.controle-0')?.querySelector('a')?.getAttribute('href')).toBe(
+    'https://ci/1',
+  );
+  expect(node('livraison.controles.controle-1')?.dataset.etat).toBe('panne');
+  const local = node('livraison.controles.controle-2')!;
+  expect(local.className).toContain('livraison-controle--ailleurs');
+  expect(local.textContent).toBe('✓ passénpm test (local)sur 9e8d7c6 · 2 min 5 s');
+  fireEvent.click(node('livraison.controles.relancer')!);
+  await waitFor(() => expect(h.calls.some((c) => c.url.endsWith('/topic.test'))).toBe(true));
+  expect(node('livraison.controles.relancer')?.textContent).toBe('Test en cours…');
+});
+
+test('Q7 : sans contrôle connu, la tuile le dit', async () => {
+  ouvrir(topic());
+  await waitFor(() =>
+    expect(node('livraison.tuile-controles.valeur')?.textContent).toBe('Aucun contrôle'),
+  );
+  expect(node('livraison.controles.vide')).not.toBeNull();
+});
+
+test('D126, D131 : la page review en retard sur la tête rend la revue obsolète, avec son avis', async () => {
+  const h = ouvrir(topic(), {
+    ...pageRevue(
+      'On peut livrer : le changement est petit.\n\nExaminé : les 2 fichiers du diff.\nNon examiné : la recette.',
+      { commit: BASE },
+    ),
+    ...avecRevue(BASE, { retard: 2 }),
+  });
+  await waitFor(() => expect(node('livraison.tuile-revue.valeur')?.textContent).toBe('Obsolète'));
+  // jamais « absent de la branche » pendant la lecture de la position du commit
+  expect(node('livraison.tuile-revue.note')?.textContent).toBe(
+    'Porte sur 1111111 · 2 commits de retard',
+  );
+  expect(node('livraison.tuile-revue')?.dataset.ton).toBe('ambre');
+  expect(node('livraison.avis.obsolete')?.textContent).toBe(
+    'Revue obsolète. L’avis porte sur 1111111, la tête est maintenant 3f2a91c.',
+  );
+  expect(node('livraison.avis.texte')?.textContent).toBe(
+    'On peut livrer : le changement est petit.',
+  );
+  expect(node('livraison.avis.examine')?.textContent).toBe('Examiné : les 2 fichiers du diff.');
+  expect(node('livraison.avis.non-examine')?.textContent).toBe('Non examiné : la recette.');
+  expect(node('livraison.avis.onglet')?.getAttribute('href')).toBe('/sujets/tp_1?onglet=review');
+  // le dépôt n'est lu qu'une fois la page connue : une seule lecture, avec le commit de la revue
+  expect(h.calls.filter((c) => c.url.includes('/git/livraison')).map((c) => c.url)).toEqual([
+    `/api/topics/tp_1/git/livraison?revue=${BASE}`,
+  ]);
+});
+
+test('D126 : pendant la lecture, la tuile Revue ne conclut rien', async () => {
+  let rendre: (r: Response) => void = () => {};
+  ouvrir(topic(), {
+    ...pageRevue('Avis.', { commit: BASE }),
+    [`GET /api/topics/tp_1/git/livraison?revue=${BASE}`]: () =>
+      new Promise<Response>((r) => (rendre = r)) as unknown as Response,
+  });
+  // la page est lue : seule la position de son commit manque
+  await attendre('livraison.avis.texte');
+  expect(node('livraison.tuile-revue.valeur')?.textContent).toBe('Lecture…');
+  expect(node('livraison.avis.obsolete')).toBeNull();
+  await act(async () =>
+    rendre(json(200, gitLu({ revue: { commit: BASE, connu: true, ancetre: true, retard: 3 } }))()),
+  );
+  await waitFor(() => expect(node('livraison.tuile-revue.valeur')?.textContent).toBe('Obsolète'));
+});
+test('D126 : à jour, sans tête connue, absente de la branche', async () => {
+  ouvrir(topic(), { ...pageRevue('Rien à redire.', { commit: TETE }), ...avecRevue(TETE, {}) });
+  await waitFor(() => expect(node('livraison.tuile-revue.valeur')?.textContent).toBe('À jour'));
+  expect(node('livraison.tuile-revue')?.dataset.ton).toBe('ok');
+  expect(node('livraison.avis.obsolete')).toBeNull();
+  cleanup();
+  ouvrir(topic(), pageRevue('Rien à redire.'));
+  await waitFor(() =>
+    expect(node('livraison.tuile-revue.valeur')?.textContent).toBe('Revue sans tête connue'),
+  );
+  expect(node('livraison.tuile-revue')?.dataset.ton).toBe('neutre');
+  cleanup();
+  ouvrir(topic(), {
+    ...pageRevue('Rien à redire.', { commit: 'abcdef1' }),
+    ...avecRevue('abcdef1', { commit: null, connu: false, ancetre: false }),
+  });
+  await waitFor(() =>
+    expect(node('livraison.tuile-revue.note')?.textContent).toBe(
+      'Porte sur abcdef1, absent de la branche',
+    ),
+  );
+});
+
+test('D126 : sans page, la dernière revue GitHub ; sans l’une ni l’autre, aucune revue', async () => {
+  ouvrir(topic());
+  await waitFor(() =>
+    expect(node('livraison.tuile-revue.valeur')?.textContent).toBe('Aucune revue'),
+  );
+  expect(node('livraison.avis.aucune')).not.toBeNull();
+  expect(node('livraison.avis.onglet')).toBeNull();
+  cleanup();
+  const h = ouvrir(avecPr, avecRevue(BASE, { retard: 1 }));
+  await arrive(h, [
+    lecture({
+      reviews: [{ author: { login: 'alice' }, commit: { oid: BASE }, state: 'APPROVED' }],
+    }),
+  ]);
+  await waitFor(() =>
+    expect(node('livraison.tuile-revue.note')?.textContent).toBe(
+      'Porte sur 1111111 · 1 commit de retard',
+    ),
+  );
+  expect(node('livraison.avis.github')?.textContent).toBe(
+    'Revue GitHub de alice, sans page de revue dans la mémoire.',
+  );
+});

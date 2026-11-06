@@ -48,7 +48,7 @@ export function PanneauContexte({
   base: string;
   remote: string | null;
   activeAgentId: string | null;
-  initialOnglet?: 'git' | 'fichiers';
+  initialOnglet?: 'git' | 'fichiers' | 'review';
   /** Chantier 26 (D119) : « Voir la question » sélectionne l'onglet de cet agent. */
   onVoirAgent?: (agentId: string) => void;
 }) {
@@ -102,7 +102,8 @@ export function PanneauContexte({
   const ids = onglets.map((o) => o.id);
   // l'onglet mémoire sélectionné peut disparaître (page retirée ailleurs) : repli sur Plan,
   // pendant le rendu (même motif que la réinitialisation des pages plus haut).
-  if (onglet !== 'plan' && !ids.includes(onglet)) {
+  // Chantier 27 (D131) : pas avant que les pages soient lues, sinon ?onglet=review retombe sur Plan.
+  if (pages !== null && onglet !== 'plan' && !ids.includes(onglet)) {
     setOnglet('plan');
     setRepli((n) => n + 1);
   }

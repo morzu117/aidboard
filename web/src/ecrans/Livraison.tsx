@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router';
 import type { LivraisonGit } from '../../../src/shared/git.js';
+import type { MemoryPage } from '../../../src/shared/memory.js';
 import type { Topic } from '../../../src/shared/model.js';
 import { Dialogue } from '../dialogues/Dialogue.js';
 import { AidApiError } from '../data/api.js';
@@ -9,7 +10,17 @@ import { usePlacement } from '../data/placement.js';
 import { useAid } from '../data/useAidState.js';
 import { Bandeau } from '../ui/Bandeau.js';
 import { Layout } from '../ui/Layout.js';
-import { court, type PrLue } from '../ui/livraisonVue.js';
+import {
+  compterControles,
+  type Controle,
+  court,
+  type Fraicheur,
+  libelleFraicheur,
+  lireAvis,
+  lireControles,
+  type PrLue,
+  type SourceRevue,
+} from '../ui/livraisonVue.js';
 
 // Chantier 27 (D121) : peut-on livrer cette tête Git, et sur quelles preuves ?
 
@@ -46,12 +57,16 @@ function Contenu({ topicId }: { topicId: string }) {
 const pluriel = (n: number, mot: string) => `${n} ${mot}${n > 1 ? 's' : ''}`;
 
 function Ecran({ topic }: { topic: Topic }) {
+  const { state } = useAid();
   const placement = usePlacement(topic.id);
   const nom = placement?.displayName ?? topic.title;
-  const l = useLivraison(topic, null);
+  const workspace = state?.workspaces.find((w) => w.id === topic.workspaceId);
+  const l = useLivraison(topic, workspace?.namespace ?? workspace?.name ?? '');
   const tete = l.pr?.headRefOid ?? l.git?.head ?? null;
   const base = l.pr?.baseRefName ?? topic.base;
   const fusionne = topic.state === 'merged' || l.pr?.state === 'MERGED';
+  const controles = lireControles(l.pr, l.test);
+  const compte = compterControles(controles, tete);
 
   return (
     <main className="page livraison" data-node="livraison">
@@ -111,11 +126,30 @@ function Ecran({ topic }: { topic: Topic }) {
       )}
       {!fusionne && <BandeauTete topicId={topic.id} pr={l.pr} git={l.git} onPousse={l.relire} />}
 
+      <div className="livraison-tuiles">
+        <TuileControles compte={compte} tete={tete} />
+        <TuileRevue fraicheur={l.fraicheur} />
+      </div>
+
       <div className="livraison-corps">
         <section className="livraison-principal">
           <Fichiers topicId={topic.id} base={base} git={l.git} />
+          <AvisRevue
+            topicId={topic.id}
+            page={l.page}
+            source={l.source}
+            fraicheur={l.fraicheur}
+            tete={tete}
+          />
         </section>
         <aside className="livraison-cote">
+          <Controles
+            topicId={topic.id}
+            controles={controles}
+            compte={compte}
+            tete={tete}
+            relancable={!fusionne && !topic.worktreeMissing}
+          />
           <Trace topic={topic} nom={nom} base={base} fusionne={fusionne} />
         </aside>
       </div>
@@ -161,6 +195,205 @@ function BandeauTete({
         </span>
       )}
     </Bandeau>
+  );
+}
+
+type Compte = ReturnType<typeof compterControles>;
+
+/** Q7 : succès et pannes des contrôles portés par la tête de l'écran. */
+function TuileControles({ compte, tete }: { compte: Compte; tete: string | null }) {
+  const parts = [`${compte.passes} passé${compte.passes > 1 ? 's' : ''}`];
+  if (compte.pannes > 0) parts.push(`${compte.pannes} panne${compte.pannes > 1 ? 's' : ''}`);
+  if (compte.enCours > 0) parts.push(`${compte.enCours} en cours`);
+  const ton = compte.pannes > 0 ? 'rouge' : compte.enCours > 0 ? 'ambre' : 'neutre';
+  return (
+    <div
+      className={`livraison-tuile livraison-tuile--${ton}`}
+      data-node="livraison.tuile-controles"
+      data-ton={ton}
+    >
+      <p className="livraison-tuile-nom">Contrôles</p>
+      <p className="livraison-tuile-valeur" data-node="livraison.tuile-controles.valeur">
+        {compte.total === 0 ? 'Aucun contrôle' : parts.join(' · ')}
+      </p>
+      <p className="livraison-tuile-note" data-node="livraison.tuile-controles.note">
+        {tete ? `Exécutés sur ${court(tete)}` : 'Tête inconnue'}
+      </p>
+    </div>
+  );
+}
+
+/** Q2, D126 : la fraîcheur de la revue ; ambre si elle ne porte pas sur la tête. */
+function TuileRevue({ fraicheur }: { fraicheur: Fraicheur | null }) {
+  const { titre, note } = fraicheur
+    ? libelleFraicheur(fraicheur)
+    : { titre: 'Lecture…', note: 'La revue est en cours de lecture' };
+  const ton =
+    fraicheur?.etat === 'obsolete' ? 'ambre' : fraicheur?.etat === 'a-jour' ? 'ok' : 'neutre';
+  return (
+    <div
+      className={`livraison-tuile livraison-tuile--${ton}`}
+      data-node="livraison.tuile-revue"
+      data-ton={ton}
+    >
+      <p className="livraison-tuile-nom">Revue</p>
+      <p className="livraison-tuile-valeur" data-node="livraison.tuile-revue.valeur">
+        {titre}
+      </p>
+      <p className="livraison-tuile-note" data-node="livraison.tuile-revue.note">
+        {note}
+      </p>
+    </div>
+  );
+}
+
+const ETAT_CONTROLE: Record<Controle['etat'], string> = {
+  succes: '✓ passé',
+  panne: '✕ en panne',
+  'en-cours': '… en cours',
+};
+
+const enDuree = (s: number) => (s < 60 ? `${s} s` : `${Math.floor(s / 60)} min ${s % 60} s`);
+
+/** D130 : chaque contrôle, sa tête et sa durée ; un contrôle d'une autre tête est grisé et ne compte pas. */
+function Controles({
+  topicId,
+  controles,
+  compte,
+  tete,
+  relancable,
+}: {
+  topicId: string;
+  controles: Controle[];
+  compte: Compte;
+  tete: string | null;
+  relancable: boolean;
+}) {
+  const test = useActionSuivie(topicId);
+  return (
+    <div className="livraison-bloc" data-node="livraison.controles">
+      <h2 className="livraison-bloc-titre">
+        Contrôles exécutés
+        {compte.total > 0 && (
+          <span className="livraison-bloc-compte" data-node="livraison.controles.compte">
+            {' '}
+            · {compte.passes} sur {compte.total}
+          </span>
+        )}
+      </h2>
+      {controles.length === 0 && (
+        <p className="texte-discret" data-node="livraison.controles.vide">
+          Aucun contrôle connu pour cette tête.
+        </p>
+      )}
+      <ul className="livraison-controles">
+        {controles.map((c, i) => {
+          const ailleurs = c.tete !== tete;
+          return (
+            <li
+              key={`${c.nom}-${i}`}
+              className={`livraison-controle${ailleurs ? ' livraison-controle--ailleurs' : ''}`}
+              data-node={`livraison.controles.controle-${i}`}
+              data-etat={c.etat}
+            >
+              <span className={`livraison-controle-etat livraison-controle-etat--${c.etat}`}>
+                {ETAT_CONTROLE[c.etat]}
+              </span>
+              {c.url ? (
+                <a className="livraison-controle-nom" href={c.url} target="_blank" rel="noreferrer">
+                  {c.nom}
+                </a>
+              ) : (
+                <span className="livraison-controle-nom">{c.nom}</span>
+              )}
+              <span className="livraison-controle-detail">
+                {c.tete ? (ailleurs ? `sur ${court(c.tete)}` : court(c.tete)) : 'tête inconnue'}
+                {c.dureeS !== null && ` · ${enDuree(c.dureeS)}`}
+              </span>
+            </li>
+          );
+        })}
+      </ul>
+      {relancable && (
+        <button
+          className="bouton bouton--fantome"
+          type="button"
+          data-node="livraison.controles.relancer"
+          disabled={test.enCours || controles.some((c) => c.local && c.etat === 'en-cours')}
+          onClick={() => void test.lancer('topic.test')}
+        >
+          {test.enCours ? 'Test en cours…' : 'Relancer le test local'}
+        </button>
+      )}
+      {test.echec && test.run === null && (
+        <p className="message-erreur" role="alert" data-node="livraison.controles.erreur">
+          {test.echec}
+        </p>
+      )}
+    </div>
+  );
+}
+
+/** D131 : ce que la revue dit, ce qu'elle a examiné et ce qu'elle n'a pas examiné. */
+function AvisRevue({
+  topicId,
+  page,
+  source,
+  fraicheur,
+  tete,
+}: {
+  topicId: string;
+  page: MemoryPage | null | undefined;
+  source: SourceRevue | null;
+  fraicheur: Fraicheur | null;
+  tete: string | null;
+}) {
+  const avis = page ? lireAvis(page.body) : null;
+  return (
+    <div className="livraison-bloc" data-node="livraison.avis">
+      <h2 className="livraison-bloc-titre">Avis de revue</h2>
+      {fraicheur?.etat === 'obsolete' && tete && (
+        <p className="livraison-encart" data-node="livraison.avis.obsolete">
+          Revue obsolète. L’avis porte sur {court(fraicheur.commit)}, la tête est maintenant{' '}
+          {court(tete)}.
+        </p>
+      )}
+      {page === undefined ? (
+        <p className="texte-discret">Lecture de la mémoire…</p>
+      ) : avis ? (
+        <>
+          <p data-node="livraison.avis.texte">{avis.texte ?? 'La page de revue est vide.'}</p>
+          {avis.examine && (
+            <p className="texte-discret" data-node="livraison.avis.examine">
+              Examiné : {avis.examine}
+            </p>
+          )}
+          {avis.nonExamine && (
+            <p className="texte-discret" data-node="livraison.avis.non-examine">
+              Non examiné : {avis.nonExamine}
+            </p>
+          )}
+        </>
+      ) : source ? (
+        <p className="texte-discret" data-node="livraison.avis.github">
+          Revue GitHub{source.auteur ? ` de ${source.auteur}` : ''}, sans page de revue dans la
+          mémoire.
+        </p>
+      ) : (
+        <p className="texte-discret" data-node="livraison.avis.aucune">
+          Aucune revue pour ce sujet.
+        </p>
+      )}
+      {page && (
+        <Link
+          className="livraison-lien"
+          data-node="livraison.avis.onglet"
+          to={`/sujets/${topicId}?onglet=review`}
+        >
+          Ouvrir l’onglet Revue
+        </Link>
+      )}
+    </div>
   );
 }
 

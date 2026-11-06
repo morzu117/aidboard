@@ -1044,9 +1044,12 @@ export function Sujet() {
   const [selectedAgent, setSelectedAgent] = useState<string | null>(params.get('agent'));
   // D.2 : ?onglet=git|fichiers sélectionne l'onglet correspondant de PanneauContexte (déplacé
   // depuis la barre d'onglets exclusifs, retirée au profit des agents toujours visibles).
+  // Chantier 27 (D131) : ?onglet=review aussi, depuis l'avis de revue de l'écran Livraison.
   const ongletParam = params.get('onglet');
   const initialOnglet =
-    ongletParam === 'git' || ongletParam === 'fichiers' ? ongletParam : undefined;
+    ongletParam === 'git' || ongletParam === 'fichiers' || ongletParam === 'review'
+      ? ongletParam
+      : undefined;
   const topic = state?.topics.find((t) => t.id === topicId);
 
   // La grille trois colonnes et le volet panneau n'existent que pour la vue complète de Contenu
@@ -1106,7 +1109,7 @@ function SujetPanneau({
   namespace: string;
   remote: string | null;
   activeAgentId: string | null;
-  initialOnglet: 'git' | 'fichiers' | undefined;
+  initialOnglet: 'git' | 'fichiers' | 'review' | undefined;
   selectedAgent: string | null;
   onSelectAgent: (id: string | null) => void;
 }) {

@@ -104,6 +104,27 @@ test('?onglet=git présélectionne l’onglet Git du panneau, sans clic', async 
   expect(await screen.findByText('Aucun commit depuis la base.')).toBeTruthy();
 });
 
+test('chantier 27 (D131) : ?onglet=review présélectionne l’onglet Revue, depuis l’écran Livraison', async () => {
+  open('/sujets/tp_1?onglet=review', {
+    [`GET /api/memory/pages?prefix=${encodeURIComponent('aid/')}`]: json(200, {
+      slugs: ['aid/review/s'],
+    }),
+    'GET /api/memory/pages/aid/review/s': json(200, {
+      slug: 'aid/review/s',
+      namespace: 'aid',
+      title: 'Revue',
+      frontmatter: {},
+      body: 'Avis.',
+      revision: 1,
+      author: 'codex',
+      createdAt: 't',
+      updatedAt: 't',
+    }),
+  });
+  const revue = await screen.findByRole('tab', { name: 'Revue' });
+  expect(revue.getAttribute('aria-selected')).toBe('true');
+});
+
 test('le bouton flottant « Ouvrir la navigation » ouvre un popup ; Échap le referme et rend le focus', async () => {
   open();
   await screen.findByTestId('term-ag_1');

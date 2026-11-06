@@ -144,3 +144,113 @@
   color: var(--text);
   font: inherit;
 }
+
+/* Q2, Q7 : les tuiles Contrôles et Revue */
+.livraison-tuiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: var(--sp-4);
+}
+.livraison-tuile {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  padding: var(--sp-3) var(--sp-4);
+  border: 1px solid var(--line);
+  border-radius: var(--r-xl);
+  background: var(--surface-1);
+}
+.livraison-tuile p {
+  margin: 0;
+}
+.livraison-tuile-nom {
+  color: var(--muted);
+  font-size: var(--fs-s);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.livraison-tuile-valeur {
+  font-size: var(--fs-l);
+  font-weight: var(--fw-sb);
+}
+.livraison-tuile-note {
+  color: var(--muted);
+  font-size: var(--fs-s);
+}
+.livraison-tuile--ambre {
+  border-color: var(--s-attente-line);
+}
+.livraison-tuile--ambre .livraison-tuile-valeur {
+  color: var(--s-attente);
+}
+.livraison-tuile--rouge {
+  border-color: var(--s-erreur-line);
+}
+.livraison-tuile--rouge .livraison-tuile-valeur {
+  color: var(--s-erreur);
+}
+.livraison-tuile--ok .livraison-tuile-valeur {
+  color: var(--s-ok);
+}
+
+/* D130 : les contrôles exécutés */
+.livraison-bloc-compte {
+  letter-spacing: 0;
+  text-transform: none;
+}
+.livraison-controles {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.livraison-controle {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  column-gap: var(--sp-3);
+  font-size: var(--fs-s);
+}
+.livraison-controle--ailleurs {
+  opacity: 0.55;
+}
+.livraison-controle-etat {
+  grid-row: span 2;
+  min-width: 6.5em;
+}
+.livraison-controle-etat--succes {
+  color: var(--s-ok);
+}
+.livraison-controle-etat--panne {
+  color: var(--s-erreur);
+}
+.livraison-controle-etat--en-cours {
+  color: var(--s-attente);
+}
+.livraison-controle-nom {
+  overflow-wrap: anywhere;
+  color: var(--text-2);
+}
+.livraison-controle-detail {
+  color: var(--muted);
+  font-family: ui-monospace, monospace;
+}
+
+/* D131 : l'avis de revue */
+.livraison-bloc p {
+  margin: 0;
+}
+.livraison-encart {
+  padding: var(--sp-2) var(--sp-3);
+  border: 1px solid var(--s-attente-line);
+  border-radius: var(--r-m);
+  background: var(--s-attente-bg);
+  color: var(--s-attente);
+  font-size: var(--fs-s);
+}
+.livraison-lien {
+  align-self: flex-start;
+  color: var(--acc);
+  font-size: var(--fs-s);
+}
