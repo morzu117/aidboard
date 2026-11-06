@@ -250,3 +250,77 @@ test('Ouvrir une discussion ouvre la discussion du serveur', async () => {
   fireEvent.click(node('machines.machine-srv_1.discussion')!);
   await waitFor(() => expect(cheminCourant()).toBe('/serveurs/srv_1/discussion'));
 });
+
+// Chantier 29.6 : la matrice des combinaisons (D158) et les fournisseurs (D159).
+
+const ligne = (id: string) => `machines.combinaisons.ligne-${id}`;
+
+test('D158 : une ligne par agent piloté et par machine, marques et état, filtre par machine', async () => {
+  ouvrir({}, [serveur({ detectedAgents: ['claude', 'cursor'] })]);
+  await waitFor(() => expect(node(`${ligne('local:claude')}.etat`)?.textContent).toBe('Prêt'));
+  expect(node(`${ligne('local:claude')}.images`)?.textContent).toBe('✓');
+  expect(node(`${ligne('local:claude')}.distant`)?.textContent).toBe('✓');
+  expect(node(`${ligne('local:claude')}.conso`)?.textContent).toBe('–');
+  expect(node(`${ligne('local:codex')}.etat`)?.textContent).toBe('Agent non détecté');
+  expect(node(`${ligne('srv_1:claude')}.images`)?.textContent).toBe('–');
+  expect(node(`${ligne('srv_1:claude')}.etat`)?.textContent).toBe('Prêt, limité');
+  expect(node(`${ligne('srv_1:cursor')}.etat`)?.textContent).toBe('Détecté, non piloté par A-I-D');
+  expect(node('machines.combinaisons.table')?.querySelectorAll('tbody tr')).toHaveLength(5);
+
+  fireEvent.click(node('machines.combinaisons.filtre-srv_1')!);
+  expect(node('machines.combinaisons.filtre-srv_1')?.getAttribute('aria-pressed')).toBe('true');
+  expect(node('machines.combinaisons.table')?.querySelectorAll('tbody tr')).toHaveLength(3);
+  expect(node(ligne('local:claude'))).toBeNull();
+  fireEvent.click(node('machines.combinaisons.filtre-local')!);
+  expect(node('machines.combinaisons.table')?.querySelectorAll('tbody tr')).toHaveLength(2);
+});
+
+test('D158 : un serveur jamais diagnostiqué est à tester, en ?', async () => {
+  ouvrir({}, [serveur()]);
+  await waitFor(() => expect(node(`${ligne('srv_1:codex')}.etat`)?.textContent).toBe('À tester'));
+  expect(node(`${ligne('srv_1:codex')}.outils`)?.textContent).toBe('?');
+  expect(node(`${ligne('srv_1:codex')}.distant`)?.textContent).toBe('–');
+});
+
+test('D159 : les fournisseurs, l’accès à l’usage en ambre, l’alerte et sa marche à suivre', async () => {
+  const f: Fournisseurs = {
+    fournisseurs: [
+      {
+        id: 'anthropic',
+        nom: 'Anthropic',
+        agent: 'claude',
+        acces: "Clé API · facturation à l'usage",
+        usage: true,
+        secret: "Clé en clair dans l'environnement",
+        alerte: 'env:ANTHROPIC_API_KEY',
+      },
+      {
+        id: 'ollama',
+        nom: 'Ollama',
+        agent: null,
+        acces: 'Endpoint local · sans clé · recherche de la mémoire',
+        usage: false,
+        secret: 'Aucun secret',
+        alerte: null,
+      },
+    ],
+    alertes: [
+      {
+        id: 'env:ANTHROPIC_API_KEY',
+        titre: "ANTHROPIC_API_KEY dans l'environnement du daemon",
+        etapes: ['Retire la ligne.', 'Relance le daemon.'],
+      },
+    ],
+  };
+  ouvrir({ 'GET /api/machines/fournisseurs': json(200, f) });
+  const acces = 'machines.fournisseur-anthropic.acces';
+  await waitFor(() => expect(node(acces)?.getAttribute('data-usage')).toBe('true'));
+  expect(node('machines.fournisseur-ollama.secret')?.textContent).toBe('Aucun secret');
+  // l'accès du fournisseur passe dans la matrice
+  expect(node(ligne('local:claude'))?.textContent).toContain("Clé API · facturation à l'usage");
+  const alerte = 'machines.alerte-env:ANTHROPIC_API_KEY';
+  expect(node(alerte)?.textContent).toContain("ANTHROPIC_API_KEY dans l'environnement du daemon");
+  expect(node(`${alerte}.etapes`)).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Comment la déplacer' }));
+  expect(node(`${alerte}.etapes`)?.querySelectorAll('li')).toHaveLength(2);
+});

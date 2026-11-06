@@ -1,6 +1,9 @@
-import type { ReactNode } from 'react';
+import { type ReactNode, useState } from 'react';
 import { useNavigate } from 'react-router';
+import { CAPACITES } from '../../../src/shared/capacites.js';
 import type {
+  AlerteSecret,
+  Fournisseurs,
   MachineServeur,
   Server,
   ServerStatus,
@@ -14,6 +17,8 @@ import {
   accesDe,
   agentsDeLaCarte,
   blocage,
+  combinaisons,
+  filtrer,
   libelleMemoire,
   MAC,
   repriseServeur,
@@ -249,6 +254,153 @@ function CarteServeur({
   );
 }
 
+/** D158 : la matrice des combinaisons réelles, filtrable par machine. */
+function Combinaisons({ m, servers }: { m: MachinesEtat; servers: Server[] }) {
+  const [filtre, setFiltre] = useState('toutes');
+  const lignes = combinaisons({
+    local: m.local,
+    serveurs: servers.map((server) => ({ server, diagnostic: m.serveurs[server.id] ?? null })),
+    fournisseurs: m.fournisseurs,
+  });
+  const filtres = [
+    { id: 'toutes', label: 'Toutes' },
+    { id: MAC.id, label: MAC.nom },
+    ...servers.map((s) => ({ id: s.id, label: s.name })),
+  ];
+  return (
+    <section
+      className="machines-section"
+      data-node="machines.combinaisons"
+      aria-labelledby="mco-titre"
+    >
+      <h2 id="mco-titre" className="titre-zone">
+        Combinaisons disponibles
+      </h2>
+      <div className="combinaisons-filtres" role="group" aria-label="Filtrer par machine">
+        {filtres.map((f) => (
+          <button
+            key={f.id}
+            className={`bouton${filtre === f.id ? ' est-actif' : ''}`}
+            data-node={`machines.combinaisons.filtre-${f.id}`}
+            type="button"
+            aria-pressed={filtre === f.id}
+            onClick={() => setFiltre(f.id)}
+          >
+            {f.label}
+          </button>
+        ))}
+      </div>
+      <div className="combinaisons-defile">
+        <table className="combinaisons" data-node="machines.combinaisons.table">
+          <thead>
+            <tr>
+              <th scope="col">Agent</th>
+              <th scope="col">Modèle</th>
+              <th scope="col">Fournisseur</th>
+              <th scope="col">Accès</th>
+              <th scope="col">Machine</th>
+              {CAPACITES.map((c) => (
+                <th key={c.id} scope="col">
+                  {c.label}
+                </th>
+              ))}
+              <th scope="col">État</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filtrer(lignes, filtre).map((l) => (
+              <tr key={l.id} data-node={`machines.combinaisons.ligne-${l.id}`}>
+                <td>{l.agent}</td>
+                <td>{l.modele}</td>
+                <td>{l.fournisseur}</td>
+                <td>{l.acces}</td>
+                <td>{l.machine}</td>
+                {CAPACITES.map((c) => (
+                  <td
+                    key={c.id}
+                    className="marque"
+                    data-node={`machines.combinaisons.ligne-${l.id}.${c.id}`}
+                    data-marque={l.marques[c.id]}
+                  >
+                    {l.marques[c.id]}
+                  </td>
+                ))}
+                <td data-node={`machines.combinaisons.ligne-${l.id}.etat`}>{l.etat}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p className="machines-legende">
+        ✓ fait et vérifié au dernier diagnostic · ? fait, machine pas encore diagnostiquée · –
+        absent, jamais proposé ailleurs dans l’interface.
+      </p>
+    </section>
+  );
+}
+
+function Alerte({ a }: { a: AlerteSecret }) {
+  const [ouverte, setOuverte] = useState(false);
+  return (
+    <div className="alerte-secret" role="alert" data-node={`machines.alerte-${a.id}`}>
+      <span className="alerte-secret-titre">{a.titre}</span>
+      <button
+        className="bouton"
+        data-node={`machines.alerte-${a.id}.deplacer`}
+        type="button"
+        aria-expanded={ouverte}
+        onClick={() => setOuverte(!ouverte)}
+      >
+        Comment la déplacer
+      </button>
+      {ouverte && (
+        <ol data-node={`machines.alerte-${a.id}.etapes`}>
+          {a.etapes.map((e) => (
+            <li key={e}>{e}</li>
+          ))}
+        </ol>
+      )}
+    </div>
+  );
+}
+
+/** D159 : les accès que les agents utilisent vraiment, et les secrets en clair, jamais leur valeur. */
+function SectionFournisseurs({ f }: { f: Fournisseurs | null }) {
+  return (
+    <section
+      className="machines-section"
+      data-node="machines.fournisseurs"
+      aria-labelledby="mf-titre"
+    >
+      <h2 id="mf-titre" className="titre-zone">
+        Fournisseurs
+      </h2>
+      {f?.alertes.map((a) => (
+        <Alerte key={a.id} a={a} />
+      ))}
+      {f && (
+        <ul className="fournisseurs">
+          {f.fournisseurs.map((x) => (
+            <li key={x.id} className="fournisseur" data-node={`machines.fournisseur-${x.id}`}>
+              <span className="machine-carte-nom">{x.nom}</span>
+              <span
+                className="fournisseur-acces"
+                data-node={`machines.fournisseur-${x.id}.acces`}
+                data-usage={String(x.usage)}
+              >
+                {x.acces}
+              </span>
+              <span className="texte-discret" data-node={`machines.fournisseur-${x.id}.secret`}>
+                {x.secret}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
+
 function Contenu() {
   const navigate = useNavigate();
   const m = useMachines();
@@ -318,6 +470,9 @@ function Contenu() {
           />
         ))}
       </section>
+
+      <Combinaisons m={m} servers={servers ?? []} />
+      <SectionFournisseurs f={m.fournisseurs} />
     </main>
   );
 }

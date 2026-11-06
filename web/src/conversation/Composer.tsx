@@ -1,4 +1,5 @@
 import { type ClipboardEvent, type DragEvent, type KeyboardEvent, useRef, useState } from 'react';
+import { capacitesDe } from '../../../src/shared/capacites.js';
 import type { AgentSettings } from '../../../src/shared/agentSettings.js';
 import type { AgentCommand, AgentOptions } from '../../../src/shared/agentSettings.js';
 import type { AgentStatus } from '../../../src/shared/model.js';
@@ -67,7 +68,11 @@ export function Composer({
   const fichierRef = useRef<HTMLInputElement>(null);
   // pièces jointes : agents `stream` seulement (D70), les mêmes qui ont des réglages
   // R.6 : pas sur un serveur distant, une pièce jointe est un fichier du daemon (D70)
-  const joindre = settings !== undefined && !distant;
+  const joindre =
+    settings !== undefined &&
+    // chantier 29 (D153) : la table des capacités, la même que l'écran Machines
+    (kind === 'claude' || kind === 'codex') &&
+    capacitesDe(kind, { machine: distant ? 'serveur' : 'mac', transport: 'stream' }).images;
 
   const needsInput = status === 'needs_input';
   const working = status === 'working';
