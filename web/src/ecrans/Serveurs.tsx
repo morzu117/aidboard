@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router';
-import type { Server, ServerStatus, ServerTest } from '../../../src/shared/model.js';
+import type { Server, ServerAgent, ServerStatus, ServerTest } from '../../../src/shared/model.js';
 import {
   activite,
   derniereDiscussion,
@@ -16,6 +16,7 @@ import {
 import { useAid } from '../data/useAidState.js';
 import { Dialogue } from '../dialogues/Dialogue.js';
 import { NouvelleDiscussion } from '../dialogues/NouvelleDiscussion.js';
+import { Reprendre } from '../dialogues/Reprendre.js';
 import { ContextMenu } from '../ui/ContextMenu.js';
 import { depuis } from '../ui/depuis.js';
 import { Layout } from '../ui/Layout.js';
@@ -57,6 +58,8 @@ function Carte({
   // R.6 : la discussion la plus récente du serveur, ou sa création s'il n'en a aucune
   const { discussions, erreur: erreurDiscussions } = useDiscussionsServeur(s.id);
   const [creation, setCreation] = useState(creer);
+  // chantier 28 (D150) : l'agent dont le dialogue Reprendre est ouvert
+  const [reprise, setReprise] = useState<ServerAgent | null>(null);
   const urlDe = (discussionId: string) => `/serveurs/${s.id}/discussions/${discussionId}`;
   const ouvrir = () => {
     const d = discussions && derniereDiscussion(discussions);
@@ -261,7 +264,9 @@ function Carte({
                         type="button"
                         onClick={(e) => {
                           e.stopPropagation();
-                          navigate(urlDe(d.id));
+                          // D150 : un suivi coupé ou en échec ouvre le dialogue, sinon la discussion
+                          if (a?.suivi) setReprise(a);
+                          else navigate(urlDe(d.id));
                         }}
                       >
                         Reprendre
@@ -274,6 +279,12 @@ function Carte({
           </table>
         )}
       </div>
+      {reprise && (
+        <Reprendre
+          cible={{ lieu: 'serveur', agent: reprise, serverId: s.id }}
+          onClose={() => setReprise(null)}
+        />
+      )}
       {creation && (
         <NouvelleDiscussion
           server={s}

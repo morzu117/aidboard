@@ -265,3 +265,41 @@ test('D119 : « Voir la question » du panneau sélectionne l’onglet de l’ag
     expect(node('1-3.terminaux.onglet-1')?.getAttribute('aria-selected')).toBe('true'),
   );
 });
+
+test('D150 : « Reprendre… » du menu ⋯ vise l’agent qui ne vit plus ; absent quand tous vivent', async () => {
+  const runs = [{ ...run }];
+  open(
+    placement(),
+    {},
+    state({
+      runs,
+      agents: [
+        agent({
+          id: 'ag_1',
+          kind: 'claude',
+          transport: 'stream',
+          status: 'stopped',
+          sessionId: 's',
+        }),
+        agent({ id: 'ag_2', kind: 'codex', transport: 'stream', status: 'working' }),
+      ],
+    }),
+  );
+  await ouvrirMenu();
+  fireEvent.click(await waitFor(() => node('1-3.actions.reprendre')!));
+  expect(await screen.findByRole('dialog', { name: 'claude est arrêté.' })).toBeTruthy();
+  expect(node('1-3.actions.reprendre')).toBeNull();
+  cleanup();
+  resetNavCacheForTests();
+  open(
+    placement(),
+    {},
+    state({
+      runs,
+      agents: [agent({ id: 'ag_2', kind: 'codex', transport: 'stream', status: 'working' })],
+    }),
+  );
+  await ouvrirMenu();
+  await waitFor(() => expect(node('1-3.actions.renommer')).not.toBeNull());
+  expect(node('1-3.actions.reprendre')).toBeNull();
+});

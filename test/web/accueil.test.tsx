@@ -522,3 +522,32 @@ test('chantier 27 (D134) : « Livrer » sur une PR ouverte, après Trancher et a
   expect(document.querySelectorAll('[data-action="sujet.trancher"]')).toHaveLength(1);
   expect(document.querySelector('[data-action="sujet.relire"]')).toBeNull();
 });
+
+test('D150 : l’agent le plus urgent ne vit plus, « Reprendre » ouvre le dialogue sans quitter l’accueil', async () => {
+  open(
+    snapshot({
+      workspaces: [ws()],
+      topics: [topic()],
+      runs: [{ id: 'run_1', topicId: 'tp_1', mode: 'standard', state: 'open', createdAt: 't' }],
+      agents: [
+        agent({
+          id: 'ag_1',
+          kind: 'claude',
+          transport: 'stream',
+          status: 'stopped',
+          sessionId: 'sess',
+        }),
+      ],
+    }),
+  );
+  await attendreTable();
+  const bouton = node('1-1.table.ligne-1.action.bouton') as HTMLElement;
+  expect(bouton.textContent).toBe('Reprendre');
+  expect(bouton.getAttribute('href')).toBeNull();
+  await userEvent.click(bouton);
+  expect(await screen.findByRole('dialog', { name: 'claude est arrêté.' })).toBeTruthy();
+  // ni la ligne ni le bouton n'ont navigué
+  expect(navigateSpy).not.toHaveBeenCalled();
+  await userEvent.click(screen.getByRole('button', { name: 'Annuler' }));
+  expect(screen.queryByRole('dialog')).toBeNull();
+});
