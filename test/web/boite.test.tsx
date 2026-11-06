@@ -195,6 +195,7 @@ const dm = (over: Partial<MeshDm>): MeshDm => ({
   replyTo: null,
   obligationId: null,
   seenAt: null,
+  decidedAt: null,
   ...over,
 });
 const meshEtat = (over: Partial<MeshState> = {}, tailscaleManage = false) => ({

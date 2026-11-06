@@ -12,20 +12,20 @@ import { agent, snapshot, topic } from './helpers.js';
 const claude = (over: Parameters<typeof agent>[0] = {}) =>
   agent({ kind: 'claude', transport: 'stream', ...over });
 
-const dm = (over: Partial<MeshDm> & { decidedAt?: string | null } = {}) =>
-  ({
-    id: 1,
-    threadId: null,
-    from: 'peer',
-    to: 'morzu-mac',
-    kind: 'question',
-    content: 'x',
-    createdAt: 't',
-    replyTo: null,
-    obligationId: null,
-    seenAt: null,
-    ...over,
-  }) as MeshDm;
+const dm = (over: Partial<MeshDm> = {}): MeshDm => ({
+  id: 1,
+  threadId: null,
+  from: 'peer',
+  to: 'morzu-mac',
+  kind: 'question',
+  content: 'x',
+  createdAt: 't',
+  replyTo: null,
+  obligationId: null,
+  seenAt: null,
+  decidedAt: null,
+  ...over,
+});
 
 test.each([
   ['une question en attente', claude({ status: 'needs_input' }), 'decision'],

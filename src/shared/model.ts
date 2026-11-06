@@ -197,6 +197,8 @@ export interface MeshDm {
   obligationId: string | null;
   /** marque locale posée dans A-I-D (12.4), jamais le `read_at` du gateway */
   seenAt: string | null;
+  /** chantier 28 (D137) : « En faire une décision », marque locale comme `seenAt` */
+  decidedAt: string | null;
 }
 
 export type MeshTailscale = 'running' | 'stopped' | 'absent';

@@ -110,6 +110,7 @@ export class MeshService {
       replyTo: (r.reply_to as number | null) ?? null,
       obligationId: (r.obligation_id as string | null) ?? null,
       seenAt: (r.seen_at as string | null) ?? null,
+      decidedAt: (r.decided_at as string | null) ?? null,
     }));
   }
 
@@ -126,6 +127,20 @@ export class MeshService {
     const seenAt = this.now();
     this.deps.db.prepare('UPDATE mesh_inbox SET seen_at = ? WHERE id = ?').run(seenAt, id);
     return { id, seenAt };
+  }
+
+  /**
+   * Chantier 28 (D137) : « En faire une décision ». Même nature que « Vu » : une marque locale, idempotente, hors
+   * journal ; le DM reste une donnée du pair. Rend null si le DM est inconnu.
+   */
+  markDecision(id: number): { id: number; decidedAt: string } | null {
+    const row = this.deps.db.prepare('SELECT decided_at FROM mesh_inbox WHERE id = ?').get(id) as
+      { decided_at: string | null } | undefined;
+    if (!row) return null;
+    if (row.decided_at) return { id, decidedAt: row.decided_at };
+    const decidedAt = this.now();
+    this.deps.db.prepare('UPDATE mesh_inbox SET decided_at = ? WHERE id = ?').run(decidedAt, id);
+    return { id, decidedAt };
   }
 
   /**

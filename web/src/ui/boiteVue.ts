@@ -32,9 +32,7 @@ export function natureAgent(a: Agent): Nature | null {
 }
 
 /** D137 : un DM vu sort de la Boîte ; mis en décision, il y passe ; sinon il informe. */
-export function natureDm(
-  dm: Pick<MeshDm, 'seenAt'> & { decidedAt?: string | null },
-): Nature | null {
+export function natureDm(dm: Pick<MeshDm, 'seenAt' | 'decidedAt'>): Nature | null {
   if (dm.seenAt) return null;
   return dm.decidedAt ? 'decision' : 'information';
 }
