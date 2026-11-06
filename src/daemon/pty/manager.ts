@@ -793,18 +793,24 @@ export class AgentManager {
     return row.kind;
   }
 
-  /** D71 : ce que le composer peut proposer pour cet agent. */
-  options(agentId: string): AgentOptions {
-    const kind = this.streamKindOr409(agentId);
+  /** Le catalogue codex appris des pilotes vivants ; le dernier connu, vide avant le premier (D71, D143). */
+  codexModels(): ModelOption[] {
     for (const s of this.streams.values()) {
       const catalog = s.kind === 'codex' ? s.driver.catalog?.() : undefined;
       if (catalog?.length) this.codexCatalog = catalog;
     }
+    return this.codexCatalog;
+  }
+
+  /** D71 : ce que le composer peut proposer pour cet agent. */
+  options(agentId: string): AgentOptions {
+    const kind = this.streamKindOr409(agentId);
+    const codexModels = this.codexModels();
     // D82 : les commandes du pilote vivant ; un agent en veille n'a que celles d'A-I-D jusqu'à sa relance
     const live = this.streams.get(agentId);
     return agentOptions(
       kind,
-      this.codexCatalog,
+      codexModels,
       live && !live.exited ? live.driver.commands?.() : undefined,
     );
   }

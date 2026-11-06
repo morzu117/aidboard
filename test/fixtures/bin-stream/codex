@@ -1,3 +1,5 @@
 #!/usr/bin/env bash
 # Faux « codex » (app-server, JSON-RPC) pour test/agent-stream.test.ts : rejoue fake-codex-appserver.mjs.
+# chantier 28 (D143) : une version synthétique, sans lancer le faux pilote
+if [ "${1:-}" = "--version" ]; then echo "codex-cli 0.50.0"; exit 0; fi
 exec node "$(dirname "$0")/../fake-codex-appserver.mjs" "$@"

@@ -3,6 +3,7 @@ import type { FastifyInstance } from 'fastify';
 import type { AgentSettings } from '../../shared/agentSettings.js';
 import type { Db } from '../db.js';
 import { AidHttpError } from '../errors.js';
+import { agentsDisponibles } from '../pty/disponibles.js';
 import type { AgentManager, AttachmentUpload } from '../pty/manager.js';
 
 const Body = Type.Object(
@@ -65,6 +66,17 @@ export function registerAgentRoutes(
       kind: 'claude' | 'codex' | 'shell' | 'swarph-cell' | 'swairm-cell';
     };
     return reply.code(201).send(deps.agents.spawn(body));
+  });
+
+  // Chantier 28 (D143) : « Vérifié à l'instant » de l'écran Nouveau sujet. Lecture seule, sans fetch.
+  app.get('/api/agents/disponibles', async (req) => {
+    const { workspaceId } = req.query as { workspaceId?: string };
+    if (!workspaceId) return agentsDisponibles(deps.agents.codexModels());
+    const ws = deps.db
+      .prepare('SELECT root, base_branch FROM workspaces WHERE id = ?')
+      .get(workspaceId) as { root: string; base_branch: string } | undefined;
+    if (!ws) throw new AidHttpError(404, 'projet inconnu');
+    return agentsDisponibles(deps.agents.codexModels(), { root: ws.root, base: ws.base_branch });
   });
 
   // Piloter un agent depuis l'Accueil : réservé à l'humain (un token de run n'atteint que POST /api/events).
