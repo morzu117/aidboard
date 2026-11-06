@@ -47,6 +47,32 @@ export interface GitCommitDetail {
   files: GitFileChange[];
 }
 
+/**
+ * Chantier 27 (D125) : ce que l'écran Livraison lit du worktree, `origin/<base>...HEAD`. Relu à chaque
+ * appel, jamais stocké. `revue` seulement si la requête nomme le commit d'une revue.
+ */
+export interface LivraisonGit {
+  /** HEAD du worktree ; null dans un dépôt sans commit. */
+  head: string | null;
+  base: string;
+  /** null : `origin/<base>` introuvable ou sans ancêtre commun. */
+  mergeBase: string | null;
+  files: GitFileChange[];
+  additions: number;
+  deletions: number;
+  /** 8 caractères, stables pour un même changement ; null sans `mergeBase`. */
+  empreinte: string | null;
+  revue?: {
+    /** Le commit nommé, résolu en entier ; null s'il est inconnu du dépôt. */
+    commit: string | null;
+    connu: boolean;
+    /** Le commit est un ancêtre de HEAD (ou HEAD même). */
+    ancetre: boolean;
+    /** Commits de `commit` à HEAD ; 0 si inconnu ou hors branche. */
+    retard: number;
+  };
+}
+
 // 11.5 : une branche locale avec sa méta — le regroupement (branche du sujet / branches
 // liées / autres, design/aid-export-git-flow) se fait côté client à partir de ces champs.
 export interface GitBranch {

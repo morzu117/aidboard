@@ -490,3 +490,35 @@ test('shells en arrière-plan : le sujet qui n’affiche plus rien porte l’ic�
   );
   expect(node('1-1.table.ligne-2.shells')).toBeNull();
 });
+
+test('chantier 27 (D134) : « Livrer » sur une PR ouverte, après Trancher et avant Relire ; rien sur un sujet fusionné', async () => {
+  open(
+    snapshot({
+      workspaces: [ws()],
+      topics: memeInstant([
+        topic({ prNumber: 7, state: 'review' }),
+        topic({ id: 'tp_2', branch: 'feat/q', slug: 'q', prNumber: 8, state: 'review' }),
+        topic({ id: 'tp_3', branch: 'feat/m', slug: 'm', prNumber: 9, state: 'merged' }),
+      ]),
+      runs: [
+        { id: 'run_1', topicId: 'tp_1', mode: 'standard', state: 'open', createdAt: 't' },
+        { id: 'run_2', topicId: 'tp_2', mode: 'standard', state: 'open', createdAt: 't' },
+      ],
+      agents: [
+        agent({ id: 'ag_1', kind: 'claude', transport: 'stream', status: 'idle' }),
+        agent({
+          id: 'ag_2',
+          runId: 'run_2',
+          status: 'needs_input',
+          pending: { id: 'pr_1', kind: 'question', question: 'Continuer ?', options: [] },
+        }),
+      ],
+    }),
+  );
+  await attendreTable();
+  const livrer = [...document.querySelectorAll('[data-action="sujet.livrer"]')];
+  expect(livrer.map((a) => a.getAttribute('href'))).toEqual(['/sujets/tp_1/livraison']);
+  expect(livrer[0]!.textContent).toBe('Livrer');
+  expect(document.querySelectorAll('[data-action="sujet.trancher"]')).toHaveLength(1);
+  expect(document.querySelector('[data-action="sujet.relire"]')).toBeNull();
+});

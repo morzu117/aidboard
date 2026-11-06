@@ -21,7 +21,9 @@ export type EcranId =
   // chantier 25 (D102) : la page « Connecter à swarph »
   | 'swarph'
   // chantier 24 : le board swarph en lecture seule
-  | 'board';
+  | 'board'
+  // chantier 27 (D121) : l'écran Livraison d'un sujet
+  | 'livraison';
 
 /** La pastille « Mesh » de la barre (12.5) : absente quand `mesh.cell` n'est pas configuré. */
 export interface BarreMesh {

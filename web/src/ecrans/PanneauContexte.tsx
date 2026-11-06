@@ -4,16 +4,19 @@ import { fetchSubjectMemory, type MemoryKind } from '../data/memory.js';
 import { useAid } from '../data/useAidState.js';
 import { Memoire } from '../ui/Memoire.js';
 import { mostUrgent } from '../ui/Statut.js';
+import { OngletLivraison } from './OngletLivraison.js';
 import { OngletFichiers } from './OngletFichiers.js';
 import { OngletGit } from './OngletGit.js';
 
-type OngletId = 'plan' | 'git' | 'fichiers' | 'review' | 'retro' | 'dev-handoff';
+type OngletId = 'plan' | 'git' | 'fichiers' | 'livraison' | 'review' | 'retro' | 'dev-handoff';
 
 const ONGLETS_FIXES: Array<{ id: OngletId; label: string }> = [
   // chantier 26 (D119) : l'onglet du sujet ; son id et son data-node restent `plan`
   { id: 'plan', label: 'Sujet' },
   { id: 'git', label: 'Git' },
   { id: 'fichiers', label: 'Fichiers' },
+  // chantier 27 (D133) : le résumé de l'écran Livraison
+  { id: 'livraison', label: 'Livraison' },
 ];
 // Q3 (chantier 15) : Revue/Rétro/Passation n'apparaissent que si leur page mémoire existe.
 const ONGLETS_MEMOIRE: Array<{ id: OngletId; label: string; kind: MemoryKind }> = [
@@ -25,6 +28,7 @@ const DATA_NODE: Record<OngletId, string> = {
   plan: '1-3.onglets.plan',
   git: '1-3.onglets.git',
   fichiers: '1-3.onglets.fichiers',
+  livraison: '1-3.onglets.livraison',
   review: '1-3.onglets.revue',
   retro: '1-3.onglets.retro',
   'dev-handoff': '1-3.onglets.passation',
@@ -48,7 +52,7 @@ export function PanneauContexte({
   base: string;
   remote: string | null;
   activeAgentId: string | null;
-  initialOnglet?: 'git' | 'fichiers';
+  initialOnglet?: 'git' | 'fichiers' | 'review';
   /** Chantier 26 (D119) : « Voir la question » sélectionne l'onglet de cet agent. */
   onVoirAgent?: (agentId: string) => void;
 }) {
@@ -102,7 +106,8 @@ export function PanneauContexte({
   const ids = onglets.map((o) => o.id);
   // l'onglet mémoire sélectionné peut disparaître (page retirée ailleurs) : repli sur Plan,
   // pendant le rendu (même motif que la réinitialisation des pages plus haut).
-  if (onglet !== 'plan' && !ids.includes(onglet)) {
+  // Chantier 27 (D131) : pas avant que les pages soient lues, sinon ?onglet=review retombe sur Plan.
+  if (pages !== null && onglet !== 'plan' && !ids.includes(onglet)) {
     setOnglet('plan');
     setRepli((n) => n + 1);
   }
@@ -220,6 +225,7 @@ export function PanneauContexte({
         )}
         {actif === 'git' && <OngletGit topicId={topicId} base={base} remote={remote} />}
         {actif === 'fichiers' && <OngletFichiers topicId={topicId} activeAgentId={activeAgentId} />}
+        {actif === 'livraison' && <OngletLivraison topicId={topicId} namespace={namespace} />}
         {actif === 'review' && (
           <Memoire only="review" namespace={namespace} topicSlug={topicSlug} />
         )}

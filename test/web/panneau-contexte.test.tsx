@@ -4,7 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { useState } from 'react';
 import { afterEach, expect, test } from 'vitest';
 import { PanneauContexte } from '../../web/src/ecrans/PanneauContexte.js';
-import { agent, json, setup, snapshot } from './helpers.js';
+import { agent, json, setup, snapshot, topic } from './helpers.js';
 
 afterEach(cleanup);
 
@@ -277,4 +277,61 @@ test('D119 : sans question en attente, l’onglet Sujet le dit', async () => {
     ),
   );
   expect(screen.queryByRole('button', { name: 'Voir la question' })).toBeNull();
+});
+
+test('chantier 27 (D133) : onglet Livraison après Fichiers ; il relit la PR, résume et ouvre la vue', async () => {
+  const TETE = '3f2a91c0000000000000000000000000000000aa';
+  const h = setup(
+    panneau(),
+    snapshot({
+      topics: [topic({ prNumber: 7, state: 'review' })],
+      actions: [
+        {
+          id: 'ac_pr',
+          topicId: 'tp_1',
+          workspaceId: 'ws_1',
+          action: 'pr.rafraichir',
+          state: 'succeeded',
+          exitCode: 0,
+          result: {
+            state: 'OPEN',
+            headRefOid: TETE,
+            baseRefName: 'main',
+            statusCheckRollup: [
+              { name: 'ci', status: 'COMPLETED', conclusion: 'SUCCESS' },
+              { name: 'lint', status: 'COMPLETED', conclusion: 'FAILURE' },
+            ],
+            reviews: [],
+          },
+          startedAt: 't',
+          finishedAt: 't',
+        },
+      ],
+    }),
+    '/',
+    {
+      'POST /api/topics/tp_1/actions/pr.rafraichir': json(202, { actionId: 'ac_pr' }),
+      'GET /api/topics/tp_1/git/livraison': json(200, {
+        head: TETE,
+        base: 'main',
+        mergeBase: null,
+        files: [],
+        additions: 0,
+        deletions: 0,
+        empreinte: null,
+      }),
+    },
+  );
+  const onglets = await screen.findAllByRole('tab');
+  expect(onglets.map((o) => o.textContent)).toEqual(['Sujet', 'Git', 'Fichiers', 'Livraison']);
+  expect(h.calls.some((c) => c.url.includes('pr.rafraichir'))).toBe(false);
+  await userEvent.click(screen.getByRole('tab', { name: 'Livraison' }));
+  await waitFor(() => expect(h.calls.some((c) => c.url.includes('pr.rafraichir'))).toBe(true));
+  const resume = (id: string) =>
+    document.querySelector(`[data-node="1-3.panneau.livraison.${id}"]`)?.textContent;
+  await waitFor(() => expect(resume('controles')).toBe('1 sur 2 · 1 en panne'));
+  expect(resume('autorisation')).toBe('Aucune · elle ciblera 3f2a91c');
+  expect(
+    document.querySelector('[data-node="1-3.panneau.livraison.ouvrir"]')?.getAttribute('href'),
+  ).toBe('/sujets/tp_1/livraison');
 });

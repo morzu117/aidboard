@@ -1,0 +1,335 @@
+/* Chantier 27 : styles de l'écran Livraison V4. Jamais dans maquette.css, dont l'empreinte est comparée aux
+   maquettes design/maquettes/aid-1-*.html (test/web/maquette-css.test.ts). */
+
+.livraison-entete {
+  align-items: flex-start;
+}
+.livraison-sha,
+.livraison-contexte,
+.livraison-fichier-chemin,
+.livraison-fichier-compte,
+.livraison-trace-etat {
+  font-family: ui-monospace, monospace;
+}
+.livraison-contexte {
+  color: var(--muted);
+  font-size: var(--fs-m);
+  overflow-wrap: anywhere;
+}
+.livraison-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--sp-2);
+}
+
+/* D121 : le changement à gauche, les preuves à droite ; une colonne sur un écran étroit */
+.livraison-corps {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 340px);
+  gap: var(--sp-5);
+  align-items: start;
+}
+[data-viewport='phone'] .livraison-corps,
+[data-viewport='tablet'] .livraison-corps {
+  grid-template-columns: minmax(0, 1fr);
+}
+.livraison-principal,
+.livraison-cote {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+  min-width: 0;
+}
+.livraison-bloc {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  padding: var(--sp-4);
+  border: 1px solid var(--line);
+  border-radius: var(--r-xl);
+  background: var(--surface-1);
+}
+.livraison-bloc-titre {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--fs-s);
+  font-weight: var(--fw-sb);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+/* Q5 : la liste des fichiers du changement */
+.livraison-fichiers {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.livraison-fichier {
+  display: flex;
+  width: 100%;
+  align-items: baseline;
+  gap: var(--sp-3);
+  padding: var(--sp-1) var(--sp-2);
+  border: 0;
+  border-radius: var(--r-s);
+  background: none;
+  color: var(--text-2);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.livraison-fichier:hover {
+  background: var(--surface-3);
+}
+.livraison-fichier-statut {
+  flex: 0 0 auto;
+  min-width: 5.5em;
+  color: var(--diff-mod);
+  font-size: var(--fs-s);
+}
+.livraison-fichier-statut--A {
+  color: var(--diff-add);
+}
+.livraison-fichier-statut--D {
+  color: var(--diff-del);
+}
+.livraison-fichier-chemin {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: var(--fs-s);
+}
+.livraison-fichier-compte {
+  flex: 0 0 auto;
+  color: var(--muted);
+  font-size: var(--fs-s);
+}
+
+/* D132 : la trace publiée */
+.livraison-trace-ligne {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  margin: 0;
+}
+.livraison-trace-etat {
+  color: var(--muted);
+  font-size: var(--fs-s);
+}
+.livraison-trace-etat--fait {
+  color: var(--s-cours);
+}
+
+.livraison-dialogue {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+}
+.livraison-dialogue label {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  font-size: var(--fs-s);
+  color: var(--muted);
+}
+.livraison-dialogue input,
+.livraison-dialogue textarea {
+  padding: var(--sp-2);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-m);
+  background: var(--surface-input);
+  color: var(--text);
+  font: inherit;
+}
+
+/* Q2, Q7 : les tuiles Contrôles et Revue */
+.livraison-tuiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: var(--sp-4);
+}
+.livraison-tuile {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  padding: var(--sp-3) var(--sp-4);
+  border: 1px solid var(--line);
+  border-radius: var(--r-xl);
+  background: var(--surface-1);
+}
+.livraison-tuile p {
+  margin: 0;
+}
+.livraison-tuile-nom {
+  color: var(--muted);
+  font-size: var(--fs-s);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.livraison-tuile-valeur {
+  font-size: var(--fs-l);
+  font-weight: var(--fw-sb);
+}
+.livraison-tuile-note {
+  color: var(--muted);
+  font-size: var(--fs-s);
+}
+.livraison-tuile--ambre {
+  border-color: var(--s-attente-line);
+}
+.livraison-tuile--ambre .livraison-tuile-valeur {
+  color: var(--s-attente);
+}
+.livraison-tuile--rouge {
+  border-color: var(--s-erreur-line);
+}
+.livraison-tuile--rouge .livraison-tuile-valeur {
+  color: var(--s-erreur);
+}
+.livraison-tuile--ok .livraison-tuile-valeur {
+  color: var(--s-ok);
+}
+
+/* D130 : les contrôles exécutés */
+.livraison-bloc-compte {
+  letter-spacing: 0;
+  text-transform: none;
+}
+.livraison-controles {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.livraison-controle {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  column-gap: var(--sp-3);
+  font-size: var(--fs-s);
+}
+.livraison-controle--ailleurs {
+  opacity: 0.55;
+}
+.livraison-controle-etat {
+  grid-row: span 2;
+  min-width: 6.5em;
+}
+.livraison-controle-etat--succes {
+  color: var(--s-ok);
+}
+.livraison-controle-etat--panne {
+  color: var(--s-erreur);
+}
+.livraison-controle-etat--en-cours {
+  color: var(--s-attente);
+}
+.livraison-controle-nom {
+  overflow-wrap: anywhere;
+  color: var(--text-2);
+}
+.livraison-controle-detail {
+  color: var(--muted);
+  font-family: ui-monospace, monospace;
+}
+
+/* D131 : l'avis de revue */
+.livraison-bloc p {
+  margin: 0;
+}
+.livraison-encart {
+  padding: var(--sp-2) var(--sp-3);
+  border: 1px solid var(--s-attente-line);
+  border-radius: var(--r-m);
+  background: var(--s-attente-bg);
+  color: var(--s-attente);
+  font-size: var(--fs-s);
+}
+.livraison-lien {
+  align-self: flex-start;
+  color: var(--acc);
+  font-size: var(--fs-s);
+}
+
+/* D127, D128 : l'autorisation du merge */
+.livraison-blocage {
+  max-width: 320px;
+  margin: 0;
+  color: var(--s-attente);
+  font-size: var(--fs-s);
+  text-align: right;
+}
+.livraison-strategies {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-3);
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.livraison-strategies legend {
+  margin-bottom: var(--sp-1);
+  color: var(--muted);
+  font-size: var(--fs-s);
+}
+.livraison-dialogue .livraison-choix {
+  flex-direction: row;
+  align-items: center;
+  gap: var(--sp-2);
+  color: var(--text-2);
+  font-size: var(--fs-m);
+}
+.livraison-citations {
+  margin: var(--sp-1) 0 0;
+  padding-left: var(--sp-5);
+  color: var(--s-attente);
+}
+
+/* D129 : relancer la revue */
+.livraison-relancer {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  padding-top: var(--sp-2);
+  border-top: 1px solid var(--line);
+}
+.livraison-relancer-ligne {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2);
+}
+.livraison-relancer select {
+  padding: var(--sp-1) var(--sp-2);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-m);
+  background: var(--surface-input);
+  color: var(--text);
+  font: inherit;
+}
+
+/* D133 : l'onglet Livraison du panneau */
+.onglet-livraison {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--sp-3);
+}
+.onglet-livraison-liste {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--sp-1) var(--sp-3);
+  margin: 0;
+  font-size: var(--fs-s);
+}
+.onglet-livraison-liste dt {
+  color: var(--muted);
+}
+.onglet-livraison-liste dd {
+  margin: 0;
+  font-family: ui-monospace, monospace;
+}

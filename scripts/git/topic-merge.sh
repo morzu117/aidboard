@@ -16,6 +16,8 @@ esac
 args=("$AID_PR_NUMBER" "$strategy_flag")
 [ "${AID_MERGE_DELETE_BRANCH:-}" = "1" ] && args+=(--delete-branch)
 [ -n "${AID_MERGE_MESSAGE:-}" ] && args+=(--subject "$AID_MERGE_MESSAGE")
+# Chantier 27 (D123) : GitHub refuse si la tête de la PR n'est plus celle que l'écran a montrée.
+[ -n "${AID_MERGE_HEAD:-}" ] && args+=(--match-head-commit "$AID_MERGE_HEAD")
 
 # Refus de GitHub (protection de branche…) remonté tel quel, pas de message réécrit par A-I-D.
 output="$("$GH" pr merge "${args[@]}" 2>&1)" || die_human "$output"

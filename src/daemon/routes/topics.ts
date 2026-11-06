@@ -19,6 +19,7 @@ import {
   gitBranches,
   gitCommitDetail,
   gitLiveInfo,
+  gitLivraison,
   gitLog,
   hasUncommittedChanges,
   hasUncommittedOrOperationInProgress,
@@ -338,6 +339,19 @@ export function registerTopicRoutes(app: FastifyInstance, deps: TopicRouteDeps):
     return commit;
   });
 
+  // Chantier 27 (D125) : le changement livré et la place du commit d'une revue, relus à chaque appel.
+  app.get('/api/topics/:id/git/livraison', async (req) => {
+    const { id } = req.params as { id: string };
+    const { revue } = req.query as { revue?: string };
+    if (revue !== undefined && !/^[0-9a-f]{4,40}$/i.test(revue))
+      throw new AidHttpError(422, 'commit de revue invalide');
+    const row = deps.db.prepare('SELECT worktree, base FROM topics WHERE id = ?').get(id) as
+      { worktree: string; base: string } | undefined;
+    if (!row) throw new AidHttpError(404, 'sujet inconnu');
+    if (!existsSync(row.worktree)) throw new AidHttpError(409, 'worktree introuvable');
+    return gitLivraison(row.worktree, row.base, revue);
+  });
+
   app.post('/api/topics/:id/actions/:actionId', async (req, reply) => {
     const { id, actionId } = req.params as { id: string; actionId: string };
     if (!(TOPIC_ACTIONS as readonly string[]).includes(actionId)) {
@@ -406,8 +420,11 @@ export function registerTopicRoutes(app: FastifyInstance, deps: TopicRouteDeps):
     // version) ; sinon repli déclaré sur l'ouverture simple du fichier courant — pas un échec.
     if (actionId === 'diff.ouvrir-fichier') {
       if (!existsSync(topic.worktree)) throw new AidHttpError(409, 'worktree introuvable');
-      const body = (req.body ?? {}) as { hash?: string; path?: string };
+      const body = (req.body ?? {}) as { hash?: string; path?: string; depuis?: string };
       if (!body.hash || !body.path) throw new AidHttpError(422, 'hash et chemin requis');
+      // Chantier 27 (D135) : « avant » à une révision donnée (la base commune de la livraison)
+      if (body.depuis !== undefined && !/^[0-9a-f]{4,40}$/i.test(body.depuis))
+        throw new AidHttpError(422, 'révision « depuis » invalide');
       if (isTraversal(body.path)) throw new AidHttpError(422, `${body.path} sort du worktree`);
       const cmd = editorCommand(deps.config.editor);
       const diff = diffCommand(cmd);
@@ -424,7 +441,7 @@ export function registerTopicRoutes(app: FastifyInstance, deps: TopicRouteDeps):
         return reply.code(204).send();
       }
       const [before, after] = await Promise.all([
-        fileAtRevision(topic.worktree, `${body.hash}^`, body.path),
+        fileAtRevision(topic.worktree, body.depuis ?? `${body.hash}^`, body.path),
         fileAtRevision(topic.worktree, body.hash, body.path),
       ]);
       const tmp = mkdtempSync(join(tmpdir(), 'aid-diff-'));
@@ -754,8 +771,12 @@ export function registerTopicRoutes(app: FastifyInstance, deps: TopicRouteDeps):
         message?: string;
         deleteBranch?: boolean;
         cleanupAfter?: boolean;
+        head?: string;
       };
       if (!mergeBody.strategy) throw new AidHttpError(422, 'stratégie de fusion requise');
+      // Chantier 27 (D123) : la tête affichée, en entier ; sans elle, le merge d'avant
+      if (mergeBody.head !== undefined && !/^[0-9a-f]{40}$/.test(mergeBody.head))
+        throw new AidHttpError(422, 'tête invalide : 40 caractères hexadécimaux');
       const { actionId: runId } = startAction(deps.actions, {
         workspaceId: ws.id,
         topicId: id,
@@ -768,6 +789,7 @@ export function registerTopicRoutes(app: FastifyInstance, deps: TopicRouteDeps):
           AID_MERGE_STRATEGY: mergeBody.strategy,
           ...(mergeBody.message && { AID_MERGE_MESSAGE: mergeBody.message }),
           ...(mergeBody.deleteBranch && { AID_MERGE_DELETE_BRANCH: '1' }),
+          ...(mergeBody.head && { AID_MERGE_HEAD: mergeBody.head }),
         }),
         afterSuccess: () => {
           deps.actions.store.append({

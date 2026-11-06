@@ -464,6 +464,20 @@ function ActionLigne({
       </button>
     );
   }
+  // chantier 27 (D134) : une PR ouverte se livre depuis l'écran Livraison, avant Relire
+  if (topic.prNumber !== null && topic.state !== 'merged') {
+    return (
+      <Link
+        className="bouton"
+        data-node={dataNode}
+        data-action="sujet.livrer"
+        to={`/sujets/${topic.id}/livraison`}
+        onClick={neRemonte}
+      >
+        Livrer
+      </Link>
+    );
+  }
   const section = sectionDe(agents);
   if (urgent && section === 'a-relire') {
     return (

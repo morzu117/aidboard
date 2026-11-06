@@ -149,6 +149,7 @@ export async function buildServer(deps: ServerDeps): Promise<FastifyInstance> {
     structural,
     deps.mesh ?? null,
     !!deps.config.swairm.bin,
+    deps.config.agents.transport,
   );
   registerMeshRoutes(app, { mesh: deps.mesh ?? null });
   registerBoardRoutes(app, { board: deps.board ?? null });
