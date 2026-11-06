@@ -202,15 +202,15 @@ test('reglageDe /effort : les efforts du modèle courant s’il en a, sinon ceux
 test('reglageDe /mode : par id ou par libellé ; inconnu ou sans argument, les possibles (sans « défaut »)', () => {
   expect(reglageDe(cmd('mode', 'plan'), CLAUDE, DEFAUT)).toEqual({
     patch: { mode: 'plan' },
-    avis: 'Mode : Plan',
+    avis: 'Permissions : Plan seulement',
   });
-  expect(reglageDe(cmd('mode', 'modifs auto'), CLAUDE, DEFAUT)).toEqual({
+  expect(reglageDe(cmd('mode', 'modifier sans demander'), CLAUDE, DEFAUT)).toEqual({
     patch: { mode: 'acceptEdits' },
-    avis: 'Mode : Modifs auto',
+    avis: 'Permissions : Modifier sans demander',
   });
   expect(reglageDe(cmd('mode', 'ACCEPTEDITS'), CLAUDE, DEFAUT)).toEqual({
     patch: { mode: 'acceptEdits' },
-    avis: 'Mode : Modifs auto',
+    avis: 'Permissions : Modifier sans demander',
   });
   // codex n’a pas de mode plan
   expect(reglageDe(cmd('mode', 'plan'), CODEX, DEFAUT)).toEqual({
@@ -219,10 +219,10 @@ test('reglageDe /mode : par id ou par libellé ; inconnu ou sans argument, les p
   expect(reglageDe(cmd('mode'), CLAUDE, DEFAUT)).toEqual({
     erreur: '/mode <id> : default, acceptEdits, auto, plan',
   });
-  // « default » est ici l’id du mode Demander, pas le défaut de la CLI
+  // « default » est ici l’id du mode « Demander avant d'écrire », pas le défaut de la CLI
   expect(reglageDe(cmd('mode', 'default'), CLAUDE, DEFAUT)).toEqual({
     patch: { mode: 'default' },
-    avis: 'Mode : Demander',
+    avis: "Permissions : Demander avant d'écrire",
   });
 });
 

@@ -8,5 +8,7 @@ test('un worktree sans index structurel affiche le repli déclaré', async ({ br
   const page = await openApp(await browser.newContext());
   await registerWorkspace(page, newRepo('depot-sans-index'));
   await createTopic(page, 'Sans index');
-  await expect(node(page, '1-3.entete.index')).toHaveText('index absent : lecture directe');
+  // chantier 26 (D119) : l'état de l'index est en tête de l'onglet Fichiers
+  await node(page, '1-3.onglets.fichiers').click();
+  await expect(node(page, '3-4.index')).toHaveText('index absent : lecture directe');
 });

@@ -71,7 +71,10 @@ export function Message({
     <div className="message-agent" data-node={dataNode}>
       <div className="message-agent-entete">
         <span className="message-agent-kind">{kind}</span>
-        {serveur && <span className="message-agent-serveur">{serveur}</span>}
+        {/* chantier 26 (D120) : un agent de sujet tourne toujours sur le Mac */}
+        <span className="message-agent-serveur" data-node={`${dataNode}.machine`}>
+          {serveur ?? 'Mac local'}
+        </span>
         <span className="texte-faible">{heure(at)}</span>
         {questions > 0 && (
           <span className="message-agent-question" data-node={`${dataNode}.questions`}>

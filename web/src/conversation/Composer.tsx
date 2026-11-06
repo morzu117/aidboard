@@ -12,6 +12,14 @@ import {
   reglageDe,
   saisieCommande,
 } from './commandes.js';
+import { fetchFileTree } from '../data/files.js';
+import {
+  aplatir,
+  filtrerFichiers,
+  insererMention,
+  saisieMention,
+  type FichiersMention,
+} from './fichiersMention.js';
 import { useAgentRoutes } from './routes.js';
 
 const message = (err: unknown) => (err instanceof Error ? err.message : String(err));
@@ -34,6 +42,7 @@ export function Composer({
   status,
   settings,
   dataNode,
+  topicId,
 }: {
   agentId: string;
   kind: string;
@@ -41,6 +50,8 @@ export function Composer({
   /** Agent `stream` (chantier 16) : présent, les chips mode et modèle s'affichent. */
   settings?: AgentSettings;
   dataNode: string;
+  /** Chantier 26 (D118) : agent de sujet, le menu `@` liste les fichiers de son worktree. */
+  topicId?: string;
 }) {
   const { call } = useAid();
   const { api, distant } = useAgentRoutes();
@@ -78,6 +89,25 @@ export function Composer({
       (o) => setCommandes(o.commands),
       () => setCommandes((c) => c ?? []),
     );
+  };
+
+  // Chantier 26 (D118) : le menu des fichiers `@` ; une discussion de serveur n'a pas de worktree sur le Mac
+  const [fichiers, setFichiers] = useState<FichiersMention | null>(null);
+  const mention = topicId ? saisieMention(text) : null;
+  const fichiersProposes =
+    mention !== null && !menuFerme && fichiers ? filtrerFichiers(fichiers.chemins, mention) : [];
+  const menuFichiers = mention !== null && !menuFerme && fichiers !== null;
+  const fichierChoisi = fichiersProposes[Math.min(choix, fichiersProposes.length - 1)];
+  // relu à chaque `@` tapé : le worktree change pendant que l'agent travaille
+  const chargerFichiers = (id: string) => {
+    fetchFileTree(call, id, 'tout').then(
+      (r) => setFichiers(aplatir(r)),
+      () => setFichiers((f) => f ?? { chemins: [], tronque: false }),
+    );
+  };
+  const choisirFichier = (chemin: string) => {
+    setText(insererMention(text, chemin));
+    setChoix(0);
   };
 
   /** D81 : une commande A-I-D est exécutée ici et ne part jamais à l'agent ; `/compact` part, chaque pilote la sait. */
@@ -184,6 +214,23 @@ export function Composer({
   };
 
   const onKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
+    // D118 : comme le menu `/` ; Tab ou Entrée insèrent le chemin
+    if (menuFichiers && fichiersProposes.length > 0 && !composingRef.current) {
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        const n = fichiersProposes.length;
+        setChoix((Math.min(choix, n - 1) + (e.key === 'ArrowDown' ? 1 : n - 1)) % n);
+        return;
+      }
+      // Entrée sur un chemin déjà complet envoie, comme sur un nom de commande complet
+      const insere = fichierChoisi ? insererMention(text, fichierChoisi) : text;
+      if (e.key === 'Tab' || (e.key === 'Enter' && !e.shiftKey && insere.trim() !== text)) {
+        e.preventDefault();
+        setText(insere);
+        setChoix(0);
+        return;
+      }
+    }
     // D86 : ↑ ↓ choisissent, Tab ou Entrée complètent, Échap ferme ; Entrée sur un nom complet envoie
     if (menuOuvert && proposees.length > 0 && !composingRef.current) {
       if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
@@ -200,7 +247,7 @@ export function Composer({
         return;
       }
     }
-    if (menuOuvert && e.key === 'Escape') {
+    if ((menuOuvert || menuFichiers) && e.key === 'Escape') {
       e.preventDefault();
       setMenuFerme(true);
       return;
@@ -277,6 +324,42 @@ export function Composer({
           )}
         </ul>
       )}
+      {menuFichiers && (
+        <ul
+          id={`${dataNode}-mention`}
+          className="composer-commandes"
+          role="listbox"
+          aria-label="Fichiers"
+          data-node={`${dataNode}.mention`}
+        >
+          {fichiersProposes.map((chemin, i) => (
+            <li
+              key={chemin}
+              id={`${dataNode}-mention-${i}`}
+              role="option"
+              aria-selected={chemin === fichierChoisi}
+              className="composer-commande"
+              onMouseDown={(e) => {
+                e.preventDefault();
+                choisirFichier(chemin);
+                taRef.current?.focus();
+              }}
+            >
+              <span className="composer-commande-nom">@{chemin}</span>
+            </li>
+          ))}
+          {fichiersProposes.length === 0 && (
+            <li className="composer-commande-vide" data-node={`${dataNode}.mention.vide`}>
+              Aucun fichier ne correspond.
+            </li>
+          )}
+          {fichiers.tronque && (
+            <li className="composer-commande-vide" data-node={`${dataNode}.mention.tronque`}>
+              Liste incomplète : le worktree est trop grand pour être lu en entier.
+            </li>
+          )}
+        </ul>
+      )}
       <textarea
         ref={taRef}
         className="composer-champ"
@@ -296,10 +379,18 @@ export function Composer({
           const v = e.target.value;
           if (settings && saisieCommande(v) !== null && (v === '/' || commandes === null))
             chargerCommandes();
+          const m = topicId ? saisieMention(v) : null;
+          if (topicId && m !== null && (m === '' || fichiers === null)) chargerFichiers(topicId);
         }}
-        aria-controls={menuOuvert ? `${dataNode}-commandes` : undefined}
+        aria-controls={
+          menuOuvert ? `${dataNode}-commandes` : menuFichiers ? `${dataNode}-mention` : undefined
+        }
         aria-activedescendant={
-          menuOuvert && choisie ? `${dataNode}-commande-${choisie.name}` : undefined
+          menuOuvert && choisie
+            ? `${dataNode}-commande-${choisie.name}`
+            : menuFichiers && fichierChoisi
+              ? `${dataNode}-mention-${fichiersProposes.indexOf(fichierChoisi)}`
+              : undefined
         }
         onKeyDown={onKeyDown}
         onPaste={onPaste}
@@ -367,7 +458,7 @@ export function Composer({
             disabled={arretBusy}
             onClick={() => void arreter()}
           >
-            Arrêter
+            Interrompre
           </button>
         )}
         <button

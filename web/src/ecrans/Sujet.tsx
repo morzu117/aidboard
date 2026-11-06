@@ -2,10 +2,11 @@ import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router';
 import type { StoredEvent } from '../../../src/shared/events.js';
 import type { GitLogResponse } from '../../../src/shared/git.js';
-import type { Agent, IndexState, Topic } from '../../../src/shared/model.js';
+import type { Agent, Topic } from '../../../src/shared/model.js';
 import { Conversation } from '../conversation/Conversation.js';
 import { AidApiError } from '../data/api.js';
 import { fetchGitLog } from '../data/git.js';
+import { changerPlacement, usePlacement } from '../data/placement.js';
 import { useAid } from '../data/useAidState.js';
 import { ConfirmerNettoyage } from '../dialogues/ConfirmerNettoyage.js';
 import { SelecteurBranche } from '../dialogues/SelecteurBranche.js';
@@ -14,6 +15,8 @@ import { Layout, useLayout } from '../ui/Layout.js';
 import { Memoire } from '../ui/Memoire.js';
 import { agentView, Point } from '../ui/Statut.js';
 import { Volet } from '../ui/Volet.js';
+import { prochaineChose } from '../ui/rangement.js';
+import { etapesPhase, etatOnglet } from '../ui/sujetVue.js';
 import type { ArchivedTopic } from './useArchive.js';
 import { useArchive } from './useArchive.js';
 import { PanneauContexte } from './PanneauContexte.js';
@@ -45,13 +48,6 @@ function libelleEvenement(e: StoredEvent): string {
   }
 }
 
-const INDEX_LABEL: Record<IndexState, string> = {
-  disabled: 'index absent : lecture directe',
-  indexing: 'indexation en cours',
-  ready: 'index prêt',
-  failed: 'index en échec : lecture directe',
-};
-
 const LIVE = ['starting', 'working', 'needs_input', 'idle'];
 type Kind = 'claude' | 'codex' | 'shell' | 'swarph-cell' | 'swairm-cell';
 const KINDS: Array<{ kind: Kind; label: string }> = [
@@ -81,6 +77,9 @@ function Contenu({
 }) {
   const { state, outputs, daemon, retry, call } = useAid();
   const navigate = useNavigate();
+  const placement = usePlacement(topicId);
+  // D112 : le titre devient un champ pendant un renommage depuis le menu ⋯
+  const [renomme, setRenomme] = useState<string | null>(null);
   const [menu, setMenu] = useState<'aucun' | 'agent' | 'plus'>('aucun');
   const [selecteurBranche, setSelecteurBranche] = useState(false);
   const [erreur, setErreur] = useState<string | null>(null);
@@ -313,6 +312,10 @@ function Contenu({
   const runIds = state.runs.filter((r) => r.topicId === topic.id).map((r) => r.id);
   const agents: Agent[] = state.agents.filter((a) => runIds.includes(a.runId));
   const active = agents.find((a) => a.id === selectedAgent) ?? agents.at(-1);
+  // D113, D114 : la phase en segments, et ce qui attend ; sous une phase, la prochaine chose ne la répète pas
+  const etapes = etapesPhase(topic.phase);
+  const enAttente = agents.some((a) => a.pending);
+  const prochaine = prochaineChose(etapes ? { ...topic, phase: null } : topic, agents);
   const kinds = [
     ...KINDS,
     ...(state.mesh ? [KIND_CELL] : []),
@@ -346,6 +349,25 @@ function Contenu({
     } catch (err) {
       setErreur(err instanceof AidApiError ? err.message : String(err));
     }
+  }
+
+  // D112 : renommer, épingler, archiver passent par le placement de la barre, qui suit tout de suite.
+  async function placer(patch: Parameters<typeof changerPlacement>[2]) {
+    setErreur(null);
+    try {
+      await changerPlacement(call, topicId, patch);
+    } catch (err) {
+      setErreur(err instanceof AidApiError ? err.message : String(err));
+    }
+  }
+
+  function finirRenommage(garder: boolean) {
+    if (renomme === null) return;
+    const nom = renomme.trim();
+    setRenomme(null);
+    // un nom vide ou égal au titre retire le nom affiché
+    if (garder && nom !== (placement?.displayName ?? topic?.title))
+      void placer({ displayName: nom === '' || nom === topic?.title ? null : nom });
   }
 
   // review db76a41 : remet « copié » à faux et annule le minuteur en attente à la fermeture du menu ⋯.
@@ -416,9 +438,25 @@ function Contenu({
               </Link>{' '}
               / sujet
             </p>
-            <h1 className="titre-ecran" data-node="1-3.entete.titre" data-bind="sujet.titre">
-              {topic.title}
-            </h1>
+            {renomme !== null ? (
+              <input
+                className="titre-ecran sujet-titre-champ"
+                data-node="1-3.entete.titre.champ"
+                aria-label="Nom affiché du sujet"
+                autoFocus
+                value={renomme}
+                onChange={(e) => setRenomme(e.target.value)}
+                onBlur={() => finirRenommage(true)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') finirRenommage(true);
+                  if (e.key === 'Escape') finirRenommage(false);
+                }}
+              />
+            ) : (
+              <h1 className="titre-ecran" data-node="1-3.entete.titre" data-bind="sujet.titre">
+                {placement?.displayName ?? topic.title}
+              </h1>
+            )}
           </div>
           <div className="sujet-actions" data-node="1-3.actions">
             <button
@@ -449,6 +487,49 @@ function Contenu({
             )}
             {menu === 'plus' && (topic.state !== 'draft' || !topic.worktreeMissing) && (
               <>
+                {placement && (
+                  <>
+                    <button
+                      className="bouton bouton--fantome"
+                      data-node="1-3.actions.renommer"
+                      data-action="sujet.renommer"
+                      type="button"
+                      onClick={() => {
+                        fermerMenuPlus();
+                        setMenu('aucun');
+                        setRenomme(placement.displayName ?? topic.title);
+                      }}
+                    >
+                      Renommer
+                    </button>
+                    <button
+                      className="bouton bouton--fantome"
+                      data-node="1-3.actions.epingler"
+                      data-action="sujet.epingler"
+                      type="button"
+                      onClick={() => {
+                        fermerMenuPlus();
+                        setMenu('aucun');
+                        void placer({ pinned: !placement.pinned });
+                      }}
+                    >
+                      {placement.pinned ? 'Désépingler' : 'Épingler'}
+                    </button>
+                    <button
+                      className="bouton bouton--fantome"
+                      data-node="1-3.actions.archiver"
+                      data-action="sujet.archiver"
+                      type="button"
+                      onClick={() => {
+                        fermerMenuPlus();
+                        setMenu('aucun');
+                        void placer({ archived: !placement.archived });
+                      }}
+                    >
+                      {placement.archived ? 'Désarchiver' : 'Archiver'}
+                    </button>
+                  </>
+                )}
                 {topic.state !== 'draft' && (
                   <button
                     className="bouton bouton--danger"
@@ -490,6 +571,30 @@ function Contenu({
             )}
           </div>
         </div>
+        <div className="sujet-etape" data-node="1-3.entete.etape">
+          {etapes && (
+            <>
+              <span className="sujet-etape-barre" aria-hidden="true">
+                {etapes.segments.map((seg) => (
+                  <span
+                    key={seg.phase}
+                    className={`sujet-etape-segment sujet-etape-segment--${seg.etat}${seg.etat === 'en-cours' && enAttente ? ' est-attente' : ''}`}
+                  />
+                ))}
+              </span>
+              <span className="sujet-etape-ligne" data-node="1-3.entete.etape.ligne">
+                {etapes.ligne}
+              </span>
+            </>
+          )}
+          <span
+            className={`sujet-prochaine${enAttente ? ' est-attente' : ''}`}
+            data-node="1-3.entete.prochaine"
+            data-bind="sujet.prochaine"
+          >
+            {prochaine}
+          </span>
+        </div>
         <div className="sujet-meta">
           <span
             className="pastille pastille--etat"
@@ -516,15 +621,6 @@ function Contenu({
               {workspace?.remote ? `${workspace.remote}/${topic.base}` : topic.base}
             </span>
           </span>
-          {topic.indexState !== 'ready' && (
-            <span
-              className="pastille pastille--discret"
-              data-node="1-3.entete.index"
-              data-bind="sujet.index"
-            >
-              {INDEX_LABEL[topic.indexState]}
-            </span>
-          )}
         </div>
       </div>
       {live && !live.onTopicBranch && (
@@ -742,14 +838,23 @@ function Contenu({
                         >
                           {a.kind}
                         </span>
+                        {/* D115 : l'état en mots ; le rôle seulement pour un agent de la chaîne, pas pour celui lancé à la main */}
                         <span
-                          className="agent-role"
-                          data-node={`1-3.terminaux.onglet-${i + 1}.role`}
-                          data-bind="agent.role"
+                          className="agent-etat"
+                          data-node={`1-3.terminaux.onglet-${i + 1}.etat`}
+                          data-bind="agent.etat"
                         >
-                          {/* « libre » est le rôle d'un agent lancé à la main : à côté de la pastille il se lisait comme son statut */}
-                          {a.role === 'free' ? v.label : roleLabel(a.role)}
+                          {etatOnglet(a)}
                         </span>
+                        {a.role !== 'free' && (
+                          <span
+                            className="agent-role"
+                            data-node={`1-3.terminaux.onglet-${i + 1}.role`}
+                            data-bind="agent.role"
+                          >
+                            {roleLabel(a.role)}
+                          </span>
+                        )}
                       </button>
                     );
                   })}
@@ -830,6 +935,7 @@ function Contenu({
                       agent={a}
                       visible={a.id === active?.id}
                       actionsHost={ongletsActionsEl}
+                      topicId={topicId}
                     />
                   ) : (
                     <Terminal key={a.id} agentId={a.id} visible={a.id === active?.id} />
@@ -1031,6 +1137,10 @@ function SujetPanneau({
           remote={remote}
           activeAgentId={activeAgentId}
           initialOnglet={initialOnglet}
+          onVoirAgent={(id) => {
+            onSelectAgent(id);
+            setOverlay('aucun');
+          }}
         />
       </Volet>
       <button

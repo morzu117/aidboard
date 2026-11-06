@@ -151,6 +151,8 @@ test('fil distant : serveur à côté de l’agent, « N commandes sur <serveur>
   ]);
   expect(await screen.findByText('1 commande sur vps-ovh')).toBeTruthy();
   expect(document.querySelector('.message-agent-serveur')?.textContent).toBe('vps-ovh');
+  // chantier 26 (D117) : le profil du composer nomme le serveur, pas « Mac local »
+  expect(screen.getByRole('group', { name: 'Profil' }).textContent).toContain('vps-ovh');
 
   const champ = screen.getByPlaceholderText('Écris à claude sur vps-ovh…') as HTMLTextAreaElement;
   h.respond.set('POST /api/server-agents/sa_1/input', json(202, { id: 'sa_1' }));

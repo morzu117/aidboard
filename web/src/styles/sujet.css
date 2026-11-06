@@ -1,0 +1,94 @@
+/* Chantier 26 : styles de l'écran Sujet V4. Jamais dans maquette.css, dont l'empreinte est comparée aux maquettes
+   design/maquettes/aid-1-*.html (test/web/maquette-css.test.ts). */
+
+/* D112 : le titre pendant un renommage */
+.sujet-titre-champ {
+  width: 100%;
+  margin: 0;
+  padding: 0 var(--sp-2);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-m);
+  background: var(--surface-input);
+  color: var(--text);
+  font-family: var(--font);
+}
+
+/* D113, D114 : la barre des cinq phases, sa ligne, et la prochaine chose */
+.sujet-etape {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2) var(--sp-4);
+  margin-top: var(--sp-2);
+  font-size: var(--fs-m);
+}
+.sujet-etape-barre {
+  display: inline-flex;
+  gap: var(--sp-1);
+}
+.sujet-etape-segment {
+  width: var(--sp-6);
+  height: 4px;
+  border-radius: 2px;
+  background: var(--line-2);
+}
+.sujet-etape-segment--fait {
+  background: var(--acc);
+}
+.sujet-etape-segment--en-cours {
+  background: var(--s-cours);
+}
+.sujet-etape-segment--en-cours.est-attente {
+  background: var(--s-attente);
+}
+.sujet-etape-ligne {
+  color: var(--text);
+}
+.sujet-prochaine {
+  color: var(--text-3);
+}
+.sujet-prochaine.est-attente {
+  color: var(--s-attente);
+}
+
+/* D115 : l'état d'un onglet d'agent, en mots */
+.agent-etat {
+  color: var(--text-3);
+}
+
+/* D117 : le chip Profil, agent · modèle · machine */
+.composer-profil {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1);
+}
+.composer-profil-part {
+  color: var(--text-3);
+  font-size: var(--fs-s);
+}
+.composer-profil-part:first-child::after {
+  content: ' ·';
+}
+.composer-profil-part:last-child::before {
+  content: '· ';
+}
+
+/* D119 : la prochaine décision, en tête de l'onglet Sujet */
+.sujet-decision {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--sp-1);
+  padding-bottom: var(--sp-3);
+  margin-bottom: var(--sp-3);
+  border-bottom: 1px solid var(--line);
+}
+.sujet-decision-titre {
+  margin: 0;
+  color: var(--text-3);
+  font-size: var(--fs-s);
+}
+.sujet-decision-question {
+  margin: 0;
+  color: var(--s-attente);
+}

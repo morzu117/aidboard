@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { FileNode, FilesResponse } from '../../../src/shared/files.js';
+import type { IndexState } from '../../../src/shared/model.js';
 import { AidApiError } from '../data/api.js';
 import { fetchFileContent, fetchFileTree } from '../data/files.js';
 import { useAid } from '../data/useAidState.js';
@@ -107,6 +108,14 @@ function Noeud({
 // `fichier.reveler` (révéler dans le Finder/Explorer) n'a aucun contrat backend nulle part
 // dans ce chantier (ni 11.7 ni 11.11) : omis plutôt que fabriqué, à la différence de
 // « mentionner à l'agent » qui réutilise POST /api/agents/:id/input, déjà existant.
+// Chantier 26 (D119) : l'état de l'index vient de l'en-tête du sujet ; c'est un état des fichiers
+const INDEX_LABEL: Record<IndexState, string> = {
+  disabled: 'index absent : lecture directe',
+  indexing: 'indexation en cours',
+  ready: 'index prêt',
+  failed: 'index en échec : lecture directe',
+};
+
 export function OngletFichiers({
   topicId,
   activeAgentId,
@@ -114,7 +123,8 @@ export function OngletFichiers({
   topicId: string;
   activeAgentId: string | null;
 }) {
-  const { call } = useAid();
+  const { call, state } = useAid();
+  const indexState = state?.topics.find((t) => t.id === topicId)?.indexState;
   const [scope, setScope] = useState<'tout' | 'modifies'>('tout');
   const [filtre, setFiltre] = useState('');
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
@@ -219,6 +229,12 @@ export function OngletFichiers({
   return (
     <div className="sujet-grille" data-node="3-4">
       <div className="colonne">
+        {/* le repli est déclaré, jamais silencieux ; rien quand l'index est prêt */}
+        {indexState && indexState !== 'ready' && (
+          <p className="pastille pastille--discret" data-node="3-4.index" data-bind="sujet.index">
+            {INDEX_LABEL[indexState]}
+          </p>
+        )}
         <section className="panneau" data-node="3-4.explorateur" aria-label="Explorateur">
           <div className="outils">
             <input

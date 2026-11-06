@@ -65,6 +65,36 @@ export function annoncerPrefsNav(prefs: Partial<NavPrefs>): void {
   for (const cb of ecouteursPrefs) cb(prefs);
 }
 
+// Chantier 26 (D111) : l'en-tête du Sujet lit le nom affiché dans ce cache, et le change par ici.
+const ecouteursCache = new Set<() => void>();
+const ecouteursPlacement = new Set<(topicId: string, patch: Partial<NavPlacement>) => void>();
+
+function poserCache(next: Partial<NavState>): void {
+  navCache = next;
+  // updateNav pose le cache depuis un updater de setNav : prévenir l'en-tête après le rendu, pas pendant
+  queueMicrotask(() => {
+    for (const cb of ecouteursCache) cb();
+  });
+}
+
+/** Chantier 26 (D111) : prévenu à chaque changement du cache ; rend la fonction qui désabonne. */
+export function ecouterNavCache(cb: () => void): () => void {
+  ecouteursCache.add(cb);
+  return () => void ecouteursCache.delete(cb);
+}
+
+/** Chantier 26 (D111) : un placement changé ailleurs que dans la barre ; le cache et la barre affichée le prennent. */
+export function annoncerPlacementNav(topicId: string, patch: Partial<NavPlacement>): void {
+  if (navCache)
+    poserCache({
+      ...navCache,
+      placements: (navCache.placements ?? []).map((p) =>
+        p.topicId === topicId ? { ...p, ...patch } : p,
+      ),
+    });
+  for (const cb of ecouteursPlacement) cb(topicId, patch);
+}
+
 /** Groupe B (D55) : barre gauche, lecture (B.2) et mode édition (B.3) — glisser-déposer, menu, renommage. */
 export function Nav({ screen }: { screen: EcranId }) {
   const { state, daemon, call } = useAid();
@@ -91,7 +121,7 @@ export function Nav({ screen }: { screen: EcranId }) {
   const updateNav = (updater: (cur: Partial<NavState>) => Partial<NavState>) => {
     setNav((cur) => {
       const next = updater(cur);
-      navCache = next;
+      poserCache(next);
       return next;
     });
   };
@@ -101,6 +131,18 @@ export function Nav({ screen }: { screen: EcranId }) {
       updateNav((cur) => ({ ...cur, prefs: { ...(cur.prefs ?? { reduit: false }), ...prefs } }));
     ecouteursPrefs.add(cb);
     return () => void ecouteursPrefs.delete(cb);
+  }, []);
+
+  useEffect(() => {
+    const cb = (topicId: string, patch: Partial<NavPlacement>) =>
+      updateNav((cur) => ({
+        ...cur,
+        placements: (cur.placements ?? []).map((p) =>
+          p.topicId === topicId ? { ...p, ...patch } : p,
+        ),
+      }));
+    ecouteursPlacement.add(cb);
+    return () => void ecouteursPlacement.delete(cb);
   }, []);
 
   const [edit, setEdit] = useState(false);
@@ -162,7 +204,7 @@ export function Nav({ screen }: { screen: EcranId }) {
     call<NavState>('GET', '/api/nav')
       .then((reponse) => {
         if (annule) return;
-        navCache = reponse;
+        poserCache(reponse);
         setNav(reponse);
       })
       .catch(() => {});
@@ -291,7 +333,7 @@ export function Nav({ screen }: { screen: EcranId }) {
   const rafraichirApresEchec = () => {
     call<NavState>('GET', '/api/nav')
       .then((r) => {
-        navCache = r;
+        poserCache(r);
         setNav(r);
       })
       .catch(() => {});

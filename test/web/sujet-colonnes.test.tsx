@@ -24,6 +24,10 @@ let montagesNav = 0;
 vi.mock('../../web/src/ui/Nav.js', async () => {
   const { useEffect } = await import('react');
   return {
+    // chantier 26 (D111) : l'en-tête lit le cache de la barre, vide ici
+    getNavCacheSnapshot: () => null,
+    ecouterNavCache: () => () => {},
+    annoncerPlacementNav: () => {},
     // Nav est posée une fois par Layout, qui ne démonte jamais entre les deux branches de Sujet
     // (chargement/chargé) ni entre l'ouverture/fermeture de son propre popup : ce compteur le vérifie.
     Nav: () => {
