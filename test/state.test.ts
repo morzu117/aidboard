@@ -42,6 +42,15 @@ test.each(['', join(import.meta.dirname, 'fixtures/fake-swairm.sh'), '/absent/sw
   },
 );
 
+test.each(['pty', 'stream'] as const)(
+  'chantier 27 (D129) : GET /api/state dit le transport des agents (%s)',
+  async (transport) => {
+    t = await startTestDaemon(undefined, { config: { agents: { transport } } });
+    const r = await t.d.app.inject({ url: '/api/state', headers: t.headers });
+    expect(r.json<StateSnapshot>().agentTransport).toBe(transport);
+  },
+);
+
 afterEach(async () => {
   await t?.d.stop();
   delete process.env.FAKE_CODEGRAPH_FIXTURES;
@@ -98,6 +107,7 @@ test('base vide : instantané vide, lastEventId nul', async () => {
     runs: [],
     agents: [],
     actions: [],
+    agentTransport: 'stream',
   });
 });
 

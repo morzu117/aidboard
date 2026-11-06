@@ -13,10 +13,12 @@ export function registerStateRoutes(
   engine: StructuralService,
   mesh: MeshService | null = null,
   swairmEnabled = false,
+  agentTransport?: 'pty' | 'stream',
 ): void {
   app.get('/api/state', async (req) => {
     const all = (req.query as { all?: string }).all === '1';
     await syncTopicBranches(db, store);
-    return buildSnapshot(db, engine, all, mesh, swairmEnabled);
+    const snapshot = await buildSnapshot(db, engine, all, mesh, swairmEnabled);
+    return agentTransport ? { ...snapshot, agentTransport } : snapshot;
   });
 }

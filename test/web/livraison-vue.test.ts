@@ -206,11 +206,35 @@ test('D131 : l’avis lu dans la page', () => {
   expect(long.endsWith('…')).toBe(true);
 });
 
+test('D129, D131 : une page complétée en append, seule la dernière revue compte', () => {
+  const body = [
+    '## Revue de 0dd8bb4',
+    'Ancien avis.',
+    '',
+    'Examiné : un fichier.',
+    '',
+    '## Revue de 3f2a91c',
+    '',
+    'Nouvel avis.',
+    '',
+    'Non examiné : la recette.',
+  ].join('\n');
+  expect(lireAvis(body)).toEqual({
+    texte: 'Nouvel avis.',
+    examine: null,
+    nonExamine: 'la recette.',
+  });
+  const corps = 'commit: 0dd8bb4\n\nAncien.\n\ncommit: 3f2a91c\n\nNouveau.';
+  expect(sourceRevue({ frontmatter: {}, body: corps }, [])?.commit).toBe('3f2a91c');
+});
+
 test('D129 : le message de revue nomme la page, la tête et la base', () => {
   const m = messageRevue({ page: 'aid/review/livraison', mergeBase: AVANT, tete: TETE });
   expect(m).toContain(`git diff ${AVANT}...${TETE}`);
   expect(m).toContain(`aid/review/livraison, avec dans son frontmatter « commit: ${TETE} »`);
   expect(m).toContain('Ne modifie aucun fichier');
+  expect(m).toContain('mode append');
+  expect(m).toContain('« ## Revue de 3f2a91c »');
   expect(m).toContain('« Examiné : … »');
   expect(m.length).toBeLessThan(4000);
 });

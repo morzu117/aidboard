@@ -1,12 +1,13 @@
-import { useEffect, useState } from 'react';
-import { Link, useParams } from 'react-router';
+import { type ReactNode, useEffect, useState } from 'react';
+import { Link, useNavigate, useParams } from 'react-router';
 import type { LivraisonGit } from '../../../src/shared/git.js';
 import type { MemoryPage } from '../../../src/shared/memory.js';
-import type { Topic } from '../../../src/shared/model.js';
+import type { Agent, Topic } from '../../../src/shared/model.js';
 import { ConfirmerMerge } from '../dialogues/ConfirmerMerge.js';
 import { Dialogue } from '../dialogues/Dialogue.js';
 import { AidApiError } from '../data/api.js';
 import { useActionSuivie, useLivraison } from '../data/livraison.js';
+import { memorySlug } from '../data/memory.js';
 import { usePlacement } from '../data/placement.js';
 import { useAid } from '../data/useAidState.js';
 import { Bandeau } from '../ui/Bandeau.js';
@@ -21,6 +22,7 @@ import {
   libelleFraicheur,
   lireAvis,
   lireControles,
+  messageRevue,
   type PrLue,
   type SourceRevue,
 } from '../ui/livraisonVue.js';
@@ -64,7 +66,8 @@ function Ecran({ topic }: { topic: Topic }) {
   const placement = usePlacement(topic.id);
   const nom = placement?.displayName ?? topic.title;
   const workspace = state?.workspaces.find((w) => w.id === topic.workspaceId);
-  const l = useLivraison(topic, workspace?.namespace ?? workspace?.name ?? '');
+  const namespace = workspace?.namespace ?? workspace?.name ?? '';
+  const l = useLivraison(topic, namespace);
   const tete = l.pr?.headRefOid ?? l.git?.head ?? null;
   const base = l.pr?.baseRefName ?? topic.base;
   const fusionne = topic.state === 'merged' || l.pr?.state === 'MERGED';
@@ -207,7 +210,17 @@ function Ecran({ topic }: { topic: Topic }) {
             source={l.source}
             fraicheur={l.fraicheur}
             tete={tete}
-          />
+          >
+            {!fusionne && (
+              <RelancerRevue
+                topic={topic}
+                pageRevue={memorySlug(namespace, 'review', topic.slug)}
+                mergeBase={l.git?.mergeBase ?? null}
+                tete={tete}
+                obsolete={l.fraicheur?.etat === 'obsolete'}
+              />
+            )}
+          </AvisRevue>
         </section>
         <aside className="livraison-cote">
           <Controles
@@ -437,12 +450,15 @@ function AvisRevue({
   source,
   fraicheur,
   tete,
+  children,
 }: {
   topicId: string;
   page: MemoryPage | null | undefined;
   source: SourceRevue | null;
   fraicheur: Fraicheur | null;
   tete: string | null;
+  /** chantier 27 (D129) : « Relancer la revue » */
+  children?: ReactNode;
 }) {
   const avis = page ? lireAvis(page.body) : null;
   return (
@@ -488,6 +504,92 @@ function AvisRevue({
         >
           Ouvrir l’onglet Revue
         </Link>
+      )}
+      {children}
+    </div>
+  );
+}
+
+type Relecteur = 'codex' | 'claude';
+
+/** D129 : un agent du sujet relit `mergeBase...tête` et écrit la page review ; le sujet s'ouvre sur lui. */
+function RelancerRevue({
+  topic,
+  pageRevue,
+  mergeBase,
+  tete,
+  obsolete,
+}: {
+  topic: Topic;
+  pageRevue: string;
+  mergeBase: string | null;
+  tete: string | null;
+  obsolete: boolean;
+}) {
+  const { state, call } = useAid();
+  const navigate = useNavigate();
+  const [kind, setKind] = useState<Relecteur>('codex');
+  const [envoi, setEnvoi] = useState(false);
+  const [erreur, setErreur] = useState<string | null>(null);
+  const raison =
+    state?.agentTransport === 'pty'
+      ? 'Les agents sont lancés en terminal (agents.transport: pty) : la revue ne se relance qu’en transport stream.'
+      : topic.worktreeMissing
+        ? 'Le worktree du sujet manque.'
+        : !tete || !mergeBase
+          ? `Rien à relire tant que origin/${topic.base} et la tête ne sont pas connus.`
+          : null;
+  const relancer = async () => {
+    if (!tete || !mergeBase) return;
+    setEnvoi(true);
+    setErreur(null);
+    try {
+      const a = await call<Agent>('POST', '/api/agents', { topicId: topic.id, kind });
+      await call('POST', `/api/agents/${a.id}/input`, {
+        text: messageRevue({ page: pageRevue, mergeBase, tete }),
+      });
+      navigate(`/sujets/${topic.id}?agent=${a.id}`);
+    } catch (err) {
+      setErreur(err instanceof AidApiError ? err.message : String(err));
+      setEnvoi(false);
+    }
+  };
+  return (
+    <div className="livraison-relancer" data-node="livraison.relancer-revue">
+      <div className="livraison-relancer-ligne">
+        <button
+          className={`bouton${obsolete ? ' bouton--primaire' : ''}`}
+          type="button"
+          data-node="livraison.relancer-revue.bouton"
+          disabled={raison !== null || envoi}
+          onClick={() => void relancer()}
+        >
+          {envoi
+            ? 'Lancement…'
+            : tete
+              ? `Relancer la revue sur ${court(tete)}`
+              : 'Relancer la revue'}
+        </button>
+        <select
+          aria-label="Agent qui relit"
+          data-node="livraison.relancer-revue.agent"
+          value={kind}
+          disabled={raison !== null || envoi}
+          onChange={(e) => setKind(e.target.value as Relecteur)}
+        >
+          <option value="codex">codex</option>
+          <option value="claude">claude</option>
+        </select>
+      </div>
+      {raison && (
+        <p className="texte-faible" data-node="livraison.relancer-revue.raison">
+          {raison}
+        </p>
+      )}
+      {erreur && (
+        <p className="message-erreur" role="alert" data-node="livraison.relancer-revue.erreur">
+          {erreur}
+        </p>
       )}
     </div>
   );

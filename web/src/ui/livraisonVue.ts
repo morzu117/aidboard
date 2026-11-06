@@ -116,6 +116,9 @@ export interface SourceRevue {
 }
 
 const COMMIT_CORPS = /^\s*commit\s*:\s*([0-9a-f]{7,40})\s*$/im;
+// Une page de phase se complète en mode append (règle du kernel) : la dernière revue est en bas.
+const dernierCommitCorps = (body: string) =>
+  [...body.matchAll(new RegExp(COMMIT_CORPS.source, 'gim'))].at(-1)?.[1] ?? null;
 
 /** La page `review` d'abord (`commit:` du frontmatter, ou en tête de corps), sinon la dernière revue GitHub. */
 export function sourceRevue(
@@ -125,9 +128,7 @@ export function sourceRevue(
   if (page) {
     const fm = page.frontmatter.commit;
     const commit =
-      typeof fm === 'string' && fm.trim() !== ''
-        ? fm.trim()
-        : (COMMIT_CORPS.exec(page.body)?.[1] ?? null);
+      typeof fm === 'string' && fm.trim() !== '' ? fm.trim() : dernierCommitCorps(page.body);
     return { origine: 'page', commit, auteur: page.author ?? null };
   }
   const derniere = reviews
@@ -230,8 +231,10 @@ const AVIS_MAX = 300;
 
 /** D131 : le premier paragraphe de la page, puis « Examiné : » et « Non examiné : » s'ils existent. */
 export function lireAvis(body: string): Avis {
-  const ligne = (re: RegExp) => re.exec(body)?.[1]?.trim() || null;
-  const paragraphe = body
+  // la page se complète en append (D129) : seule la dernière section « ## Revue de … » compte
+  const section = body.split(/^(?=##\s+Revue\b)/m).at(-1) ?? body;
+  const ligne = (re: RegExp) => re.exec(section)?.[1]?.trim() || null;
+  const paragraphe = section
     .split(/\n\s*\n/)
     .map((p) =>
       p
@@ -260,6 +263,7 @@ export function messageRevue(p: { page: string; mergeBase: string; tete: string 
     `Relis le diff ${court(p.mergeBase)}...${court(p.tete)} de ce sujet (git diff ${p.mergeBase}...${p.tete}).`,
     'Ne modifie aucun fichier et ne fais aucun commit.',
     `Écris ton avis dans la page mémoire ${p.page}, avec dans son frontmatter « commit: ${p.tete} ».`,
+    `Si la page existe déjà, complète-la (memory_put en mode append) : ton texte commence par ce frontmatter, puis par le titre « ## Revue de ${court(p.tete)} ».`,
     'Commence par un paragraphe qui dit si on peut livrer, puis une ligne « Examiné : … » et une ligne « Non examiné : … ».',
   ].join('\n');
 }

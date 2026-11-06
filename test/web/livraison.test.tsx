@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { act, cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
-import { Route, Routes } from 'react-router';
+import { Route, Routes, useLocation } from 'react-router';
 import { afterEach, beforeEach, expect, test } from 'vitest';
 import type { LivraisonGit } from '../../src/shared/git.js';
 import type { ActionRun, NavState } from '../../src/shared/model.js';
@@ -38,6 +38,11 @@ export const gitLu = (over: Partial<LivraisonGit> = {}): LivraisonGit => ({
   empreinte: '7c41e0a2',
   ...over,
 });
+
+function Ici() {
+  const l = useLocation();
+  return <p data-node="ici">{`${l.pathname}${l.search}`}</p>;
+}
 
 const nav: NavState = {
   groups: [],
@@ -78,13 +83,14 @@ export function ouvrir(
   t = topic(),
   routes: Record<string, (body: unknown) => Response> = {},
   git: LivraisonGit = gitLu(),
+  snap: Partial<ReturnType<typeof snapshot>> = {},
 ) {
   return setup(
     <Routes>
       <Route path="/sujets/:topicId/livraison" element={<Livraison />} />
-      <Route path="/sujets/:topicId" element={<p>écran sujet</p>} />
+      <Route path="/sujets/:topicId" element={<Ici />} />
     </Routes>,
-    snapshot({ workspaces: [ws()], topics: [t] }),
+    snapshot({ workspaces: [ws()], topics: [t], ...snap }),
     '/sujets/tp_1/livraison',
     {
       'GET /api/nav': json(200, nav),
@@ -578,4 +584,69 @@ test('D128 : un refus de GitHub s’affiche tel quel, le dialogue se ferme et la
   await waitFor(() => expect(bouton.disabled).toBe(false));
   fireEvent.click(bouton);
   expect(screen.getByRole('dialog')).toBeTruthy();
+});
+
+// 27.8 : relancer la revue (D129).
+
+test('D129 : un agent codex relit la tête, reçoit le message fixe, et le sujet s’ouvre sur lui', async () => {
+  const h = ouvrir(topic(), {
+    ...pageRevue('Avis.', { commit: BASE }),
+    ...avecRevue(BASE, { retard: 1 }),
+    'POST /api/agents': json(201, { id: 'ag_r', kind: 'codex', transport: 'stream' }),
+    'POST /api/agents/ag_r/input': json(202, { id: 'ag_r' }),
+  });
+  const bouton = (await attendre('livraison.relancer-revue.bouton')) as HTMLButtonElement;
+  await waitFor(() => expect(bouton.disabled).toBe(false));
+  expect(bouton.textContent).toBe('Relancer la revue sur 3f2a91c');
+  // revue obsolète : c'est l'action proposée
+  await waitFor(() => expect(bouton.className).toContain('bouton--primaire'));
+  expect((node('livraison.relancer-revue.agent') as HTMLSelectElement).value).toBe('codex');
+  fireEvent.click(bouton);
+  await waitFor(() => expect(node('ici')?.textContent).toBe('/sujets/tp_1?agent=ag_r'));
+  expect(h.calls.find((c) => c.url === '/api/agents')?.body).toEqual({
+    topicId: 'tp_1',
+    kind: 'codex',
+  });
+  const texte = (h.calls.find((c) => c.url === '/api/agents/ag_r/input')?.body as { text: string })
+    .text;
+  expect(texte).toContain(`git diff ${BASE}...${TETE}`);
+  expect(texte).toContain(`aid/review/s, avec dans son frontmatter « commit: ${TETE} »`);
+  const ordre = h.calls.map((c) => c.url).filter((u) => u.startsWith('/api/agents'));
+  expect(ordre).toEqual(['/api/agents', '/api/agents/ag_r/input']);
+});
+
+test('D129 : claude au choix ; un refus s’affiche et rien ne bouge', async () => {
+  const h = ouvrir(topic(), {
+    'POST /api/agents': json(409, { error: 'worktree occupé' }),
+  });
+  const bouton = (await attendre('livraison.relancer-revue.bouton')) as HTMLButtonElement;
+  await waitFor(() => expect(bouton.disabled).toBe(false));
+  expect(bouton.className).not.toContain('bouton--primaire');
+  fireEvent.change(node('livraison.relancer-revue.agent')!, { target: { value: 'claude' } });
+  fireEvent.click(bouton);
+  expect((await attendre('livraison.relancer-revue.erreur')).textContent).toBe('worktree occupé');
+  expect(h.calls.find((c) => c.url === '/api/agents')?.body).toEqual({
+    topicId: 'tp_1',
+    kind: 'claude',
+  });
+  expect(h.calls.some((c) => c.url.endsWith('/input'))).toBe(false);
+  expect(node('ici')).toBeNull();
+});
+
+test('D129 : en transport PTY, ou sans origin/<base>, le bouton est désactivé avec la raison', async () => {
+  ouvrir(topic(), {}, gitLu(), { agentTransport: 'pty' });
+  const raison = await attendre('livraison.relancer-revue.raison');
+  expect(raison.textContent).toContain('agents.transport: pty');
+  expect((node('livraison.relancer-revue.bouton') as HTMLButtonElement).disabled).toBe(true);
+  cleanup();
+  ouvrir(topic(), {}, gitLu({ mergeBase: null, empreinte: null, files: [] }));
+  await waitFor(() =>
+    expect(node('livraison.relancer-revue.raison')?.textContent).toBe(
+      'Rien à relire tant que origin/main et la tête ne sont pas connus.',
+    ),
+  );
+  cleanup();
+  ouvrir({ ...avecPr, state: 'merged' });
+  await attendre('livraison.avis');
+  expect(node('livraison.relancer-revue')).toBeNull();
 });
