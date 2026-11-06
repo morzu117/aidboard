@@ -430,3 +430,152 @@ test('D126 : sans page, la dernière revue GitHub ; sans l’une ni l’autre, a
     'Revue GitHub de alice, sans page de revue dans la mémoire.',
   );
 });
+
+// 27.7 : autoriser le merge (D123, D127, D128).
+
+const prete = { ...gitLu({ head: TETE }) };
+
+test('D127 : la raison du blocage, une seule, sous le bouton désactivé', async () => {
+  ouvrir(topic(), {}, prete);
+  await waitFor(() =>
+    expect(node('livraison.autoriser.blocage')?.textContent).toBe('Bloqué : aucune PR ouverte.'),
+  );
+  expect((node('livraison.autoriser') as HTMLButtonElement).disabled).toBe(true);
+  expect(node('livraison.autoriser')?.textContent).toBe('Autoriser le merge de 3f2a91c');
+  cleanup();
+
+  let h = ouvrir(avecPr, {}, gitLu({ head: LOCALE }));
+  // pendant la lecture de la PR : désactivé, sans raison annoncée
+  await waitFor(() => expect(h.calls.some((c) => c.url.includes('pr.rafraichir'))).toBe(true));
+  expect((node('livraison.autoriser') as HTMLButtonElement).disabled).toBe(true);
+  expect(node('livraison.autoriser.blocage')).toBeNull();
+  await arrive(h, [lecture({ headRefOid: TETE })]);
+  await waitFor(() =>
+    expect(node('livraison.autoriser.blocage')?.textContent).toBe(
+      'Bloqué : la tête locale 9e8d7c6 n’est pas sur la PR.',
+    ),
+  );
+  cleanup();
+
+  h = ouvrir(avecPr, {
+    ...pageRevue('Avis.', { commit: BASE }),
+    ...avecRevue(BASE, { retard: 1 }),
+  });
+  await arrive(h, [lecture({})]);
+  await waitFor(() =>
+    expect(node('livraison.autoriser.blocage')?.textContent).toBe(
+      'Bloqué : la revue ne porte pas sur cette tête.',
+    ),
+  );
+  cleanup();
+
+  h = ouvrir(avecPr, {}, prete);
+  await arrive(h, [lecture({ mergeable: 'CONFLICTING' })]);
+  await waitFor(() =>
+    expect(node('livraison.autoriser.blocage')?.textContent).toBe(
+      'Bloqué : GitHub signale un conflit avec la base.',
+    ),
+  );
+});
+
+test('D128 : la confirmation nomme la tête, cite ce qui ne bloque pas, et le merge part avec la tête', async () => {
+  const h = ouvrir(
+    avecPr,
+    { 'POST /api/topics/tp_1/actions/topic.merge': json(202, { actionId: 'ac_m' }) },
+    prete,
+  );
+  await arrive(h, [
+    lecture({ statusCheckRollup: [{ name: 'ci', status: 'COMPLETED', conclusion: 'FAILURE' }] }),
+  ]);
+  const bouton = (await attendre('livraison.autoriser')) as HTMLButtonElement;
+  await waitFor(() => expect(bouton.disabled).toBe(false));
+  expect(node('livraison.autoriser.blocage')).toBeNull();
+  expect(node('livraison.tuile-autorisation.valeur')?.textContent).toBe('Aucune');
+  expect(node('livraison.tuile-autorisation.note')?.textContent).toBe('Elle ciblera 3f2a91c');
+  fireEvent.click(bouton);
+  expect(screen.getByRole('dialog').getAttribute('aria-label')).toBe(
+    'Fusionner 3f2a91c dans main ?',
+  );
+  expect(node('livraison.confirmer-merge.citations')?.querySelectorAll('li')).toHaveLength(2);
+  expect(node('livraison.confirmer-merge.citations')?.textContent).toContain('Aucune revue');
+  expect(node('livraison.confirmer-merge.citations')?.textContent).toContain('1 contrôle en panne');
+  const radios = node('livraison.confirmer-merge.strategie')!.querySelectorAll('input');
+  expect([...radios].map((r) => [r.value, r.checked])).toEqual([
+    ['merge', true],
+    ['squash', false],
+    ['rebase', false],
+  ]);
+  expect((node('livraison.confirmer-merge.supprimer-branche') as HTMLInputElement).checked).toBe(
+    false,
+  );
+  expect((node('livraison.confirmer-merge.nettoyer') as HTMLInputElement).checked).toBe(false);
+  fireEvent.click(radios[1]!);
+  fireEvent.click(node('livraison.confirmer-merge.supprimer-branche')!);
+  fireEvent.click(node('livraison.confirmer-merge.valider')!);
+  await waitFor(() =>
+    expect(h.calls.find((c) => c.url.endsWith('/topic.merge'))?.body).toEqual({
+      strategy: 'squash',
+      deleteBranch: true,
+      cleanupAfter: false,
+      head: TETE,
+    }),
+  );
+  expect(node('livraison.confirmer-merge.valider')?.textContent).toBe('Fusion…');
+  // fusionné : le dialogue se ferme, la tuile le dit
+  await arrive(
+    h,
+    [
+      lecture({ state: 'MERGED' }),
+      { ...lecture({}), id: 'ac_m', action: 'topic.merge', result: null },
+    ],
+    [{ ...avecPr, state: 'merged' }],
+  );
+  await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+  expect(node('livraison.tuile-autorisation.valeur')?.textContent).toBe('Fusionnée');
+  expect(node('livraison.tuile-autorisation.note')?.textContent).toBe('Sur 3f2a91c');
+  expect(node('livraison.autoriser')).toBeNull();
+});
+
+test('D128 : un refus de GitHub s’affiche tel quel, le dialogue se ferme et la PR est relue', async () => {
+  const h = ouvrir(
+    avecPr,
+    { 'POST /api/topics/tp_1/actions/topic.merge': json(202, { actionId: 'ac_m' }) },
+    prete,
+  );
+  await arrive(h, [lecture({})]);
+  const bouton = (await attendre('livraison.autoriser')) as HTMLButtonElement;
+  await waitFor(() => expect(bouton.disabled).toBe(false));
+  fireEvent.click(bouton);
+  fireEvent.click(node('livraison.confirmer-merge.valider')!);
+  await waitFor(() => expect(h.calls.some((c) => c.url.endsWith('/topic.merge'))).toBe(true));
+  const refus = 'Head branch was modified. Review and try the merge again.';
+  await act(async () => {
+    FakeSocket.all[0]!.push({
+      kind: 'ephemeral',
+      type: 'action.output',
+      actionId: 'ac_m',
+      stream: 'stderr',
+      line: refus,
+    });
+  });
+  await arrive(h, [
+    lecture({}),
+    {
+      ...lecture({}),
+      id: 'ac_m',
+      action: 'topic.merge',
+      state: 'failed',
+      exitCode: 1,
+      result: null,
+    },
+  ]);
+  await waitFor(() => expect(node('livraison.autoriser.refus')?.textContent).toBe(refus));
+  expect(screen.queryByRole('dialog')).toBeNull();
+  await waitFor(() =>
+    expect(h.calls.filter((c) => c.url.includes('pr.rafraichir'))).toHaveLength(2),
+  );
+  // une nouvelle tentative rouvre le dialogue
+  await waitFor(() => expect(bouton.disabled).toBe(false));
+  fireEvent.click(bouton);
+  expect(screen.getByRole('dialog')).toBeTruthy();
+});

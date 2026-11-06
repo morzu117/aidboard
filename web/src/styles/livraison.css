@@ -254,3 +254,37 @@
   color: var(--acc);
   font-size: var(--fs-s);
 }
+
+/* D127, D128 : l'autorisation du merge */
+.livraison-blocage {
+  max-width: 320px;
+  margin: 0;
+  color: var(--s-attente);
+  font-size: var(--fs-s);
+  text-align: right;
+}
+.livraison-strategies {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-3);
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.livraison-strategies legend {
+  margin-bottom: var(--sp-1);
+  color: var(--muted);
+  font-size: var(--fs-s);
+}
+.livraison-dialogue .livraison-choix {
+  flex-direction: row;
+  align-items: center;
+  gap: var(--sp-2);
+  color: var(--text-2);
+  font-size: var(--fs-m);
+}
+.livraison-citations {
+  margin: var(--sp-1) 0 0;
+  padding-left: var(--sp-5);
+  color: var(--s-attente);
+}

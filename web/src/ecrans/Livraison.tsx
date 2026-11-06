@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router';
 import type { LivraisonGit } from '../../../src/shared/git.js';
 import type { MemoryPage } from '../../../src/shared/memory.js';
 import type { Topic } from '../../../src/shared/model.js';
+import { ConfirmerMerge } from '../dialogues/ConfirmerMerge.js';
 import { Dialogue } from '../dialogues/Dialogue.js';
 import { AidApiError } from '../data/api.js';
 import { useActionSuivie, useLivraison } from '../data/livraison.js';
@@ -11,6 +12,8 @@ import { useAid } from '../data/useAidState.js';
 import { Bandeau } from '../ui/Bandeau.js';
 import { Layout } from '../ui/Layout.js';
 import {
+  blocageMerge,
+  citations,
   compterControles,
   type Controle,
   court,
@@ -67,6 +70,32 @@ function Ecran({ topic }: { topic: Topic }) {
   const fusionne = topic.state === 'merged' || l.pr?.state === 'MERGED';
   const controles = lireControles(l.pr, l.test);
   const compte = compterControles(controles, tete);
+  // pendant une lecture (PR, dépôt, revue), le bouton attend sans annoncer de raison
+  const enLecture =
+    !topic.worktreeMissing &&
+    !fusionne &&
+    (l.lecturePr.enCours || (!l.git && !l.erreurGit) || l.fraicheur === null);
+  const blocage = topic.worktreeMissing
+    ? 'le worktree du sujet manque.'
+    : enLecture
+      ? null
+      : blocageMerge({
+          fusionne,
+          aPr: topic.prNumber !== null,
+          pr: l.pr,
+          teteLocale: l.git?.head ?? null,
+          fraicheur: l.fraicheur ?? { etat: 'aucune' },
+        });
+  const merge = useActionSuivie(topic.id);
+  // D128 : fini, dans un sens ou dans l'autre, l'écran relit ; refusé, le refus reste sous le bouton
+  const mergeFini = merge.run && merge.run.state !== 'running' ? merge.run.id : null;
+  useEffect(() => {
+    if (mergeFini) l.relire();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mergeFini]);
+  // Le dialogue retient la fusion finie à son ouverture : il se ferme dès qu'une autre l'est.
+  const [ouvertSur, setOuvertSur] = useState<string | null | false>(false);
+  const confirmer = ouvertSur !== false && (mergeFini === null || mergeFini === ouvertSur);
 
   return (
     <main className="page livraison" data-node="livraison">
@@ -106,8 +135,45 @@ function Ecran({ topic }: { topic: Topic }) {
               {l.lecturePr.enCours ? 'Lecture de la PR…' : 'Relire la PR'}
             </button>
           )}
+          {!fusionne && (
+            <button
+              className="bouton bouton--primaire"
+              type="button"
+              data-node="livraison.autoriser"
+              disabled={enLecture || blocage !== null || merge.enCours}
+              onClick={() => setOuvertSur(mergeFini)}
+            >
+              {merge.enCours
+                ? 'Fusion en cours…'
+                : tete
+                  ? `Autoriser le merge de ${court(tete)}`
+                  : 'Autoriser le merge'}
+            </button>
+          )}
+          {!fusionne && blocage && (
+            <p className="livraison-blocage" data-node="livraison.autoriser.blocage">
+              Bloqué : {blocage}
+            </p>
+          )}
+          {merge.echec && (
+            <p className="message-erreur" role="alert" data-node="livraison.autoriser.refus">
+              {merge.echec}
+            </p>
+          )}
         </div>
       </header>
+      {confirmer && l.pr?.headRefOid && l.fraicheur && !enLecture && blocage === null && (
+        <ConfirmerMerge
+          tete={l.pr.headRefOid}
+          base={base}
+          citations={citations(l.fraicheur, compte)}
+          enCours={merge.enCours}
+          onClose={() => setOuvertSur(false)}
+          onConfirmer={(choix) =>
+            void merge.lancer('topic.merge', { ...choix, head: l.pr?.headRefOid })
+          }
+        />
+      )}
 
       {topic.worktreeMissing && (
         <Bandeau ton="rouge" constat="Worktree introuvable" node="livraison.sans-worktree">
@@ -129,6 +195,7 @@ function Ecran({ topic }: { topic: Topic }) {
       <div className="livraison-tuiles">
         <TuileControles compte={compte} tete={tete} />
         <TuileRevue fraicheur={l.fraicheur} />
+        <TuileAutorisation fusionne={fusionne} enCours={merge.enCours} tete={tete} />
       </div>
 
       <div className="livraison-corps">
@@ -242,6 +309,35 @@ function TuileRevue({ fraicheur }: { fraicheur: Fraicheur | null }) {
       </p>
       <p className="livraison-tuile-note" data-node="livraison.tuile-revue.note">
         {note}
+      </p>
+    </div>
+  );
+}
+
+/** D128 : l'autorisation de livrer ; aucune tant que le merge n'est pas parti. */
+function TuileAutorisation({
+  fusionne,
+  enCours,
+  tete,
+}: {
+  fusionne: boolean;
+  enCours: boolean;
+  tete: string | null;
+}) {
+  const ton = fusionne ? 'ok' : enCours ? 'ambre' : 'neutre';
+  const sur = tete ? court(tete) : null;
+  return (
+    <div
+      className={`livraison-tuile livraison-tuile--${ton}`}
+      data-node="livraison.tuile-autorisation"
+      data-ton={ton}
+    >
+      <p className="livraison-tuile-nom">Autorisation</p>
+      <p className="livraison-tuile-valeur" data-node="livraison.tuile-autorisation.valeur">
+        {fusionne ? 'Fusionnée' : enCours ? 'Fusion en cours' : 'Aucune'}
+      </p>
+      <p className="livraison-tuile-note" data-node="livraison.tuile-autorisation.note">
+        {!sur ? 'Tête inconnue' : fusionne ? `Sur ${sur}` : `Elle ciblera ${sur}`}
       </p>
     </div>
   );
