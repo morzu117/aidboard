@@ -14,6 +14,7 @@ import { AidApiError } from '../data/api.js';
 import { ecrirePanneau, lirePanneau, type PanneauPref } from '../data/panneauServeur.js';
 import { suivreOutils, type SuiviOutils } from '../data/panneauServeur.js';
 import { statutInconnu, useServeurs } from '../data/serveurs.js';
+import { Reprendre } from '../dialogues/Reprendre.js';
 import { Bandeau } from '../ui/Bandeau.js';
 import { useAidClient } from '../data/useAidState.js';
 import { Layout } from '../ui/Layout.js';
@@ -94,11 +95,15 @@ function BandeauSuivi({
   injoignable,
   raison,
   suivi,
+  onReprendre,
 }: {
   injoignable: boolean;
   raison: string | null;
   suivi: 'coupe' | 'echec' | undefined;
+  /** chantier 28 (D150) : le dialogue Reprendre, depuis Session perdue et Suivi coupé */
+  onReprendre?: () => void;
 }) {
+  const reprendre = onReprendre && { label: 'Reprendre…', onClick: onReprendre };
   if (injoignable)
     return (
       <Bandeau
@@ -117,6 +122,7 @@ function BandeauSuivi({
         constat="Session perdue"
         continue="Le fil garde tout ce qui a été reçu. Reconnecter, sur la ligne d’échec, relance l’agent sur sa session."
         node="discussion.bandeau"
+        action={reprendre}
       >
         La reprise de la session a échoué.
       </Bandeau>
@@ -128,6 +134,7 @@ function BandeauSuivi({
         constat="Suivi coupé"
         continue="L’agent continue peut-être sur le serveur ; A-I-D reprend le lien seul et le fil se complète à la reprise."
         node="discussion.bandeau"
+        action={reprendre}
       >
         A-I-D ne reçoit plus le fil de cet agent.
       </Bandeau>
@@ -144,6 +151,8 @@ function Contenu() {
   const status = statuses[id] ?? statutInconnu(id);
   const [discussion, setDiscussion] = useState<ServerDiscussionView | null>(null);
   const [agentVue, setAgentVue] = useState<ServerAgentView | null>(null);
+  // chantier 28 (D150) : le dialogue Reprendre, ouvert depuis le bandeau
+  const [reprise, setReprise] = useState(false);
   const [erreur, setErreur] = useState<string | null>(null);
   const [introuvable, setIntrouvable] = useState(false);
   const [actionsHost, setActionsHost] = useState<HTMLDivElement | null>(null);
@@ -313,7 +322,18 @@ function Contenu() {
           </span>
         )}
       </div>
-      <BandeauSuivi injoignable={injoignable} raison={status.reason} suivi={agentVue?.suivi} />
+      <BandeauSuivi
+        injoignable={injoignable}
+        raison={status.reason}
+        suivi={agentVue?.suivi}
+        onReprendre={agentVue ? () => setReprise(true) : undefined}
+      />
+      {reprise && agentVue && (
+        <Reprendre
+          cible={{ lieu: 'serveur', agent: agentVue, serverId: id }}
+          onClose={() => setReprise(false)}
+        />
+      )}
       {erreur && (
         <p className="message-erreur" role="alert" data-node="discussion.erreur">
           {erreur}

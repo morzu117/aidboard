@@ -1,0 +1,40 @@
+/* Chantier 28 : styles de la Boîte par nature (D136 à D139). Jamais dans maquette.css, dont l'empreinte est
+   comparée aux maquettes design/maquettes/aid-1-*.html (test/web/maquette-css.test.ts). */
+
+/* un seul filtre de nature actif : une seule colonne */
+[data-viewport] .boite-colonnes--une,
+.boite-colonnes--une {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.boite-section-titre {
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: var(--fs-s);
+}
+.boite-section--decision .boite-section-titre {
+  color: var(--s-attente);
+}
+.boite-section--decision .element--attente {
+  background: var(--s-attente-bg);
+}
+
+.boite-repere {
+  color: var(--faint);
+  font-family: ui-monospace, monospace;
+  font-size: var(--fs-s);
+}
+
+.boite-contexte {
+  margin-left: auto;
+}
+
+/* D137 : le rappel d'une demande de pair, toujours visible */
+.boite-rappel {
+  color: var(--s-attente);
+  font-size: var(--fs-m);
+}
+
+.boite-mesh {
+  flex-wrap: wrap;
+}

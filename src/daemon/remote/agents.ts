@@ -535,6 +535,50 @@ export class RemoteAgentManager {
     return true;
   }
 
+  // ---- reprise (chantier 28, D148) : la sonde, puis rattacher ou relancer, chacun seul
+
+  /** L'état du processus sur le serveur, sans rien relancer : `perdu`, `fini` et `inconnu` le disent arrêté. */
+  async processus(
+    agentId: string,
+  ): Promise<{ etat: 'vivant' | 'arrete' | 'injoignable'; dernierEvenement: string | null }> {
+    const row = this.agentRow(agentId);
+    const dernier = this.deps.db
+      .prepare('SELECT MAX(at) AS at FROM server_agent_messages WHERE agent_id = ?')
+      .get(agentId) as { at: string | null };
+    const r = await remoteExec(this.serverOf(row), relayAlive(relayOf(row)), {
+      ...this.deps.transport,
+      timeoutMs: 10_000,
+    }).catch(() => null);
+    let etat: 'vivant' | 'arrete' | 'injoignable' = 'injoignable';
+    if (r?.code === 0) {
+      try {
+        etat = parseAlive(r.stdout).state === 'vivant' ? 'vivant' : 'arrete';
+      } catch {
+        etat = 'injoignable';
+      }
+    }
+    return { etat, dernierEvenement: dernier.at };
+  }
+
+  /** Reconnecter : rattacher le relais vivant à son offset, jamais relancer. */
+  async rattacher(agentId: string): Promise<void> {
+    const row = this.agentRow(agentId);
+    this.assertOpen(row);
+    if (!(await this.reattach(row)))
+      throw new AidHttpError(409, 'rien à rattacher : le processus ne répond pas sur le serveur');
+  }
+
+  /** Reprendre la session : une relance sur la session, refusée si le processus répond encore. */
+  async relancer(agentId: string): Promise<void> {
+    const row = this.agentRow(agentId);
+    this.assertOpen(row);
+    if (!row.session_id || !this.hasTurn(row.id))
+      throw new AidHttpError(409, 'aucune session à reprendre');
+    if ((await this.processus(agentId)).etat === 'vivant')
+      throw new AidHttpError(409, 'le processus répond : le relancer couperait son tour');
+    await this.relaunchOnce(row);
+  }
+
   // ---- composer (R.6) : repères, mode, modèle et effort, comme pour un agent local
 
   /** Repère (A.7) : seul un message utilisateur du fil se marque. */

@@ -3,6 +3,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router';
 import type { Agent, NavState, Topic, UpdateInfo } from '../../../src/shared/model.js';
 import { DecisionCard } from '../conversation/DecisionCard.js';
 import { AidApiError } from '../data/api.js';
+import { Reprendre } from '../dialogues/Reprendre.js';
 import { useAid } from '../data/useAidState.js';
 import { depuis } from '../ui/depuis.js';
 import { A_TRAITER, Layout, useLayout } from '../ui/Layout.js';
@@ -407,6 +408,8 @@ function ActionLigne({
   const navigate = useNavigate();
   const [busy, setBusy] = useState(false);
   const [erreur, setErreur] = useState<string | null>(null);
+  // chantier 28 (D150) : le dialogue Reprendre, ouvert depuis la ligne
+  const [reprise, setReprise] = useState(false);
   const urgent = mostUrgent(agents);
   const decideur = decideurDe(agents);
   const neRemonte = (e: { stopPropagation: () => void }) => e.stopPropagation();
@@ -503,6 +506,34 @@ function ActionLigne({
       >
         Suivre
       </Link>
+    );
+  }
+  // D150 : l'agent le plus urgent ne vit plus (arrêté, en veille, en erreur) : Reprendre ouvre le dialogue
+  if (urgent && !isAlive(urgent) && (urgent.kind === 'claude' || urgent.kind === 'codex')) {
+    return (
+      <>
+        <button
+          className="bouton"
+          data-node={dataNode}
+          data-action="sujet.reprendre"
+          type="button"
+          onClick={(e) => {
+            neRemonte(e);
+            setReprise(true);
+          }}
+        >
+          Reprendre
+        </button>
+        {reprise && (
+          // le dialogue n'est pas un portail : ses clics ne remontent pas jusqu'à la ligne
+          <div onClick={neRemonte}>
+            <Reprendre
+              cible={{ lieu: 'local', agent: urgent, topic }}
+              onClose={() => setReprise(false)}
+            />
+          </div>
+        )}
+      </>
     );
   }
   if (agents.length > 0) {

@@ -1,4 +1,4 @@
-import type { PermissionMode } from './agentSettings.js';
+import type { AgentOptions, PermissionMode } from './agentSettings.js';
 import type { IndexEngine } from './structural.js';
 
 export type RunMode = 'standard' | 'swairm';
@@ -197,6 +197,8 @@ export interface MeshDm {
   obligationId: string | null;
   /** marque locale posée dans A-I-D (12.4), jamais le `read_at` du gateway */
   seenAt: string | null;
+  /** chantier 28 (D137) : « En faire une décision », marque locale comme `seenAt` */
+  decidedAt: string | null;
 }
 
 export type MeshTailscale = 'running' | 'stopped' | 'absent';
@@ -422,4 +424,20 @@ export interface ServerAgent {
   staleConfirm?: boolean;
   /** Chantier 25 (D110) : lien perdu sans reprise (`coupe`), reprise échouée (`echec`) ; absent quand tout suit */
   suivi?: 'coupe' | 'echec';
+}
+
+/** Chantier 28 (D143) : un agent que l'écran Nouveau sujet peut lancer, tel que le daemon le trouve. */
+export interface AgentDisponible {
+  kind: 'claude' | 'codex';
+  /** le binaire est dans le PATH du daemon */
+  trouve: boolean;
+  /** `<bin> --version`, null si introuvable, en échec ou trop lent */
+  version: string | null;
+  options: AgentOptions;
+}
+
+/** `GET /api/agents/disponibles` ; `baseEnRetard` est null sans projet ou si `origin/<base>` est inconnu. */
+export interface AgentsDisponibles {
+  agents: AgentDisponible[];
+  baseEnRetard: number | null;
 }

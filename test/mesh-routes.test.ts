@@ -59,6 +59,7 @@ test('mesh désactivé : /api/mesh et ses actions répondent 404, /api/state n�
     await get('/api/mesh'),
     await post('/api/mesh/connect'),
     await post('/api/mesh/dm/1/seen'),
+    await post('/api/mesh/dm/1/decision'),
   ]) {
     expect(r.statusCode).toBe(404);
     expect(r.json<{ error: string }>().error).toContain('mesh désactivé');
@@ -96,6 +97,7 @@ test('connect (202) ⇒ mesh.state connecté ; les DM suivis arrivent dans /api/
     replyTo: null,
     obligationId: null,
     seenAt: null,
+    decidedAt: null,
   });
   const snap = (await get('/api/state')).json<StateSnapshot>();
   expect(snap.mesh?.state.connected).toBe(true);
@@ -123,6 +125,28 @@ test('« vu » : idempotent, local (seen_at), 404 sur un DM inconnu, 400 sur un 
   expect((await post('/api/mesh/dm/8/seen')).statusCode).toBe(404);
   expect((await post('/api/mesh/dm/abc/seen')).statusCode).toBe(400);
   // la marque n'est pas un événement : rien au journal
+  expect(t.store.since(null).filter((e) => e.type === 'mesh.dm')).toEqual([]);
+});
+
+test('« en faire une décision » (D137) : idempotent, local (decided_at), 404, 400, rien au journal', async () => {
+  await bootWithMesh();
+  t.db
+    .prepare(
+      "INSERT INTO mesh_inbox (id, thread_id, from_node, to_node, kind, content, created_at, event_id) VALUES (7, NULL, 'a', 'b', 'question', 'x', 't1', 'ev')",
+    )
+    .run();
+  const a = await post('/api/mesh/dm/7/decision');
+  expect(a.statusCode).toBe(200);
+  const { decidedAt } = a.json<{ id: number; decidedAt: string }>();
+  expect(typeof decidedAt).toBe('string');
+  await new Promise((r) => setTimeout(r, 5));
+  expect((await post('/api/mesh/dm/7/decision')).json()).toEqual({ id: 7, decidedAt });
+  expect((await meshApi()).inbox[0]).toMatchObject({ decidedAt, seenAt: null });
+  // « Vu » ensuite le retire de la Boîte, la décision reste notée
+  await post('/api/mesh/dm/7/seen');
+  expect((await meshApi()).inbox[0]).toMatchObject({ decidedAt });
+  expect((await post('/api/mesh/dm/8/decision')).statusCode).toBe(404);
+  expect((await post('/api/mesh/dm/abc/decision')).statusCode).toBe(400);
   expect(t.store.since(null).filter((e) => e.type === 'mesh.dm')).toEqual([]);
 });
 

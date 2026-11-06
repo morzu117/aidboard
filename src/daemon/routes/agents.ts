@@ -3,6 +3,7 @@ import type { FastifyInstance } from 'fastify';
 import type { AgentSettings } from '../../shared/agentSettings.js';
 import type { Db } from '../db.js';
 import { AidHttpError } from '../errors.js';
+import { agentsDisponibles } from '../pty/disponibles.js';
 import type { AgentManager, AttachmentUpload } from '../pty/manager.js';
 
 const Body = Type.Object(
@@ -67,6 +68,17 @@ export function registerAgentRoutes(
     return reply.code(201).send(deps.agents.spawn(body));
   });
 
+  // Chantier 28 (D143) : « Vérifié à l'instant » de l'écran Nouveau sujet. Lecture seule, sans fetch.
+  app.get('/api/agents/disponibles', async (req) => {
+    const { workspaceId } = req.query as { workspaceId?: string };
+    if (!workspaceId) return agentsDisponibles(deps.agents.codexModels());
+    const ws = deps.db
+      .prepare('SELECT root, base_branch FROM workspaces WHERE id = ?')
+      .get(workspaceId) as { root: string; base_branch: string } | undefined;
+    if (!ws) throw new AidHttpError(404, 'projet inconnu');
+    return agentsDisponibles(deps.agents.codexModels(), { root: ws.root, base: ws.base_branch });
+  });
+
   // Piloter un agent depuis l'Accueil : réservé à l'humain (un token de run n'atteint que POST /api/events).
   app.get('/api/agents/:id/screen', async (req) => {
     const { id } = req.params as { id: string };
@@ -84,6 +96,13 @@ export function registerAgentRoutes(
       return reply.code(202).send({ id });
     },
   );
+
+  // Chantier 28 (D148) : reprendre la session d'un agent conversationnel arrêté, sans message
+  app.post('/api/agents/:id/reprendre', async (req, reply) => {
+    const { id } = req.params as { id: string };
+    deps.agents.reprendre(id);
+    return reply.code(202).send({ id });
+  });
 
   app.post('/api/agents/:id/answer', { schema: { body: AnswerBody } }, async (req, reply) => {
     const { id } = req.params as { id: string };

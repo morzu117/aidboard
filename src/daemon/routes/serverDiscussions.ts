@@ -159,6 +159,23 @@ export function registerServerDiscussionRoutes(
     return reply.code(202).send({ id });
   });
 
+  // Chantier 28 (D148) : le dialogue Reprendre sonde le processus, puis rattache ou relance, l'un sans l'autre
+  app.get('/api/server-agents/:id/processus', async (req) =>
+    manager.processus((req.params as { id: string }).id),
+  );
+
+  app.post('/api/server-agents/:id/rattacher', async (req, reply) => {
+    const { id } = req.params as { id: string };
+    await manager.rattacher(id);
+    return reply.code(202).send({ id });
+  });
+
+  app.post('/api/server-agents/:id/relancer', async (req, reply) => {
+    const { id } = req.params as { id: string };
+    await manager.relancer(id);
+    return reply.code(202).send({ id });
+  });
+
   app.get('/api/server-agents/:id/options', async (req) =>
     manager.options((req.params as { id: string }).id),
   );

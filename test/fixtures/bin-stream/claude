@@ -1,3 +1,5 @@
 #!/usr/bin/env bash
 # Faux « claude » en mode structuré (stream-json) pour test/agent-stream.test.ts : rejoue fake-claude-stream.mjs.
+# chantier 28 (D143) : une version synthétique, sans lancer le faux pilote
+if [ "${1:-}" = "--version" ]; then echo "2.1.0 (Claude Code)"; exit 0; fi
 exec node "$(dirname "$0")/../fake-claude-stream.mjs" "$@"

@@ -39,4 +39,14 @@ export function registerMeshRoutes(app: FastifyInstance, deps: MeshRouteDeps): v
     if (!r) throw new AidHttpError(404, 'DM inconnu');
     return r;
   });
+
+  // chantier 28 (D137) : le DM passe dans les décisions de la Boîte ; rien ne part vers le pair
+  app.post('/api/mesh/dm/:id/decision', async (req) => {
+    const m = mesh();
+    const id = Number((req.params as { id: string }).id);
+    if (!Number.isInteger(id) || id < 0) throw new AidHttpError(400, 'id invalide');
+    const r = m.markDecision(id);
+    if (!r) throw new AidHttpError(404, 'DM inconnu');
+    return r;
+  });
 }

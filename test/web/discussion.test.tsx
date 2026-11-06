@@ -514,7 +514,8 @@ test('D110 : suivi coupé, session perdue, machine injoignable, en bandeau au-de
   await waitFor(() => expect(node('discussion.bandeau')).not.toBeNull());
   expect(node('discussion.bandeau.constat')!.textContent).toBe('Suivi coupé');
   expect(node('discussion.bandeau')!.getAttribute('data-ton')).toBe('ambre');
-  expect(node('discussion.bandeau.action')).toBeNull();
+  // chantier 28 (D150) : la seule action du bandeau ouvre Reprendre
+  expect(node('discussion.bandeau.action')!.textContent).toBe('Reprendre…');
   cleanup();
   ouvrir('/serveurs/srv_1/discussions/sd_1', {
     d: discussion({ agents: [agentVue({ suivi: 'echec' })] }),
@@ -541,4 +542,39 @@ test('D110 : suivi coupé, session perdue, machine injoignable, en bandeau au-de
   await fil();
   await waitFor(() => expect(node('discussion.agent')).not.toBeNull());
   expect(node('discussion.bandeau')).toBeNull();
+});
+
+test('D150 : « Reprendre… » du bandeau ouvre le dialogue, qui sonde le processus', async () => {
+  const h = ouvrir('/serveurs/srv_1/discussions/sd_1', {
+    d: discussion({ agents: [agentVue({ suivi: 'echec' })] }),
+  });
+  h.respond.set(
+    'GET /api/server-agents/sa_1/processus',
+    json(200, { etat: 'arrete', dernierEvenement: null }),
+  );
+  await fil();
+  await waitFor(() => expect(node('discussion.bandeau.action')).not.toBeNull());
+  fireEvent.click(node('discussion.bandeau.action')!);
+  expect(
+    await screen.findByRole('dialog', { name: 'La session de claude est perdue.' }),
+  ).toBeTruthy();
+  await waitFor(() =>
+    expect(
+      (node('reprendre.option-reprendre')!.querySelector('input') as HTMLInputElement).checked,
+    ).toBe(true),
+  );
+  expect(h.calls.some((c) => c.url === '/api/server-agents/sa_1/processus')).toBe(true);
+});
+
+test('D150 : sur Serveurs, « Reprendre » d’un suivi coupé ouvre le dialogue, pas la discussion', async () => {
+  const d = discussion({ agents: [agentVue({ suivi: 'coupe' })] });
+  const h = ouvrir('/serveurs', { d });
+  h.respond.set(
+    'GET /api/server-agents/sa_1/processus',
+    json(200, { etat: 'vivant', dernierEvenement: null }),
+  );
+  await waitFor(() => expect(node('serveurs.serveur-1.discussion-1')).not.toBeNull());
+  fireEvent.click(node('serveurs.serveur-1.discussion-1.reprendre')!);
+  expect(await screen.findByRole('dialog', { name: 'Le suivi de claude est coupé.' })).toBeTruthy();
+  expect(node('discussion.titre')).toBeNull();
 });

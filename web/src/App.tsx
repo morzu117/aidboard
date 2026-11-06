@@ -7,6 +7,7 @@ import { Boite } from './ecrans/Boite.js';
 import { Consignes } from './ecrans/Consignes.js';
 import { Discussion, OuvrirDiscussion } from './ecrans/Discussion.js';
 import { Livraison } from './ecrans/Livraison.js';
+import { NouveauSujet } from './ecrans/NouveauSujet.js';
 import { Reglages } from './ecrans/Reglages.js';
 import { ServeurConfig } from './ecrans/ServeurConfig.js';
 import { Serveurs } from './ecrans/Serveurs.js';
@@ -32,6 +33,8 @@ export function App() {
         <Route path="/serveurs/:id/configuration" element={<ServeurConfig />} />
         <Route path="/serveurs/:id/discussion" element={<OuvrirDiscussion />} />
         <Route path="/serveurs/:id/discussions/:discussionId" element={<Discussion />} />
+        {/* chantier 28 (D141) : avant /sujets/:topicId, qui prendrait « nouveau » pour un id */}
+        <Route path="/sujets/nouveau" element={<NouveauSujet />} />
         <Route path="/sujets/:topicId" element={<Sujet />} />
         {/* chantier 27 (D121) */}
         <Route path="/sujets/:topicId/livraison" element={<Livraison />} />

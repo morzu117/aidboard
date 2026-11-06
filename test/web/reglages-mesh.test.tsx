@@ -25,6 +25,7 @@ const dm = (id: number, kind: MeshDm['kind'], seenAt: string | null = null): Mes
   replyTo: null,
   obligationId: null,
   seenAt,
+  decidedAt: null,
 });
 const etat = (over: Partial<MeshState> = {}): MeshState => ({
   connected: true,

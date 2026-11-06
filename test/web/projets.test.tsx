@@ -5,7 +5,7 @@ import { afterEach, expect, test, vi } from 'vitest';
 import { Accueil } from '../../web/src/ecrans/Accueil.js';
 import { Consignes } from '../../web/src/ecrans/Consignes.js';
 import { Reglages } from '../../web/src/ecrans/Reglages.js';
-import { json, setup, snapshot, topic, ws } from './helpers.js';
+import { Chemin, cheminCourant, json, setup, snapshot, topic, ws } from './helpers.js';
 
 afterEach(() => {
   cleanup();
@@ -95,18 +95,27 @@ test('« Ajouter un projet » enregistre sans enchaîner sur la création d’un
 });
 
 test('sans aucun projet, « Nouveau sujet » commence par enregistrer le projet puis enchaîne', async () => {
-  const h = setup(<Accueil />, snapshot());
+  const h = setup(
+    <>
+      <Accueil />
+      <Chemin />
+    </>,
+    snapshot(),
+  );
   h.respond.set('POST /api/workspaces', json(201, { ...ws(), warnings: [] }));
   // Nav pose aussi un bouton « Nouveau sujet » (B.2, finding 7) : les deux appellent openNewTopic().
   await userEvent.click((await screen.findAllByRole('button', { name: 'Nouveau sujet' }))[0]!);
   await userEvent.click(await screen.findByRole('button', { name: 'Choisir mon-depot' }));
   await userEvent.click(screen.getByRole('button', { name: 'Enregistrer' }));
-  expect(await screen.findByRole('dialog', { name: 'Nouveau sujet' })).toBeTruthy();
+  await waitFor(() => expect(cheminCourant()).toBe('/sujets/nouveau'));
 });
 
 test('« Nouveau sujet » d’un projet présélectionne ce projet, pas le plus récent', async () => {
   setup(
-    <Reglages />,
+    <>
+      <Reglages />
+      <Chemin />
+    </>,
     snapshot({
       workspaces: [
         ws({ id: 'ws_a', name: 'ancien', createdAt: '2026-01-01T00:00:00Z' }),
@@ -115,7 +124,8 @@ test('« Nouveau sujet » d’un projet présélectionne ce projet, pas le plus 
     }),
   );
   await userEvent.click(await screen.findByRole('button', { name: 'Nouveau sujet dans ancien' }));
-  expect((screen.getByLabelText('Projet') as HTMLSelectElement).value).toBe('ws_a');
+  // D141 : l'écran le reçoit par l'URL (test/web/nouveau-sujet.test.tsx)
+  expect(cheminCourant()).toBe('/sujets/nouveau?projet=ws_a');
 });
 
 test('hooks : état, installation après confirmation, rappel de relancer les sessions', async () => {

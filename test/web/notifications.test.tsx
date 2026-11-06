@@ -134,6 +134,7 @@ const dm = (id: number, kind: MeshDm['kind'], over: Partial<MeshDm> = {}): MeshD
   replyTo: null,
   obligationId: null,
   seenAt: null,
+  decidedAt: null,
   ...over,
 });
 const mesh = (inbox: MeshDm[]) => ({

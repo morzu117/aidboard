@@ -611,6 +611,23 @@ export class AgentManager {
     return this.resumeStream(agentId, row);
   }
 
+  /**
+   * Chantier 28 (D148) : « Reprendre la session » d'un agent conversationnel qui ne vit plus, sans message. Le pilote
+   * repart sur sa session et attend, comme un agent neuf.
+   */
+  reprendre(agentId: string): void {
+    const row = this.deps.db
+      .prepare('SELECT transport, closed_at FROM agents WHERE id = ?')
+      .get(agentId) as { transport: string; closed_at: string | null } | undefined;
+    if (!row) throw new AidHttpError(404, 'agent inconnu');
+    if (row.transport !== 'stream')
+      throw new AidHttpError(409, 'reprise réservée aux agents conversationnels');
+    if (row.closed_at) throw new AidHttpError(409, 'cet agent est fermé');
+    const s = this.streams.get(agentId);
+    if (s && !s.exited) throw new AidHttpError(409, 'cet agent tourne encore');
+    this.streamOrResume(agentId);
+  }
+
   /** Nouveau `LiveStream` sous le même agentId (A.6) : même construction que `spawnStream`, `resume: true` si une session existe déjà. */
   private resumeStream(
     agentId: string,
@@ -793,18 +810,24 @@ export class AgentManager {
     return row.kind;
   }
 
-  /** D71 : ce que le composer peut proposer pour cet agent. */
-  options(agentId: string): AgentOptions {
-    const kind = this.streamKindOr409(agentId);
+  /** Le catalogue codex appris des pilotes vivants ; le dernier connu, vide avant le premier (D71, D143). */
+  codexModels(): ModelOption[] {
     for (const s of this.streams.values()) {
       const catalog = s.kind === 'codex' ? s.driver.catalog?.() : undefined;
       if (catalog?.length) this.codexCatalog = catalog;
     }
+    return this.codexCatalog;
+  }
+
+  /** D71 : ce que le composer peut proposer pour cet agent. */
+  options(agentId: string): AgentOptions {
+    const kind = this.streamKindOr409(agentId);
+    const codexModels = this.codexModels();
     // D82 : les commandes du pilote vivant ; un agent en veille n'a que celles d'A-I-D jusqu'à sa relance
     const live = this.streams.get(agentId);
     return agentOptions(
       kind,
-      this.codexCatalog,
+      codexModels,
       live && !live.exited ? live.driver.commands?.() : undefined,
     );
   }

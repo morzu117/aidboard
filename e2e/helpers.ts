@@ -35,12 +35,20 @@ export function newRepo(name: string, opts: { codegraph?: boolean; local?: boole
   return makeOriginAndClone(dir, { name, ...opts }).clone;
 }
 
-/** Enregistre un dépôt par le dialogue « Nouveau projet ». `warning` : l'avertissement attendu, puis « Continuer ». */
-export async function registerWorkspace(page: Page, path: string, warning?: RegExp): Promise<void> {
-  await node(page, '1-1.barre.nouveau-sujet').click();
+/** Ouvre « Nouveau projet » depuis le bouton Nouveau sujet de la barre. */
+export async function ouvrirNouveauProjet(page: Page): Promise<void> {
+  await page.locator('[data-node$=".barre.nouveau-sujet"]').click();
   // un premier dépôt ouvre directement « Nouveau projet » ; ensuite il faut passer par « Ajouter un projet »
   const ajouter = page.getByRole('button', { name: 'Ajouter un projet…' });
-  if (await ajouter.isVisible({ timeout: 2000 }).catch(() => false)) await ajouter.click();
+  // chantier 28 : l'écran Nouveau sujet se rend après le clic ; isVisible() n'attend pas, on attend l'un des deux
+  const dossier = page.getByLabel('Aller au dossier');
+  await expect(dossier.or(ajouter).first()).toBeVisible();
+  if (!(await dossier.isVisible())) await ajouter.click();
+}
+
+/** Enregistre un dépôt par le dialogue « Nouveau projet ». `warning` : l'avertissement attendu, puis « Continuer ». */
+export async function registerWorkspace(page: Page, path: string, warning?: RegExp): Promise<void> {
+  await ouvrirNouveauProjet(page);
   // le dossier se choisit dans l'explorateur ; « Aller au dossier » évite de descendre arbre par arbre
   await page.getByLabel('Aller au dossier').fill(path);
   await page.getByLabel('Aller au dossier').press('Enter');
@@ -51,12 +59,15 @@ export async function registerWorkspace(page: Page, path: string, warning?: RegE
     await expect(page.getByRole('dialog', { name: 'Projet enregistré' })).toContainText(warning);
     await page.getByRole('button', { name: 'Continuer' }).click();
   }
-  await expect(page.getByRole('dialog', { name: 'Nouveau sujet' })).toBeVisible();
+  // chantier 28 (D141) : le sujet se crée sur l'écran Nouveau sujet
+  await expect(node(page, 'nouveau-sujet.titre')).toBeVisible();
 }
 
-/** Crée un sujet dans le dialogue ouvert et attend la page du sujet. */
+/** Crée un sujet depuis l'écran Nouveau sujet ouvert et attend la page du sujet. */
 export async function createTopic(page: Page, title: string): Promise<string> {
   await page.getByLabel('Titre').fill(title);
+  // chantier 28 (D145) : sans agent, le sujet se crée comme avant ; les specs lancent le leur
+  await node(page, 'nouveau-sujet.travail.agent').selectOption('aucun');
   await page.getByRole('button', { name: 'Créer le sujet' }).click();
   await page.waitForURL(/\/sujets\/tp_/, { timeout: 40_000 });
   await expect(node(page, '1-3.entete.titre')).toHaveText(title);

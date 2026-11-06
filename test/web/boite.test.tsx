@@ -78,19 +78,29 @@ const etat = () =>
     ],
   });
 
-test('groupes par urgence, comptes, et un élément par agent qui a quelque chose à dire', async () => {
+test('D136 : trois sections par nature, comptes, et un élément par agent qui a quelque chose à dire', async () => {
   setup(<Boite />, etat());
   await screen.findByText('Autoriser Bash(npm test) ?');
-  expect(text('1-2.entete.resume')).toBe('7 éléments sur 2 sujets · triés par urgence');
+  expect(text('1-2.entete.resume')).toBe('Agents de ce Mac');
   expect(
-    [...document.querySelectorAll('.groupe')].map((g) => g.getAttribute('aria-label')),
-  ).toEqual(['Attend une réponse', 'Erreur', 'À relire', 'En cours', 'En pause']);
-  expect(text('1-2.liste.groupe-attente.compte')).toBe('2');
-  expect(text('1-2.liste.groupe-relire.compte')).toBe('2');
+    [...document.querySelectorAll('.boite-section')].map((g) => g.getAttribute('aria-label')),
+  ).toEqual(['Décisions', 'À relire', 'Informations']);
+  expect(text('1-2.liste.groupe-decision.titre')).toBe('Décisions · toi seul peux les prendre');
+  expect(text('1-2.liste.groupe-decision.compte')).toBe('2');
+  expect(text('1-2.liste.groupe-relire.compte')).toBe('3');
+  expect(text('1-2.liste.groupe-information.compte')).toBe('2');
+  expect(
+    ['tout', 'decision', 'relire', 'information'].map((n) => text(`1-2.filtres.nature-${n}`)),
+  ).toEqual(['Tout 7', 'Décisions 2', 'À relire 3', 'Informations 2']);
+  // Décisions et À relire à gauche, Informations à droite
+  expect(node('1-2.liste')?.querySelector('[data-node="1-2.liste.groupe-information"]')).toBeNull();
+  expect(
+    node('1-2.infos')?.querySelector('[data-node="1-2.liste.groupe-information"]'),
+  ).not.toBeNull();
   // ni le shell, ni l'agent terminé
   expect(document.querySelectorAll('article')).toHaveLength(7);
   expect(document.body.textContent).not.toContain('shell');
-  // l'attente la plus ancienne d'abord, le tour terminé le plus récent d'abord
+  // l'attente la plus ancienne d'abord ; à relire, l'erreur puis le tour le plus récent d'abord
   expect([1, 2, 3, 4, 5, 6, 7].map((n) => text(el(n, 'type')))).toEqual([
     'Question',
     'Permission',
@@ -103,32 +113,66 @@ test('groupes par urgence, comptes, et un élément par agent qui a quelque chos
   expect(text(el(1, 'question'))).toBe('Quel séparateur ?');
   expect(text(el(1, 'workspace'))).toBe('project_1');
   expect(text(el(1, 'branche'))).toBe('feat/csv');
+  // D138 : la machine sur une décision, pas ailleurs
+  expect(text(el(1, 'machine'))).toBe('Mac local');
+  expect(node(el(3, 'machine'))).toBeNull();
   expect(text(el(3, 'detail'))).toBe('Sortie en erreur (code 3)');
   expect(text(el(4, 'detail'))).toBe('Terminal silencieux depuis 4 min');
   expect(node(el(4, 'type'))?.className).toContain('badge--estime');
   expect(text(el(5, 'detail'))).toBe('Tests verts.');
   expect(text(el(6, 'detail'))).toBe('Bash(npm run typecheck)');
+  expect(text(el(6, 'rien'))).toBe('Rien à faire de ton côté.');
   expect(text(el(7, 'moment'))).toBe('il y a 18 min');
 });
 
-test('actions : répondre, ouvrir le terminal de l’agent, reprendre', async () => {
+test('D138, D139 : étape sur une décision ; un tour se résume à sa première ligne', async () => {
+  const s = etat();
+  s.topics[1] = { ...s.topics[1]!, phase: 'dev' };
+  s.agents = s.agents.map((a) =>
+    a.id === 'ag_tour' ? { ...a, statusMessage: `\nTests verts.\n${'détail '.repeat(40)}` } : a,
+  );
+  setup(<Boite />, s);
+  await screen.findByText('Autoriser Bash(npm test) ?');
+  expect(text(el(1, 'repere'))).toBe('étape dev · Mac local');
+  expect(node(el(2, 'etape'))).toBeNull();
+  expect(text(el(5, 'detail'))).toBe('Tests verts.');
+});
+
+test('actions : répondre, voir le contexte, ouvrir le terminal, relire ou livrer, reprendre', async () => {
   const h = setup(<Boite />, etat());
   await screen.findByText('Autoriser Bash(npm test) ?');
-  // une question sans options : seulement le terminal
+  // une question sans options : seulement le contexte
   expect(node(el(1, 'option-1'))).toBeNull();
-  expect(node(el(1, 'ouvrir'))?.getAttribute('href')).toBe('/sujets/tp_2?agent=ag_q');
+  expect(text(el(1, 'contexte'))).toBe('Voir le contexte');
+  expect(node(el(1, 'contexte'))?.getAttribute('href')).toBe('/sujets/tp_2?agent=ag_q');
   expect(node(el(2, 'option-1'))?.className).toBe('bouton bouton--primaire');
   await userEvent.click(node(el(2, 'option-1'))!);
   expect(h.calls.find((c) => c.url === '/api/agents/ag_perm/answer')?.body).toEqual({
     pendingId: 'p1',
     answer: 'yes',
   });
+  // l'erreur garde le terminal ; un tour sans PR se relit
+  expect(node(el(3, 'ouvrir'))?.getAttribute('href')).toBe('/sujets/tp_1?agent=ag_err');
+  expect(node(el(5, 'relire'))?.getAttribute('href')).toBe('/sujets/tp_1?agent=ag_tour');
+  expect(node(el(5, 'livrer'))).toBeNull();
   // « En cours » n'a pas d'action
   expect(node(el(6))?.querySelector('.element-actions')).toBeNull();
   await userEvent.click(node(el(7, 'reprendre'))!);
   expect(h.calls.some((c) => c.method === 'POST' && c.url === '/api/agents/ag_pause/resume')).toBe(
     true,
   );
+  cleanup();
+  // D139 : la PR du sujet est ouverte ⇒ Livrer ; fusionnée ⇒ Relire
+  const s = etat();
+  s.topics[0] = { ...s.topics[0]!, prNumber: 42 };
+  setup(<Boite />, s);
+  await screen.findByText('Autoriser Bash(npm test) ?');
+  expect(node(el(5, 'livrer'))?.getAttribute('href')).toBe('/sujets/tp_1/livraison');
+  cleanup();
+  s.topics[0] = { ...s.topics[0]!, prNumber: 42, state: 'merged' };
+  setup(<Boite />, s);
+  await screen.findByText('Autoriser Bash(npm test) ?');
+  expect(node(el(5, 'relire'))).not.toBeNull();
 });
 
 test('une réponse refusée par le daemon s’affiche sous l’élément', async () => {
@@ -141,17 +185,25 @@ test('une réponse refusée par le daemon s’affiche sous l’élément', async
   expect(text(el(2, 'erreur'))).toContain('ne montre plus');
 });
 
-test('filtre de projet ; vide : « Rien à traiter », sans phrase sur les issues', async () => {
+test('filtres de nature et de projet ; vide : « Rien à traiter », sans phrase sur les issues', async () => {
   setup(<Boite />, etat());
   await screen.findByText('Autoriser Bash(npm test) ?');
+  await userEvent.click(node('1-2.filtres.nature-relire')!);
+  expect(node('1-2.filtres.nature-relire')?.getAttribute('aria-pressed')).toBe('true');
+  expect(node('1-2.liste.groupe-decision')).toBeNull();
+  expect(node('1-2.infos')).toBeNull();
+  expect(document.querySelectorAll('article')).toHaveLength(3);
+  expect(document.querySelector('.boite-colonnes')?.className).toContain('boite-colonnes--une');
+  await userEvent.click(node('1-2.filtres.nature-tout')!);
   await userEvent.click(node('1-2.filtres.workspace-2')!);
-  expect(text('1-2.entete.resume')).toBe('2 éléments sur 1 sujet · triés par urgence');
+  expect(text('1-2.filtres.nature-tout')).toBe('Tout 2');
+  expect(text('1-2.liste.groupe-relire.vide')).toBe('Rien ici pour le moment.');
   cleanup();
   setup(<Boite />, snapshot({ workspaces: [ws()], topics: [topic()] }));
   expect((await screen.findByText(/Rien à traiter/)).textContent).toBe(
     'Rien à traiter : aucun agent n’attend ta réponse.',
   );
-  expect(text('1-2.entete.resume')).toBe('0 élément');
+  expect(text('1-2.filtres.nature-tout')).toBe('Tout 0');
   expect(document.body.textContent).not.toMatch(/issue/i);
   expect(node('1-2.vide.accueil')?.getAttribute('href')).toBe('/');
 });
@@ -195,6 +247,7 @@ const dm = (over: Partial<MeshDm>): MeshDm => ({
   replyTo: null,
   obligationId: null,
   seenAt: null,
+  decidedAt: null,
   ...over,
 });
 const meshEtat = (over: Partial<MeshState> = {}, tailscaleManage = false) => ({
@@ -217,37 +270,57 @@ const meshEtat = (over: Partial<MeshState> = {}, tailscaleManage = false) => ({
   tailscaleManage,
 });
 
-test('mesh : « À traiter » (les plus anciens d’abord) puis « Informations », contenu en texte brut, « Vu »', async () => {
-  const h = setup(<Boite />, { ...etat(), mesh: meshEtat() });
+test('mesh (D136, D137) : les DM en Informations, en Décisions une fois choisis, texte brut, rappel, « Vu »', async () => {
+  const mesh = meshEtat();
+  mesh.inbox.push(dm({ id: 16, kind: 'question', content: 'Tu relances ?', decidedAt: at(1) }));
+  const h = setup(<Boite />, { ...etat(), mesh });
   await screen.findByText('Autoriser Bash(npm test) ?');
+  expect(text('1-2.entete.resume')).toBe('Agents de ce Mac et messages du mesh');
   expect(node('1-2.mesh')?.getAttribute('aria-label')).toBe('Mesh · morzu-mac');
-  expect(text('1-2.mesh.compte')).toBe('4');
+  expect(text('1-2.mesh.compte')).toBe('5');
   expect(text('1-2.mesh.etat')).toBe('connecté');
   expect(
-    [...document.querySelectorAll('[data-node^="1-2.mesh.groupe-"] > .groupe-entete h3')].map(
-      (g) => g.textContent,
-    ),
-  ).toEqual(['À traiter', 'Informations']);
-  expect([1, 2, 3, 4].map((n) => text(`1-2.mesh.dm-${n}.type`))).toEqual([
+    ['tout', 'decision', 'relire', 'information'].map((n) => text(`1-2.filtres.nature-${n}`)),
+  ).toEqual(['Tout 12', 'Décisions 3', 'À relire 3', 'Informations 6']);
+  // le DM mis en décision passe en Décisions, avant les agents ; les autres informent, les plus récents d'abord
+  expect(
+    node('1-2.liste.groupe-decision')?.querySelector('[data-node="1-2.mesh.dm-1"]'),
+  ).not.toBeNull();
+  expect([1, 2, 3, 4, 5].map((n) => text(`1-2.mesh.dm-${n}.type`))).toEqual([
     'Question',
-    'Déblocage',
     'Réponse',
+    'Déblocage',
     'Statut',
+    'Question',
   ]);
-  expect(text('1-2.mesh.dm-1.emetteur')).toBe('mesh-gw');
-  expect(text('1-2.mesh.dm-1.fil')).toBe('fil thr_abcd');
-  expect(text('1-2.mesh.dm-3.emetteur')).toBe('peer-a');
+  expect(node('1-2.mesh.dm-1.decision')).toBeNull();
+  expect(text('1-2.mesh.dm-1.source')).toBe('mesh');
+  // une demande rappelle que rien n'a été lancé ; une réponse non
+  expect(text('1-2.mesh.dm-1.rappel')).toBe(
+    'Rien n’a été lancé. Un message de pair ne vaut pas autorisation, et sa cell n’a aucun accès à ta machine ni à tes sessions.',
+  );
+  expect(node('1-2.mesh.dm-3.rappel')).not.toBeNull();
+  expect(node('1-2.mesh.dm-2.rappel')).toBeNull();
+  expect(text('1-2.mesh.dm-2.emetteur')).toBe('peer-a');
+  expect(text('1-2.mesh.dm-5.emetteur')).toBe('mesh-gw');
+  expect(text('1-2.mesh.dm-5.fil')).toBe('fil thr_abcd');
   // le DM vu n'est plus là
   expect(document.body.textContent).not.toContain('déjà lu');
   // texte brut : la balise est affichée telle quelle, jamais interprétée
-  const contenu = node('1-2.mesh.dm-2.contenu')!;
+  const contenu = node('1-2.mesh.dm-3.contenu')!;
   expect(contenu.querySelector('b')).toBeNull();
   expect(contenu.querySelector('pre')?.textContent).toBe('<b>pas du HTML</b>\n**ni du Markdown**');
   expect(contenu.textContent).toContain('donnée d’un pair du mesh');
-  await userEvent.click(node('1-2.mesh.dm-1.vu')!);
+  await userEvent.click(node('1-2.mesh.dm-5.decision')!);
+  expect(h.calls.some((c) => c.method === 'POST' && c.url === '/api/mesh/dm/11/decision')).toBe(
+    true,
+  );
+  await userEvent.click(node('1-2.mesh.dm-5.vu')!);
   expect(h.calls.some((c) => c.method === 'POST' && c.url === '/api/mesh/dm/11/seen')).toBe(true);
+  // D140 : le compteur de la barre compte les décisions, agents et DM
+  expect(text('1-2.barre.nav-boite.compte')).toBe('3');
   // la pastille compte les question/unblock non vus ; elle mène à Réglages, qui bascule (25.4, D99)
-  expect(text('1-2.barre.mesh.texte')).toBe('monitor actif · 2 à traiter');
+  expect(text('1-2.barre.mesh.texte')).toBe('monitor actif · 3 à traiter');
   expect(node('1-2.barre.mesh')?.getAttribute('href')).toBe('/reglages#mesh');
 });
 
@@ -263,7 +336,10 @@ test('mesh hors ligne : « hors mesh depuis » ; sans date, « monitor arrêté 
   cleanup();
   setup(<Boite />, {
     ...snapshot({ workspaces: [ws()], topics: [topic()] }),
-    mesh: meshEtat({ connected: false, tailscale: 'stopped', monitor: 'stopped', since: null }),
+    mesh: {
+      ...meshEtat({ connected: false, tailscale: 'stopped', monitor: 'stopped', since: null }),
+      inbox: [],
+    },
   });
   await screen.findByText(/Rien à traiter/);
   expect(text('1-2.barre.mesh.texte')).toBe('monitor arrêté');

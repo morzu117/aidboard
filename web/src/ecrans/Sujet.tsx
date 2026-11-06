@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Link, useNavigate, useParams, useSearchParams } from 'react-router';
+import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router';
 import type { StoredEvent } from '../../../src/shared/events.js';
 import type { GitLogResponse } from '../../../src/shared/git.js';
 import type { Agent, Topic } from '../../../src/shared/model.js';
@@ -9,11 +9,12 @@ import { fetchGitLog } from '../data/git.js';
 import { changerPlacement, usePlacement } from '../data/placement.js';
 import { useAid } from '../data/useAidState.js';
 import { ConfirmerNettoyage } from '../dialogues/ConfirmerNettoyage.js';
+import { Reprendre } from '../dialogues/Reprendre.js';
 import { SelecteurBranche } from '../dialogues/SelecteurBranche.js';
 import { Terminal } from '../terminal/Terminal.js';
 import { Layout, useLayout } from '../ui/Layout.js';
 import { Memoire } from '../ui/Memoire.js';
-import { agentView, Point } from '../ui/Statut.js';
+import { agentView, isAlive, Point } from '../ui/Statut.js';
 import { Volet } from '../ui/Volet.js';
 import { prochaineChose } from '../ui/rangement.js';
 import { etapesPhase, etatOnglet } from '../ui/sujetVue.js';
@@ -77,12 +78,16 @@ function Contenu({
 }) {
   const { state, outputs, daemon, retry, call } = useAid();
   const navigate = useNavigate();
+  // chantier 28 (D145) : l'écran Nouveau sujet y dit pourquoi l'agent n'est pas parti
+  const erreurAgent = (useLocation().state as { erreurAgent?: string } | null)?.erreurAgent;
   const placement = usePlacement(topicId);
   // D112 : le titre devient un champ pendant un renommage depuis le menu ⋯
   const [renomme, setRenomme] = useState<string | null>(null);
   const [menu, setMenu] = useState<'aucun' | 'agent' | 'plus'>('aucun');
   const [selecteurBranche, setSelecteurBranche] = useState(false);
-  const [erreur, setErreur] = useState<string | null>(null);
+  // chantier 28 (D150) : l'agent dont le dialogue Reprendre est ouvert
+  const [reprise, setReprise] = useState<Agent | null>(null);
+  const [erreur, setErreur] = useState<string | null>(erreurAgent ?? null);
   const [ignoring, setIgnoring] = useState(false);
   // §5.3 : retour discret après la copie du chemin du worktree depuis le menu ⋯.
   const [worktreeCopie, setWorktreeCopie] = useState(false);
@@ -312,6 +317,9 @@ function Contenu({
   const runIds = state.runs.filter((r) => r.topicId === topic.id).map((r) => r.id);
   const agents: Agent[] = state.agents.filter((a) => runIds.includes(a.runId));
   const active = agents.find((a) => a.id === selectedAgent) ?? agents.at(-1);
+  // D150 : « Reprendre… » vise l'agent de l'onglet ouvert s'il ne vit plus, sinon le plus récent qui ne vit plus
+  const finis = agents.filter((a) => (a.kind === 'claude' || a.kind === 'codex') && !isAlive(a));
+  const aReprendre = finis.find((a) => a.id === selectedAgent) ?? finis.at(-1);
   // D113, D114 : la phase en segments, et ce qui attend ; sous une phase, la prochaine chose ne la répète pas
   const etapes = etapesPhase(topic.phase);
   const enAttente = agents.some((a) => a.pending);
@@ -530,6 +538,21 @@ function Contenu({
                     </button>
                   </>
                 )}
+                {aReprendre && (
+                  <button
+                    className="bouton bouton--fantome"
+                    data-node="1-3.actions.reprendre"
+                    data-action="agent.reprendre"
+                    type="button"
+                    onClick={() => {
+                      fermerMenuPlus();
+                      setMenu('aucun');
+                      setReprise(aReprendre);
+                    }}
+                  >
+                    Reprendre…
+                  </button>
+                )}
                 {topic.state !== 'draft' && (
                   <button
                     className="bouton bouton--danger"
@@ -706,6 +729,12 @@ function Contenu({
       )}
       {selecteurBranche && (
         <SelecteurBranche topicId={topic.id} onClose={() => setSelecteurBranche(false)} />
+      )}
+      {reprise && (
+        <Reprendre
+          cible={{ lieu: 'local', agent: reprise, topic }}
+          onClose={() => setReprise(null)}
+        />
       )}
       {!vueComplete(topic) ? (
         <div className="sujet-grille sujet-grille--seul">

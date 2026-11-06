@@ -3,6 +3,7 @@ import { cleanup, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, expect, test } from 'vitest';
 import { Accueil } from '../../web/src/ecrans/Accueil.js';
+import { NouveauSujet } from '../../web/src/ecrans/NouveauSujet.js';
 import { json, listing, setup, snapshot, ws } from './helpers.js';
 
 afterEach(cleanup);
@@ -96,8 +97,12 @@ test('une erreur du daemon sur la navigation est affichée', async () => {
 });
 
 test('le premier affichage part du dossier qui contient le dernier dépôt enregistré', async () => {
-  const h = setup(<Accueil />, snapshot({ workspaces: [ws({ root: '/home/moi/Projects/a' })] }));
-  await userEvent.click(await boutonNouveauSujet());
+  // chantier 28 (D141) : « Ajouter un projet… » est sur l'écran Nouveau sujet
+  const h = setup(
+    <NouveauSujet />,
+    snapshot({ workspaces: [ws({ root: '/home/moi/Projects/a' })] }),
+    '/sujets/nouveau',
+  );
   await userEvent.click(await screen.findByRole('button', { name: 'Ajouter un projet…' }));
   await screen.findByRole('group', { name: 'Choisir le dossier du dépôt' });
   expect(fsCalls(h)[0]).toBe('/api/fs/dirs?path=/home/moi/Projects');
