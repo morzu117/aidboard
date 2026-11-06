@@ -66,6 +66,8 @@ export async function registerWorkspace(page: Page, path: string, warning?: RegE
 /** Crée un sujet depuis l'écran Nouveau sujet ouvert et attend la page du sujet. */
 export async function createTopic(page: Page, title: string): Promise<string> {
   await page.getByLabel('Titre').fill(title);
+  // chantier 28 (D145) : sans agent, le sujet se crée comme avant ; les specs lancent le leur
+  await node(page, 'nouveau-sujet.travail.agent').selectOption('aucun');
   await page.getByRole('button', { name: 'Créer le sujet' }).click();
   await page.waitForURL(/\/sujets\/tp_/, { timeout: 40_000 });
   await expect(node(page, '1-3.entete.titre')).toHaveText(title);

@@ -71,6 +71,49 @@
   font-size: var(--fs-s);
 }
 
+/* D144 : la façon de travailler */
+.nouveau-sujet-faits {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr));
+  gap: var(--sp-3);
+  margin: 0;
+  font-size: var(--fs-m);
+}
+.nouveau-sujet-faits dt {
+  color: var(--muted);
+}
+.nouveau-sujet-faits dd {
+  margin: var(--sp-1) 0 0;
+  color: var(--text-2);
+}
+.nouveau-sujet-verifie ul {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  margin: var(--sp-2) 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--fs-m);
+}
+.nouveau-sujet-verifie-titre {
+  color: var(--muted);
+  font-size: var(--fs-s);
+  font-weight: 500;
+}
+.nouveau-sujet-verifie--ok > span {
+  color: var(--s-ok);
+}
+.nouveau-sujet-verifie--info > span {
+  color: var(--s-attente);
+}
+.nouveau-sujet-verifie--ko {
+  color: var(--s-erreur);
+}
+.nouveau-sujet-etat {
+  color: var(--s-cours);
+  font-size: var(--fs-m);
+}
+
 /* le pied reste visible au bas de l'écran */
 .nouveau-sujet-pied {
   position: sticky;

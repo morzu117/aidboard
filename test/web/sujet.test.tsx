@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 import { act, cleanup, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { Route, Routes, useLocation } from 'react-router';
+import { useEffect } from 'react';
+import { Route, Routes, useLocation, useNavigate } from 'react-router';
 import { afterEach, expect, test, vi } from 'vitest';
 import type { ActionRun } from '../../src/shared/model.js';
 import { Sujet } from '../../web/src/ecrans/Sujet.js';
@@ -965,4 +966,24 @@ test('transport (D53) : un agent stream affiche <Conversation>, un agent pty aff
   expect(screen.getByTestId('conv-ag_2')).toBeTruthy();
   expect(screen.queryByTestId('term-ag_2')).toBeNull();
   expect(screen.queryByTestId('conv-ag_1')).toBeNull();
+});
+
+// chantier 28 (D145) : l'écran Nouveau sujet passe l'erreur d'un agent qui n'est pas parti
+function DepuisNouveauSujet() {
+  const navigate = useNavigate();
+  useEffect(() => {
+    navigate('/sujets/tp_1', { replace: true, state: { erreurAgent: 'worktree introuvable' } });
+  }, [navigate]);
+  return null;
+}
+test('D145 : l’erreur d’un agent qui n’est pas parti est dite sur la page du sujet', async () => {
+  setup(
+    <Routes>
+      <Route path="/sujets/nouveau" element={<DepuisNouveauSujet />} />
+      <Route path="/sujets/:topicId" element={<Sujet />} />
+    </Routes>,
+    snapshot({ workspaces: [ws()], topics: [topic()], runs: [run] }),
+    '/sujets/nouveau',
+  );
+  expect((await screen.findByRole('alert')).textContent).toBe('worktree introuvable');
 });

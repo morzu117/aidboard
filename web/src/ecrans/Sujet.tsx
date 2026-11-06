@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Link, useNavigate, useParams, useSearchParams } from 'react-router';
+import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router';
 import type { StoredEvent } from '../../../src/shared/events.js';
 import type { GitLogResponse } from '../../../src/shared/git.js';
 import type { Agent, Topic } from '../../../src/shared/model.js';
@@ -77,12 +77,14 @@ function Contenu({
 }) {
   const { state, outputs, daemon, retry, call } = useAid();
   const navigate = useNavigate();
+  // chantier 28 (D145) : l'écran Nouveau sujet y dit pourquoi l'agent n'est pas parti
+  const erreurAgent = (useLocation().state as { erreurAgent?: string } | null)?.erreurAgent;
   const placement = usePlacement(topicId);
   // D112 : le titre devient un champ pendant un renommage depuis le menu ⋯
   const [renomme, setRenomme] = useState<string | null>(null);
   const [menu, setMenu] = useState<'aucun' | 'agent' | 'plus'>('aucun');
   const [selecteurBranche, setSelecteurBranche] = useState(false);
-  const [erreur, setErreur] = useState<string | null>(null);
+  const [erreur, setErreur] = useState<string | null>(erreurAgent ?? null);
   const [ignoring, setIgnoring] = useState(false);
   // §5.3 : retour discret après la copie du chemin du worktree depuis le menu ⋯.
   const [worktreeCopie, setWorktreeCopie] = useState(false);
