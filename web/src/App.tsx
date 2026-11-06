@@ -7,6 +7,7 @@ import { Boite } from './ecrans/Boite.js';
 import { Consignes } from './ecrans/Consignes.js';
 import { Discussion, OuvrirDiscussion } from './ecrans/Discussion.js';
 import { Livraison } from './ecrans/Livraison.js';
+import { Machines } from './ecrans/Machines.js';
 import { NouveauSujet } from './ecrans/NouveauSujet.js';
 import { Reglages } from './ecrans/Reglages.js';
 import { ServeurConfig } from './ecrans/ServeurConfig.js';
@@ -28,6 +29,8 @@ export function App() {
         <Route path="/swarph" element={<Swarph />} />
         <Route path="/board" element={<Board />} />
         <Route path="/board/cartes/:cardId" element={<CarteBoard />} />
+        {/* chantier 29 (D151) */}
+        <Route path="/machines" element={<Machines />} />
         <Route path="/serveurs" element={<Serveurs />} />
         <Route path="/serveurs/nouveau" element={<ServeurConfig />} />
         <Route path="/serveurs/:id/configuration" element={<ServeurConfig />} />

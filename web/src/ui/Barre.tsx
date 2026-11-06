@@ -25,7 +25,9 @@ export type EcranId =
   // chantier 27 (D121) : l'écran Livraison d'un sujet
   | 'livraison'
   // chantier 28 (D141) : l'écran Nouveau sujet
-  | 'nouveau-sujet';
+  | 'nouveau-sujet'
+  // chantier 29 (D151) : l'écran Machines
+  | 'machines';
 
 /** La pastille « Mesh » de la barre (12.5) : absente quand `mesh.cell` n'est pas configuré. */
 export interface BarreMesh {
@@ -62,7 +64,8 @@ const LIENS = [
   { id: 'boite', to: '/boite', label: 'Boîte de réception' },
   { id: 'consignes', to: '/consignes', label: 'Consignes' },
   // chantier 17 (S.4) : la maquette Servers place « Serveurs » entre Consignes et Réglages (§5.1)
-  { id: 'serveurs', to: '/serveurs', label: 'Serveurs' },
+  // chantier 29 (D151) : « Machines » la remplace ; l'écran Serveurs reste, sous la même entrée
+  { id: 'machines', to: '/machines', label: 'Machines', aussi: '/serveurs' },
   { id: 'reglages', to: '/reglages', label: 'Réglages' },
 ] as const;
 
@@ -143,7 +146,7 @@ export function Barre({
       </Link>
       <nav className="nav" data-node={n('nav')} aria-label="Navigation principale">
         {LIENS.map((l) => {
-          const actif = pathname === l.to;
+          const actif = pathname === l.to || ('aussi' in l && pathname.startsWith(l.aussi));
           return (
             <Link
               key={l.id}

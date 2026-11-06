@@ -33,7 +33,7 @@ function loginShellUnsupported(r: ExecResult, mode: Server['mode']): boolean {
 }
 
 /** Agents connus (§11.2) : binaire cherché sur le serveur → nom affiché. */
-const KNOWN_AGENTS: ReadonlyArray<[bin: string, name: string]> = [
+export const KNOWN_AGENTS: ReadonlyArray<[bin: string, name: string]> = [
   ['claude', 'claude'],
   ['codex', 'codex'],
   ['cursor-agent', 'cursor'],
@@ -96,6 +96,8 @@ export class ServerConnections {
   private statuses = new Map<string, ServerStatus>();
   private pings = new Map<string, Promise<ServerStatus>>();
   private tests = new Map<string, ServerTest>();
+  /** Chantier 29 (D155) : la fin du test en cours, ou du dernier, que Diagnostiquer attend. */
+  private runs = new Map<string, Promise<void>>();
   private disposed = false;
   private readonly abort = new AbortController();
 
@@ -200,14 +202,21 @@ export class ServerConnections {
     };
     this.tests.set(server.id, test);
     this.setStatus(server.id, { state: 'connecting' });
-    void this.runTest(server, test).catch((e: unknown) => {
+    const run = this.runTest(server, test).catch((e: unknown) => {
       // filet : `runTest` ne lève pas, mais un rejet non traité arrêterait le daemon
       test.ok = false;
       test.error ??= e instanceof Error ? e.message : String(e);
       if (test.error) test.error = maskSecrets(test.error);
       test.finishedAt ??= new Date().toISOString();
     });
+    this.runs.set(server.id, run);
     return structuredClone(test);
+  }
+
+  /** D155 : le test du serveur une fois fini ; null si aucun test n'a été lancé depuis le démarrage. */
+  async testFini(serverId: string): Promise<ServerTest | null> {
+    await this.runs.get(serverId);
+    return this.lastTest(serverId);
   }
 
   /** Arrêt du daemon : les commandes en vol sont tuées, plus rien n'est lancé ni publié. */
@@ -258,6 +267,7 @@ export class ServerConnections {
   forget(serverId: string): void {
     this.statuses.delete(serverId);
     this.tests.delete(serverId);
+    this.runs.delete(serverId);
   }
 
   private get timeoutMs(): number {
