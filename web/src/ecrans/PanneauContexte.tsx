@@ -4,17 +4,22 @@ import { fetchSubjectMemory, type MemoryKind } from '../data/memory.js';
 import { useAid } from '../data/useAidState.js';
 import { Memoire } from '../ui/Memoire.js';
 import { mostUrgent } from '../ui/Statut.js';
+import { useAgentRoutes } from '../conversation/routes.js';
+import { OngletArtefacts } from './OngletArtefacts.js';
 import { OngletLivraison } from './OngletLivraison.js';
 import { OngletFichiers } from './OngletFichiers.js';
 import { OngletGit } from './OngletGit.js';
 
-type OngletId = 'plan' | 'git' | 'fichiers' | 'livraison' | 'review' | 'retro' | 'dev-handoff';
+type OngletId =
+  'plan' | 'git' | 'fichiers' | 'artefacts' | 'livraison' | 'review' | 'retro' | 'dev-handoff';
 
 const ONGLETS_FIXES: Array<{ id: OngletId; label: string }> = [
   // chantier 26 (D119) : l'onglet du sujet ; son id et son data-node restent `plan`
   { id: 'plan', label: 'Sujet' },
   { id: 'git', label: 'Git' },
   { id: 'fichiers', label: 'Fichiers' },
+  // chantier 30 (D167) : HTML, Markdown et SVG produits par l'agent
+  { id: 'artefacts', label: 'Artefacts' },
   // chantier 27 (D133) : le résumé de l'écran Livraison
   { id: 'livraison', label: 'Livraison' },
 ];
@@ -28,6 +33,7 @@ const DATA_NODE: Record<OngletId, string> = {
   plan: '1-3.onglets.plan',
   git: '1-3.onglets.git',
   fichiers: '1-3.onglets.fichiers',
+  artefacts: '1-3.onglets.artefacts',
   livraison: '1-3.onglets.livraison',
   review: '1-3.onglets.revue',
   retro: '1-3.onglets.retro',
@@ -65,6 +71,10 @@ export function PanneauContexte({
   // review D (finding 5) : compte les replis involontaires sur Plan (onglet disparu) pour que
   // l'effet de focus plus bas ne se déclenche que sur ceux-ci, pas sur une sélection normale.
   const [repli, setRepli] = useState(0);
+  // chantier 30 (D168) : le fichier que « Ouvrir dans Artefacts » a choisi dans Fichiers
+  const [artefactDemande, setArtefactDemande] = useState<string | null>(null);
+  // D167 : pas d'onglet Artefacts pour un agent distant, son worktree n'est pas sur ce daemon
+  const { distant } = useAgentRoutes();
 
   // review D (finding 4) : au changement de sujet, vider les pages pendant le rendu (avant la
   // requête suivante) — sinon les onglets Revue/Rétro/Passation de l'ancien sujet restent
@@ -74,6 +84,7 @@ export function PanneauContexte({
   if (clePages !== cleChargee) {
     setCleChargee(clePages);
     setPages(null);
+    setArtefactDemande(null);
   }
 
   useEffect(() => {
@@ -100,7 +111,7 @@ export function PanneauContexte({
   );
 
   const onglets = [
-    ...ONGLETS_FIXES,
+    ...ONGLETS_FIXES.filter((o) => o.id !== 'artefacts' || !distant),
     ...ONGLETS_MEMOIRE.filter((o) => pages?.[o.kind] !== undefined),
   ];
   const ids = onglets.map((o) => o.id);
@@ -224,7 +235,23 @@ export function PanneauContexte({
           </>
         )}
         {actif === 'git' && <OngletGit topicId={topicId} base={base} remote={remote} />}
-        {actif === 'fichiers' && <OngletFichiers topicId={topicId} activeAgentId={activeAgentId} />}
+        {actif === 'fichiers' && (
+          <OngletFichiers
+            topicId={topicId}
+            activeAgentId={activeAgentId}
+            onOuvrirArtefact={
+              distant
+                ? undefined
+                : (path) => {
+                    setArtefactDemande(path);
+                    allerVers('artefacts');
+                  }
+            }
+          />
+        )}
+        {actif === 'artefacts' && (
+          <OngletArtefacts topicId={topicId} initialPath={artefactDemande} />
+        )}
         {actif === 'livraison' && <OngletLivraison topicId={topicId} namespace={namespace} />}
         {actif === 'review' && (
           <Memoire only="review" namespace={namespace} topicSlug={topicSlug} />

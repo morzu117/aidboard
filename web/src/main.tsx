@@ -9,6 +9,7 @@ import './styles/app.css';
 import './styles/coque.css';
 import './styles/sujet.css';
 import './styles/livraison.css';
+import './styles/artefacts.css';
 import './styles/boite.css';
 import './styles/nouveau-sujet.css';
 import './styles/reprendre.css';

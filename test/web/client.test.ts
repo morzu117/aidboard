@@ -196,3 +196,15 @@ test('api() : 4xx devient AidApiError avec le message du daemon, 401 SessionExpi
   const fText = vi.fn(async () => new Response('boum', { status: 500 })) as unknown as typeof fetch;
   await expect(api('GET', '/x', undefined, fText)).rejects.toBeInstanceOf(AidApiError);
 });
+
+test('chantier 30 (D165, lab 91283) : chaque appel du cockpit porte x-aid-cockpit: 1', async () => {
+  const vus: Array<Record<string, string>> = [];
+  const fetchImpl = (async (_u: string, init?: RequestInit) => {
+    vus.push(init?.headers as Record<string, string>);
+    return new Response('{}', { status: 200 });
+  }) as unknown as typeof fetch;
+  await api('GET', '/api/state', undefined, fetchImpl);
+  await api('POST', '/api/probe', { a: 1 }, fetchImpl);
+  expect(vus[0]).toEqual({ 'x-aid-cockpit': '1' });
+  expect(vus[1]).toEqual({ 'x-aid-cockpit': '1', 'content-type': 'application/json' });
+});

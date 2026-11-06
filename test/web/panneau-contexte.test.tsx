@@ -185,9 +185,13 @@ test('repli sur Plan quand l’onglet mémoire sélectionné disparaît, et y re
   h.respond.set('GET /api/memory/pages?prefix=aid%2F', json(200, { slugs: [] }));
   await h.client.refresh();
   await waitFor(() => expect(screen.queryByRole('tab', { name: 'Revue' })).toBeNull());
-  const plan = screen.getByRole('tab', { name: 'Sujet' });
-  expect(plan.getAttribute('aria-selected')).toBe('true');
-  expect(document.activeElement).toBe(plan);
+  // le repli et le focus suivent la disparition de l'onglet sur un rendu ultérieur :
+  // les attendre, pas les lire juste après (échec intermittent sous Node 24, PR #123)
+  await waitFor(() => {
+    const plan = screen.getByRole('tab', { name: 'Sujet' });
+    expect(plan.getAttribute('aria-selected')).toBe('true');
+    expect(document.activeElement).toBe(plan);
+  });
 });
 
 // review D, finding 1 (re-dev 2) : un repli déclenché par un changement de sujet (onglet
@@ -323,7 +327,13 @@ test('chantier 27 (D133) : onglet Livraison après Fichiers ; il relit la PR, r�
     },
   );
   const onglets = await screen.findAllByRole('tab');
-  expect(onglets.map((o) => o.textContent)).toEqual(['Sujet', 'Git', 'Fichiers', 'Livraison']);
+  expect(onglets.map((o) => o.textContent)).toEqual([
+    'Sujet',
+    'Git',
+    'Fichiers',
+    'Artefacts',
+    'Livraison',
+  ]);
   expect(h.calls.some((c) => c.url.includes('pr.rafraichir'))).toBe(false);
   await userEvent.click(screen.getByRole('tab', { name: 'Livraison' }));
   await waitFor(() => expect(h.calls.some((c) => c.url.includes('pr.rafraichir'))).toBe(true));

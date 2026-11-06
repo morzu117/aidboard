@@ -39,7 +39,9 @@ afterEach(async () => {
 
 const host = () => `127.0.0.1:${port}`;
 const origin = () => `http://127.0.0.1:${port}`;
-const cookie = () => ({ cookie: `aid_session=${auth.sessionToken}` });
+const cookie = () => ({ cookie: `aid_session=${auth.sessionToken}`, 'x-aid-cockpit': '1' });
+// chantier 30 (D165, lab 91283) : le cookie seul, comme le porte une navigation
+const cookieSeul = () => ({ cookie: `aid_session=${auth.sessionToken}` });
 
 test('GET /api/state sans cookie ni bearer : 401', async () => {
   await start();
@@ -211,4 +213,141 @@ test('la spec ouvre le navigateur sur /?token= : bon token 303 et cookie, mauvai
     401,
   );
   expect((await app.inject({ url: '/', headers: { host: host() } })).statusCode).toBe(401);
+});
+
+// chantier 30 (D165) : un artefact, sur le second port, peut naviguer son cadre vers l'API.
+// Une navigation n'envoie pas d'Origin ; seul Sec-Fetch-Site la distingue du cockpit.
+const site = (s: string) => ({ 'sec-fetch-site': s });
+
+test('D165 : GET par cookie inter-site ou same-site sur l’API : 403', async () => {
+  await start();
+  for (const s of ['cross-site', 'same-site', 'none']) {
+    const r = await app.inject({
+      url: '/api/state',
+      headers: { host: host(), ...cookie(), ...site(s) },
+    });
+    expect(r.statusCode, s).toBe(403);
+    expect(r.json()).toEqual({ error: 'requête inter-site' });
+  }
+});
+
+test('D165 : GET par cookie same-origin, ou sans Sec-Fetch-Site avec l’en-tête du cockpit : accepté', async () => {
+  await start();
+  const meme = await app.inject({
+    url: '/api/state',
+    headers: { host: host(), ...cookie(), ...site('same-origin') },
+  });
+  expect(meme.statusCode).toBe(200);
+  const sans = await app.inject({ url: '/api/state', headers: { host: host(), ...cookie() } });
+  expect(sans.statusCode).toBe(200);
+});
+
+test('D165 : POST par cookie, bonne Origin mais inter-site : 403', async () => {
+  await start();
+  const r = await app.inject({
+    method: 'POST',
+    url: '/api/probe',
+    headers: { host: host(), origin: origin(), ...cookie(), ...site('same-site') },
+    payload: {},
+  });
+  expect(r.statusCode).toBe(403);
+});
+
+test('D165 : un bearer n’est pas touché par Sec-Fetch-Site', async () => {
+  await start();
+  const r = await app.inject({
+    url: '/api/state',
+    headers: { host: host(), authorization: `Bearer ${auth.adminToken}`, ...site('cross-site') },
+  });
+  expect(r.statusCode).toBe(200);
+});
+
+test('D165 : Origin: null (document sandboxé) refusée', async () => {
+  await start();
+  for (const method of ['GET', 'POST'] as const) {
+    const r = await app.inject({
+      method,
+      url: method === 'GET' ? '/api/state' : '/api/probe',
+      headers: { host: host(), origin: 'null', ...cookie() },
+      ...(method === 'POST' ? { payload: {} } : {}),
+    });
+    expect(r.statusCode, method).toBe(403);
+  }
+});
+
+test('D165 : WebSocket inter-site refusé, même avec cookie et bonne Origin', async () => {
+  await start();
+  expect(await wsOpen({ origin: origin(), ...cookie(), ...site('same-site') })).toBe(403);
+  expect(await wsOpen({ origin: origin(), ...cookie(), ...site('same-origin') })).toBe('open');
+});
+
+test('D165 : la page elle-même reste servie à une navigation de premier niveau', async () => {
+  await start();
+  const ok = await app.inject({
+    url: `/?token=${auth.adminToken}`,
+    headers: { host: host(), ...site('none') },
+  });
+  expect(ok.statusCode).toBe(303);
+  const page = await app.inject({
+    url: '/',
+    headers: { host: host(), ...cookie(), ...site('none') },
+  });
+  expect(page.statusCode).toBe(200);
+});
+
+test('D166 : aucune page du port principal ne s’affiche dans un cadre', async () => {
+  await start();
+  const r = await app.inject({ url: '/', headers: { host: host(), ...cookie() } });
+  expect(String(r.headers['content-security-policy'])).toContain("frame-ancestors 'none'");
+});
+
+test('D165 (lab 91283) : par cookie, sans Sec-Fetch-Site ni l’en-tête du cockpit, /api/ vaut 403', async () => {
+  await start();
+  for (const method of ['GET', 'POST'] as const) {
+    const r = await app.inject({
+      method,
+      url: method === 'GET' ? '/api/state' : '/api/probe',
+      headers: { host: host(), origin: origin(), ...cookieSeul() },
+      ...(method === 'POST' && { payload: {} }),
+    });
+    expect(r.statusCode, method).toBe(403);
+    expect(r.json()).toEqual({ error: 'requête sans provenance' });
+  }
+  // une autre valeur que 1 n'est pas la marque du cockpit
+  const faux = await app.inject({
+    url: '/api/state',
+    headers: { host: host(), ...cookieSeul(), 'x-aid-cockpit': 'oui' },
+  });
+  expect(faux.statusCode).toBe(403);
+  // la page elle-même reste une navigation ordinaire
+  const page = await app.inject({ url: '/', headers: { host: host(), ...cookieSeul() } });
+  expect(page.statusCode).not.toBe(403);
+});
+
+test('D165 (lab 91283) : en bearer, l’absence de Sec-Fetch-Site et de l’en-tête ne refuse rien', async () => {
+  await start();
+  const r = await app.inject({
+    url: '/api/state',
+    headers: { host: host(), authorization: `Bearer ${auth.adminToken}` },
+  });
+  expect(r.statusCode).toBe(200);
+});
+
+test('D165 (lab 91283) : la marque du cockpit ne couvre pas une requête inter-site', async () => {
+  await start();
+  const r = await app.inject({
+    url: '/api/state',
+    headers: { host: host(), ...cookie(), ...site('cross-site') },
+  });
+  expect(r.statusCode).toBe(403);
+});
+
+test('D165 (lab 91283) : /ws/ par cookie exige l’Origin exacte du cockpit, ni null ni absente', async () => {
+  await start();
+  const ws = (h: Record<string, string>) =>
+    app.inject({ url: '/ws/events', headers: { host: host(), ...cookie(), ...h } });
+  expect((await ws({})).statusCode).toBe(403);
+  expect((await ws({ origin: 'null' })).statusCode).toBe(403);
+  expect((await ws({ origin: 'http://127.0.0.1:1' })).statusCode).toBe(403);
+  expect((await ws({ origin: `http://localhost:${port}0` })).statusCode).toBe(403);
 });

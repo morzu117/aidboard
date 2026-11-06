@@ -1,3 +1,5 @@
+import { EN_TETE_COCKPIT } from '../../../src/shared/cockpit.js';
+
 export class SessionExpired extends Error {
   constructor() {
     super('session expirée');
@@ -23,7 +25,11 @@ export async function api<T>(
   const res = await fetchImpl(path, {
     method,
     credentials: 'same-origin',
-    headers: body === undefined ? undefined : { 'content-type': 'application/json' },
+    // chantier 30 (D165) : la marque du cockpit, qu'une navigation ne peut pas imiter
+    headers: {
+      [EN_TETE_COCKPIT]: '1',
+      ...(body === undefined ? {} : { 'content-type': 'application/json' }),
+    },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
   if (res.status === 401) throw new SessionExpired();

@@ -43,6 +43,10 @@ import { readVersion } from '../cli/version.js';
 import type { IndexEngine } from '../shared/structural.js';
 import type { TransportOptions } from './remote/transport.js';
 import type { RemoteKind } from './remote/agents.js';
+import { JetonsArtefacts } from './artefacts/jetons.js';
+import { ouvrirServeurArtefacts, type ServeurArtefacts } from './artefacts/serveur.js';
+import { portArtefacts } from './config.js';
+import type { EtatArtefacts } from '../shared/artefacts.js';
 
 export class AidPortInUse extends Error {
   constructor(port: number) {
@@ -233,6 +237,16 @@ export async function startDaemon(
     const board = mesh ? new BoardReader({ mesh, cell: config.mesh.cell, log }) : null;
     // 08.8 : construit ici, et non dans buildServer, pour lancer le rattrapage après `listen`
     const indexer = new Indexer({ store, paths, engine: structural });
+    // chantier 30 (D162) : le second port s'ouvre après le principal (son CSP cite le port
+    // du daemon) ; d'ici là, les artefacts sont indisponibles
+    const jetonsArtefacts = new JetonsArtefacts();
+    let serveurArtefacts: ServeurArtefacts | null = null;
+    const etatArtefacts = (): EtatArtefacts => {
+      if (!serveurArtefacts) return { disponible: false, port: null, raison: 'non démarré' };
+      return serveurArtefacts.disponible
+        ? { disponible: true, port: serveurArtefacts.port }
+        : { disponible: false, port: serveurArtefacts.port, raison: serveurArtefacts.raison };
+    };
     const app = await buildServer({
       config,
       auth,
@@ -256,6 +270,7 @@ export async function startDaemon(
       remote: opts.remote,
       remoteBins: opts.remoteBins,
       logger: opts.logger,
+      artefacts: { jetons: jetonsArtefacts, etat: etatArtefacts },
     });
     try {
       await app.listen({ host: config.host, port: config.port });
@@ -265,6 +280,14 @@ export async function startDaemon(
     }
     const port = (app.server.address() as AddressInfo).port;
     livePort = port;
+    // un port occupé n'empêche pas le daemon de démarrer : l'onglet et `aid doctor` le disent
+    serveurArtefacts = await ouvrirServeurArtefacts({
+      port: portArtefacts(config),
+      portDaemon: () => livePort,
+      jetons: jetonsArtefacts,
+      logger: opts.logger,
+    });
+    if (!serveurArtefacts.disponible) log(`artefacts indisponibles : ${serveurArtefacts.raison}`);
     writeFileSync(
       paths.daemonJson,
       JSON.stringify({
@@ -299,6 +322,7 @@ export async function startDaemon(
         if (maintenanceTimer) clearInterval(maintenanceTimer);
         await worker?.stop();
         await mirror.flush();
+        if (serveurArtefacts?.disponible) await serveurArtefacts.app.close();
         await app.close();
         opened.close();
         rmSync(paths.daemonJson, { force: true });

@@ -1,6 +1,7 @@
 import { randomBytes, timingSafeEqual } from 'node:crypto';
 import { chmodSync, readFileSync, writeFileSync } from 'node:fs';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
+import { EN_TETE_COCKPIT } from '../shared/cockpit.js';
 
 export const SESSION_COOKIE = 'aid_session';
 // 400 jours : le plafond que Chrome applique de toute façon à un cookie persistant
@@ -80,6 +81,8 @@ function authenticate(req: FastifyRequest, auth: AuthState): Principal | null {
 export interface SecurityOptions {
   getPort: () => number;
   devOrigin?: string;
+  /** chantier 30 (D166) : le port des artefacts, null s'il n'écoute pas */
+  getArtefactsPort?: () => number | null;
 }
 
 export function registerSecurity(
@@ -146,6 +149,23 @@ export function registerSecurity(
       if ((req.method !== 'GET' || isSocket) && origin === undefined) {
         return reply.code(403).send({ error: 'origine absente' });
       }
+      // chantier 30 (D165) : un artefact, sur le second port, peut naviguer son cadre vers
+      // l'API. Une navigation n'envoie pas d'Origin, et le cookie ignore le port : seul
+      // Sec-Fetch-Site dit que la requête ne vient pas du cockpit. Absent (CLI, agents en
+      // bearer, client hors navigateur), il ne refuse rien ; le dev passe par le proxy de
+      // Vite, donc en same-origin.
+      const site = req.headers['sec-fetch-site'];
+      if ((path.startsWith('/api/') || isSocket) && site !== undefined && site !== 'same-origin') {
+        return reply.code(403).send({ error: 'requête inter-site' });
+      }
+      // Révision du lab (DM 91283) : la règle suit l'authentification, pas la présence de l'en-tête.
+      // En bearer, rien d'ambiant à forger : Sec-Fetch-Site peut manquer. Par cookie, son absence
+      // (vieux WebKit, WKWebView inconnu) ne passe sur /api/ qu'avec l'en-tête du cockpit, qu'une
+      // navigation ne sait pas poser. /ws/ : la poignée de main ne porte pas d'en-tête ajouté, d'où
+      // l'Origin exigée plus haut, et seulement celle du cockpit (ni null ni absente).
+      if (path.startsWith('/api/') && site === undefined && req.headers[EN_TETE_COCKPIT] !== '1') {
+        return reply.code(403).send({ error: 'requête sans provenance' });
+      }
     }
   });
 
@@ -160,6 +180,12 @@ export function registerSecurity(
 
   app.addHook('onSend', async (_req, reply) => {
     const port = opts.getPort();
+    // chantier 30 (D166) : le cockpit n'encadre que le second port, celui des artefacts
+    const artefacts = opts.getArtefactsPort?.() ?? null;
+    const frameSrc =
+      artefacts === null
+        ? ''
+        : `frame-src http://127.0.0.1:${artefacts} http://localhost:${artefacts}; `;
     // http://127.0.0.1:4871 : pont de redémarrage de l'app native Tauri (app/src-tauri/src/daemon_bridge.rs,
     // RESTART_BRIDGE_PORT), appelé en fetch() par le CTA de la coquille hors-ligne
     // (web/src/ecrans/Accueil.tsx) — sans cette entrée, connect-src 'self' bloque cette requête
@@ -167,7 +193,7 @@ export function registerSecurity(
     reply.header(
       'Content-Security-Policy',
       `default-src 'self'; connect-src 'self' ws://127.0.0.1:${port} ws://localhost:${port} http://127.0.0.1:4871; ` +
-        "style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'",
+        `${frameSrc}style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; frame-ancestors 'none'`,
     );
     reply.header('X-Content-Type-Options', 'nosniff');
     reply.header('Referrer-Policy', 'no-referrer');

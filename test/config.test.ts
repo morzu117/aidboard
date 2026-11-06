@@ -8,6 +8,7 @@ import {
   DEFAULT_TAILSCALE_BIN,
   loadConfig,
   parseConfig,
+  portArtefacts,
   writeDefaultConfigIfAbsent,
 } from '../src/daemon/config.js';
 import { ensureHome, resolvePaths } from '../src/daemon/paths.js';
@@ -213,4 +214,14 @@ test('mesh (12.2) : clé inconnue et champs invalides sont refusés et nommés',
     'mesh.tailscale.manage',
   );
   expect(() => parseConfig('mesh: []\n')).toThrow('mesh doit être un objet');
+});
+
+test('chantier 30 (D162) : artefacts.port, par défaut le port du daemon + 10', () => {
+  expect(parseConfig('').artefacts).toEqual({ port: null });
+  expect(portArtefacts(parseConfig(''))).toBe(4880);
+  expect(portArtefacts(parseConfig('port: 5000\n'))).toBe(5010);
+  expect(portArtefacts(parseConfig('artefacts:\n  port: 6000\n'))).toBe(6000);
+  expect(portArtefacts({ ...parseConfig(''), port: 0 })).toBe(0);
+  expect(() => parseConfig('artefacts:\n  port: 0\n')).toThrow(ConfigError);
+  expect(() => parseConfig('artefacts:\n  hote: x\n')).toThrow(/artefacts\.hote/);
 });
