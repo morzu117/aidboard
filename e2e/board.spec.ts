@@ -146,7 +146,10 @@ test('sans mesh.cell : ni lien Board ni route', async ({ browser }) => {
     await expect(node(page, '1-1.barre.nav-board')).toHaveCount(0);
     await page.goto(`http://127.0.0.1:${port}/board`);
     await expect(page).toHaveURL(new RegExp(`127\\.0\\.0\\.1:${port}/$`));
-    const r = await page.request.get(`http://127.0.0.1:${port}/api/board/projects`);
+    // chantier 30 (D165, lab 91283) : hors navigateur, le cookie seul vaut 403 ; la marque du cockpit
+    const r = await page.request.get(`http://127.0.0.1:${port}/api/board/projects`, {
+      headers: { 'x-aid-cockpit': '1' },
+    });
     expect(r.status()).toBe(404);
   } finally {
     execFileSync(process.execPath, [CLI, 'stop', '--force'], { env, timeout: 30_000 });

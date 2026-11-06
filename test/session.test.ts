@@ -13,7 +13,10 @@ afterEach(async () => {
 
 const host = (d: TestDaemon) => `127.0.0.1:${d.d.port}`;
 const asCookie = (d: TestDaemon, token: string) =>
-  d.d.app.inject({ url: '/api/state', headers: { host: host(d), cookie: `aid_session=${token}` } });
+  d.d.app.inject({
+    url: '/api/state',
+    headers: { host: host(d), cookie: `aid_session=${token}`, 'x-aid-cockpit': '1' },
+  });
 
 test('loadSessionToken : créé en 0600 au premier appel, relu tel quel ensuite', () => {
   const file = join(mkdtempSync(join(tmpdir(), 'aid-sess-')), 'session.secret');

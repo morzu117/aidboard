@@ -1,6 +1,7 @@
 import { randomBytes, timingSafeEqual } from 'node:crypto';
 import { chmodSync, readFileSync, writeFileSync } from 'node:fs';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
+import { EN_TETE_COCKPIT } from '../shared/cockpit.js';
 
 export const SESSION_COOKIE = 'aid_session';
 // 400 jours : le plafond que Chrome applique de toute façon à un cookie persistant
@@ -156,6 +157,14 @@ export function registerSecurity(
       const site = req.headers['sec-fetch-site'];
       if ((path.startsWith('/api/') || isSocket) && site !== undefined && site !== 'same-origin') {
         return reply.code(403).send({ error: 'requête inter-site' });
+      }
+      // Révision du lab (DM 91283) : la règle suit l'authentification, pas la présence de l'en-tête.
+      // En bearer, rien d'ambiant à forger : Sec-Fetch-Site peut manquer. Par cookie, son absence
+      // (vieux WebKit, WKWebView inconnu) ne passe sur /api/ qu'avec l'en-tête du cockpit, qu'une
+      // navigation ne sait pas poser. /ws/ : la poignée de main ne porte pas d'en-tête ajouté, d'où
+      // l'Origin exigée plus haut, et seulement celle du cockpit (ni null ni absente).
+      if (path.startsWith('/api/') && site === undefined && req.headers[EN_TETE_COCKPIT] !== '1') {
+        return reply.code(403).send({ error: 'requête sans provenance' });
       }
     }
   });
