@@ -47,12 +47,17 @@ Ce que l'e2e a mesuré sous Chromium (30.7) :
 - la fermeture au second load (D167) joue pour le refresh, qui part après le premier load. Elle ne
   joue pas pour un script qui navigue pendant le chargement : un seul load, le cadre reste ouvert
   sur la page d'erreur. Sans effet sous Chromium, puisque rien n'est sorti ; épinglé par le test ;
-- **à part** (« Ouvrir à part », la page seule, sans le cockpit autour), la limite connue est
-  réelle : `location.href` et le refresh atteignent le serveur extérieur. La CSP `sandbox` garde
-  l'origine opaque : `localStorage` SecurityError, `fetch` TypeError ;
-- à part, une navigation vers `GET /api/state` du daemon reçoit **401** : `Sec-Fetch-Site:
-  cross-site`, et pas de cookie (SameSite=Strict, l'initiateur est une origine opaque). Si le cookie
-  passait, D165 répondrait 403. Jamais l'état.
+- **« Ouvrir à part » ouvre une enveloppe** (30.9, lab DM 91283) : `/v/<jeton>`, sur le port des
+  artefacts, sans aucun script, qui ne contient que le cadre sandboxé et n'encadre que ce port
+  (`frame-src 'self'`). L'artefact y est de nouveau un cadre : aucune navigation ne sort, comme dans
+  le cockpit. Son origine reste opaque : `localStorage` SecurityError, `fetch` TypeError ;
+- **la limite connue reste sur l'URL directe** `/a/<jeton>` ouverte en page de premier niveau (plus
+  aucun bouton n'y mène) : `location.href` et le refresh atteignent le serveur extérieur. Épinglé ;
+- par cette URL directe, une navigation vers `GET /api/state` du daemon reçoit **401** :
+  `Sec-Fetch-Site: cross-site`, et pas de cookie (SameSite=Strict, l'initiateur est une origine
+  opaque). Si le cookie passait, D165 répondrait 403 (30.8). Jamais l'état ;
+- le second port ne renvoie jamais le chemin ni la requête dans une réponse, quel que soit le verbe
+  ou l'hôte (`test/artefacts-serveur.test.ts`).
 
 ## Prérequis sur le Mac
 
@@ -80,11 +85,14 @@ Ce que l'e2e a mesuré sous Chromium (30.7) :
   `/navigation` ou `/refresh` venus du cadre, c'est la limite connue de D169, attendue par le plan :
   le noter, ce n'est pas un échec.
   - Constat : _à remplir_
-- [ ] 30.7.5 Safari : « Ouvrir à part » sur `verdict.html` : `localStorage` lève SecurityError,
-  `document.cookie` est vide ou illisible. Sur `vers-api.html` : la page dit « Non authentifié » ou
-  refuse (401 ou 403), jamais l'état.
+- [ ] 30.7.5 Safari : « Ouvrir à part » sur `verdict.html` ouvre l'enveloppe (`/v/…`) ; dans son
+  cadre, `localStorage` lève SecurityError, `document.cookie` est vide ou illisible. Sur
+  `vers-dehors.html` et `rafraichir.html`, à part : la console du serveur extérieur ne montre rien
+  (sinon, WebKit n'applique pas `frame-src` aux navigations du cadre : le noter). L'URL directe
+  `/a/…` de `vers-api.html`, collée dans un onglet : « Non authentifié » ou un refus (401 ou 403),
+  jamais l'état.
   - Constat : _à remplir_
-- [ ] 30.7.6 L'app (WKWebView), D170 : sur une page « Ouvrir à part » de `verdict.html`,
+- [ ] 30.7.6 L'app (WKWebView), D170 : dans l'enveloppe « Ouvrir à part » de `verdict.html`,
   `localStorage` SecurityError et `document.cookie` vide (l'origine opaque sous WebKit, que le lab
   n'a pas pu évaluer).
   - Constat : _à remplir_
@@ -114,6 +122,10 @@ Ce que l'e2e a mesuré sous Chromium (30.7) :
 
 ## À valider par Julien
 
+- [ ] « Ouvrir à part » ouvre l'enveloppe `/v/…` et non plus l'artefact seul (30.9) ; l'URL directe
+  `/a/…` reste servie, la limite connue y est épinglée.
+- [ ] Par cookie, une requête `/api/` sans `Sec-Fetch-Site` est refusée sauf avec `x-aid-cockpit: 1`
+  (30.8) : un outil qui rejouerait le cookie hors navigateur reçoit 403.
 - [ ] L'état du second port passe par `GET /api/artefacts/etat` et par la liste, pas par
   `/api/state` (révision 30.4).
 - [ ] La liste réunit le diff depuis la base et le statut git : un artefact commité par l'agent y

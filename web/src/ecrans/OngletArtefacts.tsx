@@ -230,7 +230,7 @@ export function OngletArtefacts({
                 <a
                   className="bouton"
                   data-action="artefacts.ouvrir-a-part"
-                  href={vue.lien.url}
+                  href={vue.lien.aPart}
                   target="_blank"
                   rel="noopener noreferrer"
                 >

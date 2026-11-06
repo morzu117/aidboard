@@ -17,7 +17,7 @@ const TYPES: Record<TypeArtefact, string> = {
 };
 
 /** CSP de chaque réponse : `sandbox` donne une origine opaque, même hors de l'iframe. */
-export function cspArtefact(portDaemon: number): string {
+export function cspArtefact(portDaemon: number, portArtefacts?: number): string {
   return [
     'sandbox allow-scripts',
     "default-src 'none'",
@@ -29,13 +29,46 @@ export function cspArtefact(portDaemon: number): string {
     "connect-src 'none'",
     "form-action 'none'",
     "base-uri 'none'",
-    `frame-ancestors http://127.0.0.1:${portDaemon} http://localhost:${portDaemon}`,
+    `frame-ancestors http://127.0.0.1:${portDaemon} http://localhost:${portDaemon}${
+      // 30.9 (lab, DM 91283) : l'enveloppe de « Ouvrir à part », servie par ce port, l'encadre aussi
+      portArtefacts === undefined
+        ? ''
+        : ` http://127.0.0.1:${portArtefacts} http://localhost:${portArtefacts}`
+    }`,
   ].join('; ');
+}
+
+/**
+ * 30.9 (lab, DM 91283) : la CSP de l'enveloppe. Elle n'a aucun script (default-src 'none') et
+ * n'encadre que ce port : l'artefact y est de nouveau un cadre, sous le même frame-src que dans le
+ * cockpit. Pas de `sandbox` ici : une origine opaque ne satisferait pas le frame-ancestors de
+ * l'artefact. Sans script, l'enveloppe ne fait rien de son origine.
+ */
+export const CSP_ENVELOPPE = [
+  "default-src 'none'",
+  "style-src 'unsafe-inline'",
+  "frame-src 'self'",
+  "form-action 'none'",
+  "base-uri 'none'",
+  "frame-ancestors 'none'",
+].join('; ');
+
+/** La page enveloppe : le cadre sandboxé seul. Le jeton est valide, donc aléatoire, jamais une donnée. */
+export function pageEnveloppe(jeton: string): string {
+  return [
+    '<!doctype html>',
+    '<html lang="fr"><head><meta charset="utf-8"><meta name="referrer" content="no-referrer">',
+    '<title>Artefact</title>',
+    '<style>html,body{margin:0;height:100%}iframe{display:block;border:0;width:100%;height:100%}</style>',
+    '</head><body>',
+    `<iframe src="/a/${jeton}" sandbox="allow-scripts" referrerpolicy="no-referrer" title="Artefact"></iframe>`,
+    '</body></html>',
+  ].join('\n');
 }
 
 /** Le jeton ne doit pas finir dans daemon.log (même règle que `?token=`). */
 export function masquerJeton(url: string | undefined): string {
-  return (url ?? '').replace(/\/a\/[^/?#]*/g, '/a/***');
+  return (url ?? '').replace(/\/(a|v)\/[^/?#]*/g, '/$1/***');
 }
 
 export type ServeurArtefacts =
@@ -87,8 +120,12 @@ export async function ouvrirServeurArtefacts(
       return reply.code(421).type('text/plain; charset=utf-8').send('hôte refusé');
     }
   });
-  app.addHook('onSend', async (_req, reply) => {
-    reply.header('Content-Security-Policy', cspArtefact(opts.portDaemon()));
+  app.addHook('onSend', async (req, reply) => {
+    const enveloppe = req.routeOptions.url === '/v/:jeton' && reply.statusCode === 200;
+    reply.header(
+      'Content-Security-Policy',
+      enveloppe ? CSP_ENVELOPPE : cspArtefact(opts.portDaemon(), port()),
+    );
     reply.header('X-Content-Type-Options', 'nosniff');
     reply.header('Referrer-Policy', 'no-referrer');
     reply.header('Cache-Control', 'no-store');
@@ -104,6 +141,19 @@ export async function ouvrirServeurArtefacts(
     // aucun corps qui répète le jeton
     if (!c) return reply.code(404).type('text/plain; charset=utf-8').send('Lien expiré ou inconnu');
     return reply.type(TYPES[c.type]).send(c.contenu);
+  });
+  // 30.9 : « Ouvrir à part » ouvre l'enveloppe, plus l'artefact seul en page de premier niveau
+  app.get('/v/:jeton', async (req, reply) => {
+    const { jeton } = req.params as { jeton: string };
+    if (!opts.jetons.lire(jeton)) {
+      return reply.code(404).type('text/plain; charset=utf-8').send('Lien expiré ou inconnu');
+    }
+    return reply.type('text/html; charset=utf-8').send(pageEnveloppe(jeton));
+  });
+  app.route({
+    method: ['POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    url: '/v/:jeton',
+    handler: async (_req, reply) => reply.code(405).send(),
   });
   app.route({
     method: ['POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],

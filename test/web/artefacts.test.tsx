@@ -36,7 +36,11 @@ function liens() {
   return () => {
     n += 1;
     return new Response(
-      JSON.stringify({ url: `http://127.0.0.1:4880/a/jeton-synthetique-${n}`, expireA: 'x' }),
+      JSON.stringify({
+        url: `http://127.0.0.1:4880/a/jeton-synthetique-${n}`,
+        aPart: `http://127.0.0.1:4880/v/jeton-synthetique-${n}`,
+        expireA: 'x',
+      }),
       { status: 200 },
     );
   };
@@ -82,7 +86,8 @@ test('HTML : un cadre aux attributs exacts, la phrase de la frontière, Ouvrir �
     ),
   ).toBeTruthy();
   const aPart = screen.getByRole('link', { name: 'Ouvrir à part' });
-  expect(aPart.getAttribute('href')).toBe(URL_1);
+  // 30.9 (lab 91283) : l'enveloppe, plus l'artefact seul
+  expect(aPart.getAttribute('href')).toBe('http://127.0.0.1:4880/v/jeton-synthetique-1');
   expect(aPart.getAttribute('target')).toBe('_blank');
   expect(aPart.getAttribute('rel')).toBe('noopener noreferrer');
   expect(h.calls.find((c) => c.url.endsWith('/artefacts/lien'))?.body).toEqual({

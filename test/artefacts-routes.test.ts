@@ -45,6 +45,8 @@ test('D163 : un lien vers le contenu lu à l’émission, sans id de sujet ni je
   const { port } = await etat();
   expect(url).toMatch(new RegExp(`^http://127\\.0\\.0\\.1:${port}/a/[A-Za-z0-9_-]{43}$`));
   expect(url).not.toContain(t.topicId);
+  // 30.9 : l'enveloppe, même jeton, même port
+  expect(r.json<LienArtefact>().aPart).toBe(url.replace('/a/', '/v/'));
   expect(url).not.toContain(c.t.d.auth.adminToken);
   expect(Date.parse(expireA) - Date.now()).toBeGreaterThan(9 * 60_000);
 

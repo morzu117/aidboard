@@ -3,6 +3,7 @@ import { PassThrough } from 'node:stream';
 import { afterEach, expect, test } from 'vitest';
 import { JetonsArtefacts } from '../src/daemon/artefacts/jetons.js';
 import {
+  CSP_ENVELOPPE,
   cspArtefact,
   masquerJeton,
   ouvrirServeurArtefacts,
@@ -41,7 +42,7 @@ test('D164 : un HTML servi avec la CSP fermée, sandbox, et rien qui pose un coo
   expect(r.statusCode).toBe(200);
   expect(r.body).toBe('<p>rapport</p>');
   expect(r.headers['content-type']).toBe('text/html; charset=utf-8');
-  expect(r.headers['content-security-policy']).toBe(cspArtefact(DAEMON));
+  expect(r.headers['content-security-policy']).toBe(cspArtefact(DAEMON, srv.port));
   expect(String(r.headers['content-security-policy'])).toMatch(/^sandbox allow-scripts; /);
   expect(String(r.headers['content-security-policy'])).toContain("connect-src 'none'");
   expect(String(r.headers['content-security-policy'])).toContain(
@@ -63,7 +64,7 @@ test('D164 : un SVG en image/svg+xml, sous la même CSP', async () => {
   });
   expect(r.statusCode).toBe(200);
   expect(r.headers['content-type']).toBe('image/svg+xml');
-  expect(r.headers['content-security-policy']).toBe(cspArtefact(DAEMON));
+  expect(r.headers['content-security-policy']).toBe(cspArtefact(DAEMON, srv.port));
 });
 
 test('D162 : un autre hôte vaut 421 (DNS rebinding), même avec un jeton valide', async () => {
@@ -85,7 +86,7 @@ test('D164 : jeton inconnu ou expiré, 404 sans répéter le jeton', async () =>
   });
   expect(r.statusCode).toBe(404);
   expect(r.body).not.toContain('jeton-inconnu-synthetique');
-  expect(r.headers['content-security-policy']).toBe(cspArtefact(DAEMON));
+  expect(r.headers['content-security-policy']).toBe(cspArtefact(DAEMON, srv.port));
 });
 
 test('D162 : aucune route de l’API, et GET seulement', async () => {
@@ -122,6 +123,7 @@ test('D162 : le journal ne contient ni le cookie ni le jeton', async () => {
 
 test('masquerJeton : le chemin seul, requête comprise', () => {
   expect(masquerJeton('/a/abc')).toBe('/a/***');
+  expect(masquerJeton('/v/abc?x=1')).toBe('/v/***?x=1');
   expect(masquerJeton('/a/abc?x=1')).toBe('/a/***?x=1');
   expect(masquerJeton(undefined)).toBe('');
 });
@@ -148,4 +150,73 @@ test('D162 : jamais sur le port du daemon ni sur celui du pont Tauri', async () 
     });
     expect(s.disponible, String(port)).toBe(false);
   }
+});
+
+test('30.9 (lab 91283) : frame-ancestors accepte aussi le port des artefacts, pour l’enveloppe', () => {
+  expect(cspArtefact(4870, 4880)).toContain(
+    'frame-ancestors http://127.0.0.1:4870 http://localhost:4870 http://127.0.0.1:4880 http://localhost:4880',
+  );
+});
+
+test('30.9 (lab 91283) : l’enveloppe, le cadre sandboxé seul, sans script, qui n’encadre que ce port', async () => {
+  const jetons = new JetonsArtefacts();
+  const srv = await ouvrir(jetons);
+  const { jeton } = jetons.emettre(Buffer.from('<p>x</p>'), 'html');
+  const host = `127.0.0.1:${srv.port}`;
+  const r = await srv.app.inject({ url: `/v/${jeton}`, headers: { host, cookie: SECRET_COOKIE } });
+  expect(r.statusCode).toBe(200);
+  expect(r.headers['content-type']).toBe('text/html; charset=utf-8');
+  expect(r.headers['content-security-policy']).toBe(CSP_ENVELOPPE);
+  expect(CSP_ENVELOPPE).toContain("default-src 'none'");
+  expect(CSP_ENVELOPPE).toContain("frame-src 'self'");
+  expect(CSP_ENVELOPPE).toContain("frame-ancestors 'none'");
+  expect(r.headers['set-cookie']).toBeUndefined();
+  expect(r.headers['cache-control']).toBe('no-store');
+  expect(r.body).toContain(
+    `<iframe src="/a/${jeton}" sandbox="allow-scripts" referrerpolicy="no-referrer"`,
+  );
+  expect(r.body).not.toMatch(/<script/i);
+  // inconnu : 404 sans le répéter ; les autres verbes : 405
+  const inconnu = await srv.app.inject({ url: '/v/jeton-inconnu-synthetique', headers: { host } });
+  expect(inconnu.statusCode).toBe(404);
+  expect(inconnu.body).not.toContain('jeton-inconnu-synthetique');
+  expect(inconnu.headers['content-security-policy']).toBe(cspArtefact(DAEMON, srv.port));
+  const post = await srv.app.inject({ method: 'POST', url: `/v/${jeton}`, headers: { host } });
+  expect(post.statusCode).toBe(405);
+});
+
+// Lab (DM 91283) : le cadre peut encore naviguer vers une autre URL de ce port, et y mettre des
+// données dans la ligne de requête. Aucune réponse ne doit les renvoyer, pour qu'aucun autre
+// artefact ne puisse les lire.
+test('30.9 (lab 91283) : aucune réponse ne renvoie le chemin ni la requête', async () => {
+  const jetons = new JetonsArtefacts();
+  const srv = await ouvrir(jetons);
+  const { jeton } = jetons.emettre(Buffer.from('<p>contenu</p>'), 'html');
+  const M = 'fuite-synthetique-7f3a';
+  const host = `127.0.0.1:${srv.port}`;
+  const urls = [
+    `/a/${M}`,
+    `/a/${M}?d=${M}`,
+    `/a/${jeton}?d=${M}`,
+    `/a/${jeton}/${M}`,
+    `/v/${M}`,
+    `/v/${jeton}?d=${M}`,
+    `/${M}`,
+    `/${M}?d=${M}`,
+    `/api/${M}`,
+    `/a/${jeton}#${M}`,
+  ];
+  for (const url of urls) {
+    for (const method of ['GET', 'POST', 'HEAD', 'OPTIONS'] as const) {
+      const r = await srv.app.inject({ method, url, headers: { host } });
+      expect(r.body, `${method} ${url}`).not.toContain(M);
+      expect(JSON.stringify(r.headers), `${method} ${url}`).not.toContain(M);
+    }
+  }
+  // et sur un hôte étranger
+  const etranger = await srv.app.inject({
+    url: `/a/${M}?d=${M}`,
+    headers: { host: `${M}.example` },
+  });
+  expect(etranger.body).not.toContain(M);
 });

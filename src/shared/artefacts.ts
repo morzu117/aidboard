@@ -11,6 +11,8 @@ export interface EtatArtefacts {
 /** Un lien vers le second port (D163) : valable 10 minutes, réutilisable dans la fenêtre. */
 export interface LienArtefact {
   url: string;
+  /** 30.9 : l'enveloppe de « Ouvrir à part » (le cadre seul, sur le même port) */
+  aPart: string;
   /** ISO 8601 */
   expireA: string;
 }

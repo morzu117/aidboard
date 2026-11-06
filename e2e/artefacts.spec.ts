@@ -225,39 +225,66 @@ test.describe.serial('la frontière des artefacts (chantier 30)', () => {
     });
   }
 
-  /** « Ouvrir à part » : la page de l'artefact seule, sans la CSP du cockpit autour d'elle. */
-  async function aPart(nom: string): Promise<Page> {
+  /** Le lien « Ouvrir à part » de l'artefact choisi : l'enveloppe (30.9, lab DM 91283). */
+  async function lienAPart(nom: string): Promise<string> {
     await ouvrirArtefact(nom);
     const href = await page.getByRole('link', { name: 'Ouvrir à part' }).getAttribute('href');
+    expect(href).toMatch(new RegExp(`^http://127\\.0\\.0\\.1:${PORT + 10}/v/`));
+    return href!;
+  }
+
+  async function ouvrirSeule(href: string): Promise<Page> {
     const seule = await page.context().newPage();
-    void seule.goto(href!).catch(() => undefined);
+    void seule.goto(href).catch(() => undefined);
     return seule;
   }
 
-  // La limite connue, épinglée et non cachée (D169) : à part, une navigation atteint l'extérieur.
-  test('limite connue, à part : location.href et meta refresh atteignent le serveur extérieur', async () => {
+  // 30.9 : à part, l'artefact est de nouveau un cadre, dans l'enveloppe ; frame-src 'self' de l'enveloppe
+  // arrête ses navigations comme le fait le cockpit (mesuré sous Chromium ; WebKit : recette).
+  test('30.9 : à part, dans l’enveloppe, aucune navigation ne sort', async () => {
+    for (const nom of ['vers-dehors.html', 'rafraichir.html', 'vers-api.html']) {
+      const avant = recues.length;
+      let versApi = 0;
+      const seule = await ouvrirSeule(await lienAPart(nom));
+      seule.on('request', (q) => {
+        if (q.url() === `${base}/api/state`) versApi += 1;
+      });
+      await expect
+        .poll(() => seule.frames().some((f) => f.url().startsWith('chrome-error://')), {
+          message: nom,
+        })
+        .toBe(true);
+      expect(recues.slice(avant), nom).toEqual([]);
+      expect(versApi, nom).toBe(0);
+      expect(seule.url(), nom).toContain('/v/');
+      await seule.close();
+    }
+  });
+
+  // La limite connue, épinglée et non cachée (D169) : l'artefact seul, par son URL directe /a/, en
+  // page de premier niveau. Plus aucun bouton n'y mène, mais l'URL existe : une navigation y sort.
+  test('limite connue, l’URL directe /a/ : location.href et meta refresh atteignent l’extérieur', async () => {
     for (const [nom, chemin] of [
       ['vers-dehors.html', '/navigation'],
       ['rafraichir.html', '/refresh'],
     ] as const) {
-      const seule = await aPart(nom);
+      const seule = await ouvrirSeule((await lienAPart(nom)).replace('/v/', '/a/'));
       await expect.poll(() => recues.includes(chemin), { message: nom }).toBe(true);
       await seule.close();
     }
   });
 
-  test('D165, à part : une navigation vers l’API du daemon est refusée, jamais l’état', async () => {
+  test('D165, l’URL directe /a/ : une navigation vers l’API du daemon est refusée, jamais l’état', async () => {
+    const href = (await lienAPart('vers-api.html')).replace('/v/', '/a/');
     const seule = await page.context().newPage();
     const navigation = seule.waitForResponse(
       (r) => r.url() === `${base}/api/state` && r.request().isNavigationRequest(),
     );
-    await ouvrirArtefact('vers-api.html');
-    const href = await page.getByRole('link', { name: 'Ouvrir à part' }).getAttribute('href');
-    void seule.goto(href!).catch(() => undefined);
+    void seule.goto(href).catch(() => undefined);
     const r = await navigation;
     const entetes = await r.request().allHeaders();
     // Mesuré sous Chromium : 401. Le cookie est SameSite=Strict, une navigation venue d'une origine
-    // opaque ne le porte pas ; s'il passait, Sec-Fetch-Site (cross-site) vaudrait 403 (D165).
+    // opaque ne le porte pas ; s'il passait, la règle de D165 (30.8) vaudrait 403.
     expect(entetes['sec-fetch-site']).toBe('cross-site');
     expect(entetes.cookie).toBeUndefined();
     expect(r.status()).toBe(401);
@@ -272,7 +299,7 @@ test.describe.serial('la frontière des artefacts (chantier 30)', () => {
     await expect(node(page, '1-3.artefacts.cadre')).not.toHaveAttribute('src', src1!);
     const src2 = await node(page, '1-3.artefacts.cadre').getAttribute('src');
     const aPart = page.getByRole('link', { name: 'Ouvrir à part' });
-    await expect(aPart).toHaveAttribute('href', src2!);
+    await expect(aPart).toHaveAttribute('href', src2!.replace('/a/', '/v/'));
     await expect(aPart).toHaveAttribute('rel', 'noopener noreferrer');
     // le premier lien reste valable dans sa fenêtre (D163), et ne sert jamais l'API
     const reponse = await page.request.get(src1!);
@@ -283,7 +310,7 @@ test.describe.serial('la frontière des artefacts (chantier 30)', () => {
     expect(api.status()).toBe(404);
   });
 
-  test('Ouvrir à part : la page seule garde l’origine opaque (CSP sandbox)', async () => {
+  test('Ouvrir à part : l’enveloppe, l’artefact dans son cadre garde l’origine opaque', async () => {
     const [onglet] = await Promise.all([
       page.context().waitForEvent('page'),
       (async () => {
@@ -291,13 +318,18 @@ test.describe.serial('la frontière des artefacts (chantier 30)', () => {
         await page.getByRole('link', { name: 'Ouvrir à part' }).click();
       })(),
     ]);
-    await expect.poll(() => onglet.title(), { timeout: 15_000 }).toMatch(/^verdict /);
-    const verdict = JSON.parse((await onglet.title()).slice('verdict '.length)) as Record<
-      string,
-      string
-    >;
+    const titre = async () => {
+      const f = onglet.frames().find((x) => x.url().includes('/a/'));
+      return f ? f.title() : '';
+    };
+    await expect.poll(titre, { timeout: 15_000 }).toMatch(/^verdict /);
+    const verdict = JSON.parse((await titre()).slice('verdict '.length)) as Record<string, string>;
     expect(verdict.localStorage).toBe('SecurityError');
     expect(verdict.api).toBe('TypeError');
+    expect(verdict.tauri).toBe('undefined');
+    // l'enveloppe elle-même : aucun script, le cadre seul
+    expect(await onglet.locator('script').count()).toBe(0);
+    await expect(onglet.locator('iframe')).toHaveAttribute('sandbox', 'allow-scripts');
     await onglet.close();
   });
 });

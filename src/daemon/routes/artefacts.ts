@@ -109,6 +109,7 @@ export function registerArtefactRoutes(
     reply.header('Cache-Control', 'no-store');
     return {
       url: `http://${hote}:${e.port}/a/${jeton}`,
+      aPart: `http://${hote}:${e.port}/v/${jeton}`,
       expireA: new Date(expireA).toISOString(),
     } satisfies LienArtefact;
   });
