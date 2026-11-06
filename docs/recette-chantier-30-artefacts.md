@@ -136,6 +136,11 @@ Ce que l'e2e a mesuré sous Chromium (30.7) :
 
 ## Ce qui n'est pas couvert
 
+- Un artefact qui en encadre un autre (reste noté par le lab, DM 91330, sans correction) : le
+  `frame-ancestors` de l'artefact admet tout le port des artefacts, pour l'enveloppe. Un artefact
+  qui connaît le `/a/<jeton>` d'un autre peut donc l'encadrer. Il lui faut un jeton valide
+  (32 octets, 10 minutes), et chaque cadre reste opaque : il ne lit rien de l'autre.
+
 - Les artefacts d'un agent distant (pas d'onglet, D167).
 - Un PDF, une image autre que SVG, un notebook.
 - Firefox : ni dans l'e2e ni dans la recette.
