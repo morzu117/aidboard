@@ -121,6 +121,8 @@ Ce document. Pas de code.
 ### 32.10 Les autres écrans (D195)
 Sujets (filtre par état, nom en gras s'il t'attend), Suivre un sujet (prochaine décision, phase, dernier tour), Relire un tour, Autoriser un merge (en lecture, « se confirme sur le Mac »), Board et Lire une carte (repris du 31), Informations, Notifications, Appareils connectés, Ajouter ce téléphone.
 
+*Révision 32.10.* Les actions (trancher, marquer un tour) sont extraites dans `web/src/ui/ActionsAppareil.tsx`, partagées par À traiter, Suivre et Relire. Informations et Notifications sont joignables depuis l'en-tête ; la version d'A-I-D n'y figure pas, l'état masqué ne la porte pas. Notifications ne demande jamais la permission ; le badge (`setAppBadge`) est monté dans la coque. Livraison : lecture seule, « Merger » désactivé, aucun POST. L'e2e du 31 suit les deux nouveaux liens d'en-tête. Gate 2029, e2e 104 verts.
+
 ### 32.11 L'e2e et la fiche de recette
 - `e2e/mobile.spec.ts`, Chromium à 390 × 844 et à 320 px, sur le frontal de `e2e/serve-local.ts` :
   - installer : le manifeste se lit ;

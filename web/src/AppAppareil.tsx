@@ -12,6 +12,15 @@ import { Contenu as CarteContenu } from './ecrans/CarteBoard.js';
 import { HorsAcces } from './ui/HorsAcces.js';
 import { RappelInstallation } from './ui/RappelInstallation.js';
 
+import {
+  BadgeAppareil,
+  SujetsAppareil,
+  SuivreAppareil,
+  LivraisonAppareil,
+  InformationsAppareil,
+  NotificationsAppareil,
+} from './ecrans/ParcoursAppareil.js';
+
 // D195 : navigation mobile, distincte de la coque du Mac.
 function Barre({ board }: { board: boolean }) {
   const lien = ({ isActive }: { isActive: boolean }) =>
@@ -25,6 +34,12 @@ function Barre({ board }: { board: boolean }) {
             Ton Mac · tailnet
           </p>
         </div>
+        <NavLink className="appareil-lien" to="/informations">
+          Informations
+        </NavLink>
+        <NavLink className="appareil-lien" to="/notifications">
+          Notifications
+        </NavLink>
         <NavLink className="appareil-lien" to="/appareils">
           Appareils connectés
         </NavLink>
@@ -84,6 +99,7 @@ function Coque({ moi }: { moi: Moi | null }) {
   return (
     <div className="appareil-coque" data-node="appareil">
       <RappelInstallation />
+      <BadgeAppareil />
       {identite && <Barre board={cell !== null} />}
       {horsLigne && appareil && (
         <div className="appareil-bandeau" role="status">
@@ -99,14 +115,12 @@ function Coque({ moi }: { moi: Moi | null }) {
       )}
       <Routes>
         <Route path="/" element={<AccueilAppareil />} />
-        <Route
-          path="/sujets"
-          element={
-            <main className="page">
-              <h1 className="titre-ecran">Sujets</h1>
-            </main>
-          }
-        />
+        <Route path="/sujets" element={<SujetsAppareil />} />
+        <Route path="/sujets/:id" element={<SuivreAppareil />} />
+        <Route path="/sujets/:id/tour" element={<SuivreAppareil relire />} />
+        <Route path="/sujets/:id/livraison" element={<LivraisonAppareil />} />
+        <Route path="/informations" element={<InformationsAppareil />} />
+        <Route path="/notifications" element={<NotificationsAppareil />} />
         <Route
           path="/board"
           element={

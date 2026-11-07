@@ -141,8 +141,12 @@ test.describe.serial('la frontière du mode host (chantier 31)', () => {
     const liens = await node(p, 'appareil')
       .locator('a')
       .evaluateAll((as) => as.map((a) => a.getAttribute('href')));
-    expect(liens).toEqual(['/appareils', '/', '/sujets']);
-    await expect(node(p, 'appareil.barre').getByRole('link')).toHaveText('Appareils connectés');
+    expect(liens).toEqual(['/informations', '/notifications', '/appareils', '/', '/sujets']);
+    await expect(node(p, 'appareil.barre').getByRole('link')).toHaveText([
+      'Informations',
+      'Notifications',
+      'Appareils connectés',
+    ]);
     await expect(navigation.getByRole('link', { name: 'À traiter' })).toHaveAttribute(
       'aria-current',
       'page',

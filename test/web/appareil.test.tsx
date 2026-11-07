@@ -1,4 +1,7 @@
 // @vitest-environment jsdom
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { parseCard, parseGraph, parseThread, parseObligations } from '../../src/shared/board.js';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
@@ -202,7 +205,7 @@ test('D195 : deux onglets sans swarph, permission sans bouton', async () => {
 });
 
 test('D180 : les adresses du Mac n’existent pas sur un appareil, retour à l’accueil', async () => {
-  for (const route of ['/machines', '/sujets/tp_1', '/reglages', '/boite', '/board']) {
+  for (const route of ['/machines', '/reglages', '/boite', '/board']) {
     monter({ kind: 'appareil', moi: MOI }, route);
     await joindre();
     await waitFor(() => expect(cheminCourant(), route).toBe('/'));
@@ -616,4 +619,172 @@ test('D195 : le choix survit au nouvel état, seule une autre question le réini
   courante = { ...question, pendingId: 'q_2' };
   await act(() => h.client.refresh());
   expect(screen.queryByRole('button', { name: 'Confirmer' })).toBeNull();
+});
+
+test('32.10 : sujets filtrés et nom en gras quand une permission attend', async () => {
+  const courant = etat();
+  courant.topics.push({ ...courant.topics[0]!, id: 'tp_2', title: 'Autre sujet', state: 'merged' });
+  monter({ kind: 'appareil', moi: MOI }, '/sujets', {
+    'GET /api/state': () => reponse(200, courant),
+  });
+  await joindre();
+  expect(screen.getByRole('link', { name: 'Mode host' }).querySelector('strong')).toBeTruthy();
+  expect(screen.getByRole('link', { name: 'Autre sujet' }).querySelector('strong')).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'merged' }));
+  expect(screen.getByRole('button', { name: 'merged' }).getAttribute('aria-pressed')).toBe('true');
+  expect(screen.queryByRole('link', { name: 'Mode host' })).toBeNull();
+});
+
+test('32.10 : suivre reprend la confirmation de 32.9 et mène au dernier tour', async () => {
+  const h = monter({ kind: 'appareil', moi: MOI }, '/sujets/tp_1', {
+    'GET /api/state': () =>
+      reponse(
+        200,
+        avecAgent({ question, tour: { id: 'tour_1', resume: 'Résumé du tour', marque: null } }),
+      ),
+    'POST /api/appareils/agents/ag_1/reponse': () => reponse(200, {}),
+  });
+  await joindre();
+  expect(screen.getByText('Phase ou état : build')).toBeTruthy();
+  fireEvent.click(screen.getByRole('button', { name: 'Premier' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Confirmer' }));
+  await screen.findByText('Tranché');
+  expect(h.calls.find((appel) => appel.method === 'POST')?.body).toEqual({
+    pendingId: question.pendingId,
+    option: 0,
+  });
+  expect(screen.getByRole('link', { name: 'Livrer' }).getAttribute('href')).toBe(
+    '/sujets/tp_1/livraison',
+  );
+  fireEvent.click(screen.getByRole('link', { name: 'Relire un tour' }));
+  expect(screen.getByText('Résumé du tour')).toBeTruthy();
+  fireEvent.click(screen.getByRole('button', { name: 'Marquer relu' }));
+  await waitFor(() =>
+    expect(h.calls.some((appel) => appel.url.endsWith('/tour') && appel.method === 'POST')).toBe(
+      true,
+    ),
+  );
+});
+
+for (const route of ['/sujets/tp_1', '/sujets/tp_1/tour']) {
+  test(`32.10 : aucune écriture active hors ligne sur ${route}`, async () => {
+    let coupe = false;
+    const h = monter({ kind: 'appareil', moi: MOI }, route, {
+      'GET /api/state': () => {
+        if (coupe) throw new TypeError('hors ligne');
+        return reponse(
+          200,
+          avecAgent({ question, tour: { id: 'tour_1', resume: 'Résumé conservé', marque: null } }),
+        );
+      },
+    });
+    await joindre();
+    coupe = true;
+    fermer(1006, '');
+    await screen.findByText('Mac injoignable');
+    expect(screen.getByText('Résumé conservé')).toBeTruthy();
+    expect(
+      [...document.querySelectorAll('main button')].every(
+        (bouton) => (bouton as HTMLButtonElement).disabled,
+      ),
+    ).toBe(true);
+    expect(h.calls.some((appel) => appel.method === 'POST')).toBe(false);
+  });
+}
+
+test('32.10 : livraison en lecture, champs et merge toujours désactivé', async () => {
+  const h = monter({ kind: 'appareil', moi: MOI }, '/sujets/tp_1/livraison', {
+    'GET /api/appareils/sujets/tp_1/livraison': () =>
+      reponse(200, {
+        head: 'abc1234',
+        fichiers: [{ nom: 'src/exemple.ts', ajouts: 3, retraits: 1 }],
+        controles: [{ nom: 'gate', etat: 'success' }],
+        revue: { etat: 'ancienne', surLaTete: false },
+        blocage: 'Revue obsolète',
+        prNumber: 12,
+      }),
+  });
+  await joindre();
+  await screen.findByText('Tête : abc1234');
+  for (const texte of [
+    'src/exemple.ts · +3 −1',
+    'gate : success',
+    'ancienne · Ne porte pas sur la tête',
+    'Revue obsolète',
+    'PR : #12',
+    'Le merge se confirme sur le Mac.',
+  ])
+    expect(screen.getByText(texte)).toBeTruthy();
+  const merger = screen.getByRole('button', { name: 'Merger' });
+  expect((merger as HTMLButtonElement).disabled).toBe(true);
+  fireEvent.click(merger);
+  expect(h.calls.every((appel) => appel.method === 'GET')).toBe(true);
+});
+
+test('32.10 : informations depuis le seul état masqué', async () => {
+  monter({ kind: 'appareil', moi: MOI }, '/informations', {
+    'GET /api/state': () => reponse(200, AVEC_MESH),
+  });
+  await joindre();
+  for (const texte of ['Cell swarph : cell-test', 'Sujets : 1', 'Agents : 1'])
+    expect(screen.getByText(texte)).toBeTruthy();
+});
+
+test('32.10 : badge des décisions puis zéro, aucune permission demandée', async () => {
+  const setAppBadge = vi.fn().mockResolvedValue(undefined);
+  const clearAppBadge = vi.fn().mockResolvedValue(undefined);
+  const requestPermission = vi.fn();
+  vi.stubGlobal('Notification', { requestPermission });
+  Object.defineProperty(navigator, 'setAppBadge', { configurable: true, value: setAppBadge });
+  Object.defineProperty(navigator, 'clearAppBadge', { configurable: true, value: clearAppBadge });
+  let courant = avecAgent({ question });
+  courant.agents.push({
+    ...courant.agents[0]!,
+    id: 'ag_2',
+    question: undefined,
+    attend: true,
+    statusReason: 'permission',
+  });
+  monter({ kind: 'appareil', moi: MOI }, '/notifications', {
+    'GET /api/state': () => reponse(200, courant),
+  });
+  await joindre();
+  await waitFor(() => expect(setAppBadge).toHaveBeenCalledWith(2));
+  expect(screen.getByText('Les notifications push arrivent au chantier 32 bis.')).toBeTruthy();
+  expect(screen.getByText('Notifications dans ce navigateur : disponibles')).toBeTruthy();
+  courant = etat({ agents: [] });
+  act(() => FakeSocket.all[0]!.push({ kind: 'changed' }));
+  await waitFor(() => expect(clearAppBadge).toHaveBeenCalled());
+  expect(requestPermission).not.toHaveBeenCalled();
+  Reflect.deleteProperty(navigator, 'setAppBadge');
+  Reflect.deleteProperty(navigator, 'clearAppBadge');
+  vi.unstubAllGlobals();
+});
+
+test('32.10 : notifications sans API de badge ni push', async () => {
+  monter({ kind: 'appareil', moi: MOI }, '/notifications');
+  await joindre();
+  expect(screen.getByText('Push dans ce navigateur : indisponible')).toBeTruthy();
+});
+
+test('32.10 : lire une carte du 31 dans la coque mobile, sans écriture', async () => {
+  const fixture = (nom: string): unknown =>
+    JSON.parse(readFileSync(join(import.meta.dirname, '../fixtures/board', `${nom}.json`), 'utf8'));
+  const ok = (data: unknown) => ({ ok: true, data, readAt: T, schemaVersion: null });
+  const h = monter({ kind: 'appareil', moi: MOI }, '/board/cartes/101', {
+    'GET /api/state': () => reponse(200, AVEC_MESH),
+    'GET /api/board/cards/101': () =>
+      reponse(200, {
+        card: ok(parseCard(fixture('cards-show-101'))!.value),
+        graph: ok(parseGraph(fixture('cards-graph-101'))!.value),
+        thread: ok(parseThread(fixture('cards-thread-101'), 1000)!.value),
+        obligations: ok(parseObligations(fixture('obligations-list-101'))!.value),
+      }),
+  });
+  await joindre();
+  await screen.findByRole('heading', { name: 'Carte de test sans responsable' });
+  expect(node('appareil.barre')).toBeTruthy();
+  expect(node('carte-board.retour')?.getAttribute('href')).toBe('/board?projet=42');
+  expect(node('carte-board.corps.texte')?.textContent).toContain('<b>pas du HTML</b>');
+  expect(h.calls.every((appel) => appel.method === 'GET')).toBe(true);
 });

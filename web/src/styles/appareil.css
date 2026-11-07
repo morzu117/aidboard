@@ -166,3 +166,48 @@
 .appareil-actions button:disabled {
   opacity: 0.5;
 }
+
+/* 32.10 : les écrans repris du 31 restent contenus dans la largeur du téléphone. */
+.appareil-coque a {
+  display: inline-flex;
+  align-items: center;
+}
+.appareil-coque .board-carte {
+  display: flex;
+}
+.appareil-coque .entete,
+.appareil-coque .machines-appareils > li {
+  flex-wrap: wrap;
+}
+.appareil-coque .board-colonne,
+.appareil-coque .board-colonnes-zone,
+.appareil-coque .entete-texte {
+  min-width: 0;
+  max-width: 100%;
+}
+.appareil-coque .board-onglets,
+.appareil-coque .board-projets {
+  flex-wrap: wrap;
+}
+.appareil-plein {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.appareil-plein button,
+.appareil-plein input {
+  min-height: 44px;
+  max-width: 100%;
+}
+.appareil-coque button,
+.appareil-plein button {
+  min-width: 44px;
+}
+.appareil-coque .carte-board-table {
+  display: table;
+  table-layout: fixed;
+}
+.appareil-coque .carte-board-table th,
+.appareil-coque .carte-board-table td {
+  padding: var(--sp-1);
+  overflow-wrap: anywhere;
+}
