@@ -178,8 +178,16 @@ test('interrupteur Mac : défaut, clés, panneau, effacement et persistance', as
     .run(a.appareil.id, endpoint, corps.keys.p256dh, corps.keys.auth, new Date().toISOString());
   const panneau = await t.d.app.inject({ url: '/api/host', headers: t.headers });
   expect(panneau.json().abonnements).toBe(1);
+  const liste = await t.d.app.inject({ url: '/api/host/appareils', headers: t.headers });
+  expect(liste.json()).toEqual([expect.objectContaining({ id: a.appareil.id, push: true })]);
+  expect(liste.body).not.toContain(endpoint);
+
   for (const url of ['/api/host', '/api/state'])
     expect((await t.d.app.inject({ url, headers: t.headers })).body).not.toContain(endpoint);
   expect((await basculer(false)).json()).toMatchObject({ push: false, abonnements: 0 });
+  expect((await t.d.app.inject({ url: '/api/host/appareils', headers: t.headers })).json()).toEqual(
+    [expect.objectContaining({ id: a.appareil.id, push: false })],
+  );
+
   expect(t.db.prepare('SELECT * FROM push_abonnements').all()).toEqual([]);
 });

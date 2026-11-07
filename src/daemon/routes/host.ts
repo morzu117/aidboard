@@ -154,7 +154,8 @@ export function registerHostRoutes(
   // D177 : le registre vu du Mac, identité comprise ; jamais l'empreinte
   app.get('/api/host/appareils', async (req, reply) => {
     if (!admin(req, reply)) return reply;
-    return deps.modeHost.registre.lister();
+    const abonnes = new Set(abonnementsActifs(deps.db, Date.now()).map((a) => a.appareilId));
+    return deps.modeHost.registre.lister().map((a) => ({ ...a, push: abonnes.has(a.id) }));
   });
   app.delete('/api/host/appareils/:id', async (req, reply) => {
     if (!admin(req, reply)) return reply;

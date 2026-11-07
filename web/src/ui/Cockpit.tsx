@@ -178,10 +178,11 @@ function Demande({ h, d, now }: { h: ModeHostEtat; d: VueDemande | null; now: nu
   );
 }
 
-function Ligne({ a, h }: { a: Appareil; h: ModeHostEtat }) {
+function Ligne({ a, h }: { a: Appareil & { push?: boolean }; h: ModeHostEtat }) {
   return (
     <li data-node={`host.appareil.${a.id}`}>
       <span className="machine-carte-nom">{a.nom}</span>
+      {a.push && <span>Notifications</span>}
       <span className="texte-discret">{a.identite ?? 'sans identité Tailscale'}</span>
       <span className="texte-discret">
         {a.dernierContact ? `vu ${depuis(a.dernierContact)}` : 'jamais vu'}
@@ -240,6 +241,31 @@ export function Cockpit() {
           ? `Ce cockpit écoute sur ce Mac (127.0.0.1). Tes appareils du tailnet entrent par Tailscale Serve, sur ${e.tailnet.nom ?? 'le nom du Mac'}, en lecture seule, 8 heures par accès.`
           : 'Ce cockpit n’écoute que sur ce Mac (127.0.0.1). Le mode host ouvre une lecture seule à tes appareils du tailnet, par Tailscale Serve.'}
       </p>
+      {e && (
+        <div>
+          <label>
+            <input
+              type="checkbox"
+              role="switch"
+              checked={e.push ?? false}
+              disabled={h.occupe}
+              onChange={() => {
+                if (
+                  !e.push ||
+                  window.confirm('Couper les notifications ? Tous les abonnements seront effacés.')
+                )
+                  void h.basculerPush(!e.push);
+              }}
+            />
+            Notifications push sur les téléphones
+          </label>
+          <p>
+            Les notifications passent par Apple ou Google. Elles ne contiennent qu’un nombre de
+            décisions.
+          </p>
+          <p>{e.abonnements ?? 0} abonnements</p>
+        </div>
+      )}
       {h.erreur && (
         <p className="message-erreur" role="alert" data-node="host.erreur">
           {h.erreur}

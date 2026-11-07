@@ -111,6 +111,7 @@ Ce document.
 - `sw.js` : `push`, avec un repli générique, et `notificationclick`.
 - L'écran : activer et couper les notifications, avec les cas d'iOS non installé et du push coupé sur le Mac.
 - Sur le Mac, « Appareils connectés » marque les appareils abonnés.
+- *Révision 32b.6.* L'écran Notifications est dans `web/src/ui/NotificationsAppareil.tsx`. `requestPermission` n'est appelé que dans le gestionnaire du clic. Le service worker affiche toujours une notification, avec un texte générique si la charge est illisible, et `tag: 'aid'` la remplace. Sur le Mac, `GET /api/host/appareils` ajoute `push: boolean` à chaque ligne (jamais l'endpoint), et l'interrupteur demande une confirmation avant de couper. Gate 2110, e2e 111.
 
 ### 32b.7 La route du diff (D205, D206, D207)
 - `src/daemon/host/diff.ts`, la route et l'interrupteur `code`.

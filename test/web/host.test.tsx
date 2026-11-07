@@ -343,3 +343,29 @@ test('D172 : Éteindre retire le QR et les actions, et garde la liste lue', asyn
   expect(node('host.qr')).toBeNull();
   expect(node('host.ajouter')).toBeNull();
 });
+
+test('32b.6 : le réglage push appelle PUT et confirme la suppression', async () => {
+  const h = ouvrir({
+    'PUT /api/host/push': (body) => json(200, etat({ push: (body as { actif: boolean }).actif }))(),
+    'GET /api/host/appareils': json(200, [{ ...appareil(), push: true }]),
+  });
+  const interrupteur = await screen.findByRole('switch', {
+    name: 'Notifications push sur les téléphones',
+  });
+  await screen.findByText('Notifications');
+  expect((interrupteur as HTMLInputElement).checked).toBe(false);
+  fireEvent.click(interrupteur);
+  await waitFor(() => expect((interrupteur as HTMLInputElement).checked).toBe(true));
+  expect(h.calls.find((c) => c.url === '/api/host/push')?.body).toEqual({ actif: true });
+  const confirmation = vi.spyOn(window, 'confirm').mockReturnValue(false);
+  fireEvent.click(interrupteur);
+  expect(confirmation).toHaveBeenCalledWith(
+    expect.stringContaining('Tous les abonnements seront effacés'),
+  );
+  expect(h.calls.filter((c) => c.url === '/api/host/push')).toHaveLength(1);
+  confirmation.mockReturnValue(true);
+  fireEvent.click(interrupteur);
+  await waitFor(() => expect((interrupteur as HTMLInputElement).checked).toBe(false));
+  expect(h.calls.filter((c) => c.url === '/api/host/push')[1]?.body).toEqual({ actif: false });
+  confirmation.mockRestore();
+});

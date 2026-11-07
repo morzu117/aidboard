@@ -40,3 +40,35 @@ self.addEventListener('fetch', (event) => {
       .catch(() => caches.match(cacheKey)),
   );
 });
+
+self.addEventListener('push', (event) => {
+  let body = "Une décision t'attend";
+  try {
+    const n = event.data?.json()?.n;
+    if (Number.isInteger(n) && n > 1) body = `${n} décisions t'attendent`;
+  } catch {
+    // La charge illisible garde le texte générique.
+  }
+  event.waitUntil(
+    self.registration.showNotification('A-I-D', {
+      body,
+      tag: 'aid',
+      renotify: true,
+      icon: '/icons/icon-256.png',
+    }),
+  );
+});
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  event.waitUntil(
+    (async () => {
+      const clients = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+      const client = clients.find((c) => new URL(c.url).origin === self.location.origin);
+      if (client) {
+        await client.navigate('/');
+        await client.focus();
+      } else await self.clients.openWindow('/');
+    })(),
+  );
+});

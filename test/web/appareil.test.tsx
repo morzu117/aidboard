@@ -750,8 +750,7 @@ test('32.10 : badge des décisions puis zéro, aucune permission demandée', asy
   });
   await joindre();
   await waitFor(() => expect(setAppBadge).toHaveBeenCalledWith(2));
-  expect(screen.getByText('Les notifications push arrivent au chantier 32 bis.')).toBeTruthy();
-  expect(screen.getByText('Notifications dans ce navigateur : disponibles')).toBeTruthy();
+  expect(await screen.findByText('Ce navigateur ne reçoit pas les notifications.')).toBeTruthy();
   courant = etat({ agents: [] });
   act(() => FakeSocket.all[0]!.push({ kind: 'changed' }));
   await waitFor(() => expect(clearAppBadge).toHaveBeenCalled());
@@ -764,7 +763,7 @@ test('32.10 : badge des décisions puis zéro, aucune permission demandée', asy
 test('32.10 : notifications sans API de badge ni push', async () => {
   monter({ kind: 'appareil', moi: MOI }, '/notifications');
   await joindre();
-  expect(screen.getByText('Push dans ce navigateur : indisponible')).toBeTruthy();
+  expect(await screen.findByText('Ce navigateur ne reçoit pas les notifications.')).toBeTruthy();
 });
 
 test('32.10 : lire une carte du 31 dans la coque mobile, sans écriture', async () => {

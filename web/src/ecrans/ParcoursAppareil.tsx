@@ -1,3 +1,4 @@
+export { NotificationsAppareil } from '../ui/NotificationsAppareil.js';
 import { attendDecision } from '../../../src/shared/decision.js';
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router';
@@ -204,21 +205,6 @@ export function InformationsAppareil() {
           <p>Agents : {appareil.agents.length}</p>
         </>
       )}
-    </main>
-  );
-}
-
-export function NotificationsAppareil() {
-  return (
-    <main className="page">
-      <h1 className="titre-ecran">Notifications</h1>
-      <p>Les notifications push arrivent au chantier 32 bis.</p>
-      <p>
-        Notifications dans ce navigateur :{' '}
-        {'Notification' in window ? 'disponibles' : 'indisponibles'}
-      </p>
-      <p>Push dans ce navigateur : {'PushManager' in window ? 'disponible' : 'indisponible'}</p>
-      <Link to="/appareils">Appareils connectés</Link>
     </main>
   );
 }
