@@ -133,6 +133,7 @@ Ce document.
   - le JSON, le YAML et l'env ;
   - aucune coupure à 140 caractères ;
   - les faux positifs acceptés, documentés.
+- *Révision 32b.8 (faite avant 32b.7).* `src/daemon/host/filtreCode.ts` : `fichierSensible` (`^\.env` couvre `.envrc`) et `filtrerDiff`. Chaque clé sensible d'une ligne est examinée indépendamment de celles qui la précèdent, y compris entre crochets (`obj["token"]`). Toute valeur non vide est masquée, même un booléen ou un petit nombre. Ce qui suit `Bearer`, `Basic`, `Token` ou `Digest` est masqué. L'indentation est conservée. `filtrerTexte` est inchangé. Faux positifs acceptés : un hash git, et des mots de commentaire (« token », « bearer »). Trois reprises après sondage : une clé sensible sautée après une clé banale, l'indentation, `.envrc`, puis les crochets et les schémas HTTP. Gate 2185.
 
 ### 32b.9 La vue du diff (D209)
 - « Lire un fichier » depuis Relire un tour et depuis Livrer.
