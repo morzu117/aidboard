@@ -105,6 +105,7 @@ Ce document.
   - aucun envoi à 0 ;
   - aucun envoi pour un tour ;
   - aucun envoi quand l'interrupteur est coupé.
+- *Révision 32b.5.* Le prédicat de décision est partagé dans `src/shared/decision.ts` (`attendDecision`), utilisé par le badge de l'appareil et par le déclencheur. Le déclencheur recompte sur la base à chaque événement du store : les projections sont appliquées avant l'émission, donc le compte est à jour. La fenêtre de 30 s part du premier envoi ; à sa fin, un seul envoi si N dépasse la valeur du dernier envoi. Limite acceptée : une décision tranchée puis remplacée par une autre dans la même fenêtre, à N constant, ne relance pas de notification. Gate 2091.
 
 ### 32b.6 Le service worker et l'écran Notifications (D203, D204)
 - `sw.js` : `push`, avec un repli générique, et `notificationclick`.

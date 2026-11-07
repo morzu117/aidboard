@@ -1,3 +1,5 @@
+import { creerDeclencheur } from './push/declencheur.js';
+import { chargerOuCreerCles } from './push/vapid.js';
 import { livraisonPourAppareil } from './host/livraison.js';
 import { rmSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
@@ -351,6 +353,12 @@ export async function startDaemon(
     void rattraperIndex({ db: opened, store, engine: structural, indexer, log });
     // 12.3 : relit l'état d'un monitor détaché qui aurait survécu, sans le relancer
     void mesh?.init();
+    const declencheurPush = creerDeclencheur({
+      db: opened,
+      store,
+      actif: () => config.modeHost.actif && config.modeHost.push,
+      envoi: () => ({ clesVapid: chargerOuCreerCles(paths.home) }),
+    });
     return {
       app,
       port,
@@ -363,6 +371,7 @@ export async function startDaemon(
       updates: () => updates?.status() ?? null,
       modeHost,
       async stop() {
+        await declencheurPush.arreter();
         mesh?.dispose();
         await agents.stopAll('daemon_stop', 5000);
         agents.dispose();

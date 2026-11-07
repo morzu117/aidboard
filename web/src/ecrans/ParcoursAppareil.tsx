@@ -1,12 +1,11 @@
+import { attendDecision } from '../../../src/shared/decision.js';
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router';
 import type { EtatPourAppareil } from '../../../src/shared/host.js';
 import { useAid, useAidClient } from '../data/useAidState.js';
 import { Decision, Tour } from '../ui/ActionsAppareil.js';
 
-type Agent = EtatPourAppareil['agents'][number];
-export const attendDecision = (agent: Agent) =>
-  !!agent.question || (agent.attend && agent.statusReason === 'permission');
+export { attendDecision } from '../../../src/shared/decision.js';
 const agentsDuSujet = (etat: EtatPourAppareil, id: string) => {
   const runs = new Set(etat.runs.filter((run) => run.topicId === id).map((run) => run.id));
   return etat.agents.filter((agent) => runs.has(agent.runId));
