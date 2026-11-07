@@ -1,3 +1,4 @@
+import { ASK_TEXT_ANSWER } from '../src/shared/question.js';
 import { spawnSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { join } from 'node:path';
@@ -118,6 +119,12 @@ test('AskUserQuestion : une demande `question` par question, rÃ©ponses rendues Ã
   d.answer(first.id, '2');
   await waitFor(() => requests().length === 2, 5000, 'seconde question');
   const second = requests()[1]!;
+  for (const question of [first, second]) {
+    expect(question.options.at(-1)).toEqual(ASK_TEXT_ANSWER);
+    expect(
+      question.options.slice(0, -1).every((option) => option.answer !== ASK_TEXT_ANSWER.answer),
+    ).toBe(true);
+  }
   expect(second).toMatchObject({ kind: 'question', question: '(2/2) Quel moteur ?' });
   expect(() => d.answer(first.id, '1')).toThrow();
 

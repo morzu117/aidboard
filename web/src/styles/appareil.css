@@ -107,3 +107,107 @@
   color: var(--text);
   font: inherit;
 }
+
+/* D195 : coque tactile et zones sûres de l'app installée. */
+.appareil-coque {
+  min-width: 0;
+  min-height: 100dvh;
+  padding: max(var(--sp-4), env(safe-area-inset-top)) max(var(--sp-4), env(safe-area-inset-right))
+    calc(5rem + env(safe-area-inset-bottom)) max(var(--sp-4), env(safe-area-inset-left));
+  overflow-wrap: anywhere;
+}
+.appareil-coque .page {
+  min-width: 0;
+  padding: 0;
+}
+.appareil-coque button,
+.appareil-coque a {
+  min-height: 44px;
+  white-space: normal;
+}
+.appareil-lien {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.appareil-navigation {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 10;
+  display: flex;
+  padding: var(--sp-2) env(safe-area-inset-right) calc(var(--sp-2) + env(safe-area-inset-bottom))
+    env(safe-area-inset-left);
+  background: var(--bg);
+  border-top: 1px solid var(--line);
+}
+.appareil-navigation a {
+  flex: 1;
+  min-width: 0;
+}
+.appareil-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+}
+.appareil-actions button {
+  max-width: 100%;
+  padding: var(--sp-2) var(--sp-3);
+  border: 1px solid var(--line);
+  border-radius: var(--r-s);
+  background: var(--surface-3);
+  color: var(--text);
+  font: inherit;
+}
+.appareil-actions button[aria-pressed='true'] {
+  border-color: var(--s-attente);
+}
+.appareil-actions button:disabled {
+  opacity: 0.5;
+}
+
+/* 32.10 : les écrans repris du 31 restent contenus dans la largeur du téléphone. */
+.appareil-coque a {
+  display: inline-flex;
+  align-items: center;
+}
+.appareil-coque .board-carte {
+  display: flex;
+}
+.appareil-coque .entete,
+.appareil-coque .machines-appareils > li {
+  flex-wrap: wrap;
+}
+.appareil-coque .board-colonne,
+.appareil-coque .board-colonnes-zone,
+.appareil-coque .entete-texte {
+  min-width: 0;
+  max-width: 100%;
+}
+.appareil-coque .board-onglets,
+.appareil-coque .board-projets {
+  flex-wrap: wrap;
+}
+.appareil-plein {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.appareil-plein button,
+.appareil-plein input {
+  min-height: 44px;
+  max-width: 100%;
+}
+.appareil-coque button,
+.appareil-plein button {
+  min-width: 44px;
+}
+.appareil-coque .carte-board-table {
+  display: table;
+  table-layout: fixed;
+}
+.appareil-coque .carte-board-table th,
+.appareil-coque .carte-board-table td {
+  padding: var(--sp-1);
+  overflow-wrap: anywhere;
+}

@@ -1,4 +1,5 @@
 import { EN_TETE_COCKPIT } from '../../../src/shared/cockpit.js';
+import { effacer } from './dernierEtat.js';
 
 export class SessionExpired extends Error {
   /** chantier 31 (D177) : sur le port des appareils, `inconnu`, `expire` ou `revoque` */
@@ -41,8 +42,10 @@ export async function api<T>(
     // corps non JSON : on garde le texte comme message
   }
   // le port du Mac répond en texte ; celui des appareils dit pourquoi (D177)
-  if (res.status === 401)
+  if (res.status === 401) {
+    void effacer();
     throw new SessionExpired(typeof json.raison === 'string' ? json.raison : null);
+  }
   if (!res.ok) {
     throw new AidApiError(
       res.status,

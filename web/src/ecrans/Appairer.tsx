@@ -98,7 +98,12 @@ export function Appairer({
 
   return (
     <main className="appareil-plein" data-node="appairer">
-      <h1 className="titre-ecran">Ajouter cet appareil</h1>
+      <h1 className="titre-ecran">Ajouter ce téléphone</h1>
+      <p>Connecter ce téléphone à ton cockpit</p>
+      <p>
+        Ce code vient du QR affiché dans Machines › Ajouter un appareil. Il sert une seule fois.
+      </p>
+      <p>Sur iPhone, l’app installée peut demander un nouvel appairage après Safari.</p>
       {code === '' ? (
         <p data-node="appairer.sans-code">
           Ouvre cette page depuis le QR affiché sur le Mac, dans Machines › Ton cockpit.
@@ -128,7 +133,7 @@ export function Appairer({
           >
             Demander l’accès
           </button>
-          <p className="texte-discret">Lecture seule, 8 heures, sans prolongation.</p>
+          <p className="texte-discret">Décider, relire, suivre · 8 heures, sans prolongation.</p>
         </form>
       ) : etape.kind === 'attente' ? (
         <div data-node="appairer.attente">

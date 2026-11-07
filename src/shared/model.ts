@@ -49,6 +49,9 @@ export interface PendingOption {
 }
 
 export interface PendingRequest {
+  /** Mode reçu du hook au moment de la demande, jamais exposé aux appareils. */
+  modeVivant?: string;
+  modeVivantA?: string;
   id: string;
   kind: 'permission' | 'question';
   question: string;
@@ -134,6 +137,13 @@ export interface Agent {
   statusReason: string | null;
   statusMessage: string | null;
   statusSource: StatusSource | null;
+  marqueTour: {
+    tourId: string;
+    etat: 'relu' | 'a_reprendre';
+    par: string;
+    parNom: string;
+    a: string;
+  } | null;
   statusAt: string | null;
   statusDetail: StatusDetail | null;
   lastTool: string | null;

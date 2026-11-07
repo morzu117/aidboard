@@ -75,6 +75,7 @@ export const agent = (over: Partial<Agent> = {}): Agent => ({
   statusReason: null,
   statusMessage: null,
   statusSource: null,
+  marqueTour: null,
   statusAt: null,
   statusDetail: null,
   lastTool: null,

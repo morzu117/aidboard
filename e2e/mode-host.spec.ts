@@ -1,11 +1,10 @@
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import type { Server } from 'node:https';
-import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { type Browser, type BrowserContext, expect, type Page, test } from '@playwright/test';
+import { appairerHost, demarrerHost } from './host-helpers.js';
 import { createTopic, fermerContextes, newRepo, node, registerWorkspace } from './helpers.js';
-import { fauxTailscale, NOM_E2E, ouvrirServeLocal } from './serve-local.js';
+import { NOM_E2E, ouvrirServeLocal } from './serve-local.js';
 
 // Chantier 31 (31.11) : l'e2e de la frontière du mode host. Son propre daemon (port de l'e2e + 2,
 // ses appareils 20 plus haut), mode host actif, une sortie `tailscale` synthétique, et devant le
@@ -30,76 +29,15 @@ let frontal: Server | null = null;
 let mac: Page;
 
 function demarrer() {
-  home = realpathSync(mkdtempSync(join(tmpdir(), 'aid-e2e-host-')));
-  const bin = join(home, 'tailscale');
-  writeFileSync(bin, fauxTailscale(PORT_APPAREILS), { mode: 0o700 });
-  writeFileSync(
-    join(home, 'config.yaml'),
-    [
-      `port: ${PORT}`,
-      'mesh:',
-      '  tailscale:',
-      '    manage: false',
-      `    bin: ${bin}`,
-      'modeHost:',
-      '  actif: true',
-      '',
-    ].join('\n'),
-    { mode: 0o600 },
-  );
-  const env = { ...process.env, AID_HOME: home, AID_NO_BROWSER: '1', SHELL: '/bin/sh' };
-  execFileSync(process.execPath, [CLI], { env, timeout: 40_000 });
-  token = (JSON.parse(readFileSync(join(home, 'daemon.json'), 'utf8')) as { token: string }).token;
+  ({ home, token } = demarrerHost(PORT));
 }
 
 async function appareil(browser: Browser): Promise<BrowserContext> {
   return browser.newContext({ ignoreHTTPSErrors: true, viewport: { width: 1000, height: 800 } });
 }
 
-/** Le parcours de D176 entre le Mac et un appareil. Rend la page de l'appareil, en mode appareil. */
 async function appairer(browser: Browser, nom: string): Promise<Page> {
-  await mac.goto(`http://127.0.0.1:${PORT}/machines`);
-  await expect(node(mac, 'machines.cockpit.mode')).toHaveText('Mode host actif');
-  const reponse = mac.waitForResponse(
-    (r) => r.url().endsWith('/api/host/appairages') && r.request().method() === 'POST',
-  );
-  await node(mac, 'host.ajouter').click();
-  const { url } = (await (await reponse).json()) as { url: string };
-  expect(url).toMatch(new RegExp(`^${APPAREIL}/appairer#`));
-  await expect(node(mac, 'host.qr')).toBeVisible();
-
-  const p = await (await appareil(browser)).newPage();
-  // D179 (branche prudente) : le plafond est global, 5 réclamations par minute en tout. Les
-  // épreuves en font plus : sur « Trop d'essais » (429), on attend et on rouvre le même lien.
-  for (let essai = 0; ; essai++) {
-    // sinon le même lien n'est qu'une navigation de fragment : la page ne relirait pas le code
-    if (essai > 0) await p.goto('about:blank');
-    await p.goto(url);
-    // le code quitte l'adresse dès l'ouverture
-    await expect.poll(() => new URL(p.url()).hash).toBe('');
-    await node(p, 'appairer.nom').fill(nom);
-    await node(p, 'appairer.demander').click();
-    await expect(node(p, 'appairer.code-court').or(node(p, 'appairer.erreur'))).toBeVisible();
-    if (await node(p, 'appairer.code-court').isVisible()) break;
-    await expect(node(p, 'appairer.erreur')).toHaveText(
-      'Trop d’essais : réessaie dans une minute.',
-    );
-    expect(essai).toBeLessThan(8);
-    await p.waitForTimeout(10_000);
-  }
-  const code = (await node(p, 'appairer.code-court').textContent())!.trim();
-  expect(code).toMatch(/^[A-Z0-9]{3}-[A-Z0-9]{3}$/);
-
-  // le Mac voit le même code court, le nom, et l'identité que le frontal a posée
-  await expect(node(mac, 'host.demande.code-court')).toHaveText(code);
-  await expect(node(mac, 'host.demande.nom')).toHaveText(nom);
-  await expect(node(mac, 'host.demande.identite')).toHaveText('julien@exemple (non vérifiable)');
-  await node(mac, 'host.demande.approuver').click();
-
-  await expect(node(p, 'appareil.barre')).toBeVisible();
-  await expect(node(mac, 'host.demande.fin')).toHaveText('Appareil ajouté. L’accès dure 8 heures.');
-  await node(mac, 'host.fermer').click();
-  return p;
+  return appairerHost(browser, mac, PORT, nom);
 }
 
 const evaluer = <T>(p: Page, f: () => Promise<T>) => p.evaluate(f);
@@ -136,13 +74,28 @@ test.describe.serial('la frontière du mode host (chantier 31)', () => {
   }) => {
     const p = await appairer(browser, 'Téléphone e2e');
     expect(new URL(p.url()).origin).toBe(APPAREIL);
-    const liens = await node(p, 'appareil.barre')
+    const navigation = p.getByRole('navigation', { name: 'Navigation', exact: true });
+    await expect(navigation.getByRole('link')).toHaveText(['À traiter', 'Sujets']);
+    const liens = await node(p, 'appareil')
       .locator('a')
       .evaluateAll((as) => as.map((a) => a.getAttribute('href')));
-    expect(liens).toEqual(['/', '/appareils']);
-    await expect(node(p, `appareil.sujet.${topicId}`)).toContainText('Sujet vu du téléphone');
-    // aucun bouton ni lien dans l'accueil, aucun écran du Mac
-    expect(await node(p, 'appareil.accueil').locator('button, a, input, form').count()).toBe(0);
+    expect(liens).toEqual(['/informations', '/notifications', '/appareils', '/', '/sujets']);
+    await expect(node(p, 'appareil.barre').getByRole('link')).toHaveText([
+      'Informations',
+      'Notifications',
+      'Appareils connectés',
+    ]);
+    await expect(navigation.getByRole('link', { name: 'À traiter' })).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
+    // Sans attente ni tour à relire, le sujet ne réclame rien dans À traiter.
+    await expect(node(p, 'appareil.accueil.vide')).toContainText("Rien n'attend ta réponse");
+    // Aucun contrôle dans cet accueil, aucun écran du Mac.
+    expect(
+      await node(p, 'appareil.accueil').locator('button, a, input, textarea, select, form').count(),
+    ).toBe(0);
+    await expect(node(p, '1-1.barre.marque')).toHaveCount(0);
     await p.goto(`${APPAREIL}/machines`);
     await expect.poll(() => new URL(p.url()).pathname).toBe('/');
     // le cookie d'appareil : __Host-, Secure, HttpOnly, SameSite=Strict, sur ce nom seul
@@ -247,7 +200,7 @@ test.describe.serial('la frontière du mode host (chantier 31)', () => {
     browser,
   }) => {
     const p = await appairer(browser, 'Révoqué e2e');
-    await expect(node(p, `appareil.sujet.${topicId}`)).toBeVisible();
+    await expect(node(p, 'appareil.accueil.vide')).toContainText("Rien n'attend ta réponse");
     const ligne = mac.locator('[data-node^="host.appareil."]', { hasText: 'Révoqué e2e' });
     await ligne.locator('[data-node$=".revoquer"]').click();
     await expect(node(p, 'appareil.hors-acces.phrase')).toHaveText(

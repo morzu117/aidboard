@@ -113,3 +113,20 @@ test('D109 : une phrase par type ; un type ou un cas que la table ne sait pas di
   expect(node('1-1.activite.ligne-1.type')?.getAttribute('data-type')).toBe('plan.updated');
   expect(node('1-1.activite.ligne-2')).toBeNull();
 });
+
+test('32.5 : marques et écritures d’appareil dans le fil', () => {
+  expect(phraseActivite(ev({ type: 'tour.marque', data: { etat: 'relu', par: 'mac' } }))).toBe(
+    'Tour marqué relu par Mac',
+  );
+  expect(
+    phraseActivite(
+      ev({
+        type: 'tour.marque',
+        data: { etat: 'a_reprendre', par: 'appareil-1', parNom: 'Téléphone test' },
+      }),
+    ),
+  ).toBe('Tour marqué à reprendre par Téléphone test');
+  expect(phraseActivite(ev({ type: 'appareil.ecriture', data: { nom: 'Téléphone test' } }))).toBe(
+    'Téléphone test a écrit depuis un appareil',
+  );
+});

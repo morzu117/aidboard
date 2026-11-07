@@ -186,7 +186,7 @@ export async function buildServer(deps: ServerDeps): Promise<FastifyInstance> {
       deps.auth.sessionToken = writeSessionToken(deps.paths.sessionSecret);
     },
   });
-  registerAgentRoutes(app, { db: deps.db, agents: deps.agents });
+  registerAgentRoutes(app, { db: deps.db, agents: deps.agents, store: deps.store });
   registerWorkspaceRoutes(app, { ...deps, engine: structural });
   registerNavRoutes(app, { db: deps.db });
   const connections = registerServerRoutes(app, {

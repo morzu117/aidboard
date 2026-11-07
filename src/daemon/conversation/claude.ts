@@ -1,3 +1,4 @@
+import { ASK_TEXT_ANSWER } from '../../shared/question.js';
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
@@ -79,7 +80,6 @@ interface AskState {
 
 // Au-delà, le dernier bouton est « Répondre en texte » : 9 réponses au plus par demande.
 const ASK_OPTIONS_MAX = 8;
-const ASK_TEXT_ANSWER: PendingOption = { label: 'Répondre en texte', answer: 'no' };
 
 /** Les questions d'un AskUserQuestion ; null si l'entrée n'a pas la forme attendue (retombe sur la permission). */
 function askQuestionsOf(input: unknown): AskQuestion[] | null {

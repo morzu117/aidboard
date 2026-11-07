@@ -1,4 +1,5 @@
 import { useAppareilsConnectes } from '../data/appareil.js';
+import { useAid } from '../data/useAidState.js';
 import { depuis } from '../ui/depuis.js';
 import { HorsAcces } from '../ui/HorsAcces.js';
 
@@ -11,6 +12,7 @@ const heure = (iso: string) =>
 
 export function AppareilsConnectes() {
   const a = useAppareilsConnectes();
+  const { horsLigne } = useAid();
   if (a.deconnecte) return <HorsAcces fin="deconnecte" />;
   const actifs = (a.liste ?? []).filter((x) => x.etat === 'actif');
   return (
@@ -45,7 +47,7 @@ export function AppareilsConnectes() {
                 className="bouton bouton--danger"
                 type="button"
                 data-node="appareils.deconnecter"
-                disabled={a.occupe}
+                disabled={a.occupe || horsLigne}
                 onClick={() => void a.deconnecter()}
               >
                 Me déconnecter
@@ -55,7 +57,7 @@ export function AppareilsConnectes() {
                 className="bouton bouton--danger"
                 type="button"
                 data-node={`appareils.${x.id}.revoquer`}
-                disabled={a.occupe}
+                disabled={a.occupe || horsLigne}
                 onClick={() => void a.revoquer(x.id)}
               >
                 Révoquer

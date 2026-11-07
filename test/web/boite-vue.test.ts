@@ -118,3 +118,22 @@ test('D140 : le compteur de la barre compte les agents en attente et les DM mis 
   });
   expect(decisionsEnAttente(state)).toBe(3);
 });
+
+test('32.5 : une marque relue ne vaut que pour son tour, à reprendre reste à relire', () => {
+  const a = claude({
+    status: 'idle',
+    statusAt: 'tour-1',
+    marqueTour: {
+      tourId: 'tour-1',
+      etat: 'relu',
+      par: 'mac',
+      parNom: 'Mac',
+      a: 't',
+    },
+  });
+  expect(natureAgent(a)).toBeNull();
+  expect(natureAgent({ ...a, statusAt: 'tour-2' })).toBe('relire');
+  expect(natureAgent({ ...a, marqueTour: { ...a.marqueTour!, etat: 'a_reprendre' } })).toBe(
+    'relire',
+  );
+});

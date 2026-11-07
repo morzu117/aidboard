@@ -1,3 +1,4 @@
+import { livraisonPourAppareil } from './host/livraison.js';
 import { rmSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import type { AddressInfo } from 'node:net';
@@ -271,6 +272,9 @@ export async function startDaemon(
         { port: PORT_PONT_TAURI, nom: "pont de l'app" },
         { port: serveurArtefacts?.port ?? portArtefacts(config), nom: 'artefacts' },
       ],
+      livraison: (id) => livraisonPourAppareil(opened, memory, id),
+      tours: { db: opened, store },
+      reponses: { db: opened, store, agents },
       registre: new RegistreAppareils(opened),
       appairages: new Appairages(),
       webRoot,

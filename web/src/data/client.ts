@@ -4,6 +4,7 @@ import type { ServerStatus, ServerTest } from '../../../src/shared/model.js';
 import type { StateSnapshot } from '../../../src/shared/state.js';
 import { api, SessionExpired } from './api.js';
 import type { DaemonLink } from './types.js';
+import { effacer, garder, relire } from './dernierEtat.js';
 
 export interface OutputLine {
   stream: string;
@@ -21,6 +22,8 @@ export interface ClientSnapshot {
   meshCheckedAt?: string;
   /** Chantier 31 (D175, D180) : en mode appareil, l'état masqué, à la place de `state` */
   appareil?: EtatPourAppareil;
+  horsLigne?: boolean;
+  dernierEtatLu?: string;
   /** Chantier 31 (D177) : en mode appareil, pourquoi l'accès est fini */
   acces?: AccesFini;
 }
@@ -56,6 +59,8 @@ export class AidClient {
   private retryTimer: ReturnType<typeof setTimeout> | null = null;
   private failures = 0;
   private stopped = true;
+  private accesTermine = false;
+  private etatRelu = false;
   private readonly o: Required<Omit<ClientOptions, 'fetchImpl' | 'socketFactory' | 'origin'>> &
     Pick<ClientOptions, 'fetchImpl' | 'socketFactory' | 'origin'>;
 
@@ -67,6 +72,7 @@ export class AidClient {
       flux: 'events',
       ...options,
     };
+    if (this.o.flux === 'signal') this.snap.horsLigne = false;
   }
 
   subscribe = (cb: () => void): (() => void) => {
@@ -106,18 +112,30 @@ export class AidClient {
     path: string,
     body?: unknown,
   ): Promise<T> {
-    return api<T>(method, path, body, this.o.fetchImpl);
+    return api<T>(method, path, body, this.o.fetchImpl)
+      .then((resultat) => {
+        if (
+          this.o.flux === 'signal' &&
+          method === 'POST' &&
+          path === '/api/appareils/moi/deconnexion'
+        ) {
+          this.accesTermine = true;
+        }
+        return resultat;
+      })
+      .catch((err: unknown) => {
+        if (this.o.flux === 'signal' && err instanceof SessionExpired) this.failed(err);
+        throw err;
+      });
   }
 
   async refresh(): Promise<void> {
     if (this.o.flux === 'signal') {
-      const appareil = await api<EtatPourAppareil>(
-        'GET',
-        '/api/state',
-        undefined,
-        this.o.fetchImpl,
-      );
-      this.set({ appareil });
+      const appareil = await this.request<EtatPourAppareil>('GET', '/api/state', undefined);
+      if (this.accesTermine) return;
+      void garder(appareil);
+      this.etatRelu = false;
+      this.set({ appareil, dernierEtatLu: new Date().toISOString() });
       return;
     }
     const state = await api<StateSnapshot>('GET', '/api/state', undefined, this.o.fetchImpl);
@@ -127,6 +145,8 @@ export class AidClient {
 
   private set(patch: Partial<ClientSnapshot>): void {
     this.snap = { ...this.snap, ...patch };
+    if (this.o.flux === 'signal')
+      this.snap.horsLigne = this.snap.daemon === 'injoignable' || this.etatRelu;
     for (const cb of this.listeners) cb();
   }
 
@@ -215,10 +235,14 @@ export class AidClient {
 
   private failed(err?: unknown): void {
     if (err instanceof SessionExpired) {
+      if (this.o.flux === 'signal') {
+        this.accesTermine = true;
+        void effacer();
+      }
       this.stop();
       this.set(
         this.o.flux === 'signal'
-          ? { daemon: 'session-expiree', acces: accesFini(err.raison) }
+          ? { daemon: 'session-expiree', acces: accesFini(err.raison), appareil: undefined }
           : { daemon: 'session-expiree' },
       );
       return;
@@ -227,6 +251,13 @@ export class AidClient {
     this.socket = null;
     this.failures += 1;
     this.set({ daemon: this.failures >= 3 ? 'injoignable' : 'reconnexion' });
+    if (this.o.flux === 'signal' && !this.snap.appareil) {
+      void relire().then((entree) => {
+        if (!entree || this.stopped || this.accesTermine || this.snap.appareil) return;
+        this.etatRelu = true;
+        this.set({ appareil: entree.etat, dernierEtatLu: entree.lu });
+      });
+    }
     const delays = this.o.backoffMs;
     const delay = delays[Math.min(this.failures - 1, delays.length - 1)] ?? 8000;
     if (this.retryTimer) clearTimeout(this.retryTimer);
