@@ -272,6 +272,7 @@ export async function startDaemon(
         { port: serveurArtefacts?.port ?? portArtefacts(config), nom: 'artefacts' },
       ],
       tours: { db: opened, store },
+      reponses: { db: opened, store, agents },
       registre: new RegistreAppareils(opened),
       appairages: new Appairages(),
       webRoot,

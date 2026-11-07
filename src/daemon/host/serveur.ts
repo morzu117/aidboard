@@ -1,3 +1,4 @@
+import { CorpsReponseAppareil, repondreAppareil, type ReponseAppareil } from '../reponses.js';
 import { CorpsMarqueTour, marquerTour, type MarqueTour } from '../tours.js';
 import type { Db } from '../db.js';
 import type { EventStore } from '../events/store.js';
@@ -98,6 +99,7 @@ export interface OptionsServeurAppareils {
   /** D175 : l'état complet, que masque.ts réduit ; absent = 404 (tests du port seul) */
   etat?: () => Promise<StateSnapshot>;
   tours?: { db: Db; store: EventStore };
+  reponses?: Parameters<typeof repondreAppareil>[0];
   /** D175 : la source des signaux, le store d'événements */
   signal?: {
     on(e: 'event' | 'ephemeral', f: () => void): unknown;
@@ -147,6 +149,7 @@ export async function ouvrirServeurAppareils(
             ...(opts.logStream && { stream: opts.logStream }),
           }
         : false,
+    ajv: { customOptions: { removeAdditional: false, coerceTypes: false } },
     logController: new LogController({ disableRequestLogging: true }),
   });
   if (opts.onRoute) {
@@ -307,6 +310,21 @@ export async function ouvrirServeurAppareils(
         opts.tours.store,
         (req.params as { id: string }).id,
         req.body as MarqueTour,
+        req.appareil!,
+      );
+      return reply.code(r.status).send(r.corps);
+    },
+  );
+
+  app.post(
+    '/api/appareils/agents/:id/reponse',
+    { schema: { body: CorpsReponseAppareil } },
+    async (req, reply) => {
+      if (!opts.reponses) return reply.code(404).send({ error: 'introuvable' });
+      const r = repondreAppareil(
+        opts.reponses,
+        (req.params as { id: string }).id,
+        req.body as ReponseAppareil,
         req.appareil!,
       );
       return reply.code(r.status).send(r.corps);

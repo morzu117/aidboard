@@ -98,6 +98,7 @@ Ce document. Pas de code.
 - La route, ses six vérifications dans l'ordre, le compare-and-set.
 - Tests : un test par refus (`mode` pour `acceptEdits` et `auto`, `nature`, `perimee`, option hors bornes, option texte), deux réponses concurrentes, appareil révoqué entre deux, la liste fermée.
 - **Frontière : signalé au lab.**
+- *Révision 32.6.* La logique est dans `src/daemon/reponses.ts`. Une demande déjà consommée (un `approval.resolved` existe pour ce `pendingId`) rend 409 `deja_tranchee` plutôt que 403 `nature`. Le port des appareils valide les corps sans retirer les champs en trop ni convertir les types (`removeAdditional: false`, `coerceTypes: false`). Sur le Mac, `AgentManager.answer` vérifiait déjà le `pendingId` : il enregistre maintenant la résolution **avant** d'écrire au terminal ou au pilote, et le second appel reçoit `deja_tranchee`. Le Mac rend alors 409 au lieu de son erreur générique.
 
 ### 32.7 La livraison vue d'un appareil (D192)
 - `blocageMerge` et `citations` déplacés dans `src/shared/`, le Mac inchangé à l'écran.

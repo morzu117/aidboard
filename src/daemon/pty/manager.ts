@@ -1177,13 +1177,13 @@ export class AgentManager {
     const a = this.liveOr409(agentId);
     const pending = this.pendingOf(agentId);
     if (!pending || pending.id !== pendingId)
-      throw new AidHttpError(409, 'cette demande n’est plus en cours');
+      throw new AidHttpError(409, 'cette demande n’est plus en cours', { raison: 'deja_tranchee' });
     const option = pending.options.find((o) => o.answer === answer);
     if (!option) throw new AidHttpError(422, 'réponse inconnue pour cette demande');
     const screen = a.mirror.screen();
     if (!screenShows(screen, option))
       throw new AidHttpError(409, 'l’écran ne montre plus cette demande : ouvrir le terminal');
-    a.pty.write(KEYS[answer] ?? answer);
+    // D190 : contrôle et consommation synchrones avant tout appel au pilote réentrant.
     this.deps.store.append({
       source: 'daemon',
       type: 'approval.resolved',
@@ -1193,6 +1193,7 @@ export class AgentManager {
       agentId,
       data: { pendingId, option: answer, by: 'human' },
     });
+    a.pty.write(KEYS[answer] ?? answer);
   }
 
   /** Pas de `screenShows` (D59) : la demande en cours et ses options viennent du pilote, jamais de l'écran. */
@@ -1200,10 +1201,10 @@ export class AgentManager {
     const s = this.streamOr409(agentId);
     const pending = this.pendingOf(agentId);
     if (!pending || pending.id !== pendingId)
-      throw new AidHttpError(409, 'cette demande n’est plus en cours');
+      throw new AidHttpError(409, 'cette demande n’est plus en cours', { raison: 'deja_tranchee' });
     const option = pending.options.find((o) => o.answer === answer);
     if (!option) throw new AidHttpError(422, 'réponse inconnue pour cette demande');
-    s.driver.answer(pendingId, option.answer);
+    // D190 : contrôle et consommation synchrones avant tout appel au pilote réentrant.
     this.deps.store.append({
       source: 'daemon',
       type: 'approval.resolved',
@@ -1213,7 +1214,8 @@ export class AgentManager {
       agentId,
       data: { pendingId, option: answer, by: 'human' },
     });
-    this.showNextPending(s);
+    s.driver.answer(pendingId, option.answer);
+    if (!this.pendingOf(agentId)) this.showNextPending(s);
   }
 
   /** La demande suivante en file devient la demande en cours ; false si la file est vide. */

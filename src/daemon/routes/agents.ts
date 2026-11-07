@@ -119,7 +119,13 @@ export function registerAgentRoutes(
   app.post('/api/agents/:id/answer', { schema: { body: AnswerBody } }, async (req, reply) => {
     const { id } = req.params as { id: string };
     const body = req.body as { pendingId: string; answer: string };
-    deps.agents.answer(id, body.pendingId, body.answer);
+    try {
+      deps.agents.answer(id, body.pendingId, body.answer);
+    } catch (erreur) {
+      if (erreur instanceof AidHttpError && erreur.extra.raison === 'deja_tranchee')
+        return reply.code(409).send({ raison: 'deja_tranchee' });
+      throw erreur;
+    }
     return reply.code(202).send({ id });
   });
 
