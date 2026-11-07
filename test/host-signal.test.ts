@@ -43,7 +43,7 @@ async function ouvrir(extra: { now?: () => number; board?: BoardReader } = {}) {
     webRoot: null,
     signal: store,
     board: extra.board ?? null,
-    now: extra.now,
+    now: extra.now ?? (() => h.t),
   });
   if (!s.disponible) throw new Error(s.raison);
   const { appareil, jeton } = registre.emettre({ nom: 'Téléphone', identite: null });

@@ -71,7 +71,7 @@ function question(p: Payload): PendingRequest {
 export function mapHook(event: string, p: Payload): Emission[] {
   const status = (s: string, extra: Payload = {}): Emission => ({
     type: 'agent.status',
-    data: { status: s, ...extra },
+    data: { status: s, permission_mode: p.permission_mode, ...extra },
   });
   switch (event) {
     case 'UserPromptSubmit':

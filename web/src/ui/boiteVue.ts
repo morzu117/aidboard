@@ -22,7 +22,7 @@ export function natureAgent(a: Agent): Nature | null {
       return 'decision';
     case 'relire':
     case 'erreur':
-      return 'relire';
+      return a.marqueTour?.tourId === a.statusAt && a.marqueTour.etat === 'relu' ? null : 'relire';
     case 'cours':
     case 'pause':
       return 'information';
@@ -54,15 +54,7 @@ export function agentsDeLaBoite(
   return out;
 }
 
-/** D139 : le résumé d'un tour à relire, la première ligne non vide du dernier message, 140 caractères au plus. */
-export function resumeTour(message: string | null): string | null {
-  const ligne = message
-    ?.split('\n')
-    .map((l) => l.trim())
-    .find((l) => l.length > 0);
-  if (!ligne) return null;
-  return ligne.length > 140 ? `${ligne.slice(0, 139)}…` : ligne;
-}
+export { resumeTour } from '../../../src/shared/tour.js';
 
 /** Les compteurs des filtres ; `tout` additionne les trois natures. */
 export function compterNatures(natures: Nature[]): Record<Nature | 'tout', number> {

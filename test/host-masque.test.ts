@@ -1,4 +1,5 @@
 import { expect, test } from 'vitest';
+import { ASK_TEXT_ANSWER } from '../src/shared/question.js';
 import { etatPourAppareil, raisonAppareil } from '../src/daemon/host/masque.js';
 import type { StateSnapshot } from '../src/shared/state.js';
 
@@ -62,10 +63,19 @@ function snapshot(): StateSnapshot {
         statusReason: M('statusReason'),
         statusMessage: M('statusMessage'),
         statusSource: 'hook',
+        marqueTour: null,
         statusAt: 't2',
         statusDetail: { lastLine: M('statusDetail') } as never,
         lastTool: M('lastTool'),
-        pending: { id: 'p', kind: 'question', question: M('pending') } as never,
+        pending: {
+          id: 'p',
+          kind: 'permission',
+          question: M('pending'),
+          options: [],
+          command: M('commandePermission'),
+          byRule: true,
+          confirm: { server: M('serveurConfirmation') },
+        },
         pausedAt: null,
         permissionMode: 'default',
         model: M('model'),
@@ -172,6 +182,7 @@ test('31.7 (D175) : les clés de sortie sont exactement celles de la liste', () 
     'transport',
     'updatedAt',
   ]);
+  expect(e.agents[0]).not.toHaveProperty('question');
   expect(Object.keys(e.mesh!).sort()).toEqual(['inbox', 'state']);
   expect(Object.keys(e.mesh!.state).sort()).toEqual([
     'cell',
@@ -221,4 +232,118 @@ test('31.7 (D175) : un champ ajouté plus tard au snapshot ne sort pas', () => {
   (s.agents[0] as unknown as Record<string, unknown>).nouveauChamp = M('nouveauChamp');
   (s.topics[0] as unknown as Record<string, unknown>).nouveauChamp = M('nouveauChamp');
   expect(JSON.stringify(etatPourAppareil(s))).not.toContain('marqueur-');
+});
+
+test('32.4 : une permission ne révèle ni question ni commande', () => {
+  const s = snapshot();
+  const e = etatPourAppareil(s);
+  expect(e.agents[0]).not.toHaveProperty('question');
+  expect(JSON.stringify(e)).not.toContain(s.agents[0]!.pending!.command);
+  expect(JSON.stringify(e)).not.toContain('marqueur-');
+  s.agents[0]!.pending = null;
+  expect(etatPourAppareil(s).agents[0]).not.toHaveProperty('question');
+});
+
+test('32.4 : question et tour filtrés, choix dans l’ordre et indices conservés', () => {
+  const s = snapshot();
+  const a = s.agents[0]!;
+  const valeurs = [
+    '/tmp/exemple-prive',
+    'https://example.com/prive',
+    'aid-e2e.ts.net',
+    'sk-exempleFictif123',
+  ];
+  const texte = valeurs.join(' ; ');
+  a.pending = {
+    id: 'question-1',
+    kind: 'question',
+    question: `Question ${texte}`,
+    options: [
+      { label: `Premier ${texte}`, answer: '1' },
+      { label: 'Répondre en texte', answer: '2' },
+      { ...ASK_TEXT_ANSWER, label: 'Saisie libre traduite' },
+    ],
+  };
+  a.status = 'idle';
+  a.statusMessage = `Résumé ${texte}`;
+  const e = etatPourAppareil(s);
+  expect(e.agents[0]!.question).toEqual({
+    pendingId: 'question-1',
+    coupee: false,
+    texte: 'Question [masqué] ; [masqué] ; [masqué] ; [masqué]',
+    options: ['Premier [masqué] ; [masqué] ; [masqué] ; [masqué]', 'Répondre en texte'],
+  });
+  expect(Object.keys(e.agents[0]!).sort()).toEqual([
+    'attend',
+    'createdAt',
+    'id',
+    'kind',
+    'pausedAt',
+    'question',
+    'role',
+    'runId',
+    'status',
+    'statusAt',
+    'statusReason',
+    'tour',
+    'transport',
+    'updatedAt',
+  ]);
+  expect(Object.keys(e.agents[0]!.question!).sort()).toEqual([
+    'coupee',
+    'options',
+    'pendingId',
+    'texte',
+  ]);
+  expect(Object.keys(e.agents[0]!.tour!).sort()).toEqual(['id', 'marque', 'resume']);
+  expect(e.agents[0]!.tour).toEqual({
+    id: a.statusAt,
+    marque: null,
+    resume: 'Résumé [masqué] ; [masqué] ; [masqué] ; [masqué]',
+  });
+  for (const valeur of valeurs) expect(JSON.stringify(e)).not.toContain(valeur);
+  for (const [i] of e.agents[0]!.question!.options.entries()) {
+    expect(a.pending.options[i]!.answer).toBe(String(i + 1));
+  }
+  expect(a.pending.options.at(-1)!.answer).toBe(ASK_TEXT_ANSWER.answer);
+});
+
+test('32.4 : le tour dépend du statut, de sa date et du type d’agent', () => {
+  const s = snapshot();
+  const a = s.agents[0]!;
+  a.pending = null;
+  a.statusReason = null;
+  a.status = 'idle';
+  a.statusMessage = '  \n ';
+  expect(etatPourAppareil(s).agents[0]!.tour).toEqual({ id: 't2', resume: null, marque: null });
+  a.statusAt = 't3';
+  expect(etatPourAppareil(s).agents[0]!.tour!.id).toBe('t3');
+  a.statusReason = 'question';
+  expect(etatPourAppareil(s).agents[0]).not.toHaveProperty('tour');
+  a.statusReason = null;
+  a.kind = 'shell';
+  expect(etatPourAppareil(s).agents[0]).not.toHaveProperty('tour');
+  a.kind = 'claude';
+  a.status = 'working';
+  expect(etatPourAppareil(s).agents[0]).not.toHaveProperty('tour');
+  a.status = 'error';
+  expect(etatPourAppareil(s).agents[0]!.tour).toEqual({ id: 't3', resume: null, marque: null });
+  a.statusAt = null;
+  expect(etatPourAppareil(s).agents[0]).not.toHaveProperty('tour');
+});
+
+test('32.12 : choix affichés avec saisie libre au milieu et autre réponse no', () => {
+  const s = snapshot();
+  s.agents[0]!.pending = {
+    id: 'question-1',
+    kind: 'question',
+    question: 'Quel choix ?',
+    options: [
+      { label: 'Premier', answer: '1' },
+      ASK_TEXT_ANSWER,
+      { label: 'Refuser', answer: 'no' },
+      { label: 'Second', answer: '2' },
+    ],
+  };
+  expect(etatPourAppareil(s).agents[0]!.question!.options).toEqual(['Premier', 'Second']);
 });

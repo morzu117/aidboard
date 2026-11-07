@@ -27,7 +27,12 @@ self.addEventListener('fetch', (event) => {
   const cacheKey = request.mode === 'navigate' ? '/' : request;
   event.respondWith(
     fetch(request)
-      .then((response) => {
+      .then(async (response) => {
+        if (response.status !== 200) {
+          return request.mode === 'navigate'
+            ? ((await caches.match(cacheKey)) ?? response)
+            : response;
+        }
         const copy = response.clone();
         void caches.open(CACHE).then((c) => c.put(cacheKey, copy));
         return response;

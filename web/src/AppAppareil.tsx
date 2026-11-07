@@ -1,44 +1,63 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Navigate, NavLink, Route, Routes, useLocation, useParams } from 'react-router';
-import { AidClient } from './data/client.js';
+import { AidClient, type AccesFini } from './data/client.js';
+import { SessionExpired } from './data/api.js';
 import type { Moi, ModeInterface } from './data/appareil.js';
-import { AidProvider, useAid } from './data/useAidState.js';
+import { AidProvider, useAid, useAidClient } from './data/useAidState.js';
 import { AccueilAppareil } from './ecrans/AccueilAppareil.js';
 import { AppareilsConnectes } from './ecrans/AppareilsConnectes.js';
 import { Appairer } from './ecrans/Appairer.js';
 import { Contenu as BoardContenu } from './ecrans/Board.js';
 import { Contenu as CarteContenu } from './ecrans/CarteBoard.js';
 import { HorsAcces } from './ui/HorsAcces.js';
+import { RappelInstallation } from './ui/RappelInstallation.js';
 
-// Chantier 31 (D180) : l'interface sur un appareil, servie par le port des appareils. Une barre
-// réduite (Accueil, Board, Appareils connectés), aucun bouton d'écriture, et le flux de
-// `/ws/signal`. Les écrans du Mac n'y sont pas montés : une adresse inconnue revient à l'accueil.
+import {
+  BadgeAppareil,
+  SujetsAppareil,
+  SuivreAppareil,
+  LivraisonAppareil,
+  InformationsAppareil,
+  NotificationsAppareil,
+} from './ecrans/ParcoursAppareil.js';
 
-const heure = (iso: string) =>
-  new Date(iso).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
-
-function Barre({ moi, board }: { moi: Moi; board: boolean }) {
+// D195 : navigation mobile, distincte de la coque du Mac.
+function Barre({ board }: { board: boolean }) {
   const lien = ({ isActive }: { isActive: boolean }) =>
     `appareil-lien${isActive ? ' est-actif' : ''}`;
   return (
-    <header className="appareil-barre" data-node="appareil.barre">
-      <nav aria-label="Cockpit">
-        <NavLink to="/" end className={lien} data-node="appareil.barre.accueil">
-          Accueil
+    <>
+      <header className="appareil-barre" data-node="appareil.barre">
+        <div>
+          <strong>A-I-D</strong>
+          <p className="texte-discret" data-node="appareil.barre.moi">
+            Ton Mac · tailnet
+          </p>
+        </div>
+        <NavLink className="appareil-lien" to="/informations">
+          Informations
+        </NavLink>
+        <NavLink className="appareil-lien" to="/notifications">
+          Notifications
+        </NavLink>
+        <NavLink className="appareil-lien" to="/appareils">
+          Appareils connectés
+        </NavLink>
+      </header>
+      <nav className="appareil-navigation" aria-label="Navigation">
+        <NavLink to="/" end className={lien}>
+          À traiter
+        </NavLink>
+        <NavLink to="/sujets" className={lien}>
+          Sujets
         </NavLink>
         {board && (
           <NavLink to="/board" className={lien} data-node="appareil.barre.board">
             Board
           </NavLink>
         )}
-        <NavLink to="/appareils" className={lien} data-node="appareil.barre.appareils">
-          Appareils connectés
-        </NavLink>
       </nav>
-      <span className="texte-discret" data-node="appareil.barre.moi">
-        {moi.nom} · lecture seule, jusqu’à {heure(moi.expireA)}
-      </span>
-    </header>
+    </>
   );
 }
 
@@ -48,20 +67,60 @@ function Carte() {
   return <CarteContenu key={id} cardId={id} />;
 }
 
-function Coque({ moi }: { moi: Moi }) {
-  const { appareil, daemon, acces } = useAid();
-  if (acces) return <HorsAcces fin={acces} />;
+function Coque({ moi }: { moi: Moi | null }) {
+  const { appareil, daemon, acces, horsLigne, dernierEtatLu } = useAid();
+  const client = useAidClient();
+  const [identite, setIdentite] = useState(moi);
+  const [fin, setFin] = useState<AccesFini | null>(null);
+  useEffect(() => {
+    if (identite || daemon !== 'connecte') return;
+    let actif = true;
+    void client.request<Moi>('GET', '/api/appareils/moi').then(
+      (lu) => {
+        if (actif) setIdentite(lu);
+      },
+      (err: unknown) => {
+        if (!actif || !(err instanceof SessionExpired)) return;
+        try {
+          localStorage.removeItem('aid.mode');
+        } catch {
+          // Le stockage peut être interdit.
+        }
+        client.stop();
+        setFin(err.raison === 'expire' || err.raison === 'revoque' ? err.raison : 'inconnu');
+      },
+    );
+    return () => {
+      actif = false;
+    };
+  }, [client, daemon, identite]);
+  if (acces || fin) return <HorsAcces fin={acces ?? fin!} />;
   const cell = appareil?.mesh?.state.cell ?? null;
   return (
     <div className="appareil-coque" data-node="appareil">
-      <Barre moi={moi} board={cell !== null} />
-      {(daemon === 'injoignable' || daemon === 'reconnexion') && appareil && (
+      <RappelInstallation />
+      <BadgeAppareil />
+      {identite && <Barre board={cell !== null} />}
+      {horsLigne && appareil && (
+        <div className="appareil-bandeau" role="status">
+          <p>Mac injoignable</p>
+          {dernierEtatLu && <p>Dernier état connu il y a {ageDernierEtat(dernierEtatLu)}</p>}
+          <p>{"A-I-D n'a pas pu te prévenir de ce qui s'est passé depuis."}</p>
+        </div>
+      )}
+      {(!horsLigne || !appareil) && (daemon === 'injoignable' || daemon === 'reconnexion') && (
         <p className="appareil-bandeau" role="status" data-node="appareil.bandeau">
           {daemon === 'injoignable' ? 'Mac injoignable. Nouvel essai…' : 'Reconnexion…'}
         </p>
       )}
       <Routes>
         <Route path="/" element={<AccueilAppareil />} />
+        <Route path="/sujets" element={<SujetsAppareil />} />
+        <Route path="/sujets/:id" element={<SuivreAppareil />} />
+        <Route path="/sujets/:id/tour" element={<SuivreAppareil relire />} />
+        <Route path="/sujets/:id/livraison" element={<LivraisonAppareil />} />
+        <Route path="/informations" element={<InformationsAppareil />} />
+        <Route path="/notifications" element={<NotificationsAppareil />} />
         <Route
           path="/board"
           element={
@@ -81,6 +140,11 @@ function Coque({ moi }: { moi: Moi }) {
       </Routes>
     </div>
   );
+}
+
+function ageDernierEtat(lu: string): string {
+  const minutes = Math.max(0, Math.floor((Date.now() - Date.parse(lu)) / 60_000));
+  return minutes < 60 ? `${minutes} min` : `${Math.floor(minutes / 60)} h`;
 }
 
 export function AppAppareil({

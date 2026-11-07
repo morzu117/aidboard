@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { AidApiError, api, SessionExpired } from './api.js';
 import type { AccesFini } from './client.js';
 import { useAidClient } from './useAidState.js';
+import { effacer } from './dernierEtat.js';
 
 // Chantier 31 (D180) : qui ouvre l'interface. `GET /api/appareils/moi` n'existe que sur le port
 // des appareils : le Mac y répond 404 (ou 401 en texte, sans raison), un appareil 200 ou 401 avec
@@ -14,15 +15,29 @@ export interface Moi {
 }
 
 export type ModeInterface =
-  { kind: 'mac' } | { kind: 'appareil'; moi: Moi } | { kind: 'hors-acces'; raison: AccesFini };
+  | { kind: 'mac' }
+  | { kind: 'appareil'; moi: Moi | null }
+  | { kind: 'hors-acces'; raison: AccesFini };
 
 const RAISONS: readonly string[] = ['inconnu', 'expire', 'revoque'];
 
 export async function detecterMode(fetchImpl: typeof fetch = fetch): Promise<ModeInterface> {
   try {
     const moi = await api<Moi>('GET', '/api/appareils/moi', undefined, fetchImpl);
+    try {
+      localStorage.setItem('aid.mode', 'appareil');
+    } catch {
+      // Le stockage peut être interdit.
+    }
     return { kind: 'appareil', moi };
   } catch (err) {
+    try {
+      if (err instanceof SessionExpired) localStorage.removeItem('aid.mode');
+      else if (!(err instanceof AidApiError) && localStorage.getItem('aid.mode') === 'appareil')
+        return { kind: 'appareil', moi: null };
+    } catch {
+      // Le stockage peut être interdit.
+    }
     if (err instanceof SessionExpired && err.raison !== null && RAISONS.includes(err.raison)) {
       return { kind: 'hors-acces', raison: err.raison as AccesFini };
     }
@@ -96,6 +111,7 @@ export function useAppareilsConnectes() {
     deconnecter: () =>
       agir(async () => {
         await client.request('POST', '/api/appareils/moi/deconnexion', {});
+        await effacer();
         client.stop();
         setDeconnecte(true);
       }),

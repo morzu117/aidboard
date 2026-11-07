@@ -1,3 +1,6 @@
+import { optionsAppareil } from './options.js';
+import { resumeTour } from '../../shared/tour.js';
+import { filtrerTexte, texteCoupe } from './filtre.js';
 import type { EtatPourAppareil, RaisonAppareil } from '../../shared/host.js';
 import type { StateSnapshot } from '../../shared/state.js';
 
@@ -57,6 +60,25 @@ export function etatPourAppareil(s: StateSnapshot): EtatPourAppareil {
       createdAt: a.createdAt,
       updatedAt: a.updatedAt,
       attend: a.pending !== null,
+      ...(a.pending?.kind === 'question' && {
+        question: {
+          pendingId: a.pending.id,
+          coupee:
+            texteCoupe(a.pending.question) ||
+            optionsAppareil(a.pending).some((option) => texteCoupe(option.label)),
+          texte: filtrerTexte(a.pending.question),
+          options: optionsAppareil(a.pending).map((option) => filtrerTexte(option.label)),
+        },
+      }),
+      ...(a.kind !== 'shell' &&
+        ((a.status === 'idle' && a.statusReason !== 'question') || a.status === 'error') &&
+        a.statusAt !== null && {
+          tour: {
+            id: a.statusAt,
+            marque: a.marqueTour?.tourId === a.statusAt ? a.marqueTour.etat : null,
+            resume: filtrerTexte(resumeTour(a.statusMessage) ?? '') || null,
+          },
+        }),
     })),
   };
   if (s.mesh) {

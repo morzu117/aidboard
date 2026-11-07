@@ -82,11 +82,11 @@ function Article({ n, e }: { n: number; e: Element }) {
   const versAgent = `/sujets/${e.topic.id}?agent=${a.id}`;
   // D139 : une PR ouverte se livre (D134), sinon le tour se relit
   const livrer = e.topic.prNumber !== null && e.topic.state !== 'merged';
-  const agir = async (path: string, body?: unknown) => {
+  const agir = async (path: string, body?: unknown, method: 'POST' | 'PUT' = 'POST') => {
     setBusy(true);
     setErreur(null);
     try {
-      await call('POST', `/api/agents/${a.id}/${path}`, body);
+      await call(method, `/api/agents/${a.id}/${path}`, body);
     } catch (err) {
       setErreur(err instanceof Error ? err.message : String(err));
     } finally {
@@ -151,6 +151,11 @@ function Article({ n, e }: { n: number; e: Element }) {
             {texte}
           </p>
         ))}
+      {e.nature === 'relire' &&
+        a.marqueTour?.tourId === a.statusAt &&
+        a.marqueTour.etat === 'a_reprendre' && (
+          <p className="texte-faible">À reprendre, marqué par {a.marqueTour.parNom}</p>
+        )}
       {tone === 'cours' && (
         <p className="texte-faible" data-node={id('rien')}>
           Rien à faire de ton côté.
@@ -158,6 +163,16 @@ function Article({ n, e }: { n: number; e: Element }) {
       )}
       {tone !== 'cours' && (
         <div className="element-actions">
+          {e.nature === 'relire' && a.statusAt && (
+            <button
+              className="bouton"
+              type="button"
+              disabled={busy}
+              onClick={() => void agir('tour', { tourId: a.statusAt, etat: 'relu' }, 'PUT')}
+            >
+              Marquer relu
+            </button>
+          )}
           {options.map((o, i) => (
             <button
               key={o.answer}

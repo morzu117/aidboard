@@ -1,3 +1,5 @@
+import { CorpsMarqueTour, marquerTour, type MarqueTour } from '../tours.js';
+import type { EventStore } from '../events/store.js';
 import { Type } from '@sinclair/typebox';
 import type { FastifyInstance } from 'fastify';
 import type { AgentSettings } from '../../shared/agentSettings.js';
@@ -58,8 +60,18 @@ const SettingsBody = Type.Object(
 
 export function registerAgentRoutes(
   app: FastifyInstance,
-  deps: { db: Db; agents: AgentManager },
+  deps: { db: Db; agents: AgentManager; store: EventStore },
 ): void {
+  app.put('/api/agents/:id/tour', { schema: { body: CorpsMarqueTour } }, async (req, reply) => {
+    const r = marquerTour(
+      deps.db,
+      deps.store,
+      (req.params as { id: string }).id,
+      req.body as MarqueTour,
+    );
+    return reply.code(r.status).send(r.corps);
+  });
+
   app.post('/api/agents', { schema: { body: Body } }, async (req, reply) => {
     const body = req.body as {
       topicId: string;
@@ -107,7 +119,13 @@ export function registerAgentRoutes(
   app.post('/api/agents/:id/answer', { schema: { body: AnswerBody } }, async (req, reply) => {
     const { id } = req.params as { id: string };
     const body = req.body as { pendingId: string; answer: string };
-    deps.agents.answer(id, body.pendingId, body.answer);
+    try {
+      deps.agents.answer(id, body.pendingId, body.answer);
+    } catch (erreur) {
+      if (erreur instanceof AidHttpError && erreur.extra.raison === 'deja_tranchee')
+        return reply.code(409).send({ raison: 'deja_tranchee' });
+      throw erreur;
+    }
     return reply.code(202).send({ id });
   });
 

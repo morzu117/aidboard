@@ -405,3 +405,41 @@ test('« Ouvrir la cell » : choisir un sujet actif lance swarph-cell et mène �
   expect(node('1-2.mesh.dm-1.cell')?.tagName).toBe('A');
   expect(node('1-2.mesh.dm-1.cell')?.getAttribute('href')).toBe('/sujets/tp_1?agent=ag_cell');
 });
+
+test('32.5 : relu sort de la boîte ; à reprendre garde la mention et le bouton Mac', async () => {
+  const s = etat();
+  s.agents = [
+    claude({
+      id: 'relu',
+      status: 'idle',
+      statusAt: 'tour-1',
+      statusMessage: 'Déjà relu',
+      marqueTour: { tourId: 'tour-1', etat: 'relu', par: 'mac', parNom: 'Mac', a: 't' },
+    }),
+    claude({
+      id: 'reprendre',
+      status: 'idle',
+      statusAt: 'tour-2',
+      statusMessage: 'À examiner',
+      marqueTour: {
+        tourId: 'tour-2',
+        etat: 'a_reprendre',
+        par: 'appareil-1',
+        parNom: 'Téléphone test',
+        a: 't',
+      },
+    }),
+  ];
+  const h = setup(<Boite />, s);
+  await screen.findByText('À reprendre, marqué par Téléphone test');
+  expect(screen.queryByText('Déjà relu')).toBeNull();
+  expect(text('1-2.liste.groupe-relire.compte')).toBe('1');
+  await userEvent.click(screen.getByRole('button', { name: 'Marquer relu' }));
+  await waitFor(() =>
+    expect(h.calls).toContainEqual({
+      method: 'PUT',
+      url: '/api/agents/reprendre/tour',
+      body: { tourId: 'tour-2', etat: 'relu' },
+    }),
+  );
+});

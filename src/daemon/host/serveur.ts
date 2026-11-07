@@ -1,3 +1,8 @@
+import type { livraisonPourAppareil } from './livraison.js';
+import { CorpsReponseAppareil, repondreAppareil, type ReponseAppareil } from '../reponses.js';
+import { CorpsMarqueTour, marquerTour, type MarqueTour } from '../tours.js';
+import type { Db } from '../db.js';
+import type { EventStore } from '../events/store.js';
 import type { AddressInfo } from 'node:net';
 import type { Writable } from 'node:stream';
 import fastifyCookie from '@fastify/cookie';
@@ -69,6 +74,7 @@ export function masquerAppairage(url: string | undefined): string {
 export function cspAppareils(nom: string): string {
   return [
     "default-src 'self'",
+    "manifest-src 'self'",
     `connect-src 'self' wss://${nom}`,
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data:",
@@ -94,6 +100,9 @@ export interface OptionsServeurAppareils {
   appairages: Appairages;
   /** D175 : l'état complet, que masque.ts réduit ; absent = 404 (tests du port seul) */
   etat?: () => Promise<StateSnapshot>;
+  livraison?: (topicId: string) => ReturnType<typeof livraisonPourAppareil>;
+  tours?: { db: Db; store: EventStore };
+  reponses?: Parameters<typeof repondreAppareil>[0];
   /** D175 : la source des signaux, le store d'événements */
   signal?: {
     on(e: 'event' | 'ephemeral', f: () => void): unknown;
@@ -143,6 +152,7 @@ export async function ouvrirServeurAppareils(
             ...(opts.logStream && { stream: opts.logStream }),
           }
         : false,
+    ajv: { customOptions: { removeAdditional: false, coerceTypes: false } },
     logController: new LogController({ disableRequestLogging: true }),
   });
   if (opts.onRoute) {
@@ -188,6 +198,8 @@ export async function ouvrirServeurAppareils(
     if (!api && !socket) return;
     const lu = opts.registre.authentifier(req.cookies[COOKIE_APPAREIL]);
     if (!lu.ok) {
+      if (lu.raison === 'revoque' || lu.raison === 'expire')
+        reply.header('Clear-Site-Data', '"cache", "storage"');
       return reply.code(401).send({ error: 'Non authentifié', raison: lu.raison });
     }
     req.appareil = lu.appareil;
@@ -224,6 +236,13 @@ export async function ouvrirServeurAppareils(
   app.get('/api/appareils/moi', async (req) => {
     const a = req.appareil!;
     return { id: a.id, nom: a.nom, expireA: a.expireA };
+  });
+
+  app.get('/api/appareils/sujets/:id/livraison', async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const livraison = await opts.livraison?.(id);
+    if (!livraison) return reply.code(404).send({ error: 'sujet inconnu' });
+    return livraison;
   });
 
   // D176 : la seule écriture sans authentification de ce port. L'Origin est exigée : seule la
@@ -290,6 +309,37 @@ export async function ouvrirServeurAppareils(
     reply.clearCookie(COOKIE_APPAREIL, COOKIE);
     return { ok: true };
   });
+
+  app.post(
+    '/api/appareils/agents/:id/tour',
+    { schema: { body: CorpsMarqueTour } },
+    async (req, reply) => {
+      if (!opts.tours) return reply.code(404).send({ error: 'introuvable' });
+      const r = marquerTour(
+        opts.tours.db,
+        opts.tours.store,
+        (req.params as { id: string }).id,
+        req.body as MarqueTour,
+        req.appareil!,
+      );
+      return reply.code(r.status).send(r.corps);
+    },
+  );
+
+  app.post(
+    '/api/appareils/agents/:id/reponse',
+    { schema: { body: CorpsReponseAppareil } },
+    async (req, reply) => {
+      if (!opts.reponses) return reply.code(404).send({ error: 'introuvable' });
+      const r = repondreAppareil(
+        opts.reponses,
+        (req.params as { id: string }).id,
+        req.body as ReponseAppareil,
+        req.appareil!,
+      );
+      return reply.code(r.status).send(r.corps);
+    },
+  );
 
   // D175 : l'état masqué, champ par champ
   app.get('/api/state', async (_req, reply) => {

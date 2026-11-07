@@ -1,4 +1,6 @@
 import type { AccesFini } from '../data/client.js';
+import { useEffect } from 'react';
+import { effacer } from '../data/dernierEtat.js';
 
 // Chantier 31 (D177, D180) : l'écran plein d'un appareil sans accès. Aucun lien vers le Mac :
 // on ne revient que par un nouveau QR, affiché sur le Mac.
@@ -20,6 +22,9 @@ export const TEXTES_FIN: Record<FinAcces, { titre: string; phrase: string }> = {
 };
 
 export function HorsAcces({ fin }: { fin: FinAcces }) {
+  useEffect(() => {
+    void effacer();
+  }, []);
   const t = TEXTES_FIN[fin];
   return (
     <main className="appareil-plein" data-node="appareil.hors-acces" data-fin={fin}>
