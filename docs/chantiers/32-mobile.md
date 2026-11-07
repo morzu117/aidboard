@@ -79,6 +79,7 @@ Ce document. Pas de code.
 ### 32.3 Le filtre de valeurs (D186)
 - `src/daemon/host/filtre.ts`, pur, sans dépendance.
 - Tests : un cas par motif, des faux positifs courants (une phrase française, un numéro de PR, une date), la coupe à 140 caractères, l'idempotence.
+- *Révision 32.3.* Une longue suite n'est masquée que si elle a au moins deux chiffres et une lettre, et si chacun de ses segments séparés par `/` ou `-` qui contient une lettre contient aussi un chiffre ; une suite hexadécimale de 24 caractères ou plus l'est toujours. Ainsi un long mot, un nom de branche, un chemin relatif ou un identifiant en CamelCase passent. **Limite assumée :** un jeton fait seulement de lettres passe aussi.
 
 ### 32.4 La question et le tour dans l'état masqué (D187, D188)
 - `MQ`, `SH` : `question` et `tour`, tout texte passé par D186.
