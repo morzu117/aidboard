@@ -20,6 +20,8 @@ const COMMANDE = 'tailscale serve --bg --https=443 http://127.0.0.1:4890';
 
 const etat = (over: Partial<EtatModeHostDaemon> = {}): EtatModeHostDaemon => ({
   actif: true,
+  push: false,
+  abonnements: 0,
   port: 4890,
   tailnet: { etat: 'running', nom: NOM, compte: 'julien@exemple' },
   serve: { etat: 'ok', funnel: false, interdits: [] },

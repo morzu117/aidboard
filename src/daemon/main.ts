@@ -274,6 +274,7 @@ export async function startDaemon(
       ],
       livraison: (id) => livraisonPourAppareil(opened, memory, id),
       tours: { db: opened, store },
+      push: { db: opened, dossierEtat: paths.home, actif: () => config.modeHost.push },
       reponses: { db: opened, store, agents },
       registre: new RegistreAppareils(opened),
       appairages: new Appairages(),

@@ -1,3 +1,10 @@
+import {
+  abonnementsActifs,
+  CorpsAbonnementPush,
+  cleAbonnementValide,
+} from '../push/abonnements.js';
+import { verifierEndpoint } from '../push/envoi.js';
+import { chargerOuCreerCles } from '../push/vapid.js';
 import type { livraisonPourAppareil } from './livraison.js';
 import { CorpsReponseAppareil, repondreAppareil, type ReponseAppareil } from '../reponses.js';
 import { CorpsMarqueTour, marquerTour, type MarqueTour } from '../tours.js';
@@ -102,6 +109,7 @@ export interface OptionsServeurAppareils {
   etat?: () => Promise<StateSnapshot>;
   livraison?: (topicId: string) => ReturnType<typeof livraisonPourAppareil>;
   tours?: { db: Db; store: EventStore };
+  push?: { db: Db; dossierEtat: string; actif: () => boolean };
   reponses?: Parameters<typeof repondreAppareil>[0];
   /** D175 : la source des signaux, le store d'événements */
   signal?: {
@@ -235,7 +243,59 @@ export async function ouvrirServeurAppareils(
   // D174, D180 : qui suis-je. Le mode appareil de l'interface part de cette réponse.
   app.get('/api/appareils/moi', async (req) => {
     const a = req.appareil!;
-    return { id: a.id, nom: a.nom, expireA: a.expireA };
+    const abonne = opts.push
+      ? abonnementsActifs(opts.push.db, now()).some((p) => p.appareilId === a.id)
+      : false;
+    return {
+      id: a.id,
+      nom: a.nom,
+      expireA: a.expireA,
+      push: { actifSurLeMac: opts.push?.actif() ?? false, abonne },
+    };
+  });
+
+  const gardePush = async (_req: FastifyRequest, reply: FastifyReply) => {
+    if (!opts.push?.actif()) return reply.code(403).send({ raison: 'push_coupe' });
+  };
+  app.get('/api/appareils/push/cle', { onRequest: gardePush }, async () => ({
+    cle: chargerOuCreerCles(opts.push!.dossierEtat).clePubliqueBase64url(),
+  }));
+  app.post(
+    '/api/appareils/moi/push',
+    {
+      onRequest: gardePush,
+      schema: { body: CorpsAbonnementPush },
+    },
+    async (req, reply) => {
+      const corps = req.body as { endpoint: string; keys: { p256dh: string; auth: string } };
+      if (!verifierEndpoint(corps.endpoint)) return reply.code(400).send({ raison: 'endpoint' });
+      if (
+        !cleAbonnementValide(corps.keys.p256dh, 65) ||
+        !cleAbonnementValide(corps.keys.auth, 16)
+      ) {
+        return reply.code(400).send({ raison: 'cles' });
+      }
+      opts
+        .push!.db.prepare(
+          `INSERT INTO push_abonnements (appareil_id, endpoint, p256dh, auth, cree_a)
+      VALUES (?, ?, ?, ?, ?) ON CONFLICT(appareil_id) DO UPDATE SET
+      endpoint = excluded.endpoint, p256dh = excluded.p256dh, auth = excluded.auth, cree_a = excluded.cree_a`,
+        )
+        .run(
+          req.appareil!.id,
+          corps.endpoint,
+          corps.keys.p256dh,
+          corps.keys.auth,
+          new Date(now()).toISOString(),
+        );
+      return reply.code(204).send();
+    },
+  );
+  app.delete('/api/appareils/moi/push', { onRequest: gardePush }, async (req, reply) => {
+    opts
+      .push!.db.prepare('DELETE FROM push_abonnements WHERE appareil_id = ?')
+      .run(req.appareil!.id);
+    return reply.code(204).send();
   });
 
   app.get('/api/appareils/sujets/:id/livraison', async (req, reply) => {

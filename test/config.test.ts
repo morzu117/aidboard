@@ -231,7 +231,7 @@ test('chantier 30 (D162) : artefacts.port, par défaut le port du daemon + 10', 
 // Chantier 31 (D171, D172) : le mode host, éteint par défaut, et le port des appareils.
 test('31.3 : modeHost éteint par défaut ; port des appareils = port du daemon + 20', () => {
   const c = parseConfig('');
-  expect(c.modeHost).toEqual({ actif: false, port: null });
+  expect(c.modeHost).toEqual({ actif: false, port: null, push: false });
   expect(portAppareils(c)).toBe(4890);
   expect(portAppareils(parseConfig('port: 5000'))).toBe(5020);
   expect(portAppareils(parseConfig('modeHost:\n  port: 4999'))).toBe(4999);

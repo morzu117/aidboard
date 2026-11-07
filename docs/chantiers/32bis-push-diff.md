@@ -96,6 +96,7 @@ Ce document.
 - La migration 022 ; `config.modeHost.push` ; les routes du Mac (`PUT` sur le réglage) et celles de l'appareil (`POST`, `DELETE` et `GET .../push/cle`).
 - La liste fermée de `test/host-liste.test.ts` est mise à jour. C'est un test de frontière : le point l'autorise explicitement.
 - La cascade est testée sur la révocation, sur « Couper tous les accès » et sur l'échéance.
+- *Révision 32b.4.* Les clés étrangères sont actives, mais la révocation pose `revoque_a` sans supprimer la ligne. `abonnementsActifs` efface donc, à chaque lecture, les abonnements des appareils révoqués ou échus, et ne rend que les autres. Les clés VAPID sont dans le dossier d'état (`paths.home`). Les refus du port des appareils sont `{ raison }` (`push_coupe`, `endpoint`, `cles`) ; `PUT /api/host/push`, sur le Mac, garde `{ error }`. `host-liste` : les trois routes ajoutées, rien de retiré. Gate 2079.
 
 ### 32b.5 Le déclencheur et le regroupement (D202)
 - Il est abonné au store d'événements.

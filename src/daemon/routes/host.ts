@@ -1,8 +1,12 @@
+import type { Db } from '../db.js';
+import { abonnementsActifs } from '../push/abonnements.js';
+import { chargerOuCreerCles } from '../push/vapid.js';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import {
   type AidConfig,
   ConfigError,
   ecrireModeHostActif,
+  ecrireModeHostPush,
   PORT_PONT_TAURI,
   portAppareils,
   portArtefacts,
@@ -40,6 +44,7 @@ export function registerHostRoutes(
   deps: {
     config: AidConfig;
     paths: AidPaths;
+    db: Db;
     getPort: () => number;
     modeHost: ModeHost;
     tailscaleExec?: TailscaleExec;
@@ -54,7 +59,12 @@ export function registerHostRoutes(
     );
     // un nom apparu ou changé (MagicDNS activé après coup) est pris par le port des appareils
     if (e.tailnet.etat === 'running') deps.modeHost.noterNom(e.tailnet.nom);
-    return { ...e, ...deps.modeHost.etat() };
+    return {
+      ...e,
+      ...deps.modeHost.etat(),
+      push: deps.config.modeHost.push,
+      abonnements: abonnementsActifs(deps.db, Date.now()).length,
+    };
   };
   // le port du Mac seulement : le port des appareils n'enregistre jamais ces routes
   app.get('/api/host', async (req, reply) => {
@@ -78,6 +88,23 @@ export function registerHostRoutes(
     deps.config.modeHost.actif = actif;
     if (actif) await deps.modeHost.demarrer();
     else await deps.modeHost.arreter({ couper: true });
+    return etat();
+  });
+
+  app.put('/api/host/push', async (req, reply) => {
+    if (req.principal?.kind !== 'admin') return reply.code(403).send({ error: 'admin seulement' });
+    reply.header('Cache-Control', 'no-store');
+    const actif = (req.body as { actif?: unknown } | null)?.actif;
+    if (typeof actif !== 'boolean') return reply.code(400).send({ error: 'actif : true ou false' });
+    try {
+      if (actif) chargerOuCreerCles(deps.paths.home);
+      ecrireModeHostPush(deps.paths, actif);
+    } catch (err) {
+      if (err instanceof ConfigError) return reply.code(409).send({ error: err.message });
+      throw err;
+    }
+    deps.config.modeHost.push = actif;
+    if (!actif) deps.db.prepare('DELETE FROM push_abonnements').run();
     return etat();
   });
 

@@ -217,6 +217,7 @@ export async function buildServer(deps: ServerDeps): Promise<FastifyInstance> {
       paths: deps.paths,
       getPort: () => (app.server.address() as AddressInfo | null)?.port ?? deps.config.port,
       modeHost: deps.modeHost,
+      db: deps.db,
       tailscaleExec: deps.tailscaleExec,
     });
   }
