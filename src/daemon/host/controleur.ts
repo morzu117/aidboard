@@ -26,6 +26,7 @@ export interface OptionsModeHost {
   webRoot: string | null;
   /** D175, D178 : ce que le port des appareils lit */
   etat?: OptionsServeurAppareils['etat'];
+  tours?: OptionsServeurAppareils['tours'];
   signal?: OptionsServeurAppareils['signal'];
   board?: OptionsServeurAppareils['board'];
   tailscaleExec?: TailscaleExec;
@@ -95,6 +96,7 @@ export class ModeHost {
         registre: this.opts.registre,
         appairages: this.opts.appairages,
         etat: this.opts.etat,
+        tours: this.opts.tours,
         signal: this.opts.signal,
         board: this.opts.board,
         webRoot: this.opts.webRoot,

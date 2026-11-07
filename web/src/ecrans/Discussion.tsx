@@ -46,6 +46,7 @@ const commeAgent = (a: ServerAgentView, cwd: string): Agent => ({
   statusReason: null,
   statusMessage: null,
   statusSource: null,
+  marqueTour: null,
   statusAt: null,
   statusDetail: null,
   lastTool: null,

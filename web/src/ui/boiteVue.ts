@@ -22,7 +22,7 @@ export function natureAgent(a: Agent): Nature | null {
       return 'decision';
     case 'relire':
     case 'erreur':
-      return 'relire';
+      return a.marqueTour?.tourId === a.statusAt && a.marqueTour.etat === 'relu' ? null : 'relire';
     case 'cours':
     case 'pause':
       return 'information';

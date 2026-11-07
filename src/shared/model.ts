@@ -134,6 +134,13 @@ export interface Agent {
   statusReason: string | null;
   statusMessage: string | null;
   statusSource: StatusSource | null;
+  marqueTour: {
+    tourId: string;
+    etat: 'relu' | 'a_reprendre';
+    par: string;
+    parNom: string;
+    a: string;
+  } | null;
   statusAt: string | null;
   statusDetail: StatusDetail | null;
   lastTool: string | null;

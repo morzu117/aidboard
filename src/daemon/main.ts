@@ -271,6 +271,7 @@ export async function startDaemon(
         { port: PORT_PONT_TAURI, nom: "pont de l'app" },
         { port: serveurArtefacts?.port ?? portArtefacts(config), nom: 'artefacts' },
       ],
+      tours: { db: opened, store },
       registre: new RegistreAppareils(opened),
       appairages: new Appairages(),
       webRoot,

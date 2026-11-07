@@ -63,6 +63,7 @@ function snapshot(): StateSnapshot {
         statusReason: M('statusReason'),
         statusMessage: M('statusMessage'),
         statusSource: 'hook',
+        marqueTour: null,
         statusAt: 't2',
         statusDetail: { lastLine: M('statusDetail') } as never,
         lastTool: M('lastTool'),
@@ -288,9 +289,10 @@ test('32.4 : question et tour filtrés, choix dans l’ordre et indices conserv�
     'updatedAt',
   ]);
   expect(Object.keys(e.agents[0]!.question!).sort()).toEqual(['options', 'pendingId', 'texte']);
-  expect(Object.keys(e.agents[0]!.tour!).sort()).toEqual(['id', 'resume']);
+  expect(Object.keys(e.agents[0]!.tour!).sort()).toEqual(['id', 'marque', 'resume']);
   expect(e.agents[0]!.tour).toEqual({
     id: a.statusAt,
+    marque: null,
     resume: 'Résumé [masqué] ; [masqué] ; [masqué] ; [masqué]',
   });
   for (const valeur of valeurs) expect(JSON.stringify(e)).not.toContain(valeur);
@@ -307,7 +309,7 @@ test('32.4 : le tour dépend du statut, de sa date et du type d’agent', () => 
   a.statusReason = null;
   a.status = 'idle';
   a.statusMessage = '  \n ';
-  expect(etatPourAppareil(s).agents[0]!.tour).toEqual({ id: 't2', resume: null });
+  expect(etatPourAppareil(s).agents[0]!.tour).toEqual({ id: 't2', resume: null, marque: null });
   a.statusAt = 't3';
   expect(etatPourAppareil(s).agents[0]!.tour!.id).toBe('t3');
   a.statusReason = 'question';
@@ -319,7 +321,7 @@ test('32.4 : le tour dépend du statut, de sa date et du type d’agent', () => 
   a.status = 'working';
   expect(etatPourAppareil(s).agents[0]).not.toHaveProperty('tour');
   a.status = 'error';
-  expect(etatPourAppareil(s).agents[0]!.tour).toEqual({ id: 't3', resume: null });
+  expect(etatPourAppareil(s).agents[0]!.tour).toEqual({ id: 't3', resume: null, marque: null });
   a.statusAt = null;
   expect(etatPourAppareil(s).agents[0]).not.toHaveProperty('tour');
 });

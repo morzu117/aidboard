@@ -1,3 +1,6 @@
+import { CorpsMarqueTour, marquerTour, type MarqueTour } from '../tours.js';
+import type { Db } from '../db.js';
+import type { EventStore } from '../events/store.js';
 import type { AddressInfo } from 'node:net';
 import type { Writable } from 'node:stream';
 import fastifyCookie from '@fastify/cookie';
@@ -94,6 +97,7 @@ export interface OptionsServeurAppareils {
   appairages: Appairages;
   /** D175 : l'état complet, que masque.ts réduit ; absent = 404 (tests du port seul) */
   etat?: () => Promise<StateSnapshot>;
+  tours?: { db: Db; store: EventStore };
   /** D175 : la source des signaux, le store d'événements */
   signal?: {
     on(e: 'event' | 'ephemeral', f: () => void): unknown;
@@ -292,6 +296,22 @@ export async function ouvrirServeurAppareils(
     reply.clearCookie(COOKIE_APPAREIL, COOKIE);
     return { ok: true };
   });
+
+  app.post(
+    '/api/appareils/agents/:id/tour',
+    { schema: { body: CorpsMarqueTour } },
+    async (req, reply) => {
+      if (!opts.tours) return reply.code(404).send({ error: 'introuvable' });
+      const r = marquerTour(
+        opts.tours.db,
+        opts.tours.store,
+        (req.params as { id: string }).id,
+        req.body as MarqueTour,
+        req.appareil!,
+      );
+      return reply.code(r.status).send(r.corps);
+    },
+  );
 
   // D175 : l'état masqué, champ par champ
   app.get('/api/state', async (_req, reply) => {

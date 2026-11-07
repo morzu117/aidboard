@@ -74,6 +74,7 @@ export function etatPourAppareil(s: StateSnapshot): EtatPourAppareil {
         a.statusAt !== null && {
           tour: {
             id: a.statusAt,
+            marque: a.marqueTour?.tourId === a.statusAt ? a.marqueTour.etat : null,
             resume: filtrerTexte(resumeTour(a.statusMessage) ?? '') || null,
           },
         }),

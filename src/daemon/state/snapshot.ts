@@ -1,3 +1,4 @@
+import { lireMarqueTour } from '../tours.js';
 import { existsSync } from 'node:fs';
 import type { ActionRun, Agent, Run, Topic, TopicIndex, Workspace } from '../../shared/model.js';
 import type { StateSnapshot } from '../../shared/state.js';
@@ -100,6 +101,7 @@ export async function buildSnapshot(
       statusReason: (r.status_reason as string | null) ?? null,
       statusMessage: (r.status_message as string | null) ?? null,
       statusSource: (r.status_source as Agent['statusSource']) ?? null,
+      marqueTour: lireMarqueTour(db, r.id as string),
       statusAt: (r.status_at as string | null) ?? null,
       statusDetail: parseJson(r.status_detail) as Agent['statusDetail'],
       lastTool: (r.last_tool as string | null) ?? null,

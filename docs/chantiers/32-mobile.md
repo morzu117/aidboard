@@ -92,6 +92,7 @@ Ce document. Pas de code.
 - La boîte du Mac montre la marque.
 - Tests : 409 sur un tour périmé, l'effacement par un nouveau tour, la liste fermée (`test/host-liste.test.ts`) avec la nouvelle route.
 - **Frontière : signalé au lab.**
+- *Révision 32.5.* La table est `tours_marques`, une ligne par agent (la dernière marque). La route de l'appareil est `POST /api/appareils/agents/:id/tour`, entrée dans la liste fermée. Un tour marqué relu sort de « À relire » sur le Mac ; « À reprendre » y reste avec l'auteur ; le Mac a un bouton « Marquer relu ». `tour.marque` porte aussi `parNom`, pour le fil d'activité du Mac. Le téléphone ne voit que `marque`, jamais l'auteur. Les écritures sont synchrones, sans attente entre le contrôle et l'événement.
 
 ### 32.6 Trancher une question (D190, D191)
 - La route, ses six vérifications dans l'ordre, le compare-and-set.
