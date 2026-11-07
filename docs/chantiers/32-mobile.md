@@ -132,6 +132,7 @@ Sujets (filtre par état, nom en gras s'il t'attend), Suivre un sujet (prochaine
   - révoquer : « Accès coupé », et le stockage vidé ;
   - aucun défilement horizontal à 320 px.
 - `docs/recette-chantier-32-mobile.md` : iPhone installé (cookie `__Host-`, `Sec-Fetch-Site`, stockage distinct de Safari), Android, Node 22 et 24.
+- *Révision 32.11.* Le montage du frontal et l'appairage sont partagés dans `e2e/host-helpers.ts` ; les assertions de `mode-host.spec.ts` y ont été déplacées, aucune retirée. `e2e/mobile.spec.ts` : 7 cas. Gate 2029, e2e 111 verts. La recette réelle sur iPhone et Android reste à faire avec Julien.
 
 ## 6. Pièges
 
