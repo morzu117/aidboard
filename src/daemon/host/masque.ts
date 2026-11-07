@@ -1,3 +1,6 @@
+import { ASK_TEXT_ANSWER } from '../../shared/question.js';
+import { resumeTour } from '../../shared/tour.js';
+import { filtrerTexte } from './filtre.js';
 import type { EtatPourAppareil, RaisonAppareil } from '../../shared/host.js';
 import type { StateSnapshot } from '../../shared/state.js';
 
@@ -57,6 +60,23 @@ export function etatPourAppareil(s: StateSnapshot): EtatPourAppareil {
       createdAt: a.createdAt,
       updatedAt: a.updatedAt,
       attend: a.pending !== null,
+      ...(a.pending?.kind === 'question' && {
+        question: {
+          pendingId: a.pending.id,
+          texte: filtrerTexte(a.pending.question),
+          options: a.pending.options
+            .filter((option) => option.answer !== ASK_TEXT_ANSWER.answer)
+            .map((option) => filtrerTexte(option.label)),
+        },
+      }),
+      ...(a.kind !== 'shell' &&
+        ((a.status === 'idle' && a.statusReason !== 'question') || a.status === 'error') &&
+        a.statusAt !== null && {
+          tour: {
+            id: a.statusAt,
+            resume: filtrerTexte(resumeTour(a.statusMessage) ?? '') || null,
+          },
+        }),
     })),
   };
   if (s.mesh) {

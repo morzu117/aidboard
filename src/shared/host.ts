@@ -85,8 +85,10 @@ export interface EtatPourAppareil {
     pausedAt: string | null;
     createdAt: string;
     updatedAt: string;
-    /** à la place de `pending`, dont le texte n'est jamais montré à un appareil */
+    /** à la place de `pending`, dont seuls la question et les choix filtrés sont montrés */
     attend: boolean;
+    question?: { pendingId: string; texte: string; options: string[] };
+    tour?: { id: string; resume: string | null };
   }>;
   mesh?: {
     state: {

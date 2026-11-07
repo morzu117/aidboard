@@ -85,6 +85,7 @@ Ce document. Pas de code.
 - `MQ`, `SH` : `question` et `tour`, tout texte passé par D186.
 - Tests : les clés exactes mises à jour ; une permission ne donne ni texte ni option ; `ASK_TEXT_ANSWER` absent ; un chemin, une URL et un jeton dans la question n'en sortent pas.
 - **Frontière : signalé au lab.**
+- *Révision 32.4.* `tour.id` vaut `statusAt`, l'horodatage du passage au statut `idle` ou `error`, plutôt que la séquence du dernier message : tout agent en a un, conversationnel ou non, et un nouveau tour le change. `tour` ne porte que `{ id, resume }` ; les marques arrivent en 32.5. `resumeTour` passe dans `src/shared/tour.ts`, `ASK_TEXT_ANSWER` dans `src/shared/question.ts`. Dans `test/host-masque.test.ts`, la demande de la fixture devient une permission complète (commande, `byRule`, `confirm`), dont rien ne sort.
 
 ### 32.5 Relu et À reprendre (D189, D191)
 - Migration 021, projecteur, routes du Mac et de l'appareil, événement `appareil.ecriture`.
