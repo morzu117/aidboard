@@ -292,7 +292,8 @@ function Cartes({
   );
 }
 
-function Contenu({ cell }: { cell: string }) {
+/** Chantier 31 (D180) : aussi monté par l'interface d'un appareil, sans la coque du Mac. */
+export function Contenu({ cell }: { cell: string }) {
   const projets = useBoardProjects();
   const [params, setParams] = useSearchParams();
   const [cartes, setCartes] = useState<{

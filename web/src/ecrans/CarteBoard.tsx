@@ -275,7 +275,8 @@ function Fiche({ s, relire }: { s: BoardCardSheet; relire: () => void }) {
   );
 }
 
-function Contenu({ cardId }: { cardId: number }) {
+/** Chantier 31 (D180) : aussi monté par l'interface d'un appareil, sans la coque du Mac. */
+export function Contenu({ cardId }: { cardId: number }) {
   const { result, enLecture, luA, erreur, relire, reussieA } = useBoardCard(cardId);
   const c = result?.card.ok ? result.card.data : null;
   return (

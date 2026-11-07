@@ -1,7 +1,8 @@
 import { EN_TETE_COCKPIT } from '../../../src/shared/cockpit.js';
 
 export class SessionExpired extends Error {
-  constructor() {
+  /** chantier 31 (D177) : sur le port des appareils, `inconnu`, `expire` ou `revoque` */
+  constructor(readonly raison: string | null = null) {
     super('session expirée');
   }
 }
@@ -32,7 +33,6 @@ export async function api<T>(
     },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
-  if (res.status === 401) throw new SessionExpired();
   const text = await res.text();
   let json: Record<string, unknown> = {};
   try {
@@ -40,6 +40,9 @@ export async function api<T>(
   } catch {
     // corps non JSON : on garde le texte comme message
   }
+  // le port du Mac répond en texte ; celui des appareils dit pourquoi (D177)
+  if (res.status === 401)
+    throw new SessionExpired(typeof json.raison === 'string' ? json.raison : null);
   if (!res.ok) {
     throw new AidApiError(
       res.status,
