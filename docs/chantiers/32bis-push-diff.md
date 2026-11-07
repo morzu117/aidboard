@@ -71,6 +71,7 @@ Ce document.
 - `src/daemon/push/chiffre.ts` : `aes128gcm`, avec le remplissage fixe.
 - `src/daemon/push/vapid.ts` : la génération, le stockage en `0600`, le JWT ES256 en r‖s.
 - Les tests : les vecteurs de la RFC 8291, la signature vérifiée par `crypto.verify` en `ieee-p1363`, `aud` et `exp`.
+- *Révision 32b.2.* Remplissage fixe à 128 octets de clair (`TAILLE_CLAIR`) ; la fonction de bas niveau accepte un remplissage nul pour reproduire le vecteur de la RFC 8291, à l'octet près. `exp` vaut 12 h moins 60 s. Un fichier de clés aux droits plus larges que `0600` est refusé, jamais corrigé en silence. Gate 2038.
 
 ### 32b.3 L'envoi et la liste fermée (D199, D201)
 - `src/daemon/push/envoi.ts` : `verifierEndpoint(url)` et `envoyer(abonnement, n)`.
