@@ -37,6 +37,8 @@ export async function startTestDaemon(
     tailscaleExec?: TailscaleExec;
     /** Chantier 31 : un faux build de l'interface ; absent = aucun, comme hors build. */
     webRoot?: string | null;
+    /** Chantier 31 (D174) : relève les routes du port du Mac. */
+    onRoute?: (r: { method: string | string[]; url: string }) => void;
     memory?: {
       embedder?: Embedder;
       backoffMs?: number[];
@@ -75,6 +77,7 @@ export async function startTestDaemon(
     remoteBins: extra.remoteBins,
     tailscaleExec: extra.tailscaleExec ?? (async () => ({ stdout: '', code: 'ENOENT' })),
     webRoot: extra.webRoot ?? null,
+    onRoute: extra.onRoute,
   });
   const headers = { host: `127.0.0.1:${d.port}`, authorization: `Bearer ${d.auth.adminToken}` };
   return { d, home, headers, db: d.db, store: d.store };

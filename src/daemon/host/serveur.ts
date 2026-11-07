@@ -29,7 +29,11 @@ export const COOKIE_DEMANDE = '__Host-aid_demande';
 /** D176 : code faux, expiré, annulé ou déjà pris, demande inconnue ou sans son cookie : un seul corps */
 export const CORPS_INCONNU = { error: 'Code inconnu, expiré ou déjà utilisé' };
 /** les deux seules routes qui posent un cookie (D176) */
-const ROUTES_COOKIE = new Set(['/appairage/reclamer', '/appairage/:demandeId']);
+const ROUTES_COOKIE = new Set([
+  '/appairage/reclamer',
+  '/appairage/:demandeId',
+  '/api/appareils/moi/deconnexion',
+]);
 const COOKIE = { httpOnly: true, secure: true, sameSite: 'strict', path: '/' } as const;
 
 // caractères de contrôle et de mise en forme : un login n'en a pas
@@ -95,6 +99,8 @@ export interface OptionsServeurAppareils {
   board?: BoardReader | null;
   /** tests : l'horloge de l'échéance des sockets */
   now?: () => number;
+  /** D174, tests : chaque route déclarée sur ce port */
+  onRoute?: (r: { method: string | string[]; url: string }) => void;
   /** le build de l'interface ; null hors build (tests, dev) */
   webRoot: string | null;
   logger?: boolean;
@@ -135,6 +141,10 @@ export async function ouvrirServeurAppareils(
         : false,
     logController: new LogController({ disableRequestLogging: true }),
   });
+  if (opts.onRoute) {
+    const f = opts.onRoute;
+    app.addHook('onRoute', (r) => f({ method: r.method, url: r.url }));
+  }
   await app.register(fastifyCookie);
   await app.register(fastifyWebsocket);
   app.decorateRequest('appareil', null);
@@ -177,7 +187,10 @@ export async function ouvrirServeurAppareils(
     if (site !== undefined && site !== 'same-origin') {
       return reply.code(403).send({ error: 'requête inter-site' });
     }
-    if (socket && origin === undefined) return reply.code(403).send({ error: 'origine absente' });
+    // une socket, ou une écriture (révoquer, se déconnecter) : l'Origin est exigée, comme au Mac
+    if ((socket || req.method !== 'GET') && origin === undefined) {
+      return reply.code(403).send({ error: 'origine absente' });
+    }
     if (api && site === undefined && req.headers[EN_TETE_COCKPIT] !== '1') {
       return reply.code(403).send({ error: 'requête sans provenance' });
     }
@@ -242,6 +255,31 @@ export async function ouvrirServeurAppareils(
     reply.clearCookie(COOKIE_DEMANDE, COOKIE);
     reply.setCookie(COOKIE_APPAREIL, jeton, { ...COOKIE, maxAge: DUREE_ACCES_MS / 1000 });
     return { etat: 'approuve' };
+  });
+
+  // D177 : les appareils connectés, vus d'un appareil. Ni l'identité, ni l'empreinte.
+  app.get('/api/appareils', async (req) =>
+    opts.registre.lister().map((a) => ({
+      id: a.id,
+      nom: a.nom,
+      creeA: a.creeA,
+      dernierContact: a.dernierContact,
+      expireA: a.expireA,
+      etat: a.etat,
+      moi: a.id === req.appareil!.id,
+    })),
+  );
+  // D177 : révoquer depuis un appareil, sans confirmation (règles globales), soi compris
+  app.delete('/api/appareils/:id', async (req, reply) => {
+    const { id } = req.params as { id: string };
+    if (!opts.registre.revoquer(id))
+      return reply.code(404).send({ error: 'appareil inconnu ou déjà coupé' });
+    return { ok: true };
+  });
+  app.post('/api/appareils/moi/deconnexion', async (req, reply) => {
+    opts.registre.revoquer(req.appareil!.id);
+    reply.clearCookie(COOKIE_APPAREIL, COOKIE);
+    return { ok: true };
   });
 
   // D175 : l'état masqué, champ par champ

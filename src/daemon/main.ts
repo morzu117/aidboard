@@ -33,7 +33,7 @@ import { ensureHome, resolvePaths } from './paths.js';
 import { reconcile } from './reconcile.js';
 import { reconcileNamespaces } from './routes/workspaces.js';
 import { type AuthState, createAuthState, loadSessionToken } from './security.js';
-import { buildServer, defaultWebRoot } from './server.js';
+import { buildServer, defaultWebRoot, type ServerDeps } from './server.js';
 import { StructuralService } from './structural/service.js';
 import { Indexer } from './topics/index.js';
 import { rattraperIndex } from './topics/rattrapage.js';
@@ -98,6 +98,8 @@ export async function startDaemon(
     tailscaleExec?: TailscaleExec;
     /** chantier 31 : le build de l'interface, servi aux deux ports ; null = aucun (tests) */
     webRoot?: string | null;
+    /** chantier 31 (D174), tests : les routes du port du Mac */
+    onRoute?: ServerDeps['onRoute'];
     // tests : un Embedder/ChatModel déterministe, des délais courts, un rythme d'entretien rapide
     memory?: {
       embedder?: Embedder;
@@ -284,6 +286,7 @@ export async function startDaemon(
     const app = await buildServer({
       webRoot,
       modeHost,
+      onRoute: opts.onRoute,
       config,
       auth,
       db: opened,

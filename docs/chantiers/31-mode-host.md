@@ -168,6 +168,7 @@ Chaque point est un commit, avec le gate vert. Le message de commit compte les l
     - couper ferme tout ;
     - éteindre le mode host arrête l'écoute.
 - **Vérification** : `npm run gate`
+- *Révision 31.8.* Sur le port des appareils, une écriture (`DELETE`, `POST`) exige l'`Origin` du port, comme au Mac par cookie. `GET /api/appareils` ne rend ni l'identité ni l'empreinte, et marque `moi`. `GET /api/host/appareils` (Mac) rend l'identité, jamais l'empreinte. `POST /api/host/couper` rend `{ coupes }`. Le relevé `onRoute` est une option de `buildServer` et du port des appareils, passée seulement par les tests. Le second test vérifie aussi l'inverse : le port des appareils déclare exactement la liste de D174.
 
 ### 31.9 L'écran Machines, « Ton cockpit »
 

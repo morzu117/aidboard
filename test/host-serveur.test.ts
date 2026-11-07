@@ -167,13 +167,17 @@ test('31.5 (D174) : aucune route du Mac ; ce qui n’est pas déclaré n’exist
     '/api/host',
     '/api/artefacts/etat',
     '/api/topics',
-    '/api/appareils',
+    '/api/memory/pages',
   ]) {
     const r = await srv.app.inject({ url, headers: api(jeton) });
     expect(r.statusCode, url).toBe(404);
   }
   for (const method of ['POST', 'PUT', 'DELETE'] as const) {
-    const r = await srv.app.inject({ method, url: '/api/appareils/moi', headers: api(jeton) });
+    const r = await srv.app.inject({
+      method,
+      url: '/api/appareils/moi',
+      headers: api(jeton, { origin: ORIGINE }),
+    });
     expect(r.statusCode, method).toBe(404);
   }
   // le lien d'ouverture du Mac n'y fait rien

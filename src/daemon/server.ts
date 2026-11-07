@@ -88,6 +88,8 @@ export interface ServerDeps {
   tailscaleExec?: TailscaleExec;
   /** chantier 31 (D172) : le port des appareils ; absent = pas de route du mode host */
   modeHost?: ModeHost;
+  /** chantier 31 (D174), tests : chaque route déclarée sur le port du Mac */
+  onRoute?: (r: { method: string | string[]; url: string }) => void;
 }
 
 export function redactToken(url: string | undefined): string {
@@ -130,6 +132,10 @@ export async function buildServer(deps: ServerDeps): Promise<FastifyInstance> {
     // refuser un champ inconnu plutôt que de le retirer sans rien dire
     ajv: { customOptions: { removeAdditional: false } },
   });
+  if (deps.onRoute) {
+    const f = deps.onRoute;
+    app.addHook('onRoute', (r) => f({ method: r.method, url: r.url }));
+  }
   app.addHook('onResponse', async (req, reply) => {
     if (reply.statusCode >= 400)
       req.log.warn(

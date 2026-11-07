@@ -124,6 +124,25 @@ export function registerHostRoutes(
         })
       : reply.code(404).send({ error: 'demande inconnue, expirée ou annulée' });
   });
+  // D177 : le registre vu du Mac, identité comprise ; jamais l'empreinte
+  app.get('/api/host/appareils', async (req, reply) => {
+    if (!admin(req, reply)) return reply;
+    return deps.modeHost.registre.lister();
+  });
+  app.delete('/api/host/appareils/:id', async (req, reply) => {
+    if (!admin(req, reply)) return reply;
+    const { id } = req.params as { id: string };
+    if (!deps.modeHost.registre.revoquer(id)) {
+      return reply.code(404).send({ error: 'appareil inconnu ou déjà coupé' });
+    }
+    return { ok: true };
+  });
+  // « Couper tous les accès » : tous les appareils, et la demande en cours. Le Mac reste.
+  app.post('/api/host/couper', async (req, reply) => {
+    if (!admin(req, reply)) return reply;
+    deps.modeHost.appairages.toutAnnuler();
+    return { coupes: deps.modeHost.registre.toutRevoquer().length };
+  });
   app.post('/api/host/appairages/:id/refuser', async (req, reply) => {
     if (!admin(req, reply)) return reply;
     const { id } = req.params as { id: string };
