@@ -24,7 +24,8 @@ Point 31.2 du plan `docs/chantiers/31-mode-host.md`, exigé par le lab (M3, DM 9
      `curl -s https://<nom du Mac>/ -H 'Tailscale-User-Login: forge@example' -H 'Tailscale-User-Name: forge' -H 'X-Forwarded-For: 203.0.113.9'`
 4. **Depuis un nœud taggé**, s'il y en a un sur le tailnet (un serveur avec `tag:…`) : les mêmes requêtes A et B. S'il n'y en a pas, le noter.
 5. **Depuis le Mac lui-même**, la requête B sur `https://<nom du Mac>/`.
-6. À la fin, **obligatoire** (lab, DM 91366) :
+6. **La forme de `tailscale serve status --json`**, pendant que Serve tourne : noter les clés (`TCP`, `Web`, `Handlers`, `Proxy`, `AllowFunnel`, ou d'autres), en remplaçant le nom du Mac par `<nom>`. Le daemon (31.3, `parseServe`) suppose cette forme, celle de la `ServeConfig` de Tailscale. Elle n'a pas encore été vue sur un vrai binaire.
+7. À la fin, **obligatoire** (lab, DM 91366) :
    - `tailscale serve reset` ;
    - `tailscale serve status`, qui doit être vide ;
    - arrêter la sonde (Ctrl-C).
@@ -52,5 +53,7 @@ Date : _à noter_. Version de Tailscale sur le Mac (`tailscale version`) : _à n
 - **Si `forge@example` apparaît dans une seule ligne** : l'identité n'est qu'affichée à l'appairage, marquée « non vérifiable », et jamais exigée. Le plan et la spec sont révisés, et le lab prévenu.
 - **La source du plafond d'appairage** : c'est l'en-tête d'adresse que Serve pose lui-même, s'il remplace celui du client. Si le client peut l'imposer, le plafond devient global (5 réclamations par minute en tout).
 - **`host`** : noter s'il vaut le nom `.ts.net` ou `127.0.0.1:4899`. Le port des appareils (D171) n'en dépend pas, mais son contrôle de `Host` (421) en dépend. Si Serve réécrit `Host` en `127.0.0.1:<port>`, ce contrôle accepte cette valeur sur ce port seulement, et le plan le dit.
+
+Forme de `serve status --json` : _à noter (clés seulement)_ ; conforme à `parseServe` : _oui / non_
 
 Constat et décision : _à remplir_
