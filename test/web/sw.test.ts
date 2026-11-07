@@ -135,3 +135,9 @@ test.each([true, false])(
     } else expect(h.openWindow).toHaveBeenCalledWith('/');
   },
 );
+
+test('D209 : le diff échappe au cache du service worker', () => {
+  const h = coque(200, true, 'cors', '/api/appareils/sujets/x/fichiers/0/diff?tete=abc');
+  expect(h.respondWith).not.toHaveBeenCalled();
+  expect(h.put).not.toHaveBeenCalled();
+});

@@ -156,6 +156,28 @@ test.describe.serial('app mobile (32.11), Chromium', () => {
           expect((await bouton.boundingBox())!.height).toBeGreaterThanOrEqual(44);
       }
     }
+    await telephone.route('**/api/appareils/sujets/*/livraison', (route) =>
+      route.fulfill({
+        json: { head: 'a'.repeat(40), fichiers: [{ nom: 'long.ts', ajouts: 1, retraits: 0 }] },
+      }),
+    );
+    await telephone.route('**/api/appareils/sujets/*/fichiers/0/diff?*', (route) =>
+      route.fulfill({
+        json: { etat: 'ok', lignes: ['+' + 'ligne longue '.repeat(200)] },
+      }),
+    );
+    await telephone.goto(`${ORIGINE_APPAREIL}/sujets/${sujet}/fichiers/0`);
+    await expect(telephone.locator('.diff-ajout')).toBeVisible();
+    expect(await telephone.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+      true,
+    );
+    expect(
+      await telephone
+        .locator('.appareil-diff')
+        .evaluate((bloc) => bloc.scrollWidth > bloc.clientWidth),
+    ).toBe(true);
+    await telephone.unroute('**/api/appareils/sujets/*/livraison');
+    await telephone.unroute('**/api/appareils/sujets/*/fichiers/0/diff?*');
     await telephone.setViewportSize({ width: 390, height: 844 });
   });
 

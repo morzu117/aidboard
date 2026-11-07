@@ -7,6 +7,7 @@ import { MemoryRouter } from 'react-router';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import type { EtatPourAppareil } from '../../src/shared/host.js';
 import { AppAppareil } from '../../web/src/AppAppareil.js';
+import * as dernierEtat from '../../web/src/data/dernierEtat.js';
 import { SessionExpired, api } from '../../web/src/data/api.js';
 import { detecterMode, type Moi, type ModeInterface } from '../../web/src/data/appareil.js';
 import { AidClient } from '../../web/src/data/client.js';
@@ -786,4 +787,100 @@ test('32.10 : lire une carte du 31 dans la coque mobile, sans écriture', async 
   expect(node('carte-board.retour')?.getAttribute('href')).toBe('/board?projet=42');
   expect(node('carte-board.corps.texte')?.textContent).toContain('<b>pas du HTML</b>');
   expect(h.calls.every((appel) => appel.method === 'GET')).toBe(true);
+});
+
+const LIVRAISON_DIFF = {
+  head: 'a'.repeat(40),
+  fichiers: [
+    { nom: 'z.ts', ajouts: 2, retraits: 1 },
+    { nom: 'a.ts', ajouts: 1, retraits: 0 },
+  ],
+  controles: [],
+  revue: { etat: 'ok', surLaTete: true },
+  blocage: null,
+  prNumber: null,
+};
+const URL_LIVRAISON_DIFF = '/api/appareils/sujets/tp_1/livraison';
+const urlDiff = (index = 0, tete = LIVRAISON_DIFF.head) =>
+  `/api/appareils/sujets/tp_1/fichiers/${index}/diff?tete=${tete}`;
+
+test.each([
+  ['sensible', 200, 'Fichier sensible : il se lit sur le Mac.'],
+  ['binaire', 200, 'Fichier binaire.'],
+  ['coupe', 200, 'Suite sur le Mac.'],
+  ['code_coupe', 403, 'La lecture du code est coupée sur le Mac.'],
+  ['perimee', 409, 'La livraison a changé.'],
+  ['fichier', 404, "Ce fichier n'est plus dans la livraison."],
+  ['requete', 400, 'Demande de diff invalide.'],
+])('32b.9 : réponse %s', async (etat, status, texte) => {
+  const h = monter({ kind: 'appareil', moi: MOI }, '/sujets/tp_1/fichiers/0', {
+    [`GET ${URL_LIVRAISON_DIFF}`]: () => reponse(200, LIVRAISON_DIFF),
+    [`GET ${urlDiff()}`]: () =>
+      reponse(
+        status,
+        status === 200
+          ? { etat, lignes: etat === 'coupe' ? ['+suite'] : undefined }
+          : { raison: etat },
+      ),
+  });
+  expect(await screen.findByText(texte)).toBeTruthy();
+  if (etat === 'coupe') expect(screen.getByText('+suite')).toBeTruthy();
+  h.client.stop();
+});
+
+test('32b.9 : index du lien, tête parent et classes des lignes', async () => {
+  const garder = vi.spyOn(dernierEtat, 'garder');
+  const h = monter({ kind: 'appareil', moi: MOI }, '/sujets/tp_1/livraison', {
+    [`GET ${URL_LIVRAISON_DIFF}`]: () => reponse(200, LIVRAISON_DIFF),
+    [`GET ${urlDiff(1)}`]: () =>
+      reponse(200, {
+        etat: 'ok',
+        lignes: ['+ajout', '-retrait', '@@ bloc', ' contexte', '+[masqué]'],
+      }),
+  });
+  fireEvent.click(await screen.findByRole('link', { name: 'a.ts · +1 −0' }));
+  await screen.findByText('+ajout');
+  for (const [texte, classe] of [
+    ['+ajout', 'ajout'],
+    ['-retrait', 'retrait'],
+    ['@@ bloc', 'bloc'],
+    ['contexte', 'contexte'],
+  ]) {
+    expect(screen.getByText(texte!).closest(`.diff-${classe}`)).toBeTruthy();
+  }
+  expect(screen.getByText('[masqué]').className).toBe('diff-masque');
+  expect(h.calls.filter((c) => c.url === URL_LIVRAISON_DIFF)).toHaveLength(1);
+  expect(h.calls.some((c) => c.url === urlDiff(1))).toBe(true);
+  expect(garder).toHaveBeenCalled();
+  for (const [valeur] of garder.mock.calls) expect(valeur).toEqual(etat());
+  garder.mockRestore();
+  h.client.stop();
+});
+
+test('32b.9 : Relire renouvelle la livraison avant le diff', async () => {
+  let nombre = 0;
+  const tete = 'b'.repeat(40);
+  const h = monter({ kind: 'appareil', moi: MOI }, '/sujets/tp_1/fichiers/0', {
+    [`GET ${URL_LIVRAISON_DIFF}`]: () =>
+      reponse(200, { ...LIVRAISON_DIFF, head: nombre++ ? tete : LIVRAISON_DIFF.head }),
+    [`GET ${urlDiff()}`]: () => reponse(409, { raison: 'perimee' }),
+    [`GET ${urlDiff(0, tete)}`]: () => reponse(200, { etat: 'ok', lignes: ['+nouveau'] }),
+  });
+  fireEvent.click(await screen.findByRole('button', { name: 'Relire' }));
+  await screen.findByText('+nouveau');
+  expect(
+    h.calls
+      .filter((c) => c.url.includes('/livraison') || c.url.includes('/diff?'))
+      .map((c) => c.url),
+  ).toEqual([URL_LIVRAISON_DIFF, urlDiff(), URL_LIVRAISON_DIFF, urlDiff(0, tete)]);
+  h.client.stop();
+});
+
+test('32b.9 : Relire un tour propose les mêmes index de fichiers', async () => {
+  const h = monter({ kind: 'appareil', moi: MOI }, '/sujets/tp_1/tour', {
+    [`GET ${URL_LIVRAISON_DIFF}`]: () => reponse(200, LIVRAISON_DIFF),
+  });
+  const lien = await screen.findByRole('link', { name: 'a.ts · +1 −0' });
+  expect(lien.getAttribute('href')).toBe('/sujets/tp_1/fichiers/1');
+  h.client.stop();
 });

@@ -142,6 +142,7 @@ Ce document.
   - les lignes ajoutées et retirées, sans défilement horizontal de la page ; une ligne longue défile dans son bloc ;
   - « Fichier sensible », « Fichier binaire » et « Suite sur le Mac » ;
   - hors ligne, « Diff indisponible ».
+- *Révision 32b.9.* L'écran « Lire un fichier » (`/sujets/:id/fichiers/:index`) est dans `ParcoursAppareil.tsx`. Le diff est un état local au composant : il n'est jamais passé à `dernierEtat`, et `sw.js` saute `/api/`, ce qu'un test vérifie. Une ligne longue défile dans `.appareil-diff`, et la page reste à 320 px. Pour la largeur, l'e2e mobile simule les réponses (`route.fulfill`). Un test de minuterie de `conversation.test.tsx`, sans rapport avec ce point, a échoué une fois sous charge ; il est vert en relance. Gate 2207, e2e 111.
 
 ### 32b.10 L'e2e et la fiche de recette
 - `e2e/mobile-push-diff.spec.ts`, sur Chromium :
