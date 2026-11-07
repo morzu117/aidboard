@@ -1,5 +1,5 @@
 import { Type } from '@sinclair/typebox';
-import { ASK_TEXT_ANSWER } from '../shared/question.js';
+import { optionsAppareil } from './host/options.js';
 import type { PendingRequest } from '../shared/model.js';
 import type { Db } from './db.js';
 import { AidHttpError } from './errors.js';
@@ -77,9 +77,8 @@ export function repondreAppareil(
   }
   if (!pending || pending.kind !== 'question') return refuser('nature');
   if (pending.id !== corps.pendingId) return { status: 409, corps: { raison: 'perimee' } };
-  const option = pending.options[corps.option];
-  if (!option || option.answer === ASK_TEXT_ANSWER.answer)
-    return { status: 400, corps: { raison: 'option' } };
+  const option = optionsAppareil(pending)[corps.option];
+  if (!option) return { status: 400, corps: { raison: 'option' } };
   try {
     deps.agents.answer(id, corps.pendingId, option.answer);
   } catch (erreur) {

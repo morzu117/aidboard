@@ -405,3 +405,26 @@ test('GET /api/state : une option coupée suffit à signaler la coupe', async ()
   expect(r.json().agents[0].question.coupee).toBe(true);
   expect(r.json().agents[0].question.options[0].length).toBeLessThanOrEqual(140);
 });
+
+test.each([0, 1, 2, 3])('32.12 : index appareil filtré %s', async (option) => {
+  const p = await preparer();
+  const options = [
+    { label: 'Premier', answer: '1' },
+    ASK_TEXT_ANSWER,
+    { label: 'Refuser', answer: 'no' },
+    { label: 'Second', answer: '2' },
+  ];
+  p.db.prepare('UPDATE agents SET pending = ?').run(JSON.stringify({ ...demande, options }));
+  const etat = await p.app.inject({ method: 'GET', url: '/api/state', headers: p.headers });
+  expect(etat.statusCode).toBe(200);
+  expect(etat.json().agents[0].question.options).toEqual(['Premier', 'Second']);
+  const r = await p.envoyer({ ...corps, option });
+  if (option < 2) {
+    expect(r.statusCode).toBe(200);
+    expect(p.pilote).toHaveBeenCalledExactlyOnceWith(demande.id, String(option + 1));
+  } else {
+    expect(r.statusCode).toBe(400);
+    expect(r.json()).toEqual({ raison: 'option' });
+    expect(p.pilote).not.toHaveBeenCalled();
+  }
+});

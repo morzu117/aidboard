@@ -331,3 +331,19 @@ test('32.4 : le tour dépend du statut, de sa date et du type d’agent', () => 
   a.statusAt = null;
   expect(etatPourAppareil(s).agents[0]).not.toHaveProperty('tour');
 });
+
+test('32.12 : choix affichés avec saisie libre au milieu et autre réponse no', () => {
+  const s = snapshot();
+  s.agents[0]!.pending = {
+    id: 'question-1',
+    kind: 'question',
+    question: 'Quel choix ?',
+    options: [
+      { label: 'Premier', answer: '1' },
+      ASK_TEXT_ANSWER,
+      { label: 'Refuser', answer: 'no' },
+      { label: 'Second', answer: '2' },
+    ],
+  };
+  expect(etatPourAppareil(s).agents[0]!.question!.options).toEqual(['Premier', 'Second']);
+});

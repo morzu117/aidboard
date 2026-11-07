@@ -56,7 +56,8 @@ Chromium ne valide ni l'installation iOS, ni ses cookies et safe-areas, ni le la
   rouvrir : l'accès tient sans nouvel appairage avant expiration. Ne relever aucune valeur.
   - Constat : _à remplir_
 - [ ] 32.R.4 Observer les requêtes de l'app installée : forme de `Sec-Fetch-Site` sur la lecture
-  et l'écriture de même origine ; aucune erreur 403 due à cet en-tête. Noter s'il est absent.
+  et l'écriture de même origine : valeur attendue `Sec-Fetch-Site: same-origin`, sans erreur
+  403 due à cet en-tête. Noter toute absence ou valeur différente.
   Confirmer qu'une origine étrangère ne permet pas d'écriture.
   - Constat : _à remplir_
 - [ ] 32.R.5 Safe-areas : portrait puis paysage, avec encoche et indicateur d'accueil.
@@ -82,7 +83,8 @@ Chromium ne valide ni l'installation iOS, ni ses cookies et safe-areas, ni le la
   Réveiller le Mac : l'état frais revient.
   - Constat : _à remplir_
 - [ ] 32.R.11 Révoquer depuis le Mac, app ouverte : « Accès coupé ». Dans l'inspecteur,
-  la base IndexedDB `aid-appareil` est absente ou sans entrée et `aid.mode` a disparu.
+  la base IndexedDB `aid-appareil` et le cache `aid-shell` sont absents ou vides,
+  et `aid.mode` a disparu.
   Recharger : l'accès ne revient pas. Ne copier ni cookie ni contenu de stockage.
   - Constat : _à remplir_
 - [ ] 32.R.12 Refaire appairage, question, permission, relecture, veille et révocation avec
@@ -91,6 +93,18 @@ Chromium ne valide ni l'installation iOS, ni ses cookies et safe-areas, ni le la
 - [ ] 32.R.13 Arrêter l'instance de recette ; si Serve a été activé pour celle-ci,
   `tailscale serve reset`, puis `tailscale serve status` vide.
   - Constat : _à remplir_
+
+- [ ] 32.R.14 Safari : après révocation et réception du 401, vérifier la présence de
+  `Clear-Site-Data` dans la réponse et constater son effet sur le stockage.
+  Son efficacité sur Safari reste non vérifiée. Si Safari l'ignore, `effacer()` couvre
+  IndexedDB ; contrôler aussi séparément le cache `aid-shell`, sans attribuer à l'en-tête
+  les suppressions effectuées par l'app. Noter si l'effet propre de l'en-tête est indéterminé.
+  - Version Safari et constat : _à remplir_
+- [ ] 32.R.15 Lire un état, mettre le téléphone hors ligne, puis révoquer l'appareil
+  depuis le Mac. Recharger hors ligne : le dernier état reste visible avec son âge.
+  Ce résidu persiste jusqu'au prochain 401. Rétablir le réseau : à réception du 401,
+  constater « Accès coupé », puis IndexedDB `aid-appareil` et cache `aid-shell` vides.
+  - Constat hors ligne puis après le 401 : _à remplir_
 
 ## À valider
 

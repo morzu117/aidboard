@@ -1,4 +1,4 @@
-import { ASK_TEXT_ANSWER } from '../../shared/question.js';
+import { optionsAppareil } from './options.js';
 import { resumeTour } from '../../shared/tour.js';
 import { filtrerTexte, texteCoupe } from './filtre.js';
 import type { EtatPourAppareil, RaisonAppareil } from '../../shared/host.js';
@@ -65,13 +65,9 @@ export function etatPourAppareil(s: StateSnapshot): EtatPourAppareil {
           pendingId: a.pending.id,
           coupee:
             texteCoupe(a.pending.question) ||
-            a.pending.options.some(
-              (option) => option.answer !== ASK_TEXT_ANSWER.answer && texteCoupe(option.label),
-            ),
+            optionsAppareil(a.pending).some((option) => texteCoupe(option.label)),
           texte: filtrerTexte(a.pending.question),
-          options: a.pending.options
-            .filter((option) => option.answer !== ASK_TEXT_ANSWER.answer)
-            .map((option) => filtrerTexte(option.label)),
+          options: optionsAppareil(a.pending).map((option) => filtrerTexte(option.label)),
         },
       }),
       ...(a.kind !== 'shell' &&

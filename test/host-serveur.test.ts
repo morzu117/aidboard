@@ -60,6 +60,7 @@ async function ouvrir(
     appairages: new Appairages(),
     webRoot: extra.webRoot === undefined ? build() : extra.webRoot,
     logStream: extra.logStream,
+    now: () => h.t,
   });
   if (!s.disponible) throw new Error(s.raison);
   const { appareil, jeton } = registre.emettre({ nom: 'Téléphone', identite: null });

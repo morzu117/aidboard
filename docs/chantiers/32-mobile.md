@@ -133,8 +133,12 @@ Sujets (filtre par état, nom en gras s'il t'attend), Suivre un sujet (prochaine
   - aucun défilement horizontal à 320 px.
 - `docs/recette-chantier-32-mobile.md` : iPhone installé (cookie `__Host-`, `Sec-Fetch-Site`, stockage distinct de Safari), Android, Node 22 et 24.
 - *Révision 32.11.* Le montage du frontal et l'appairage sont partagés dans `e2e/host-helpers.ts` ; les assertions de `mode-host.spec.ts` y ont été déplacées, aucune retirée. `e2e/mobile.spec.ts` : 7 cas. Gate 2029, e2e 111 verts. La recette réelle sur iPhone et Android reste à faire avec Julien.
+- *Révision 32.12 (revue du lab, DM 91939).* `optionsAppareil(pending)` (`src/daemon/host/options.ts`) est la seule source de la liste des options vue par l'appareil : `masque.ts` l'affiche, `reponses.ts` y résout l'index. Le choix i répond donc la i-ème option affichée, quelle que soit la place de « Répondre en texte ». Les tests `host-signal` et `host-serveur` partagent l'horloge du registre : ils échouaient dès que l'heure réelle dépassait 10:00Z + 8 h. La fiche de recette ajoute `Sec-Fetch-Site`, la purge après révocation, `Clear-Site-Data` sur Safari et le résidu hors ligne. Gate 2034, e2e 111 verts.
 
 ## 6. Pièges
+
+- **Résidu accepté (lab, DM 91916 et 91939) : le mode vivant est relevé quand la question est posée.** Un Maj+Tab pendant que la question attend n'est pas vu : l'appareil peut alors trancher une question sous un mode que l'utilisateur du Mac a lui-même élargi. C'est acceptable, car seul le terminal du Mac, le principal de confiance, change ce mode. Une défense en profondeur possible serait de lire l'indicateur de mode au pied de l'écran du terminal, mais elle est fragile d'une version de la CLI à l'autre et reste ouverte sur un indicateur inconnu ; elle n'est pas faite.
+- **Résidu accepté (lab, DM 91939) : un appareil révoqué alors qu'il est hors ligne garde son dernier état** dans IndexedDB jusqu'à son prochain 401. C'est l'état déjà masqué que son cookie lui donnait en direct. La fiche de recette le constate.
 
 - **iOS :** le stockage d'une app installée est séparé de celui de Safari ; un appareil appairé dans Safari peut devoir l'être à nouveau dans l'app. L'écran le dit.
 - **Le filtre ne voit pas tout :** un secret écrit en clair dans une phrase passe. Accepté par Julien ; le dire dans la recette.
