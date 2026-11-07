@@ -46,6 +46,7 @@ import type { RemoteKind } from './remote/agents.js';
 import { JetonsArtefacts } from './artefacts/jetons.js';
 import { ouvrirServeurArtefacts, type ServeurArtefacts } from './artefacts/serveur.js';
 import { portArtefacts } from './config.js';
+import type { TailscaleExec } from './mesh/tailscale.js';
 import type { EtatArtefacts } from '../shared/artefacts.js';
 
 export class AidPortInUse extends Error {
@@ -87,6 +88,8 @@ export async function startDaemon(
     remote?: TransportOptions;
     /** Chantier 17 (R.4) : binaires des agents distants ; les tests passent les faux agents. */
     remoteBins?: Partial<Record<RemoteKind, string>>;
+    /** chantier 31 (D173) : l'exécution de `tailscale` ; un test passe une fausse sortie */
+    tailscaleExec?: TailscaleExec;
     // tests : un Embedder/ChatModel déterministe, des délais courts, un rythme d'entretien rapide
     memory?: {
       embedder?: Embedder;
@@ -271,6 +274,7 @@ export async function startDaemon(
       remoteBins: opts.remoteBins,
       logger: opts.logger,
       artefacts: { jetons: jetonsArtefacts, etat: etatArtefacts },
+      tailscaleExec: opts.tailscaleExec,
     });
     try {
       await app.listen({ host: config.host, port: config.port });

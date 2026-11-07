@@ -13,6 +13,7 @@ import {
   type SwairmProbe,
 } from '../src/cli/commands/doctor.js';
 import { resolvePaths } from '../src/daemon/paths.js';
+import type { EtatModeHost } from '../src/shared/host.js';
 import type { IndexStatus } from '../src/shared/structural.js';
 
 const good: Probes = {
@@ -33,6 +34,7 @@ const good: Probes = {
   install: () => ({ mode: 'repo', version: null }),
   mesh: async () => null,
   swairm: async () => null,
+  modeHost: async () => null,
 };
 
 const levels = async (over: Partial<Probes>) =>
@@ -499,4 +501,44 @@ test('chantier 30 (D162) : port des artefacts ouvert, libre, ou indisponible (�
       }),
     }),
   ).toContain('warn:port des artefacts 4880 indisponible');
+});
+
+// Chantier 31 (D182) : les lignes du mode host, seulement s'il est actif.
+const hostOk: EtatModeHost = {
+  actif: true,
+  port: 4890,
+  tailnet: { etat: 'running', nom: 'mac.exemple.ts.net', compte: 'julien@exemple' },
+  serve: { etat: 'ok', funnel: false, interdits: [] },
+  commande: 'tailscale serve --bg --https=443 http://127.0.0.1:4890',
+};
+
+test('31.3 (D182) : mode host éteint, aucune ligne ; actif et sain, des ✓ seulement', async () => {
+  expect((await levels({})).some((l) => l.includes('mode host'))).toBe(false);
+  const lignes = await levels({ modeHost: async () => hostOk });
+  expect(lignes.filter((l) => l.includes('mode host'))).toEqual([
+    'ok:mode host : le nom du Mac sur le tailnet est lu',
+    'ok:mode host : Tailscale Serve vise le port des appareils 4890 en HTTPS',
+    'ok:mode host : aucun Funnel, rien sur internet',
+    'ok:mode host : Serve n’expose ni le daemon, ni le pont de l’app, ni les artefacts',
+  ]);
+});
+
+test('31.3 (D182) : Serve absent ⚠ avec la commande ; Funnel et port interdit ✗', async () => {
+  const checks = await runChecks({
+    ...good,
+    modeHost: async () => ({
+      ...hostOk,
+      tailnet: { etat: 'running', nom: null, compte: null },
+      serve: { etat: 'autre', funnel: true, interdits: [4870, 4871] },
+    }),
+  });
+  const host = checks.filter((c) => c.label.startsWith('mode host'));
+  expect(host.map((c) => `${c.level}:${c.label}`)).toEqual([
+    'warn:mode host : nom du Mac sur le tailnet introuvable',
+    'warn:mode host : Tailscale Serve ne vise pas le port des appareils 4890',
+    'ko:mode host : un Funnel est actif',
+    'ko:mode host : Serve expose le port 4870, 4871',
+  ]);
+  expect(host[1]!.detail).toBe('lancer : tailscale serve --bg --https=443 http://127.0.0.1:4890');
+  expect(host[0]!.detail).toContain('MagicDNS');
 });

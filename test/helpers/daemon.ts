@@ -9,6 +9,7 @@ import type { Embedder } from '../../src/daemon/memory/embed.js';
 import type { ChatModel } from '../../src/daemon/memory/maintain.js';
 import type { IndexEngine } from '../../src/shared/structural.js';
 import type { TransportOptions } from '../../src/daemon/remote/transport.js';
+import type { TailscaleExec } from '../../src/daemon/mesh/tailscale.js';
 
 /** Chantier 17 (D79) : le faux ssh, jamais le vrai — un serveur `vps` de test n'ouvre aucune connexion. */
 export const FAKE_SSH = resolve(__dirname, '../fixtures/fake-ssh.sh');
@@ -32,6 +33,8 @@ export async function startTestDaemon(
     remote?: TransportOptions;
     /** Chantier 17 (R.4) : faux agents lancés sur le faux serveur. */
     remoteBins?: Partial<Record<'claude' | 'codex', string>>;
+    /** Chantier 31 (D173) : la sortie de `tailscale`. Par défaut, binaire absent : jamais le vrai. */
+    tailscaleExec?: TailscaleExec;
     memory?: {
       embedder?: Embedder;
       backoffMs?: number[];
@@ -68,6 +71,7 @@ export async function startTestDaemon(
       env: { ...process.env, FAKE_SSH_HOME: home },
     },
     remoteBins: extra.remoteBins,
+    tailscaleExec: extra.tailscaleExec ?? (async () => ({ stdout: '', code: 'ENOENT' })),
   });
   const headers = { host: `127.0.0.1:${d.port}`, authorization: `Bearer ${d.auth.adminToken}` };
   return { d, home, headers, db: d.db, store: d.store };

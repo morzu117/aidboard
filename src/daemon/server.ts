@@ -36,6 +36,8 @@ import { registerServerRoutes } from './routes/servers.js';
 import { registerServerDiscussionRoutes } from './routes/serverDiscussions.js';
 import { registerMachineRoutes } from './routes/machines.js';
 import { type ArtefactsDeps, registerArtefactRoutes } from './routes/artefacts.js';
+import { registerHostRoutes } from './routes/host.js';
+import type { TailscaleExec } from './mesh/tailscale.js';
 import type { RemoteKind } from './remote/agents.js';
 import type { TransportOptions } from './remote/transport.js';
 import type { MeshService } from './mesh/service.js';
@@ -81,6 +83,8 @@ export interface ServerDeps {
   logger?: boolean;
   /** chantier 30 : les jetons et l'état du second port ; absent = artefacts indisponibles */
   artefacts?: ArtefactsDeps;
+  /** chantier 31 (D173) : l'exécution de `tailscale`, remplacée en test ; absent = le vrai binaire */
+  tailscaleExec?: TailscaleExec;
 }
 
 export function redactToken(url: string | undefined): string {
@@ -198,6 +202,11 @@ export async function buildServer(deps: ServerDeps): Promise<FastifyInstance> {
   registerFsRoutes(app);
   registerFileRoutes(app, { db: deps.db });
   registerArtefactRoutes(app, { db: deps.db, artefacts: deps.artefacts });
+  registerHostRoutes(app, {
+    config: deps.config,
+    getPort: () => (app.server.address() as AddressInfo | null)?.port ?? deps.config.port,
+    tailscaleExec: deps.tailscaleExec,
+  });
   registerHookRoutes(app, () => process.env);
   const indexer =
     deps.indexer ??

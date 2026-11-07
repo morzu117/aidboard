@@ -8,6 +8,7 @@ import {
   DEFAULT_TAILSCALE_BIN,
   loadConfig,
   parseConfig,
+  portAppareils,
   portArtefacts,
   writeDefaultConfigIfAbsent,
 } from '../src/daemon/config.js';
@@ -224,4 +225,27 @@ test('chantier 30 (D162) : artefacts.port, par défaut le port du daemon + 10', 
   expect(portArtefacts({ ...parseConfig(''), port: 0 })).toBe(0);
   expect(() => parseConfig('artefacts:\n  port: 0\n')).toThrow(ConfigError);
   expect(() => parseConfig('artefacts:\n  hote: x\n')).toThrow(/artefacts\.hote/);
+});
+
+// Chantier 31 (D171, D172) : le mode host, éteint par défaut, et le port des appareils.
+test('31.3 : modeHost éteint par défaut ; port des appareils = port du daemon + 20', () => {
+  const c = parseConfig('');
+  expect(c.modeHost).toEqual({ actif: false, port: null });
+  expect(portAppareils(c)).toBe(4890);
+  expect(portAppareils(parseConfig('port: 5000'))).toBe(5020);
+  expect(portAppareils(parseConfig('modeHost:\n  port: 4999'))).toBe(4999);
+  expect(portAppareils({ ...c, port: 0 })).toBe(0);
+  expect(parseConfig('modeHost:\n  actif: true').modeHost.actif).toBe(true);
+});
+
+test('31.3 : modeHost refuse une clé inconnue, un type faux, et les ports interdits', () => {
+  expect(() => parseConfig('modeHost:\n  ecoute: 0.0.0.0')).toThrow(/clé inconnue/);
+  expect(() => parseConfig('modeHost:\n  actif: oui')).toThrow(/true ou false/);
+  expect(() => parseConfig('modeHost: 1')).toThrow(/objet/);
+  expect(() => parseConfig('modeHost:\n  port: 4870')).toThrow(/port du daemon/);
+  expect(() => parseConfig('modeHost:\n  port: 4871')).toThrow(/pont/);
+  expect(() => parseConfig('modeHost:\n  port: 4880')).toThrow(/artefacts/);
+  expect(() => parseConfig('artefacts:\n  port: 4890')).toThrow(/artefacts/);
+  // l'adresse d'écoute ne bouge toujours pas
+  expect(() => parseConfig('host: 0.0.0.0')).toThrow(/127.0.0.1/);
 });

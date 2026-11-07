@@ -9,6 +9,8 @@ import { onPath } from '../../daemon/actions/editor.js';
 import { readProcVersion } from '../../daemon/routes/workspaces.js';
 import { loadConfig } from '../../daemon/config.js';
 import { portArtefacts } from '../../daemon/config.js';
+import { etatModeHost } from '../../daemon/routes/host.js';
+import type { EtatModeHost } from '../../shared/host.js';
 import type { EtatArtefacts } from '../../shared/artefacts.js';
 import { meshPaths } from '../../daemon/mesh/paths.js';
 import { tailscaleState } from '../../daemon/mesh/tailscale.js';
@@ -67,6 +69,8 @@ export interface Probes {
   install(): { mode: InstallMode; version: string | null }; // 13.2 : comment cette CLI est installée ; version = celle de ~/.aid/server/current (mode release)
   mesh(): Promise<MeshProbe | null>; // 12.2 : null = mesh désactivé (`mesh.cell` vide)
   swairm(): Promise<SwairmProbe | null>; // 14.5 : null = cell Swairm désactivée (`swairm.bin` vide)
+  /** chantier 31 (D182) : null = mode host éteint (`modeHost.actif` vaut false) */
+  modeHost(): Promise<EtatModeHost | null>;
 }
 
 export function nodeSupported(v: string): boolean {
@@ -235,6 +239,42 @@ export async function runChecks(p: Probes): Promise<Check[]> {
       detail: `${artefacts.raison ?? 'occupé'} : l’onglet Artefacts ne s’affichera pas ; changer \`artefacts.port\` dans ~/.aid/config.yaml`,
     },
   );
+
+  // chantier 31 (D182) : seulement si le mode host est actif ; rien n'est lancé, tout est lu
+  const host = await p.modeHost();
+  if (host) {
+    verify(host.tailnet.nom !== null, 'mode host : le nom du Mac sur le tailnet est lu', {
+      level: 'warn',
+      label: 'mode host : nom du Mac sur le tailnet introuvable',
+      detail:
+        host.tailnet.etat === 'running'
+          ? 'activer MagicDNS et HTTPS dans la console Tailscale'
+          : 'démarrer Tailscale',
+    });
+    verify(
+      host.serve.etat === 'ok',
+      `mode host : Tailscale Serve vise le port des appareils ${host.port} en HTTPS`,
+      {
+        level: 'warn',
+        label: `mode host : Tailscale Serve ne vise pas le port des appareils ${host.port}`,
+        detail: `lancer : ${host.commande}`,
+      },
+    );
+    verify(!host.serve.funnel, 'mode host : aucun Funnel, rien sur internet', {
+      level: 'ko',
+      label: 'mode host : un Funnel est actif',
+      detail: 'quelque chose de ce Mac est sur internet par Tailscale : couper le Funnel',
+    });
+    verify(
+      host.serve.interdits.length === 0,
+      'mode host : Serve n’expose ni le daemon, ni le pont de l’app, ni les artefacts',
+      {
+        level: 'ko',
+        label: `mode host : Serve expose le port ${host.serve.interdits.join(', ')}`,
+        detail: 'seul le port des appareils doit passer par Serve : retirer ce service',
+      },
+    );
+  }
 
   if (p.has('claude')) {
     verify(p.claudeHooks(), 'hooks Claude Code installés', {
@@ -466,6 +506,10 @@ export function realProbes(paths: AidPaths): Probes {
         gateway: cfg.gateway,
         tailscale: await tailscaleState(cfg.tailscale.bin),
       };
+    },
+    async modeHost() {
+      const cfg = loadConfig(paths);
+      return cfg.modeHost.actif ? etatModeHost(cfg, cfg.port) : null;
     },
     async swairm() {
       const { bin } = loadConfig(paths).swairm;
