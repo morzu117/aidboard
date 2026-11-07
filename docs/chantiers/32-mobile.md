@@ -74,6 +74,7 @@ Ce document. Pas de code.
 - `HS` : `Clear-Site-Data` sur le 401 `revoque` et `expire`.
 - `AP` : la marque `aid.mode`, et le choix au démarrage à froid.
 - Tests : `SW` (une 502 n'écrase pas la coque), le 401 et son en-tête, `detecterMode` à froid avec et sans marque.
+- *Révision 32.2.* Ouverte à froid sans Mac, l'app est en mode appareil sans identité : `Coque` (`AA`) affiche la bannière sans la barre, puis relit `GET /api/appareils/moi` une fois au retour du Mac, et affiche la barre ; un 401 à ce moment mène à l'écran hors accès et efface la marque. Une navigation qui ne répond pas 200 sert la coque en cache, s'il y en a une.
 
 ### 32.3 Le filtre de valeurs (D186)
 - `src/daemon/host/filtre.ts`, pur, sans dépendance.

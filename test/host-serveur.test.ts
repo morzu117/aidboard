@@ -128,14 +128,17 @@ test('31.5 (D177) : sans cookie, inconnu, révoqué ou expiré : 401 avec la rai
     url: '/api/appareils/moi',
     headers: { host: NOM, 'sec-fetch-site': 'same-origin' },
   });
+  expect(sans.headers['clear-site-data']).toBeUndefined();
   expect(sans.statusCode).toBe(401);
   expect(sans.json()).toEqual({ error: 'Non authentifié', raison: 'inconnu' });
   const autre = registre.emettre({ nom: 'B', identite: null });
   registre.revoquer(autre.appareil.id);
   const revoque = await srv.app.inject({ url: '/api/appareils/moi', headers: api(autre.jeton) });
+  expect(revoque.headers['clear-site-data']).toBe('"cache", "storage"');
   expect([revoque.statusCode, revoque.json().raison]).toEqual([401, 'revoque']);
   h.t += DUREE_ACCES_MS;
   const expire = await srv.app.inject({ url: '/api/appareils/moi', headers: api(jeton) });
+  expect(expire.headers['clear-site-data']).toBe('"cache", "storage"');
   expect([expire.statusCode, expire.json().raison]).toEqual([401, 'expire']);
   expect(registre.lire(appareil.id)!.etat).toBe('expire');
 });

@@ -1,8 +1,9 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Navigate, NavLink, Route, Routes, useLocation, useParams } from 'react-router';
-import { AidClient } from './data/client.js';
+import { AidClient, type AccesFini } from './data/client.js';
+import { SessionExpired } from './data/api.js';
 import type { Moi, ModeInterface } from './data/appareil.js';
-import { AidProvider, useAid } from './data/useAidState.js';
+import { AidProvider, useAid, useAidClient } from './data/useAidState.js';
 import { AccueilAppareil } from './ecrans/AccueilAppareil.js';
 import { AppareilsConnectes } from './ecrans/AppareilsConnectes.js';
 import { Appairer } from './ecrans/Appairer.js';
@@ -48,14 +49,39 @@ function Carte() {
   return <CarteContenu key={id} cardId={id} />;
 }
 
-function Coque({ moi }: { moi: Moi }) {
+function Coque({ moi }: { moi: Moi | null }) {
   const { appareil, daemon, acces } = useAid();
-  if (acces) return <HorsAcces fin={acces} />;
+  const client = useAidClient();
+  const [identite, setIdentite] = useState(moi);
+  const [fin, setFin] = useState<AccesFini | null>(null);
+  useEffect(() => {
+    if (identite || daemon !== 'connecte') return;
+    let actif = true;
+    void client.request<Moi>('GET', '/api/appareils/moi').then(
+      (lu) => {
+        if (actif) setIdentite(lu);
+      },
+      (err: unknown) => {
+        if (!actif || !(err instanceof SessionExpired)) return;
+        try {
+          localStorage.removeItem('aid.mode');
+        } catch {
+          // Le stockage peut être interdit.
+        }
+        client.stop();
+        setFin(err.raison === 'expire' || err.raison === 'revoque' ? err.raison : 'inconnu');
+      },
+    );
+    return () => {
+      actif = false;
+    };
+  }, [client, daemon, identite]);
+  if (acces || fin) return <HorsAcces fin={acces ?? fin!} />;
   const cell = appareil?.mesh?.state.cell ?? null;
   return (
     <div className="appareil-coque" data-node="appareil">
-      <Barre moi={moi} board={cell !== null} />
-      {(daemon === 'injoignable' || daemon === 'reconnexion') && appareil && (
+      {identite && <Barre moi={identite} board={cell !== null} />}
+      {(daemon === 'injoignable' || daemon === 'reconnexion') && (
         <p className="appareil-bandeau" role="status" data-node="appareil.bandeau">
           {daemon === 'injoignable' ? 'Mac injoignable. Nouvel essai…' : 'Reconnexion…'}
         </p>

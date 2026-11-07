@@ -188,6 +188,8 @@ export async function ouvrirServeurAppareils(
     if (!api && !socket) return;
     const lu = opts.registre.authentifier(req.cookies[COOKIE_APPAREIL]);
     if (!lu.ok) {
+      if (lu.raison === 'revoque' || lu.raison === 'expire')
+        reply.header('Clear-Site-Data', '"cache", "storage"');
       return reply.code(401).send({ error: 'Non authentifié', raison: lu.raison });
     }
     req.appareil = lu.appareil;
