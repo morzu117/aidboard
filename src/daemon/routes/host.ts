@@ -1,6 +1,5 @@
 import type { Db } from '../db.js';
 import { abonnementsActifs } from '../push/abonnements.js';
-import { chargerOuCreerCles } from '../push/vapid.js';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import {
   type AidConfig,
@@ -99,14 +98,17 @@ export function registerHostRoutes(
     const actif = (req.body as { actif?: unknown } | null)?.actif;
     if (typeof actif !== 'boolean') return reply.code(400).send({ error: 'actif : true ou false' });
     try {
-      if (actif) chargerOuCreerCles(deps.paths.home);
+      if (actif) deps.modeHost.fournisseurPush?.obtenir();
       ecrireModeHostPush(deps.paths, actif);
     } catch (err) {
       if (err instanceof ConfigError) return reply.code(409).send({ error: err.message });
       throw err;
     }
     deps.config.modeHost.push = actif;
-    if (!actif) deps.db.prepare('DELETE FROM push_abonnements').run();
+    if (!actif) {
+      deps.modeHost.fournisseurPush?.couper();
+      deps.db.prepare('DELETE FROM push_abonnements').run();
+    }
     return etat();
   });
 

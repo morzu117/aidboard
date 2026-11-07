@@ -2,6 +2,10 @@ import { expect, test } from 'vitest';
 import { fichierSensible, filtrerDiff } from '../src/daemon/host/filtreCode.js';
 
 test.each([
+  '.htpasswd',
+  'cles.jks',
+  'cles.keystore',
+  'service-account-test.json',
   '.env',
   '.envrc',
   '.env-prod',
@@ -79,6 +83,8 @@ test.each([
   ['+dsn: 123', '+dsn: [masqué]'],
   ['+password: ""', '+password: ""'],
   ['+password=', '+password='],
+  ['+DB_PASS=motdepasse', '+DB_PASS=[masqué]'],
+  ['+access_key: xyz', '+access_key: [masqué]'],
   ['+{"token":"abc", "pwd":"def"}', '+{"token":"[masqué]", "pwd":"[masqué]"}'],
 ])('masque la valeur et garde la syntaxe : %s', (ligne, attendu) => {
   expect(filtrerDiff([ligne])).toEqual([attendu]);
@@ -175,3 +181,56 @@ test.each(['Bearer', 'basic', 'TOKEN', 'dIgEsT'])(
     ]);
   },
 );
+
+// Faux positifs acceptés par le lab : « pass » est cherché en sous-chaîne.
+test.each(['bypass:', 'compass ='])('masque volontairement %s', (cle) => {
+  expect(filtrerDiff([`+${cle} exemple`])).toEqual([`+${cle} [masqué]`]);
+});
+
+test('les faux en-têtes dans un hunk sont du contenu, les fichiers suivants ont leurs en-têtes', () => {
+  const premier = [
+    'diff --git a/a.sql b/a.sql',
+    'index abc..def 100644',
+    '--- a/a.sql',
+    '+++ b/a.sql',
+    '@@ -1 +1 @@',
+  ];
+  const second = [
+    'diff --git a/b.sql b/b.sql',
+    'index abc..def 100644',
+    '--- a/b.sql',
+    '+++ b/b.sql',
+    '@@ -1 +1 @@',
+  ];
+  expect(
+    filtrerDiff([
+      ...premier,
+      '--- DB_PASSWORD=hunter2',
+      '+++ token=abc',
+      '\\ No newline at end of file',
+      ...second,
+      '+DB_PASS=exemple',
+    ]),
+  ).toEqual([
+    ...premier,
+    '--- DB_PASSWORD=[masqué]',
+    '+++ token=[masqué]',
+    '\\ No newline at end of file',
+    ...second,
+    '+DB_PASS=[masqué]',
+  ]);
+});
+
+test('masque une clé sans BEGIN mais conserve une phrase et un identifiant court', () => {
+  const phrase = 'Une phrase ordinaire avec des espaces reste visible ici même';
+  const court = 'aZ'.repeat(15);
+  expect(
+    filtrerDiff([
+      '@@ -1 +1 @@',
+      '+' + 'aZ+/'.repeat(16),
+      '+  ' + 'aZ_-'.repeat(16) + '  ',
+      '+' + phrase,
+      '+' + court,
+    ]),
+  ).toEqual(['@@ -1 +1 @@', '+[masqué]', '+[masqué]', '+' + phrase, '+' + court]);
+});

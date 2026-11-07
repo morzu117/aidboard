@@ -90,3 +90,14 @@ export function chargerOuCreerCles(dossierEtat: string): ClesVapid {
     closeSync(fichier);
   }
 }
+
+/** Fournisseur local au daemon ; une coupure oublie l'objet, jamais le fichier. */
+export function creerFournisseurCles(dossierEtat: string, charger = chargerOuCreerCles) {
+  let cles: ClesVapid | undefined;
+  return {
+    obtenir: () => (cles ??= charger(dossierEtat)),
+    couper: () => {
+      cles = undefined;
+    },
+  };
+}

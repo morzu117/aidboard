@@ -1,3 +1,4 @@
+import { creerFournisseurCles } from '../push/vapid.js';
 import type { FastifyInstance } from 'fastify';
 import type { AidConfig } from '../config.js';
 import { lireTailnet, type TailscaleExec } from '../mesh/tailscale.js';
@@ -43,7 +44,13 @@ export class ModeHost {
   private nom: string | null = null;
   private file: Promise<unknown> = Promise.resolve();
 
-  constructor(private readonly opts: OptionsModeHost) {}
+  readonly fournisseurPush;
+
+  constructor(private readonly opts: OptionsModeHost) {
+    this.fournisseurPush =
+      opts.push && (opts.push.fournisseur ?? creerFournisseurCles(opts.push.dossierEtat));
+    if (opts.push?.actif()) this.fournisseurPush!.obtenir();
+  }
 
   /** les bascules passent l'une après l'autre : jamais deux instances sur le même port */
   private enFile<T>(f: () => Promise<T>): Promise<T> {
@@ -103,7 +110,7 @@ export class ModeHost {
         livraison: this.opts.livraison,
         code: this.opts.code,
         tours: this.opts.tours,
-        push: this.opts.push,
+        push: this.opts.push && { ...this.opts.push, fournisseur: this.fournisseurPush },
         reponses: this.opts.reponses,
         signal: this.opts.signal,
         board: this.opts.board,

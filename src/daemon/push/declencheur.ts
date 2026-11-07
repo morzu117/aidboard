@@ -5,6 +5,7 @@ import { abonnementsActifs } from './abonnements.js';
 import { envoyer, type DependancesEnvoi } from './envoi.js';
 
 export interface DependancesDeclencheur {
+  log?: (message: string) => void;
   db: Db;
   store: EventStore;
   actif: () => boolean;
@@ -50,9 +51,13 @@ export function creerDeclencheur(deps: DependancesDeclencheur) {
     // La fenêtre mesure les départs, jamais la durée du transport.
     minuterie = programmer(() => {
       minuterie = undefined;
-      const actuel = compter();
-      precedent = actuel;
-      if (actuel > dernierEnvoi) expedier(actuel);
+      try {
+        const actuel = compter();
+        precedent = actuel;
+        if (actuel > dernierEnvoi) expedier(actuel);
+      } catch {
+        (deps.log ?? console.error)('Erreur du compteur push');
+      }
     }, 30_000);
     for (const abonnement of abonnementsActifs(deps.db, maintenant())) {
       const tache = (async () => {
@@ -79,10 +84,14 @@ export function creerDeclencheur(deps: DependancesDeclencheur) {
   }
 
   function observer() {
-    const actuel = compter();
-    const hausse = actuel > precedent;
-    precedent = actuel;
-    if (hausse && minuterie === undefined) expedier(actuel);
+    try {
+      const actuel = compter();
+      const hausse = actuel > precedent;
+      precedent = actuel;
+      if (hausse && minuterie === undefined) expedier(actuel);
+    } catch {
+      (deps.log ?? console.error)('Erreur du compteur push');
+    }
   }
   deps.store.on('event', observer);
   return {

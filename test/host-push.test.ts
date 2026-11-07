@@ -1,8 +1,9 @@
+import { creerFournisseurCles, chargerOuCreerCles } from '../src/daemon/push/vapid.js';
 import { existsSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Writable } from 'node:stream';
-import { afterEach, expect, test } from 'vitest';
+import { afterEach, expect, test, vi } from 'vitest';
 import { buildSnapshot } from '../src/daemon/state/snapshot.js';
 import { openDb } from '../src/daemon/db.js';
 import { parseConfig } from '../src/daemon/config.js';
@@ -37,6 +38,8 @@ async function preparer() {
   let journal = '';
   const registre = new RegistreAppareils(db, () => instant);
   const acces = registre.emettre({ nom: 'Test', identite: null });
+  const charger = vi.fn(chargerOuCreerCles);
+  const fournisseur = creerFournisseurCles(dossier, charger);
   const s = await ouvrirServeurAppareils({
     port: 0,
     interdits: [],
@@ -45,7 +48,7 @@ async function preparer() {
     appairages: new Appairages(),
     webRoot: null,
     now: () => instant,
-    push: { db, dossierEtat: dossier, actif: () => actif },
+    push: { db, dossierEtat: dossier, fournisseur, actif: () => actif },
     etat: () =>
       buildSnapshot(db, { status: async () => ({ state: 'unavailable' }) } as unknown as Parameters<
         typeof buildSnapshot
@@ -78,6 +81,8 @@ async function preparer() {
   return {
     db,
     registre,
+    charger,
+    fournisseur,
     acces,
     envoyer,
     couper: () => {
@@ -190,4 +195,16 @@ test('interrupteur Mac : défaut, clés, panneau, effacement et persistance', as
   );
 
   expect(t.db.prepare('SELECT * FROM push_abonnements').all()).toEqual([]);
+});
+
+test('32b.11 : dix lectures de la clé publique ne chargent les clés qu’une fois', async () => {
+  const t = await preparer();
+  for (let i = 0; i < 10; i++) {
+    expect((await t.envoyer('GET', '/api/appareils/push/cle')).statusCode).toBe(200);
+  }
+  expect(t.charger).toHaveBeenCalledTimes(1);
+  const publique = t.fournisseur.obtenir().clePubliqueBase64url();
+  t.fournisseur.couper();
+  expect(t.fournisseur.obtenir().clePubliqueBase64url()).toBe(publique);
+  expect(t.charger).toHaveBeenCalledTimes(2);
 });

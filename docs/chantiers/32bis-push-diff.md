@@ -155,6 +155,7 @@ Ce document.
   - les clés VAPID sont chargées une seule fois ;
   - l'observateur du déclencheur et sa minuterie sont protégés contre les exceptions.
 - Le test `D176 : refusée ou expirée…` de `test/web/appareil.test.tsx` est rendu robuste au CI lent.
+- *Révision 32b.11.* Les huit points sont faits. Le filtre ne reconnaît plus d'en-tête après le premier `@@` d'un fichier. Il masque aussi les lignes faites uniquement de base64, de 40 caractères ou plus. `gitLivraison` porte les mêmes gardes que `lireDiff`, et un test direct passe un `.gitattributes` piégé. Les clés VAPID sont chargées une seule fois, dans un fournisseur partagé. L'observateur du déclencheur et sa minuterie sont protégés par un `try`/`catch`. Le test D176 de `appareil.test.tsx` attend 5 s au lieu d'1 s, sans changer ses assertions. Gate 2221, e2e 115.
 
 ### 32b.10 L'e2e et la fiche de recette
 - `e2e/mobile-push-diff.spec.ts`, sur Chromium :

@@ -5,7 +5,7 @@ import {
   cleAbonnementValide,
 } from '../push/abonnements.js';
 import { verifierEndpoint } from '../push/envoi.js';
-import { chargerOuCreerCles } from '../push/vapid.js';
+import { creerFournisseurCles } from '../push/vapid.js';
 import type { livraisonPourAppareil } from './livraison.js';
 import { CorpsReponseAppareil, repondreAppareil, type ReponseAppareil } from '../reponses.js';
 import { CorpsMarqueTour, marquerTour, type MarqueTour } from '../tours.js';
@@ -111,7 +111,12 @@ export interface OptionsServeurAppareils {
   livraison?: (topicId: string) => ReturnType<typeof livraisonPourAppareil>;
   code?: { db: Db; actif: () => boolean };
   tours?: { db: Db; store: EventStore };
-  push?: { db: Db; dossierEtat: string; actif: () => boolean };
+  push?: {
+    db: Db;
+    dossierEtat: string;
+    fournisseur?: ReturnType<typeof creerFournisseurCles>;
+    actif: () => boolean;
+  };
   reponses?: Parameters<typeof repondreAppareil>[0];
   /** D175 : la source des signaux, le store d'événements */
   signal?: {
@@ -146,6 +151,9 @@ export async function ouvrirServeurAppareils(
       raison: `le port ${opts.port} est réservé (${interdit.nom})`,
     };
   }
+  const clesPush =
+    opts.push && (opts.push.fournisseur ?? creerFournisseurCles(opts.push.dossierEtat));
+  if (opts.push?.actif()) clesPush!.obtenir();
   const app = Fastify({
     // la méthode, le chemin (sans requête, demande masquée) et l'hôte : aucun en-tête, donc ni
     // cookie ni code d'appairage
@@ -260,7 +268,7 @@ export async function ouvrirServeurAppareils(
     if (!opts.push?.actif()) return reply.code(403).send({ raison: 'push_coupe' });
   };
   app.get('/api/appareils/push/cle', { onRequest: gardePush }, async () => ({
-    cle: chargerOuCreerCles(opts.push!.dossierEtat).clePubliqueBase64url(),
+    cle: clesPush!.obtenir().clePubliqueBase64url(),
   }));
   app.post(
     '/api/appareils/moi/push',

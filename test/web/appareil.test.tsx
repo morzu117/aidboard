@@ -426,8 +426,9 @@ test('D176 : refusée ou expirée pendant l’attente, le message, et l’attent
   await act(async () => {
     vi.advanceTimersByTime(ATTENTE_MS);
   });
-  await waitFor(() =>
-    expect(node('appairer.erreur')?.textContent).toContain('refusée, annulée ou expirée'),
+  await waitFor(
+    () => expect(node('appairer.erreur')?.textContent).toContain('refusée, annulée ou expirée'),
+    { timeout: 5000 },
   );
   const n = h.calls.length;
   await act(async () => {

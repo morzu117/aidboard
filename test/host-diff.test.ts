@@ -227,3 +227,24 @@ test('32b.7 : chemins git exacts, noms sensibles cités et pathspec littéral', 
   expect(r.json().lignes).toContain('+fichier littéral');
   expect(r.body).not.toContain('autre fichier');
 });
+
+test.each(['textconv', 'command'])(
+  '32b.11 : gitLivraison refuse le pilote %s directement',
+  async (pilote) => {
+    racine = mkdtempSync(join(tmpdir(), 'aid-livraison-'));
+    const { clone } = makeOriginAndClone(racine);
+    writeFileSync(join(clone, '.gitattributes'), '* diff=piege\n');
+    sh(clone, 'config', `diff.piege.${pilote}`, 'touch marqueur');
+    sh(clone, 'config', 'diff.external', 'touch marqueur');
+    commitFile(clone, 'normal.txt', 'bonjour\n');
+    const livraison = await gitLivraison(clone, 'main');
+    expect(livraison.files).toContainEqual({
+      path: 'normal.txt',
+      status: 'A',
+      additions: 1,
+      deletions: 0,
+    });
+    expect(livraison.empreinte).toMatch(/^[a-f0-9]{8}$/);
+    expect(existsSync(join(clone, 'marqueur'))).toBe(false);
+  },
+);

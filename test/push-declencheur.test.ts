@@ -40,10 +40,12 @@ function preparer() {
   }
   const appareilId = abonner();
   const envoyer = vi.fn(async (): Promise<ResultatEnvoi> => ({ statut: 'ok' }));
+  const log = vi.fn();
   const config = { host: true, push: true };
   const declencheur = creerDeclencheur({
     db,
     store,
+    log,
     actif: () => config.host && config.push,
     envoi: () => ({
       clesVapid: {
@@ -86,6 +88,7 @@ function preparer() {
   return {
     db,
     store,
+    log,
     config,
     envoyer,
     ajouter,
@@ -236,4 +239,25 @@ test('les agents fermés et les sujets archivés restent hors du compteur', () =
   t.config.push = true;
   t.ajouter();
   expect(t.envoyer).not.toHaveBeenCalled();
+});
+
+test('32b.11 : JSON invalide isolé dans l’observateur et la minuterie, puis reprise', async () => {
+  const t = preparer();
+  t.config.push = false;
+  const id = t.ajouter();
+  t.retirer(id);
+  t.db.prepare('UPDATE agents SET pending = ? WHERE id = ?').run('invalide', id);
+  expect(() => t.signaler()).not.toThrow();
+  expect(t.log).toHaveBeenCalledWith('Erreur du compteur push');
+  t.retirer(id);
+  t.config.push = true;
+  const suivant = t.ajouter();
+  expect(t.envoyer).toHaveBeenCalledTimes(1);
+  await Promise.resolve();
+  t.db.prepare('UPDATE agents SET pending = ? WHERE id = ?').run('invalide', suivant);
+  await expect(vi.advanceTimersByTimeAsync(30_000)).resolves.not.toThrow();
+  expect(t.log).toHaveBeenCalledTimes(2);
+  t.retirer(suivant);
+  t.ajouter();
+  expect(t.envoyer).toHaveBeenCalledTimes(2);
 });

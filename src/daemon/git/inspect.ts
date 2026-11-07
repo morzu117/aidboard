@@ -405,9 +405,48 @@ export async function gitLivraison(
   };
   if (out.head && out.mergeBase) {
     const [numstat, nameStatus, raw] = await Promise.all([
-      git(worktree, ['diff', '--numstat', '-z', '--no-renames', out.mergeBase, out.head]),
-      git(worktree, ['diff', '--name-status', '-z', '--no-renames', out.mergeBase, out.head]),
-      git(worktree, ['diff', '--raw', '--no-renames', '--no-abbrev', out.mergeBase, out.head]),
+      git(worktree, [
+        '-c',
+        'core.attributesFile=/dev/null',
+        '-c',
+        'diff.external=',
+        'diff',
+        '--no-ext-diff',
+        '--no-textconv',
+        '--numstat',
+        '-z',
+        '--no-renames',
+        out.mergeBase,
+        out.head,
+      ]),
+      git(worktree, [
+        '-c',
+        'core.attributesFile=/dev/null',
+        '-c',
+        'diff.external=',
+        'diff',
+        '--no-ext-diff',
+        '--no-textconv',
+        '--name-status',
+        '-z',
+        '--no-renames',
+        out.mergeBase,
+        out.head,
+      ]),
+      git(worktree, [
+        '-c',
+        'core.attributesFile=/dev/null',
+        '-c',
+        'diff.external=',
+        'diff',
+        '--no-ext-diff',
+        '--no-textconv',
+        '--raw',
+        '--no-renames',
+        '--no-abbrev',
+        out.mergeBase,
+        out.head,
+      ]),
     ]);
     const statusByPath = new Map<string, GitFileChange['status']>();
     // -z conserve les chemins exacts, même avec accents, tabulations ou retours à la ligne.

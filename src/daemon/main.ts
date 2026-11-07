@@ -1,5 +1,4 @@
 import { creerDeclencheur } from './push/declencheur.js';
-import { chargerOuCreerCles } from './push/vapid.js';
 import { livraisonPourAppareil } from './host/livraison.js';
 import { rmSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
@@ -358,7 +357,8 @@ export async function startDaemon(
       db: opened,
       store,
       actif: () => config.modeHost.actif && config.modeHost.push,
-      envoi: () => ({ clesVapid: chargerOuCreerCles(paths.home) }),
+      log,
+      envoi: () => ({ clesVapid: modeHost.fournisseurPush!.obtenir() }),
     });
     return {
       app,
