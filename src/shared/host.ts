@@ -107,3 +107,40 @@ export interface EtatPourAppareil {
     }>;
   };
 }
+
+// Chantier 31 (D176) : l'appairage vu du Mac.
+export type RaisonAnnulation = 'deux-reclamations' | 'remplacee' | 'refusee' | 'coupee';
+
+export type EtatDemande =
+  | 'attente' // créée sur le Mac, QR affiché, personne n'a réclamé
+  | 'reclamee' // un appareil a réclamé : code court à comparer sur le Mac
+  | 'approuvee' // approuvée sur le Mac : l'appareil n'a pas encore pris son accès
+  | 'consommee' // l'appareil a pris son accès
+  | 'annulee'
+  | 'expiree';
+
+/** Ce que le Mac voit de la demande en cours (D176). */
+export interface VueDemande {
+  id: string;
+  etat: EtatDemande;
+  expireA: string;
+  codeCourt: string | null;
+  nom: string | null;
+  identite: string | null;
+  raison: RaisonAnnulation | null;
+}
+
+// Chantier 31 (D177) : un appareil du registre, jamais son empreinte.
+export type EtatAppareil = 'actif' | 'expire' | 'revoque';
+
+export interface Appareil {
+  id: string;
+  nom: string;
+  /** l'identité Tailscale vue à l'appairage, null sans en-tête (D179) */
+  identite: string | null;
+  creeA: string;
+  dernierContact: string | null;
+  expireA: string;
+  revoqueA: string | null;
+  etat: EtatAppareil;
+}

@@ -1,4 +1,5 @@
 import { randomBytes, randomInt, timingSafeEqual } from 'node:crypto';
+import type { EtatDemande, RaisonAnnulation, VueDemande } from '../../shared/host.js';
 
 // Chantier 31 (D176, lab M4 et DM 91366) : les demandes d'appairage, en mémoire seulement. Une
 // seule demande vit à la fois. Le code sert une fois et vit 5 minutes. Une seconde réclamation du
@@ -12,26 +13,7 @@ export const FENETRE_PLAFOND_MS = 60 * 1000;
 /** sans ambiguïté à l'œil : ni 0/O, ni 1/I/L */
 export const ALPHABET_CODE_COURT = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
 
-export type RaisonAnnulation = 'deux-reclamations' | 'remplacee' | 'refusee' | 'coupee';
-
-export type EtatDemande =
-  | 'attente' // créée sur le Mac, QR affiché, personne n'a réclamé
-  | 'reclamee' // un appareil a réclamé : code court à comparer sur le Mac
-  | 'approuvee' // approuvée sur le Mac : l'appareil n'a pas encore pris son accès
-  | 'consommee' // l'appareil a pris son accès
-  | 'annulee'
-  | 'expiree';
-
-/** Ce que le Mac voit de la demande en cours (D176). */
-export interface VueDemande {
-  id: string;
-  etat: EtatDemande;
-  expireA: string;
-  codeCourt: string | null;
-  nom: string | null;
-  identite: string | null;
-  raison: RaisonAnnulation | null;
-}
+export type { EtatDemande, RaisonAnnulation, VueDemande };
 
 interface Demande {
   id: string;

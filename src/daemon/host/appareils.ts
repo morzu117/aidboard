@@ -1,4 +1,5 @@
 import { createHash, randomBytes } from 'node:crypto';
+import type { Appareil, EtatAppareil } from '../../shared/host.js';
 import type { Db } from '../db.js';
 
 // Chantier 31 (D177) : le registre des appareils. Le jeton n'est jamais gardé : seule son
@@ -11,19 +12,7 @@ export const TOUCHE_MS = 60 * 1000;
 export const GARDE_MS = 30 * 24 * 3600 * 1000;
 export const NOM_MAX = 40;
 
-export type EtatAppareil = 'actif' | 'expire' | 'revoque';
-
-export interface Appareil {
-  id: string;
-  nom: string;
-  /** l'identité Tailscale vue à l'appairage, null sans en-tête (D179) */
-  identite: string | null;
-  creeA: string;
-  dernierContact: string | null;
-  expireA: string;
-  revoqueA: string | null;
-  etat: EtatAppareil;
-}
+export type { Appareil, EtatAppareil };
 
 export type Authentification =
   { ok: true; appareil: Appareil } | { ok: false; raison: 'inconnu' | 'expire' | 'revoque' };
