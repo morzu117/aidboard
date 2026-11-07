@@ -25,6 +25,7 @@ export interface ModeHostEtat {
   qr: NouveauCode | null;
   erreur: string | null;
   occupe: boolean;
+  basculerCode: (actif: boolean) => Promise<void>;
   basculerPush: (actif: boolean) => Promise<void>;
   basculer: (actif: boolean) => Promise<void>;
   nouveauCode: () => Promise<void>;
@@ -119,6 +120,10 @@ export function useModeHost(): ModeHostEtat {
     qr,
     erreur,
     occupe,
+    basculerCode: (actif) =>
+      agir(async () => {
+        setEtat(await client.request<EtatModeHostDaemon>('PUT', '/api/host/code', { actif }));
+      }),
     basculerPush: (actif) =>
       agir(async () => {
         setEtat(await client.request<EtatModeHostDaemon>('PUT', '/api/host/push', { actif }));

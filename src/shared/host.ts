@@ -38,6 +38,7 @@ export interface EtatModeHost {
 
 /** GET et PUT /api/host (D172) : l'état lu de Tailscale, plus celui du port des appareils. */
 export interface EtatModeHostDaemon extends EtatModeHost {
+  code: boolean;
   push: boolean;
   abonnements: number;
   /** le port des appareils écoute, et le nom du Mac est lu */

@@ -34,6 +34,7 @@ const LISTE = [
   'POST /api/appareils/moi/push',
   'DELETE /api/appareils/moi/push',
   'GET /api/appareils/sujets/:id/livraison',
+  'GET /api/appareils/sujets/:id/fichiers/:index/diff',
   'POST /api/appareils/agents/:id/tour',
   'POST /api/appareils/agents/:id/reponse',
   'GET /api/appareils/moi',

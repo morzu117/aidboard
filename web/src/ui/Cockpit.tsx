@@ -264,6 +264,20 @@ export function Cockpit() {
             décisions.
           </p>
           <p>{e.abonnements ?? 0} abonnements</p>
+          <label>
+            <input
+              type="checkbox"
+              role="switch"
+              checked={e.code ?? false}
+              disabled={h.occupe}
+              onChange={() => void h.basculerCode(!e.code)}
+            />
+            Montrer le code aux appareils
+          </label>
+          <p>
+            Les téléphones appairés pourront lire le diff des fichiers d&apos;une livraison, filtré.
+            Les fichiers sensibles restent sur le Mac.
+          </p>
         </div>
       )}
       {h.erreur && (

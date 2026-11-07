@@ -27,6 +27,7 @@ export interface OptionsModeHost {
   /** D175, D178 : ce que le port des appareils lit */
   etat?: OptionsServeurAppareils['etat'];
   livraison?: OptionsServeurAppareils['livraison'];
+  code?: OptionsServeurAppareils['code'];
   tours?: OptionsServeurAppareils['tours'];
   push?: OptionsServeurAppareils['push'];
   reponses?: OptionsServeurAppareils['reponses'];
@@ -100,6 +101,7 @@ export class ModeHost {
         appairages: this.opts.appairages,
         etat: this.opts.etat,
         livraison: this.opts.livraison,
+        code: this.opts.code,
         tours: this.opts.tours,
         push: this.opts.push,
         reponses: this.opts.reponses,

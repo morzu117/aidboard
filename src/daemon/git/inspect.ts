@@ -405,18 +405,19 @@ export async function gitLivraison(
   };
   if (out.head && out.mergeBase) {
     const [numstat, nameStatus, raw] = await Promise.all([
-      git(worktree, ['diff', '--numstat', '--no-renames', out.mergeBase, out.head]),
-      git(worktree, ['diff', '--name-status', '--no-renames', out.mergeBase, out.head]),
+      git(worktree, ['diff', '--numstat', '-z', '--no-renames', out.mergeBase, out.head]),
+      git(worktree, ['diff', '--name-status', '-z', '--no-renames', out.mergeBase, out.head]),
       git(worktree, ['diff', '--raw', '--no-renames', '--no-abbrev', out.mergeBase, out.head]),
     ]);
     const statusByPath = new Map<string, GitFileChange['status']>();
-    for (const line of nameStatus.ok ? nameStatus.stdout.split('\n').filter(Boolean) : []) {
-      const [code, ...rest] = line.split('\t');
-      const letter = code?.[0] as GitFileChange['status'] | undefined;
-      statusByPath.set(rest.join('\t'), letter && ['A', 'M', 'D'].includes(letter) ? letter : '?');
+    // -z conserve les chemins exacts, même avec accents, tabulations ou retours à la ligne.
+    const statuts = nameStatus.ok ? nameStatus.stdout.split('\0') : [];
+    for (let i = 0; i + 1 < statuts.length; i += 2) {
+      const lettre = statuts[i]?.[0] as GitFileChange['status'];
+      statusByPath.set(statuts[i + 1]!, ['A', 'M', 'D'].includes(lettre) ? lettre : '?');
     }
-    for (const line of numstat.ok ? numstat.stdout.split('\n').filter(Boolean) : []) {
-      const [a, d, ...rest] = line.split('\t');
+    for (const entree of numstat.ok ? numstat.stdout.split('\0').filter(Boolean) : []) {
+      const [a, d, ...rest] = entree.split('\t');
       const path = rest.join('\t');
       const additions = a === '-' ? null : Number(a);
       const deletions = d === '-' ? null : Number(d);

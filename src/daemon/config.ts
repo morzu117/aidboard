@@ -33,6 +33,7 @@ export interface ArtefactsConfig {
  * reste l'adresse d'écoute, toujours 127.0.0.1 : le mode host n'y touche pas.
  */
 export interface ModeHostConfig {
+  code: boolean;
   push: boolean;
   actif: boolean;
   port: number | null;
@@ -100,7 +101,7 @@ export const DEFAULT_CONFIG: AidConfig = {
     tailscale: { manage: false, bin: DEFAULT_TAILSCALE_BIN },
   },
   artefacts: { port: null },
-  modeHost: { actif: false, port: null, push: false },
+  modeHost: { actif: false, port: null, push: false, code: false },
 };
 
 export class ConfigError extends Error {}
@@ -197,7 +198,9 @@ export function parseConfig(text: string): AidConfig {
   }
   if (doc.modeHost !== undefined) {
     if (!isRecord(doc.modeHost)) throw new ConfigError('config.yaml : modeHost doit être un objet');
-    rejectUnknown(doc.modeHost, ['actif', 'port', 'push'], 'modeHost.');
+    rejectUnknown(doc.modeHost, ['actif', 'port', 'push', 'code'], 'modeHost.');
+    if (doc.modeHost.code !== undefined)
+      cfg.modeHost.code = bool(doc.modeHost.code, 'modeHost.code');
     if (doc.modeHost.push !== undefined)
       cfg.modeHost.push = bool(doc.modeHost.push, 'modeHost.push');
     if (doc.modeHost.actif !== undefined) {
@@ -374,6 +377,19 @@ export function ecrireModeHostPush(p: AidPaths, actif: boolean): void {
   if (doc.errors.length > 0) throw new ConfigError("config.yaml illisible : rien n'est écrit");
   try {
     doc.setIn(['modeHost', 'push'], actif);
+  } catch {
+    throw new ConfigError('config.yaml : modeHost doit être un objet');
+  }
+  const texte = doc.toString();
+  parseConfig(texte);
+  writeFileSync(p.config, texte);
+}
+
+export function ecrireModeHostCode(p: AidPaths, actif: boolean): void {
+  const doc = parseDocument(existsSync(p.config) ? readFileSync(p.config, 'utf8') : '');
+  if (doc.errors.length > 0) throw new ConfigError("config.yaml illisible : rien n'est écrit");
+  try {
+    doc.setIn(['modeHost', 'code'], actif);
   } catch {
     throw new ConfigError('config.yaml : modeHost doit être un objet');
   }

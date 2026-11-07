@@ -275,6 +275,7 @@ export async function startDaemon(
         { port: serveurArtefacts?.port ?? portArtefacts(config), nom: 'artefacts' },
       ],
       livraison: (id) => livraisonPourAppareil(opened, memory, id),
+      code: { db: opened, actif: () => config.modeHost.code },
       tours: { db: opened, store },
       push: { db: opened, dossierEtat: paths.home, actif: () => config.modeHost.push },
       reponses: { db: opened, store, agents },

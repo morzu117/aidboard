@@ -124,6 +124,7 @@ Ce document.
   - `--no-ext-diff` et `--no-textconv`, avec un `.gitattributes` piégé dans le worktree ;
   - le 403 `code_coupe` ;
   - `no-store`.
+- *Révision 32b.7.* `src/daemon/host/diff.ts` lance `git` sans shell, avec `--literal-pathspecs -c core.attributesFile=/dev/null -c diff.external= diff --no-ext-diff --no-textconv --no-color --no-renames`. La lecture se fait en flux et s'arrête au plafond (2 000 lignes ou 200 Ko). Un pilote diff piégé dans `.gitattributes` et dans la configuration locale n'est pas exécuté (test avec un fichier marqueur). `gitLivraison` lit désormais `--numstat` et `--name-status` en `-z` : les chemins sont exacts, accents compris. Le journal `appareil.lecture_code` passe par le journal Fastify, sans chemin ni contenu. La suppression de `config.ts` lors d'un renommage vers `.env.local` reste visible, filtrée. `host-liste` : une route ajoutée. Gate 2195, e2e 111.
 
 ### 32b.8 Le filtre des diffs (D208)
 - `filtrerCode`.

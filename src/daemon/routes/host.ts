@@ -7,6 +7,7 @@ import {
   ConfigError,
   ecrireModeHostActif,
   ecrireModeHostPush,
+  ecrireModeHostCode,
   PORT_PONT_TAURI,
   portAppareils,
   portArtefacts,
@@ -63,6 +64,7 @@ export function registerHostRoutes(
       ...e,
       ...deps.modeHost.etat(),
       push: deps.config.modeHost.push,
+      code: deps.config.modeHost.code,
       abonnements: abonnementsActifs(deps.db, Date.now()).length,
     };
   };
@@ -105,6 +107,21 @@ export function registerHostRoutes(
     }
     deps.config.modeHost.push = actif;
     if (!actif) deps.db.prepare('DELETE FROM push_abonnements').run();
+    return etat();
+  });
+
+  app.put('/api/host/code', async (req, reply) => {
+    if (req.principal?.kind !== 'admin') return reply.code(403).send({ error: 'admin seulement' });
+    reply.header('Cache-Control', 'no-store');
+    const actif = (req.body as { actif?: unknown } | null)?.actif;
+    if (typeof actif !== 'boolean') return reply.code(400).send({ error: 'actif : true ou false' });
+    try {
+      ecrireModeHostCode(deps.paths, actif);
+    } catch (err) {
+      if (err instanceof ConfigError) return reply.code(409).send({ error: err.message });
+      throw err;
+    }
+    deps.config.modeHost.code = actif;
     return etat();
   });
 

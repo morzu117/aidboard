@@ -21,6 +21,7 @@ const COMMANDE = 'tailscale serve --bg --https=443 http://127.0.0.1:4890';
 const etat = (over: Partial<EtatModeHostDaemon> = {}): EtatModeHostDaemon => ({
   actif: true,
   push: false,
+  code: false,
   abonnements: 0,
   port: 4890,
   tailnet: { etat: 'running', nom: NOM, compte: 'julien@exemple' },
@@ -368,4 +369,24 @@ test('32b.6 : le réglage push appelle PUT et confirme la suppression', async ()
   await waitFor(() => expect((interrupteur as HTMLInputElement).checked).toBe(false));
   expect(h.calls.filter((c) => c.url === '/api/host/push')[1]?.body).toEqual({ actif: false });
   confirmation.mockRestore();
+});
+
+test('D205 : le code est coupé par défaut, le Mac peut le montrer puis le couper', async () => {
+  let code = false;
+  const h = ouvrir({
+    'PUT /api/host/code': (body) => {
+      code = (body as { actif: boolean }).actif;
+      return json(200, etat({ code }))();
+    },
+  });
+  const interrupteur = await screen.findByRole('switch', { name: 'Montrer le code aux appareils' });
+  expect((interrupteur as HTMLInputElement).checked).toBe(false);
+  expect(screen.getByText(/Les téléphones appairés pourront lire le diff/).textContent).toContain(
+    "Les téléphones appairés pourront lire le diff des fichiers d'une livraison, filtré. Les fichiers sensibles restent sur le Mac.",
+  );
+  fireEvent.click(interrupteur);
+  await waitFor(() => expect((interrupteur as HTMLInputElement).checked).toBe(true));
+  expect(h.calls.find((c) => c.url === '/api/host/code')?.body).toEqual({ actif: true });
+  fireEvent.click(interrupteur);
+  await waitFor(() => expect((interrupteur as HTMLInputElement).checked).toBe(false));
 });

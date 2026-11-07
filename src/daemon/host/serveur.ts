@@ -1,3 +1,4 @@
+import { diffPourAppareil } from './diff.js';
 import {
   abonnementsActifs,
   CorpsAbonnementPush,
@@ -108,6 +109,7 @@ export interface OptionsServeurAppareils {
   /** D175 : l'état complet, que masque.ts réduit ; absent = 404 (tests du port seul) */
   etat?: () => Promise<StateSnapshot>;
   livraison?: (topicId: string) => ReturnType<typeof livraisonPourAppareil>;
+  code?: { db: Db; actif: () => boolean };
   tours?: { db: Db; store: EventStore };
   push?: { db: Db; dossierEtat: string; actif: () => boolean };
   reponses?: Parameters<typeof repondreAppareil>[0];
@@ -303,6 +305,32 @@ export async function ouvrirServeurAppareils(
     const livraison = await opts.livraison?.(id);
     if (!livraison) return reply.code(404).send({ error: 'sujet inconnu' });
     return livraison;
+  });
+
+  app.get('/api/appareils/sujets/:id/fichiers/:index/diff', async (req, reply) => {
+    const { id, index } = req.params as { id: string; index: string };
+    const indexValide = /^(0|[1-9][0-9]*)$/.test(index) && Number.isSafeInteger(Number(index));
+    const envoyer = (
+      statut: number,
+      corps: { raison?: string; etat?: string; lignes?: string[] },
+    ) => {
+      req.log.info(
+        {
+          appareilId: req.appareil!.id,
+          topicId: id,
+          index: indexValide ? Number(index) : null,
+          etat: corps.etat ?? corps.raison,
+        },
+        'appareil.lecture_code',
+      );
+      return reply.code(statut).send(corps);
+    };
+    if (!opts.code?.actif()) return envoyer(403, { raison: 'code_coupe' });
+    const { tete } = req.query as { tete?: unknown };
+    if (!indexValide || typeof tete !== 'string' || !/^[0-9a-f]{40}$/i.test(tete))
+      return envoyer(400, { raison: 'requete' });
+    const resultat = await diffPourAppareil(opts.code.db, id, Number(index), tete);
+    return envoyer(resultat.statut, resultat.corps);
   });
 
   // D176 : la seule écriture sans authentification de ce port. L'Origin est exigée : seule la
