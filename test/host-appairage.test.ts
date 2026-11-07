@@ -43,8 +43,9 @@ test('31.4 : le parcours, de la création à la consommation, une seule fois', (
     nom: 'Téléphone',
     identite: 'julien@exemple',
   });
-  // consommée : la lecture suivante ne rend plus rien
-  expect(a.lirePourAppareil(d.id, r.jetonDemande)).toEqual({ etat: 'inconnu' });
+  // consommée : la lecture suivante ne rend plus l'accès
+  expect(a.lirePourAppareil(d.id, r.jetonDemande)).toEqual({ etat: 'consommee' });
+  expect(a.lirePourAppareil(d.id, 'autre-jeton')).toEqual({ etat: 'inconnu' });
   expect(a.vueMac()!.etat).toBe('consommee');
   // le code ne sert plus
   expect(a.reclamer(appareil(d.code))).toEqual({ ok: false, raison: 'inconnu' });

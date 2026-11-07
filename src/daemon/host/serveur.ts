@@ -4,7 +4,8 @@ import fastifyCookie from '@fastify/cookie';
 import fastifyStatic from '@fastify/static';
 import Fastify, { type FastifyInstance, type FastifyRequest, LogController } from 'fastify';
 import { EN_TETE_COCKPIT } from '../../shared/cockpit.js';
-import type { Appareil, RegistreAppareils } from './appareils.js';
+import type { Appairages } from './appairage.js';
+import { type Appareil, DUREE_ACCES_MS, nomAppareil, type RegistreAppareils } from './appareils.js';
 
 // Chantier 31 (D171, D174) : le port des appareils. Une troisième instance Fastify, sur
 // 127.0.0.1 seulement, que seul Tailscale Serve atteint. Elle n'enregistre que ses propres
@@ -13,6 +14,28 @@ import type { Appareil, RegistreAppareils } from './appareils.js';
 // `aid_session` n'y ouvrent rien.
 
 export const COOKIE_APPAREIL = '__Host-aid_appareil';
+/** D176 (lab, DM 91366) : lie l'appareil qui a réclamé à sa demande, 5 minutes */
+export const COOKIE_DEMANDE = '__Host-aid_demande';
+/** D176 : code faux, expiré, annulé ou déjà pris, demande inconnue ou sans son cookie : un seul corps */
+export const CORPS_INCONNU = { error: 'Code inconnu, expiré ou déjà utilisé' };
+/** les deux seules routes qui posent un cookie (D176) */
+const ROUTES_COOKIE = new Set(['/appairage/reclamer', '/appairage/:demandeId']);
+const COOKIE = { httpOnly: true, secure: true, sameSite: 'strict', path: '/' } as const;
+
+// caractères de contrôle et de mise en forme : un login n'en a pas
+// eslint-disable-next-line no-control-regex -- les refuser est le but
+const CONTROLES = /[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u2028-\u202e\u2066-\u2069]/;
+
+/**
+ * D179 : l'identité que Tailscale Serve dit avoir vue. Tant que la mesure de 31.2 n'a pas
+ * prouvé qu'un client ne peut pas l'imposer, elle n'est qu'affichée, « non vérifiable ».
+ */
+export function identiteTailscale(req: FastifyRequest): string | null {
+  const v = req.headers['tailscale-user-login'];
+  if (typeof v !== 'string') return null;
+  const t = v.trim();
+  return t === '' || t.length > 256 || CONTROLES.test(t) ? null : t;
+}
 
 declare module 'fastify' {
   interface FastifyRequest {
@@ -50,6 +73,7 @@ export interface OptionsServeurAppareils {
   /** le nom `.ts.net` du Mac (D173), lu à l'activation ; null = tout est refusé (421) */
   nom: () => string | null;
   registre: RegistreAppareils;
+  appairages: Appairages;
   /** le build de l'interface ; null hors build (tests, dev) */
   webRoot: string | null;
   logger?: boolean;
@@ -128,9 +152,12 @@ export async function ouvrirServeurAppareils(
     if (nom !== null) reply.header('Content-Security-Policy', cspAppareils(nom));
     reply.header('X-Content-Type-Options', 'nosniff');
     reply.header('Referrer-Policy', 'no-referrer');
-    if (chemin(req).startsWith('/api/')) reply.header('Cache-Control', 'no-store');
-    // aucun cookie posé ici : seul l'appairage (31.6, D176) en posera
-    reply.removeHeader('Set-Cookie');
+    const p = chemin(req);
+    if (p.startsWith('/api/') || p.startsWith('/appairage/')) {
+      reply.header('Cache-Control', 'no-store');
+    }
+    // aucun cookie posé ici, hors des deux routes de l'appairage (D176)
+    if (!ROUTES_COOKIE.has(req.routeOptions.url ?? '')) reply.removeHeader('Set-Cookie');
   });
   app.addHook('onResponse', async (req, reply) => {
     if (reply.statusCode >= 400) req.log.warn({ req, statusCode: reply.statusCode }, 'refus');
@@ -140,6 +167,46 @@ export async function ouvrirServeurAppareils(
   app.get('/api/appareils/moi', async (req) => {
     const a = req.appareil!;
     return { id: a.id, nom: a.nom, expireA: a.expireA };
+  });
+
+  // D176 : la seule écriture sans authentification de ce port. L'Origin est exigée : seule la
+  // page /appairer, servie par ce port, la fait.
+  app.post('/appairage/reclamer', { bodyLimit: 4096 }, async (req, reply) => {
+    const site = req.headers['sec-fetch-site'];
+    if (req.headers.origin === undefined || (site !== undefined && site !== 'same-origin')) {
+      return reply.code(403).send({ error: 'origine absente' });
+    }
+    const corps = (req.body ?? {}) as { code?: unknown; nom?: unknown };
+    const r = opts.appairages.reclamer({
+      code: corps.code,
+      nom: nomAppareil(corps.nom),
+      identite: identiteTailscale(req),
+      // D179 : en attendant la mesure de 31.2, aucune adresse n'est crue : le plafond est global
+      source: '',
+    });
+    if (!r.ok) {
+      return r.raison === 'plafond'
+        ? reply.code(429).send({ error: 'Trop d’essais : réessayer dans une minute' })
+        : reply.code(404).send(CORPS_INCONNU);
+    }
+    reply.setCookie(COOKIE_DEMANDE, r.jetonDemande, { ...COOKIE, maxAge: 5 * 60 });
+    return { demandeId: r.demandeId, codeCourt: r.codeCourt };
+  });
+  // D176 : l'appareil attend l'approbation. Il faut le chemin **et** le cookie de demande.
+  app.get('/appairage/:demandeId', async (req, reply) => {
+    const site = req.headers['sec-fetch-site'];
+    if (site !== undefined && site !== 'same-origin') {
+      return reply.code(403).send({ error: 'requête inter-site' });
+    }
+    const { demandeId } = req.params as { demandeId: string };
+    const lu = opts.appairages.lirePourAppareil(demandeId, req.cookies[COOKIE_DEMANDE]);
+    if (lu.etat === 'inconnu') return reply.code(404).send(CORPS_INCONNU);
+    if (lu.etat === 'attente') return { etat: 'attente' };
+    if (lu.etat === 'consommee') return { etat: 'consomme' };
+    const { jeton } = opts.registre.emettre({ nom: lu.nom, identite: lu.identite });
+    reply.clearCookie(COOKIE_DEMANDE, COOKIE);
+    reply.setCookie(COOKIE_APPAREIL, jeton, { ...COOKIE, maxAge: DUREE_ACCES_MS / 1000 });
+    return { etat: 'approuve' };
   });
 
   if (opts.webRoot) {

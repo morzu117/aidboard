@@ -56,7 +56,7 @@ export function nomAppareil(brut: unknown): string {
 export class RegistreAppareils {
   constructor(
     private readonly db: Db,
-    private readonly now: () => number = Date.now,
+    private readonly now: () => number = () => Date.now(),
   ) {}
 
   private iso(ms: number): string {

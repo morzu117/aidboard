@@ -56,6 +56,8 @@ export type Approbation = { ok: true } | { ok: false; raison: 'inconnu' | 'ident
 export type LectureAppareil =
   | { etat: 'attente' }
   | { etat: 'approuvee'; nom: string; identite: string | null }
+  /** D176 : déjà prise ; l'appelant ne pose plus aucun cookie */
+  | { etat: 'consommee' }
   | { etat: 'inconnu' };
 
 function egal(a: string, b: string): boolean {
@@ -76,7 +78,7 @@ export class Appairages {
   private demande: Demande | null = null;
   private readonly tentatives = new Map<string, number[]>();
 
-  constructor(private readonly now: () => number = Date.now) {}
+  constructor(private readonly now: () => number = () => Date.now()) {}
 
   private vivante(): Demande | null {
     const d = this.demande;
@@ -211,6 +213,7 @@ export class Appairages {
       d.etat = 'consommee';
       return { etat: 'approuvee', nom: d.reclamation.nom, identite: d.reclamation.identite };
     }
+    if (d.etat === 'consommee') return { etat: 'consommee' };
     return { etat: 'inconnu' };
   }
 

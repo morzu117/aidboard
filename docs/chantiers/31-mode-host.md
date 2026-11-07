@@ -140,6 +140,7 @@ Chaque point est un commit, avec le gate vert. Le message de commit compte les l
   - le cookie de demande effacé à la pose du cookie d'appareil ;
   - `Referrer-Policy: no-referrer` sur `/appairer`.
 - **Vérification** : `npm run gate`. **Attend la mesure de 31.2** pour la partie identité.
+- *Révision 31.6.* **En attendant la mesure de 31.2, la branche prudente de D179** : l'identité que Serve dit avoir vue est affichée, avec `identiteVerifiable: false`, et jamais exigée ; le plafond est global, aucune adresse n'étant crue. Une identité présente dispense toujours de la case « Appareil taggé » : c'est le Mac qui approuve, après avoir comparé le code court. La mesure faite, seules ces deux lignes changent (`serveur.ts`, `routes/host.ts`). Deux ajouts au plan : `GET /api/host/appairage`, la demande en cours vue du Mac (sans le code ni le jeton de demande), et `url` dans la réponse de `POST /api/host/appairages`, le lien du QR. `POST /appairage/reclamer` exige une `Origin` : seule la page `/appairer` le fait.
 
 ### 31.7 L'état masqué, le signal et le board
 

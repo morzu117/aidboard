@@ -1,4 +1,4 @@
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import {
   type AidConfig,
   ConfigError,
@@ -79,5 +79,57 @@ export function registerHostRoutes(
     if (actif) await deps.modeHost.demarrer();
     else await deps.modeHost.arreter({ couper: true });
     return etat();
+  });
+
+  // D176 : l'appairage, côté Mac. Ces routes n'existent pas sur le port des appareils : un
+  // appareil ne peut ni créer, ni voir, ni approuver une demande.
+  const admin = (req: FastifyRequest, reply: FastifyReply) => {
+    reply.header('Cache-Control', 'no-store');
+    if (req.principal?.kind === 'admin') return true;
+    void reply.code(403).send({ error: 'admin seulement' });
+    return false;
+  };
+  app.post('/api/host/appairages', async (req, reply) => {
+    if (!admin(req, reply)) return reply;
+    const e = deps.modeHost.etat();
+    const nom = deps.modeHost.nomLu();
+    // un QR qui ne mènerait nulle part n'est pas émis
+    if (!e.disponible || nom === null) {
+      return reply.code(409).send({ error: e.raison ?? 'nom Tailscale du Mac non lu' });
+    }
+    const d = deps.modeHost.appairages.creer();
+    // le code est dans le fragment : jamais dans un journal ni dans la requête envoyée
+    return {
+      demandeId: d.id,
+      code: d.code,
+      expireA: d.expireA,
+      url: `https://${nom}/appairer#${d.code}`,
+    };
+  });
+  app.get('/api/host/appairage', async (req, reply) => {
+    if (!admin(req, reply)) return reply;
+    // D179 : tant que la mesure de 31.2 manque, l'identité n'est qu'affichée, non vérifiable
+    return { demande: deps.modeHost.appairages.vueMac(), identiteVerifiable: false };
+  });
+  app.post('/api/host/appairages/:id/approuver', async (req, reply) => {
+    if (!admin(req, reply)) return reply;
+    const { id } = req.params as { id: string };
+    const sansIdentite = (req.body as { sansIdentite?: unknown } | null)?.sansIdentite === true;
+    const r = deps.modeHost.appairages.approuver(id, { sansIdentite });
+    if (r.ok) return { ok: true };
+    return r.raison === 'identite-absente'
+      ? reply.code(409).send({
+          error: 'identite-absente',
+          message: 'Aucune identité Tailscale : cocher « Appareil taggé, sans identité Tailscale »',
+        })
+      : reply.code(404).send({ error: 'demande inconnue, expirée ou annulée' });
+  });
+  app.post('/api/host/appairages/:id/refuser', async (req, reply) => {
+    if (!admin(req, reply)) return reply;
+    const { id } = req.params as { id: string };
+    if (!deps.modeHost.appairages.refuser(id)) {
+      return reply.code(404).send({ error: 'demande inconnue, expirée ou annulée' });
+    }
+    return { ok: true };
   });
 }

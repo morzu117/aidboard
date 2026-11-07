@@ -52,6 +52,19 @@ export class ModeHost {
     return { disponible: true, raison: null };
   }
 
+  get appairages(): Appairages {
+    return this.opts.appairages;
+  }
+
+  get registre(): RegistreAppareils {
+    return this.opts.registre;
+  }
+
+  /** le nom `.ts.net` du Mac, celui du QR (D176) */
+  nomLu(): string | null {
+    return this.nom;
+  }
+
   /** tests : l'instance du port des appareils, null quand il n'écoute pas */
   instance(): FastifyInstance | null {
     return this.serveur?.disponible ? this.serveur.app : null;
@@ -72,6 +85,7 @@ export class ModeHost {
         interdits: this.opts.interdits(),
         nom: () => this.nom,
         registre: this.opts.registre,
+        appairages: this.opts.appairages,
         webRoot: this.opts.webRoot,
         logger: this.opts.logger,
       });

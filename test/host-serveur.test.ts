@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { PassThrough } from 'node:stream';
 import { afterEach, expect, test } from 'vitest';
 import { openDb } from '../src/daemon/db.js';
+import { Appairages } from '../src/daemon/host/appairage.js';
 import { DUREE_ACCES_MS, RegistreAppareils } from '../src/daemon/host/appareils.js';
 import {
   COOKIE_APPAREIL,
@@ -55,6 +56,7 @@ async function ouvrir(
     interdits: [],
     nom: () => nom,
     registre,
+    appairages: new Appairages(),
     webRoot: extra.webRoot === undefined ? build() : extra.webRoot,
     logStream: extra.logStream,
   });
@@ -212,7 +214,7 @@ test('31.5 (D171) : port occupé, indisponible avec sa raison ; les ports interd
   const registre = new RegistreAppareils(
     openDb(join(mkdtempSync(join(tmpdir(), 'aid-hs-')), 'state.db')),
   );
-  const base = { nom: () => NOM, registre, webRoot: null };
+  const base = { nom: () => NOM, registre, appairages: new Appairages(), webRoot: null };
   s = await ouvrirServeurAppareils({ ...base, port, interdits: [] });
   expect(s).toEqual({ disponible: false, port, raison: `le port ${port} est occupé` });
   for (const [p, nom] of [
