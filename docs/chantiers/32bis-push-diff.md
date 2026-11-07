@@ -144,6 +144,18 @@ Ce document.
   - hors ligne, « Diff indisponible ».
 - *Révision 32b.9.* L'écran « Lire un fichier » (`/sujets/:id/fichiers/:index`) est dans `ParcoursAppareil.tsx`. Le diff est un état local au composant : il n'est jamais passé à `dernierEtat`, et `sw.js` saute `/api/`, ce qu'un test vérifie. Une ligne longue défile dans `.appareil-diff`, et la page reste à 320 px. Pour la largeur, l'e2e mobile simule les réponses (`route.fulfill`). Un test de minuterie de `conversation.test.tsx`, sans rapport avec ce point, a échoué une fois sous charge ; il est vert en relance. Gate 2207, e2e 111.
 
+### 32b.11 Les remarques du lab sur la PR #127 (DM 92000)
+- Les conditions obligatoires :
+  - `filtrerDiff` ne reconnaît `diff --git`, `index`, `---` et `+++` qu'avant le premier `@@` d'un fichier ;
+  - D207 gagne `.htpasswd`, `*.jks`, `*.keystore` et `service-account*.json` ;
+  - D208 gagne `pass` et `access[_-]?key`.
+- Les recommandations :
+  - les gardes de `lireDiff` s'appliquent aussi aux trois `git diff` de `gitLivraison` ;
+  - une ligne de contenu faite uniquement de caractères base64, de 40 caractères ou plus, est masquée ;
+  - les clés VAPID sont chargées une seule fois ;
+  - l'observateur du déclencheur et sa minuterie sont protégés contre les exceptions.
+- Le test `D176 : refusée ou expirée…` de `test/web/appareil.test.tsx` est rendu robuste au CI lent.
+
 ### 32b.10 L'e2e et la fiche de recette
 - `e2e/mobile-push-diff.spec.ts`, sur Chromium :
   - l'abonnement, avec un faux service de push local. Il est autorisé **seulement** par une option de test du daemon, jamais par la configuration ;
