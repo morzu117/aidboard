@@ -49,6 +49,7 @@ import { PORT_PONT_TAURI, portAppareils, portArtefacts } from './config.js';
 import { Appairages } from './host/appairage.js';
 import { RegistreAppareils } from './host/appareils.js';
 import { ModeHost } from './host/controleur.js';
+import { buildSnapshot } from './state/snapshot.js';
 import type { TailscaleExec } from './mesh/tailscale.js';
 import type { EtatArtefacts } from '../shared/artefacts.js';
 
@@ -271,6 +272,11 @@ export async function startDaemon(
       registre: new RegistreAppareils(opened),
       appairages: new Appairages(),
       webRoot,
+      // D175 : l'état sans relire les branches (syncTopicBranches reste au Mac), puis masqué
+      etat: () => buildSnapshot(opened, structural, false, mesh, !!config.swairm.bin),
+      signal: store,
+      // D178 : un lecteur à part, 60 s ; les appareils partagent ses lectures, le Mac garde ses 5 s
+      board: mesh ? new BoardReader({ mesh, cell: config.mesh.cell, log, cacheMs: 60_000 }) : null,
       tailscaleExec: opts.tailscaleExec,
       logger: opts.logger,
       log,

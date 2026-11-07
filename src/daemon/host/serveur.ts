@@ -2,8 +2,18 @@ import type { AddressInfo } from 'node:net';
 import type { Writable } from 'node:stream';
 import fastifyCookie from '@fastify/cookie';
 import fastifyStatic from '@fastify/static';
-import Fastify, { type FastifyInstance, type FastifyRequest, LogController } from 'fastify';
+import fastifyWebsocket from '@fastify/websocket';
+import type { WebSocket } from 'ws';
+import Fastify, {
+  type FastifyInstance,
+  type FastifyReply,
+  type FastifyRequest,
+  LogController,
+} from 'fastify';
 import { EN_TETE_COCKPIT } from '../../shared/cockpit.js';
+import type { StateSnapshot } from '../../shared/state.js';
+import { type BoardReader, isBoardId } from '../mesh/board.js';
+import { etatPourAppareil } from './masque.js';
 import type { Appairages } from './appairage.js';
 import { type Appareil, DUREE_ACCES_MS, nomAppareil, type RegistreAppareils } from './appareils.js';
 
@@ -74,6 +84,17 @@ export interface OptionsServeurAppareils {
   nom: () => string | null;
   registre: RegistreAppareils;
   appairages: Appairages;
+  /** D175 : l'état complet, que masque.ts réduit ; absent = 404 (tests du port seul) */
+  etat?: () => Promise<StateSnapshot>;
+  /** D175 : la source des signaux, le store d'événements */
+  signal?: {
+    on(e: 'event' | 'ephemeral', f: () => void): unknown;
+    off(e: 'event' | 'ephemeral', f: () => void): unknown;
+  };
+  /** D178 : le lecteur du board des appareils, cache de 60 s ; null = mesh désactivé */
+  board?: BoardReader | null;
+  /** tests : l'horloge de l'échéance des sockets */
+  now?: () => number;
   /** le build de l'interface ; null hors build (tests, dev) */
   webRoot: string | null;
   logger?: boolean;
@@ -115,7 +136,21 @@ export async function ouvrirServeurAppareils(
     logController: new LogController({ disableRequestLogging: true }),
   });
   await app.register(fastifyCookie);
+  await app.register(fastifyWebsocket);
   app.decorateRequest('appareil', null);
+  const now = opts.now ?? (() => Date.now());
+
+  // D177, D183 : les sockets de chaque appareil, fermées en 4401 à la révocation et à l'échéance
+  const sockets = new Map<string, Set<WebSocket>>();
+  const fermer = (id: string, raison: 'revoque' | 'expire') => {
+    for (const s of sockets.get(id) ?? []) s.close(4401, raison);
+  };
+  const desabonner = opts.registre.surRevocation((ids) =>
+    ids.forEach((id) => fermer(id, 'revoque')),
+  );
+  app.addHook('onClose', async () => {
+    desabonner();
+  });
 
   app.addHook('onRequest', async (req, reply) => {
     const nom = opts.nom();
@@ -207,6 +242,61 @@ export async function ouvrirServeurAppareils(
     reply.clearCookie(COOKIE_DEMANDE, COOKIE);
     reply.setCookie(COOKIE_APPAREIL, jeton, { ...COOKIE, maxAge: DUREE_ACCES_MS / 1000 });
     return { etat: 'approuve' };
+  });
+
+  // D175 : l'état masqué, champ par champ
+  app.get('/api/state', async (_req, reply) => {
+    if (!opts.etat) return reply.code(404).send({ error: 'introuvable' });
+    return etatPourAppareil(await opts.etat());
+  });
+
+  // D175, D183 : un signal sans contenu ; l'appareil relit GET /api/state
+  app.get('/ws/signal', { websocket: true }, (socket, req) => {
+    const a = req.appareil!;
+    const liste = sockets.get(a.id) ?? new Set<WebSocket>();
+    liste.add(socket);
+    sockets.set(a.id, liste);
+    const echeance = setTimeout(
+      () => socket.close(4401, 'expire'),
+      Math.max(0, Date.parse(a.expireA) - now()),
+    );
+    let attente: NodeJS.Timeout | null = null;
+    const changer = () => {
+      // anti-rebond de 250 ms : une rafale d'événements fait un seul signal
+      attente ??= setTimeout(() => {
+        attente = null;
+        if (socket.readyState === socket.OPEN) socket.send(JSON.stringify({ kind: 'changed' }));
+      }, 250);
+    };
+    opts.signal?.on('event', changer);
+    opts.signal?.on('ephemeral', changer);
+    socket.on('close', () => {
+      clearTimeout(echeance);
+      if (attente) clearTimeout(attente);
+      opts.signal?.off('event', changer);
+      opts.signal?.off('ephemeral', changer);
+      liste.delete(socket);
+      if (liste.size === 0) sockets.delete(a.id);
+    });
+  });
+
+  // D178 : le board, par le lecteur des appareils (60 s). `?fresh=1` est ignoré.
+  const board = (reply: FastifyReply) => {
+    if (opts.board) return opts.board;
+    void reply.code(404).send({ error: 'mesh désactivé' });
+    return null;
+  };
+  const id = (raw: string) => (/^\d+$/.test(raw) && isBoardId(Number(raw)) ? Number(raw) : null);
+  app.get('/api/board/projects', async (_req, reply) => board(reply)?.projects() ?? reply);
+  app.get('/api/board/projects/:projectId/cards', async (req, reply) => {
+    const n = id((req.params as { projectId: string }).projectId);
+    if (n === null) return reply.code(400).send({ error: 'identifiant invalide' });
+    return board(reply)?.cards(n) ?? reply;
+  });
+  app.get('/api/board/cards/:cardId', async (req, reply) => {
+    const n = id((req.params as { cardId: string }).cardId);
+    if (n === null) return reply.code(400).send({ error: 'identifiant invalide' });
+    return board(reply)?.card(n) ?? reply;
   });
 
   if (opts.webRoot) {

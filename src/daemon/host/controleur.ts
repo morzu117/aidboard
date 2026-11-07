@@ -3,7 +3,11 @@ import type { AidConfig } from '../config.js';
 import { lireTailnet, type TailscaleExec } from '../mesh/tailscale.js';
 import type { Appairages } from './appairage.js';
 import type { RegistreAppareils } from './appareils.js';
-import { ouvrirServeurAppareils, type ServeurAppareils } from './serveur.js';
+import {
+  type OptionsServeurAppareils,
+  ouvrirServeurAppareils,
+  type ServeurAppareils,
+} from './serveur.js';
 
 // Chantier 31 (D171, D172) : allumer et éteindre le port des appareils sans redémarrer le
 // daemon. Éteindre révoque tous les appareils et annule la demande d'appairage (D177).
@@ -20,6 +24,10 @@ export interface OptionsModeHost {
   registre: RegistreAppareils;
   appairages: Appairages;
   webRoot: string | null;
+  /** D175, D178 : ce que le port des appareils lit */
+  etat?: OptionsServeurAppareils['etat'];
+  signal?: OptionsServeurAppareils['signal'];
+  board?: OptionsServeurAppareils['board'];
   tailscaleExec?: TailscaleExec;
   logger?: boolean;
   log?: (m: string) => void;
@@ -86,6 +94,9 @@ export class ModeHost {
         nom: () => this.nom,
         registre: this.opts.registre,
         appairages: this.opts.appairages,
+        etat: this.opts.etat,
+        signal: this.opts.signal,
+        board: this.opts.board,
         webRoot: this.opts.webRoot,
         logger: this.opts.logger,
       });
@@ -101,10 +112,14 @@ export class ModeHost {
     return this.enFile(async () => {
       const s = this.serveur;
       this.serveur = null;
+      // couper d'abord : les sockets des appareils se ferment en 4401 « revoque » (D183)
+      let coupes: string[] = [];
+      if (opts.couper) {
+        this.opts.appairages.toutAnnuler();
+        coupes = this.opts.registre.toutRevoquer();
+      }
       if (s?.disponible) await s.app.close();
-      if (!opts.couper) return [];
-      this.opts.appairages.toutAnnuler();
-      return this.opts.registre.toutRevoquer();
+      return coupes;
     });
   }
 }

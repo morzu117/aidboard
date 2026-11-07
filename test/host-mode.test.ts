@@ -8,8 +8,9 @@ import { COOKIE_APPAREIL } from '../src/daemon/host/serveur.js';
 import type { TailscaleExec } from '../src/daemon/mesh/tailscale.js';
 import { resolvePaths } from '../src/daemon/paths.js';
 import { issueRunToken, SESSION_COOKIE } from '../src/daemon/security.js';
-import type { EtatModeHostDaemon } from '../src/shared/host.js';
-import { startTestDaemon, type TestDaemon } from './helpers/daemon.js';
+import type { EtatModeHostDaemon, EtatPourAppareil } from '../src/shared/host.js';
+import WebSocket from 'ws';
+import { seedTopic, startTestDaemon, type TestDaemon } from './helpers/daemon.js';
 
 // Chantier 31 (D171, D172) : le mode host sur un vrai daemon. L'interrupteur du Mac, et la
 // frontière entre les deux ports dans les deux sens.
@@ -203,4 +204,43 @@ test('31.5 (D173) : le nom lu après coup, par GET /api/host, ouvre le port des 
   ).json<EtatModeHostDaemon>();
   expect(lu).toMatchObject({ disponible: true, raison: null });
   expect((await surAppareil({}, '/')).statusCode).toBe(404);
+});
+
+test('31.7 (D175) : GET /api/state sur le port des appareils, masqué, depuis la vraie base', async () => {
+  t = await startTestDaemon(undefined, { tailscaleExec: tailnet() });
+  seedTopic(t.db);
+  await basculer(true);
+  const { jeton } = new RegistreAppareils(t.db).emettre({ nom: 'A', identite: null });
+  const r = await surAppareil({ cookie: `${COOKIE_APPAREIL}=${jeton}` }, '/api/state');
+  expect(r.statusCode).toBe(200);
+  const e = r.json<EtatPourAppareil>();
+  expect(e.topics.map((x) => x.title)).toEqual(['T']);
+  expect(e.agents.map((x) => x.id)).toEqual(['ag_1']);
+  for (const chemin of ['/definitely/missing', '/w/s', '"sh"', '/a"', '/w"']) {
+    expect(r.body, chemin).not.toContain(chemin);
+  }
+  // le même état sur le port du Mac porte bien ces chemins : le masque fait la différence
+  const mac = await t.d.app.inject({ url: '/api/state', headers: t.headers });
+  expect(mac.body).toContain('/definitely/missing');
+});
+
+test('31.7 (D183) : éteindre le mode host ferme les sockets des appareils en 4401', async () => {
+  t = await startTestDaemon(undefined, { tailscaleExec: tailnet() });
+  await basculer(true);
+  const { jeton } = new RegistreAppareils(t.db).emettre({ nom: 'A', identite: null });
+  const ws = new WebSocket(`ws://127.0.0.1:${t.d.modeHost.portOuvert()}/ws/signal`, {
+    headers: {
+      host: NOM,
+      origin: `https://${NOM}`,
+      cookie: `${COOKIE_APPAREIL}=${jeton}`,
+      'sec-fetch-site': 'same-origin',
+    },
+  });
+  await new Promise((r, j) => {
+    ws.on('open', r);
+    ws.on('error', j);
+  });
+  const fin = new Promise<[number, string]>((r) => ws.on('close', (c, m) => r([c, String(m)])));
+  await basculer(false);
+  expect(await fin).toEqual([4401, 'revoque']);
 });

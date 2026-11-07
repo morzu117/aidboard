@@ -154,6 +154,7 @@ Chaque point est un commit, avec le gate vert. Le message de commit compte les l
     - `statusReason` d'un texte quelconque sort `autre` ;
     - le board ne relit pas avant 60 s pour deux appareils.
 - **Vérification** : `npm run gate`
+- *Révision 31.7.* Le board des appareils passe par **un second `BoardReader`**, à 60 s, que tous les appareils partagent, plutôt que par une option de celui du Mac : `BO` n'est pas modifié, et le Mac garde ses 5 s et Relire. `GET /api/state` des appareils ne relit pas les branches (`syncTopicBranches` reste au Mac). Dans l'inbox, seule la marque `seenAt` sort (pas `decidedAt`), et les actions ne portent ni leur nom ni leur résultat. Le registre des sockets par appareil (D177, D183) est fait ici : la révocation, « tout révoquer » et l'arrêt du mode host ferment en 4401 `revoque`, l'échéance en 4401 `expire`. 31.8 n'aura qu'à y brancher ses routes.
 
 ### 31.8 La liste fermée, révoquer et couper
 

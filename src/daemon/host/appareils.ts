@@ -54,6 +54,18 @@ export function nomAppareil(brut: unknown): string {
 }
 
 export class RegistreAppareils {
+  private readonly ecouteurs = new Set<(ids: string[]) => void>();
+
+  /** D177 : le port des appareils ferme les sockets d'un appareil révoqué. Rend le désabonnement. */
+  surRevocation(f: (ids: string[]) => void): () => void {
+    this.ecouteurs.add(f);
+    return () => this.ecouteurs.delete(f);
+  }
+
+  private prevenir(ids: string[]): void {
+    if (ids.length > 0) for (const f of this.ecouteurs) f(ids);
+  }
+
   constructor(
     private readonly db: Db,
     private readonly now: () => number = () => Date.now(),
@@ -139,6 +151,7 @@ export class RegistreAppareils {
     const r = this.db
       .prepare('UPDATE appareils SET revoque_a = ? WHERE id = ? AND revoque_a IS NULL')
       .run(this.iso(this.now()), id);
+    if (r.changes > 0) this.prevenir([id]);
     return r.changes > 0;
   }
 
@@ -151,6 +164,7 @@ export class RegistreAppareils {
         .all(t) as Array<{ id: string }>
     ).map((r) => r.id);
     this.db.prepare('UPDATE appareils SET revoque_a = ? WHERE revoque_a IS NULL').run(t);
+    this.prevenir(ids);
     return ids;
   }
 

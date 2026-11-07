@@ -42,3 +42,68 @@ export interface EtatModeHostDaemon extends EtatModeHost {
   disponible: boolean;
   raison: string | null;
 }
+
+/**
+ * Chantier 31 (D175) : l'état vu par un appareil. Construit champ par champ : un champ ajouté
+ * plus tard à `StateSnapshot` n'arrive pas ici tant qu'il n'y est pas ajouté.
+ */
+export type RaisonAppareil = 'permission' | 'question' | 'autre';
+
+export interface EtatPourAppareil {
+  lastEventId: string | null;
+  workspaces: Array<{ id: string; name: string }>;
+  topics: Array<{
+    id: string;
+    workspaceId: string;
+    slug: string;
+    title: string;
+    type: string;
+    branch: string;
+    state: string;
+    phase: string | null;
+    prNumber: number | null;
+    createdAt: string;
+    updatedAt: string;
+  }>;
+  runs: Array<{ id: string; topicId: string; state: string; createdAt: string }>;
+  actions: Array<{
+    id: string;
+    topicId: string | null;
+    state: string;
+    startedAt: string;
+    finishedAt: string | null;
+  }>;
+  agents: Array<{
+    id: string;
+    runId: string;
+    kind: string;
+    role: string;
+    transport: string;
+    status: string;
+    statusReason: RaisonAppareil | null;
+    statusAt: string | null;
+    pausedAt: string | null;
+    createdAt: string;
+    updatedAt: string;
+    /** à la place de `pending`, dont le texte n'est jamais montré à un appareil */
+    attend: boolean;
+  }>;
+  mesh?: {
+    state: {
+      connected: boolean;
+      tailscale: string;
+      monitor: string;
+      pending: number;
+      since: string | null;
+      cell: string;
+    };
+    /** jamais `content` */
+    inbox: Array<{
+      id: number;
+      from: string;
+      kind: string;
+      createdAt: string;
+      seenAt: string | null;
+    }>;
+  };
+}
