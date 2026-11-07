@@ -90,6 +90,7 @@ Ce document.
   - 404 et 410 retirent l'abonnement ;
   - le délai ;
   - le corps de la réponse jamais journalisé.
+- *Révision 32b.3.* `fetch` global avec `redirect: 'manual'` et `AbortSignal.timeout(10 s)` ; le transport est injectable pour les tests, et la vérification de l'hôte s'applique toujours avant lui. Le corps de la réponse est annulé sans être lu. Une erreur du transport n'est jamais propagée, car elle pourrait contenir l'endpoint.
 
 ### 32b.4 L'interrupteur, l'abonnement et la révocation (D196, D200)
 - La migration 022 ; `config.modeHost.push` ; les routes du Mac (`PUT` sur le réglage) et celles de l'appareil (`POST`, `DELETE` et `GET .../push/cle`).
