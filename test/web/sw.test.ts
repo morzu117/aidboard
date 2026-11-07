@@ -53,3 +53,14 @@ test('32.2 : les chemins sensibles échappent au service worker', () => {
     expect(coque(200, true, 'navigate', chemin).respondWith).not.toHaveBeenCalled();
   }
 });
+
+test('32.8 : le manifeste et les icônes suivent le cache statique, en 200 seulement', async () => {
+  for (const chemin of ['/manifest.webmanifest', '/icons/icon-256.png', '/icons/icon-512.png']) {
+    for (const statut of [200, 404, 502]) {
+      const h = coque(statut, true, 'cors', chemin);
+      expect(await h.respondWith.mock.calls[0]![0]).toBe(h.fraiche);
+      if (statut === 200) expect(h.put).toHaveBeenCalled();
+      else expect(h.put).not.toHaveBeenCalled();
+    }
+  }
+});

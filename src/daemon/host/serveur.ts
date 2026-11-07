@@ -74,6 +74,7 @@ export function masquerAppairage(url: string | undefined): string {
 export function cspAppareils(nom: string): string {
   return [
     "default-src 'self'",
+    "manifest-src 'self'",
     `connect-src 'self' wss://${nom}`,
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data:",

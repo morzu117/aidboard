@@ -110,6 +110,7 @@ Ce document. Pas de code.
 ### 32.8 L'app installée et le dernier état (D193, D194)
 - Manifeste, icônes, `theme-color`, rappel iPhone.
 - IndexedDB, l'écran « Mac injoignable » avec l'âge, l'effacement sur 401.
+- *Révision 32.8.* Icônes reprises de l'app Tauri (256 et 512 px), `apple-touch-icon` en 256 px ; CSP des appareils avec `manifest-src 'self'`. Le client expose `horsLigne` (vrai après trois échecs, `injoignable`, ou quand l'état affiché vient d'IndexedDB) et `dernierEtatLu`. Pendant une simple `reconnexion`, l'interface normale reste. Tout 401 efface l'état gardé ; une socket fermée en 4401 et « Se déconnecter » aussi. Rappel d'installation : iOS Safari non installé seulement, fermable.
 
 ### 32.9 La coque et À traiter (D195)
 - Les trois onglets, la mise en page mobile.

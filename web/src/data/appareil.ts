@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { AidApiError, api, SessionExpired } from './api.js';
 import type { AccesFini } from './client.js';
 import { useAidClient } from './useAidState.js';
+import { effacer } from './dernierEtat.js';
 
 // Chantier 31 (D180) : qui ouvre l'interface. `GET /api/appareils/moi` n'existe que sur le port
 // des appareils : le Mac y répond 404 (ou 401 en texte, sans raison), un appareil 200 ou 401 avec
@@ -110,6 +111,7 @@ export function useAppareilsConnectes() {
     deconnecter: () =>
       agir(async () => {
         await client.request('POST', '/api/appareils/moi/deconnexion', {});
+        await effacer();
         client.stop();
         setDeconnecte(true);
       }),

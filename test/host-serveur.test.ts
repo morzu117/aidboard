@@ -2,6 +2,7 @@ import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { createServer, type Server } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { resolve } from 'node:path';
 import { PassThrough } from 'node:stream';
 import { afterEach, expect, test } from 'vitest';
 import { openDb } from '../src/daemon/db.js';
@@ -270,4 +271,26 @@ test('masquerAppairage : la demande masquée, la requête et le fragment retiré
   expect(masquerAppairage('/appairage/abc?x=1')).toBe('/appairage/***');
   expect(masquerAppairage('/appairer#code')).toBe('/appairer');
   expect(masquerAppairage(undefined)).toBe('');
+});
+
+test('32.8 : manifeste et icônes publics, types MIME et CSP compatibles avec l’installation', async () => {
+  const { srv } = await ouvrir({ webRoot: resolve('web/public'), nom: 'aid-e2e.ts.net' });
+  const r = await srv.app.inject({
+    url: '/manifest.webmanifest',
+    headers: { host: 'aid-e2e.ts.net' },
+  });
+  expect(r.statusCode).toBe(200);
+  expect(r.headers['content-type']).toMatch(/^application\/manifest\+json/);
+  expect(r.headers['content-security-policy']).toContain("manifest-src 'self'");
+  expect(r.headers['content-security-policy']).toContain("img-src 'self'");
+  expect(r.json().name).toBe('A-I-D');
+  for (const taille of [256, 512]) {
+    const icone = await srv.app.inject({
+      url: `/icons/icon-${taille}.png`,
+      headers: { host: 'aid-e2e.ts.net' },
+    });
+    expect(icone.statusCode).toBe(200);
+    expect(icone.headers['content-type']).toBe('image/png');
+    expect(icone.rawPayload.readUInt32BE(16)).toBe(taille);
+  }
 });

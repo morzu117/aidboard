@@ -10,6 +10,7 @@ import { Appairer } from './ecrans/Appairer.js';
 import { Contenu as BoardContenu } from './ecrans/Board.js';
 import { Contenu as CarteContenu } from './ecrans/CarteBoard.js';
 import { HorsAcces } from './ui/HorsAcces.js';
+import { RappelInstallation } from './ui/RappelInstallation.js';
 
 // Chantier 31 (D180) : l'interface sur un appareil, servie par le port des appareils. Une barre
 // réduite (Accueil, Board, Appareils connectés), aucun bouton d'écriture, et le flux de
@@ -50,7 +51,7 @@ function Carte() {
 }
 
 function Coque({ moi }: { moi: Moi | null }) {
-  const { appareil, daemon, acces } = useAid();
+  const { appareil, daemon, acces, horsLigne, dernierEtatLu } = useAid();
   const client = useAidClient();
   const [identite, setIdentite] = useState(moi);
   const [fin, setFin] = useState<AccesFini | null>(null);
@@ -77,9 +78,23 @@ function Coque({ moi }: { moi: Moi | null }) {
     };
   }, [client, daemon, identite]);
   if (acces || fin) return <HorsAcces fin={acces ?? fin!} />;
+  if (horsLigne && appareil) {
+    return (
+      <div className="appareil-coque" data-node="appareil">
+        <RappelInstallation />
+        <div className="appareil-bandeau" role="status">
+          <p>Mac injoignable</p>
+          {dernierEtatLu && <p>Dernier état connu il y a {ageDernierEtat(dernierEtatLu)}</p>}
+          <p>{"A-I-D n'a pas pu te prévenir de ce qui s'est passé depuis."}</p>
+        </div>
+        <AccueilAppareil />
+      </div>
+    );
+  }
   const cell = appareil?.mesh?.state.cell ?? null;
   return (
     <div className="appareil-coque" data-node="appareil">
+      <RappelInstallation />
       {identite && <Barre moi={identite} board={cell !== null} />}
       {(daemon === 'injoignable' || daemon === 'reconnexion') && (
         <p className="appareil-bandeau" role="status" data-node="appareil.bandeau">
@@ -107,6 +122,11 @@ function Coque({ moi }: { moi: Moi | null }) {
       </Routes>
     </div>
   );
+}
+
+function ageDernierEtat(lu: string): string {
+  const minutes = Math.max(0, Math.floor((Date.now() - Date.parse(lu)) / 60_000));
+  return minutes < 60 ? `${minutes} min` : `${Math.floor(minutes / 60)} h`;
 }
 
 export function AppAppareil({
