@@ -59,9 +59,13 @@ type Issue =
     }
   | { ouvert: false; statut: number };
 
-function connecter(port: number, headers: Record<string, string>): Promise<Issue> {
+function connecter(
+  port: number,
+  headers: Record<string, string>,
+  chemin = '/ws/signal',
+): Promise<Issue> {
   return new Promise((resolve) => {
-    const ws = new WebSocket(`ws://127.0.0.1:${port}/ws/signal`, {
+    const ws = new WebSocket(`ws://127.0.0.1:${port}${chemin}`, {
       headers: { host: NOM, ...headers },
     });
     ouverts.push(ws);
@@ -215,4 +219,25 @@ test('31.7 (D178) : sans mesh, le board répond 404', async () => {
     headers: { host: NOM, cookie: `${COOKIE_APPAREIL}=${jeton}`, 'sec-fetch-site': 'same-origin' },
   });
   expect(r.statusCode).toBe(404);
+});
+
+test('31.11 (D174) : une socket hors de /ws/signal est refusée en 404, sans jamais s’ouvrir', async () => {
+  const { srv, jeton } = await ouvrir();
+  for (const chemin of [
+    '/ws/events',
+    '/ws/pty/ag_1',
+    '/ws/agent/ag_1',
+    '/ws/x',
+    '/api/state',
+    '/',
+  ]) {
+    const c = await connecter(srv.port, valide(jeton), chemin);
+    expect(c.ouvert ? 'ouvert' : c.statut, chemin).toBe(404);
+  }
+  // et sans cookie, pareil : rien ne dit qu'une route existe
+  const sans = await connecter(srv.port, { origin: `https://${NOM}` }, '/ws/pty/ag_1');
+  expect(sans.ouvert ? 'ouvert' : sans.statut).toBe(404);
+  // /ws/signal, elle, s'ouvre
+  const c = await connecter(srv.port, valide(jeton));
+  expect(c.ouvert).toBe(true);
 });

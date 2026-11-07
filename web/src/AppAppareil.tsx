@@ -57,7 +57,7 @@ function Coque({ moi }: { moi: Moi }) {
       <Barre moi={moi} board={cell !== null} />
       {(daemon === 'injoignable' || daemon === 'reconnexion') && appareil && (
         <p className="appareil-bandeau" role="status" data-node="appareil.bandeau">
-          {daemon === 'injoignable' ? 'Cockpit injoignable. Nouvel essai…' : 'Reconnexion…'}
+          {daemon === 'injoignable' ? 'Mac injoignable. Nouvel essai…' : 'Reconnexion…'}
         </p>
       )}
       <Routes>

@@ -35,6 +35,10 @@ const ROUTES_COOKIE = new Set([
   '/api/appareils/moi/deconnexion',
 ]);
 const COOKIE = { httpOnly: true, secure: true, sameSite: 'strict', path: '/' } as const;
+/** D174 : la seule route WebSocket de ce port */
+const SOCKETS = new Set(['/ws/signal']);
+const estUpgrade = (req: FastifyRequest) =>
+  String(req.headers.upgrade ?? '').toLowerCase() === 'websocket';
 
 // caractères de contrôle et de mise en forme : un login n'en a pas
 // eslint-disable-next-line no-control-regex -- les refuser est le but
@@ -173,6 +177,11 @@ export async function ouvrirServeurAppareils(
       return reply.code(403).send({ error: 'origine refusée' });
     }
     const p = chemin(req);
+    // 31.11 (D174) : une poignée de main WebSocket hors de /ws/signal est refusée avant d'aboutir.
+    // Sinon @fastify/websocket l'accepte, puis ferme la socket : elle s'ouvrirait un instant.
+    if (estUpgrade(req) && !SOCKETS.has(req.routeOptions.url ?? '')) {
+      return reply.code(404).send({ error: 'introuvable' });
+    }
     const api = p.startsWith('/api/');
     const socket = p.startsWith('/ws/');
     // les fichiers de l'interface sont publics : ils ne portent rien du Mac (31.5, lab DM 91366)
