@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, statSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { expect, test } from 'vitest';
@@ -6,8 +6,10 @@ import {
   ConfigError,
   DEFAULT_CONFIG,
   DEFAULT_TAILSCALE_BIN,
+  ecrireModeHostActif,
   loadConfig,
   parseConfig,
+  portAppareils,
   portArtefacts,
   writeDefaultConfigIfAbsent,
 } from '../src/daemon/config.js';
@@ -224,4 +226,48 @@ test('chantier 30 (D162) : artefacts.port, par défaut le port du daemon + 10', 
   expect(portArtefacts({ ...parseConfig(''), port: 0 })).toBe(0);
   expect(() => parseConfig('artefacts:\n  port: 0\n')).toThrow(ConfigError);
   expect(() => parseConfig('artefacts:\n  hote: x\n')).toThrow(/artefacts\.hote/);
+});
+
+// Chantier 31 (D171, D172) : le mode host, éteint par défaut, et le port des appareils.
+test('31.3 : modeHost éteint par défaut ; port des appareils = port du daemon + 20', () => {
+  const c = parseConfig('');
+  expect(c.modeHost).toEqual({ actif: false, port: null });
+  expect(portAppareils(c)).toBe(4890);
+  expect(portAppareils(parseConfig('port: 5000'))).toBe(5020);
+  expect(portAppareils(parseConfig('modeHost:\n  port: 4999'))).toBe(4999);
+  expect(portAppareils({ ...c, port: 0 })).toBe(0);
+  expect(parseConfig('modeHost:\n  actif: true').modeHost.actif).toBe(true);
+});
+
+test('31.3 : modeHost refuse une clé inconnue, un type faux, et les ports interdits', () => {
+  expect(() => parseConfig('modeHost:\n  ecoute: 0.0.0.0')).toThrow(/clé inconnue/);
+  expect(() => parseConfig('modeHost:\n  actif: oui')).toThrow(/true ou false/);
+  expect(() => parseConfig('modeHost: 1')).toThrow(/objet/);
+  expect(() => parseConfig('modeHost:\n  port: 4870')).toThrow(/port du daemon/);
+  expect(() => parseConfig('modeHost:\n  port: 4871')).toThrow(/pont/);
+  expect(() => parseConfig('modeHost:\n  port: 4880')).toThrow(/artefacts/);
+  expect(() => parseConfig('artefacts:\n  port: 4890')).toThrow(/artefacts/);
+  // l'adresse d'écoute ne bouge toujours pas
+  expect(() => parseConfig('host: 0.0.0.0')).toThrow(/127.0.0.1/);
+});
+
+test('31.5 (D172) : ecrireModeHostActif garde le reste du fichier, commentaires compris', () => {
+  const home = mkdtempSync(join(tmpdir(), 'aid-cfg-'));
+  const p = resolvePaths(home);
+  ensureHome(p);
+  ecrireModeHostActif(p, true);
+  expect(loadConfig(p).modeHost.actif).toBe(true);
+  writeFileSync(p.config, '# mon commentaire\nport: 4999 # garde\nmodeHost:\n  port: 5100\n');
+  ecrireModeHostActif(p, true);
+  ecrireModeHostActif(p, false);
+  const texte = readFileSync(p.config, 'utf8');
+  expect(texte).toContain('# mon commentaire');
+  expect(texte).toContain('port: 4999 # garde');
+  expect(loadConfig(p)).toMatchObject({ port: 4999, modeHost: { actif: false, port: 5100 } });
+  // illisible ou invalide : rien n'est écrit
+  for (const brut of ['modeHost: [1]\n', 'port: [\n', 'modeHost:\n  port: 4870\n']) {
+    writeFileSync(p.config, brut);
+    expect(() => ecrireModeHostActif(p, true), brut).toThrow(ConfigError);
+    expect(readFileSync(p.config, 'utf8')).toBe(brut);
+  }
 });

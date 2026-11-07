@@ -36,6 +36,7 @@ const probes = (swarph: string | null): Probes => ({
   install: () => ({ mode: 'repo', version: null }),
   mesh: async () => meshOk,
   swairm: async () => null,
+  modeHost: async () => null,
 });
 
 const swarphLines = async (v: string | null) =>

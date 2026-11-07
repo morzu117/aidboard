@@ -36,6 +36,9 @@ import { registerServerRoutes } from './routes/servers.js';
 import { registerServerDiscussionRoutes } from './routes/serverDiscussions.js';
 import { registerMachineRoutes } from './routes/machines.js';
 import { type ArtefactsDeps, registerArtefactRoutes } from './routes/artefacts.js';
+import { registerHostRoutes } from './routes/host.js';
+import type { TailscaleExec } from './mesh/tailscale.js';
+import type { ModeHost } from './host/controleur.js';
 import type { RemoteKind } from './remote/agents.js';
 import type { TransportOptions } from './remote/transport.js';
 import type { MeshService } from './mesh/service.js';
@@ -81,6 +84,12 @@ export interface ServerDeps {
   logger?: boolean;
   /** chantier 30 : les jetons et l'état du second port ; absent = artefacts indisponibles */
   artefacts?: ArtefactsDeps;
+  /** chantier 31 (D173) : l'exécution de `tailscale`, remplacée en test ; absent = le vrai binaire */
+  tailscaleExec?: TailscaleExec;
+  /** chantier 31 (D172) : le port des appareils ; absent = pas de route du mode host */
+  modeHost?: ModeHost;
+  /** chantier 31 (D174), tests : chaque route déclarée sur le port du Mac */
+  onRoute?: (r: { method: string | string[]; url: string }) => void;
 }
 
 export function redactToken(url: string | undefined): string {
@@ -123,6 +132,10 @@ export async function buildServer(deps: ServerDeps): Promise<FastifyInstance> {
     // refuser un champ inconnu plutôt que de le retirer sans rien dire
     ajv: { customOptions: { removeAdditional: false } },
   });
+  if (deps.onRoute) {
+    const f = deps.onRoute;
+    app.addHook('onRoute', (r) => f({ method: r.method, url: r.url }));
+  }
   app.addHook('onResponse', async (req, reply) => {
     if (reply.statusCode >= 400)
       req.log.warn(
@@ -198,6 +211,15 @@ export async function buildServer(deps: ServerDeps): Promise<FastifyInstance> {
   registerFsRoutes(app);
   registerFileRoutes(app, { db: deps.db });
   registerArtefactRoutes(app, { db: deps.db, artefacts: deps.artefacts });
+  if (deps.modeHost) {
+    registerHostRoutes(app, {
+      config: deps.config,
+      paths: deps.paths,
+      getPort: () => (app.server.address() as AddressInfo | null)?.port ?? deps.config.port,
+      modeHost: deps.modeHost,
+      tailscaleExec: deps.tailscaleExec,
+    });
+  }
   registerHookRoutes(app, () => process.env);
   const indexer =
     deps.indexer ??

@@ -21,6 +21,8 @@ self.addEventListener('fetch', (event) => {
   const path = new URL(request.url).pathname;
   // L'état vivant, jamais mis en cache — son échec est déjà géré côté app (AidClient.failed()).
   if (path.startsWith('/api/') || path.startsWith('/ws/') || path === '/auth') return;
+  // chantier 31 (D176) : l'appairage d'un appareil, jamais mis en cache non plus
+  if (path.startsWith('/appairage/')) return;
 
   const cacheKey = request.mode === 'navigate' ? '/' : request;
   event.respondWith(

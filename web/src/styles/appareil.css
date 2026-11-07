@@ -1,0 +1,109 @@
+/* Chantier 31 (D180) : l'interface sur un appareil. Sans la mise en page mobile, qui est au
+   chantier 32. Hors de maquette.css (test/web/maquette-css.test.ts). */
+
+.appareil-coque {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+  min-height: 100vh;
+  padding: var(--sp-4);
+  background: var(--bg);
+}
+
+.appareil-barre {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  padding-bottom: var(--sp-3);
+  border-bottom: 1px solid var(--line);
+}
+.appareil-barre nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+}
+.appareil-lien {
+  padding: var(--sp-1) var(--sp-3);
+  border-radius: var(--r-s);
+  color: var(--text-2);
+  text-decoration: none;
+}
+.appareil-lien.est-actif {
+  background: var(--surface-3);
+  color: var(--text);
+}
+
+.appareil-bandeau {
+  margin: 0;
+  padding: var(--sp-2) var(--sp-3);
+  border: 1px solid var(--s-attente-line);
+  border-radius: var(--r-s);
+  background: var(--s-attente-bg);
+  color: var(--s-attente);
+}
+
+.appareil-accueil .appareil-projet {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+.appareil-sujets,
+.appareil-agents {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.appareil-sujets {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+.appareil-sujets > li {
+  padding: var(--sp-3) var(--sp-4);
+  border: 1px solid var(--line);
+  border-radius: var(--r-m);
+}
+.appareil-sujet-ligne {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+  align-items: baseline;
+}
+.appareil-agents {
+  margin-top: var(--sp-2);
+  color: var(--text-2);
+  font-size: var(--fs-s);
+}
+.appareil-agents .est-en-attente {
+  color: var(--s-attente);
+}
+
+.appareil-plein {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  max-width: 32rem;
+  margin: 15vh auto 0;
+  padding: var(--sp-4);
+}
+.appairer-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+}
+.appairer-form label {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+}
+.appairer-form input {
+  height: var(--h-controle-s);
+  padding: 0 var(--sp-2);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-s);
+  background: var(--surface-3);
+  color: var(--text);
+  font: inherit;
+}

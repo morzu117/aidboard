@@ -1,5 +1,5 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
-import { parse } from 'yaml';
+import { parse, parseDocument } from 'yaml';
 import type { AidPaths } from './paths.js';
 
 export interface AidConfig {
@@ -14,6 +14,7 @@ export interface AidConfig {
   swairm: SwairmConfig;
   agents: AgentsConfig;
   artefacts: ArtefactsConfig;
+  modeHost: ModeHostConfig;
 }
 
 /** Bascule progressive D63 : `stream` passe `claude`/`codex` par pilote structuré plutôt que PTY. */
@@ -23,6 +24,16 @@ export interface AgentsConfig {
 
 /** Chantier 30 (D162) : le second port, réservé aux artefacts. `null` = port du daemon + 10. */
 export interface ArtefactsConfig {
+  port: number | null;
+}
+
+/**
+ * Chantier 31 (D171, D172) : le mode host par le tailnet. Éteint par défaut. `port` : celui des
+ * appareils, que Tailscale Serve est seul à atteindre ; `null` = port du daemon + 20. La clé `host`
+ * reste l'adresse d'écoute, toujours 127.0.0.1 : le mode host n'y touche pas.
+ */
+export interface ModeHostConfig {
+  actif: boolean;
   port: number | null;
 }
 
@@ -88,6 +99,7 @@ export const DEFAULT_CONFIG: AidConfig = {
     tailscale: { manage: false, bin: DEFAULT_TAILSCALE_BIN },
   },
   artefacts: { port: null },
+  modeHost: { actif: false, port: null },
 };
 
 export class ConfigError extends Error {}
@@ -137,6 +149,7 @@ export function parseConfig(text: string): AidConfig {
       'swairm',
       'agents',
       'artefacts',
+      'modeHost',
     ],
     '',
   );
@@ -181,7 +194,37 @@ export function parseConfig(text: string): AidConfig {
       cfg.artefacts.port = positiveInt(doc.artefacts.port, 'artefacts.port', 65535);
     }
   }
+  if (doc.modeHost !== undefined) {
+    if (!isRecord(doc.modeHost)) throw new ConfigError('config.yaml : modeHost doit être un objet');
+    rejectUnknown(doc.modeHost, ['actif', 'port'], 'modeHost.');
+    if (doc.modeHost.actif !== undefined) {
+      cfg.modeHost.actif = bool(doc.modeHost.actif, 'modeHost.actif');
+    }
+    if (doc.modeHost.port !== undefined) {
+      cfg.modeHost.port = positiveInt(doc.modeHost.port, 'modeHost.port', 65535);
+    }
+  }
+  verifierPortAppareils(cfg);
   return cfg;
+}
+
+/** Le pont de redémarrage de l'app Tauri (`app/src-tauri/src/daemon_bridge.rs`). */
+export const PORT_PONT_TAURI = 4871;
+
+/** D171 : le port des appareils n'est ni celui du daemon, ni le pont Tauri, ni celui des artefacts. */
+function verifierPortAppareils(cfg: AidConfig): void {
+  const port = portAppareils(cfg);
+  if (port === 0) return;
+  const interdits: Array<[number, string]> = [
+    [cfg.port, 'le port du daemon'],
+    [PORT_PONT_TAURI, 'le pont de l’app'],
+    [portArtefacts(cfg), 'le port des artefacts'],
+  ];
+  for (const [p, nom] of interdits) {
+    if (port === p) {
+      throw new ConfigError(`config.yaml : modeHost.port (${port}) ne peut pas être ${nom}`);
+    }
+  }
 }
 
 function str(v: unknown, name: string): string {
@@ -305,6 +348,24 @@ function parseAgents(raw: unknown, cfg: AgentsConfig): void {
   }
 }
 
+/**
+ * Chantier 31 (D172) : l'interrupteur du mode host écrit `modeHost.actif` dans config.yaml, en
+ * gardant le reste du fichier, commentaires compris. Le résultat est relu par `parseConfig`
+ * avant d'être écrit : un fichier qui ne passerait plus n'est jamais posé.
+ */
+export function ecrireModeHostActif(p: AidPaths, actif: boolean): void {
+  const doc = parseDocument(existsSync(p.config) ? readFileSync(p.config, 'utf8') : '');
+  if (doc.errors.length > 0) throw new ConfigError("config.yaml illisible : rien n'est écrit");
+  try {
+    doc.setIn(['modeHost', 'actif'], actif);
+  } catch {
+    throw new ConfigError('config.yaml : modeHost doit être un objet');
+  }
+  const texte = doc.toString();
+  parseConfig(texte);
+  writeFileSync(p.config, texte);
+}
+
 export function loadConfig(p: AidPaths): AidConfig {
   if (!existsSync(p.config)) return structuredClone(DEFAULT_CONFIG);
   return parseConfig(readFileSync(p.config, 'utf8'));
@@ -351,6 +412,9 @@ const DEFAULT_FILE = `# Configuration d'A-I-D. Tout est facultatif : ce sont les
 #                          # ex. /Users/vous/.local/bin/swairm
 # agents:
 #   transport: stream      # stream = claude/codex par pilote structuré (D63, défaut) ; pty = terminal
+# modeHost:                # chantier 31 : le cockpit sur ton tailnet, jamais sur internet
+#   actif: false           # s'active depuis Machines, sur le Mac seulement
+#   port: 4890             # vide = port + 20 ; Tailscale Serve y envoie les appareils
 `;
 
 export function writeDefaultConfigIfAbsent(p: AidPaths): void {
@@ -361,4 +425,10 @@ export function writeDefaultConfigIfAbsent(p: AidPaths): void {
 export function portArtefacts(config: AidConfig): number {
   if (config.artefacts.port !== null) return config.artefacts.port;
   return config.port === 0 ? 0 : config.port + 10;
+}
+
+/** Chantier 31 (D171) : le port des appareils ; un daemon sur un port libre (0, tests) donne 0. */
+export function portAppareils(config: AidConfig): number {
+  if (config.modeHost.port !== null) return config.modeHost.port;
+  return config.port === 0 ? 0 : config.port + 20;
 }

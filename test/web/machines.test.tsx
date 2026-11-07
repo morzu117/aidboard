@@ -150,13 +150,15 @@ test('D151 : l’entrée Machines de la barre est active ; Ajouter une machine o
   await waitFor(() => expect(cheminCourant()).toBe('/serveurs/nouveau'));
 });
 
-test('D152 : Ton cockpit, mode host inactif, le Mac seul et aucun bouton d’appareil', async () => {
+test('D152 : Ton cockpit, mode host inactif, le Mac seul et aucun bouton d’appareil (31.9 : l’interrupteur seul)', async () => {
   ouvrir();
   await waitFor(() => expect(node('machines.cockpit.mode')?.textContent).toBe('Mode host inactif'));
   expect(node('machines.cockpit.phrase')?.textContent).toContain('127.0.0.1');
   expect(node('machines.cockpit.appareils')?.querySelectorAll('li')).toHaveLength(1);
   expect(node('machines.cockpit.appareil-local')?.textContent).toContain('Héberge le cockpit');
-  expect(node('machines.cockpit')?.querySelector('button')).toBeNull();
+  expect(
+    [...(node('machines.cockpit')?.querySelectorAll('button') ?? [])].map((b) => b.dataset.node),
+  ).toEqual(['host.interrupteur']);
 });
 
 test('D157 : la carte du Mac, agents et versions, reprise, mémoire, sessions actives', async () => {

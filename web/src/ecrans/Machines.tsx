@@ -12,6 +12,7 @@ import type {
 import { type MachinesEtat, useMachines } from '../data/machines.js';
 import { statutInconnu, useServeurs } from '../data/serveurs.js';
 import { useAid } from '../data/useAidState.js';
+import { Cockpit } from '../ui/Cockpit.js';
 import { Layout } from '../ui/Layout.js';
 import {
   accesDe,
@@ -432,26 +433,7 @@ function Contenu() {
         </p>
       )}
 
-      <section className="machines-section" data-node="machines.cockpit" aria-labelledby="mc-titre">
-        <div className="machines-section-entete">
-          <h2 id="mc-titre" className="titre-zone">
-            Ton cockpit
-          </h2>
-          <span className="pastille pastille--discret" data-node="machines.cockpit.mode">
-            Mode host inactif
-          </span>
-        </div>
-        <p className="texte-discret" data-node="machines.cockpit.phrase">
-          Ce cockpit n’écoute que sur ce Mac (127.0.0.1). Les autres appareils viendront avec le
-          mode host.
-        </p>
-        <ul className="machines-appareils" data-node="machines.cockpit.appareils">
-          <li data-node="machines.cockpit.appareil-local">
-            <span className="machine-carte-nom">Mac local · ici</span>
-            <span className="texte-discret">Héberge le cockpit</span>
-          </li>
-        </ul>
-      </section>
+      <Cockpit />
 
       <section className="machines-section" data-node="machines.liste" aria-labelledby="ml-titre">
         <h2 id="ml-titre" className="titre-zone">

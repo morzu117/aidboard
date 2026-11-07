@@ -1,0 +1,99 @@
+/* Chantier 31 (D172, D176, D181) : Machines › Ton cockpit, le mode host. Hors de maquette.css,
+   dont l'empreinte est comparée aux maquettes (test/web/maquette-css.test.ts). */
+
+.pastille--host-discret {
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  color: var(--muted);
+}
+.pastille--host-ok {
+  background: var(--s-relire-bg);
+  color: var(--s-ok);
+}
+.pastille--host-attente {
+  background: var(--s-attente-bg);
+  color: var(--s-attente);
+}
+.pastille--host-erreur {
+  background: var(--s-erreur-bg);
+  color: var(--s-erreur);
+}
+
+.host-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+}
+
+.host-commande {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2);
+}
+.host-commande p {
+  flex-basis: 100%;
+  margin: 0;
+}
+.host-commande code {
+  padding: var(--sp-1) var(--sp-2);
+  border: 1px solid var(--line);
+  border-radius: var(--r-s, 4px);
+  background: var(--surface-2);
+  user-select: all;
+}
+
+.host-qr {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-4);
+  align-items: flex-start;
+}
+/* toujours noir sur blanc, quel que soit le thème : c'est ce qu'un appareil photo lit le mieux */
+.qr {
+  width: 220px;
+  height: 220px;
+  border-radius: var(--r-m);
+}
+.host-qr-texte {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+.host-qr-texte p {
+  margin: 0;
+}
+
+.host-demande {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  padding: var(--sp-3) var(--sp-4);
+  border: 1px solid var(--s-attente-line);
+  border-radius: var(--r-m);
+  background: var(--s-attente-bg);
+}
+.host-avertissement {
+  margin: 0;
+  color: var(--s-attente);
+  font-weight: 600;
+}
+.host-demande-champs {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: var(--sp-1) var(--sp-3);
+  margin: 0;
+}
+.host-demande-champs dd {
+  margin: 0;
+}
+.host-code-court {
+  font-family: var(--mono, ui-monospace, monospace);
+  font-size: 1.4em;
+  letter-spacing: 0.15em;
+}
+.host-case {
+  display: flex;
+  gap: var(--sp-2);
+  align-items: center;
+}
