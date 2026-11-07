@@ -10,6 +10,8 @@ import { RegistreAppareils } from '../src/daemon/host/appareils.js';
 import { COOKIE_APPAREIL, ouvrirServeurAppareils } from '../src/daemon/host/serveur.js';
 import { AgentManager } from '../src/daemon/pty/manager.js';
 import { registerAgentRoutes } from '../src/daemon/routes/agents.js';
+import { buildSnapshot } from '../src/daemon/state/snapshot.js';
+import { mapHook } from '../src/cli/commands/hook.js';
 import { ASK_TEXT_ANSWER } from '../src/shared/question.js';
 import { seedTopic } from './helpers/daemon.js';
 
@@ -21,6 +23,8 @@ afterEach(async () => {
 const demande = {
   id: 'question-1',
   kind: 'question',
+  modeVivant: 'default',
+  modeVivantA: '2026-11-07T00:00:00Z',
   question: 'Texte privé de la question',
   options: [{ label: 'Premier', answer: '1' }, { label: 'Second', answer: '2' }, ASK_TEXT_ANSWER],
 };
@@ -35,7 +39,7 @@ async function preparer() {
   });
   seedTopic(db);
   db.prepare(
-    "UPDATE agents SET kind = 'claude', permission_mode = 'default', pending = ?, status = 'needs_input' WHERE id = 'ag_1'",
+    "UPDATE agents SET kind = 'claude', transport = 'pty', permission_mode = 'default', pending = ?, status = 'needs_input' WHERE id = 'ag_1'",
   ).run(JSON.stringify(demande));
   const store = new EventStore(db);
   const pilote = vi.fn();
@@ -46,6 +50,9 @@ async function preparer() {
       ['ag_1', { id: 'ag_1', runId: 'run_1', queued: [], driver: { answer: pilote } }],
     ]),
   });
+  const moteur = { status: async () => ({ state: 'unavailable' }) } as unknown as Parameters<
+    typeof buildSnapshot
+  >[1];
   const registre = new RegistreAppareils(db);
   const s = await ouvrirServeurAppareils({
     port: 0,
@@ -55,6 +62,7 @@ async function preparer() {
     appairages: new Appairages(),
     webRoot: null,
     reponses: { db, store, agents },
+    etat: () => buildSnapshot(db, moteur),
   });
   if (!s.disponible) throw new Error(s.raison);
   nettoyages.push(() => s.app.close());
@@ -85,14 +93,16 @@ async function preparer() {
       url: '/api/agents/ag_1/answer',
       payload: { pendingId: demande.id, answer: '1' },
     });
-  return { db, store, pilote, registre, appareil, envoyer, headers, repondreMac };
+  return { app: s.app, db, store, pilote, registre, appareil, envoyer, headers, repondreMac };
 }
 
 test.each(['default', 'plan'])(
   'question en mode %s : answer vient des options serveur',
   async (mode) => {
     const p = await preparer();
-    p.db.prepare('UPDATE agents SET permission_mode = ?').run(mode);
+    p.db
+      .prepare('UPDATE agents SET permission_mode = ?, pending = ?')
+      .run(mode, JSON.stringify({ ...demande, modeVivant: mode }));
     expect((await p.envoyer()).statusCode).toBe(200);
     expect(p.pilote).toHaveBeenCalledExactlyOnceWith(demande.id, '2');
     expect(p.db.prepare('SELECT pending FROM agents').get()).toEqual({ pending: null });
@@ -122,6 +132,15 @@ test.each(['permission', null])('nature refusée : %s', async (kind) => {
   const r = await p.envoyer({ ...corps, pendingId: 'ancien' });
   expect(r.statusCode).toBe(403);
   expect(r.json()).toEqual({ raison: 'nature' });
+  const refus = p.store.since(null).filter((e) => e.type === 'appareil.refus');
+  expect(refus).toHaveLength(1);
+  expect(refus[0]!.agentId).toBe('ag_1');
+  expect(refus[0]!.data).toEqual({
+    appareilId: p.appareil.id,
+    nom: 'Téléphone test',
+    route: '/api/appareils/agents/:id/reponse',
+    raison: 'nature',
+  });
   expect(p.pilote).not.toHaveBeenCalled();
 });
 
@@ -217,11 +236,12 @@ test('pilote réentrant : consommation avant l’envoi et question suivante cons
   p.pilote.mockImplementation(() => {
     expect(p.db.prepare('SELECT pending FROM agents').get()).toEqual({ pending: null });
     p.store.append({
-      source: 'daemon',
+      source: 'hook:claude',
       type: 'agent.status',
       agentId: 'ag_1',
       data: {
         status: 'needs_input',
+        permission_mode: 'default',
         reason: 'question',
         pending: { ...demande, id: 'question-2' },
       },
@@ -236,4 +256,152 @@ test('pilote réentrant : consommation avant l’envoi et question suivante cons
   expect(r.statusCode).toBe(409);
   expect(r.json()).toEqual({ raison: 'perimee' });
   expect(p.pilote).toHaveBeenCalledTimes(1);
+});
+
+test.each(['acceptEdits', 'auto', 'inconnu', undefined, 'default', 'plan'])(
+  'mode vivant du hook %s, mode enregistré default',
+  async (mode) => {
+    const p = await preparer();
+    p.db.prepare("UPDATE agents SET transport = 'pty'").run();
+    const e = p.store.append({
+      source: 'hook:claude',
+      type: 'agent.status',
+      agentId: 'ag_1',
+      data: { status: 'needs_input', reason: 'question', permission_mode: mode, pending: demande },
+    });
+    const pending = JSON.parse(
+      (p.db.prepare('SELECT pending FROM agents').get() as { pending: string }).pending,
+    );
+    if (mode !== undefined) expect(pending).toMatchObject({ modeVivant: mode, modeVivantA: e.ts });
+    const r = await p.envoyer();
+    expect(r.statusCode).toBe(['default', 'plan'].includes(mode ?? '') ? 200 : 403);
+    if (r.statusCode === 403) expect(r.json()).toEqual({ raison: 'mode' });
+  },
+);
+
+test('stream : plan refusé et refus journalisé sans texte', async () => {
+  const p = await preparer();
+  p.db.prepare("UPDATE agents SET transport = 'stream', permission_mode = 'plan'").run();
+  expect((await p.envoyer()).json()).toEqual({ raison: 'mode' });
+  const e = p.db
+    .prepare("SELECT agent_id, data FROM events WHERE type = 'appareil.refus'")
+    .get() as { agent_id: string; data: string };
+  expect(e.agent_id).toBe('ag_1');
+  expect(JSON.parse(e.data)).toEqual({
+    appareilId: p.appareil.id,
+    nom: 'Téléphone test',
+    route: '/api/appareils/agents/:id/reponse',
+    raison: 'mode',
+  });
+});
+
+test('GET /api/state authentifié masque le chemin et le jeton de la question', async () => {
+  const p = await preparer();
+  p.db
+    .prepare('UPDATE agents SET pending = ?')
+    .run(JSON.stringify({ ...demande, question: 'Voir /home/exemple/projet et sk_live_abcdefgh' }));
+  const r = await p.app.inject({ url: '/api/state', headers: p.headers });
+  expect(r.statusCode).toBe(200);
+  expect(r.json().agents[0].question).toEqual({
+    pendingId: demande.id,
+    texte: 'Voir [masqué] et [masqué]',
+    options: ['Premier', 'Second'],
+    coupee: false,
+  });
+});
+
+test.each(['acceptEdits', 'auto', 'inconnu', null])(
+  'mode vivant refusé malgré default enregistré : %s',
+  async (modeVivant) => {
+    const p = await preparer();
+    p.db
+      .prepare("UPDATE agents SET transport = 'pty', pending = ?")
+      .run(JSON.stringify({ ...demande, modeVivant }));
+    const r = await p.envoyer();
+    expect(r.statusCode).toBe(403);
+    expect(r.json()).toEqual({ raison: 'mode' });
+    expect(p.pilote).not.toHaveBeenCalled();
+  },
+);
+
+test.each(['default', 'plan'])('stream sans mode vivant : repli %s', async (mode) => {
+  const p = await preparer();
+  const pending = {
+    id: demande.id,
+    kind: demande.kind,
+    question: demande.question,
+    options: demande.options,
+  };
+  p.db
+    .prepare("UPDATE agents SET transport = 'stream', permission_mode = ?, pending = ?")
+    .run(mode, JSON.stringify(pending));
+  const r = await p.envoyer();
+  expect(r.statusCode).toBe(mode === 'default' ? 200 : 403);
+  if (mode === 'plan') expect(r.json()).toEqual({ raison: 'mode' });
+});
+
+test('sans mode vivant en pty : refus journalisé sans texte', async () => {
+  const p = await preparer();
+  const pending = {
+    id: demande.id,
+    kind: demande.kind,
+    question: demande.question,
+    options: demande.options,
+  };
+  p.db.prepare("UPDATE agents SET transport = 'pty', pending = ?").run(JSON.stringify(pending));
+  expect((await p.envoyer()).json()).toEqual({ raison: 'mode' });
+  const refus = p.store.since(null).filter((e) => e.type === 'appareil.refus');
+  expect(refus).toHaveLength(1);
+  expect(refus[0]).toMatchObject({
+    agentId: 'ag_1',
+    data: {
+      appareilId: p.appareil.id,
+      nom: 'Téléphone test',
+      route: '/api/appareils/agents/:id/reponse',
+      raison: 'mode',
+    },
+  });
+  expect(Object.keys(refus[0]!.data).sort()).toEqual(['appareilId', 'nom', 'raison', 'route']);
+});
+
+test('hook vivant projeté puis GET /api/state authentifié : question masquée et coupe visible', async () => {
+  const p = await preparer();
+  const [evenement] = mapHook('PreToolUse', {
+    permission_mode: 'default',
+    tool_use_id: 'vivante',
+    tool_name: 'AskUserQuestion',
+    tool_input: {
+      questions: [
+        {
+          question: 'Lire /tmp/exemple sk_test_abcdefgh puis ' + 'mot '.repeat(50),
+          options: [{ label: 'Oui' }],
+        },
+      ],
+    },
+  });
+  p.store.append({ source: 'hook:claude', agentId: 'ag_1', runId: 'run_1', ...evenement! });
+  const pending = JSON.parse(
+    (p.db.prepare('SELECT pending FROM agents').get() as { pending: string }).pending,
+  );
+  expect(pending.modeVivant).toBe('default');
+  expect(pending.modeVivantA).toEqual(expect.any(String));
+  const r = await p.app.inject({ method: 'GET', url: '/api/state', headers: p.headers });
+  expect(r.statusCode).toBe(200);
+  const question = r.json().agents[0].question;
+  expect(question.coupee).toBe(true);
+  expect(question.texte).toContain('[masqué]');
+  expect(question.texte).not.toContain('/tmp/exemple');
+  expect(question.texte).not.toContain('sk_test_abcdefgh');
+  expect(question).not.toHaveProperty('modeVivant');
+});
+
+test('GET /api/state : une option coupée suffit à signaler la coupe', async () => {
+  const p = await preparer();
+  p.db
+    .prepare('UPDATE agents SET pending = ?')
+    .run(JSON.stringify({ ...demande, options: [{ label: 'mot '.repeat(50), answer: '1' }] }));
+  const r = await p.app.inject({ url: '/api/state', headers: p.headers });
+  expect(r.statusCode).toBe(200);
+  expect(r.json().agents[0].question.coupee).toBe(true);
+  expect(r.json().agents[0].question.options[0].length).toBeLessThanOrEqual(140);
 });

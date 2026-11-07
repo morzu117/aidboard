@@ -34,6 +34,10 @@ function projectStatus(tx: Db, e: AidEvent, d: Record<string, unknown>): void {
   if (source === 'heuristic' && row.status_source === 'hook') return;
   if (isSubSession(d.chain, row.pid)) return;
   const pending = status === 'needs_input' ? sanitizePending(d.pending) : null;
+  if (pending && e.source === 'hook:claude' && typeof d.permission_mode === 'string') {
+    pending.modeVivant = d.permission_mode;
+    pending.modeVivantA = e.ts;
+  }
   const detail = source === 'heuristic' ? sanitizeDetail(d) : null;
   tx.prepare(
     'UPDATE agents SET status = ?, status_reason = ?, status_message = ?, status_source = ?, status_at = ?, status_detail = ?, pending = ?, updated_at = ? WHERE id = ?',

@@ -1,11 +1,18 @@
 import { expect, test } from 'vitest';
-import { filtrerTexte } from '../src/daemon/host/filtre.js';
+import { filtrerTexte, texteCoupe } from '../src/daemon/host/filtre.js';
 
 const valeurs = [
   '/Users/exemple/projet',
   '/home/exemple/projet',
   '/var/log/service',
   '~/projet/fichier',
+  '$HOME/projet/fichier',
+  '${HOME}/projet/fichier',
+  '~exemple/projet/fichier',
+  ...['sk_live_', 'sk_test_', 'rk_live_', 'sk-', 'ghp_'].flatMap((prefixe) => [
+    prefixe + 'abcdefgh',
+    prefixe + 'a'.repeat(40),
+  ]),
   'C:\\exemple\\fichier',
   'https://example.com/page',
   'http://example.com',
@@ -105,4 +112,17 @@ test.each(phrasesSensibles)('masque la valeur sensible dans %s', (texte, attendu
   const resultat = filtrerTexte(texte);
   expect(resultat).toBe(attendu);
   expect(filtrerTexte(resultat)).toBe(resultat);
+});
+
+test('la coupe est mesurée après masquage', () => {
+  expect(texteCoupe('é'.repeat(141))).toBe(true);
+  expect(texteCoupe('é'.repeat(140))).toBe(false);
+  expect(texteCoupe('/' + 'a'.repeat(160))).toBe(false);
+});
+
+test('reste utilisable directement dans map', () => {
+  expect(['Aucune revue', '2 contrôles en panne'].map(filtrerTexte)).toEqual([
+    'Aucune revue',
+    '2 contrôles en panne',
+  ]);
 });

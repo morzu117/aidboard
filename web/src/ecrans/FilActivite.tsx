@@ -40,6 +40,8 @@ const DM: Record<string, string> = {
 const PHRASES: Record<string, (d: Donnees) => string | null> = {
   'tour.marque': (d) =>
     `Tour marqué ${d.etat === 'relu' ? 'relu' : 'à reprendre'} par ${d.par === 'mac' ? 'Mac' : (texte(d.parNom) ?? 'un appareil')}`,
+  'appareil.refus': (d) =>
+    `${texte(d.nom) ?? 'Un appareil'} : écriture refusée (${texte(d.raison) ?? 'refus'})`,
   'appareil.ecriture': (d) => `${texte(d.nom) ?? 'Un appareil'} a écrit depuis un appareil`,
   'approval.requested': () => 'Une autorisation t’attend',
   'approval.resolved': () => 'Autorisation tranchée',

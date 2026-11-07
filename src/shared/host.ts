@@ -87,7 +87,7 @@ export interface EtatPourAppareil {
     updatedAt: string;
     /** à la place de `pending`, dont seuls la question et les choix filtrés sont montrés */
     attend: boolean;
-    question?: { pendingId: string; texte: string; options: string[] };
+    question?: { coupee: boolean; pendingId: string; texte: string; options: string[] };
     tour?: { id: string; resume: string | null; marque: 'relu' | 'a_reprendre' | null };
   }>;
   mesh?: {

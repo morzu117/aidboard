@@ -23,9 +23,16 @@ function estIpv6(valeur: string): boolean {
 }
 
 export function filtrerTexte(s: string): string {
+  return filtrerAvecLimite(s, 140);
+}
+
+function filtrerAvecLimite(s: string, limite: number): string {
   let texte = s
     .replace(/(?:https?:\/\/|wss?:\/\/|file:\/\/|ssh:\/\/|git@)[^\s<>"'`]+/gi, MASQUE)
-    .replace(/(?<![\p{L}\p{N}_./\\-])(?:~\/|[a-z]:\\|\/)[^\s<>"'`,;!?()[\]{}]+/giu, MASQUE)
+    .replace(
+      /(?<![\p{L}\p{N}_./\\-])(?:\$\{HOME\}\/|\$HOME\/|~[\w.-]*\/|[a-z]:\\|\/)[^\s<>"'`,;!?()[\]{}]+/giu,
+      MASQUE,
+    )
     .replace(/\b(?:[a-z\d-]+\.)+ts\.net\b/gi, MASQUE)
     .replace(/(?<![\w:])(?:[\da-f]*:){2,}[\da-f:.]*(?:%[\w.-]+)?(?![\w:])/gi, (valeur) => {
       const adresse = valeur.replace(/\.+$/, '');
@@ -34,7 +41,10 @@ export function filtrerTexte(s: string): string {
     .replace(/\b(?:\d{1,3}\.){3}\d{1,3}\b/g, (valeur) =>
       valeur.split('.').every((n) => Number(n) <= 255) ? MASQUE : valeur,
     )
-    .replace(/\b(?:sk-|gh[pos]_|github_pat_|xox[abpr]-|AKIA|eyJ|glpat-)[a-z\d_./+=-]*/gi, MASQUE)
+    .replace(
+      /\b(?:sk_live_|sk_test_|rk_live_|sk-|gh[pos]_|github_pat_|xox[abpr]-|AKIA|eyJ|glpat-)[a-z\d_./+=-]*/gi,
+      MASQUE,
+    )
     .replace(/(?<![\w+/-])[a-z\d+/_-]{24,}={0,2}(?![\w+/-])/gi, (valeur) => {
       // Une suite hexadécimale reste reconnaissable, même sans chiffre (deadbeef…).
       if (/^[a-f\d]{24,}$/i.test(valeur)) return MASQUE;
@@ -52,12 +62,17 @@ export function filtrerTexte(s: string): string {
     .trim()
     .replace(/\[masqué\](?: *\[masqué\])+/g, MASQUE);
 
-  if (texte.length <= 140) return texte;
-  let fin = 139;
+  if (texte.length <= limite) return texte;
+  let fin = limite - 1;
   const debutMasque = texte.lastIndexOf(MASQUE, fin);
   if (debutMasque >= 0 && debutMasque + MASQUE.length > fin) fin = debutMasque;
   const espace = texte.lastIndexOf(' ', fin);
   if (espace > 0) fin = espace;
   texte = texte.slice(0, fin).trimEnd();
   return `${texte}…`;
+}
+
+/** La coupe se mesure après masquage, avant la limite de présentation. */
+export function texteCoupe(s: string): boolean {
+  return filtrerAvecLimite(s, Infinity).length > 140;
 }

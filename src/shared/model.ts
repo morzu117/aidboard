@@ -49,6 +49,9 @@ export interface PendingOption {
 }
 
 export interface PendingRequest {
+  /** Mode reçu du hook au moment de la demande, jamais exposé aux appareils. */
+  modeVivant?: string;
+  modeVivantA?: string;
   id: string;
   kind: 'permission' | 'question';
   question: string;

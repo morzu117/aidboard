@@ -39,6 +39,7 @@ describe('table des événements (plan 06, E2)', () => {
       type: 'agent.status',
       data: {
         status: 'needs_input',
+        permission_mode: 'default',
         reason: 'permission',
         message: 'autoriser Bash(npm test -- pty) ?',
         pending: {

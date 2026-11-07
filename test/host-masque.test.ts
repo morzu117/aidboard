@@ -269,6 +269,7 @@ test('32.4 : question et tour filtrés, choix dans l’ordre et indices conserv�
   const e = etatPourAppareil(s);
   expect(e.agents[0]!.question).toEqual({
     pendingId: 'question-1',
+    coupee: false,
     texte: 'Question [masqué] ; [masqué] ; [masqué] ; [masqué]',
     options: ['Premier [masqué] ; [masqué] ; [masqué] ; [masqué]', 'Répondre en texte'],
   });
@@ -288,7 +289,12 @@ test('32.4 : question et tour filtrés, choix dans l’ordre et indices conserv�
     'transport',
     'updatedAt',
   ]);
-  expect(Object.keys(e.agents[0]!.question!).sort()).toEqual(['options', 'pendingId', 'texte']);
+  expect(Object.keys(e.agents[0]!.question!).sort()).toEqual([
+    'coupee',
+    'options',
+    'pendingId',
+    'texte',
+  ]);
   expect(Object.keys(e.agents[0]!.tour!).sort()).toEqual(['id', 'marque', 'resume']);
   expect(e.agents[0]!.tour).toEqual({
     id: a.statusAt,

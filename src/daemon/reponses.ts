@@ -21,12 +21,13 @@ export function repondreAppareil(
 ) {
   const agent = deps.db
     .prepare(
-      `SELECT g.permission_mode, g.pending, g.run_id, r.topic_id, t.workspace_id
+      `SELECT g.transport, g.permission_mode, g.pending, g.run_id, r.topic_id, t.workspace_id
       FROM agents g JOIN runs r ON r.id = g.run_id
       JOIN topics t ON t.id = r.topic_id WHERE g.id = ?`,
     )
     .get(id) as
     | {
+        transport: string;
         permission_mode: string | null;
         pending: string | null;
         run_id: string;
@@ -35,9 +36,35 @@ export function repondreAppareil(
       }
     | undefined;
   if (!agent) return { status: 404, corps: { error: 'agent inconnu' } };
+  const refuser = (raison: 'mode' | 'nature') => {
+    deps.store.append({
+      source: 'daemon',
+      type: 'appareil.refus',
+      agentId: id,
+      runId: agent.run_id,
+      topicId: agent.topic_id,
+      workspaceId: agent.workspace_id,
+      data: {
+        appareilId: appareil.id,
+        nom: appareil.nom,
+        route: '/api/appareils/agents/:id/reponse',
+        raison,
+      },
+    });
+    return { status: 403, corps: { raison } };
+  };
   if (agent.permission_mode !== 'default' && agent.permission_mode !== 'plan')
-    return { status: 403, corps: { raison: 'mode' } };
+    return refuser('mode');
   const pending = agent.pending ? (JSON.parse(agent.pending) as PendingRequest) : null;
+  // Le stream ne fournit pas de mode vivant : sortir du plan interdit ce repli.
+  if (agent.transport === 'stream') {
+    if (agent.permission_mode !== 'default') return refuser('mode');
+  } else if (
+    pending &&
+    (!pending.modeVivantA || !['default', 'plan'].includes(pending.modeVivant ?? ''))
+  ) {
+    return refuser('mode');
+  }
   if (!pending) {
     // Une demande consommée se distingue d'un agent qui n'a jamais posé cette question.
     const tranchee = deps.db
@@ -48,7 +75,7 @@ export function repondreAppareil(
       .get(id, corps.pendingId);
     if (tranchee) return { status: 409, corps: { raison: 'deja_tranchee' } };
   }
-  if (!pending || pending.kind !== 'question') return { status: 403, corps: { raison: 'nature' } };
+  if (!pending || pending.kind !== 'question') return refuser('nature');
   if (pending.id !== corps.pendingId) return { status: 409, corps: { raison: 'perimee' } };
   const option = pending.options[corps.option];
   if (!option || option.answer === ASK_TEXT_ANSWER.answer)

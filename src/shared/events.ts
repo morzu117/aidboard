@@ -14,6 +14,7 @@ export type EventSource = (typeof EVENT_SOURCES)[number];
 export const EVENT_TYPES = [
   'tour.marque',
   'appareil.ecriture',
+  'appareil.refus',
   'agent.spawned',
   'agent.exited',
   'agent.resumed',
@@ -68,6 +69,7 @@ export type StoredEvent = AidEvent & {
 export const ACTIVITY_TYPES = [
   'tour.marque',
   'appareil.ecriture',
+  'appareil.refus',
   'approval.requested',
   'approval.resolved',
   'agent.spawned',
