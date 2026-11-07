@@ -215,7 +215,7 @@ async function connexionVivante() {
     );
   });
   expect(client.getSnapshot().horsLigne).toBe(false);
-  expect(screen.getByRole('navigation', { name: 'Cockpit' })).toBeTruthy();
+  expect(screen.getByRole('navigation', { name: 'Navigation' })).toBeTruthy();
   act(() => FakeSocket.all[0]!.open());
   reseau.joignable = false;
   act(() => FakeSocket.all[0]!.onclose?.());
@@ -225,7 +225,7 @@ async function connexionVivante() {
 test('32.8 : un seul échec garde la barre et la bannière Reconnexion', async () => {
   await connexionVivante();
   expect(client!.getSnapshot()).toMatchObject({ daemon: 'reconnexion', horsLigne: false });
-  expect(screen.getByRole('navigation', { name: 'Cockpit' })).toBeTruthy();
+  expect(screen.getByRole('navigation', { name: 'Navigation' })).toBeTruthy();
   expect(screen.getByText('Reconnexion…')).toBeTruthy();
   expect(screen.queryByText('Mac injoignable')).toBeNull();
   expect(screen.queryByText(/Dernier état connu/)).toBeNull();
@@ -235,11 +235,11 @@ test('32.8 : trois échecs passent à l’écran hors ligne', async () => {
   await connexionVivante();
   await act(async () => vi.advanceTimersByTimeAsync(1000));
   expect(client!.getSnapshot()).toMatchObject({ daemon: 'reconnexion', horsLigne: false });
-  expect(screen.getByRole('navigation', { name: 'Cockpit' })).toBeTruthy();
+  expect(screen.getByRole('navigation', { name: 'Navigation' })).toBeTruthy();
   await act(async () => vi.advanceTimersByTimeAsync(1000));
   expect(client!.getSnapshot()).toMatchObject({ daemon: 'injoignable', horsLigne: true });
   expect(screen.getByText('Mac injoignable')).toBeTruthy();
-  expect(screen.queryByRole('navigation')).toBeNull();
+  expect(screen.getByRole('navigation', { name: 'Navigation' })).toBeTruthy();
 });
 
 test('32.8 : le retour du Mac retire horsLigne et rétablit la barre', async () => {
@@ -250,7 +250,7 @@ test('32.8 : le retour du Mac retire horsLigne et rétablit la barre', async () 
   await act(async () => vi.advanceTimersByTimeAsync(1000));
   act(() => FakeSocket.all[1]!.open());
   expect(client!.getSnapshot()).toMatchObject({ daemon: 'connecte', horsLigne: false });
-  expect(screen.getByRole('navigation', { name: 'Cockpit' })).toBeTruthy();
+  expect(screen.getByRole('navigation', { name: 'Navigation' })).toBeTruthy();
   expect(screen.queryByText('Mac injoignable')).toBeNull();
 });
 
@@ -278,7 +278,7 @@ test('32.8 : une lecture vivante remplace la provenance IndexedDB pendant la rec
   joignable = true;
   await act(async () => client!.retry());
   expect(client.getSnapshot()).toMatchObject({ daemon: 'reconnexion', horsLigne: false });
-  expect(screen.getByRole('navigation', { name: 'Cockpit' })).toBeTruthy();
+  expect(screen.getByRole('navigation', { name: 'Navigation' })).toBeTruthy();
   expect(screen.getByText('Reconnexion…')).toBeTruthy();
   act(() => FakeSocket.all[0]!.open());
   expect(client.getSnapshot().horsLigne).toBe(false);

@@ -97,8 +97,8 @@ test.each([200, 401])(
     await waitFor(() => expect(FakeSocket.all.length).toBe(1));
     await act(async () => FakeSocket.all[0]!.open());
     if (statut === 200) {
-      expect(await screen.findByRole('navigation', { name: 'Cockpit' })).toBeTruthy();
-      expect(screen.getByText(/Téléphone · lecture seule/)).toBeTruthy();
+      expect(await screen.findByRole('navigation', { name: 'Navigation' })).toBeTruthy();
+      expect(screen.getByText(/Ton Mac · tailnet/)).toBeTruthy();
       await act(async () => {
         await client.refresh();
         await client.refresh();

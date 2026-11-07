@@ -136,13 +136,24 @@ test.describe.serial('la frontière du mode host (chantier 31)', () => {
   }) => {
     const p = await appairer(browser, 'Téléphone e2e');
     expect(new URL(p.url()).origin).toBe(APPAREIL);
-    const liens = await node(p, 'appareil.barre')
+    const navigation = p.getByRole('navigation', { name: 'Navigation', exact: true });
+    await expect(navigation.getByRole('link')).toHaveText(['À traiter', 'Sujets']);
+    const liens = await node(p, 'appareil')
       .locator('a')
       .evaluateAll((as) => as.map((a) => a.getAttribute('href')));
-    expect(liens).toEqual(['/', '/appareils']);
-    await expect(node(p, `appareil.sujet.${topicId}`)).toContainText('Sujet vu du téléphone');
-    // aucun bouton ni lien dans l'accueil, aucun écran du Mac
-    expect(await node(p, 'appareil.accueil').locator('button, a, input, form').count()).toBe(0);
+    expect(liens).toEqual(['/appareils', '/', '/sujets']);
+    await expect(node(p, 'appareil.barre').getByRole('link')).toHaveText('Appareils connectés');
+    await expect(navigation.getByRole('link', { name: 'À traiter' })).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
+    // Sans attente ni tour à relire, le sujet ne réclame rien dans À traiter.
+    await expect(node(p, 'appareil.accueil.vide')).toContainText("Rien n'attend ta réponse");
+    // Aucun contrôle dans cet accueil, aucun écran du Mac.
+    expect(
+      await node(p, 'appareil.accueil').locator('button, a, input, textarea, select, form').count(),
+    ).toBe(0);
+    await expect(node(p, '1-1.barre.marque')).toHaveCount(0);
     await p.goto(`${APPAREIL}/machines`);
     await expect.poll(() => new URL(p.url()).pathname).toBe('/');
     // le cookie d'appareil : __Host-, Secure, HttpOnly, SameSite=Strict, sur ce nom seul
@@ -247,7 +258,7 @@ test.describe.serial('la frontière du mode host (chantier 31)', () => {
     browser,
   }) => {
     const p = await appairer(browser, 'Révoqué e2e');
-    await expect(node(p, `appareil.sujet.${topicId}`)).toBeVisible();
+    await expect(node(p, 'appareil.accueil.vide')).toContainText("Rien n'attend ta réponse");
     const ligne = mac.locator('[data-node^="host.appareil."]', { hasText: 'Révoqué e2e' });
     await ligne.locator('[data-node$=".revoquer"]').click();
     await expect(node(p, 'appareil.hors-acces.phrase')).toHaveText(

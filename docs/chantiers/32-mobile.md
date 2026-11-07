@@ -116,6 +116,7 @@ Ce document. Pas de code.
 - Les trois onglets, la mise en page mobile.
 - À traiter : décisions (trancher une question, avec « Confirmer »), tours à relire, en cours ; « Une autorisation t'attend, sur le Mac » sans bouton.
 - « Rien à traiter, sans swarph ».
+- *Révision 32.9.* « Appareils connectés » passe dans l'en-tête ; les onglets restent en bas (deux sans swarph). Le choix d'une option survit aux nouveaux états tant que `pendingId` ne change pas. L'e2e de frontière du 31 (`e2e/mode-host.spec.ts`) suit la nouvelle navigation : liens exacts, accueil vide sans aucun contrôle, aucun écran du Mac. Gate 2020, e2e 104 verts.
 
 ### 32.10 Les autres écrans (D195)
 Sujets (filtre par état, nom en gras s'il t'attend), Suivre un sujet (prochaine décision, phase, dernier tour), Relire un tour, Autoriser un merge (en lecture, « se confirme sur le Mac »), Board et Lire une carte (repris du 31), Informations, Notifications, Appareils connectés, Ajouter ce téléphone.

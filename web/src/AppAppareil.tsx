@@ -12,35 +12,37 @@ import { Contenu as CarteContenu } from './ecrans/CarteBoard.js';
 import { HorsAcces } from './ui/HorsAcces.js';
 import { RappelInstallation } from './ui/RappelInstallation.js';
 
-// Chantier 31 (D180) : l'interface sur un appareil, servie par le port des appareils. Une barre
-// réduite (Accueil, Board, Appareils connectés), aucun bouton d'écriture, et le flux de
-// `/ws/signal`. Les écrans du Mac n'y sont pas montés : une adresse inconnue revient à l'accueil.
-
-const heure = (iso: string) =>
-  new Date(iso).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
-
-function Barre({ moi, board }: { moi: Moi; board: boolean }) {
+// D195 : navigation mobile, distincte de la coque du Mac.
+function Barre({ board }: { board: boolean }) {
   const lien = ({ isActive }: { isActive: boolean }) =>
     `appareil-lien${isActive ? ' est-actif' : ''}`;
   return (
-    <header className="appareil-barre" data-node="appareil.barre">
-      <nav aria-label="Cockpit">
-        <NavLink to="/" end className={lien} data-node="appareil.barre.accueil">
-          Accueil
+    <>
+      <header className="appareil-barre" data-node="appareil.barre">
+        <div>
+          <strong>A-I-D</strong>
+          <p className="texte-discret" data-node="appareil.barre.moi">
+            Ton Mac · tailnet
+          </p>
+        </div>
+        <NavLink className="appareil-lien" to="/appareils">
+          Appareils connectés
+        </NavLink>
+      </header>
+      <nav className="appareil-navigation" aria-label="Navigation">
+        <NavLink to="/" end className={lien}>
+          À traiter
+        </NavLink>
+        <NavLink to="/sujets" className={lien}>
+          Sujets
         </NavLink>
         {board && (
           <NavLink to="/board" className={lien} data-node="appareil.barre.board">
             Board
           </NavLink>
         )}
-        <NavLink to="/appareils" className={lien} data-node="appareil.barre.appareils">
-          Appareils connectés
-        </NavLink>
       </nav>
-      <span className="texte-discret" data-node="appareil.barre.moi">
-        {moi.nom} · lecture seule, jusqu’à {heure(moi.expireA)}
-      </span>
-    </header>
+    </>
   );
 }
 
@@ -78,31 +80,33 @@ function Coque({ moi }: { moi: Moi | null }) {
     };
   }, [client, daemon, identite]);
   if (acces || fin) return <HorsAcces fin={acces ?? fin!} />;
-  if (horsLigne && appareil) {
-    return (
-      <div className="appareil-coque" data-node="appareil">
-        <RappelInstallation />
+  const cell = appareil?.mesh?.state.cell ?? null;
+  return (
+    <div className="appareil-coque" data-node="appareil">
+      <RappelInstallation />
+      {identite && <Barre board={cell !== null} />}
+      {horsLigne && appareil && (
         <div className="appareil-bandeau" role="status">
           <p>Mac injoignable</p>
           {dernierEtatLu && <p>Dernier état connu il y a {ageDernierEtat(dernierEtatLu)}</p>}
           <p>{"A-I-D n'a pas pu te prévenir de ce qui s'est passé depuis."}</p>
         </div>
-        <AccueilAppareil />
-      </div>
-    );
-  }
-  const cell = appareil?.mesh?.state.cell ?? null;
-  return (
-    <div className="appareil-coque" data-node="appareil">
-      <RappelInstallation />
-      {identite && <Barre moi={identite} board={cell !== null} />}
-      {(daemon === 'injoignable' || daemon === 'reconnexion') && (
+      )}
+      {(!horsLigne || !appareil) && (daemon === 'injoignable' || daemon === 'reconnexion') && (
         <p className="appareil-bandeau" role="status" data-node="appareil.bandeau">
           {daemon === 'injoignable' ? 'Mac injoignable. Nouvel essai…' : 'Reconnexion…'}
         </p>
       )}
       <Routes>
         <Route path="/" element={<AccueilAppareil />} />
+        <Route
+          path="/sujets"
+          element={
+            <main className="page">
+              <h1 className="titre-ecran">Sujets</h1>
+            </main>
+          }
+        />
         <Route
           path="/board"
           element={
