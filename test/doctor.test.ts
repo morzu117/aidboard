@@ -542,3 +542,19 @@ test('31.3 (D182) : Serve absent ⚠ avec la commande ; Funnel et port interdit 
   expect(host[1]!.detail).toBe('lancer : tailscale serve --bg --https=443 http://127.0.0.1:4890');
   expect(host[0]!.detail).toContain('MagicDNS');
 });
+
+test('31.5 (D182) : la ligne du port des appareils, quand le daemon répond', async () => {
+  const sans = await levels({ modeHost: async () => hostOk });
+  expect(sans.some((l) => l.includes('port des appareils 4890 ouvert'))).toBe(false);
+  const ouvert = await levels({
+    modeHost: async () => ({ ...hostOk, disponible: true, raison: null }),
+  });
+  expect(ouvert).toContain('ok:mode host : port des appareils 4890 ouvert par le daemon');
+  const checks = await runChecks({
+    ...good,
+    modeHost: async () => ({ ...hostOk, disponible: false, raison: 'le port 4890 est occupé' }),
+  });
+  const c = checks.find((x) => x.label.includes('port des appareils 4890'))!;
+  expect([c.level, c.label]).toEqual(['warn', 'mode host : port des appareils 4890 indisponible']);
+  expect(c.detail).toContain('le port 4890 est occupé');
+});

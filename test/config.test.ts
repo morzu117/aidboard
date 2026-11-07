@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, statSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { expect, test } from 'vitest';
@@ -6,6 +6,7 @@ import {
   ConfigError,
   DEFAULT_CONFIG,
   DEFAULT_TAILSCALE_BIN,
+  ecrireModeHostActif,
   loadConfig,
   parseConfig,
   portAppareils,
@@ -248,4 +249,25 @@ test('31.3 : modeHost refuse une clé inconnue, un type faux, et les ports inter
   expect(() => parseConfig('artefacts:\n  port: 4890')).toThrow(/artefacts/);
   // l'adresse d'écoute ne bouge toujours pas
   expect(() => parseConfig('host: 0.0.0.0')).toThrow(/127.0.0.1/);
+});
+
+test('31.5 (D172) : ecrireModeHostActif garde le reste du fichier, commentaires compris', () => {
+  const home = mkdtempSync(join(tmpdir(), 'aid-cfg-'));
+  const p = resolvePaths(home);
+  ensureHome(p);
+  ecrireModeHostActif(p, true);
+  expect(loadConfig(p).modeHost.actif).toBe(true);
+  writeFileSync(p.config, '# mon commentaire\nport: 4999 # garde\nmodeHost:\n  port: 5100\n');
+  ecrireModeHostActif(p, true);
+  ecrireModeHostActif(p, false);
+  const texte = readFileSync(p.config, 'utf8');
+  expect(texte).toContain('# mon commentaire');
+  expect(texte).toContain('port: 4999 # garde');
+  expect(loadConfig(p)).toMatchObject({ port: 4999, modeHost: { actif: false, port: 5100 } });
+  // illisible ou invalide : rien n'est écrit
+  for (const brut of ['modeHost: [1]\n', 'port: [\n', 'modeHost:\n  port: 4870\n']) {
+    writeFileSync(p.config, brut);
+    expect(() => ecrireModeHostActif(p, true), brut).toThrow(ConfigError);
+    expect(readFileSync(p.config, 'utf8')).toBe(brut);
+  }
 });

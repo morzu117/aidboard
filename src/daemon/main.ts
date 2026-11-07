@@ -33,7 +33,7 @@ import { ensureHome, resolvePaths } from './paths.js';
 import { reconcile } from './reconcile.js';
 import { reconcileNamespaces } from './routes/workspaces.js';
 import { type AuthState, createAuthState, loadSessionToken } from './security.js';
-import { buildServer } from './server.js';
+import { buildServer, defaultWebRoot } from './server.js';
 import { StructuralService } from './structural/service.js';
 import { Indexer } from './topics/index.js';
 import { rattraperIndex } from './topics/rattrapage.js';
@@ -45,7 +45,10 @@ import type { TransportOptions } from './remote/transport.js';
 import type { RemoteKind } from './remote/agents.js';
 import { JetonsArtefacts } from './artefacts/jetons.js';
 import { ouvrirServeurArtefacts, type ServeurArtefacts } from './artefacts/serveur.js';
-import { portArtefacts } from './config.js';
+import { PORT_PONT_TAURI, portAppareils, portArtefacts } from './config.js';
+import { Appairages } from './host/appairage.js';
+import { RegistreAppareils } from './host/appareils.js';
+import { ModeHost } from './host/controleur.js';
 import type { TailscaleExec } from './mesh/tailscale.js';
 import type { EtatArtefacts } from '../shared/artefacts.js';
 
@@ -67,6 +70,8 @@ export interface DaemonHandle {
   mesh: MeshService | null;
   /** 13.4 : ce que le watcher sait d'une mise à jour (null : rien, ou vérification coupée) */
   updates: () => WatchStatus | null;
+  /** chantier 31 (D171, D172) : le port des appareils */
+  modeHost: ModeHost;
   stop(): Promise<void>;
 }
 
@@ -90,6 +95,8 @@ export async function startDaemon(
     remoteBins?: Partial<Record<RemoteKind, string>>;
     /** chantier 31 (D173) : l'exécution de `tailscale` ; un test passe une fausse sortie */
     tailscaleExec?: TailscaleExec;
+    /** chantier 31 : le build de l'interface, servi aux deux ports ; null = aucun (tests) */
+    webRoot?: string | null;
     // tests : un Embedder/ChatModel déterministe, des délais courts, un rythme d'entretien rapide
     memory?: {
       embedder?: Embedder;
@@ -250,7 +257,27 @@ export async function startDaemon(
         ? { disponible: true, port: serveurArtefacts.port }
         : { disponible: false, port: serveurArtefacts.port, raison: serveurArtefacts.raison };
     };
+    // chantier 31 (D171, D172) : le port des appareils, ouvert après le principal et celui des
+    // artefacts, dont il refuse les ports ; seulement si `modeHost.actif`
+    const webRoot = opts.webRoot === undefined ? defaultWebRoot() : opts.webRoot;
+    const modeHost = new ModeHost({
+      config,
+      port: () => portAppareils(config),
+      interdits: () => [
+        { port: livePort, nom: 'daemon' },
+        { port: PORT_PONT_TAURI, nom: "pont de l'app" },
+        { port: serveurArtefacts?.port ?? portArtefacts(config), nom: 'artefacts' },
+      ],
+      registre: new RegistreAppareils(opened),
+      appairages: new Appairages(),
+      webRoot,
+      tailscaleExec: opts.tailscaleExec,
+      logger: opts.logger,
+      log,
+    });
     const app = await buildServer({
+      webRoot,
+      modeHost,
       config,
       auth,
       db: opened,
@@ -292,6 +319,8 @@ export async function startDaemon(
       logger: opts.logger,
     });
     if (!serveurArtefacts.disponible) log(`artefacts indisponibles : ${serveurArtefacts.raison}`);
+    // un port occupé n'empêche pas non plus le daemon de démarrer : GET /api/host et doctor le disent
+    if (config.modeHost.actif) await modeHost.demarrer();
     writeFileSync(
       paths.daemonJson,
       JSON.stringify({
@@ -318,6 +347,7 @@ export async function startDaemon(
       memory,
       mesh,
       updates: () => updates?.status() ?? null,
+      modeHost,
       async stop() {
         mesh?.dispose();
         await agents.stopAll('daemon_stop', 5000);
@@ -327,6 +357,8 @@ export async function startDaemon(
         await worker?.stop();
         await mirror.flush();
         if (serveurArtefacts?.disponible) await serveurArtefacts.app.close();
+        // l'arrêt du daemon ferme le port, sans couper les accès : ils sont en base, 8 h au plus
+        await modeHost.arreter({ couper: false });
         await app.close();
         opened.close();
         rmSync(paths.daemonJson, { force: true });

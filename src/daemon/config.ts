@@ -1,5 +1,5 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
-import { parse } from 'yaml';
+import { parse, parseDocument } from 'yaml';
 import type { AidPaths } from './paths.js';
 
 export interface AidConfig {
@@ -346,6 +346,24 @@ function parseAgents(raw: unknown, cfg: AgentsConfig): void {
     }
     cfg.transport = raw.transport;
   }
+}
+
+/**
+ * Chantier 31 (D172) : l'interrupteur du mode host écrit `modeHost.actif` dans config.yaml, en
+ * gardant le reste du fichier, commentaires compris. Le résultat est relu par `parseConfig`
+ * avant d'être écrit : un fichier qui ne passerait plus n'est jamais posé.
+ */
+export function ecrireModeHostActif(p: AidPaths, actif: boolean): void {
+  const doc = parseDocument(existsSync(p.config) ? readFileSync(p.config, 'utf8') : '');
+  if (doc.errors.length > 0) throw new ConfigError("config.yaml illisible : rien n'est écrit");
+  try {
+    doc.setIn(['modeHost', 'actif'], actif);
+  } catch {
+    throw new ConfigError('config.yaml : modeHost doit être un objet');
+  }
+  const texte = doc.toString();
+  parseConfig(texte);
+  writeFileSync(p.config, texte);
 }
 
 export function loadConfig(p: AidPaths): AidConfig {
