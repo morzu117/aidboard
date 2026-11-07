@@ -1,3 +1,4 @@
+import type { livraisonPourAppareil } from './livraison.js';
 import { CorpsReponseAppareil, repondreAppareil, type ReponseAppareil } from '../reponses.js';
 import { CorpsMarqueTour, marquerTour, type MarqueTour } from '../tours.js';
 import type { Db } from '../db.js';
@@ -98,6 +99,7 @@ export interface OptionsServeurAppareils {
   appairages: Appairages;
   /** D175 : l'état complet, que masque.ts réduit ; absent = 404 (tests du port seul) */
   etat?: () => Promise<StateSnapshot>;
+  livraison?: (topicId: string) => ReturnType<typeof livraisonPourAppareil>;
   tours?: { db: Db; store: EventStore };
   reponses?: Parameters<typeof repondreAppareil>[0];
   /** D175 : la source des signaux, le store d'événements */
@@ -233,6 +235,13 @@ export async function ouvrirServeurAppareils(
   app.get('/api/appareils/moi', async (req) => {
     const a = req.appareil!;
     return { id: a.id, nom: a.nom, expireA: a.expireA };
+  });
+
+  app.get('/api/appareils/sujets/:id/livraison', async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const livraison = await opts.livraison?.(id);
+    if (!livraison) return reply.code(404).send({ error: 'sujet inconnu' });
+    return livraison;
   });
 
   // D176 : la seule écriture sans authentification de ce port. L'Origin est exigée : seule la

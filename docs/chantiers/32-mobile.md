@@ -104,6 +104,7 @@ Ce document. Pas de code.
 - `blocageMerge` et `citations` déplacés dans `src/shared/`, le Mac inchangé à l'écran.
 - La route, la liste fermée.
 - Tests : les clés exactes, un chemin absolu absent, les blocages identiques au Mac sur les cas de `LV`.
+- *Révision 32.7.* Les règles pures de `LV` passent dans `src/shared/livraison.ts`, réexportées par `LV`. L'assemblage est dans `src/daemon/host/livraison.ts` : la PR vient du dernier `pr.rafraichir` réussi, sans relecture de GitHub. La réponse porte aussi `prNumber`. Un worktree absent ou une branche absente donnent `fichiers: []` et un blocage qui le dit. Aucun identifiant d'action n'est exposé.
 
 ### 32.8 L'app installée et le dernier état (D193, D194)
 - Manifeste, icônes, `theme-color`, rappel iPhone.
