@@ -156,6 +156,7 @@ Ce document.
   - la révocation, après laquelle plus aucun push n'arrive ;
   - le diff d'un fichier, et un fichier sensible ;
   - les deux interrupteurs.
+- *Révision 32b.10.* Le daemon des e2e tourne dans un processus séparé : rien n'y est injecté et la liste fermée n'est pas ouverte. L'e2e vérifie l'abonnement, puis le journal `push.envoye` avec le statut `echec`. L'endpoint de test, `e2e.invalid.fcm.googleapis.com`, passe la liste fermée mais ne se résout pas en DNS. Seule une requête DNS sort ; aucune connexion n'est faite. La chaîne complète, avec un vrai push vers Apple et Google, se vérifie dans la recette. Gate 2207, e2e 115.
 
 ## 6. Pièges
 
