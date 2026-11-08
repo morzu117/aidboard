@@ -167,6 +167,7 @@ Le refus fermé de D225 bloquerait tout merge sur une installation qui n'a jamai
 ### 34.3 La migration 024 et le réglage (D227, D230)
 
 `migrations/024_confirmations.sql`, `src/daemon/confirmations/reglage.ts`, `GET /api/confirmations/reglage`. Le `PUT` n'arrive qu'au 34.5.
+- *Révision 34.3.* Une demande annulée a `etat = 'expiree'` et `resultat = 'annulee'` : le `CHECK` de la 023 n'admet pas d'autre état, et la table n'est pas recréée (D230). `PUT /api/confirmations/reglage` avec `actif: false` répond 501 jusqu'au 34.5. `mesh-schema.test.ts` passe à `user_version` 24. Gate 2329.
 
 ### 34.4 L'attendu dans les scripts git (D224)
 

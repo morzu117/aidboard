@@ -39,6 +39,7 @@ import { type ArtefactsDeps, registerArtefactRoutes } from './routes/artefacts.j
 import type { creerFournisseurClePda } from './pda/cle.js';
 import type { FilePda } from './pda/file.js';
 import { registerHostRoutes } from './routes/host.js';
+import { registerConfirmationRoutes } from './routes/confirmations.js';
 import type { TailscaleExec } from './mesh/tailscale.js';
 import type { ModeHost } from './host/controleur.js';
 import type { RemoteKind } from './remote/agents.js';
@@ -214,6 +215,7 @@ export async function buildServer(deps: ServerDeps): Promise<FastifyInstance> {
   });
   registerFsRoutes(app);
   registerFileRoutes(app, { db: deps.db });
+  registerConfirmationRoutes(app, deps.db);
   registerArtefactRoutes(app, { db: deps.db, artefacts: deps.artefacts });
   if (deps.modeHost) {
     registerHostRoutes(app, {
