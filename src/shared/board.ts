@@ -57,6 +57,24 @@ export interface BoardCard extends BoardCardSummary {
   links: Record<string, string>;
 }
 
+export interface BoardRow {
+  id: number | null;
+  holder: string | null;
+  status: string | null;
+  createdAt: string | null;
+  takenAt: string | null;
+  closedAt: string | null;
+  closeOutcome: string | null;
+}
+
+export interface BoardEvent {
+  at: string | null;
+  by: string | null;
+  kind: string;
+  holder: string | null;
+  outcome: string | null;
+}
+
 export interface BoardStep {
   step: string | null;
   mandatory: boolean | null;
@@ -64,7 +82,9 @@ export interface BoardStep {
   state: string | null;
   holder: string | null;
   due: string | null;
-  row: number | null;
+  row: BoardRow | null;
+  events: BoardEvent[];
+  priorRows: number;
 }
 
 export interface BoardGraph {
@@ -218,6 +238,45 @@ const parseLinks = (v: unknown): Record<string, string> => {
   return out;
 };
 
+const parseLigne = (valeur: unknown): BoardRow | null => {
+  if (!isObj(valeur) && int(valeur) === null) return null;
+  const ligne = isObj(valeur) ? valeur : { id: valeur };
+  return {
+    id: int(ligne.id),
+    holder: str(ligne.holder),
+    status: str(ligne.status),
+    createdAt: str(ligne.created_at),
+    takenAt: str(ligne.taken_at),
+    closedAt: str(ligne.closed_at),
+    closeOutcome: str(ligne.close_outcome),
+  };
+};
+
+const parseEvenement = (valeur: unknown): BoardEvent | null => {
+  if (!isObj(valeur)) return null;
+  const kind = str(valeur.kind);
+  if (kind === null || kind === '') return null;
+  let detail: unknown = null;
+  if (typeof valeur.detail === 'string') {
+    try {
+      detail = JSON.parse(valeur.detail) as unknown;
+    } catch {
+      // Un détail illisible ne fait pas perdre l'événement.
+    }
+  }
+  const champ = (valeur: unknown): string | null => {
+    const texte = str(valeur);
+    return texte !== null && texte.length <= 200 ? texte : null;
+  };
+  return {
+    at: str(valeur.at),
+    by: str(valeur.by),
+    kind,
+    holder: isObj(detail) ? champ(detail.holder) : null,
+    outcome: isObj(detail) ? champ(detail.outcome) : null,
+  };
+};
+
 const parseStep = (s: unknown): BoardStep | null => {
   if (!isObj(s)) return null;
   return {
@@ -226,7 +285,9 @@ const parseStep = (s: unknown): BoardStep | null => {
     state: str(s.state),
     holder: str(s.holder),
     due: str(s.due),
-    row: int(s.row),
+    row: parseLigne(s.row),
+    events: compact(arr(s.events).map(parseEvenement)),
+    priorRows: arr(s.prior_rows).filter((id) => int(id) !== null).length,
   };
 };
 

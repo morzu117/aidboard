@@ -78,6 +78,7 @@ Le 38 garde les mêmes six lectures que le 24, avec les mêmes arguments et le m
 - `row` en objet, en entier et invalide ;
 - les événements, dont un `detail` illisible, un `detail` trop long et une entrée sans `kind` ;
 - `prior_rows`.
+- *Révision 38.1.* `BoardRow` et `BoardEvent` ; `row` est lu en objet, en entier ou à `null` ; `events` garde seulement `holder` et `outcome` de `detail` (au plus 200 caractères), et ignore une entrée sans `kind` ; `priorRows` ne compte que les identifiants entiers. `evidence` et `accept` ne sont pas lus. Lignes existantes modifiées : 6.
 
 ### 38.2 La fonction `chronologie` (D237)
 
