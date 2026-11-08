@@ -2,7 +2,7 @@
 
 | Champ | Valeur |
 |---|---|
-| État | **Révision 0, 8 novembre 2026.** Julien a validé la spec et tranché Q1 à Q5. Le lab a relu la frontière à trois reprises (DM 92254, 92437, 92440), et son PASS est donné sous trois conditions, reprises ici en D213, D217 et D211. |
+| État | **Révision 1, 8 novembre 2026.** Le lab a relu le plan (DM 92443), et ses trois points obligatoires sont écrits en D211 et D218. Julien a validé la spec et tranché Q1 à Q5. Le lab a relu la frontière à trois reprises (DM 92254, 92437, 92440), et son PASS est donné sous trois conditions, reprises ici en D213, D217 et D211. |
 | Emplacement final | `docs/chantiers/43-pda.md` sur `main`, dans le premier commit du chantier |
 | Base | **6d9d67e** (`origin/main`, PR #127). |
 | Spec | `specs/pda-43.md`, révision 4 (dossier de travail, hors dépôt ; copie sur morzu-vps dans `~/work/aid-specs/`). |
@@ -47,7 +47,7 @@ Le 43 construit le canal et le PDA. Le chantier 34 y branchera les actions réel
 
 ### D211
 
-**La clé de signature du daemon** : une paire P-256 (ES256), rangée comme la clé VAPID (`wx`, `0600`, `O_NOFOLLOW`, mode vérifié), dans un fichier distinct, chargée une seule fois et partagée. Sa clé publique est servie aux appareils par un **script** : `GET /pda-cle.js` sur le port des appareils, mis en cache par le service worker et importé par l'app. Elle n'est jamais rangée dans IndexedDB. Sur le Mac, « Faire tourner la clé » en crée une nouvelle : c'est le chemin de révocation de l'app elle-même, et les apps en cache refusent alors les nouvelles demandes jusqu'à leur passage par le tailnet.
+**La clé de signature du daemon** : une paire P-256 (ES256), rangée comme la clé VAPID (`wx`, `0600`, `O_NOFOLLOW`, mode vérifié), dans un fichier distinct, chargée une seule fois et partagée. Sa clé publique est servie aux appareils par un **script** : `GET /pda-cle.js` sur le port des appareils, mis en cache par le service worker et importé par l'app. Elle n'est jamais rangée dans IndexedDB. **Séparation des usages** (lab, DM 92443) : la même clé signe deux sortes d'octets, toujours précédés d'un contexte. Une demande lue par l'app signe `"aid-pda-demande-v1\n" ‖ corps`. Une requête vers le relais signe `"aid-pda-relais-v1\n" ‖ méthode ‖ "\n" ‖ chemin ‖ "\n" ‖ hachage du corps ‖ "\n" ‖ heure`. Une signature faite pour un usage ne vaut donc jamais pour l'autre. Sur le Mac, « Faire tourner la clé » en crée une nouvelle : c'est le chemin de révocation de l'app elle-même, et les apps en cache refusent alors les nouvelles demandes jusqu'à leur passage par le tailnet.
 
 *Source : Lab, condition 3.*
 
@@ -69,7 +69,7 @@ L'enveloppe transportée est `{ corps: <octets en base64url>, sig: <r‖s en bas
 **Ce qui vient du relais n'est jamais interprété avant la vérification** (lab, condition 1).
 - L'app borne la taille de la réponse (16 Kio), puis vérifie la signature du daemon sur les octets bruts du corps, avec la clé épinglée de D211. Elle ne parse le corps qu'ensuite, et rejette toute demande échue.
 - Le sujet et l'action sont affichés par `textContent`, jamais par `innerHTML` ni par `dangerouslySetInnerHTML`.
-- La CSP du port des appareils devient `script-src 'self'`, sans inline, avec `connect-src 'self' <hôte du relais>`.
+- La CSP du port des appareils devient `default-src 'none'; script-src 'self'; connect-src 'self' <hôte du relais>; object-src 'none'; base-uri 'none'; frame-ancestors 'none'`, plus ce que l'app utilise déjà pour les styles, les images et le manifeste. Aucun script inline.
 - Les requêtes vers le relais partent avec `credentials: 'omit'` et `redirect: 'error'`.
 
 *Source : Lab, condition 1.*
@@ -84,7 +84,7 @@ L'enveloppe transportée est `{ corps: <octets en base64url>, sig: <r‖s en bas
 - `cle_relais` (JWK ES256) ;
 - `cree_a`, `revoque_a`.
 
-**L'enregistrement** : depuis un appareil appairé et dans son accès de 8 h, dans le tailnet, l'app crée une passkey sur l'origine de l'app, avec `userVerification: 'required'`, `attestation: 'none'` et ES256 seul. Elle crée aussi une clé de relais WebCrypto, non extractible. Elle envoie les deux clés publiques au daemon par `POST /api/appareils/moi/pda`. L'appareil reste « en attente » jusqu'à ce que le Mac l'active, après avoir comparé l'empreinte courte affichée des deux côtés.
+**L'enregistrement** : depuis un appareil appairé et dans son accès de 8 h, dans le tailnet, l'app crée une passkey sur l'origine de l'app, avec `userVerification: 'required'`, `attestation: 'none'` et ES256 seul. Elle crée aussi une clé de relais WebCrypto, non extractible. Elle envoie les deux clés publiques au daemon par `POST /api/appareils/moi/pda`. L'appareil reste « en attente » jusqu'à ce que le Mac l'active, après avoir comparé l'empreinte courte affichée des deux côtés. **L'empreinte** couvre les deux clés publiques à la fois : c'est le SHA-256 du JSON canonique `{ passkey, relais }`, dont les 40 premiers bits sont écrits en base32, soit 8 caractères, groupés par 4 (lab, DM 92443).
 
 **La révocation** sur le Mac fait foi : le daemon retire l'appareil de son registre.
 
@@ -112,6 +112,7 @@ L'enveloppe transportée est `{ corps: <octets en base64url>, sig: <r‖s en bas
 - Le CORS n'accepte que l'origine de l'app, prise dans sa configuration. Il n'y a pas de `Access-Control-Allow-Credentials`.
 - L'app signe chaque requête avec sa clé de relais, que le relais vérifie contre la liste signée par le daemon.
 - Les corps sont bornés à 16 Kio, et il y a au plus 32 demandes ouvertes.
+- Une limite de débit par adresse s'applique aux routes de l'app : un dépassement donne 429, sans corps.
 - Une demande est purgée à son échéance. Une réponse est purgée après avoir été tirée, ou au bout de 10 min.
 - Le journal ne garde que les identifiants, jamais le sujet.
 
@@ -127,15 +128,17 @@ L'enveloppe transportée est `{ corps: <octets en base64url>, sig: <r‖s en bas
 
 **La vérification par le daemon, fermée par défaut et dans cet ordre** (lab, point 4 de la DM 92437) :
 1. Taille et schéma bornés, AJV en `additionalProperties: false`.
-2. L'appareil est actif dans le registre local, et sa clé COSE vient du registre, pas de ce que présente le relais.
+2. L'appareil est actif dans le registre local, et sa clé COSE vient du registre, pas de ce que présente le relais. Le `rawId` de l'assertion est égal au `cred_id` de cet appareil.
 3. ES256 seul.
-4. `clientDataJSON.type === 'webauthn.get'`, son `origin` est celle de la configuration, et `rpIdHash` est le SHA-256 du rpId de la configuration.
+4. `clientDataJSON` : `type === 'webauthn.get'`, `origin` égale à celle de la configuration, `crossOrigin` absent ou `false`. Le `rpIdHash` de `authenticatorData` est le SHA-256 du rpId de la configuration.
 5. Les bits UP **et** UV sont posés.
-6. Le `challenge` est égal au hachage recalculé par le daemon à partir de **sa** demande.
-7. L'échéance est lue sur l'horloge du daemon.
-8. L'identifiant est marqué consommé **avant** l'exécution de l'action.
+6. Pour `oui`, le `numero` posté est égal à celui de **la** demande du daemon.
+7. Le `challenge` de `clientDataJSON`, décodé en base64url, est égal **octet par octet** au défi recalculé par le daemon à partir de **sa** demande, avec la `valeur` et le `numero` postés. Un relais qui change `non` en `oui` casse donc le défi.
+8. **La signature** : `signature` est vérifiée sur `authenticatorData ‖ SHA-256(clientDataJSON)`, avec la clé COSE du registre (ECDSA P-256, SHA-256, DER).
+9. L'échéance est lue sur l'horloge du daemon.
+10. L'identifiant est marqué consommé **avant** l'exécution de l'action.
 
-Tout échec est refusé et journalisé (`pda.refus { appareil?, raison }`), sans contenu. Le compteur de signature n'est pas exigé, car les passkeys synchronisées le laissent à 0.
+Tout échec est refusé et journalisé (`pda.refus { appareil?, raison }`), sans contenu. Le compteur de signature n'est pas exigé, car les passkeys synchronisées le laissent à 0. Points 2, 4, 6, 7 et 8 complétés après la relecture du plan (lab, DM 92443).
 
 *Source : Lab, point 4 et condition 2.*
 
@@ -217,7 +220,9 @@ Ce document.
   - l'enregistrement, puis l'activation sur le Mac ;
   - l'essai confirmé, puis l'essai refusé ;
   - un appareil révoqué, dont la réponse est refusée ;
-  - la rotation de la clé, après laquelle l'app refuse la demande.
+  - la rotation de la clé, après laquelle l'app refuse la demande ;
+  - un authentificateur virtuel avec `isUserVerified: false`, dont la réponse est refusée (bit UV).
+- L'authentificateur virtuel ne prouve rien sur les vraies passkeys d'iOS et d'Android, ni pour le compteur ni pour UV : c'est la recette qui le porte.
 - `docs/recette-chantier-43-pda.md` :
   - le relais sur un VPS de Julien ;
   - une confirmation en 4G, hors du tailnet ;
@@ -229,7 +234,7 @@ Ce document.
 
 - **Ne pas ouvrir de transport réglable** autre que `config.modeHost.relais`. Pas d'URL de relais dans une route, ni dans un appareil.
 - **L'origine de l'app est le rpId.** Une passkey créée sur une autre origine ne vaut rien ici. Ne jamais créer une passkey depuis une page du relais : il n'en sert d'ailleurs aucune.
-- **Les passkeys synchronisées** (iCloud, Google) ont un compteur à 0 : D218 ne l'exige pas.
+- **Les passkeys synchronisées** (iCloud, Google) ont un compteur à 0 : D218 ne l'exige pas. Le prix : un authentificateur cloné ne se détecte pas. La parade est UV et la révocation sur le Mac.
 - **iOS** peut évincer le stockage d'une PWA si la place manque. La clé publique épinglée est dans le cache du code, pas dans IndexedDB. Un cache perdu donne un refus fermé.
 - **L'horloge** : le relais n'est jamais cru sur l'heure. Le daemon accepte une marge de 60 s sur les requêtes signées, mais aucune sur l'échéance.
 - **Le chantier 34** branchera les actions réelles. Au 43, `action` n'accepte que `essai` : un autre code est refusé.
