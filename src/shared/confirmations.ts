@@ -114,13 +114,13 @@ const schemas: Record<ActionConfirmee, Record<string, Validation>> = {
   'projet.retirer': { workspaceId: identifiant, racine: texte(1024) },
   appairage: {
     appairageId: identifiant,
-    nom: texte(40),
+    nom: (v) => texte(40)(v) && typeof v === 'string' && !/[<>]/.test(v),
     hIdentite: nullable(motif(/^[A-Za-z0-9_-]{43}$/)),
     sansIdentite: booleen,
   },
   'pda.activer': {
     appareilId: identifiant,
-    nom: texte(40),
+    nom: (v) => texte(40)(v) && typeof v === 'string' && !/[<>]/.test(v),
     empreinte: motif(/^[A-Z2-7]{4}-[A-Z2-7]{4}$/),
   },
   'host.option': { option: choix('code', 'push'), actif: booleen },

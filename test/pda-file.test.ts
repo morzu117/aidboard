@@ -37,7 +37,7 @@ async function preparer() {
   };
   const file = new FilePda(options);
   nettoyages.push(() => file.arreter());
-  const { id } = await file.creerDemande({ action: 'essai', sujet: 'Exemple' });
+  const { id } = await file.creerDemande({ action: 'essai', params: {} });
   function repondre(corps: unknown, appareil = a.id, demande = id, curseur = 1) {
     return {
       curseur,
@@ -111,7 +111,7 @@ test('modification non → oui : refus du défi', async () => {
 test('retard : horloge locale, refus echeance puis expiration', async () => {
   const t = await preparer();
   t.reponses([t.repondre(await assertionPda(t.db, t.id, t.a))]);
-  t.heure(1_800_000_300_001);
+  t.heure(1_800_000_900_001);
   await t.file.tour();
   expect(t.journal).toHaveBeenCalledWith('pda.refus', { appareil: t.a.id, raison: 'echeance' });
   expect(t.file.etat(t.id)).toEqual({ etat: 'expiree' });
@@ -159,7 +159,7 @@ test('origine et rpId sont relus, aucun essai sans nom', async () => {
   await t.file.tour();
   expect(t.journal).toHaveBeenCalledWith('pda.refus', { appareil: t.a.id, raison: 'client' });
   t.contexte(null);
-  await expect(t.file.creerDemande({ action: 'essai', sujet: 'Exemple' })).rejects.toThrow();
+  await expect(t.file.creerDemande({ action: 'essai', params: {} })).rejects.toThrow();
 });
 test('publication des actifs à l’allumage et après changement', async () => {
   const t = await preparer();
@@ -209,7 +209,7 @@ for (const cas of [302, 500, 'taille', 'exception'] as const) {
     });
     const autre = new FilePda({ ...t.options, relais: client });
     nettoyages.push(() => autre.arreter());
-    const { id } = await autre.creerDemande({ action: 'essai', sujet: 'Exemple' });
+    const { id } = await autre.creerDemande({ action: 'essai', params: {} });
     await expect(autre.tour()).resolves.toBeUndefined();
     expect(autre.etat(id)).toEqual({ etat: 'ouverte' });
     expect(t.journal).toHaveBeenCalledWith('pda.relais.echec');
@@ -224,7 +224,7 @@ for (const cas of [302, 500, 'taille', 'exception'] as const) {
 test('une file vide ne sonde pas et une échéance sans réponse expire la demande', async () => {
   vi.useFakeTimers();
   const t = await preparer();
-  t.heure(1_800_000_300_001);
+  t.heure(1_800_000_900_001);
   await vi.advanceTimersByTimeAsync(15_000);
   expect(t.file.etat(t.id)).toEqual({ etat: 'expiree' });
   expect(t.relais.tirer).toHaveBeenCalledOnce();
@@ -264,7 +264,7 @@ test('une liste oubliée est republiée avant le dépôt d’une nouvelle demand
     expect(autorises).toHaveLength(2);
     return true;
   });
-  await t.file.creerDemande({ action: 'essai', sujet: 'Exemple' });
+  await t.file.creerDemande({ action: 'essai', params: {} });
   expect(t.relais.publierAutorises).toHaveBeenCalledTimes(3);
 });
 
@@ -275,11 +275,22 @@ test('le tour renouvelle une publication de plus de cinq minutes et retente un �
   await t.file.tour();
   expect(t.relais.publierAutorises).toHaveBeenCalledTimes(2);
   t.relais.publierAutorises.mockResolvedValueOnce(false);
-  t.heure(1_800_000_300_001);
+  t.heure(1_800_000_900_001);
   await t.file.tour();
   expect(t.relais.publierAutorises).toHaveBeenCalledTimes(3);
   await t.file.tour();
   expect(t.relais.publierAutorises).toHaveBeenCalledTimes(4);
   await t.file.tour();
   expect(t.relais.publierAutorises).toHaveBeenCalledTimes(4);
+});
+
+test('essai signé en v2, résumé sans sujet', async () => {
+  const t = await preparer();
+  const enveloppe = t.relais.deposer.mock.calls[0]![1];
+  expect(JSON.parse(Buffer.from(enveloppe.corps, 'base64url').toString())).toMatchObject({
+    v: 2,
+    action: 'essai',
+    params: {},
+    resume: "Demande d'essai",
+  });
 });

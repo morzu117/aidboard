@@ -160,7 +160,7 @@ export function registerHostRoutes(
     if (!file || !deps.modeHost.nomLu()?.endsWith('.ts.net'))
       return reply.code(409).send({ error: 'PDA ou nom Tailscale indisponible' });
     try {
-      return await file.creerDemande({ action: 'essai', sujet: corps.sujet });
+      return await file.creerDemande({ action: 'essai', params: {} });
     } catch (err) {
       if (err instanceof RelaisInjoignable)
         return reply.code(502).send({ error: 'relais injoignable' });

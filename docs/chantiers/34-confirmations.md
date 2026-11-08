@@ -209,6 +209,7 @@ Dans `verifierAssertion` et `FilePda` : en cas de numéro faux, la vérification
 ### 34.7 L'app du téléphone (D232)
 
 Le v2, l'affichage des `params`, le numéro « toujours ». Tests web, sur le modèle du 43.8.
+- *Révision 34.7.* L'app affiche le v2 : le `resume` en titre, puis les params utiles en texte seul, sans identifiant interne ni `hIdentite`. En classe « toujours », « Retape le numéro affiché sur le Mac » ; « Confirmer » est actif à 4 chiffres. L'essai passe au v2 (« Demande d'essai »). Les schémas refusent aussi les chevrons `<` `>` dans les noms. Lignes existantes modifiées : 23. Gate 2444.
 
 ### 34.8 L'UI du Mac (D231)
 
