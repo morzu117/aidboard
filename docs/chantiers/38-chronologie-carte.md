@@ -103,6 +103,8 @@ Le 38 garde les mêmes six lectures que le 24, avec les mêmes arguments et le m
 
 - `e2e/board.spec.ts` : la chronologie de la carte de test, les filtres, et le pied de liste quand le fil est limité.
 - La fiche `docs/recette-chantier-38-chronologie.md`, pour Julien : sur son board réel, ouvrir une carte et comparer la chronologie au fil et aux obligations.
+- *Révision 38.4 — fait.* E2e sur la carte 102 : ordre décroissant, phrases des obligations, filtre Fil et pied des deux lignes antérieures. Fiche de recette rédigée pour Julien ; recette réelle à effectuer.
+- *Révision 38.4.* L'e2e de `e2e/board.spec.ts` vérifie la chronologie de la carte 102 : l'ordre, les phrases des obligations, le filtre Fil et les lignes antérieures. La fiche `docs/recette-chantier-38-chronologie.md` est pour Julien. Gate : 2496 tests passent ; `agents-pilotage`, déjà connu pour être instable, passe relancé seul. E2e 118.
 
 ## 6. Pièges
 
