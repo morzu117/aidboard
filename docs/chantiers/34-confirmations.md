@@ -2,7 +2,7 @@
 
 | Champ | Valeur |
 |---|---|
-| État | **Révision 0, 8 novembre 2026**, à relire par le lab. Julien a tranché Q1 à Q4 de la spec, puis l'armement (D233). Le lab a relu la spec (DM 92515), et ses deux points obligatoires sont écrits en D224 et D226. |
+| État | **Révision 0, 8 novembre 2026**, à relire par le lab. Julien a tranché Q1 à Q4 de la spec, puis l'armement (D233). Le lab a relu la spec (DM 92515), et ses deux points obligatoires sont écrits en D224 et D226. PASS de lab sur la spec (DM 92518), dont les deux précisions sont écrites en D224 et D226. |
 | Emplacement final | `docs/chantiers/34-confirmations.md` sur `main`, dans le premier commit du chantier |
 | Base | **9ec6a45** (`origin/main`, PR #129). |
 | Spec | `specs/confirmations-34.md`, révision 3 (dossier de travail, hors dépôt ; copie sur morzu-vps dans `~/work/aid-specs/`). |
@@ -65,7 +65,7 @@ Ligne 34 du programme : « Confirmations par le téléphone : réglage, plancher
 Une revérification juste avant l'écriture laisse une fenêtre. Chaque exécution porte donc l'attendu signé **jusqu'à l'écriture** :
 - `merge` : `gh pr merge --match-head-commit <tete>` toujours (le script le rend obligatoire quand `AID_MERGE_EXIGER_TETE=1`).
 - `push` : `git push --force-with-lease=refs/heads/<branche>:<distante> origin <tete>:refs/heads/<branche>`. Si `distante` vaut `null`, le bail exige que la branche soit absente (`--force-with-lease=refs/heads/<branche>:`). Le script refuse aussi si `git rev-parse <branche>` n'est pas égal à `tete`.
-- `nettoyage` : le script refuse si la branche locale n'est pas à `tete` (ou si elle existe alors que `tete` vaut `null`). L'état du sujet est relu et passé à `archived` dans la même transaction qui consomme la demande.
+- `nettoyage` : la branche locale est supprimée par `git update-ref -d refs/heads/<branche> <tete>`, qui échoue si elle n'est pas à `tete`. Il n'y a pas de lecture puis de suppression en deux temps (lab, DM 92518). Une branche distante éventuelle est supprimée par `git push --delete` avec `--force-with-lease=refs/heads/<branche>:<tete>`. L'état du sujet est relu et passé à `archived` dans la même transaction qui consomme la demande.
 - `projet.retirer` : la vérification (« aucun sujet ouvert », la racine) et la suppression se font dans **une seule** transaction SQLite.
 - `appairage`, `pda.activer`, `host.option`, `reglage` : la relecture de l'état et l'écriture se font dans une seule transaction (l'appairage est toujours en attente et non expiré ; l'appareil est en attente avec la même empreinte ; etc.).
 
@@ -88,7 +88,7 @@ La route d'origine appelle `preparer`. Si l'action est sous confirmation (D227),
 - Il est journalisé en évidence (`pda.amorcage`, sans contenu). Le panneau affiche « Premier appareil activé sans confirmation » tant qu'aucun second appareil n'est actif.
 - Dès qu'un appareil est actif, toute activation est une action `pda.activer` sous confirmation.
 - La révocation reste immédiate. Si le dernier appareil est révoqué, toute action sous confirmation est refusée (D225), et seul l'amorçage par l'UI peut en remettre un.
-- **Limite connue du §7.** Les agents tournent sous le même utilisateur Unix que le daemon : un agent déterminé pourrait lire le jeton de session (`0600`) et se faire passer pour l'UI. L'amorçage repose donc sur la confiance du Mac. Le journal et le bandeau rendent un amorçage inattendu visible.
+- **Limite connue du §7.** Les agents tournent sous le même utilisateur Unix que le daemon : un agent déterminé pourrait lire le jeton de session (`0600`) et se faire passer pour l'UI. L'amorçage repose donc sur la confiance du Mac. Le journal et le bandeau rendent un amorçage inattendu visible. La vraie parade, un utilisateur Unix distinct pour les agents, est un chantier à part, à ouvrir plus tard dans le programme (lab, DM 92518, même classe que sa card #20).
 
 ### D227. Le réglage
 
