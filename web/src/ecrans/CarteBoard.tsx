@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { Link, Navigate, useParams } from 'react-router';
 import type {
   BoardCard,
@@ -9,6 +9,7 @@ import type {
   BoardThread,
 } from '../../../src/shared/board.js';
 import { useBoardCard } from '../data/board.js';
+import { chronologie } from '../data/chronologie.js';
 import { useAid } from '../data/useAidState.js';
 import { Layout } from '../ui/Layout.js';
 import {
@@ -191,28 +192,59 @@ function Fil({ t }: { t: BoardThread }) {
   );
 }
 
-function Historique({ card }: { card: BoardCard }) {
-  return card.stageHistory.length === 0 ? (
-    <p className="texte-discret">Aucun historique.</p>
-  ) : (
-    <table className="carte-board-table">
-      <thead>
-        <tr>
-          <th>Étape</th>
-          <th>Auteur</th>
-          <th>Date</th>
-        </tr>
-      </thead>
-      <tbody>
-        {card.stageHistory.map((h, i) => (
-          <tr key={i} data-node={`carte-board.historique-${i}`}>
-            <td>{h.stage ?? TIRET}</td>
-            <td>{h.by}</td>
-            <td>{date(h.at)}</td>
-          </tr>
+function Chronologie({ s }: { s: BoardCardSheet }) {
+  const [filtres, setFiltres] = useState({ etape: true, obligation: true, fil: true });
+  const { entrees, limites } = chronologie(s);
+  return (
+    <section className="carte-board-bloc" data-node="carte-board.chronologie">
+      <h2 className="carte-board-bloc-titre">Chronologie</h2>
+      <p className="carte-board-meta">
+        {(['etape', 'obligation', 'fil'] as const).map((source) => (
+          <label key={source}>
+            <input
+              type="checkbox"
+              data-node={`carte-board.chronologie.filtre-${source}`}
+              checked={filtres[source]}
+              onChange={() => setFiltres((avant) => ({ ...avant, [source]: !avant[source] }))}
+            />{' '}
+            {{ etape: 'Étapes', obligation: 'Obligations', fil: 'Fil' }[source]}
+          </label>
         ))}
-      </tbody>
-    </table>
+      </p>
+      <ol className="carte-board-fil">
+        {entrees
+          .filter((entree) => filtres[entree.source])
+          .map((entree, i) => (
+            <li key={entree.cle} data-node={`carte-board.chronologie.entree-${i}`}>
+              <p className="carte-board-fil-entete">
+                <span className="texte-discret" title={entree.date ?? undefined}>
+                  {date(entree.date)} · {age(entree.date)}
+                </span>
+                <span>
+                  {{ etape: 'étape', obligation: 'obligation', fil: 'fil' }[entree.source]}
+                </span>
+                <span className="carte-board-auteur">{entree.auteur}</span>
+              </p>
+              <p className="carte-board-texte">{entree.texte}</p>
+            </li>
+          ))}
+      </ol>
+      <div className="texte-discret" data-node="carte-board.chronologie.limites">
+        {limites.map((limite, i) => (
+          <p key={i}>
+            {limite === 'fil-limite'
+              ? 'Fil limité à 1000 messages : la chronologie peut être incomplète'
+              : 'lignesAnterieures' in limite
+                ? `${limite.lignesAnterieures} lignes antérieures, sans leurs événements`
+                : {
+                    etapes: 'Étapes non lues',
+                    obligations: 'Obligations non lues',
+                    fil: 'Fil non lu',
+                  }[limite['non-lu']]}
+          </p>
+        ))}
+      </div>
+    </section>
   );
 }
 
@@ -265,9 +297,7 @@ function Fiche({ s, relire }: { s: BoardCardSheet; relire: () => void }) {
       <Bloc id="fil" titre="Fil" result={s.thread} onRelire={relire}>
         {s.thread.ok && <Fil t={s.thread.data} />}
       </Bloc>
-      <Bloc id="historique" titre="Historique" result={s.card} onRelire={relire}>
-        {c && <Historique card={c} />}
-      </Bloc>
+      <Chronologie s={s} />
       <Bloc id="github" titre="GitHub" result={s.card} onRelire={relire}>
         {c && <GitHub card={c} />}
       </Bloc>

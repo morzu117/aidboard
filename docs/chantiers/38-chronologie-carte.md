@@ -97,6 +97,7 @@ Le 38 garde les mêmes six lectures que le 24, avec les mêmes arguments et le m
 - l'ordre affiché ;
 - un `detail` ou un message contenant `<img src=x onerror=alert(1)>` n'est affiché qu'en texte ;
 - les limites.
+- *Révision 38.3.* Le bloc « Chronologie » remplace « Historique ». Il a trois cases de filtre locales et affiche, pour chaque entrée, la date (complète en `title`), la source, l'auteur et le texte, avec les limites en pied. Aucun CSS ajouté. Lignes existantes modifiées : 27 (le bloc Historique et ses deux tests). Gate 2497.
 
 ### 38.4 L'e2e et la fiche de recette
 
