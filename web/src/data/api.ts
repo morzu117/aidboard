@@ -49,7 +49,11 @@ export async function api<T>(
   if (!res.ok) {
     throw new AidApiError(
       res.status,
-      typeof json.error === 'string' ? json.error : text || res.statusText,
+      json.error === 'confirmation_impossible' && typeof json.message === 'string'
+        ? json.message
+        : typeof json.error === 'string'
+          ? json.error
+          : text || res.statusText,
       json,
     );
   }

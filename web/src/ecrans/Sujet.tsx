@@ -553,7 +553,7 @@ function Contenu({
                     Reprendre…
                   </button>
                 )}
-                {topic.state !== 'draft' && (
+                {topic.state !== 'draft' && !nettoyage.confirmation.id && (
                   <button
                     className="bouton bouton--danger"
                     data-action="topic.cleanup"
@@ -715,6 +715,7 @@ function Contenu({
           )}
         </section>
       )}
+      {nettoyage.confirmation.attente}
       {(erreur || nettoyage.phase.phase === 'refuse') && (
         <p className="message-erreur" role="alert">
           {erreur ?? (nettoyage.phase.phase === 'refuse' ? nettoyage.phase.message : '')}

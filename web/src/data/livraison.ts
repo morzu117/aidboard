@@ -1,3 +1,4 @@
+import { useConfirmation } from '../ui/AttenteConfirmation.js';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { LivraisonGit } from '../../../src/shared/git.js';
 import type { MemoryPage } from '../../../src/shared/memory.js';
@@ -30,6 +31,9 @@ function useCallStable(): AidApi['call'] {
 export function useActionSuivie(topicId: string) {
   const { state, outputs } = useAid();
   const call = useCallStable();
+  const client = useAidClient();
+  const confirmation = useConfirmation(() => client.refresh());
+  const { recevoir } = confirmation;
   const [id, setId] = useState<string | null>(null);
   const [envoi, setEnvoi] = useState(false);
   const [refus, setRefus] = useState<string | null>(null);
@@ -54,6 +58,7 @@ export function useActionSuivie(topicId: string) {
           `/api/topics/${topicId}/actions/${actionId}`,
           body,
         );
+        if (recevoir(r)) return;
         setId(r.actionId);
       } catch (err) {
         setRefus(message(err));
@@ -61,10 +66,17 @@ export function useActionSuivie(topicId: string) {
         setEnvoi(false);
       }
     },
-    [call, topicId],
+    [call, topicId, recevoir],
   );
 
-  return { run, enCours, echec, reussi: run?.state === 'succeeded', lancer };
+  return {
+    confirmation,
+    run,
+    enCours,
+    echec,
+    reussi: confirmation.executee !== null || run?.state === 'succeeded',
+    lancer,
+  };
 }
 
 /** Le dernier `topic.test` du sujet, d'où qu'il ait été lancé. */

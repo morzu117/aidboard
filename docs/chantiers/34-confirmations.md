@@ -214,6 +214,7 @@ Le v2, l'affichage des `params`, le numéro « toujours ». Tests web, sur le mo
 ### 34.8 L'UI du Mac (D231)
 
 L'attente sur chaque bouton, le numéro « toujours », la section « Confirmations ». Tests web.
+- *Révision 34.8.* `AttenteConfirmation` remplace le bouton sur une réponse 202. Il affiche l'attente, « Annuler » et, en classe « toujours », le numéro en gros, puis le résultat. Le numéro n'est rangé ni dans un état global, ni dans `localStorage`, ni dans le titre. `PanneauConfirmations` montre la file, le réglage (couper passe par une demande, rallumer est direct), l'état d'armement, les bandeaux et le désarmement avec « DÉSARMER ». Les 124 lignes existantes modifiées dans dix écrans sont surtout des réindentations, autour du rendu de l'attente. Hors armement, les tests existants n'ont pas changé. Gate 2461, e2e 116.
 
 ### 34.9 L'e2e et la fiche de recette
 

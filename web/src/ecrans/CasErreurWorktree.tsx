@@ -13,7 +13,7 @@ export function CasErreurWorktree({
   workspace: Workspace | undefined;
 }) {
   const id = (rest: string) => `1-1.erreur.sujet-${n}.${rest}`;
-  const { phase, start, reset } = useNettoyage(topic.id);
+  const { phase, start, reset, confirmation } = useNettoyage(topic.id);
   return (
     <article
       className="cas-erreur"
@@ -46,16 +46,18 @@ export function CasErreurWorktree({
         </p>
       )}
       <div className="cas-erreur-actions">
-        <button
-          className="bouton bouton--fantome"
-          data-node={id('archiver')}
-          data-action="topic.cleanup"
-          type="button"
-          onClick={() => void start()}
-          disabled={phase.phase === 'en-cours'}
-        >
-          Archiver le sujet
-        </button>
+        {confirmation.attente ?? (
+          <button
+            className="bouton bouton--fantome"
+            data-node={id('archiver')}
+            data-action="topic.cleanup"
+            type="button"
+            onClick={() => void start()}
+            disabled={phase.phase === 'en-cours'}
+          >
+            Archiver le sujet
+          </button>
+        )}
       </div>
       {phase.phase === 'confirmer' && (
         <ConfirmerNettoyage

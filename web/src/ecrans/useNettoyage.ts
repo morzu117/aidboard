@@ -1,3 +1,4 @@
+import { useConfirmation } from '../ui/AttenteConfirmation.js';
 import { useState } from 'react';
 import { AidApiError } from '../data/api.js';
 import { useAid } from '../data/useAidState.js';
@@ -11,7 +12,8 @@ export type Nettoyage =
 // Un nettoyage peut être refusé pour du travail non commité (rien à faire que le dire) ou pour des commits
 // non fusionnés (l'humain peut confirmer en répétant leur nombre exact).
 export function useNettoyage(topicId: string) {
-  const { state, outputs, call } = useAid();
+  const { state, outputs, call, refresh } = useAid();
+  const confirmation = useConfirmation(refresh);
   const [actionId, setActionId] = useState<string | null>(null);
   const [requesting, setRequesting] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
@@ -48,6 +50,7 @@ export function useNettoyage(topicId: string) {
           ...(confirmUnmerged !== undefined && { confirmUnmerged }),
         },
       );
+      if (confirmation.recevoir(r)) return;
       setActionId(r.actionId);
     } catch (err) {
       setFailure(err instanceof AidApiError ? err.message : String(err));
@@ -57,6 +60,7 @@ export function useNettoyage(topicId: string) {
   }
 
   return {
+    confirmation,
     phase,
     start,
     reset: () => {

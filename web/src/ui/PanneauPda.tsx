@@ -1,3 +1,4 @@
+import { useConfirmation } from './AttenteConfirmation.js';
 import { useEffect, useState } from 'react';
 import type { EtatModeHostDaemon } from '../../../src/shared/host.js';
 import { useAidClient } from '../data/useAidState.js';
@@ -22,6 +23,10 @@ export function PanneauPda({ etat }: { etat: EtatModeHostDaemon['pda'] }) {
   const [demande, setDemande] = useState<string | null>(null);
   const [resultat, setResultat] = useState('');
   const [erreur, setErreur] = useState('');
+  const [activation, setActivation] = useState('');
+  const confirmation = useConfirmation(async () => {
+    setAppareils(await client.request<AppareilPda[]>('GET', '/api/host/pda/appareils'));
+  }, true);
   const [occupe, setOccupe] = useState(false);
   useEffect(() => {
     let monte = true;
@@ -77,7 +82,13 @@ export function PanneauPda({ etat }: { etat: EtatModeHostDaemon['pda'] }) {
     }
   }
   async function appareil(id: string, action: string, empreinte?: string) {
-    await client.request('POST', `/api/host/pda/appareils/${id}/${action}`, { empreinte });
+    const r = await client.request('POST', `/api/host/pda/appareils/${id}/${action}`, {
+      empreinte,
+    });
+    if (action === 'activer' && confirmation.recevoir(r)) {
+      setActivation(id);
+      return;
+    }
     setAppareils(await client.request<AppareilPda[]>('GET', '/api/host/pda/appareils'));
   }
   return (
@@ -125,22 +136,24 @@ export function PanneauPda({ etat }: { etat: EtatModeHostDaemon['pda'] }) {
             <span>Créé : {a.cree_a}</span>
             {a.active_a && <span>Activé : {a.active_a}</span>}
             {a.revoque_a && <span>Révoqué : {a.revoque_a}</span>}
-            {a.etat === 'attente' && (
-              <button
-                className="bouton"
-                disabled={occupe}
-                onClick={() => {
-                  if (
-                    window.confirm(
-                      `L'empreinte affichée sur le téléphone est-elle exactement ${a.empreinte} ?`,
-                    )
-                  )
-                    void agir(() => appareil(a.id, 'activer', a.empreinte));
-                }}
-              >
-                Activer
-              </button>
-            )}
+            {a.id === activation && confirmation.id
+              ? confirmation.attente
+              : a.etat === 'attente' && (
+                  <button
+                    className="bouton"
+                    disabled={occupe || (!!confirmation.id && !confirmation.terminee)}
+                    onClick={() => {
+                      if (
+                        window.confirm(
+                          `L'empreinte affichée sur le téléphone est-elle exactement ${a.empreinte} ?`,
+                        )
+                      )
+                        void agir(() => appareil(a.id, 'activer', a.empreinte));
+                    }}
+                  >
+                    Activer
+                  </button>
+                )}
             {a.etat !== 'revoque' && (
               <button
                 className="bouton bouton--danger"
