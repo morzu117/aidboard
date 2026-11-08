@@ -2,7 +2,7 @@
 
 | Champ | Valeur |
 |---|---|
-| État | **Révision 0, 8 novembre 2026**, à relire par le lab. Julien a tranché Q1 à Q4 de la spec, puis l'armement (D233). Le lab a relu la spec (DM 92515), et ses deux points obligatoires sont écrits en D224 et D226. PASS de lab sur la spec (DM 92518), dont les deux précisions sont écrites en D224 et D226. |
+| État | **Révision 1, 8 novembre 2026.** Julien a tranché Q1 à Q4 de la spec, puis l'armement (D233). Le lab a relu la spec (DM 92515), et ses deux points obligatoires sont écrits en D224 et D226. PASS de lab sur la spec (DM 92518), dont les deux précisions sont écrites en D224 et D226. **Révision 1 :** le lab a relu le plan (DM 92521) ; son point obligatoire sur le désarmement est écrit en D233, et ses recommandations en D223, D224, D227 et D228. |
 | Emplacement final | `docs/chantiers/34-confirmations.md` sur `main`, dans le premier commit du chantier |
 | Base | **9ec6a45** (`origin/main`, PR #129). |
 | Spec | `specs/confirmations-34.md`, révision 3 (dossier de travail, hors dépôt ; copie sur morzu-vps dans `~/work/aid-specs/`). |
@@ -27,7 +27,7 @@ Ligne 34 du programme : « Confirmations par le téléphone : réglage, plancher
 
 ## 3. Cible et hors-périmètre
 
-**Cible.** Huit actions passent par une confirmation, rangées en deux classes. La porte est commune. L'exécution part de la réponse vérifiée, avec les paramètres signés et l'attendu porté par l'écriture. Le Mac montre la file et le résultat. Le réglage vit en base.
+**Cible.** Neuf actions passent par une confirmation, rangées en deux classes. La porte est commune. L'exécution part de la réponse vérifiée, avec les paramètres signés et l'attendu porté par l'écriture. Le Mac montre la file et le résultat. Le réglage vit en base.
 
 **Hors-périmètre.**
 - Le merge lancé **depuis le téléphone** (l'écran du 32) : il réutilisera la même porte, mais dans un chantier à part.
@@ -47,7 +47,8 @@ Ligne 34 du programme : « Confirmations par le téléphone : réglage, plancher
 | `appairage` | toujours | `POST /api/host/appairages/:id/approuver` | `appairageId`, `nom`, `identite`, `sansIdentite` |
 | `pda.activer` | toujours | `POST /api/host/pda/appareils/:id/activer` | `appareilId`, `empreinte` |
 | `host.option` | toujours | `PUT /api/host/code` et `/push` | `option` (`code` ou `push`), `actif` |
-| `reglage` | toujours | nouvelle route (D227) | `classe`, `action`, `actif` |
+| `reglage` | toujours | nouvelle route (D227) | `action`, `actif: false` |
+| `desarmement` | toujours | nouvelle route (D233) | aucun |
 
 `essai` reste, en classe « par défaut », sans effet. Couper le code, le push ou le PDA, révoquer un appareil, « Couper tous les accès » : ce sont des retraits de droits, **jamais** sous confirmation (lab, DM 92515).
 
@@ -58,7 +59,7 @@ Ligne 34 du programme : « Confirmations par le téléphone : réglage, plancher
 - `resume` est le texte de l'invite, ≤ 160 caractères, construit par le daemon à partir des seuls `params` (D229). L'app l'affiche en texte, et affiche aussi les `params` à sa façon : un relais ne peut changer ni l'un ni l'autre.
 - `numero` : les 4 chiffres pour la classe « par défaut », comme au 43. Pour la classe « toujours », `null` : le numéro n'est pas dans le corps (Q1).
 - `echeance` : `emise + 15 min` (Q3).
-- Le v1 (`essai`) reste lisible par l'app tant que le 34 n'est pas déployé. Ensuite, le daemon ne signe plus que du v2.
+- Le v1 n'est accepté que pour `essai`, qui est sans effet. Un v1 portant une autre action est refusé, et un test le vérifie (lab, DM 92521). Le daemon ne signe plus que du v2.
 
 ### D224. L'attendu porté par l'écriture (obligatoire, lab)
 
@@ -69,7 +70,9 @@ Une revérification juste avant l'écriture laisse une fenêtre. Chaque exécuti
 - `projet.retirer` : la vérification (« aucun sujet ouvert », la racine) et la suppression se font dans **une seule** transaction SQLite.
 - `appairage`, `pda.activer`, `host.option`, `reglage` : la relecture de l'état et l'écriture se font dans une seule transaction (l'appairage est toujours en attente et non expiré ; l'appareil est en attente avec la même empreinte ; etc.).
 
-Une revérification a lieu juste avant aussi, pour refuser tôt avec un message clair (L2).
+Une revérification a lieu juste avant aussi, pour refuser tôt avec un message clair (L2), dont `git rev-parse <branche> == tete` pour le push.
+
+Les scripts n'exigent la tête que si la variable est passée. `executer` passe donc **toujours** `AID_MERGE_EXIGER_TETE=1` et les têtes signées, et un test par action git échoue si `executer` l'oublie (lab, DM 92521).
 
 ### D225. La porte
 
@@ -95,13 +98,13 @@ La route d'origine appelle `preparer`. Si l'action est sous confirmation (D227),
 - Migration 024 : `confirmations_reglage (action TEXT PRIMARY KEY, actif INTEGER NOT NULL)`, préremplie pour les quatre actions « par défaut », toutes à 1 (Q4). Il n'est pas dans `config.yaml`.
 - Les actions « toujours » n'ont pas de ligne : on ne peut pas les couper.
 - La valeur qui compte est celle lue **au moment de la demande**.
-- `PUT /api/confirmations/reglage { action, actif }` crée toujours une demande `reglage` (classe « toujours »). Il n'existe aucune autre écriture.
+- `PUT /api/confirmations/reglage { action, actif }` : **couper** une action crée une demande `reglage` (classe « toujours »). **Rallumer** resserre la sécurité : comme une révocation, cela s'applique tout de suite, sans confirmation (lab, DM 92521). Il n'existe aucune autre écriture.
 - `GET /api/confirmations/reglage` renvoie l'état pour l'UI.
 
 ### D228. Le numéro de la classe « toujours »
 
 - Le daemon tire 4 chiffres, les garde en base, et ne les met pas dans le corps signé.
-- `GET /api/confirmations/:id/numero` ne répond qu'au principal `admin` par cookie, `Cache-Control: no-store`. C'est le seul endroit qui le sert.
+- `GET /api/confirmations/:id/numero` ne répond qu'au principal `admin` par cookie, `Cache-Control: no-store`. C'est le seul endroit qui le sert. Le numéro est dans le corps de la réponse, jamais dans une URL : le journal HTTP de Fastify, qui note l'URL, ne le voit pas.
 - Il n'apparaît ni dans le journal, ni dans un événement (`/ws/`, `events`), ni dans un retour d'agent ou d'outil.
 - L'app affiche « Retape le numéro affiché sur le Mac ». Le daemon compare le numéro de l'assertion à celui de la base (étape « numero » de D218).
 
@@ -144,9 +147,14 @@ Les noms (sujet, projet, appareil) passent par le relais, comme au 43 (Q4 du 43)
 Le refus fermé de D225 bloquerait tout merge sur une installation qui n'a jamais eu de PDA. Julien a retenu l'armement au premier PDA :
 - Les confirmations sont **armées** au premier amorçage (D226), par une ligne en base (`confirmations_armees`, horodatée).
 - **Avant l'armement**, les actions de D222 s'exécutent comme aujourd'hui, sur le Mac seul. Le panneau dit « Confirmations non armées ».
-- **Après l'armement**, c'est irréversible depuis l'API : la révocation de tous les appareils ne désarme pas, elle rend les actions impossibles (D225). Seule la commande locale `aid confirmations desarmer`, dans un terminal du Mac, désarme. Elle est journalisée et affichée.
-- Ainsi, un agent qui révoque tout ne rouvre pas la porte du Mac seul.
-- **Limite.** Un agent qui peut lancer un terminal peut aussi lancer cette commande (même limite que D226).
+- **Après l'armement**, la révocation de tous les appareils ne désarme pas : elle rend les actions impossibles (D225). Un agent qui révoque tout ne rouvre donc pas la porte du Mac seul.
+- **Le désarmement** (lab, DM 92521) :
+  - il n'existe **aucune** commande CLI pour désarmer, puisque les agents lancent des commandes dans un terminal du Mac ;
+  - il passe par l'UI du Mac seulement (principal `admin` par cookie, jamais le bearer), avec la phrase « DÉSARMER » à retaper ;
+  - s'il reste au moins un appareil actif, c'est une action `desarmement` de classe « toujours », sous confirmation, avec le numéro lu sur le Mac ;
+  - s'il n'y a aucun appareil actif (téléphone perdu), il se fait par l'UI seule. Il est journalisé (`pda.desarmement`), et le bandeau « Confirmations désarmées le … » reste affiché jusqu'au réarmement ;
+  - il passe par l'API du daemon, jamais par une écriture directe en base : la règle vit à un seul endroit.
+- **Limite**, la même que D226 : un agent sous le même utilisateur Unix peut lire le jeton de session ou écrire dans la base. La barrière arrête les chemins prévus, pas un agent déterminé. Le journal et le bandeau rendent l'acte visible. La parade complète est le chantier à part de D226.
 
 ## 5. Points
 
@@ -192,5 +200,5 @@ Un merge et un push confirmés de bout en bout avec le relais local et la passke
 
 ## 7. Fini quand
 
-- Les huit actions passent par la porte, avec leur attendu.
+- Les neuf actions passent par la porte, avec leur attendu.
 - Le gate, l'e2e, la revue de frontière du lab et la recette de Julien sont faits.
