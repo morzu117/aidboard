@@ -2,7 +2,7 @@
 
 | Champ | Valeur |
 |---|---|
-| État | **Révision 0, 8 novembre 2026.** Julien a retenu Q1 à Q4 de la spec. La spec a été envoyée au lab pour relecture (DM 92559). Rien n'est construit. |
+| État | **Révision 0, 8 novembre 2026.** Julien a retenu Q1 à Q4 de la spec. PASS de lab sur la spec (DM 92561), dont les réponses à L1 et L2 sont écrites en D236 et D237. |
 | Emplacement final | `docs/chantiers/38-chronologie-carte.md` sur `main`, dans le premier commit du chantier |
 | Base | **c6b3554** (`origin/main`, PR #130). |
 | Spec | `specs/chronologie-38.md`, révision 1 (dossier de travail, hors dépôt ; copie sur morzu-vps dans `~/work/aid-specs/`). |
@@ -51,6 +51,8 @@ Le 38 garde les mêmes six lectures que le 24, avec les mêmes arguments et le m
 - `BoardStep.events` : `{ at, by, kind, holder, outcome }[]`.
   - `holder` et `outcome` viennent de `detail` (une chaîne JSON), lu par `JSON.parse` dans un `try`. Ils ne sont gardés que si ce sont des chaînes d'au plus 200 caractères. Le reste de `detail` est jeté.
   - Une entrée sans `kind` est ignorée.
+- **La tolérance (L2 du lab).** Le format est celui du gateway, relayé par swarph sans contrat versionné. Un champ inconnu est ignoré. Un champ absent est affiché comme absent, sans faire échouer l'entrée. Un `status` hors de la liste connue (`open`, `closed`, `withdrawn`, `released`, `fallback_fired`, `declined`) s'affiche tel quel.
+- `step.evidence` et `row.accept` sont des textes libres écrits par des cellules : le parseur ne les lit pas, et la chronologie ne les montre jamais.
 - `BoardStep.priorRows` : le nombre d'identifiants dans `prior_rows`.
 
 ### D237. La fonction `chronologie`
@@ -58,7 +60,7 @@ Le 38 garde les mêmes six lectures que le 24, avec les mêmes arguments et le m
 `chronologie({ card, graph, thread })` est une fonction pure, dans `web/src/data/chronologie.ts`. Elle prend les trois `BoardResult` et renvoie :
 - `{ entrees, limites }` ;
 - `entrees` : `{ cle, date, source: 'etape' | 'obligation' | 'fil', auteur, texte }[]`, triées par date décroissante. Les entrées sans date ou à date illisible vont à la fin, dans l'ordre reçu. Le tri est stable ;
-- les phrases de la spec : « Étape → build », « (déduite par le gateway, ligne N) », puis pour les obligations « Obligation <step> ouverte pour <holder> », « prise », « modifiée », « fermée : <outcome> », et « événement <kind> » pour une sorte inconnue. Pour le fil, les 140 premiers caractères du message, suivis de « … » si le message est coupé ;
+- les phrases de la spec : « Étape → build », « (déduite par le gateway, ligne N) », puis pour les obligations « Obligation <step> ouverte pour <holder> », « prise », « modifiée », « fermée : <outcome> ». Le lab (L1, DM 92561) donne les neuf sortes de la contrainte du gateway. Les cinq autres sont `decline` « déclinée », `reassign` « réattribuée », complétée par « à <holder> » si `holder` est lisible, `fallback` « échéance passée », `withdraw` « retirée » et `release` « rendue ». Toute autre sorte donne « événement <kind> ». Pour le fil, les 140 premiers caractères du message, suivis de « … » si le message est coupé ;
 - `limites` : `fil-limite` si `capped`, `{ lignesAnterieures: N }` si N > 0, et `non-lu: 'etapes' | 'obligations' | 'fil'` pour chaque lecture en échec.
 
 ### D238. Le bloc « Chronologie »
@@ -81,7 +83,7 @@ Le 38 garde les mêmes six lectures que le 24, avec les mêmes arguments et le m
 
 `web/src/data/chronologie.ts`. Tests dans `test/web/chronologie.test.ts` :
 - le tri, avec les dates égales et les entrées sans date ;
-- chaque phrase, y compris une sorte inconnue ;
+- chaque phrase, pour les neuf sortes et une sorte inconnue ;
 - la coupe à 140 caractères ;
 - chaque limite ;
 - une lecture en échec n'empêche pas le reste.
