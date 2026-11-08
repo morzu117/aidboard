@@ -17,6 +17,7 @@ import {
   SujetsAppareil,
   SuivreAppareil,
   LivraisonAppareil,
+  FichierAppareil,
   InformationsAppareil,
   NotificationsAppareil,
 } from './ecrans/ParcoursAppareil.js';
@@ -118,6 +119,7 @@ function Coque({ moi }: { moi: Moi | null }) {
         <Route path="/sujets" element={<SujetsAppareil />} />
         <Route path="/sujets/:id" element={<SuivreAppareil />} />
         <Route path="/sujets/:id/tour" element={<SuivreAppareil relire />} />
+        <Route path="/sujets/:id/fichiers/:index" element={<FichierAppareil />} />
         <Route path="/sujets/:id/livraison" element={<LivraisonAppareil />} />
         <Route path="/informations" element={<InformationsAppareil />} />
         <Route path="/notifications" element={<NotificationsAppareil />} />

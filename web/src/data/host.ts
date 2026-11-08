@@ -18,13 +18,15 @@ export interface NouveauCode {
 
 export interface ModeHostEtat {
   etat: EtatModeHostDaemon | null;
-  appareils: Appareil[];
+  appareils: (Appareil & { push?: boolean })[];
   demande: VueDemande | null;
   identiteVerifiable: boolean;
   /** le QR affiché : il n'existe que dans cet écran, jamais relu du daemon */
   qr: NouveauCode | null;
   erreur: string | null;
   occupe: boolean;
+  basculerCode: (actif: boolean) => Promise<void>;
+  basculerPush: (actif: boolean) => Promise<void>;
   basculer: (actif: boolean) => Promise<void>;
   nouveauCode: () => Promise<void>;
   fermerQr: () => void;
@@ -39,7 +41,7 @@ export const RELECTURE_DEMANDE_MS = 1000;
 export function useModeHost(): ModeHostEtat {
   const client = useAidClient();
   const [etat, setEtat] = useState<EtatModeHostDaemon | null>(null);
-  const [appareils, setAppareils] = useState<Appareil[]>([]);
+  const [appareils, setAppareils] = useState<(Appareil & { push?: boolean })[]>([]);
   const [demande, setDemande] = useState<VueDemande | null>(null);
   const [identiteVerifiable, setIdentiteVerifiable] = useState(false);
   const [qr, setQr] = useState<NouveauCode | null>(null);
@@ -59,7 +61,7 @@ export function useModeHost(): ModeHostEtat {
   }, [client]);
 
   const lireAppareils = useCallback(async () => {
-    const l = await client.request<Appareil[]>('GET', '/api/host/appareils');
+    const l = await client.request<(Appareil & { push?: boolean })[]>('GET', '/api/host/appareils');
     if (monte.current) setAppareils(l);
   }, [client]);
 
@@ -118,6 +120,15 @@ export function useModeHost(): ModeHostEtat {
     qr,
     erreur,
     occupe,
+    basculerCode: (actif) =>
+      agir(async () => {
+        setEtat(await client.request<EtatModeHostDaemon>('PUT', '/api/host/code', { actif }));
+      }),
+    basculerPush: (actif) =>
+      agir(async () => {
+        setEtat(await client.request<EtatModeHostDaemon>('PUT', '/api/host/push', { actif }));
+        await lireAppareils();
+      }),
     basculer: (actif) =>
       agir(async () => {
         const e = await client.request<EtatModeHostDaemon>('PUT', '/api/host', { actif });

@@ -140,6 +140,7 @@ export class RegistreAppareils {
     const r = this.db
       .prepare('UPDATE appareils SET revoque_a = ? WHERE id = ? AND revoque_a IS NULL')
       .run(this.iso(this.now()), id);
+    this.db.prepare('DELETE FROM push_abonnements WHERE appareil_id = ?').run(id);
     if (r.changes > 0) this.prevenir([id]);
     return r.changes > 0;
   }
@@ -153,6 +154,7 @@ export class RegistreAppareils {
         .all(t) as Array<{ id: string }>
     ).map((r) => r.id);
     this.db.prepare('UPDATE appareils SET revoque_a = ? WHERE revoque_a IS NULL').run(t);
+    this.db.prepare('DELETE FROM push_abonnements').run();
     this.prevenir(ids);
     return ids;
   }

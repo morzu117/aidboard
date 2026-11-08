@@ -20,6 +20,9 @@ const COMMANDE = 'tailscale serve --bg --https=443 http://127.0.0.1:4890';
 
 const etat = (over: Partial<EtatModeHostDaemon> = {}): EtatModeHostDaemon => ({
   actif: true,
+  push: false,
+  code: false,
+  abonnements: 0,
   port: 4890,
   tailnet: { etat: 'running', nom: NOM, compte: 'julien@exemple' },
   serve: { etat: 'ok', funnel: false, interdits: [] },
@@ -340,4 +343,50 @@ test('D172 : Éteindre retire le QR et les actions, et garde la liste lue', asyn
   expect(h.calls.find((c) => c.method === 'PUT')?.body).toEqual({ actif: false });
   expect(node('host.qr')).toBeNull();
   expect(node('host.ajouter')).toBeNull();
+});
+
+test('32b.6 : le réglage push appelle PUT et confirme la suppression', async () => {
+  const h = ouvrir({
+    'PUT /api/host/push': (body) => json(200, etat({ push: (body as { actif: boolean }).actif }))(),
+    'GET /api/host/appareils': json(200, [{ ...appareil(), push: true }]),
+  });
+  const interrupteur = await screen.findByRole('switch', {
+    name: 'Notifications push sur les téléphones',
+  });
+  await screen.findByText('Notifications');
+  expect((interrupteur as HTMLInputElement).checked).toBe(false);
+  fireEvent.click(interrupteur);
+  await waitFor(() => expect((interrupteur as HTMLInputElement).checked).toBe(true));
+  expect(h.calls.find((c) => c.url === '/api/host/push')?.body).toEqual({ actif: true });
+  const confirmation = vi.spyOn(window, 'confirm').mockReturnValue(false);
+  fireEvent.click(interrupteur);
+  expect(confirmation).toHaveBeenCalledWith(
+    expect.stringContaining('Tous les abonnements seront effacés'),
+  );
+  expect(h.calls.filter((c) => c.url === '/api/host/push')).toHaveLength(1);
+  confirmation.mockReturnValue(true);
+  fireEvent.click(interrupteur);
+  await waitFor(() => expect((interrupteur as HTMLInputElement).checked).toBe(false));
+  expect(h.calls.filter((c) => c.url === '/api/host/push')[1]?.body).toEqual({ actif: false });
+  confirmation.mockRestore();
+});
+
+test('D205 : le code est coupé par défaut, le Mac peut le montrer puis le couper', async () => {
+  let code = false;
+  const h = ouvrir({
+    'PUT /api/host/code': (body) => {
+      code = (body as { actif: boolean }).actif;
+      return json(200, etat({ code }))();
+    },
+  });
+  const interrupteur = await screen.findByRole('switch', { name: 'Montrer le code aux appareils' });
+  expect((interrupteur as HTMLInputElement).checked).toBe(false);
+  expect(screen.getByText(/Les téléphones appairés pourront lire le diff/).textContent).toContain(
+    "Les téléphones appairés pourront lire le diff des fichiers d'une livraison, filtré. Les fichiers sensibles restent sur le Mac.",
+  );
+  fireEvent.click(interrupteur);
+  await waitFor(() => expect((interrupteur as HTMLInputElement).checked).toBe(true));
+  expect(h.calls.find((c) => c.url === '/api/host/code')?.body).toEqual({ actif: true });
+  fireEvent.click(interrupteur);
+  await waitFor(() => expect((interrupteur as HTMLInputElement).checked).toBe(false));
 });

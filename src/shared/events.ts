@@ -12,6 +12,7 @@ export const EVENT_SOURCES = [
 export type EventSource = (typeof EVENT_SOURCES)[number];
 
 export const EVENT_TYPES = [
+  'push.envoye',
   'tour.marque',
   'appareil.ecriture',
   'appareil.refus',

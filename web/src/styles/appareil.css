@@ -211,3 +211,25 @@
   padding: var(--sp-1);
   overflow-wrap: anywhere;
 }
+
+.appareil-diff {
+  max-width: 100%;
+  min-width: 0;
+  overflow-x: auto;
+  white-space: pre;
+  overflow-wrap: normal;
+  font-family: var(--mono);
+  color: var(--text-2);
+}
+.appareil-diff .diff-ajout {
+  color: var(--diff-add);
+}
+.appareil-diff .diff-retrait {
+  color: var(--diff-del);
+}
+.appareil-diff .diff-bloc {
+  color: var(--diff-mod);
+}
+.appareil-diff .diff-masque {
+  color: var(--text-3);
+}

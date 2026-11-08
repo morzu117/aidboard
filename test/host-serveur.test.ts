@@ -117,7 +117,12 @@ test('31.5 (D180) : GET /api/appareils/moi, avec le cookie d’appareil', async 
   const { srv, appareil, jeton } = await ouvrir();
   const r = await srv.app.inject({ url: '/api/appareils/moi', headers: api(jeton) });
   expect(r.statusCode).toBe(200);
-  expect(r.json()).toEqual({ id: appareil.id, nom: 'Téléphone', expireA: appareil.expireA });
+  expect(r.json()).toEqual({
+    id: appareil.id,
+    nom: 'Téléphone',
+    expireA: appareil.expireA,
+    push: { actifSurLeMac: false, abonne: false },
+  });
   expect(r.headers['cache-control']).toBe('no-store');
   expect(r.headers['content-security-policy']).toBe(cspAppareils(NOM));
   expect(r.headers['x-content-type-options']).toBe('nosniff');

@@ -1,3 +1,4 @@
+import { creerFournisseurCles } from '../push/vapid.js';
 import type { FastifyInstance } from 'fastify';
 import type { AidConfig } from '../config.js';
 import { lireTailnet, type TailscaleExec } from '../mesh/tailscale.js';
@@ -27,7 +28,9 @@ export interface OptionsModeHost {
   /** D175, D178 : ce que le port des appareils lit */
   etat?: OptionsServeurAppareils['etat'];
   livraison?: OptionsServeurAppareils['livraison'];
+  code?: OptionsServeurAppareils['code'];
   tours?: OptionsServeurAppareils['tours'];
+  push?: OptionsServeurAppareils['push'];
   reponses?: OptionsServeurAppareils['reponses'];
   signal?: OptionsServeurAppareils['signal'];
   board?: OptionsServeurAppareils['board'];
@@ -41,7 +44,13 @@ export class ModeHost {
   private nom: string | null = null;
   private file: Promise<unknown> = Promise.resolve();
 
-  constructor(private readonly opts: OptionsModeHost) {}
+  readonly fournisseurPush;
+
+  constructor(private readonly opts: OptionsModeHost) {
+    this.fournisseurPush =
+      opts.push && (opts.push.fournisseur ?? creerFournisseurCles(opts.push.dossierEtat));
+    if (opts.push?.actif()) this.fournisseurPush!.obtenir();
+  }
 
   /** les bascules passent l'une après l'autre : jamais deux instances sur le même port */
   private enFile<T>(f: () => Promise<T>): Promise<T> {
@@ -99,7 +108,9 @@ export class ModeHost {
         appairages: this.opts.appairages,
         etat: this.opts.etat,
         livraison: this.opts.livraison,
+        code: this.opts.code,
         tours: this.opts.tours,
+        push: this.opts.push && { ...this.opts.push, fournisseur: this.fournisseurPush },
         reponses: this.opts.reponses,
         signal: this.opts.signal,
         board: this.opts.board,

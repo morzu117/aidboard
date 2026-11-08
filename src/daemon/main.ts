@@ -1,3 +1,4 @@
+import { creerDeclencheur } from './push/declencheur.js';
 import { livraisonPourAppareil } from './host/livraison.js';
 import { rmSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
@@ -273,7 +274,9 @@ export async function startDaemon(
         { port: serveurArtefacts?.port ?? portArtefacts(config), nom: 'artefacts' },
       ],
       livraison: (id) => livraisonPourAppareil(opened, memory, id),
+      code: { db: opened, actif: () => config.modeHost.code },
       tours: { db: opened, store },
+      push: { db: opened, dossierEtat: paths.home, actif: () => config.modeHost.push },
       reponses: { db: opened, store, agents },
       registre: new RegistreAppareils(opened),
       appairages: new Appairages(),
@@ -350,6 +353,13 @@ export async function startDaemon(
     void rattraperIndex({ db: opened, store, engine: structural, indexer, log });
     // 12.3 : relit l'état d'un monitor détaché qui aurait survécu, sans le relancer
     void mesh?.init();
+    const declencheurPush = creerDeclencheur({
+      db: opened,
+      store,
+      actif: () => config.modeHost.actif && config.modeHost.push,
+      log,
+      envoi: () => ({ clesVapid: modeHost.fournisseurPush!.obtenir() }),
+    });
     return {
       app,
       port,
@@ -362,6 +372,7 @@ export async function startDaemon(
       updates: () => updates?.status() ?? null,
       modeHost,
       async stop() {
+        await declencheurPush.arreter();
         mesh?.dispose();
         await agents.stopAll('daemon_stop', 5000);
         agents.dispose();

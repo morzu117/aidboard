@@ -64,3 +64,80 @@ test('32.8 : le manifeste et les icônes suivent le cache statique, en 200 seule
     }
   }
 });
+
+function notifications() {
+  const rappels: Record<string, (event: unknown) => void> = {};
+  const showNotification = vi.fn(async () => undefined);
+  const openWindow = vi.fn(async () => undefined);
+  const matchAll = vi.fn(async (): Promise<unknown[]> => []);
+  runInNewContext(readFileSync('web/public/sw.js', 'utf8'), {
+    self: {
+      location: { origin: 'https://example.com' },
+      addEventListener: (nom: string, rappel: (event: unknown) => void) => {
+        rappels[nom] = rappel;
+      },
+      registration: { showNotification },
+      clients: { openWindow, matchAll },
+    },
+    URL,
+  });
+  return { rappels, showNotification, openWindow, matchAll };
+}
+
+test.each([
+  [{ n: 3 }, "3 décisions t'attendent"],
+  [{ n: 1 }, "Une décision t'attend"],
+  [{ n: 'abc' }, "Une décision t'attend"],
+  [undefined, "Une décision t'attend"],
+  ['invalide', "Une décision t'attend"],
+])('32b.6 : chaque push affiche une notification (%j)', async (charge, body) => {
+  const h = notifications();
+  const waitUntil = vi.fn();
+  h.rappels.push!({
+    data:
+      charge === undefined
+        ? undefined
+        : {
+            json: () => {
+              if (charge === 'invalide') throw new Error();
+              return charge;
+            },
+          },
+    waitUntil,
+  });
+  await waitUntil.mock.calls[0]![0];
+  expect(h.showNotification).toHaveBeenCalledExactlyOnceWith('A-I-D', {
+    body,
+    tag: 'aid',
+    renotify: true,
+    icon: '/icons/icon-256.png',
+  });
+});
+
+test.each([true, false])(
+  '32b.6 : toucher ouvre la racine, client existant %s',
+  async (existant) => {
+    const h = notifications();
+    const focus = vi.fn();
+    const navigate = vi.fn();
+    h.matchAll.mockResolvedValue(
+      existant ? [{ url: 'https://example.com/sujets', focus, navigate }] : [],
+    );
+    const close = vi.fn();
+    const waitUntil = vi.fn();
+    h.rappels.notificationclick!({ notification: { close }, waitUntil });
+    await waitUntil.mock.calls[0]![0];
+    expect(close).toHaveBeenCalledOnce();
+    if (existant) {
+      expect(navigate).toHaveBeenCalledWith('/');
+      expect(focus).toHaveBeenCalledOnce();
+      expect(h.openWindow).not.toHaveBeenCalled();
+    } else expect(h.openWindow).toHaveBeenCalledWith('/');
+  },
+);
+
+test('D209 : le diff échappe au cache du service worker', () => {
+  const h = coque(200, true, 'cors', '/api/appareils/sujets/x/fichiers/0/diff?tete=abc');
+  expect(h.respondWith).not.toHaveBeenCalled();
+  expect(h.put).not.toHaveBeenCalled();
+});

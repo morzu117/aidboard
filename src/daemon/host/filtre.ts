@@ -26,7 +26,7 @@ export function filtrerTexte(s: string): string {
   return filtrerAvecLimite(s, 140);
 }
 
-function filtrerAvecLimite(s: string, limite: number): string {
+function filtrerAvecLimite(s: string, limite: number, conserverEspaces = false): string {
   let texte = s
     .replace(/(?:https?:\/\/|wss?:\/\/|file:\/\/|ssh:\/\/|git@)[^\s<>"'`]+/gi, MASQUE)
     .replace(
@@ -55,12 +55,15 @@ function filtrerAvecLimite(s: string, limite: number): string {
         segments.every((segment) => !/[a-z]/i.test(segment) || /\d/.test(segment))
         ? MASQUE
         : valeur;
-    })
-    // Les contrôles sont traités après les motifs pour ne pas joindre deux valeurs.
-    .replace(/[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/gu, ' ')
-    .replace(/\s+/gu, ' ')
-    .trim()
-    .replace(/\[masqué\](?: *\[masqué\])+/g, MASQUE);
+    });
+  if (!conserverEspaces) {
+    texte = texte
+      // Les contrôles sont traités après les motifs pour ne pas joindre deux valeurs.
+      .replace(/[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/gu, ' ')
+      .replace(/\s+/gu, ' ')
+      .trim()
+      .replace(/\[masqué\](?: *\[masqué\])+/g, MASQUE);
+  }
 
   if (texte.length <= limite) return texte;
   let fin = limite - 1;
@@ -75,4 +78,9 @@ function filtrerAvecLimite(s: string, limite: number): string {
 /** La coupe se mesure après masquage, avant la limite de présentation. */
 export function texteCoupe(s: string): boolean {
   return filtrerAvecLimite(s, Infinity).length > 140;
+}
+
+/** Même filtre de valeurs, sans la limite de présentation des résumés. */
+export function filtrerValeurs(s: string): string {
+  return filtrerAvecLimite(s, Infinity, true);
 }

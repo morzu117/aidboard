@@ -1,3 +1,11 @@
+import { diffPourAppareil } from './diff.js';
+import {
+  abonnementsActifs,
+  CorpsAbonnementPush,
+  cleAbonnementValide,
+} from '../push/abonnements.js';
+import { verifierEndpoint } from '../push/envoi.js';
+import { creerFournisseurCles } from '../push/vapid.js';
 import type { livraisonPourAppareil } from './livraison.js';
 import { CorpsReponseAppareil, repondreAppareil, type ReponseAppareil } from '../reponses.js';
 import { CorpsMarqueTour, marquerTour, type MarqueTour } from '../tours.js';
@@ -101,7 +109,14 @@ export interface OptionsServeurAppareils {
   /** D175 : l'état complet, que masque.ts réduit ; absent = 404 (tests du port seul) */
   etat?: () => Promise<StateSnapshot>;
   livraison?: (topicId: string) => ReturnType<typeof livraisonPourAppareil>;
+  code?: { db: Db; actif: () => boolean };
   tours?: { db: Db; store: EventStore };
+  push?: {
+    db: Db;
+    dossierEtat: string;
+    fournisseur?: ReturnType<typeof creerFournisseurCles>;
+    actif: () => boolean;
+  };
   reponses?: Parameters<typeof repondreAppareil>[0];
   /** D175 : la source des signaux, le store d'événements */
   signal?: {
@@ -136,6 +151,9 @@ export async function ouvrirServeurAppareils(
       raison: `le port ${opts.port} est réservé (${interdit.nom})`,
     };
   }
+  const clesPush =
+    opts.push && (opts.push.fournisseur ?? creerFournisseurCles(opts.push.dossierEtat));
+  if (opts.push?.actif()) clesPush!.obtenir();
   const app = Fastify({
     // la méthode, le chemin (sans requête, demande masquée) et l'hôte : aucun en-tête, donc ni
     // cookie ni code d'appairage
@@ -235,7 +253,59 @@ export async function ouvrirServeurAppareils(
   // D174, D180 : qui suis-je. Le mode appareil de l'interface part de cette réponse.
   app.get('/api/appareils/moi', async (req) => {
     const a = req.appareil!;
-    return { id: a.id, nom: a.nom, expireA: a.expireA };
+    const abonne = opts.push
+      ? abonnementsActifs(opts.push.db, now()).some((p) => p.appareilId === a.id)
+      : false;
+    return {
+      id: a.id,
+      nom: a.nom,
+      expireA: a.expireA,
+      push: { actifSurLeMac: opts.push?.actif() ?? false, abonne },
+    };
+  });
+
+  const gardePush = async (_req: FastifyRequest, reply: FastifyReply) => {
+    if (!opts.push?.actif()) return reply.code(403).send({ raison: 'push_coupe' });
+  };
+  app.get('/api/appareils/push/cle', { onRequest: gardePush }, async () => ({
+    cle: clesPush!.obtenir().clePubliqueBase64url(),
+  }));
+  app.post(
+    '/api/appareils/moi/push',
+    {
+      onRequest: gardePush,
+      schema: { body: CorpsAbonnementPush },
+    },
+    async (req, reply) => {
+      const corps = req.body as { endpoint: string; keys: { p256dh: string; auth: string } };
+      if (!verifierEndpoint(corps.endpoint)) return reply.code(400).send({ raison: 'endpoint' });
+      if (
+        !cleAbonnementValide(corps.keys.p256dh, 65) ||
+        !cleAbonnementValide(corps.keys.auth, 16)
+      ) {
+        return reply.code(400).send({ raison: 'cles' });
+      }
+      opts
+        .push!.db.prepare(
+          `INSERT INTO push_abonnements (appareil_id, endpoint, p256dh, auth, cree_a)
+      VALUES (?, ?, ?, ?, ?) ON CONFLICT(appareil_id) DO UPDATE SET
+      endpoint = excluded.endpoint, p256dh = excluded.p256dh, auth = excluded.auth, cree_a = excluded.cree_a`,
+        )
+        .run(
+          req.appareil!.id,
+          corps.endpoint,
+          corps.keys.p256dh,
+          corps.keys.auth,
+          new Date(now()).toISOString(),
+        );
+      return reply.code(204).send();
+    },
+  );
+  app.delete('/api/appareils/moi/push', { onRequest: gardePush }, async (req, reply) => {
+    opts
+      .push!.db.prepare('DELETE FROM push_abonnements WHERE appareil_id = ?')
+      .run(req.appareil!.id);
+    return reply.code(204).send();
   });
 
   app.get('/api/appareils/sujets/:id/livraison', async (req, reply) => {
@@ -243,6 +313,32 @@ export async function ouvrirServeurAppareils(
     const livraison = await opts.livraison?.(id);
     if (!livraison) return reply.code(404).send({ error: 'sujet inconnu' });
     return livraison;
+  });
+
+  app.get('/api/appareils/sujets/:id/fichiers/:index/diff', async (req, reply) => {
+    const { id, index } = req.params as { id: string; index: string };
+    const indexValide = /^(0|[1-9][0-9]*)$/.test(index) && Number.isSafeInteger(Number(index));
+    const envoyer = (
+      statut: number,
+      corps: { raison?: string; etat?: string; lignes?: string[] },
+    ) => {
+      req.log.info(
+        {
+          appareilId: req.appareil!.id,
+          topicId: id,
+          index: indexValide ? Number(index) : null,
+          etat: corps.etat ?? corps.raison,
+        },
+        'appareil.lecture_code',
+      );
+      return reply.code(statut).send(corps);
+    };
+    if (!opts.code?.actif()) return envoyer(403, { raison: 'code_coupe' });
+    const { tete } = req.query as { tete?: unknown };
+    if (!indexValide || typeof tete !== 'string' || !/^[0-9a-f]{40}$/i.test(tete))
+      return envoyer(400, { raison: 'requete' });
+    const resultat = await diffPourAppareil(opts.code.db, id, Number(index), tete);
+    return envoyer(resultat.statut, resultat.corps);
   });
 
   // D176 : la seule écriture sans authentification de ce port. L'Origin est exigée : seule la

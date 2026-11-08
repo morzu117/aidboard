@@ -2,11 +2,16 @@ import { useState } from 'react';
 
 const CLE = 'aid.installation-fermee';
 
-function proposer(): boolean {
+export function installationRequise(): boolean {
   if (!/iPhone|iPad/.test(navigator.userAgent) || !/Safari/.test(navigator.userAgent)) return false;
   if (/CriOS|FxiOS|EdgiOS|OPiOS/.test(navigator.userAgent)) return false;
   if ((navigator as Navigator & { standalone?: boolean }).standalone === true) return false;
   if (window.matchMedia?.('(display-mode: standalone)').matches) return false;
+  return true;
+}
+
+function proposer(): boolean {
+  if (!installationRequise()) return false;
   try {
     return localStorage.getItem(CLE) !== 'oui';
   } catch {

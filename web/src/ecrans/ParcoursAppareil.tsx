@@ -1,12 +1,13 @@
+export { NotificationsAppareil } from '../ui/NotificationsAppareil.js';
+import { attendDecision } from '../../../src/shared/decision.js';
 import { useEffect, useState } from 'react';
-import { Link, useParams } from 'react-router';
+import { Link, useLocation, useParams } from 'react-router';
 import type { EtatPourAppareil } from '../../../src/shared/host.js';
 import { useAid, useAidClient } from '../data/useAidState.js';
+import { AidApiError } from '../data/api.js';
 import { Decision, Tour } from '../ui/ActionsAppareil.js';
 
-type Agent = EtatPourAppareil['agents'][number];
-export const attendDecision = (agent: Agent) =>
-  !!agent.question || (agent.attend && agent.statusReason === 'permission');
+export { attendDecision } from '../../../src/shared/decision.js';
 const agentsDuSujet = (etat: EtatPourAppareil, id: string) => {
   const runs = new Set(etat.runs.filter((run) => run.topicId === id).map((run) => run.id));
   return etat.agents.filter((agent) => runs.has(agent.runId));
@@ -75,6 +76,9 @@ export function SuivreAppareil({ relire = false }: { relire?: boolean }) {
     <main className="page">
       <Link to={relire ? chemin(sujet.id) : '/sujets'}>{relire ? sujet.title : 'Sujets'}</Link>
       <h1 className="titre-ecran">{relire ? 'Relire un tour' : sujet.title}</h1>
+      {relire && lecture?.livraison && (
+        <FichiersAppareil id={sujet.id} livraison={lecture.livraison} />
+      )}
       {relire ? (
         dernier ? (
           <Tour key={`${dernier.id}:${dernier.tour!.id}`} agent={dernier} horsLigne={!!horsLigne} />
@@ -160,13 +164,7 @@ export function LivraisonAppareil() {
         <>
           <p>Tête : {livraison.head ?? 'inconnue'}</p>
           <h2>Fichiers</h2>
-          <ul>
-            {livraison.fichiers.map((fichier) => (
-              <li key={fichier.nom}>
-                {fichier.nom} · +{fichier.ajouts} −{fichier.retraits}
-              </li>
-            ))}
-          </ul>
+          <FichiersAppareil id={id!} livraison={livraison} />
           <h2>Contrôles</h2>
           <ul>
             {livraison.controles.map((controle, index) => (
@@ -209,21 +207,6 @@ export function InformationsAppareil() {
   );
 }
 
-export function NotificationsAppareil() {
-  return (
-    <main className="page">
-      <h1 className="titre-ecran">Notifications</h1>
-      <p>Les notifications push arrivent au chantier 32 bis.</p>
-      <p>
-        Notifications dans ce navigateur :{' '}
-        {'Notification' in window ? 'disponibles' : 'indisponibles'}
-      </p>
-      <p>Push dans ce navigateur : {'PushManager' in window ? 'disponible' : 'indisponible'}</p>
-      <Link to="/appareils">Appareils connectés</Link>
-    </main>
-  );
-}
-
 export function BadgeAppareil() {
   const { appareil } = useAid();
   const nombre = appareil?.agents.filter(
@@ -250,4 +233,128 @@ export function BadgeAppareil() {
     })();
   }, [nombre]);
   return null;
+}
+
+function FichiersAppareil({ id, livraison }: { id: string; livraison: Livraison }) {
+  return (
+    <ul>
+      {livraison.fichiers.map((fichier, index) => (
+        <li key={index}>
+          <Link to={`${chemin(id)}/fichiers/${index}`} state={{ livraison }}>
+            {fichier.nom} · +{fichier.ajouts} −{fichier.retraits}
+          </Link>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+const MESSAGES_DIFF: Record<string, string> = {
+  sensible: 'Fichier sensible : il se lit sur le Mac.',
+  binaire: 'Fichier binaire.',
+  coupe: 'Suite sur le Mac.',
+  code_coupe: 'La lecture du code est coupée sur le Mac.',
+  perimee: 'La livraison a changé.',
+  fichier: "Ce fichier n'est plus dans la livraison.",
+  requete: 'Demande de diff invalide.',
+};
+
+export function FichierAppareil() {
+  const { id, index } = useParams();
+  const { horsLigne } = useAid();
+  return <LectureFichierAppareil key={`${id}:${index}:${!!horsLigne}`} />;
+}
+
+function LectureFichierAppareil() {
+  const { id, index } = useParams();
+  const { state } = useLocation();
+  const client = useAidClient();
+  const { horsLigne } = useAid();
+  const [relecture, setRelecture] = useState(0);
+  const [lecture, setLecture] = useState<{
+    livraison?: Livraison;
+    etat: string;
+    lignes?: string[];
+  } | null>(null);
+  useEffect(() => {
+    if (horsLigne || !id) return;
+    let actif = true;
+    void (async () => {
+      let livraison: Livraison | undefined;
+      try {
+        livraison = relecture === 0 ? state?.livraison : undefined;
+        livraison ??= await client.request<Livraison>(
+          'GET',
+          `/api/appareils/sujets/${encodeURIComponent(id)}/livraison`,
+        );
+        if (!actif) return;
+        const diff = await client.request<{ etat: string; lignes?: string[] }>(
+          'GET',
+          `/api/appareils/sujets/${encodeURIComponent(id)}/fichiers/${encodeURIComponent(index ?? '')}/diff?tete=${encodeURIComponent(livraison.head ?? '')}`,
+        );
+        if (actif) setLecture({ livraison, ...diff });
+      } catch (erreur) {
+        if (actif)
+          setLecture({
+            livraison,
+            etat: erreur instanceof AidApiError ? String(erreur.body.raison) : 'indisponible',
+          });
+      }
+    })();
+    return () => {
+      actif = false;
+    };
+  }, [client, id, index, state, relecture, horsLigne]);
+  const fichier = lecture?.livraison?.fichiers[Number(index)];
+  return (
+    <main className="page">
+      <Link to={`${chemin(id ?? '')}/livraison`}>Livrer</Link>
+      <h1 className="titre-ecran">Lire un fichier</h1>
+      {fichier && (
+        <h2>
+          {fichier.nom} · +{fichier.ajouts} −{fichier.retraits}
+        </h2>
+      )}
+      {horsLigne ? (
+        <p>Diff indisponible hors ligne.</p>
+      ) : (
+        lecture && (
+          <>
+            {lecture.lignes && (
+              <pre className="appareil-diff">
+                {lecture.lignes.map((ligne, i) => {
+                  const classe = ligne.startsWith('@@')
+                    ? 'bloc'
+                    : ligne.startsWith('+')
+                      ? 'ajout'
+                      : ligne.startsWith('-')
+                        ? 'retrait'
+                        : 'contexte';
+                  return (
+                    <span key={i} className={`diff-${classe}`}>
+                      {ligne.split('[masqué]').map((partie, j) => (
+                        <span key={j}>
+                          {j > 0 && <span className="diff-masque">[masqué]</span>}
+                          {partie}
+                        </span>
+                      ))}
+                      {'\n'}
+                    </span>
+                  );
+                })}
+              </pre>
+            )}
+            {lecture.etat !== 'ok' && (
+              <p role="status">{MESSAGES_DIFF[lecture.etat] ?? 'Diff indisponible.'}</p>
+            )}
+            {lecture.etat === 'perimee' && (
+              <div className="appareil-actions">
+                <button onClick={() => setRelecture((n) => n + 1)}>Relire</button>
+              </div>
+            )}
+          </>
+        )
+      )}
+    </main>
+  );
 }
