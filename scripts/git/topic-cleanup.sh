@@ -45,6 +45,22 @@ if [ "$have_branch" = 1 ]; then
   fi
 fi
 
+if [ "${AID_CLEANUP_TETE+x}" = x ]; then
+  [[ -z "$AID_CLEANUP_TETE" || "$AID_CLEANUP_TETE" =~ ^[0-9a-fA-F]{40}$ ]] || die_human "tête de nettoyage invalide"
+  # Le bail précède tout retrait : son refus garde branche et worktree intacts.
+  # Si le retrait échoue ensuite, le worktree et ses fichiers restent récupérables.
+  if [ -n "$AID_CLEANUP_TETE" ]; then
+    git update-ref -d "refs/heads/$AID_BRANCH" "$AID_CLEANUP_TETE" || die_human "la tête locale a changé"
+    # Une HEAD détachée conserve les commits et permet le retrait sans forcer.
+    if [ -d "$AID_WORKTREE" ] && [ "$(git -C "$AID_WORKTREE" symbolic-ref -q HEAD || true)" = "refs/heads/$AID_BRANCH" ]; then
+      git -C "$AID_WORKTREE" update-ref --no-deref HEAD "$AID_CLEANUP_TETE"
+    fi
+  else
+    printf 'verify refs/heads/%s %040d\n' "$AID_BRANCH" 0 | git update-ref --stdin || die_human "la branche locale existe"
+  fi
+  have_branch=0
+fi
+
 # 3. Le démon d'index du worktree, seulement si le pid est bien un codegraph (un pid périmé peut être réutilisé).
 pidfile="$AID_WORKTREE/.codegraph/daemon.pid"
 if [ -f "$pidfile" ]; then

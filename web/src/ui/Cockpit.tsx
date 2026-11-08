@@ -1,3 +1,4 @@
+import { PanneauConfirmations } from './PanneauConfirmations.js';
 import { useEffect, useState } from 'react';
 import type { Appareil, EtatModeHostDaemon, VueDemande } from '../../../src/shared/host.js';
 import { type ModeHostEtat, useModeHost } from '../data/host.js';
@@ -79,6 +80,7 @@ function Demande({ h, d, now }: { h: ModeHostEtat; d: VueDemande | null; now: nu
       Nouveau code
     </button>
   );
+  if (h.confirmations.appairage) return h.confirmations.appairage;
   if (d?.etat === 'reclamee') {
     const peutApprouver = d.identite !== null || sansIdentite;
     return (
@@ -111,15 +113,17 @@ function Demande({ h, d, now }: { h: ModeHostEtat; d: VueDemande | null; now: nu
           </label>
         )}
         <div className="host-actions">
-          <button
-            className="bouton bouton--primaire"
-            type="button"
-            data-node="host.demande.approuver"
-            disabled={h.occupe || !peutApprouver}
-            onClick={() => void h.approuver(d.id, d.identite === null && sansIdentite)}
-          >
-            Approuver
-          </button>
+          {h.confirmations.appairage ?? (
+            <button
+              className="bouton bouton--primaire"
+              type="button"
+              data-node="host.demande.approuver"
+              disabled={h.occupe || !peutApprouver}
+              onClick={() => void h.approuver(d.id, d.identite === null && sansIdentite)}
+            >
+              Approuver
+            </button>
+          )}
           <button
             className="bouton bouton--danger"
             type="button"
@@ -244,37 +248,43 @@ export function Cockpit() {
       </p>
       {e && (
         <div>
-          <label>
-            <input
-              type="checkbox"
-              role="switch"
-              checked={e.push ?? false}
-              disabled={h.occupe}
-              onChange={() => {
-                if (
-                  !e.push ||
-                  window.confirm('Couper les notifications ? Tous les abonnements seront effacés.')
-                )
-                  void h.basculerPush(!e.push);
-              }}
-            />
-            Notifications push sur les téléphones
-          </label>
+          {h.confirmations.push ?? (
+            <label>
+              <input
+                type="checkbox"
+                role="switch"
+                checked={e.push ?? false}
+                disabled={h.occupe}
+                onChange={() => {
+                  if (
+                    !e.push ||
+                    window.confirm(
+                      'Couper les notifications ? Tous les abonnements seront effacés.',
+                    )
+                  )
+                    void h.basculerPush(!e.push);
+                }}
+              />
+              Notifications push sur les téléphones
+            </label>
+          )}
           <p>
             Les notifications passent par Apple ou Google. Elles ne contiennent qu’un nombre de
             décisions.
           </p>
           <p>{e.abonnements ?? 0} abonnements</p>
-          <label>
-            <input
-              type="checkbox"
-              role="switch"
-              checked={e.code ?? false}
-              disabled={h.occupe}
-              onChange={() => void h.basculerCode(!e.code)}
-            />
-            Montrer le code aux appareils
-          </label>
+          {h.confirmations.code ?? (
+            <label>
+              <input
+                type="checkbox"
+                role="switch"
+                checked={e.code ?? false}
+                disabled={h.occupe}
+                onChange={() => void h.basculerCode(!e.code)}
+              />
+              Montrer le code aux appareils
+            </label>
+          )}
           <p>
             Les téléphones appairés pourront lire le diff des fichiers d&apos;une livraison, filtré.
             Les fichiers sensibles restent sur le Mac.
@@ -282,6 +292,7 @@ export function Cockpit() {
         </div>
       )}
       {e?.pda && <PanneauPda key={JSON.stringify(e.pda)} etat={e.pda} />}
+      {e?.pda && <PanneauConfirmations />}
       {h.erreur && (
         <p className="message-erreur" role="alert" data-node="host.erreur">
           {h.erreur}

@@ -5,31 +5,59 @@ import {
   jsonCanonique,
   lireCorpsDemande,
   type CorpsDemande,
+  CLASSE_ACTION,
+  resumeAction,
+  type ParamsAction,
+  type CorpsDemandeV2,
+  type CorpsDemandeV1,
 } from '../../shared/pda.js';
 import { creerFournisseurClePda } from './cle.js';
 
+type EntreeV1 = { action: 'essai'; sujet: string; maintenant: number };
+type EntreeSignee = EntreeV1 | (ParamsAction & { maintenant: number });
+interface DemandeSignee<C extends CorpsDemande> {
+  corps: C;
+  numeroMac: string | null;
+  enveloppe: { corps: string; sig: string };
+  hDemande: string;
+}
+export function signerDemande(
+  entree: EntreeV1,
+  fournisseur: ReturnType<typeof creerFournisseurClePda>,
+): Promise<DemandeSignee<CorpsDemandeV1>>;
+export function signerDemande(
+  entree: EntreeSignee,
+  fournisseur: ReturnType<typeof creerFournisseurClePda>,
+): Promise<DemandeSignee<CorpsDemande>>;
 /** Le fournisseur partagé reste attaché à cette instance du daemon. */
 export async function signerDemande(
-  {
-    action,
-    sujet,
-    maintenant,
-  }: {
-    action: 'essai';
-    sujet: string;
-    maintenant: number;
-  },
+  entree: ({ action: 'essai'; sujet: string } | ParamsAction) & { maintenant: number },
   fournisseur: ReturnType<typeof creerFournisseurClePda>,
 ) {
-  const corps: CorpsDemande = {
-    v: 1,
-    id: randomBytes(16).toString('base64url'),
-    action,
-    sujet,
-    numero: randomInt(10000).toString().padStart(4, '0'),
-    echeance: maintenant + 5 * 60 * 1000,
-    emise: maintenant,
-  };
+  const { action, maintenant } = entree;
+  const numero = randomInt(10000).toString().padStart(4, '0');
+  const corps: CorpsDemande =
+    'sujet' in entree
+      ? {
+          v: 1,
+          id: randomBytes(16).toString('base64url'),
+          action: entree.action,
+          sujet: entree.sujet,
+          numero,
+          echeance: maintenant + 5 * 60 * 1000,
+          emise: maintenant,
+        }
+      : ({
+          v: 2,
+          id: randomBytes(16).toString('base64url'),
+          action,
+          classe: CLASSE_ACTION[action],
+          params: entree.params,
+          resume: resumeAction(action, entree.params),
+          numero: CLASSE_ACTION[action] === 'toujours' ? null : numero,
+          echeance: maintenant + 15 * 60_000,
+          emise: maintenant,
+        } as CorpsDemandeV2);
   const octets = Buffer.from(jsonCanonique(corps), 'utf8');
   lireCorpsDemande(octets);
   const sig = sign('sha256', Buffer.concat([Buffer.from(CONTEXTE_DEMANDE), octets]), {
@@ -38,11 +66,15 @@ export async function signerDemande(
   });
   return {
     corps,
+    numeroMac: corps.numero === null ? numero : null,
     enveloppe: { corps: octets.toString('base64url'), sig: sig.toString('base64url') },
     hDemande: await hacher(octets),
   };
 }
 
 export function creerSigneurDemande(fournisseur: ReturnType<typeof creerFournisseurClePda>) {
-  return (demande: Parameters<typeof signerDemande>[0]) => signerDemande(demande, fournisseur);
+  return <E extends EntreeSignee>(demande: E) =>
+    signerDemande(demande, fournisseur) as Promise<
+      DemandeSignee<E extends EntreeV1 ? CorpsDemandeV1 : CorpsDemandeV2>
+    >;
 }

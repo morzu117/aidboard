@@ -1,3 +1,4 @@
+import { useConfirmation } from '../ui/AttenteConfirmation.js';
 import { useEffect, useRef, useState } from 'react';
 import type { Workspace } from '../../../src/shared/model.js';
 import { useAid } from '../data/useAidState.js';
@@ -24,6 +25,7 @@ const pluriel = (n: number, mot: string) => `${n} ${mot}${n > 1 ? 's' : ''}`;
 function Projets() {
   const { state, call, refresh } = useAid();
   const { openNewTopic, openNewWorkspace } = useLayout();
+  const confirmation = useConfirmation(refresh);
   const [retrait, setRetrait] = useState<Workspace | null>(null);
   const [erreur, setErreur] = useState<string | null>(null);
   const workspaces = state?.workspaces ?? [];
@@ -31,7 +33,8 @@ function Projets() {
   const retirer = async (w: Workspace) => {
     setErreur(null);
     try {
-      await call('DELETE', `/api/workspaces/${w.id}`);
+      const r = await call('DELETE', `/api/workspaces/${w.id}`);
+      if (confirmation.recevoir(r)) return;
       await refresh();
     } catch (err) {
       setErreur(message(err));
@@ -47,6 +50,7 @@ function Projets() {
           {workspaces.length}
         </span>
       </div>
+      {confirmation.attente}
       {workspaces.length === 0 && (
         <p className="texte-discret" data-node="reglages.projets.vide">
           Aucun projet enregistré.
@@ -88,7 +92,7 @@ function Projets() {
               >
                 Nouveau sujet
               </button>
-              {n === 0 && (
+              {n === 0 && !confirmation.id && (
                 <button
                   className="bouton bouton--fantome"
                   data-node={`${id}.retirer`}

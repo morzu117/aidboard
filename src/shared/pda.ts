@@ -1,3 +1,19 @@
+import {
+  CLASSE_ACTION,
+  resumeAction,
+  validerParamsAction,
+  type ActionConfirmee,
+  type CorpsDemandeV2,
+} from './confirmations.js';
+export { CLASSE_ACTION, resumeAction } from './confirmations.js';
+export type {
+  ActionConfirmee,
+  ClasseConfirmation,
+  ParamsAction,
+  ParametresActions,
+  CorpsDemandeV2,
+} from './confirmations.js';
+
 export const CONTEXTE_DEMANDE = 'aid-pda-demande-v1\n';
 export const CONTEXTE_RELAIS = 'aid-pda-relais-v1\n';
 
@@ -67,7 +83,8 @@ export function jsonCanonique(valeur: unknown): string {
   return encoder(valeur);
 }
 
-export interface CorpsDemande {
+export type CorpsDemande = CorpsDemandeV1 | CorpsDemandeV2;
+export interface CorpsDemandeV1 {
   v: 1;
   id: string;
   action: 'essai';
@@ -102,6 +119,7 @@ export function lireCorpsDemande(octets: Uint8Array): CorpsDemande {
   const o: unknown = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(octets));
   if (!o || typeof o !== 'object' || Array.isArray(o)) throw new Error('Demande invalide');
   const c = o as Record<string, unknown>;
+  if (c.v === 2) return lireCorpsDemandeV2(c);
   const cles = ['v', 'id', 'action', 'sujet', 'numero', 'echeance', 'emise'];
   if (
     Object.keys(c).length !== cles.length ||
@@ -204,4 +222,31 @@ export async function empreintePda({ credId, passkey, relais }: ClesPda): Promis
     }
   }
   return `${texte.slice(0, 4)}-${texte.slice(4)}`;
+}
+
+function lireCorpsDemandeV2(c: Record<string, unknown>): CorpsDemandeV2 {
+  const cles = ['v', 'id', 'action', 'classe', 'params', 'resume', 'numero', 'echeance', 'emise'];
+  if (
+    Object.keys(c).length !== cles.length ||
+    !cles.every((cle) => Object.hasOwn(c, cle)) ||
+    typeof c.id !== 'string' ||
+    decoderBase64url(c.id).length !== 16 ||
+    typeof c.action !== 'string' ||
+    !Object.hasOwn(CLASSE_ACTION, c.action) ||
+    c.classe !== CLASSE_ACTION[c.action as ActionConfirmee] ||
+    !validerParamsAction(c.action as ActionConfirmee, c.params) ||
+    (c.classe === 'toujours'
+      ? c.numero !== null
+      : typeof c.numero !== 'string' || c.numero.length !== 4 || !/^\d{4}$/.test(c.numero)) ||
+    typeof c.resume !== 'string' ||
+    Array.from(c.resume).length > 160 ||
+    !Number.isSafeInteger(c.echeance) ||
+    !Number.isSafeInteger(c.emise) ||
+    (c.echeance as number) < (c.emise as number) ||
+    (c.echeance as number) - (c.emise as number) > 15 * 60_000
+  )
+    throw new Error('Demande invalide');
+  const corps = c as unknown as CorpsDemandeV2;
+  if (corps.resume !== resumeAction(corps.action, corps.params)) throw new Error('Résumé invalide');
+  return corps;
 }

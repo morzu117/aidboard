@@ -1,3 +1,5 @@
+import * as actions from '../src/daemon/actions/service.js';
+import { vi } from 'vitest';
 import { mkdtempSync, realpathSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -41,6 +43,7 @@ const state = async () =>
 
 test('git.pousser : avec avance, pousse la branche du sujet sur origin', async () => {
   const { origin, ws } = await setup();
+  const appel = vi.spyOn(actions, 'startAction');
   const created = (
     await t.d.app.inject({
       method: 'POST',
@@ -67,6 +70,13 @@ test('git.pousser : avec avance, pousse la branche du sujet sur origin', async (
   expect(fin.data.outcome).toBe('succeeded');
 
   expect(sh(origin, 'rev-parse', created.branch)).toBe(tip);
+  expect(appel.mock.calls.find(([, spec]) => spec.action === 'git.pousser')?.[1].env).toMatchObject(
+    {
+      AID_PUSH_TETE: tip,
+      AID_PUSH_DISTANTE: '',
+    },
+  );
+  appel.mockRestore();
 });
 
 test('git.pousser : sans avance, 422 et rien n’est lancé', async () => {

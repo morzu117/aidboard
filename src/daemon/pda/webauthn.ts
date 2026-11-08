@@ -3,7 +3,8 @@ import { decoderBase64url, defiReponse } from '../../shared/pda.js';
 
 interface ContexteAssertion {
   appareil: { id: string; credId: string; clePublique: string; actif: boolean } | null;
-  demande: { id: string; hDemande: string; numero: string; echeance: number };
+  demande: { id: string; hDemande: string; numero: string | null; echeance: number };
+  numeroAttendu?: string;
   origine: string;
   rpId: string;
   maintenant: number;
@@ -16,7 +17,7 @@ const egaux = (a: Uint8Array, b: Uint8Array) => a.length === b.length && timingS
 export async function verifierAssertion(
   entree: unknown,
   ctx: ContexteAssertion,
-): Promise<{ ok: true; valeur: 'oui' | 'non' } | { ok: false; raison: string }> {
+): Promise<{ ok: true; valeur: 'oui' | 'non' } | { ok: false; raison: string; signee?: true }> {
   const refus = (raison: string) => ({ ok: false as const, raison });
   let taille: number;
   try {
@@ -95,12 +96,14 @@ export async function verifierAssertion(
   }
   if (!egaux(authentificateur.subarray(0, 32), hacher(ctx.rpId))) return refus('rpid');
   if ((authentificateur[32]! & 5) !== 5) return refus('presence');
+  const numeroAttendu = ctx.demande.numero ?? ctx.numeroAttendu;
   if (
-    e.valeur === 'oui'
-      ? e.numero !== ctx.demande.numero
-      : e.numero !== undefined && e.numero !== null
+    ctx.demande.numero === null &&
+    (numeroAttendu?.length !== 4 || !/^\d{4}$/.test(numeroAttendu))
   )
     return refus('numero');
+  const numeroFaux = e.valeur === 'oui' && e.numero !== numeroAttendu;
+  if (e.valeur === 'non' && e.numero !== undefined && e.numero !== null) return refus('numero');
   try {
     if (
       typeof donnees.challenge !== 'string' ||
@@ -125,5 +128,6 @@ export async function verifierAssertion(
     return refus('signature');
   }
   if (!(ctx.maintenant <= ctx.demande.echeance)) return refus('echeance');
+  if (numeroFaux) return { ok: false, raison: 'numero', signee: true };
   return { ok: true, valeur: e.valeur };
 }

@@ -6,6 +6,10 @@ source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 require_env AID_PR_NUMBER AID_MERGE_STRATEGY
 GH="${AID_GH_BIN:-gh}"
 
+if [ "${AID_MERGE_EXIGER_TETE:-}" = "1" ] && ! [[ "${AID_MERGE_HEAD:-}" =~ ^[0-9a-fA-F]{40}$ ]]; then
+  die_human "tête de fusion requise : 40 caractères hexadécimaux"
+fi
+
 case "$AID_MERGE_STRATEGY" in
   squash) strategy_flag=--squash ;;
   merge) strategy_flag=--merge ;;

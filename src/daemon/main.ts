@@ -1,3 +1,4 @@
+import type { LigneDemande } from './pda/file.js';
 import { FilePda } from './pda/file.js';
 import { ClientRelais } from './pda/relais.js';
 import { RegistrePda } from './pda/registre.js';
@@ -298,11 +299,22 @@ export async function startDaemon(
       log,
     });
     let filePda: FilePda | null = null;
+    let derniereFilePda: FilePda | null = null;
+    let preparerConsommation: ((ligne: LigneDemande) => Promise<() => void>) | undefined;
+    let executerConfirmation: ((ligne: LigneDemande) => Promise<void>) | undefined;
     let relaisPda: string | null = null;
     let signalerPda = () => {};
     let basculePda: Promise<void> = Promise.resolve();
     const pda = {
+      lierExecuteur: (
+        executer: (ligne: LigneDemande) => Promise<void>,
+        preparer: (ligne: LigneDemande) => Promise<() => void>,
+      ) => {
+        preparerConsommation = preparer;
+        executerConfirmation = executer;
+      },
       obtenir: () => filePda,
+      pourAnnulation: () => filePda ?? derniereFilePda,
       synchroniser: () => {
         basculePda = basculePda.then(async () => {
           const actif = () =>
@@ -332,7 +344,10 @@ export async function startDaemon(
               },
               journal: (type, donnees) => log(`${type} ${JSON.stringify(donnees)}`),
               signaler: () => signalerPda(),
+              executer: (ligne) => executerConfirmation!(ligne),
+              preparerConsommation: (ligne) => preparerConsommation!(ligne),
             });
+            derniereFilePda = filePda;
           }
         });
         return basculePda;

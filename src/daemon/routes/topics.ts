@@ -1,3 +1,10 @@
+import { creerActionsConfirmation } from '../confirmations/actions.js';
+import {
+  creerPorte,
+  type Porte,
+  type ActionPorte,
+  type EntreeAction,
+} from '../confirmations/porte.js';
 import { existsSync, mkdirSync, mkdtempSync, realpathSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, join } from 'node:path';
@@ -86,6 +93,7 @@ export interface TopicRouteDeps {
   config: AidConfig;
   actions: ActionContext;
   indexer: Indexer;
+  porte?: Porte;
 }
 
 interface TopicRow {
@@ -110,6 +118,9 @@ interface WorkspaceRow {
 
 export function registerTopicRoutes(app: FastifyInstance, deps: TopicRouteDeps): void {
   const scripts = findAssetDir('scripts/git', 'topic-create.sh');
+  const porte =
+    deps.porte ??
+    creerPorte({ db: deps.db, actions: creerActionsConfirmation(deps), file: () => null });
 
   app.post('/api/topics', { schema: { body: CreateBody } }, async (req, reply) => {
     const body = req.body as { workspaceId: string; title: string; type: string; slug?: string };
@@ -369,6 +380,20 @@ export function registerTopicRoutes(app: FastifyInstance, deps: TopicRouteDeps):
     if (!(TOPIC_ACTIONS as readonly string[]).includes(actionId)) {
       throw new AidHttpError(404, `action inconnue : ${actionId}`);
     }
+    const confirmee = (
+      { 'topic.merge': 'merge', 'git.pousser': 'push', 'topic.cleanup': 'nettoyage' } as Record<
+        string,
+        ActionPorte
+      >
+    )[actionId];
+    if (confirmee) {
+      const entree = { ...(req.body ?? {}), topicId: id } as EntreeAction;
+      const demande = await porte.demander(confirmee, entree, req);
+      if ('confirmation' in demande)
+        return reply.code(202).send({ confirmation: demande.confirmation });
+      const runId = await porte.executer(confirmee, demande.direct, entree);
+      return reply.code(202).send({ actionId: runId });
+    }
     const topic = deps.db.prepare('SELECT * FROM topics WHERE id = ?').get(id) as
       TopicRow | undefined;
     if (!topic) throw new AidHttpError(404, 'sujet inconnu');
@@ -542,24 +567,6 @@ export function registerTopicRoutes(app: FastifyInstance, deps: TopicRouteDeps):
         cwd: topic.worktree,
         timeoutMs: TWO_MIN,
         env: scriptEnv(process.env, deps.config.env.strip, { AID_BASE: topic.base }),
-      });
-      return reply.code(202).send({ actionId: runId });
-    }
-
-    if (actionId === 'git.pousser') {
-      if (!existsSync(topic.worktree)) throw new AidHttpError(409, 'worktree introuvable');
-      const live = await gitLiveInfo(topic.worktree, topic.base);
-      if (!live.aheadBehind || live.aheadBehind.ahead === 0) {
-        throw new AidHttpError(422, 'rien à pousser : pas d’avance sur origin/' + topic.base);
-      }
-      const { actionId: runId } = startAction(deps.actions, {
-        workspaceId: ws.id,
-        topicId: id,
-        action: 'git.pousser',
-        script: join(scripts, 'topic-push.sh'),
-        cwd: topic.worktree,
-        timeoutMs: TWO_MIN,
-        env: scriptEnv(process.env, deps.config.env.strip, { AID_BRANCH: topic.branch }),
       });
       return reply.code(202).send({ actionId: runId });
     }
@@ -770,89 +777,6 @@ export function registerTopicRoutes(app: FastifyInstance, deps: TopicRouteDeps):
       return reply.code(202).send({ actionId: runId });
     }
 
-    if (actionId === 'topic.merge') {
-      if (topic.pr_number == null) throw new AidHttpError(409, 'aucune PR ouverte pour ce sujet');
-      // gh peut réussir côté GitHub avant que le script ne confirme (coupure réseau après
-      // l'appel) : un second topic.merge sur un sujet déjà fusionné n'est pas une erreur
-      // bloquante, juste un 409 propre plutôt qu'une tentative de refusion.
-      if (topic.state === 'merged') {
-        throw new AidHttpError(409, 'ce sujet est déjà fusionné');
-      }
-      const mergeBody = (req.body ?? {}) as {
-        strategy?: 'squash' | 'merge' | 'rebase';
-        message?: string;
-        deleteBranch?: boolean;
-        cleanupAfter?: boolean;
-        head?: string;
-      };
-      if (!mergeBody.strategy) throw new AidHttpError(422, 'stratégie de fusion requise');
-      // Chantier 27 (D123) : la tête affichée, en entier ; sans elle, le merge d'avant
-      if (mergeBody.head !== undefined && !/^[0-9a-f]{40}$/.test(mergeBody.head))
-        throw new AidHttpError(422, 'tête invalide : 40 caractères hexadécimaux');
-      const { actionId: runId } = startAction(deps.actions, {
-        workspaceId: ws.id,
-        topicId: id,
-        action: 'topic.merge',
-        script: join(scripts, 'topic-merge.sh'),
-        cwd: topic.worktree,
-        timeoutMs: TWO_MIN,
-        env: scriptEnv(process.env, deps.config.env.strip, {
-          AID_PR_NUMBER: String(topic.pr_number),
-          AID_MERGE_STRATEGY: mergeBody.strategy,
-          ...(mergeBody.message && { AID_MERGE_MESSAGE: mergeBody.message }),
-          ...(mergeBody.deleteBranch && { AID_MERGE_DELETE_BRANCH: '1' }),
-          ...(mergeBody.head && { AID_MERGE_HEAD: mergeBody.head }),
-        }),
-        afterSuccess: () => {
-          deps.actions.store.append({
-            source: 'daemon',
-            type: 'topic.state',
-            workspaceId: ws.id,
-            topicId: id,
-            data: { state: 'merged' },
-          });
-          if (mergeBody.cleanupAfter) {
-            startAction(deps.actions, {
-              workspaceId: ws.id,
-              topicId: id,
-              action: 'topic.cleanup',
-              script: join(scripts, 'topic-cleanup.sh'),
-              cwd: existsSync(topic.worktree) ? topic.worktree : ws.root,
-              timeoutMs: TWO_MIN,
-              env: scriptEnv(process.env, deps.config.env.strip, {
-                AID_REPO_ROOT: ws.root,
-                AID_TOPIC: id,
-                AID_SLUG: topic.worktree.split('/').at(-1) ?? '',
-                AID_BRANCH: topic.branch,
-                AID_BASE: topic.base,
-                AID_WORKTREE: topic.worktree,
-                ...(deps.engine.bin && { AID_CODEGRAPH_BIN: deps.engine.bin }),
-              }),
-              afterSuccess: (out) => {
-                deps.actions.store.append({
-                  source: 'daemon',
-                  type: 'topic.state',
-                  workspaceId: ws.id,
-                  topicId: id,
-                  data: { state: 'archived' },
-                });
-                if (typeof out.result.stashRef === 'string') {
-                  deps.actions.store.append({
-                    source: 'daemon',
-                    type: 'topic.stash',
-                    workspaceId: ws.id,
-                    topicId: id,
-                    data: { stashRef: out.result.stashRef },
-                  });
-                }
-              },
-            });
-          }
-        },
-      });
-      return reply.code(202).send({ actionId: runId });
-    }
-
     if (actionId === 'archive.oublier-stash') {
       if (topic.stash_ref == null)
         throw new AidHttpError(409, 'aucun stash à oublier pour ce sujet');
@@ -876,68 +800,5 @@ export function registerTopicRoutes(app: FastifyInstance, deps: TopicRouteDeps):
       });
       return reply.code(200).send({ found });
     }
-
-    const body = (req.body ?? {}) as {
-      confirmUnmerged?: number;
-      dirtyAction?: 'stash' | 'force';
-      confirmed?: boolean;
-    };
-    if (topic.state === 'archived') throw new AidHttpError(409, 'ce sujet est déjà archivé');
-    const alive = deps.db
-      .prepare(
-        `SELECT a.id, a.kind FROM agents a JOIN runs r ON r.id = a.run_id
-         WHERE r.topic_id = ? AND a.status IN (${LIVE.map(() => '?').join(',')})`,
-      )
-      .all(id, ...LIVE) as Array<{ id: string; kind: string }>;
-    if (alive.length > 0) {
-      throw new AidHttpError(409, 'des agents tournent encore : les arrêter avant de nettoyer', {
-        agents: alive,
-      });
-    }
-    // D21 : la case à cocher de confirmation est un garde-fou côté daemon, pas seulement côté UI.
-    if (body.dirtyAction === 'force' && body.confirmed !== true) {
-      throw new AidHttpError(422, 'suppression forcée : confirmation requise');
-    }
-    const { actionId: runId } = startAction(deps.actions, {
-      workspaceId: ws.id,
-      topicId: id,
-      action: 'topic.cleanup',
-      script: join(scripts, 'topic-cleanup.sh'),
-      cwd: existsSync(topic.worktree) ? topic.worktree : ws.root,
-      timeoutMs: TWO_MIN,
-      env: scriptEnv(process.env, deps.config.env.strip, {
-        AID_REPO_ROOT: ws.root,
-        AID_TOPIC: id,
-        AID_SLUG: topic.worktree.split('/').at(-1) ?? '',
-        AID_BRANCH: topic.branch,
-        AID_BASE: topic.base,
-        AID_REMOTE: ws.remote ?? '',
-        AID_WORKTREE: topic.worktree,
-        ...(deps.engine.bin && { AID_CODEGRAPH_BIN: deps.engine.bin }),
-        ...(body.confirmUnmerged !== undefined && {
-          AID_CONFIRM_UNMERGED: String(body.confirmUnmerged),
-        }),
-        ...(body.dirtyAction && { AID_DIRTY_ACTION: body.dirtyAction }),
-      }),
-      afterSuccess: (out) => {
-        deps.actions.store.append({
-          source: 'daemon',
-          type: 'topic.state',
-          workspaceId: ws.id,
-          topicId: id,
-          data: { state: 'archived' },
-        });
-        if (typeof out.result.stashRef === 'string') {
-          deps.actions.store.append({
-            source: 'daemon',
-            type: 'topic.stash',
-            workspaceId: ws.id,
-            topicId: id,
-            data: { stashRef: out.result.stashRef },
-          });
-        }
-      },
-    });
-    return reply.code(202).send({ actionId: runId });
   });
 }

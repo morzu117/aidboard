@@ -1,3 +1,5 @@
+import { useConfirmation } from '../ui/AttenteConfirmation.js';
+import type { ReactNode } from 'react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Appareil, EtatModeHostDaemon, VueDemande } from '../../../src/shared/host.js';
 import { useAidClient } from './useAidState.js';
@@ -17,6 +19,7 @@ export interface NouveauCode {
 }
 
 export interface ModeHostEtat {
+  confirmations: Record<string, ReactNode>;
   etat: EtatModeHostDaemon | null;
   appareils: (Appareil & { push?: boolean })[];
   demande: VueDemande | null;
@@ -100,6 +103,10 @@ export function useModeHost(): ModeHostEtat {
     return () => clearInterval(t);
   }, [vivante, lireDemande, lireAppareils]);
 
+  const code = useConfirmation(lireTout, true);
+  const push = useConfirmation(lireTout, true);
+  const appairage = useConfirmation(lireTout, true);
+
   const agir = useCallback(async (f: () => Promise<unknown>) => {
     setOccupe(true);
     setErreur(null);
@@ -113,6 +120,7 @@ export function useModeHost(): ModeHostEtat {
   }, []);
 
   return {
+    confirmations: { code: code.attente, push: push.attente, appairage: appairage.attente },
     etat,
     appareils,
     demande,
@@ -122,11 +130,15 @@ export function useModeHost(): ModeHostEtat {
     occupe,
     basculerCode: (actif) =>
       agir(async () => {
-        setEtat(await client.request<EtatModeHostDaemon>('PUT', '/api/host/code', { actif }));
+        const r = await client.request<EtatModeHostDaemon>('PUT', '/api/host/code', { actif });
+        if (code.recevoir(r)) return;
+        setEtat(r);
       }),
     basculerPush: (actif) =>
       agir(async () => {
-        setEtat(await client.request<EtatModeHostDaemon>('PUT', '/api/host/push', { actif }));
+        const r = await client.request<EtatModeHostDaemon>('PUT', '/api/host/push', { actif });
+        if (push.recevoir(r)) return;
+        setEtat(r);
         await lireAppareils();
       }),
     basculer: (actif) =>
@@ -145,11 +157,12 @@ export function useModeHost(): ModeHostEtat {
     fermerQr: () => setQr(null),
     approuver: (id, sansIdentite) =>
       agir(async () => {
-        await client.request(
+        const r = await client.request(
           'POST',
           `/api/host/appairages/${id}/approuver`,
           sansIdentite ? { sansIdentite: true } : {},
         );
+        if (appairage.recevoir(r)) return;
         await lireDemande();
       }),
     refuser: (id) =>

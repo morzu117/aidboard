@@ -68,7 +68,7 @@ test('PDA : passkey, essais, UV, révocation, rotation et coque hors ligne', asy
       if (ancienPort === undefined) delete process.env.AID_E2E_RELAIS_PORT;
       else process.env.AID_E2E_RELAIS_PORT = ancienPort;
     }
-    base = new Database(join(home, 'state.db'), { readonly: true });
+    base = new Database(join(home, 'state.db'));
     frontal = await ouvrirServeLocal({ dir: home, port: FRONTAL, versPort: PORT + 20 });
     frontalRelais = await ouvrirServeLocal({
       dir: home,
@@ -163,8 +163,8 @@ test('PDA : passkey, essais, UV, révocation, rotation et coque hors ligne', asy
     };
     await envoyer('Essai confirmé');
     await telephone.getByRole('button', { name: 'Actualiser' }).click();
-    await expect(telephone.getByRole('heading', { name: 'Demande d’essai' })).toBeVisible();
-    await expect(telephone.getByText('Essai confirmé', { exact: true })).toBeVisible();
+    await expect(telephone.getByRole('heading', { name: "Demande d'essai" })).toBeVisible();
+    await expect(telephone.getByText('Essai confirmé', { exact: true })).toHaveCount(0);
     await confirmer(telephone);
     await expect(mac.getByText('Confirmée', { exact: true })).toBeVisible({ timeout: 30_000 });
     await envoyer('Essai refusé');
@@ -181,7 +181,8 @@ test('PDA : passkey, essais, UV, révocation, rotation et coque hors ligne', asy
     expect(etat(uv)).toBe('ouverte');
     await expect(mac.getByText('Confirmée', { exact: true })).toHaveCount(0);
     // Chromium peut arrêter credentials.get avant toute assertion : aucune réponse
-    // n'atteint alors le daemon. Vérifier le refus fermé jusqu'à l'échéance réelle.
+    // n'atteint alors le daemon. Avancer l'échéance v2 pour vérifier le refus fermé.
+    base!.prepare('UPDATE pda_demandes SET echeance = ? WHERE id = ?').run(Date.now() - 1, uv);
     await expect
       .poll(
         () => {
@@ -234,9 +235,9 @@ test('PDA : passkey, essais, UV, révocation, rotation et coque hors ligne', asy
     await envoyer('Après rotation');
     await telephone.getByRole('button', { name: 'Actualiser' }).click();
     await expect(telephone.getByText(/demandes? illisibles? ignorée/)).toBeVisible();
-    await expect(telephone.getByRole('heading', { name: 'Demande d’essai' })).toHaveCount(0);
+    await expect(telephone.getByRole('heading', { name: "Demande d'essai" })).toHaveCount(0);
     await telephone.reload();
-    await expect(telephone.getByText('Après rotation', { exact: true })).toBeVisible();
+    await expect(telephone.getByRole('heading', { name: "Demande d'essai" })).toBeVisible();
     await telephone.evaluate(async () => {
       await navigator.serviceWorker.ready;
     });
@@ -244,7 +245,7 @@ test('PDA : passkey, essais, UV, révocation, rotation et coque hors ligne', asy
     frontal = undefined;
     await telephone.reload();
     await expect(telephone.getByRole('heading', { name: 'Confirmer', exact: true })).toBeVisible();
-    await expect(telephone.getByText('Après rotation', { exact: true })).toBeVisible();
+    await expect(telephone.getByRole('heading', { name: "Demande d'essai" })).toBeVisible();
   } finally {
     const nettoyages = await Promise.allSettled([
       fermerContextes(browser),

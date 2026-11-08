@@ -1,3 +1,4 @@
+import { useConfirmation } from '../ui/AttenteConfirmation.js';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { GitCommitDetail, GitLogCommit, GitLogResponse } from '../../../src/shared/git.js';
 import { AidApiError } from '../data/api.js';
@@ -191,11 +192,16 @@ export function OngletGit({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [topicId]);
 
+  const confirmation = useConfirmation(async () => {
+    setLog(await fetchGitLog(call, topicId));
+  });
+
   async function lancerAction(actionId: string) {
     setActionErreur(null);
     setActionEnCours(actionId);
     try {
-      await call('POST', `/api/topics/${topicId}/actions/${actionId}`, {});
+      const r = await call('POST', `/api/topics/${topicId}/actions/${actionId}`, {});
+      if (confirmation.recevoir(r)) return;
       setLog(await fetchGitLog(call, topicId));
     } catch (err) {
       setActionErreur(err instanceof AidApiError ? err.message : String(err));
@@ -269,14 +275,16 @@ export function OngletGit({
   if (rows.length === 0) {
     return (
       <>
-        <SituationBanniere
-          live={log.live}
-          base={base}
-          actionEnCours={actionEnCours}
-          erreur={actionErreur}
-          onSynchroniser={() => void lancerAction('topic.sync')}
-          onPousser={() => void lancerAction('git.pousser')}
-        />
+        {confirmation.attente ?? (
+          <SituationBanniere
+            live={log.live}
+            base={base}
+            actionEnCours={actionEnCours}
+            erreur={actionErreur}
+            onSynchroniser={() => void lancerAction('topic.sync')}
+            onPousser={() => void lancerAction('git.pousser')}
+          />
+        )}
         <div className="sujet-grille sujet-grille--seul">
           <section className="vide" data-node="1-3.git.vide">
             <p className="vide-message">Aucun commit depuis la base.</p>
@@ -300,7 +308,7 @@ export function OngletGit({
     return true;
   });
 
-  const banniere = (
+  const banniere = confirmation.attente ?? (
     <SituationBanniere
       live={log.live}
       base={base}

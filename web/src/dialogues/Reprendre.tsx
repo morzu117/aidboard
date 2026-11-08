@@ -229,19 +229,21 @@ export function Reprendre({ cible, onClose }: { cible: AReprendre; onClose: () =
               </select>
             </label>
             {alerte?.nonPousses && (
-              <p className="reprendre-alerte" data-node={n('transfert.non-pousses')}>
+              <div className="reprendre-alerte" data-node={n('transfert.non-pousses')}>
                 {alerte.nonPousses}{' '}
-                <button
-                  className="bouton bouton--contour"
-                  data-node={n('transfert.pousser')}
-                  data-action="git.pousser"
-                  type="button"
-                  disabled={envoi || pousser.enCours}
-                  onClick={() => void pousser.lancer('git.pousser')}
-                >
-                  {pousser.enCours ? 'Poussée…' : 'Pousser d’abord'}
-                </button>
-              </p>
+                {pousser.confirmation.attente ?? (
+                  <button
+                    className="bouton bouton--contour"
+                    data-node={n('transfert.pousser')}
+                    data-action="git.pousser"
+                    type="button"
+                    disabled={envoi || pousser.enCours}
+                    onClick={() => void pousser.lancer('git.pousser')}
+                  >
+                    {pousser.enCours ? 'Poussée…' : 'Pousser d’abord'}
+                  </button>
+                )}
+              </div>
             )}
             {pousser.echec && (
               <p className="message-erreur" role="alert" data-node={n('transfert.pousser-echec')}>

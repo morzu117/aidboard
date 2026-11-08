@@ -91,7 +91,9 @@ function Ecran({ topic }: { topic: Topic }) {
         });
   const merge = useActionSuivie(topic.id);
   // D128 : fini, dans un sens ou dans l'autre, l'écran relit ; refusé, le refus reste sous le bouton
-  const mergeFini = merge.run && merge.run.state !== 'running' ? merge.run.id : null;
+  const mergeFini =
+    merge.confirmation.executee ??
+    (merge.run && merge.run.state !== 'running' ? merge.run.id : null);
   useEffect(() => {
     if (mergeFini) l.relire();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -138,21 +140,22 @@ function Ecran({ topic }: { topic: Topic }) {
               {l.lecturePr.enCours ? 'Lecture de la PR…' : 'Relire la PR'}
             </button>
           )}
-          {!fusionne && (
-            <button
-              className="bouton bouton--primaire"
-              type="button"
-              data-node="livraison.autoriser"
-              disabled={enLecture || blocage !== null || merge.enCours}
-              onClick={() => setOuvertSur(mergeFini)}
-            >
-              {merge.enCours
-                ? 'Fusion en cours…'
-                : tete
-                  ? `Autoriser le merge de ${court(tete)}`
-                  : 'Autoriser le merge'}
-            </button>
-          )}
+          {merge.confirmation.attente ??
+            (!fusionne && (
+              <button
+                className="bouton bouton--primaire"
+                type="button"
+                data-node="livraison.autoriser"
+                disabled={enLecture || blocage !== null || merge.enCours}
+                onClick={() => setOuvertSur(mergeFini)}
+              >
+                {merge.enCours
+                  ? 'Fusion en cours…'
+                  : tete
+                    ? `Autoriser le merge de ${court(tete)}`
+                    : 'Autoriser le merge'}
+              </button>
+            ))}
           {!fusionne && blocage && (
             <p className="livraison-blocage" data-node="livraison.autoriser.blocage">
               Bloqué : {blocage}
@@ -165,18 +168,23 @@ function Ecran({ topic }: { topic: Topic }) {
           )}
         </div>
       </header>
-      {confirmer && l.pr?.headRefOid && l.fraicheur && !enLecture && blocage === null && (
-        <ConfirmerMerge
-          tete={l.pr.headRefOid}
-          base={base}
-          citations={citations(l.fraicheur, compte)}
-          enCours={merge.enCours}
-          onClose={() => setOuvertSur(false)}
-          onConfirmer={(choix) =>
-            void merge.lancer('topic.merge', { ...choix, head: l.pr?.headRefOid })
-          }
-        />
-      )}
+      {!merge.confirmation.id &&
+        confirmer &&
+        l.pr?.headRefOid &&
+        l.fraicheur &&
+        !enLecture &&
+        blocage === null && (
+          <ConfirmerMerge
+            tete={l.pr.headRefOid}
+            base={base}
+            citations={citations(l.fraicheur, compte)}
+            enCours={merge.enCours}
+            onClose={() => setOuvertSur(false)}
+            onConfirmer={(choix) =>
+              void merge.lancer('topic.merge', { ...choix, head: l.pr?.headRefOid })
+            }
+          />
+        )}
 
       {topic.worktreeMissing && (
         <Bandeau ton="rouge" constat="Worktree introuvable" node="livraison.sans-worktree">
@@ -250,11 +258,12 @@ function BandeauTete({
   onPousse: () => void;
 }) {
   const pousser = useActionSuivie(topicId);
-  const fini = pousser.reussi ? pousser.run?.id : undefined;
+  const fini = pousser.confirmation.executee ?? (pousser.reussi ? pousser.run?.id : undefined);
   useEffect(() => {
     if (fini) onPousse();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fini]);
+  if (pousser.confirmation.attente) return pousser.confirmation.attente;
   if (!pr?.headRefOid || !git?.head || pr.headRefOid === git.head) return null;
   return (
     <Bandeau

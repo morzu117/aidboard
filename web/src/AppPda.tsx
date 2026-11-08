@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { empreintePda, encoderBase64url } from '../../src/shared/pda.js';
+import { type CorpsDemandeV2, empreintePda, encoderBase64url } from '../../src/shared/pda.js';
 import {
   chargerCodePda,
   fabriquerReponse,
@@ -212,18 +212,22 @@ function Demande({
   repondre: (d: DemandePda, valeur: 'oui' | 'non', numero: string) => Promise<void>;
 }) {
   const [numero, setNumero] = useState('');
+  const demande = entree.demande;
   return (
     <section>
-      <h2>Demande d’essai</h2>
-      <p>{entree.demande.sujet}</p>
+      <h2>{demande.v === 2 ? demande.resume : 'Demande d’essai'}</h2>
+      {demande.v === 1 ? <p>{demande.sujet}</p> : <Parametres demande={demande} />}
       <strong className="pda-numero">{entree.demande.numero}</strong>
       <label>
-        Retape le numéro
+        {demande.numero === null ? 'Retape le numéro affiché sur le Mac' : 'Retape le numéro'}
         <input inputMode="numeric" value={numero} onChange={(e) => setNumero(e.target.value)} />
       </label>
       <div className="appareil-actions">
         <button
-          disabled={occupe || numero !== entree.demande.numero}
+          disabled={
+            occupe ||
+            (demande.numero === null ? !/^\d{4}$/.test(numero) : numero !== demande.numero)
+          }
           onClick={() => void repondre(entree, 'oui', numero)}
         >
           Confirmer
@@ -243,4 +247,59 @@ export function LienPda() {
       .catch(() => undefined);
   }, []);
   return present ? <a href="/pda">Confirmations</a> : null;
+}
+
+function Parametres({ demande: d }: { demande: CorpsDemandeV2 }) {
+  let lignes: string[] = [];
+  switch (d.action) {
+    case 'merge':
+      lignes = [
+        `Dépôt : ${d.params.depot}`,
+        `PR : ${d.params.pr}`,
+        `Tête : ${d.params.tete.slice(0, 7)}`,
+        `Stratégie : ${d.params.strategie}`,
+        `Branche supprimée : ${d.params.supprimerBranche ? 'oui' : 'non'}`,
+        `Nettoyage ensuite : ${d.params.nettoyer ? 'oui' : 'non'}`,
+      ];
+      break;
+    case 'push':
+      lignes = [
+        `Branche : ${d.params.branche}`,
+        `Tête : ${d.params.tete.slice(0, 7)}`,
+        `Distante : ${d.params.distante?.slice(0, 7) ?? 'nouvelle branche'}`,
+      ];
+      break;
+    case 'nettoyage':
+      lignes = [
+        `Branche : ${d.params.branche}`,
+        `Tête : ${d.params.tete?.slice(0, 7) ?? 'sans branche'}`,
+        ...(d.params.nonFusionnes
+          ? [`Commits non fusionnés perdus : ${d.params.nonFusionnes}`]
+          : []),
+        `Modifications locales : ${d.params.sale === 'stash' ? 'mises de côté' : d.params.sale === 'force' ? 'perdues' : 'refusées'}`,
+      ];
+      break;
+    case 'projet.retirer':
+      lignes = [`Racine : ${d.params.racine}`];
+      break;
+    case 'appairage':
+      lignes = [
+        `Nom : ${d.params.nom}`,
+        ...(d.params.sansIdentite ? ['Sans identité Tailscale'] : []),
+      ];
+      break;
+    case 'pda.activer':
+      lignes = [`Nom : ${d.params.nom}`, `Empreinte : ${d.params.empreinte}`];
+      break;
+    case 'desarmement':
+      lignes = ['Les actions ne demanderont plus de confirmation'];
+      break;
+  }
+  return (
+    <>
+      {lignes.map((ligne) => (
+        <p key={ligne}>{ligne}</p>
+      ))}
+    </>
+  );
 }
