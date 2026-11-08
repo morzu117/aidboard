@@ -1,3 +1,4 @@
+import { LienPda } from '../AppPda.js';
 import { useAid } from '../data/useAidState.js';
 import { Decision, Tour } from '../ui/ActionsAppareil.js';
 
@@ -15,6 +16,7 @@ export function AccueilAppareil() {
   return (
     <main className="page appareil-accueil" data-node="appareil.accueil">
       <h1 className="titre-ecran">À traiter</h1>
+      <LienPda />
       {decisions.length === 0 && (
         <div data-node="appareil.accueil.vide">
           <h2>{"Rien n'attend ta réponse"}</h2>

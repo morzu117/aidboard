@@ -3,6 +3,7 @@ import '@fontsource/inter/500.css';
 import '@fontsource/inter/600.css';
 import { createRoot } from 'react-dom/client';
 import { BrowserRouter } from 'react-router';
+import { AppPda } from './AppPda.js';
 import { App } from './App.js';
 import { AppAppareil } from './AppAppareil.js';
 import { detecterMode } from './data/appareil.js';
@@ -24,8 +25,11 @@ import './styles/appareil.css';
 if ('serviceWorker' in navigator) void navigator.serviceWorker.register('/sw.js');
 
 // chantier 31 (D180) : le port des appareils répond à /api/appareils/moi ; le Mac, non
-void detecterMode().then((mode) =>
-  createRoot(document.getElementById('root')!).render(
-    <BrowserRouter>{mode.kind === 'mac' ? <App /> : <AppAppareil mode={mode} />}</BrowserRouter>,
-  ),
-);
+if (location.pathname.startsWith('/pda')) {
+  createRoot(document.getElementById('root')!).render(<AppPda />);
+} else
+  void detecterMode().then((mode) =>
+    createRoot(document.getElementById('root')!).render(
+      <BrowserRouter>{mode.kind === 'mac' ? <App /> : <AppAppareil mode={mode} />}</BrowserRouter>,
+    ),
+  );

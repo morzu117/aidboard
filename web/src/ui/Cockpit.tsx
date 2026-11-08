@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import type { Appareil, EtatModeHostDaemon, VueDemande } from '../../../src/shared/host.js';
 import { type ModeHostEtat, useModeHost } from '../data/host.js';
 import { depuis } from './depuis.js';
+import { PanneauPda } from './PanneauPda.js';
 import { Qr } from './Qr.js';
 
 // Chantier 31 (D172, D176, D177, D181) : Machines › Ton cockpit. Le mode host, l'ajout d'un
@@ -280,6 +281,7 @@ export function Cockpit() {
           </p>
         </div>
       )}
+      {e?.pda && <PanneauPda key={JSON.stringify(e.pda)} etat={e.pda} />}
       {h.erreur && (
         <p className="message-erreur" role="alert" data-node="host.erreur">
           {h.erreur}

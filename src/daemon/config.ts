@@ -1,3 +1,4 @@
+import { isIP } from 'node:net';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { parse, parseDocument } from 'yaml';
 import type { AidPaths } from './paths.js';
@@ -33,6 +34,8 @@ export interface ArtefactsConfig {
  * reste l'adresse d'écoute, toujours 127.0.0.1 : le mode host n'y touche pas.
  */
 export interface ModeHostConfig {
+  relais: string | null;
+  pda: boolean;
   code: boolean;
   push: boolean;
   actif: boolean;
@@ -101,7 +104,7 @@ export const DEFAULT_CONFIG: AidConfig = {
     tailscale: { manage: false, bin: DEFAULT_TAILSCALE_BIN },
   },
   artefacts: { port: null },
-  modeHost: { actif: false, port: null, push: false, code: false },
+  modeHost: { actif: false, port: null, push: false, code: false, pda: false, relais: null },
 };
 
 export class ConfigError extends Error {}
@@ -198,7 +201,9 @@ export function parseConfig(text: string): AidConfig {
   }
   if (doc.modeHost !== undefined) {
     if (!isRecord(doc.modeHost)) throw new ConfigError('config.yaml : modeHost doit être un objet');
-    rejectUnknown(doc.modeHost, ['actif', 'port', 'push', 'code'], 'modeHost.');
+    rejectUnknown(doc.modeHost, ['actif', 'port', 'push', 'code', 'pda', 'relais'], 'modeHost.');
+    if (doc.modeHost.relais !== undefined) cfg.modeHost.relais = validerRelais(doc.modeHost.relais);
+    if (doc.modeHost.pda !== undefined) cfg.modeHost.pda = bool(doc.modeHost.pda, 'modeHost.pda');
     if (doc.modeHost.code !== undefined)
       cfg.modeHost.code = bool(doc.modeHost.code, 'modeHost.code');
     if (doc.modeHost.push !== undefined)
@@ -463,4 +468,47 @@ export function portArtefacts(config: AidConfig): number {
 export function portAppareils(config: AidConfig): number {
   if (config.modeHost.port !== null) return config.modeHost.port;
   return config.port === 0 ? 0 : config.port + 20;
+}
+
+export function ecrireModeHostPda(p: AidPaths, actif: boolean, relais?: string | null): void {
+  const doc = parseDocument(existsSync(p.config) ? readFileSync(p.config, 'utf8') : '');
+  if (doc.errors.length > 0) throw new ConfigError("config.yaml illisible : rien n'est écrit");
+  try {
+    doc.setIn(['modeHost', 'pda'], actif);
+    if (relais !== undefined) doc.setIn(['modeHost', 'relais'], validerRelais(relais));
+  } catch {
+    throw new ConfigError('config.yaml : modeHost doit être un objet');
+  }
+  const texte = doc.toString();
+  parseConfig(texte);
+  writeFileSync(p.config, texte);
+}
+
+/** L'unique destination de sortie PDA, validée aussi avant toute écriture. */
+export function validerRelais(valeur: unknown): string | null {
+  if (valeur === null) return null;
+  try {
+    if (typeof valeur !== 'string' || valeur.trim() !== valeur) throw new Error();
+    const url = new URL(valeur);
+    if (
+      url.protocol !== 'https:' ||
+      url.username ||
+      url.password ||
+      (url.port !== '' && url.port !== '443') ||
+      url.pathname !== '/' ||
+      url.search ||
+      url.hash ||
+      valeur.includes('?') ||
+      valeur.includes('#') ||
+      url.hostname.endsWith('.') ||
+      isIP(url.hostname.replace(/^\[|\]$/g, '')) !== 0 ||
+      !/^https:\/\/[^\s/@?#\\]+\/?$/i.test(valeur)
+    )
+      throw new Error();
+    return url.origin;
+  } catch {
+    throw new ConfigError(
+      'modeHost.relais : origine HTTPS (port 443), sans chemin, IP ni identifiants requise',
+    );
+  }
 }

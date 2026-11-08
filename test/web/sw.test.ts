@@ -141,3 +141,30 @@ test('D209 : le diff échappe au cache du service worker', () => {
   expect(h.respondWith).not.toHaveBeenCalled();
   expect(h.put).not.toHaveBeenCalled();
 });
+
+test('43.7 : l’activation supprime tous les anciens caches avant de prendre les clients', async () => {
+  let activer!: (event: { waitUntil: (attente: Promise<unknown>) => void }) => void;
+  const noms = new Set(['aid-shell', 'aid-shell-v1', 'aid-shell-v2', 'autre-cache']);
+  const supprimer = vi.fn(async (nom: string) => noms.delete(nom));
+  const claim = vi.fn(async () => {
+    expect([...noms]).toEqual(['aid-shell-v2']);
+  });
+  runInNewContext(readFileSync('web/public/sw.js', 'utf8'), {
+    self: {
+      addEventListener: (nom: string, rappel: typeof activer) => {
+        if (nom === 'activate') activer = rappel;
+      },
+      clients: { claim },
+    },
+    caches: { keys: async () => [...noms], delete: supprimer },
+  });
+  const waitUntil = vi.fn();
+  activer({ waitUntil });
+  await waitUntil.mock.calls[0]![0];
+  expect(supprimer.mock.calls.map(([nom]) => nom)).toEqual([
+    'aid-shell',
+    'aid-shell-v1',
+    'autre-cache',
+  ]);
+  expect(claim).toHaveBeenCalledOnce();
+});

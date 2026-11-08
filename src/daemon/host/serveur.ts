@@ -1,9 +1,16 @@
+import type { creerFournisseurClePda } from '../pda/cle.js';
 import { diffPourAppareil } from './diff.js';
 import {
   abonnementsActifs,
   CorpsAbonnementPush,
   cleAbonnementValide,
 } from '../push/abonnements.js';
+import {
+  CorpsEnregistrementPda,
+  RegistrePda,
+  RefusPda,
+  type EnregistrementPda,
+} from '../pda/registre.js';
 import { verifierEndpoint } from '../push/envoi.js';
 import { creerFournisseurCles } from '../push/vapid.js';
 import type { livraisonPourAppareil } from './livraison.js';
@@ -79,16 +86,19 @@ export function masquerAppairage(url: string | undefined): string {
   return (url ?? '').replace(/\/appairage\/[^/?#]+/g, '/appairage/***').replace(/[?#].*$/, '');
 }
 
-export function cspAppareils(nom: string): string {
+export function cspAppareils(nom: string, relais?: string | null): string {
   return [
-    "default-src 'self'",
-    "manifest-src 'self'",
-    `connect-src 'self' wss://${nom}`,
+    "default-src 'none'",
+    "script-src 'self'",
+    `connect-src 'self' wss://${nom}${relais ? ` ${relais}` : ''}`,
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data:",
     "font-src 'self'",
+    "manifest-src 'self'",
+    "worker-src 'self'",
     "form-action 'none'",
     "base-uri 'none'",
+    "object-src 'none'",
     "frame-ancestors 'none'",
   ].join('; ');
 }
@@ -109,6 +119,9 @@ export interface OptionsServeurAppareils {
   /** D175 : l'état complet, que masque.ts réduit ; absent = 404 (tests du port seul) */
   etat?: () => Promise<StateSnapshot>;
   livraison?: (topicId: string) => ReturnType<typeof livraisonPourAppareil>;
+  pda?: { db: Db; actif: () => boolean };
+  clePda?: ReturnType<typeof creerFournisseurClePda>;
+  relaisPda?: () => string | null;
   code?: { db: Db; actif: () => boolean };
   tours?: { db: Db; store: EventStore };
   push?: {
@@ -236,7 +249,11 @@ export async function ouvrirServeurAppareils(
   });
   app.addHook('onSend', async (req, reply) => {
     const nom = opts.nom();
-    if (nom !== null) reply.header('Content-Security-Policy', cspAppareils(nom));
+    if (nom !== null)
+      reply.header(
+        'Content-Security-Policy',
+        cspAppareils(nom, opts.pda?.actif() ? opts.relaisPda?.() : null),
+      );
     reply.header('X-Content-Type-Options', 'nosniff');
     reply.header('Referrer-Policy', 'no-referrer');
     const p = chemin(req);
@@ -248,6 +265,16 @@ export async function ouvrirServeurAppareils(
   });
   app.addHook('onResponse', async (req, reply) => {
     if (reply.statusCode >= 400) req.log.warn({ req, statusCode: reply.statusCode }, 'refus');
+  });
+
+  app.get('/pda-cle.js', async (_req, reply) => {
+    if (!opts.clePda) return reply.code(404).send();
+    return reply
+      .type('text/javascript; charset=utf-8')
+      .header('Cache-Control', 'no-cache')
+      .send(
+        `export const CLE_DAEMON = "${opts.clePda.clePubliqueRaw()}"; export const RELAIS = ${JSON.stringify(opts.pda?.actif() ? (opts.relaisPda?.() ?? null) : null)};`,
+      );
   });
 
   // D174, D180 : qui suis-je. Le mode appareil de l'interface part de cette réponse.
@@ -263,6 +290,30 @@ export async function ouvrirServeurAppareils(
       push: { actifSurLeMac: opts.push?.actif() ?? false, abonne },
     };
   });
+
+  app.post(
+    '/api/appareils/moi/pda',
+    {
+      bodyLimit: 8192,
+      onRequest: async (_req, reply) => {
+        if (!opts.pda?.actif()) return reply.code(403).send({ raison: 'pda_coupe' });
+      },
+      schema: { body: CorpsEnregistrementPda },
+    },
+    async (req, reply) => {
+      try {
+        return await new RegistrePda(
+          opts.pda!.db,
+          (type, donnees) => req.log.info(donnees, type),
+          now,
+        ).enregistrer(req.appareil!.id, req.body as EnregistrementPda);
+      } catch (err) {
+        if (err instanceof RefusPda)
+          return reply.code(err.raison === 'connu' ? 409 : 400).send({ raison: err.raison });
+        throw err;
+      }
+    },
+  );
 
   const gardePush = async (_req: FastifyRequest, reply: FastifyReply) => {
     if (!opts.push?.actif()) return reply.code(403).send({ raison: 'push_coupe' });
