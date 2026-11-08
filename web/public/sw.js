@@ -2,17 +2,28 @@
 // ce soit (c'est lui qui sert le HTML/JS — sans lui, le navigateur affiche sa propre page
 // d'erreur avant que React n'ait la moindre chance de charger).
 //
-// Réseau toujours préféré, cache en secours seulement sur échec : pas de manifest de précache, pas
-// de nom de cache versionné à invalider — dès que le réseau répond, le cache se met à jour avec la
-// réponse fraîche tout seul.
-const CACHE = 'aid-shell';
+// Réseau préféré, cache en secours ; la clé publique rejoint la coque dès l’installation.
+const CACHE = 'aid-shell-v2';
+const COQUE = ['/pda-cle.js'];
 
 self.addEventListener('install', (event) => {
-  event.waitUntil(self.skipWaiting());
+  event.waitUntil(
+    caches
+      .open(CACHE)
+      .then((cache) => cache.addAll(COQUE))
+      .then(() => self.skipWaiting()),
+  );
 });
 
 self.addEventListener('activate', (event) => {
-  event.waitUntil(self.clients.claim());
+  event.waitUntil(
+    caches
+      .keys()
+      .then((noms) =>
+        Promise.all(noms.filter((nom) => nom !== CACHE).map((nom) => caches.delete(nom))),
+      )
+      .then(() => self.clients.claim()),
+  );
 });
 
 self.addEventListener('fetch', (event) => {

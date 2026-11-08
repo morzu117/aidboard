@@ -209,6 +209,7 @@ Ce document.
 - `GET /pda-cle.js` est servi par le daemon et mis en cache par le service worker.
 - La CSP du port des appareils passe à `script-src 'self'`, avec `connect-src` réduit à l'hôte du relais.
 - Tests : l'en-tête CSP exact, avec et sans relais configuré ; aucun script inline dans `index.html` ; `sw.js` met `pda-cle.js` en cache.
+- *Révision 43.7.* Le service worker garde sa stratégie, le réseau d'abord et le cache en secours. Il met désormais `/pda-cle.js` en cache dès l'installation, sous `aid-shell-v2`, et supprime les anciens caches à l'activation. `validerRelais` renvoie `url.origin`, qui est la forme écrite dans la configuration et dans la CSP. Avec la nouvelle CSP, l'e2e reste vert (115). Gate 2300.
 
 ### 43.8 L'app : l'enregistrement et l'invite (D213, D214, D217, D220)
 - Dans l'écran « Appareils PDA », sur le téléphone, « Enregistrer cet appareil » crée la passkey et la clé de relais, puis affiche l'empreinte courte.

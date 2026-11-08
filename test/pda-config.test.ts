@@ -1,5 +1,6 @@
 import { afterEach, expect, test, vi } from 'vitest';
 import { parseConfig, validerRelais } from '../src/daemon/config.js';
+import { cspAppareils } from '../src/daemon/host/serveur.js';
 import { startTestDaemon } from './helpers/daemon.js';
 
 const nettoyages: Array<() => unknown | Promise<unknown>> = [];
@@ -12,10 +13,11 @@ test('relais : null par défaut et une origine HTTPS stricte au chargement', () 
     null,
     'https://example.com',
     'https://example.com/',
+    'https://EXAMPLE.COM',
     'https://example.com:443',
   ]) {
     expect(parseConfig(`modeHost:\n  relais: ${JSON.stringify(relais)}`).modeHost.relais).toBe(
-      relais,
+      relais === null ? null : 'https://example.com',
     );
   }
 });
@@ -118,4 +120,14 @@ test('un dépôt refusé par le relais donne 502 et expire la demande', async ()
   expect(reponse.statusCode).toBe(502);
   expect(reponse.json()).toEqual({ error: 'relais injoignable' });
   expect(t.db.prepare('SELECT etat FROM pda_demandes').all()).toEqual([{ etat: 'expiree' }]);
+});
+
+test('43.7 : les variantes du relais donnent la même origine dans la CSP', () => {
+  for (const valeur of ['https://example.com/', 'https://EXAMPLE.COM', 'https://example.com:443']) {
+    const relais = validerRelais(valeur);
+    expect(relais).toBe('https://example.com');
+    expect(cspAppareils('aid-e2e.ts.net', relais).split('; ')[2]).toBe(
+      "connect-src 'self' wss://aid-e2e.ts.net https://example.com",
+    );
+  }
 });

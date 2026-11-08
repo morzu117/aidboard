@@ -505,7 +505,7 @@ export function validerRelais(valeur: unknown): string | null {
       !/^https:\/\/[^\s/@?#\\]+\/?$/i.test(valeur)
     )
       throw new Error();
-    return valeur;
+    return url.origin;
   } catch {
     throw new ConfigError(
       'modeHost.relais : origine HTTPS (port 443), sans chemin, IP ni identifiants requise',

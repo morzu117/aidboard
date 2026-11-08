@@ -269,6 +269,7 @@ export async function startDaemon(
     // chantier 31 (D171, D172) : le port des appareils, ouvert après le principal et celui des
     // artefacts, dont il refuse les ports ; seulement si `modeHost.actif`
     const webRoot = opts.webRoot === undefined ? defaultWebRoot() : opts.webRoot;
+    const fournisseurPda = creerFournisseurClePda(paths.home);
     const modeHost = new ModeHost({
       config,
       port: () => portAppareils(config),
@@ -279,6 +280,7 @@ export async function startDaemon(
       ],
       livraison: (id) => livraisonPourAppareil(opened, memory, id),
       pda: { db: opened, actif: () => config.modeHost.pda },
+      clePda: fournisseurPda,
       code: { db: opened, actif: () => config.modeHost.code },
       tours: { db: opened, store },
       push: { db: opened, dossierEtat: paths.home, actif: () => config.modeHost.push },
@@ -295,7 +297,6 @@ export async function startDaemon(
       logger: opts.logger,
       log,
     });
-    const fournisseurPda = creerFournisseurClePda(paths.home);
     let filePda: FilePda | null = null;
     let relaisPda: string | null = null;
     let signalerPda = () => {};
