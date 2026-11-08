@@ -171,6 +171,7 @@ Le refus fermé de D225 bloquerait tout merge sur une installation qui n'a jamai
 ### 34.4 L'attendu dans les scripts git (D224)
 
 `topic-merge.sh` (tête obligatoire), `topic-push.sh` (`--force-with-lease`, tête locale), `topic-cleanup.sh` (tête de la branche). Les variables ne sont exigées que si elles sont passées, et les chemins actuels sans confirmation passent la tête courante. Tests de scripts avec un dépôt local et un dépôt « distant » nu : une tête qui a bougé est refusée.
+- *Révision 34.4.* Le nettoyage pose le bail (`update-ref -d` avec la tête) **avant** tout retrait : son refus laisse la branche et le worktree intacts. Si le retrait du worktree échoue ensuite, celui-ci reste en HEAD détachée sur la tête, et ses commits restent récupérables. Une branche attendue absente se vérifie par `update-ref --stdin` avec `verify <ref> 0…0`. Les routes `git.pousser` et `topic.cleanup` passent déjà les têtes courantes. Lignes existantes modifiées : 2. Gate 2326.
 
 ### 34.5 La porte et l'exécution (D225, D228, D230)
 

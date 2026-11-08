@@ -1,3 +1,5 @@
+import * as actions from '../src/daemon/actions/service.js';
+import { vi } from 'vitest';
 import { spawn } from 'node:child_process';
 import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -83,13 +85,21 @@ test('une confirmation périmée (un commit de plus depuis) est refusée', async
 });
 
 test('une branche identique à origin/main : supprimée sans confirmation, sujet archivé', async () => {
+  const appel = vi.spyOn(actions, 'startAction');
   c = await setupWorkspace();
   const { wt, branch, topicId } = await makeTopic(c);
+  const tete = sh(wt, 'rev-parse', 'HEAD');
   const fin = await cleanup(topicId);
   expect(fin.data).toMatchObject({ outcome: 'succeeded', result: { removed: true } });
   expect(existsSync(wt)).toBe(false);
   expect(hasBranch(branch)).toBe(false);
   expect(topicState(topicId)).toBe('archived');
+  expect(
+    appel.mock.calls.find(([, spec]) => spec.action === 'topic.cleanup')?.[1].env,
+  ).toMatchObject({
+    AID_CLEANUP_TETE: tete,
+  });
+  appel.mockRestore();
 });
 
 test('un agent vivant : 409, rien n’est lancé', async () => {

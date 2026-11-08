@@ -552,6 +552,10 @@ export function registerTopicRoutes(app: FastifyInstance, deps: TopicRouteDeps):
       if (!live.aheadBehind || live.aheadBehind.ahead === 0) {
         throw new AidHttpError(422, 'rien à pousser : pas d’avance sur origin/' + topic.base);
       }
+      const [tete, distante] = await Promise.all([
+        git(ws.root, ['rev-parse', '--verify', '--quiet', `refs/heads/${topic.branch}`]),
+        git(ws.root, ['rev-parse', '--verify', '--quiet', `refs/remotes/origin/${topic.branch}`]),
+      ]);
       const { actionId: runId } = startAction(deps.actions, {
         workspaceId: ws.id,
         topicId: id,
@@ -559,7 +563,11 @@ export function registerTopicRoutes(app: FastifyInstance, deps: TopicRouteDeps):
         script: join(scripts, 'topic-push.sh'),
         cwd: topic.worktree,
         timeoutMs: TWO_MIN,
-        env: scriptEnv(process.env, deps.config.env.strip, { AID_BRANCH: topic.branch }),
+        env: scriptEnv(process.env, deps.config.env.strip, {
+          AID_BRANCH: topic.branch,
+          AID_PUSH_TETE: tete.ok ? tete.stdout : '',
+          AID_PUSH_DISTANTE: distante.ok ? distante.stdout : '',
+        }),
       });
       return reply.code(202).send({ actionId: runId });
     }
@@ -789,6 +797,9 @@ export function registerTopicRoutes(app: FastifyInstance, deps: TopicRouteDeps):
       // Chantier 27 (D123) : la tête affichée, en entier ; sans elle, le merge d'avant
       if (mergeBody.head !== undefined && !/^[0-9a-f]{40}$/.test(mergeBody.head))
         throw new AidHttpError(422, 'tête invalide : 40 caractères hexadécimaux');
+      const tete = mergeBody.cleanupAfter
+        ? await git(ws.root, ['rev-parse', '--verify', '--quiet', `refs/heads/${topic.branch}`])
+        : undefined;
       const { actionId: runId } = startAction(deps.actions, {
         workspaceId: ws.id,
         topicId: id,
@@ -824,6 +835,7 @@ export function registerTopicRoutes(app: FastifyInstance, deps: TopicRouteDeps):
                 AID_TOPIC: id,
                 AID_SLUG: topic.worktree.split('/').at(-1) ?? '',
                 AID_BRANCH: topic.branch,
+                AID_CLEANUP_TETE: tete?.ok ? tete.stdout : '',
                 AID_BASE: topic.base,
                 AID_WORKTREE: topic.worktree,
                 ...(deps.engine.bin && { AID_CODEGRAPH_BIN: deps.engine.bin }),
@@ -898,6 +910,12 @@ export function registerTopicRoutes(app: FastifyInstance, deps: TopicRouteDeps):
     if (body.dirtyAction === 'force' && body.confirmed !== true) {
       throw new AidHttpError(422, 'suppression forcée : confirmation requise');
     }
+    const tete = await git(ws.root, [
+      'rev-parse',
+      '--verify',
+      '--quiet',
+      `refs/heads/${topic.branch}`,
+    ]);
     const { actionId: runId } = startAction(deps.actions, {
       workspaceId: ws.id,
       topicId: id,
@@ -912,6 +930,7 @@ export function registerTopicRoutes(app: FastifyInstance, deps: TopicRouteDeps):
         AID_BRANCH: topic.branch,
         AID_BASE: topic.base,
         AID_REMOTE: ws.remote ?? '',
+        AID_CLEANUP_TETE: tete.ok ? tete.stdout : '',
         AID_WORKTREE: topic.worktree,
         ...(deps.engine.bin && { AID_CODEGRAPH_BIN: deps.engine.bin }),
         ...(body.confirmUnmerged !== undefined && {
