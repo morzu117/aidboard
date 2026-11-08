@@ -402,16 +402,27 @@ test('D176, D180 : le fragment quitte l’adresse, la réclamation attend un ges
     url: '/appairage/reclamer',
     body: { code: 'code-synthetique', nom: 'Mon iPhone' },
   });
-  await act(async () => {
-    vi.advanceTimersByTime(ATTENTE_MS);
-  });
-  await waitFor(() => expect(h.calls.filter((c) => c.url === '/appairage/dm_1')).toHaveLength(1));
+  // L'effet peut installer l'intervalle après l'affichage du code : avancer à chaque essai.
+  await waitFor(
+    async () => {
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(ATTENTE_MS);
+      });
+      expect(h.calls.filter((c) => c.url === '/appairage/dm_1')).toHaveLength(1);
+    },
+    { timeout: 5000 },
+  );
   expect(h.recharger).not.toHaveBeenCalled();
   etatDemande = 'approuve';
-  await act(async () => {
-    vi.advanceTimersByTime(ATTENTE_MS);
-  });
-  await waitFor(() => expect(h.recharger).toHaveBeenCalledTimes(1));
+  await waitFor(
+    async () => {
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(ATTENTE_MS);
+      });
+      expect(h.recharger).toHaveBeenCalledTimes(1);
+    },
+    { timeout: 5000 },
+  );
   expect(node('appairer.approuve')).not.toBeNull();
 });
 
