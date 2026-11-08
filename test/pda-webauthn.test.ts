@@ -90,7 +90,7 @@ it('refuse chaque étape dans l’ordre', async () => {
     [await assertion('oui', { rpId: 'autre.example.com' }), ctx, 'rpid'],
     [await assertion('oui', { flags: 1 }), ctx, 'presence'],
     [await assertion('oui', { flags: 4 }), ctx, 'presence'],
-    [{ ...valide, numero: '9999' }, ctx, 'numero'],
+    [{ ...valide, numero: '9999' }, ctx, 'defi'],
     [{ ...(await assertion('non')), valeur: 'oui', numero: '1234' }, ctx, 'defi'],
     [{ ...valide, signature: signature.toString('base64url') }, ctx, 'signature'],
     [valide, { ...ctx, maintenant: 1001 }, 'echeance'],
@@ -127,4 +127,11 @@ it('normalise le numéro du défi non en chaîne vide', async () => {
       .update(jsonCanonique({ ...reponse, numero: '' }))
       .digest(),
   );
+});
+
+it('reporte le faux numéro signé après les autres vérifications', async () => {
+  const entree = await assertion();
+  expect(
+    await verifierAssertion(entree, { ...ctx, demande: { ...ctx.demande, numero: '9999' } }),
+  ).toEqual({ ok: false, raison: 'numero', signee: true });
 });

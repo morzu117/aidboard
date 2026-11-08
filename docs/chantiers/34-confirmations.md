@@ -205,6 +205,7 @@ Les deux autres écarts avec la V4 sont tranchés par Julien en faveur du 34 :
 ### 34.6b Le faux numéro annule (D234)
 
 Dans `verifierAssertion` et `FilePda` : en cas de numéro faux, la vérification continue jusqu'à la signature, puis la demande est annulée si la réponse est signée. Tests : une réponse signée avec un faux numéro annule la demande ; une réponse non signée, ou signée par un appareil révoqué, avec un faux numéro ne l'annule pas.
+- *Révision 34.6b.* `verifierAssertion` note un faux numéro, puis vérifie quand même le défi (avec le numéro saisi), la signature et l'échéance. Il ne renvoie `numero` avec `signee: true` qu'après ces vérifications. `FilePda` ne l'annule que si l'appareil est encore actif et l'échéance pas passée, et seulement si la demande est encore ouverte. Elle journalise alors `pda.numero_faux` sans le numéro et retire la demande du relais. Lignes existantes modifiées : 20.
 
 ### 34.7 L'app du téléphone (D232)
 

@@ -236,9 +236,11 @@ it('vérifie le numéro externe quand le corps ne le contient pas', async () => 
     ok: true,
     valeur: 'oui',
   });
-  expect(
-    await verifierAssertion({ ...entree, numero: '9999' }, { ...ctx, numeroAttendu: '0123' }),
-  ).toEqual({ ok: false, raison: 'numero' });
+  expect(await verifierAssertion(entree, { ...ctx, numeroAttendu: '9999' })).toEqual({
+    ok: false,
+    raison: 'numero',
+    signee: true,
+  });
   expect(await verifierAssertion(entree, ctx)).toEqual({ ok: false, raison: 'numero' });
 });
 

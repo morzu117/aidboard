@@ -177,14 +177,27 @@ async function preparer(action: ActionGit = 'push', arme = true) {
     valeur: 'oui' | 'non' = 'oui',
     doubler = false,
     fauxNumero = false,
+    signatureFausse = false,
   ) {
     const numero = ligne(id).numero_mac;
+    const numeroInitial = ligne(id).numero;
+    if (numero === null && fauxNumero)
+      t.db
+        .prepare('UPDATE pda_demandes SET numero = ? WHERE id = ?')
+        .run(numeroInitial === '0000' ? '0001' : '0000', id);
     // L'outil du 43 lit numero : son adaptation reste locale à cette fausse passkey.
     if (numero !== null)
       t.db
         .prepare('UPDATE pda_demandes SET numero = ? WHERE id = ?')
         .run(fauxNumero ? (numero === '0000' ? '0001' : '0000') : numero, id);
     const corps = await assertionPda(t.db, id, appareil, valeur);
+    if (signatureFausse) {
+      const signature = Buffer.from(corps.signature, 'base64url');
+      signature[signature.length - 1]! ^= 1;
+      corps.signature = signature.toString('base64url');
+    }
+    if (numero === null && fauxNumero)
+      t.db.prepare('UPDATE pda_demandes SET numero = ? WHERE id = ?').run(numeroInitial, id);
     if (numero !== null) t.db.prepare("UPDATE pda_demandes SET numero = '' WHERE id = ?").run(id);
     const reponse = {
       id,
@@ -317,7 +330,7 @@ for (const action of ['merge', 'push', 'nettoyage'] as const) {
       });
   });
 }
-test('numéro toujours : corps signé, journaux, événements et liste sans numéro ; cookie seul ; faux numéro refusé', async () => {
+test('numéro toujours : corps signé, journaux, événements et liste sans numéro ; cookie seul ; faux numéro signé annulé', async () => {
   const t = await preparer('reglage');
   const evenements: unknown[] = [];
   t.store.on('ephemeral', (e) => evenements.push(e));
@@ -343,13 +356,14 @@ test('numéro toujours : corps signé, journaux, événements et liste sans num�
   expect(Object.keys(liste.json().ouvertes[0]).sort()).toEqual(
     ['id', 'action', 'classe', 'resume', 'etat', 'resultat', 'raison', 'cree_a', 'echeance'].sort(),
   );
-  await t.repondre(id, 'oui', false, true);
-  expect(t.ligne(id).etat).toBe('ouverte');
+  await t.repondre(id, 'oui', true, true);
+  expect(t.ligne(id)).toMatchObject({ etat: 'expiree', resultat: 'annulee', raison: 'numero' });
   expect(t.reglage.exige('merge')).toBe(true);
-  expect(t.journal).toHaveBeenCalledWith('pda.refus', {
-    appareil: t.appareil.id,
-    raison: 'numero',
-  });
+  expect(t.journal).toHaveBeenCalledWith('pda.numero_faux', { id, appareil: t.appareil.id });
+  expect(t.relais.retirer).toHaveBeenCalledWith(id);
+  expect(runScript).not.toHaveBeenCalled();
+  expect(t.journal).toHaveBeenCalledWith('pda.tardive', { id });
+  expect(t.journal.mock.calls.filter(([type]) => type === 'pda.numero_faux')).toHaveLength(1);
   expect(
     jsonCanonique([
       t.logs,
@@ -360,8 +374,9 @@ test('numéro toujours : corps signé, journaux, événements et liste sans num�
       corps,
     ]),
   ).not.toContain(JSON.stringify(numero));
-  await t.repondre(id);
-  expect(t.ligne(id).resultat).toBe('executee');
+  const suivant = (await t.demander()).json<{ confirmation: string }>().confirmation;
+  await t.repondre(suivant);
+  expect(t.ligne(suivant).resultat).toBe('executee');
   expect(
     (await t.app.inject({ url: `/api/confirmations/${id}/numero`, headers: t.cookies })).statusCode,
   ).toBe(404);
@@ -564,3 +579,27 @@ test('récentes : une ancienne demande annulée maintenant reste en tête des r�
   expect(liste.recentes).toHaveLength(20);
   expect(liste.recentes[0].id).toBe(id);
 });
+
+for (const cas of ['signature', 'revoque', 'echeance', 'defaut'] as const) {
+  test(`faux numéro signé : ${cas}`, async () => {
+    const t = await preparer(cas === 'defaut' ? 'push' : 'reglage');
+    const { confirmation: id } = (await t.demander()).json<{ confirmation: string }>();
+    if (cas === 'revoque') t.registre.revoquer(t.appareil.id);
+    if (cas === 'echeance') t.expirer();
+    await t.repondre(id, 'oui', false, true, cas === 'signature');
+    if (cas === 'defaut') {
+      expect(t.ligne(id)).toMatchObject({ etat: 'expiree', resultat: 'annulee', raison: 'numero' });
+      expect(t.journal).toHaveBeenCalledWith('pda.numero_faux', { id, appareil: t.appareil.id });
+      expect(t.relais.retirer).toHaveBeenCalledWith(id);
+    } else {
+      expect(t.ligne(id).resultat).not.toBe('annulee');
+      if (cas !== 'echeance') expect(t.ligne(id).etat).toBe('ouverte');
+      expect(t.journal).not.toHaveBeenCalledWith('pda.numero_faux', expect.anything());
+      expect(t.journal).toHaveBeenCalledWith('pda.refus', {
+        appareil: t.appareil.id,
+        raison: { signature: 'signature', revoque: 'appareil', echeance: 'echeance' }[cas],
+      });
+    }
+    expect(runScript).not.toHaveBeenCalled();
+  });
+}

@@ -213,6 +213,31 @@ export class FilePda {
         ? await this.deps.preparerConsommation?.(demande)
         : undefined;
     if (!this.actif()) return;
+    if (!resultat.ok && resultat.raison === 'numero' && resultat.signee) {
+      if (!appareil || !this.deps.registre.actif(appareil)?.actif)
+        return refus('appareil', appareil);
+      if (this.maintenant() > demande.echeance) return refus('echeance', appareil);
+      const annulee = this.deps.db.transaction(
+        () =>
+          this.deps.db
+            .prepare(
+              "UPDATE pda_demandes SET etat = 'expiree', resultat = 'annulee', raison = 'numero' WHERE id = ? AND etat = 'ouverte'",
+            )
+            .run(demande.id).changes,
+      )();
+      if (!annulee) {
+        this.deps.journal('pda.tardive', { id: demande.id });
+        return;
+      }
+      this.deps.journal('pda.numero_faux', { id: demande.id, appareil });
+      this.deps.signaler();
+      try {
+        await this.deps.relais.retirer(demande.id);
+      } catch {
+        this.deps.journal('pda.retrait.echec', { id: demande.id });
+      }
+      return;
+    }
     if (!resultat.ok) return refus(resultat.raison, appareil);
     // La vérification attend le hachage : une révocation ou l'échéance peut survenir entre-temps.
     if (!appareil || !this.deps.registre.actif(appareil)?.actif) return refus('appareil', appareil);

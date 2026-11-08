@@ -17,7 +17,7 @@ const egaux = (a: Uint8Array, b: Uint8Array) => a.length === b.length && timingS
 export async function verifierAssertion(
   entree: unknown,
   ctx: ContexteAssertion,
-): Promise<{ ok: true; valeur: 'oui' | 'non' } | { ok: false; raison: string }> {
+): Promise<{ ok: true; valeur: 'oui' | 'non' } | { ok: false; raison: string; signee?: true }> {
   const refus = (raison: string) => ({ ok: false as const, raison });
   let taille: number;
   try {
@@ -102,12 +102,8 @@ export async function verifierAssertion(
     (numeroAttendu?.length !== 4 || !/^\d{4}$/.test(numeroAttendu))
   )
     return refus('numero');
-  if (
-    e.valeur === 'oui'
-      ? e.numero !== (ctx.demande.numero ?? ctx.numeroAttendu)
-      : e.numero !== undefined && e.numero !== null
-  )
-    return refus('numero');
+  const numeroFaux = e.valeur === 'oui' && e.numero !== numeroAttendu;
+  if (e.valeur === 'non' && e.numero !== undefined && e.numero !== null) return refus('numero');
   try {
     if (
       typeof donnees.challenge !== 'string' ||
@@ -132,5 +128,6 @@ export async function verifierAssertion(
     return refus('signature');
   }
   if (!(ctx.maintenant <= ctx.demande.echeance)) return refus('echeance');
+  if (numeroFaux) return { ok: false, raison: 'numero', signee: true };
   return { ok: true, valeur: e.valeur };
 }
