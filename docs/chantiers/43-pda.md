@@ -170,6 +170,7 @@ Ce document.
   - la signature est faite en r‖s, et vérifiée par `crypto.verify` en ieee-p1363 ;
   - une enveloppe dont un seul octet change est refusée ;
   - un fichier de clé aux permissions trop larges est refusé.
+- *Révision 43.2.* La relecture a trouvé un défaut : `verifierEnveloppe` levait une exception sur un corps invalide mais correctement signé. Elle renvoie maintenant `null` dans tous les cas d'échec, et un test le vérifie. Gate 2227.
 
 ### 43.3 La vérification d'une assertion WebAuthn (D217, D218)
 - `src/daemon/pda/webauthn.ts` lit une clé COSE ES256, puis vérifie une assertion dans l'ordre de D218. C'est écrit sur `node:crypto`, sans dépendance.
