@@ -1,3 +1,4 @@
+import type { creerFournisseurClePda } from '../pda/cle.js';
 import { RelaisInjoignable, type FilePda } from '../pda/file.js';
 import { RegistrePda } from '../pda/registre.js';
 import type { Db } from '../db.js';
@@ -51,6 +52,7 @@ export function registerHostRoutes(
     db: Db;
     getPort: () => number;
     modeHost: ModeHost;
+    clePda?: ReturnType<typeof creerFournisseurClePda>;
     pda?: { obtenir: () => FilePda | null; synchroniser: () => Promise<void> };
     tailscaleExec?: TailscaleExec;
   },
@@ -69,6 +71,7 @@ export function registerHostRoutes(
       ...deps.modeHost.etat(),
       push: deps.config.modeHost.push,
       code: deps.config.modeHost.code,
+      pda: { actif: deps.config.modeHost.pda, relais: deps.config.modeHost.relais },
       abonnements: abonnementsActifs(deps.db, Date.now()).length,
     };
   };
@@ -126,6 +129,17 @@ export function registerHostRoutes(
     await deps.pda?.synchroniser();
     return { actif, relais };
   });
+  for (const [methode, chemin] of [
+    ['get', '/api/host/pda/cle'],
+    ['post', '/api/host/pda/cle/tourner'],
+  ] as const) {
+    app[methode](chemin, async (req, reply) => {
+      if (!admin(req, reply)) return reply;
+      if (!deps.clePda) return reply.code(503).send({ error: 'clé PDA indisponible' });
+      if (methode === 'post') deps.clePda.tourner();
+      return { clePublique: deps.clePda.clePubliqueRaw() };
+    });
+  }
   app.post('/api/host/pda/essai', async (req, reply) => {
     if (!admin(req, reply)) return reply;
     const corps = req.body as { sujet?: unknown } | null;

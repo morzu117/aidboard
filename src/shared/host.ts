@@ -38,6 +38,7 @@ export interface EtatModeHost {
 
 /** GET et PUT /api/host (D172) : l'état lu de Tailscale, plus celui du port des appareils. */
 export interface EtatModeHostDaemon extends EtatModeHost {
+  pda?: { actif: boolean; relais: string | null };
   code: boolean;
   push: boolean;
   abonnements: number;

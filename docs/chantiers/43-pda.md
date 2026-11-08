@@ -220,6 +220,7 @@ Ce document.
 ### 43.9 Le panneau du Mac (D221)
 - L'interrupteur, l'URL du relais, les appareils PDA, la rotation de la clé et la demande d'essai.
 - Tests web : confirmation avant de couper ou de faire tourner la clé ; affichage du résultat de l'essai.
+- *Révision 43.9.* `GET /api/host/pda/cle` et `POST /api/host/pda/cle/tourner` sont réservés à l'admin et renvoient la clé publique raw. Le panneau la montre avec « Copier » et rappelle `aid relais --cle-daemon`. `GET /api/host` gagne `pda: { actif, relais }`. Le numéro n'apparaît nulle part sur le Mac, et un test le vérifie. Gate 2320, e2e 115.
 
 ### 43.10 L'e2e et la fiche de recette
 - L'e2e lance un relais local sur `127.0.0.1` et le daemon pointé dessus, avec un authentificateur WebAuthn virtuel de Playwright (CDP `WebAuthn.addVirtualAuthenticator`, avec UV). Il couvre :

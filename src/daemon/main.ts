@@ -339,6 +339,7 @@ export async function startDaemon(
       },
     };
     const app = await buildServer({
+      clePda: fournisseurPda,
       pda,
       webRoot,
       modeHost,
