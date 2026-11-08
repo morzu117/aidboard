@@ -135,6 +135,15 @@ relais.example.com {
   pas une barrière cryptographique. L'enregistrement dans le tailnet, depuis
   un appareil autorisé, reste la barrière (lab, DM 92447).
   Acceptation : _à remplir_.
+- [ ] Le relais purge une réponse dès que le daemon l'a tirée. Si le daemon
+  tombe entre ce tirage et la consommation de la demande, la réponse est
+  perdue : il faut répondre à nouveau, ou la demande expire. Rien ne
+  s'exécute sans réponse, donc l'échec est fermé (lab, DM 92510).
+  Acceptation : _à remplir_.
+- [ ] La CSP des appareils garde `style-src 'self' 'unsafe-inline'`. Ce n'est
+  pas une faille ici, puisque l'écran du PDA n'affiche que du texte React.
+  La retirer, quand les styles en ligne auront disparu, fermerait aussi
+  l'exfiltration par CSS. Suivi recommandé par le lab (DM 92510).
 
 ## Vérifications du point 43.10
 
