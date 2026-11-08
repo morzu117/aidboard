@@ -177,13 +177,13 @@ Le refus fermé de D225 bloquerait tout merge sur une installation qui n'a jamai
 `topic-merge.sh` (tête obligatoire), `topic-push.sh` (`--force-with-lease`, tête locale), `topic-cleanup.sh` (tête de la branche). Les variables ne sont exigées que si elles sont passées, et les chemins actuels sans confirmation passent la tête courante. Tests de scripts avec un dépôt local et un dépôt « distant » nu : une tête qui a bougé est refusée.
 - *Révision 34.4.* Le nettoyage pose le bail (`update-ref -d` avec la tête) **avant** tout retrait : son refus laisse la branche et le worktree intacts. Si le retrait du worktree échoue ensuite, celui-ci reste en HEAD détachée sur la tête, et ses commits restent récupérables. Une branche attendue absente se vérifie par `update-ref --stdin` avec `verify <ref> 0…0`. Les routes `git.pousser` et `topic.cleanup` passent déjà les têtes courantes. Lignes existantes modifiées : 2. Gate 2326.
 
-### 34.5 La porte et l'exécution (D225, D228, D230)
+### 34.5 La porte, la file v2 et les actions git (D224, D225, D227, D228, D230)
 
-`src/daemon/confirmations/porte.ts` : `preparer` et `executer` pour les neuf actions, la création de la demande, le 202, le 409 `confirmation_impossible`, l'exécution depuis `FilePda` après la consommation, `perime` sur tout écart, le résultat en base. Les routes `GET /api/confirmations`, `DELETE /api/confirmations/:id`, `GET /api/confirmations/:id/numero` et `PUT /api/confirmations/reglage`. Tests : chaque action confirmée puis exécutée, refusée, expirée, annulée, périmée ; le numéro absent des journaux et des événements.
+`src/daemon/confirmations/porte.ts` : la porte commune, `preparer` et `executer` pour `merge`, `push`, `nettoyage`, `projet.retirer` et `reglage` (couper). `FilePda` crée et vérifie du v2, garde `numero_mac` pour la classe « toujours » et exécute après la consommation. Les routes `GET /api/confirmations`, `DELETE /api/confirmations/:id`, `GET /api/confirmations/:id/numero`, et le `PUT /api/confirmations/reglage` avec `actif: false`. Tests : chaque action confirmée puis exécutée, refusée, expirée, annulée, périmée ; `executer` passe toujours les têtes signées ; le numéro est absent des journaux et des événements ; avant l'armement, rien ne change.
 
-### 34.6 L'amorçage (D226)
+### 34.6 Les actions du mode host, l'amorçage et le désarmement (D226, D233)
 
-Le chemin cookie seul, l'empreinte exigée, `pda.amorcage`, le bandeau. Tests : le bearer est refusé ; après la révocation du dernier appareil, toute action sous confirmation est refusée, et l'amorçage par cookie fonctionne.
+`appairage`, `pda.activer`, `host.option` et `desarmement` dans la porte. Le chemin d'amorçage par cookie seul, avec l'empreinte exigée, `pda.amorcage`, l'armement et le bandeau. Le désarmement par l'UI seule, avec « DÉSARMER ». Tests : le bearer est refusé ; après la révocation du dernier appareil, toute action sous confirmation est refusée, et l'amorçage par cookie fonctionne ; le désarmement sans appareil est journalisé.
 
 ### 34.7 L'app du téléphone (D232)
 
