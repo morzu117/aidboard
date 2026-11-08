@@ -10,7 +10,7 @@ import { RegistreAppareils } from '../src/daemon/host/appareils.js';
 import { COOKIE_APPAREIL } from '../src/daemon/host/serveur.js';
 import { startTestDaemon } from './helpers/daemon.js';
 import { parseConfig } from '../src/daemon/config.js';
-import { issueRunToken } from '../src/daemon/security.js';
+import { issueRunToken, SESSION_COOKIE } from '../src/daemon/security.js';
 
 const nettoyages: (() => unknown | Promise<unknown>)[] = [];
 afterEach(async () => {
@@ -171,7 +171,21 @@ test('routes PDA : interrupteur, gardes, corps strict, admin et séparation des 
     expect((await mac(method, url, undefined, nonAdmin)).statusCode).toBe(403);
     expect((await app.inject({ method, url, headers })).statusCode).toBe(404);
   }
-  expect((await mac('POST', `/api/host/pda/appareils/${id}/activer`)).statusCode).toBe(200);
+  expect(
+    (
+      await mac(
+        'POST',
+        `/api/host/pda/appareils/${id}/activer`,
+        { empreinte: r.json().empreinte },
+        {
+          host: t.headers.host!,
+          origin: `http://${t.headers.host}`,
+          'sec-fetch-site': 'same-origin',
+          cookie: `${SESSION_COOKIE}=${t.d.auth.sessionToken}`,
+        },
+      )
+    ).statusCode,
+  ).toBe(200);
   await mac('PUT', '/api/host/pda', { actif: false });
   const liste = (await mac('GET', '/api/host/pda/appareils')).json();
   expect(liste[0]).toMatchObject({ id, etat: 'actif', empreinte: r.json().empreinte });

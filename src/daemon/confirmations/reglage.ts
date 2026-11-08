@@ -54,13 +54,13 @@ export function creerReglage(db: Db) {
     },
     armer() {
       db.prepare(
-        'UPDATE confirmations_armement SET arme = 1, arme_a = ? WHERE id = 1 AND arme = 0',
+        'UPDATE confirmations_armement SET arme = 1, arme_a = MAX(?, COALESCE(desarme_a + 1, 0)) WHERE id = 1 AND arme = 0',
       ).run(Date.now());
     },
     // Réservé à la porte de désarmement.
     desarmerConfirme() {
       db.prepare(
-        'UPDATE confirmations_armement SET arme = 0, desarme_a = ? WHERE id = 1 AND arme = 1',
+        'UPDATE confirmations_armement SET arme = 0, desarme_a = MAX(?, COALESCE(arme_a + 1, 0)) WHERE id = 1 AND arme = 1',
       ).run(Date.now());
     },
   };

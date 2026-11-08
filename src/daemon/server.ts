@@ -208,6 +208,7 @@ export async function buildServer(deps: ServerDeps): Promise<FastifyInstance> {
     db: deps.db,
     actions: creerActionsConfirmation({
       ...deps,
+      journal: (type, donnees) => app.log.info(donnees, type),
       actions: actionsConfirmation,
       engine: structural,
     }),
@@ -257,6 +258,7 @@ export async function buildServer(deps: ServerDeps): Promise<FastifyInstance> {
       clePda: deps.clePda,
       pda: deps.pda,
       db: deps.db,
+      porte,
       tailscaleExec: deps.tailscaleExec,
     });
   }

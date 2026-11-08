@@ -247,7 +247,11 @@ export class FilePda {
         this.deps.journal('pda.retrait.echec', { id: demande.id });
       }
     }
-    if (resultat.valeur === 'oui' && demande.params !== null) await this.deps.executer?.(demande);
+    if (resultat.valeur === 'oui' && demande.params !== null) {
+      await this.deps.executer?.(demande);
+      // Déjà dans la file : ne pas réenfiler la publication après une activation.
+      if (demande.action === 'pda.activer') await this.publier();
+    }
   }
   tour() {
     return this.enFile(async () => {

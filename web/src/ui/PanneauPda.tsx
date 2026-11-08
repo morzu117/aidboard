@@ -76,8 +76,8 @@ export function PanneauPda({ etat }: { etat: EtatModeHostDaemon['pda'] }) {
       setOccupe(false);
     }
   }
-  async function appareil(id: string, action: string) {
-    await client.request('POST', `/api/host/pda/appareils/${id}/${action}`, {});
+  async function appareil(id: string, action: string, empreinte?: string) {
+    await client.request('POST', `/api/host/pda/appareils/${id}/${action}`, { empreinte });
     setAppareils(await client.request<AppareilPda[]>('GET', '/api/host/pda/appareils'));
   }
   return (
@@ -135,7 +135,7 @@ export function PanneauPda({ etat }: { etat: EtatModeHostDaemon['pda'] }) {
                       `L'empreinte affichée sur le téléphone est-elle exactement ${a.empreinte} ?`,
                     )
                   )
-                    void agir(() => appareil(a.id, 'activer'));
+                    void agir(() => appareil(a.id, 'activer', a.empreinte));
                 }}
               >
                 Activer

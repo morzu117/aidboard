@@ -96,6 +96,9 @@ test('activation et révocation relisent la liste, une 502 est affichée', async
   await waitFor(() =>
     expect(h.calls.filter((c) => c.url === '/api/host/pda/appareils')).toHaveLength(2),
   );
+  expect(h.calls.find((c) => c.url === '/api/host/pda/appareils/a/activer')?.body).toEqual({
+    empreinte: 'ABCD EFGH',
+  });
   await waitFor(() =>
     expect((screen.getByRole('button', { name: 'Activer' }) as HTMLButtonElement).disabled).toBe(
       false,

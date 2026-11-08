@@ -1,3 +1,4 @@
+import { creerActionsHost, type DependancesHost } from './host.js';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { resumeAction, type ParametresActions } from '../../shared/confirmations.js';
@@ -30,12 +31,14 @@ interface Projet {
 const TWO_MIN = 2 * 60_000;
 const LIVE = ['starting', 'working', 'needs_input', 'idle'];
 
-export function creerActionsConfirmation(deps: {
-  db: Db;
-  config?: AidConfig;
-  actions?: ActionContext;
-  engine?: StructuralService;
-}): ActionsPorte {
+export function creerActionsConfirmation(
+  deps: DependancesHost & {
+    db: Db;
+    config?: AidConfig;
+    actions?: ActionContext;
+    engine?: StructuralService;
+  },
+): ActionsPorte {
   const scripts = findAssetDir('scripts/git', 'topic-create.sh');
   const reglage = creerReglage(deps.db);
   const lireSujet = (id?: string) => {
@@ -116,6 +119,7 @@ export function creerActionsConfirmation(deps: {
     return params;
   };
   return {
+    ...creerActionsHost(deps),
     push: {
       async preparer(entree, ctx) {
         const { topic, ws } = lireSujet(entree.topicId);

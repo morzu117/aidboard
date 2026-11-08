@@ -41,7 +41,8 @@ afterEach(async () => {
   for (const nettoyer of nettoyages.splice(0).reverse()) await nettoyer();
 });
 
-async function preparer(action: ActionPorte = 'push', arme = true) {
+type ActionGit = Exclude<ActionPorte, 'appairage' | 'pda.activer' | 'host.option' | 'desarmement'>;
+async function preparer(action: ActionGit = 'push', arme = true) {
   const t = preparerPda();
   nettoyages.push(t.nettoyer);
   const dossier = mkdtempSync(join(tmpdir(), 'aid-confirmations-'));
@@ -143,7 +144,7 @@ async function preparer(action: ActionPorte = 'push', arme = true) {
     cookie: `${SESSION_COOKIE}=${auth.sessionToken}`,
     'sec-fetch-site': 'same-origin',
   };
-  const entrees: Record<ActionPorte, EntreeAction> = {
+  const entrees: Record<ActionGit, EntreeAction> = {
     merge: { strategy: 'squash', cleanupAfter: true },
     push: {},
     nettoyage: { confirmUnmerged: 3, dirtyAction: 'force', confirmed: true },

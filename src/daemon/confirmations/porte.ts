@@ -6,7 +6,16 @@ import { AidHttpError } from '../errors.js';
 import type { FilePda, LigneDemande } from '../pda/file.js';
 import { creerReglage } from './reglage.js';
 
-export type ActionPorte = 'merge' | 'push' | 'nettoyage' | 'projet.retirer' | 'reglage';
+export type ActionPorte =
+  | 'merge'
+  | 'push'
+  | 'nettoyage'
+  | 'projet.retirer'
+  | 'reglage'
+  | 'appairage'
+  | 'pda.activer'
+  | 'host.option'
+  | 'desarmement';
 export interface EntreeAction {
   topicId?: string;
   workspaceId?: string;
@@ -19,10 +28,16 @@ export interface EntreeAction {
   dirtyAction?: 'stash' | 'force';
   confirmed?: boolean;
   action?: ParametresActions['reglage']['action'];
-  actif?: false;
+  actif?: boolean;
+  appairageId?: string;
+  sansIdentite?: boolean;
+  appareilId?: string;
+  empreinte?: unknown;
+  option?: 'code' | 'push';
 }
 export interface ContexteAction {
   confirmation: boolean;
+  amorcage?: boolean;
   entree?: EntreeAction;
   actionId?: string;
   etatAvantNettoyage?: string;

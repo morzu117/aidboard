@@ -32,7 +32,7 @@ const exemples: ParametresActions = {
     sale: 'refuser',
   },
   'projet.retirer': { workspaceId: 'projet_1', racine: '/projets/projet' },
-  appairage: { appairageId: 'pair_1', nom: 'Téléphone', identite: null, sansIdentite: true },
+  appairage: { appairageId: 'pair_1', nom: 'Téléphone', hIdentite: null, sansIdentite: true },
   'pda.activer': { appareilId: 'pda_1', nom: 'Téléphone', empreinte: 'ABCD-2345' },
   'host.option': { option: 'code', actif: true },
   reglage: { action: 'merge', actif: false },
@@ -139,9 +139,13 @@ it('valide les bornes et types des paramètres sans conversion implicite', () =>
     },
     push: { distante: ['', 'A'.repeat(40)] },
     nettoyage: { tete: [''], etat: ['a'.repeat(61)] },
-    appairage: { nom: ['a'.repeat(61)], identite: ['a'.repeat(61)], sansIdentite: [0] },
+    appairage: {
+      nom: ['a'.repeat(41)],
+      hIdentite: ['a'.repeat(42), 'a'.repeat(44), '+'.repeat(43)],
+      sansIdentite: [0],
+    },
     'projet.retirer': { racine: ['a'.repeat(1025), '/projets/' + 'a'.repeat(61)] },
-    'pda.activer': { nom: ['a'.repeat(61)], empreinte: ['abcd-2345', 'ABCD-0189', 'ABCD-2345\n'] },
+    'pda.activer': { nom: ['a'.repeat(41)], empreinte: ['abcd-2345', 'ABCD-0189', 'ABCD-2345\n'] },
     'host.option': { option: ['autre'], actif: [0] },
   };
   for (const [action, champs] of Object.entries(invalides)) {
@@ -248,8 +252,8 @@ it('accepte les variantes aux bornes des schémas', () => {
   expect(resumeAction('merge', { ...exemples.merge, pr: 1e9, strategie: 'rebase' })).toContain(
     '#1000000000',
   );
-  expect(resumeAction('appairage', { ...exemples.appairage, nom: 'a'.repeat(60) })).toBe(
-    "Approuver l'appareil " + 'a'.repeat(60),
+  expect(resumeAction('appairage', { ...exemples.appairage, nom: 'a'.repeat(40) })).toBe(
+    "Approuver l'appareil " + 'a'.repeat(40),
   );
   expect(
     resumeAction('projet.retirer', {

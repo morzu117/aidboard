@@ -188,6 +188,7 @@ Le refus fermé de D225 bloquerait tout merge sur une installation qui n'a jamai
 ### 34.6 Les actions du mode host, l'amorçage et le désarmement (D226, D233)
 
 `appairage`, `pda.activer`, `host.option` et `desarmement` dans la porte. Le chemin d'amorçage par cookie seul, avec l'empreinte exigée, `pda.amorcage`, l'armement et le bandeau. Le désarmement par l'UI seule, avec « DÉSARMER ». Tests : le bearer est refusé ; après la révocation du dernier appareil, toute action sous confirmation est refusée, et l'amorçage par cookie fonctionne ; le désarmement sans appareil est journalisé.
+- *Révision 34.6.* `src/daemon/confirmations/host.ts` porte `appairage`, `pda.activer`, `host.option` et `desarmement`. L'appairage signe `hIdentite` (le SHA-256 de l'identité Tailscale) et jamais le login. Les noms d'appairage et de PDA sont bornés à 40 caractères, comme dans les routes. L'activation exige `{ empreinte }`. Si les confirmations sont armées et qu'un appareil est actif, elle passe par une demande. Sinon, c'est l'amorçage : cookie seul (le bearer reçoit 403 `amorcage_ui_seulement`), puis `armer()` et `pda.amorcage`. Le désarmement passe par le cookie seul, avec « DÉSARMER ». Le réarmement est direct, et il n'existe aucune commande CLI. Les retraits restent immédiats une fois armé. Lignes existantes modifiées : 36. Gate 2425.
 
 ### 34.7 L'app du téléphone (D232)
 

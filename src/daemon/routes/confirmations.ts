@@ -14,7 +14,37 @@ export function registerConfirmationRoutes(
   const reglage = creerReglage(db);
   app.get('/api/confirmations/reglage', async (req, reply) => {
     if (req.principal?.kind !== 'admin') return reply.code(403).send({ error: 'admin seulement' });
-    return { actions: reglage.lire(), ...reglage.lireArmement() };
+    const armement = reglage.lireArmement();
+    const { n } = db
+      .prepare("SELECT count(*) AS n FROM pda_appareils WHERE etat = 'actif'")
+      .get() as { n: number };
+    const bandeau =
+      armement.desarmeA !== null && armement.desarmeA > (armement.armeA ?? 0)
+        ? 'desarme'
+        : armement.arme && n === 1
+          ? 'amorcage'
+          : null;
+    return { actions: reglage.lire(), ...armement, bandeau };
+  });
+  app.post('/api/confirmations/armer', async (req, reply) => {
+    if (req.principal?.kind !== 'admin') return reply.code(403).send({ error: 'admin seulement' });
+    reglage.armer();
+    return { ok: true };
+  });
+  app.post('/api/confirmations/desarmer', async (req, reply) => {
+    if (req.principal?.kind !== 'admin' || req.principal.via !== 'cookie')
+      return reply.code(403).send({ error: 'cookie admin requis' });
+    if ((req.body as { phrase?: unknown } | null)?.phrase !== 'DÉSARMER')
+      return reply.code(400).send({ error: 'phrase invalide' });
+    if (!reglage.arme()) return reply.code(409).send({ error: 'confirmations non armées' });
+    if (db.prepare("SELECT 1 FROM pda_appareils WHERE etat = 'actif' LIMIT 1").get()) {
+      const demande = await porte.demander('desarmement', {}, req);
+      if ('confirmation' in demande)
+        return reply.code(202).send({ confirmation: demande.confirmation });
+    }
+    reglage.desarmerConfirme();
+    app.log.info({}, 'pda.desarmement');
+    return { ok: true };
   });
   app.put('/api/confirmations/reglage', async (req, reply) => {
     if (req.principal?.kind !== 'admin') return reply.code(403).send({ error: 'admin seulement' });

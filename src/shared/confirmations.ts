@@ -19,7 +19,7 @@ export interface ParametresActions {
     sale: 'refuser' | 'stash' | 'force';
   };
   'projet.retirer': { workspaceId: string; racine: string };
-  appairage: { appairageId: string; nom: string; identite: string | null; sansIdentite: boolean };
+  appairage: { appairageId: string; nom: string; hIdentite: string | null; sansIdentite: boolean };
   'pda.activer': { appareilId: string; nom: string; empreinte: string };
   'host.option': { option: 'code' | 'push'; actif: boolean };
   reglage: { action: 'merge' | 'push' | 'nettoyage' | 'projet.retirer'; actif: false };
@@ -114,13 +114,13 @@ const schemas: Record<ActionConfirmee, Record<string, Validation>> = {
   'projet.retirer': { workspaceId: identifiant, racine: texte(1024) },
   appairage: {
     appairageId: identifiant,
-    nom: texte(60),
-    identite: nullable(texte(60)),
+    nom: texte(40),
+    hIdentite: nullable(motif(/^[A-Za-z0-9_-]{43}$/)),
     sansIdentite: booleen,
   },
   'pda.activer': {
     appareilId: identifiant,
-    nom: texte(60),
+    nom: texte(40),
     empreinte: motif(/^[A-Z2-7]{4}-[A-Z2-7]{4}$/),
   },
   'host.option': { option: choix('code', 'push'), actif: booleen },

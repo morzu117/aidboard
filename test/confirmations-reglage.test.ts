@@ -129,6 +129,7 @@ test('routes admin du Mac seulement, rallumage immédiat et coupure différée',
   const reglage = creerReglage(t.db);
   expect((await t.d.app.inject({ method: 'GET', url, headers: t.headers })).json()).toEqual({
     actions: reglage.lire(),
+    bandeau: null,
     arme: false,
     armeA: null,
     desarmeA: null,

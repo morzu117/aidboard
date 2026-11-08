@@ -1,3 +1,6 @@
+import { creerActionsHost } from '../confirmations/host.js';
+import type { Porte } from '../confirmations/porte.js';
+import { creerReglage } from '../confirmations/reglage.js';
 import type { creerFournisseurClePda } from '../pda/cle.js';
 import { RelaisInjoignable, type FilePda } from '../pda/file.js';
 import { RegistrePda } from '../pda/registre.js';
@@ -47,6 +50,7 @@ export async function etatModeHost(
 export function registerHostRoutes(
   app: FastifyInstance,
   deps: {
+    porte: Porte;
     config: AidConfig;
     paths: AidPaths;
     db: Db;
@@ -57,6 +61,8 @@ export function registerHostRoutes(
     tailscaleExec?: TailscaleExec;
   },
 ): void {
+  const reglage = creerReglage(deps.db);
+  const porte = deps.porte;
   const etat = async (): Promise<EtatModeHostDaemon> => {
     const e = await etatModeHost(
       deps.config,
@@ -176,6 +182,38 @@ export function registerHostRoutes(
     app.post(`/api/host/pda/appareils/:id/${action}`, async (req, reply) => {
       if (!admin(req, reply)) return reply;
       const { id } = req.params as { id: string };
+      if (action === 'activer') {
+        const entree = {
+          appareilId: id,
+          empreinte: (req.body as { empreinte?: unknown } | null)?.empreinte,
+        };
+        const appareil = (await pda.lister()).find((a) => a.id === id);
+        if (!appareil || appareil.etat !== 'attente' || appareil.empreinte !== entree.empreinte)
+          return reply.code(409).send({ raison: 'etat' });
+        const actif = deps.db
+          .prepare("SELECT 1 FROM pda_appareils WHERE etat = 'actif' LIMIT 1")
+          .get();
+        if (actif && reglage.arme()) {
+          const demande = await porte.demander('pda.activer', entree, req);
+          if ('confirmation' in demande)
+            return reply.code(202).send({ confirmation: demande.confirmation });
+          await porte.executer('pda.activer', demande.direct, entree);
+          return { ok: true };
+        } else {
+          if (req.principal?.kind !== 'admin' || req.principal.via !== 'cookie')
+            return reply.code(403).send({ error: 'amorcage_ui_seulement' });
+          const definitions = creerActionsHost({
+            ...deps,
+            journal: (type, donnees) => app.log.info(donnees, type),
+          });
+          const params = await definitions['pda.activer'].preparer(entree, { confirmation: false });
+          await definitions['pda.activer'].executer(params, {
+            confirmation: false,
+            amorcage: true,
+          });
+          return { ok: true };
+        }
+      }
       if (!pda[action](id)) return reply.code(409).send({ raison: 'etat' });
       await deps.pda?.obtenir()?.publierAutorises();
       return { ok: true };
@@ -187,6 +225,14 @@ export function registerHostRoutes(
     reply.header('Cache-Control', 'no-store');
     const actif = (req.body as { actif?: unknown } | null)?.actif;
     if (typeof actif !== 'boolean') return reply.code(400).send({ error: 'actif : true ou false' });
+    if (actif) {
+      const entree = { option: 'push' as const, actif: true };
+      const demande = await porte.demander('host.option', entree, req);
+      if ('confirmation' in demande)
+        return reply.code(202).send({ confirmation: demande.confirmation });
+      await porte.executer('host.option', demande.direct, entree);
+      return etat();
+    }
     try {
       if (actif) deps.modeHost.fournisseurPush?.obtenir();
       ecrireModeHostPush(deps.paths, actif);
@@ -207,6 +253,14 @@ export function registerHostRoutes(
     reply.header('Cache-Control', 'no-store');
     const actif = (req.body as { actif?: unknown } | null)?.actif;
     if (typeof actif !== 'boolean') return reply.code(400).send({ error: 'actif : true ou false' });
+    if (actif) {
+      const entree = { option: 'code' as const, actif: true };
+      const demande = await porte.demander('host.option', entree, req);
+      if ('confirmation' in demande)
+        return reply.code(202).send({ confirmation: demande.confirmation });
+      await porte.executer('host.option', demande.direct, entree);
+      return etat();
+    }
     try {
       ecrireModeHostCode(deps.paths, actif);
     } catch (err) {
@@ -251,14 +305,12 @@ export function registerHostRoutes(
     if (!admin(req, reply)) return reply;
     const { id } = req.params as { id: string };
     const sansIdentite = (req.body as { sansIdentite?: unknown } | null)?.sansIdentite === true;
-    const r = deps.modeHost.appairages.approuver(id, { sansIdentite });
-    if (r.ok) return { ok: true };
-    return r.raison === 'identite-absente'
-      ? reply.code(409).send({
-          error: 'identite-absente',
-          message: 'Aucune identité Tailscale : cocher « Appareil taggé, sans identité Tailscale »',
-        })
-      : reply.code(404).send({ error: 'demande inconnue, expirée ou annulée' });
+    const entree = { appairageId: id, sansIdentite };
+    const demande = await porte.demander('appairage', entree, req);
+    if ('confirmation' in demande)
+      return reply.code(202).send({ confirmation: demande.confirmation });
+    await porte.executer('appairage', demande.direct, entree);
+    return { ok: true };
   });
   // D177 : le registre vu du Mac, identité comprise ; jamais l'empreinte
   app.get('/api/host/appareils', async (req, reply) => {
