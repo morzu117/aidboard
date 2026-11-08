@@ -45,7 +45,7 @@ Ligne 34 du programme : « Confirmations par le téléphone : réglage, plancher
 | `nettoyage` | par défaut | `topic.cleanup` | `topicId`, `branche`, `tete` (40 hex ou `null`), `etat` |
 | `projet.retirer` | par défaut | `DELETE /api/workspaces/:id` | `workspaceId`, `racine` |
 | `appairage` | toujours | `POST /api/host/appairages/:id/approuver` | `appairageId`, `nom`, `identite`, `sansIdentite` |
-| `pda.activer` | toujours | `POST /api/host/pda/appareils/:id/activer` | `appareilId`, `empreinte` |
+| `pda.activer` | toujours | `POST /api/host/pda/appareils/:id/activer` | `appareilId`, `nom`, `empreinte` |
 | `host.option` | toujours | `PUT /api/host/code` et `/push` | `option` (`code` ou `push`), `actif` |
 | `reglage` | toujours | nouvelle route (D227) | `action`, `actif: false` |
 | `desarmement` | toujours | nouvelle route (D233) | aucun |
@@ -117,7 +117,9 @@ La route d'origine appelle `preparer`. Si l'action est sous confirmation (D227),
 - `appairage` : « Approuver l'appareil <nom> ».
 - `pda.activer` : « Activer le PDA <nom>, empreinte <XXXX-XXXX> ».
 - `host.option` : « Montrer le code aux appareils » ou « Notifications push sur les appareils ».
-- `reglage` : « Confirmations : <action> coupée » ou « allumée ».
+- `reglage` : « Confirmations : <action> coupée » (seul couper est confirmé, D227).
+- `essai` : « Demande d'essai ».
+- `desarmement` : « Désarmer les confirmations ».
 
 Les noms (sujet, projet, appareil) passent par le relais, comme au 43 (Q4 du 43). Ils sont bornés à 60 caractères et nettoyés des caractères de contrôle.
 
