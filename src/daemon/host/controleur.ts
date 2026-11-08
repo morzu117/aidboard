@@ -30,6 +30,7 @@ export interface OptionsModeHost {
   livraison?: OptionsServeurAppareils['livraison'];
   code?: OptionsServeurAppareils['code'];
   tours?: OptionsServeurAppareils['tours'];
+  pda?: OptionsServeurAppareils['pda'];
   push?: OptionsServeurAppareils['push'];
   reponses?: OptionsServeurAppareils['reponses'];
   signal?: OptionsServeurAppareils['signal'];
@@ -108,6 +109,7 @@ export class ModeHost {
         appairages: this.opts.appairages,
         etat: this.opts.etat,
         livraison: this.opts.livraison,
+        pda: this.opts.pda,
         code: this.opts.code,
         tours: this.opts.tours,
         push: this.opts.push && { ...this.opts.push, fournisseur: this.fournisseurPush },

@@ -1,3 +1,4 @@
+import { RegistrePda } from '../pda/registre.js';
 import type { Db } from '../db.js';
 import { abonnementsActifs } from '../push/abonnements.js';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
@@ -6,6 +7,7 @@ import {
   ConfigError,
   ecrireModeHostActif,
   ecrireModeHostPush,
+  ecrireModeHostPda,
   ecrireModeHostCode,
   PORT_PONT_TAURI,
   portAppareils,
@@ -91,6 +93,33 @@ export function registerHostRoutes(
     else await deps.modeHost.arreter({ couper: true });
     return etat();
   });
+
+  app.put('/api/host/pda', async (req, reply) => {
+    if (!admin(req, reply)) return reply;
+    const actif = (req.body as { actif?: unknown } | null)?.actif;
+    if (typeof actif !== 'boolean') return reply.code(400).send({ error: 'actif : true ou false' });
+    try {
+      ecrireModeHostPda(deps.paths, actif);
+    } catch (err) {
+      if (err instanceof ConfigError) return reply.code(409).send({ error: err.message });
+      throw err;
+    }
+    deps.config.modeHost.pda = actif;
+    return { actif };
+  });
+  const pda = new RegistrePda(deps.db, (type, donnees) => app.log.info(donnees, type));
+  app.get('/api/host/pda/appareils', async (req, reply) => {
+    if (!admin(req, reply)) return reply;
+    return pda.lister();
+  });
+  for (const action of ['activer', 'revoquer'] as const) {
+    app.post(`/api/host/pda/appareils/:id/${action}`, async (req, reply) => {
+      if (!admin(req, reply)) return reply;
+      const { id } = req.params as { id: string };
+      if (!pda[action](id)) return reply.code(409).send({ raison: 'etat' });
+      return { ok: true };
+    });
+  }
 
   app.put('/api/host/push', async (req, reply) => {
     if (req.principal?.kind !== 'admin') return reply.code(403).send({ error: 'admin seulement' });

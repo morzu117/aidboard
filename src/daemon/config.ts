@@ -33,6 +33,7 @@ export interface ArtefactsConfig {
  * reste l'adresse d'écoute, toujours 127.0.0.1 : le mode host n'y touche pas.
  */
 export interface ModeHostConfig {
+  pda: boolean;
   code: boolean;
   push: boolean;
   actif: boolean;
@@ -101,7 +102,7 @@ export const DEFAULT_CONFIG: AidConfig = {
     tailscale: { manage: false, bin: DEFAULT_TAILSCALE_BIN },
   },
   artefacts: { port: null },
-  modeHost: { actif: false, port: null, push: false, code: false },
+  modeHost: { actif: false, port: null, push: false, code: false, pda: false },
 };
 
 export class ConfigError extends Error {}
@@ -198,7 +199,8 @@ export function parseConfig(text: string): AidConfig {
   }
   if (doc.modeHost !== undefined) {
     if (!isRecord(doc.modeHost)) throw new ConfigError('config.yaml : modeHost doit être un objet');
-    rejectUnknown(doc.modeHost, ['actif', 'port', 'push', 'code'], 'modeHost.');
+    rejectUnknown(doc.modeHost, ['actif', 'port', 'push', 'code', 'pda'], 'modeHost.');
+    if (doc.modeHost.pda !== undefined) cfg.modeHost.pda = bool(doc.modeHost.pda, 'modeHost.pda');
     if (doc.modeHost.code !== undefined)
       cfg.modeHost.code = bool(doc.modeHost.code, 'modeHost.code');
     if (doc.modeHost.push !== undefined)
@@ -463,4 +465,17 @@ export function portArtefacts(config: AidConfig): number {
 export function portAppareils(config: AidConfig): number {
   if (config.modeHost.port !== null) return config.modeHost.port;
   return config.port === 0 ? 0 : config.port + 20;
+}
+
+export function ecrireModeHostPda(p: AidPaths, actif: boolean): void {
+  const doc = parseDocument(existsSync(p.config) ? readFileSync(p.config, 'utf8') : '');
+  if (doc.errors.length > 0) throw new ConfigError("config.yaml illisible : rien n'est écrit");
+  try {
+    doc.setIn(['modeHost', 'pda'], actif);
+  } catch {
+    throw new ConfigError('config.yaml : modeHost doit être un objet');
+  }
+  const texte = doc.toString();
+  parseConfig(texte);
+  writeFileSync(p.config, texte);
 }

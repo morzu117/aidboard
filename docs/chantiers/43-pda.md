@@ -185,6 +185,7 @@ Ce document.
 - `POST /api/appareils/moi/pda` exige un appareil appairé dans son accès, avec la garde commune et un corps strict. L'appareil est créé « en attente ».
 - Sur le port du Mac, en admin : `GET /api/host/pda/appareils`, `POST .../:id/activer` et `POST .../:id/revoquer`. L'empreinte courte est la même des deux côtés.
 - `host-liste` gagne la route de l'appareil.
+- *Révision 43.4.* Couper le PDA n'efface pas son registre, puisqu'un PDA doit durer. La révocation de l'accès de 8 h du 31 ne révoque pas un PDA. La relecture a trouvé une course : deux enregistrements concurrents avec le même cred_id donnaient une 500. Ils donnent maintenant une 409 `connu`. `config.test` et `mesh-schema.test` ont été adaptés au champ `pda` et à la version 23 du schéma. Les événements `pda.active` et `pda.revoque` passent par le journal Fastify. Gate 2237.
 
 ### 43.5 Le relais (D216)
 - `src/relais/`, avec la sous-commande `aid relais`.

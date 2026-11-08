@@ -4,6 +4,12 @@ import {
   CorpsAbonnementPush,
   cleAbonnementValide,
 } from '../push/abonnements.js';
+import {
+  CorpsEnregistrementPda,
+  RegistrePda,
+  RefusPda,
+  type EnregistrementPda,
+} from '../pda/registre.js';
 import { verifierEndpoint } from '../push/envoi.js';
 import { creerFournisseurCles } from '../push/vapid.js';
 import type { livraisonPourAppareil } from './livraison.js';
@@ -109,6 +115,7 @@ export interface OptionsServeurAppareils {
   /** D175 : l'état complet, que masque.ts réduit ; absent = 404 (tests du port seul) */
   etat?: () => Promise<StateSnapshot>;
   livraison?: (topicId: string) => ReturnType<typeof livraisonPourAppareil>;
+  pda?: { db: Db; actif: () => boolean };
   code?: { db: Db; actif: () => boolean };
   tours?: { db: Db; store: EventStore };
   push?: {
@@ -263,6 +270,30 @@ export async function ouvrirServeurAppareils(
       push: { actifSurLeMac: opts.push?.actif() ?? false, abonne },
     };
   });
+
+  app.post(
+    '/api/appareils/moi/pda',
+    {
+      bodyLimit: 8192,
+      onRequest: async (_req, reply) => {
+        if (!opts.pda?.actif()) return reply.code(403).send({ raison: 'pda_coupe' });
+      },
+      schema: { body: CorpsEnregistrementPda },
+    },
+    async (req, reply) => {
+      try {
+        return await new RegistrePda(
+          opts.pda!.db,
+          (type, donnees) => req.log.info(donnees, type),
+          now,
+        ).enregistrer(req.appareil!.id, req.body as EnregistrementPda);
+      } catch (err) {
+        if (err instanceof RefusPda)
+          return reply.code(err.raison === 'connu' ? 409 : 400).send({ raison: err.raison });
+        throw err;
+      }
+    },
+  );
 
   const gardePush = async (_req: FastifyRequest, reply: FastifyReply) => {
     if (!opts.push?.actif()) return reply.code(403).send({ raison: 'push_coupe' });

@@ -148,3 +148,33 @@ export async function verifierEnveloppe(
     return null;
   }
 }
+
+export interface ClesPda {
+  credId: string;
+  passkey: string;
+  relais: { crv: string; kty: string; x: string; y: string };
+}
+
+/** Les 40 premiers bits du hachage, en base32 RFC 4648. */
+export async function empreintePda({ credId, passkey, relais }: ClesPda): Promise<string> {
+  const { crv, kty, x, y } = relais;
+  const h = new Uint8Array(
+    await globalThis.crypto.subtle.digest(
+      'SHA-256',
+      new TextEncoder().encode(jsonCanonique({ credId, passkey, relais: { crv, kty, x, y } })),
+    ),
+  );
+  const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+  let bits = 0;
+  let valeur = 0;
+  let texte = '';
+  for (const octet of h.slice(0, 5)) {
+    valeur = (valeur << 8) | octet;
+    bits += 8;
+    while (bits >= 5) {
+      bits -= 5;
+      texte += alphabet[(valeur >>> bits) & 31];
+    }
+  }
+  return `${texte.slice(0, 4)}-${texte.slice(4)}`;
+}
