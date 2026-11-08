@@ -40,12 +40,17 @@ test('43.7 : CSP exacte et configuration du relais relue sans redémarrage', asy
     expect(avant.statusCode).toBe(200);
     expect(avant.headers['content-type']).toBe('text/javascript; charset=utf-8');
     expect(avant.headers['cache-control']).toBe('no-cache');
-    expect(avant.body).toBe(`export const CLE_DAEMON = "${fournisseur.clePubliqueRaw()}";`);
+    expect(avant.body).toBe(
+      `export const CLE_DAEMON = "${fournisseur.clePubliqueRaw()}"; export const RELAIS = null;`,
+    );
     fournisseur.tourner();
     const apres = await lire();
     expect(apres.body).not.toBe(avant.body);
-    expect(apres.body).toBe(`export const CLE_DAEMON = "${fournisseur.clePubliqueRaw()}";`);
+    expect(apres.body).toBe(
+      `export const CLE_DAEMON = "${fournisseur.clePubliqueRaw()}"; export const RELAIS = null;`,
+    );
     config.pda = true;
+    expect((await lire()).body).toContain('export const RELAIS = "https://example.com";');
     expect((await lire()).headers['content-security-policy']).toBe(csp(' https://example.com'));
     config.relais = 'https://relais.example.com';
     expect((await lire()).headers['content-security-policy']).toBe(

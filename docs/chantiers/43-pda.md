@@ -215,6 +215,7 @@ Ce document.
 - Dans l'écran « Appareils PDA », sur le téléphone, « Enregistrer cet appareil » crée la passkey et la clé de relais, puis affiche l'empreinte courte.
 - L'écran « Confirmer » lit `GET /demandes` du relais, avec `credentials: 'omit'`. Il vérifie la taille, puis la signature, puis l'échéance, et affiche par `textContent`. Le numéro est retapé, puis `credentials.get` est appelé.
 - Tests web : une enveloppe à la signature fausse n'est jamais affichée ; un sujet `<img src=x onerror=…>` s'affiche comme du texte ; « Confirmer » reste inactif tant que le numéro n'est pas retapé.
+- *Révision 43.8.* `/pda-cle.js` exporte aussi `RELAIS`, l'origine du relais, ou `null` si le PDA est coupé. `main.tsx` rend `AppPda` directement sur `/pda*`, sans `detecterMode` ni aucune route `/api/`. Hors ligne, la navigation retombe sur la coque en cache (`/`), comme au 32. La charge du push ne distingue pas le PDA : le lien « Confirmations » est donc ajouté à l'accueil de l'appareil. Un test Node montre qu'une réponse fabriquée par le code de l'app, signée par une fausse passkey en DER, est acceptée par `verifierAssertion`. Gate 2315, e2e 115.
 
 ### 43.9 Le panneau du Mac (D221)
 - L'interrupteur, l'URL du relais, les appareils PDA, la rotation de la clé et la demande d'essai.

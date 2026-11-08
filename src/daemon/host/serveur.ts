@@ -272,7 +272,9 @@ export async function ouvrirServeurAppareils(
     return reply
       .type('text/javascript; charset=utf-8')
       .header('Cache-Control', 'no-cache')
-      .send(`export const CLE_DAEMON = "${opts.clePda.clePubliqueRaw()}";`);
+      .send(
+        `export const CLE_DAEMON = "${opts.clePda.clePubliqueRaw()}"; export const RELAIS = ${JSON.stringify(opts.pda?.actif() ? (opts.relaisPda?.() ?? null) : null)};`,
+      );
   });
 
   // D174, D180 : qui suis-je. Le mode appareil de l'interface part de cette réponse.
