@@ -1,5 +1,11 @@
 import { randomBytes, randomInt, sign } from 'node:crypto';
-import { hacher, jsonCanonique, lireCorpsDemande, type CorpsDemande } from '../../shared/pda.js';
+import {
+  CONTEXTE_DEMANDE,
+  hacher,
+  jsonCanonique,
+  lireCorpsDemande,
+  type CorpsDemande,
+} from '../../shared/pda.js';
 import { creerFournisseurClePda } from './cle.js';
 
 /** Le fournisseur partagé reste attaché à cette instance du daemon. */
@@ -26,7 +32,10 @@ export async function signerDemande(
   };
   const octets = Buffer.from(jsonCanonique(corps), 'utf8');
   lireCorpsDemande(octets);
-  const sig = sign('sha256', octets, { key: fournisseur.obtenir(), dsaEncoding: 'ieee-p1363' });
+  const sig = sign('sha256', Buffer.concat([Buffer.from(CONTEXTE_DEMANDE), octets]), {
+    key: fournisseur.obtenir(),
+    dsaEncoding: 'ieee-p1363',
+  });
   return {
     corps,
     enveloppe: { corps: octets.toString('base64url'), sig: sig.toString('base64url') },

@@ -1,3 +1,17 @@
+export const CONTEXTE_DEMANDE = 'aid-pda-demande-v1\n';
+export const CONTEXTE_RELAIS = 'aid-pda-relais-v1\n';
+
+export function octetsRequeteRelais(requete: {
+  methode: string;
+  chemin: string;
+  hachageCorps: string;
+  heure: string;
+}): Uint8Array<ArrayBuffer> {
+  return new TextEncoder().encode(
+    `${CONTEXTE_RELAIS}${requete.methode}\n${requete.chemin}\n${requete.hachageCorps}\n${requete.heure}`,
+  );
+}
+
 /** JSON déterministe, indépendant de Node et sans conversion implicite de valeurs. */
 export function jsonCanonique(valeur: unknown): string {
   const actifs = new Set<object>();
@@ -97,7 +111,9 @@ export async function defiReponse(reponse: {
   return new Uint8Array(
     await globalThis.crypto.subtle.digest(
       'SHA-256',
-      new TextEncoder().encode(jsonCanonique(reponse)),
+      new TextEncoder().encode(
+        jsonCanonique({ ...reponse, numero: reponse.valeur === 'non' ? '' : reponse.numero }),
+      ),
     ),
   );
 }
@@ -123,7 +139,7 @@ export async function verifierEnveloppe(
         { name: 'ECDSA', hash: 'SHA-256' },
         cle,
         decoderBase64url(enveloppe.sig),
-        corps,
+        new Uint8Array([...new TextEncoder().encode(CONTEXTE_DEMANDE), ...corps]),
       ))
     )
       return null;

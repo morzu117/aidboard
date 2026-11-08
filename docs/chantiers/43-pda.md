@@ -178,6 +178,7 @@ Ce document.
 ### 43.3 La vérification d'une assertion WebAuthn (D217, D218)
 - `src/daemon/pda/webauthn.ts` lit une clé COSE ES256, puis vérifie une assertion dans l'ordre de D218. C'est écrit sur `node:crypto`, sans dépendance.
 - Tests sur des assertions fabriquées avec une clé de test : chaque condition de D218 a son cas de refus, plus le cas valide. Les bits UP et UV absents, une autre origine, un autre rpId, un autre défi et une échéance passée sont refusés.
+- *Révision 43.3.* La clé publique de l'appareil est rangée en SPKI DER, telle que la donne `getPublicKey()`, et non en COSE : aucun décodeur CBOR n'entre dans le daemon (écart soumis au lab, DM 92445). Pour `non`, le numéro du défi vaut `''`. La partie A sépare les usages de la clé (D211, révision 1), avec les contextes `CONTEXTE_DEMANDE` et `CONTEXTE_RELAIS`. Gate 2230.
 
 ### 43.4 Le registre des appareils PDA et l'enregistrement (D214)
 - La migration 023 crée `pda_appareils` et `pda_demandes` (`id`, `action`, `sujet`, `h_demande`, `numero`, `echeance`, `etat`, `consomme_a`).

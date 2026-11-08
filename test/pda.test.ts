@@ -6,6 +6,8 @@ import { createHash, createPublicKey, sign, verify } from 'node:crypto';
 import { creerFournisseurClePda } from '../src/daemon/pda/cle.js';
 import { creerSigneurDemande } from '../src/daemon/pda/demande.js';
 import {
+  CONTEXTE_DEMANDE,
+  octetsRequeteRelais,
   defiReponse,
   jsonCanonique,
   lireCorpsDemande,
@@ -59,7 +61,7 @@ describe('format PDA', () => {
     expect(
       verify(
         'sha256',
-        octets,
+        Buffer.concat([Buffer.from(CONTEXTE_DEMANDE), octets]),
         {
           key: createPublicKey({ key: fournisseur.clePubliqueJwk(), format: 'jwk' }),
           dsaEncoding: 'ieee-p1363',
@@ -96,7 +98,7 @@ describe('format PDA', () => {
     const { corps } = await signerDemande(entree);
     for (const texte of [JSON.stringify({ ...corps, trop: true }), '{']) {
       const octets = Buffer.from(texte);
-      const sig = sign('sha256', octets, {
+      const sig = sign('sha256', Buffer.concat([Buffer.from(CONTEXTE_DEMANDE), octets]), {
         key: fournisseur.obtenir(),
         dsaEncoding: 'ieee-p1363',
       });
@@ -106,6 +108,27 @@ describe('format PDA', () => {
           fournisseur.clePubliqueRaw(),
         ),
       ).resolves.toBeNull();
+    }
+  });
+  it('refuse les signatures sans contexte et celles du relais', async () => {
+    const { fournisseur, signerDemande } = contexte();
+    const { enveloppe } = await signerDemande(entree);
+    for (const octets of [
+      Buffer.from(enveloppe.corps, 'base64url'),
+      octetsRequeteRelais({
+        methode: 'PUT',
+        chemin: '/demandes/exemple',
+        hachageCorps: 'abc',
+        heure: '1000',
+      }),
+    ]) {
+      const sig = sign('sha256', octets, { key: fournisseur.obtenir(), dsaEncoding: 'ieee-p1363' });
+      expect(
+        await verifierEnveloppe(
+          { ...enveloppe, sig: sig.toString('base64url') },
+          fournisseur.clePubliqueRaw(),
+        ),
+      ).toBeNull();
     }
   });
   it('refuse les schémas et les tailles hors limites', async () => {
