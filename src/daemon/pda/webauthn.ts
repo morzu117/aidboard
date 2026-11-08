@@ -3,7 +3,8 @@ import { decoderBase64url, defiReponse } from '../../shared/pda.js';
 
 interface ContexteAssertion {
   appareil: { id: string; credId: string; clePublique: string; actif: boolean } | null;
-  demande: { id: string; hDemande: string; numero: string; echeance: number };
+  demande: { id: string; hDemande: string; numero: string | null; echeance: number };
+  numeroAttendu?: string;
   origine: string;
   rpId: string;
   maintenant: number;
@@ -95,9 +96,15 @@ export async function verifierAssertion(
   }
   if (!egaux(authentificateur.subarray(0, 32), hacher(ctx.rpId))) return refus('rpid');
   if ((authentificateur[32]! & 5) !== 5) return refus('presence');
+  const numeroAttendu = ctx.demande.numero ?? ctx.numeroAttendu;
+  if (
+    ctx.demande.numero === null &&
+    (numeroAttendu?.length !== 4 || !/^\d{4}$/.test(numeroAttendu))
+  )
+    return refus('numero');
   if (
     e.valeur === 'oui'
-      ? e.numero !== ctx.demande.numero
+      ? e.numero !== (ctx.demande.numero ?? ctx.numeroAttendu)
       : e.numero !== undefined && e.numero !== null
   )
     return refus('numero');

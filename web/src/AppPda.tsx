@@ -212,6 +212,7 @@ function Demande({
   repondre: (d: DemandePda, valeur: 'oui' | 'non', numero: string) => Promise<void>;
 }) {
   const [numero, setNumero] = useState('');
+  if (entree.demande.v !== 1) return null;
   return (
     <section>
       <h2>Demande d’essai</h2>

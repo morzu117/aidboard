@@ -165,6 +165,7 @@ Le refus fermé de D225 bloquerait tout merge sur une installation qui n'a jamai
 ### 34.2 Le corps v2, les schémas d'action et le résumé (D222, D223, D229)
 
 `src/shared/pda.ts` : `CorpsDemandeV2`, un schéma fermé par action, `lireCorpsDemande` qui accepte le v1 et le v2, et `resumeAction(params)`. `defiReponse` ne change pas. Les tests couvrent une clé en trop refusée par action, les bornes, les caractères de contrôle et `numero: null` pour « toujours ».
+- *Révision 34.2.* Les schémas d'action sont dans `src/shared/confirmations.ts`, réexportés par `pda.ts`. Le v1 n'est accepté que pour `essai`. Le `resume` doit être égal à `resumeAction(action, params)`. `verifierAssertion` prend `numeroAttendu` quand le corps porte `numero: null` (classe « toujours ») et refuse `numero` s'il manque. Lignes existantes modifiées : 3. Gate 2346.
 
 ### 34.3 La migration 024 et le réglage (D227, D230)
 
