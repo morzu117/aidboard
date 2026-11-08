@@ -236,6 +236,7 @@ Ce document.
   - le second appareil ;
   - le cache perdu ;
   - la rotation de la clé.
+- *Révision 43.10.* Le daemon de l'e2e joint le relais factice `relais.aid-e2e.example` par un module de test (`e2e/pda-fetch.mjs`, chargé par `NODE_OPTIONS=--import`), qu'aucun fichier de `src/` ne connaît. WebAuthn passe par un authentificateur virtuel CDP (UV). Chromium arrête lui-même l'assertion sans UV : le cas vérifie donc que la demande n'est jamais confirmée, puis qu'elle expire réellement (environ 5 min). La rotation (une demande illisible avec l'ancienne clé, puis lue après un rechargement) et l'ouverture hors ligne passent. Gate 2320, e2e 116.
 
 ## 6. Pièges
 
