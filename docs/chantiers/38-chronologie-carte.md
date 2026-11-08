@@ -88,6 +88,7 @@ Le 38 garde les mêmes six lectures que le 24, avec les mêmes arguments et le m
 - la coupe à 140 caractères ;
 - chaque limite ;
 - une lecture en échec n'empêche pas le reste.
+- *Révision 38.2.* `chronologie()` fusionne les étapes, les événements des neuf sortes et le fil. Le tri est stable, par date décroissante, et les dates illisibles vont en fin de liste. Les limites sont `fil-limite`, `lignesAnterieures` et `non-lu`. Hors du chantier : le test « merge 202 » du 34.8 est rendu déterministe, avec les minuteries avancées dans `waitFor` (2 lignes remplacées), et il passe 20 fois sur 20 sous la charge du gate. Gate : 2491 tests passent ; `agents-pilotage`, déjà connu pour être instable, passe quand il est relancé seul.
 
 ### 38.3 Le bloc « Chronologie » (D238)
 
