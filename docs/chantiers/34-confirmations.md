@@ -40,15 +40,17 @@ Ligne 34 du programme : « Confirmations par le téléphone : réglage, plancher
 
 | Action | Classe | Route d'origine | Paramètres signés |
 |---|---|---|---|
-| `merge` | par défaut | `topic.merge` | `topicId`, dépôt (`owner/nom`), `pr`, `tete` (40 hex), `strategie`, `supprimerBranche`, `nettoyer` |
+| `merge` | par défaut | `topic.merge` | `topicId`, dépôt (`owner/nom`), `pr`, `tete` (40 hex), `strategie`, `supprimerBranche`, `nettoyer`, `teteNettoyage` (40 hex, ou `null` si `nettoyer` est faux ou la branche absente) |
 | `push` | par défaut | `git.pousser` | `topicId`, `branche`, `tete` locale (40 hex), `distante` attendue (40 hex ou `null` si absente) |
-| `nettoyage` | par défaut | `topic.cleanup` | `topicId`, `branche`, `tete` (40 hex ou `null`), `etat` |
+| `nettoyage` | par défaut | `topic.cleanup` | `topicId`, `branche`, `tete` (40 hex ou `null`), `etat`, `nonFusionnes` (entier ≥ 0 ou `null`, le `confirmUnmerged` de la route), `sale` (`refuser`, `stash` ou `force`) |
 | `projet.retirer` | par défaut | `DELETE /api/workspaces/:id` | `workspaceId`, `racine` |
 | `appairage` | toujours | `POST /api/host/appairages/:id/approuver` | `appairageId`, `nom`, `identite`, `sansIdentite` |
 | `pda.activer` | toujours | `POST /api/host/pda/appareils/:id/activer` | `appareilId`, `nom`, `empreinte` |
 | `host.option` | toujours | `PUT /api/host/code` et `/push` | `option` (`code` ou `push`), `actif` |
 | `reglage` | toujours | nouvelle route (D227) | `action`, `actif: false` |
 | `desarmement` | toujours | nouvelle route (D233) | aucun |
+
+Le message de merge personnalisé (`message`), du texte libre, n'est pas accepté sous confirmation : la route répond 422 « message de merge personnalisé indisponible sous confirmation ». Hors confirmation, il reste comme aujourd'hui.
 
 `essai` reste, en classe « par défaut », sans effet. Couper le code, le push ou le PDA, révoquer un appareil, « Couper tous les accès » : ce sont des retraits de droits, **jamais** sous confirmation (lab, DM 92515).
 
@@ -112,7 +114,8 @@ La route d'origine appelle `preparer`. Si l'action est sous confirmation (D227),
 
 - `merge` : « Merge de <dépôt>#<pr> (<tête courte>), <stratégie>, branche supprimée oui/non ». Le titre de la PR n'y est pas : c'est du texte venu de la forge.
 - `push` : « Push de <branche> (<tête courte>) ».
-- `nettoyage` : « Nettoyage du sujet <branche> ».
+- `nettoyage` : « Nettoyage du sujet <branche> », suivi de « , N commits non fusionnés perdus » si `nonFusionnes` > 0, et de « , modifications locales mises de côté » (`stash`) ou « , modifications locales perdues » (`force`).
+- `merge` : si `nettoyer` est vrai, « , puis nettoyage » s'ajoute.
 - `projet.retirer` : « Retrait du projet <nom du dossier> ».
 - `appairage` : « Approuver l'appareil <nom> ».
 - `pda.activer` : « Activer le PDA <nom>, empreinte <XXXX-XXXX> ».
