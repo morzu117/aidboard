@@ -80,11 +80,11 @@ L'enveloppe transportée est `{ corps: <octets en base64url>, sig: <r‖s en bas
 - `id` ;
 - `nom` ;
 - `cred_id` ;
-- `cle_publique` (COSE ES256) ;
+- `cle_publique` : la SPKI DER donnée par `getPublicKey()`, avec `getPublicKeyAlgorithm() === -7`. Le daemon l'importe par `createPublicKey({ format: 'der', type: 'spki' })`, et refuse tout ce qui n'est pas EC P-256. Si `getPublicKey()` renvoie `null`, l'enregistrement échoue avec un message, sans recourir à l'attestation. Aucun CBOR n'est lu (lab, DM 92447) ;
 - `cle_relais` (JWK ES256) ;
 - `cree_a`, `revoque_a`.
 
-**L'enregistrement** : depuis un appareil appairé et dans son accès de 8 h, dans le tailnet, l'app crée une passkey sur l'origine de l'app, avec `userVerification: 'required'`, `attestation: 'none'` et ES256 seul. Elle crée aussi une clé de relais WebCrypto, non extractible. Elle envoie les deux clés publiques au daemon par `POST /api/appareils/moi/pda`. L'appareil reste « en attente » jusqu'à ce que le Mac l'active, après avoir comparé l'empreinte courte affichée des deux côtés. **L'empreinte** couvre les deux clés publiques à la fois : c'est le SHA-256 du JSON canonique `{ passkey, relais }`, dont les 40 premiers bits sont écrits en base32, soit 8 caractères, groupés par 4 (lab, DM 92443).
+**L'enregistrement** : depuis un appareil appairé et dans son accès de 8 h, dans le tailnet, l'app crée une passkey sur l'origine de l'app, avec `userVerification: 'required'`, `attestation: 'none'` et ES256 seul. Elle crée aussi une clé de relais WebCrypto, non extractible. Elle envoie les deux clés publiques au daemon par `POST /api/appareils/moi/pda`. L'appareil reste « en attente » jusqu'à ce que le Mac l'active, après avoir comparé l'empreinte courte affichée des deux côtés. **L'empreinte** couvre les deux clés publiques à la fois : c'est le SHA-256 du JSON canonique `{ credId, passkey, relais }`, dont les 40 premiers bits sont écrits en base32, soit 8 caractères, groupés par 4 (lab, DM 92443).
 
 **La révocation** sur le Mac fait foi : le daemon retire l'appareil de son registre.
 
@@ -236,6 +236,7 @@ Ce document.
 - **Ne pas ouvrir de transport réglable** autre que `config.modeHost.relais`. Pas d'URL de relais dans une route, ni dans un appareil.
 - **L'origine de l'app est le rpId.** Une passkey créée sur une autre origine ne vaut rien ici. Ne jamais créer une passkey depuis une page du relais : il n'en sert d'ailleurs aucune.
 - **Les passkeys synchronisées** (iCloud, Google) ont un compteur à 0 : D218 ne l'exige pas. Le prix : un authentificateur cloné ne se détecte pas. La parade est UV et la révocation sur le Mac.
+- **L'empreinte sur 40 bits n'est pas une barrière cryptographique** : une collision coûte environ 2^40 hachages, ce qui se fait hors ligne. Elle protège d'une erreur. La vraie barrière, c'est que l'enregistrement se fait dans le tailnet, depuis un appareil dans son accès de 8 h (lab, DM 92447).
 - **iOS** peut évincer le stockage d'une PWA si la place manque. La clé publique épinglée est dans le cache du code, pas dans IndexedDB. Un cache perdu donne un refus fermé.
 - **L'horloge** : le relais n'est jamais cru sur l'heure. Le daemon accepte une marge de 60 s sur les requêtes signées, mais aucune sur l'échéance.
 - **Le chantier 34** branchera les actions réelles. Au 43, `action` n'accepte que `essai` : un autre code est refusé.
