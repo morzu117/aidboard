@@ -44,7 +44,7 @@ Ligne 34 du programme : « Confirmations par le téléphone : réglage, plancher
 | `push` | par défaut | `git.pousser` | `topicId`, `branche`, `tete` locale (40 hex), `distante` attendue (40 hex ou `null` si absente) |
 | `nettoyage` | par défaut | `topic.cleanup` | `topicId`, `branche`, `tete` (40 hex ou `null`), `etat`, `nonFusionnes` (entier ≥ 0 ou `null`, le `confirmUnmerged` de la route), `sale` (`refuser`, `stash` ou `force`) |
 | `projet.retirer` | par défaut | `DELETE /api/workspaces/:id` | `workspaceId`, `racine` |
-| `appairage` | toujours | `POST /api/host/appairages/:id/approuver` | `appairageId`, `nom`, `identite`, `sansIdentite` |
+| `appairage` | toujours | `POST /api/host/appairages/:id/approuver` | `appairageId`, `nom`, `hIdentite` (SHA-256 base64url de l'identité Tailscale, ou `null` sans identité), `sansIdentite` |
 | `pda.activer` | toujours | `POST /api/host/pda/appareils/:id/activer` | `appareilId`, `nom`, `empreinte` |
 | `host.option` | toujours | `PUT /api/host/code` et `/push` | `option` (`code` ou `push`), `actif` |
 | `reglage` | toujours | nouvelle route (D227) | `action`, `actif: false` |
@@ -124,7 +124,7 @@ La route d'origine appelle `preparer`. Si l'action est sous confirmation (D227),
 - `essai` : « Demande d'essai ».
 - `desarmement` : « Désarmer les confirmations ».
 
-Les noms (sujet, projet, appareil) passent par le relais, comme au 43 (Q4 du 43). Ils sont bornés à 60 caractères et nettoyés des caractères de contrôle.
+Les noms (sujet, projet, appareil) passent par le relais, comme au 43 (Q4 du 43). L'identité Tailscale d'un appairage, un login, n'y passe **jamais** : seul son hachage est signé (`hIdentite`), et le daemon le recalcule au rejeu de `preparer`. Ils sont bornés à 60 caractères et nettoyés des caractères de contrôle.
 
 ### D230. La file, l'attente et le résultat
 
