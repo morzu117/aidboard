@@ -413,3 +413,25 @@ test('écran Livraison : le merge 202 ferme le dialogue et remplace le bouton pa
     lectures,
   );
 });
+
+test('faux numéro signé : motif dans l’attente et les dernières demandes', async () => {
+  const h = ouvrirMerge();
+  h.respond.set(
+    'GET /api/confirmations',
+    json(200, {
+      ouvertes: [],
+      recentes: [{ ...ouverte, etat: 'expiree', resultat: 'annulee', raison: 'numero' }],
+    }),
+  );
+  fireEvent.click(screen.getByText('Merge'));
+  await screen.findByText('Annulée : mauvais numéro saisi sur le téléphone');
+  cleanup();
+  setup(<PanneauConfirmations />, snapshot(), '/', {
+    ...routes,
+    'GET /api/confirmations': json(200, {
+      ouvertes: [],
+      recentes: [{ ...ouverte, etat: 'expiree', resultat: 'annulee', raison: 'numero' }],
+    }),
+  });
+  await screen.findByText('Merge du sujet — Annulée : mauvais numéro saisi sur le téléphone');
+});

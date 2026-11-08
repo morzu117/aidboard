@@ -221,6 +221,9 @@ L'attente sur chaque bouton, le numéro « toujours », la section « Confirmati
 
 Un merge et un push confirmés de bout en bout avec le relais local et la passkey virtuelle. Un merge dont la tête bouge entre la demande et la confirmation, qui doit être refusé par la forge factice ou par le bail. Une approbation d'appareil avec le numéro lu sur le Mac. Le réglage coupé puis rallumé. L'amorçage après la révocation. La fiche : `docs/recette-chantier-34-confirmations.md`.
 
+- *Révision 34.9 — fait.* E2E des confirmations avec relais local, passkey virtuelle et forge factice ; fiche de recette pour les vrais téléphones. Le motif D234 est affiché dans l’attente et les dernières demandes. Le brief final privilégie les cas merge et host ; le push confirmé reste couvert par les tests du 34.5.
+- *Révision 34.9.* `e2e/confirmations.spec.ts` couvre le merge direct puis confirmé, une demande périmée, l'appairage avec le bon numéro puis un faux numéro signé, l'annulation, le réglage, le désarmement, le réarmement et le refus après révocation. Le push confirmé reste couvert par les tests du 34.5. Le texte de D234 s'affiche sur le Mac. La fiche `docs/recette-chantier-34-confirmations.md` est pour Julien. Gate 2467, e2e 117.
+
 ## 6. Pièges
 
 - **Lignes existantes modifiées.** Ce chantier touche des routes existantes (merge, push, nettoyage, retrait de projet, appairage, options du host). Le nombre de lignes modifiées sera plus élevé qu'aux chantiers précédents. Chaque point le donne et le justifie.

@@ -8,12 +8,15 @@ export interface Confirmation {
   echeance: number;
   etat: string;
   resultat: string | null;
+  raison?: string | null;
 }
 export interface FileConfirmations {
   ouvertes: Confirmation[];
   recentes: Confirmation[];
 }
 export function resultatConfirmation(d: Confirmation): string | null {
+  if (d.resultat === 'annulee' && d.raison === 'numero')
+    return 'Annulée : mauvais numéro saisi sur le téléphone';
   const resultat = {
     executee: 'Exécutée',
     annulee: 'Annulée',
