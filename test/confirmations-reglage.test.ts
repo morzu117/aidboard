@@ -158,9 +158,9 @@ test('routes admin du Mac seulement, rallumage immédiat et coupure différée',
     headers: t.headers,
     payload: { action: 'merge', actif: false },
   });
-  expect(refus.statusCode).toBe(501);
-  expect(refus.json()).toEqual({ error: 'confirmation_requise' });
-  expect(reglage.exige('merge')).toBe(true);
+  expect(refus.statusCode).toBe(200);
+  expect(refus.json()).toEqual({ actions: reglage.lire(), ...reglage.lireArmement() });
+  expect(reglage.exige('merge')).toBe(false);
   for (const payload of [
     { action: 'inconnue', actif: true },
     { action: 'reglage', actif: false },

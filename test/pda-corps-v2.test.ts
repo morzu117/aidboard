@@ -20,9 +20,17 @@ const exemples: ParametresActions = {
     strategie: 'squash',
     supprimerBranche: true,
     nettoyer: false,
+    teteNettoyage: null,
   },
   push: { topicId: 'sujet_1', branche: 'sujet/test', tete, distante: null },
-  nettoyage: { topicId: 'sujet_1', branche: 'sujet/test', tete: null, etat: 'closed' },
+  nettoyage: {
+    topicId: 'sujet_1',
+    branche: 'sujet/test',
+    tete: null,
+    etat: 'closed',
+    nonFusionnes: null,
+    sale: 'refuser',
+  },
   'projet.retirer': { workspaceId: 'projet_1', racine: '/projets/projet' },
   appairage: { appairageId: 'pair_1', nom: 'Téléphone', identite: null, sansIdentite: true },
   'pda.activer': { appareilId: 'pda_1', nom: 'Téléphone', empreinte: 'ABCD-2345' },
@@ -249,4 +257,37 @@ it('accepte les variantes aux bornes des schémas', () => {
       racine: '/' + 'a/'.repeat(508) + 'projet/',
     }),
   ).toBe('Retrait du projet projet');
+});
+it('signe les options de nettoyage et les explique dans le résumé', () => {
+  for (const teteNettoyage of ['', 'A'.repeat(40), 'a'.repeat(39)])
+    expect(() =>
+      resumeAction('merge', { ...exemples.merge, nettoyer: true, teteNettoyage }),
+    ).toThrow();
+  expect(() => resumeAction('merge', { ...exemples.merge, teteNettoyage: tete })).toThrow();
+  expect(resumeAction('merge', { ...exemples.merge, nettoyer: true, teteNettoyage: tete })).toBe(
+    'Merge de exemple/projet#42 (abcdef0), squash, branche supprimée oui, puis nettoyage',
+  );
+  expect(
+    resumeAction('merge', { ...exemples.merge, nettoyer: true, teteNettoyage: null }),
+  ).toContain('puis nettoyage');
+  for (const nonFusionnes of [-1, 1.5, 1000001, '3'])
+    expect(() =>
+      resumeAction('nettoyage', {
+        ...exemples.nettoyage,
+        nonFusionnes,
+      } as ParametresActions['nettoyage']),
+    ).toThrow();
+  for (const nonFusionnes of [null, 0, 1000000])
+    expect(resumeAction('nettoyage', { ...exemples.nettoyage, nonFusionnes })).toContain(
+      'Nettoyage du sujet',
+    );
+  expect(resumeAction('nettoyage', { ...exemples.nettoyage, nonFusionnes: 3, sale: 'force' })).toBe(
+    'Nettoyage du sujet sujet/test, 3 commits non fusionnés perdus, modifications locales perdues',
+  );
+  expect(resumeAction('nettoyage', { ...exemples.nettoyage, sale: 'stash' })).toBe(
+    'Nettoyage du sujet sujet/test, modifications locales mises de côté',
+  );
+  expect(() =>
+    lire({ ...corps('nettoyage'), params: { ...exemples.nettoyage, sale: 'autre' } }),
+  ).toThrow();
 });

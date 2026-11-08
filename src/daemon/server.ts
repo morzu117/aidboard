@@ -1,3 +1,6 @@
+import { creerActionsConfirmation } from './confirmations/actions.js';
+import { creerPorte } from './confirmations/porte.js';
+import type { LigneDemande } from './pda/file.js';
 import { existsSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -92,7 +95,15 @@ export interface ServerDeps {
   /** chantier 31 (D172) : le port des appareils ; absent = pas de route du mode host */
   modeHost?: ModeHost;
   clePda?: ReturnType<typeof creerFournisseurClePda>;
-  pda?: { obtenir: () => FilePda | null; synchroniser: () => Promise<void> };
+  pda?: {
+    obtenir: () => FilePda | null;
+    pourAnnulation?: () => FilePda | null;
+    synchroniser: () => Promise<void>;
+    lierExecuteur?: (
+      executer: (ligne: LigneDemande) => Promise<void>,
+      preparer: (ligne: LigneDemande) => Promise<() => void>,
+    ) => void;
+  };
   /** chantier 31 (D174), tests : chaque route déclarée sur le port du Mac */
   onRoute?: (r: { method: string | string[]; url: string }) => void;
 }
@@ -192,7 +203,22 @@ export async function buildServer(deps: ServerDeps): Promise<FastifyInstance> {
     },
   });
   registerAgentRoutes(app, { db: deps.db, agents: deps.agents, store: deps.store });
-  registerWorkspaceRoutes(app, { ...deps, engine: structural });
+  const actionsConfirmation = { store: deps.store, paths: deps.paths, queue: new WorkspaceQueue() };
+  const porte = creerPorte({
+    db: deps.db,
+    actions: creerActionsConfirmation({
+      ...deps,
+      actions: actionsConfirmation,
+      engine: structural,
+    }),
+    file: () => deps.pda?.obtenir() ?? null,
+    signaler: () => deps.pda?.obtenir()?.signaler(),
+  });
+  deps.pda?.lierExecuteur?.(
+    (ligne) => porte.executerConfirmee(ligne),
+    (ligne) => porte.preparerConsommation(ligne),
+  );
+  registerWorkspaceRoutes(app, { ...deps, engine: structural, porte });
   registerNavRoutes(app, { db: deps.db });
   const connections = registerServerRoutes(app, {
     db: deps.db,
@@ -215,7 +241,12 @@ export async function buildServer(deps: ServerDeps): Promise<FastifyInstance> {
   });
   registerFsRoutes(app);
   registerFileRoutes(app, { db: deps.db });
-  registerConfirmationRoutes(app, deps.db);
+  registerConfirmationRoutes(
+    app,
+    deps.db,
+    porte,
+    () => deps.pda?.pourAnnulation?.() ?? deps.pda?.obtenir() ?? null,
+  );
   registerArtefactRoutes(app, { db: deps.db, artefacts: deps.artefacts });
   if (deps.modeHost) {
     registerHostRoutes(app, {
@@ -242,7 +273,8 @@ export async function buildServer(deps: ServerDeps): Promise<FastifyInstance> {
     db: deps.db,
     config: deps.config,
     engine: structural,
-    actions: { store: deps.store, paths: deps.paths, queue: new WorkspaceQueue() },
+    actions: actionsConfirmation,
+    porte,
     indexer,
   });
   registerStructuralRoutes(app, { db: deps.db, engine: structural, store: deps.store, indexer });

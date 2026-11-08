@@ -1,3 +1,5 @@
+import { creerActionsConfirmation } from '../confirmations/actions.js';
+import { creerPorte, type Porte } from '../confirmations/porte.js';
 import { existsSync, readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { basename, join } from 'node:path';
@@ -87,6 +89,7 @@ export function registerWorkspaceRoutes(
     db: Db;
     paths: AidPaths;
     procVersion?: () => string | null;
+    porte?: Porte;
     engine: StructuralService;
   },
 ): void {
@@ -169,70 +172,14 @@ export function registerWorkspaceRoutes(
   // Retirer un projet oublie son enregistrement et ses sujets archivés ; ni le dépôt ni le journal ne sont touchés.
   app.delete('/api/workspaces/:id', async (req, reply) => {
     const { id } = req.params as { id: string };
-    const db = deps.db;
-    if (!db.prepare('SELECT 1 FROM workspaces WHERE id = ?').get(id)) {
-      throw new AidHttpError(404, `projet ${id} inconnu`);
-    }
-    const open = db
-      .prepare("SELECT count(*) AS n FROM topics WHERE workspace_id = ? AND state != 'archived'")
-      .get(id) as { n: number };
-    if (open.n > 0) {
-      throw new AidHttpError(
-        409,
-        `${open.n} sujet${open.n > 1 ? 's' : ''} ouvert${open.n > 1 ? 's' : ''} : les archiver avant de retirer le projet`,
-      );
-    }
-    const runs =
-      'SELECT r.id FROM runs r JOIN topics t ON t.id = r.topic_id WHERE t.workspace_id = ?';
-    const live = db
-      .prepare(
-        `SELECT count(*) AS n FROM agents WHERE run_id IN (${runs}) AND status NOT IN ('done', 'error', 'stopped')`,
-      )
-      .get(id) as { n: number };
-    if (live.n > 0) throw new AidHttpError(409, 'un agent tourne encore pour ce projet');
-    db.transaction(() => {
-      // Le groupe par défaut du projet disparaît avec lui ; un sujet d'un autre projet qui
-      // y avait été déplacé (nav/placements) revient dans le groupe de son propre projet.
-      const navGroup = db.prepare('SELECT id FROM nav_group WHERE workspace_id = ?').get(id) as
-        { id: string } | undefined;
-      if (navGroup) {
-        const elsewhere = db
-          .prepare(
-            'SELECT p.topic_id AS topicId, t.workspace_id AS workspaceId FROM nav_placement p ' +
-              'JOIN topics t ON t.id = p.topic_id WHERE p.group_id = ? AND t.workspace_id != ?',
-          )
-          .all(navGroup.id, id) as Array<{ topicId: string; workspaceId: string }>;
-        for (const p of elsewhere) {
-          const home = db
-            .prepare('SELECT id FROM nav_group WHERE workspace_id = ?')
-            .get(p.workspaceId) as { id: string } | undefined;
-          if (!home) continue;
-          const ord =
-            (
-              db
-                .prepare('SELECT COALESCE(MAX(ord), -1) AS m FROM nav_placement WHERE group_id = ?')
-                .get(home.id) as { m: number }
-            ).m + 1;
-          db.prepare('UPDATE nav_placement SET group_id = ?, ord = ? WHERE topic_id = ?').run(
-            home.id,
-            ord,
-            p.topicId,
-          );
-        }
-        db.prepare('DELETE FROM nav_placement WHERE group_id = ?').run(navGroup.id);
-        db.prepare('DELETE FROM nav_group WHERE id = ?').run(navGroup.id);
-      }
-      db.prepare(`DELETE FROM agents WHERE run_id IN (${runs})`).run(id);
-      db.prepare(
-        'DELETE FROM runs WHERE topic_id IN (SELECT id FROM topics WHERE workspace_id = ?)',
-      ).run(id);
-      db.prepare(
-        'DELETE FROM nav_placement WHERE topic_id IN (SELECT id FROM topics WHERE workspace_id = ?)',
-      ).run(id);
-      db.prepare('DELETE FROM topics WHERE workspace_id = ?').run(id);
-      db.prepare('DELETE FROM actions WHERE workspace_id = ?').run(id);
-      db.prepare('DELETE FROM workspaces WHERE id = ?').run(id);
-    })();
+    const porte =
+      deps.porte ??
+      creerPorte({ db: deps.db, actions: creerActionsConfirmation(deps), file: () => null });
+    const entree = { workspaceId: id };
+    const demande = await porte.demander('projet.retirer', entree, req);
+    if ('confirmation' in demande)
+      return reply.code(202).send({ confirmation: demande.confirmation });
+    await porte.executer('projet.retirer', demande.direct, entree);
     return reply.code(204).send();
   });
 

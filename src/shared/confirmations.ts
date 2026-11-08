@@ -7,9 +7,17 @@ export interface ParametresActions {
     strategie: 'squash' | 'merge' | 'rebase';
     supprimerBranche: boolean;
     nettoyer: boolean;
+    teteNettoyage: string | null;
   };
   push: { topicId: string; branche: string; tete: string; distante: string | null };
-  nettoyage: { topicId: string; branche: string; tete: string | null; etat: string };
+  nettoyage: {
+    topicId: string;
+    branche: string;
+    tete: string | null;
+    etat: string;
+    nonFusionnes: number | null;
+    sale: 'refuser' | 'stash' | 'force';
+  };
   'projet.retirer': { workspaceId: string; racine: string };
   appairage: { appairageId: string; nom: string; identite: string | null; sansIdentite: boolean };
   'pda.activer': { appareilId: string; nom: string; empreinte: string };
@@ -90,9 +98,19 @@ const schemas: Record<ActionConfirmee, Record<string, Validation>> = {
     strategie: choix('squash', 'merge', 'rebase'),
     supprimerBranche: booleen,
     nettoyer: booleen,
+    teteNettoyage: nullable(tete),
   },
   push: { topicId: identifiant, branche, tete, distante: nullable(tete) },
-  nettoyage: { topicId: identifiant, branche, tete: nullable(tete), etat: texte(60) },
+  nettoyage: {
+    topicId: identifiant,
+    branche,
+    tete: nullable(tete),
+    etat: texte(60),
+    nonFusionnes: nullable(
+      (v) => typeof v === 'number' && Number.isInteger(v) && v >= 0 && v <= 1e6,
+    ),
+    sale: choix('refuser', 'stash', 'force'),
+  },
   'projet.retirer': { workspaceId: identifiant, racine: texte(1024) },
   appairage: {
     appairageId: identifiant,
@@ -116,6 +134,7 @@ export function validerParamsAction(action: ActionConfirmee, params: unknown): b
   const schema = schemas[action];
   const p = params as Record<string, unknown>;
   return (
+    (action !== 'merge' || p.nettoyer === true || p.teteNettoyage === null) &&
     Object.keys(p).length === Object.keys(schema).length &&
     Object.entries(schema).every(([cle, valider]) => Object.hasOwn(p, cle) && valider(p[cle]))
   );
@@ -135,13 +154,13 @@ export function resumeAction(
   let resume: string;
   switch (p.action) {
     case 'merge':
-      resume = `Merge de ${p.params.depot}#${p.params.pr} (${p.params.tete.slice(0, 7)}), ${p.params.strategie}, branche supprimée ${p.params.supprimerBranche ? 'oui' : 'non'}`;
+      resume = `Merge de ${p.params.depot}#${p.params.pr} (${p.params.tete.slice(0, 7)}), ${p.params.strategie}, branche supprimée ${p.params.supprimerBranche ? 'oui' : 'non'}${p.params.nettoyer ? ', puis nettoyage' : ''}`;
       break;
     case 'push':
       resume = `Push de ${p.params.branche} (${p.params.tete.slice(0, 7)})`;
       break;
     case 'nettoyage':
-      resume = `Nettoyage du sujet ${p.params.branche}`;
+      resume = `Nettoyage du sujet ${p.params.branche}${p.params.nonFusionnes ? `, ${p.params.nonFusionnes} commits non fusionnés perdus` : ''}${p.params.sale === 'stash' ? ', modifications locales mises de côté' : p.params.sale === 'force' ? ', modifications locales perdues' : ''}`;
       break;
     case 'projet.retirer': {
       const nom = p.params.racine.replace(/\/+$/, '').split('/').at(-1) ?? '';

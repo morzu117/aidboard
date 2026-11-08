@@ -1,4 +1,4 @@
-import { decoderBase64url } from '../../shared/pda.js';
+import { decoderBase64url, jsonCanonique, type ParamsAction } from '../../shared/pda.js';
 import type { Db } from '../db.js';
 import type { creerFournisseurClePda } from './cle.js';
 import { signerDemande } from './demande.js';
@@ -6,10 +6,16 @@ import type { RegistrePda } from './registre.js';
 import type { RelaisPda, ReponseRelais } from './relais.js';
 import { verifierAssertion } from './webauthn.js';
 
-interface LigneDemande {
+export interface LigneDemande {
   id: string;
   hDemande: string;
-  numero: string;
+  numero: string | null;
+  numero_mac: string | null;
+  action: string;
+  params: string | null;
+  classe: string | null;
+  etatAvantNettoyage?: string;
+  perimee?: boolean;
   echeance: number;
 }
 export class RelaisInjoignable extends Error {
@@ -35,12 +41,18 @@ export class FilePda {
       journal: (type: string, donnees: Record<string, unknown>) => void;
       signaler: () => void;
       maintenant?: () => number;
+      executer?: (ligne: LigneDemande) => Promise<void>;
+      preparerConsommation?: (ligne: LigneDemande) => Promise<() => void>;
     },
   ) {
     this.maintenant = deps.maintenant ?? Date.now;
     // D210 : aucune demande d'une session précédente ne survit à l'allumage.
     const anciennes = this.ouvertes();
-    deps.db.prepare("UPDATE pda_demandes SET etat = 'expiree' WHERE etat = 'ouverte'").run();
+    deps.db
+      .prepare(
+        "UPDATE pda_demandes SET etat = 'expiree', resultat = NULL, consomme_a = ? WHERE etat = 'ouverte'",
+      )
+      .run(new Date(this.maintenant()).toISOString());
     if (anciennes.length) deps.signaler();
     void this.enFile(async () => {
       for (const { id } of anciennes) {
@@ -49,6 +61,12 @@ export class FilePda {
       }
       await this.publier();
     }).catch(() => {});
+  }
+  disponible() {
+    return this.actif() && this.deps.contexte() !== null;
+  }
+  signaler() {
+    this.deps.signaler();
   }
   private actif() {
     return !this.arrete && this.deps.actif();
@@ -92,7 +110,7 @@ export class FilePda {
   publierAutorises() {
     return this.enFile(() => this.publier());
   }
-  creerDemande(entree: { action: 'essai'; sujet: string }) {
+  creerDemande(entree: { action: 'essai'; sujet: string } | ParamsAction) {
     return this.enFile(async () => {
       if (!this.actif() || !this.deps.contexte())
         throw new Error('PDA ou nom Tailscale indisponible');
@@ -104,30 +122,49 @@ export class FilePda {
       this.deps.db
         .prepare(
           `INSERT INTO pda_demandes
-        (id, action, sujet, h_demande, numero, echeance, etat, cree_a)
-        VALUES (?, ?, ?, ?, ?, ?, 'ouverte', ?)`,
+        (id, action, sujet, h_demande, numero, echeance, etat, cree_a, classe, params, resume, numero_mac)
+        VALUES (?, ?, ?, ?, ?, ?, 'ouverte', ?, ?, ?, ?, ?)`,
         )
         .run(
           d.corps.id,
           d.corps.action,
-          d.corps.sujet,
+          d.corps.v === 1 ? d.corps.sujet : '',
           d.hDemande,
-          d.corps.numero,
+          d.corps.numero ?? '',
           d.corps.echeance,
           new Date(d.corps.emise).toISOString(),
+          d.corps.v === 2 ? d.corps.classe : null,
+          d.corps.v === 2 ? jsonCanonique(d.corps.params) : null,
+          d.corps.v === 2 ? d.corps.resume : null,
+          d.numeroMac,
         );
       await this.publier();
       if (!this.actif()) throw new Error('PDA indisponible');
       if (!(await this.deps.relais.deposer(d.corps.id, d.enveloppe))) {
         this.deps.db
-          .prepare("UPDATE pda_demandes SET etat = 'expiree' WHERE id = ? AND etat = 'ouverte'")
-          .run(d.corps.id);
+          .prepare(
+            "UPDATE pda_demandes SET etat = 'expiree', consomme_a = ? WHERE id = ? AND etat = 'ouverte'",
+          )
+          .run(new Date(this.maintenant()).toISOString(), d.corps.id);
         this.deps.signaler();
         throw new RelaisInjoignable();
       }
       if (this.actif()) this.deps.signaler();
       this.programmer();
       return { id: d.corps.id };
+    });
+  }
+  annuler(id: string) {
+    return this.enFile(async () => {
+      const modifie = this.deps.db
+        .prepare(
+          "UPDATE pda_demandes SET etat = 'expiree', resultat = 'annulee', consomme_a = ? WHERE id = ? AND etat = 'ouverte'",
+        )
+        .run(new Date(this.maintenant()).toISOString(), id);
+      if (!modifie.changes) return false;
+      this.deps.signaler();
+      await this.deps.relais.retirer(id);
+      return true;
     });
   }
   etat(id: string) {
@@ -150,7 +187,9 @@ export class FilePda {
     const appareil = typeof entree.appareil === 'string' ? entree.appareil : undefined;
     if (appareil !== r.appareil) return refus('appareil', appareil);
     const demande = this.deps.db
-      .prepare('SELECT id, h_demande AS hDemande, numero, echeance FROM pda_demandes WHERE id = ?')
+      .prepare(
+        "SELECT id, h_demande AS hDemande, CASE WHEN classe = 'toujours' THEN NULL ELSE numero END AS numero, numero_mac, echeance, action, classe, params FROM pda_demandes WHERE id = ?",
+      )
       .get(r.id) as LigneDemande | undefined;
     if (!demande) return refus('demande', appareil);
     const ctx = this.deps.contexte();
@@ -158,33 +197,57 @@ export class FilePda {
     const resultat = await verifierAssertion(entree, {
       ...ctx,
       appareil: appareil ? this.deps.registre.actif(appareil) : null,
-      demande,
+      demande: {
+        id: demande.id,
+        hDemande: demande.hDemande,
+        numero: demande.numero,
+        echeance: demande.echeance,
+      },
+      ...(demande.classe === 'toujours' && demande.numero_mac !== null
+        ? { numeroAttendu: demande.numero_mac }
+        : {}),
       maintenant: this.maintenant(),
     });
+    const consommer =
+      resultat.ok && resultat.valeur === 'oui'
+        ? await this.deps.preparerConsommation?.(demande)
+        : undefined;
     if (!this.actif()) return;
     if (!resultat.ok) return refus(resultat.raison, appareil);
     // La vérification attend le hachage : une révocation ou l'échéance peut survenir entre-temps.
     if (!appareil || !this.deps.registre.actif(appareil)?.actif) return refus('appareil', appareil);
     if (this.maintenant() > demande.echeance) return refus('echeance', appareil);
-    const consomme = this.deps.db.transaction(
-      () =>
-        this.deps.db
-          .prepare(
-            "UPDATE pda_demandes SET etat = ?, consomme_a = ? WHERE id = ? AND etat = 'ouverte'",
-          )
-          .run(
-            resultat.valeur === 'oui' ? 'confirmee' : 'refusee',
-            new Date(this.maintenant()).toISOString(),
-            demande.id,
-          ).changes,
-    )();
+    const consomme = this.deps.db.transaction(() => {
+      const changements = this.deps.db
+        .prepare(
+          "UPDATE pda_demandes SET etat = ?, consomme_a = ? WHERE id = ? AND etat = 'ouverte'",
+        )
+        .run(
+          resultat.valeur === 'oui' ? 'confirmee' : 'refusee',
+          new Date(this.maintenant()).toISOString(),
+          demande.id,
+        ).changes;
+      // D224 : l'archivage du nettoyage partage la transaction de consommation.
+      if (changements && resultat.valeur === 'oui') consommer?.();
+      return changements;
+    })();
     if (!consomme) {
       this.deps.journal('pda.tardive', { id: demande.id });
       return;
     }
     this.deps.signaler();
-    this.deps.journal('pda.essai', { id: demande.id, valeur: resultat.valeur });
-    if (this.actif()) await this.deps.relais.retirer(demande.id);
+    this.deps.journal(demande.action === 'essai' ? 'pda.essai' : 'pda.reponse', {
+      id: demande.id,
+      valeur: resultat.valeur,
+    });
+    if (this.actif()) {
+      try {
+        await this.deps.relais.retirer(demande.id);
+      } catch {
+        this.deps.journal('pda.retrait.echec', { id: demande.id });
+      }
+    }
+    if (resultat.valeur === 'oui' && demande.params !== null) await this.deps.executer?.(demande);
   }
   tour() {
     return this.enFile(async () => {
@@ -205,8 +268,10 @@ export class FilePda {
         if (!this.actif()) return;
         if (d.echeance < this.maintenant()) {
           this.deps.db
-            .prepare("UPDATE pda_demandes SET etat = 'expiree' WHERE id = ? AND etat = 'ouverte'")
-            .run(d.id);
+            .prepare(
+              "UPDATE pda_demandes SET etat = 'expiree', consomme_a = ? WHERE id = ? AND etat = 'ouverte'",
+            )
+            .run(new Date(this.maintenant()).toISOString(), d.id);
           this.deps.signaler();
           await this.deps.relais.retirer(d.id);
         }
