@@ -187,9 +187,9 @@ test('pause perdue : un agent en pause qui écrit encore est restoppé ; repris,
   const stat = () => execFileSync('ps', ['-o', 'stat=', '-p', String(pid)], { encoding: 'utf8' });
   const ticks = () => out().match(/tick \d+/g)?.length ?? 0;
   try {
-    // `exec` : le shell devient un écrivain continu, sans contrôle de tâches (même groupe que ses `sleep`)
+    // Un seul processus : aucun `sleep` forké entre SIGSTOP et SIGCONT ne peut rester suspendu.
     live.pty.write(
-      `exec /bin/sh -c 'i=0; while :; do i=$((i+1)); echo "tick $i"; sleep 0.05; done'\r`,
+      `exec "${process.execPath}" -e 'let i=0; setInterval(() => console.log("tick " + ++i), 50)'\r`,
     );
     await waitFor(() => ticks() >= 3, 5000, 'écrit en continu');
     expect((await inject('POST', 'pause')).statusCode).toBe(202);
