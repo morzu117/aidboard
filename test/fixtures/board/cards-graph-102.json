@@ -15,13 +15,42 @@
       "hours": 24,
       "delivery": "ref",
       "evidence": null,
-      "row": 9000,
+      "row": {
+        "id": 9000,
+        "holder": "peer-b",
+        "status": "open",
+        "created_at": "2026-11-04T07:00:00Z",
+        "taken_at": "2026-11-05T07:00:00Z",
+        "closed_at": null,
+        "close_outcome": null,
+        "accept": "Non conservé"
+      },
       "needs": [],
       "due": null,
       "retries": null,
-      "events": [],
+      "events": [
+        {
+          "at": "2026-11-04T07:00:00Z",
+          "by": "peer-a",
+          "kind": "mint",
+          "detail": "{\"holder\":\"peer-b\"}"
+        },
+        { "at": "2026-11-05T07:00:00Z", "by": "peer-b", "kind": "take", "detail": "{}" },
+        {
+          "at": "2026-11-05T08:00:00Z",
+          "by": "peer-a",
+          "kind": "amend",
+          "detail": "{\"holder\":\"peer-a\"}"
+        },
+        {
+          "at": "2026-11-05T09:00:00Z",
+          "by": "peer-a",
+          "kind": "close",
+          "detail": "{\"outcome\":\"PASS\"}"
+        }
+      ],
       "eligible": [],
-      "prior_rows": []
+      "prior_rows": [8998, 8999]
     },
     {
       "step": "validate",

@@ -107,7 +107,9 @@ test('carte 101 : corps brut, graphe complet, obligation retirée fermée, fil e
   expect(node('carte-board.fil.limite')).toBeNull();
   expect(node('carte-board.pastille')!.textContent).toMatch(/Board lu il y a/);
   // lecture seule
-  expect(document.querySelector('.carte-board textarea, .carte-board input')).toBeNull();
+  expect(
+    document.querySelector('.carte-board textarea, .carte-board input:not([type=checkbox])'),
+  ).toBeNull();
   expect(screen.queryByText(/Prendre|Commenter/)).toBeNull();
 });
 
@@ -115,7 +117,7 @@ test('carte 102 : liste tronquée, entrée dérivée « gateway (ligne N) », li
   await ouvrir('/board/cartes/102', { 102: fiche(102) });
   await waitFor(() => expect(node('carte-board.obligations.tronquee')).not.toBeNull());
   expect(node('carte-board.obligations.tronquee')!.textContent).toBe('Liste tronquée par le board');
-  expect(node('carte-board.historique-1')!.textContent).toContain('gateway (ligne 9000)');
+  expect(node('carte-board.chronologie')!.textContent).toContain('gateway (ligne 9000)');
   const pr = node('carte-board.lien-pr')!.querySelector('a')!;
   expect(pr.getAttribute('href')).toBe('https://github.com/exemple/depot/pull/1');
   expect(pr.getAttribute('rel')).toContain('noopener');
@@ -197,4 +199,99 @@ test('D110 : la carte ne se lit pas (gateway muet) : « Board indisponible » ; 
   });
   await waitFor(() => expect(node('carte-board.graphe.message')).not.toBeNull());
   expect(node('carte-board.bandeau')).toBeNull();
+});
+
+const entreesChronologie = () => [...node('carte-board.chronologie')!.querySelectorAll('li')];
+
+function ficheChronologie() {
+  const s = fiche(102);
+  if (!s.card.ok || !s.graph.ok || !s.thread.ok) throw new Error('Fixture illisible');
+  s.card.data.stageHistory = [{ stage: 'build', by: 'peer-a', at: '2026-01-01T10:00:00Z' }];
+  s.graph.data.steps = [
+    {
+      ...s.graph.data.steps[0]!,
+      priorRows: 3,
+      events: [
+        { at: '2026-01-02T10:00:00Z', by: 'peer-b', kind: 'take', holder: null, outcome: null },
+      ],
+    },
+  ];
+  s.thread.data.messages = [
+    {
+      ...s.thread.data.messages[0]!,
+      author: 'peer-c',
+      createdAt: '2026-01-03T10:00:00Z',
+      content: '<img src=x onerror=alert(1)>',
+    },
+  ];
+  s.thread.data.capped = true;
+  return s;
+}
+
+test('chronologie : ordre décroissant, date complète et message en texte brut', async () => {
+  await ouvrir('/board/cartes/102', { 102: ficheChronologie() });
+  await waitFor(() => expect(entreesChronologie()).toHaveLength(3));
+  const entrees = entreesChronologie();
+  expect(entrees.map((e) => e.querySelector('.carte-board-auteur')!.textContent)).toEqual([
+    'peer-c',
+    'peer-b',
+    'peer-a',
+  ]);
+  expect(entrees[0]!.querySelector('[title]')!.getAttribute('title')).toBe('2026-01-03T10:00:00Z');
+  expect(entrees[0]!.textContent).toContain('2026-01-03 10:00');
+  expect(entrees[0]!.textContent).toContain('<img src=x onerror=alert(1)>');
+  expect(document.querySelector('img')).toBeNull();
+});
+
+test('chronologie : les trois filtres sont cochés et masquent chacun leur source', async () => {
+  await ouvrir('/board/cartes/102', { 102: ficheChronologie() });
+  await waitFor(() => expect(entreesChronologie()).toHaveLength(3));
+  for (const [source, auteur] of [
+    ['etape', 'peer-a'],
+    ['obligation', 'peer-b'],
+    ['fil', 'peer-c'],
+  ]) {
+    const filtre = node(`carte-board.chronologie.filtre-${source}`) as HTMLInputElement;
+    expect(filtre.checked).toBe(true);
+    fireEvent.click(filtre);
+    expect(entreesChronologie()).toHaveLength(2);
+    expect(
+      entreesChronologie()
+        .map((e) => e.textContent)
+        .join(''),
+    ).not.toContain(auteur);
+    fireEvent.click(filtre);
+    expect(entreesChronologie()).toHaveLength(3);
+  }
+});
+
+test('chronologie : limites du fil et des lignes antérieures', async () => {
+  await ouvrir('/board/cartes/102', { 102: ficheChronologie() });
+  await waitFor(() => expect(node('carte-board.chronologie.limites')).not.toBeNull());
+  expect(node('carte-board.chronologie.limites')!.textContent).toContain(
+    'Fil limité à 1000 messages : la chronologie peut être incomplète',
+  );
+  expect(node('carte-board.chronologie.limites')!.textContent).toContain(
+    '3 lignes antérieures, sans leurs événements',
+  );
+});
+
+test('chronologie : un fil non lu garde les étapes et obligations', async () => {
+  const s = ficheChronologie();
+  s.thread = { ok: false, kind: 'unreachable', readAt: READ_AT };
+  await ouvrir('/board/cartes/102', { 102: s });
+  await waitFor(() => expect(entreesChronologie()).toHaveLength(2));
+  expect(entreesChronologie()[0]!.textContent).toContain('Obligation');
+  expect(entreesChronologie()[1]!.textContent).toContain('Étape → build');
+  expect(node('carte-board.chronologie.limites')!.textContent).toContain('Fil non lu');
+});
+
+test('chronologie : limites des étapes et obligations non lues', async () => {
+  const s = ficheChronologie();
+  s.card = { ok: false, kind: 'forbidden', readAt: READ_AT };
+  s.graph = { ok: false, kind: 'forbidden', readAt: READ_AT };
+  await ouvrir('/board/cartes/102', { 102: s });
+  await waitFor(() => expect(entreesChronologie()).toHaveLength(1));
+  expect(node('carte-board.chronologie.limites')!.textContent).toContain('Étapes non lues');
+  expect(node('carte-board.chronologie.limites')!.textContent).toContain('Obligations non lues');
 });

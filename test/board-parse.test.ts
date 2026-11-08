@@ -154,7 +154,16 @@ test('champ absent ou d’un mauvais type : null, sans exception', () => {
     flow: 'x',
   });
   expect(g?.value.steps).toEqual([
-    { step: 'build', mandatory: null, state: null, holder: null, due: null, row: null },
+    {
+      step: 'build',
+      mandatory: null,
+      state: null,
+      holder: null,
+      due: null,
+      row: null,
+      events: [],
+      priorRows: 0,
+    },
   ]);
   expect(g?.value.unconfirmed).toEqual([]);
 });
@@ -173,4 +182,113 @@ test('schema_version lu s’il est présent', () => {
   expect(parseProjects({ schema_version: '1', projects: [] })?.schemaVersion).toBe('1');
   expect(parseProjects({ schema_version: 2, projects: [] })?.schemaVersion).toBe('2');
   expect(parseProjects({ projects: [] })?.schemaVersion).toBeNull();
+});
+
+test('graphe : ligne objet et événements de la fixture, sans accept ni détail brut', () => {
+  const etape = parseGraph(fixture('cards-graph-102'))?.value.steps[0];
+  expect(etape?.row).toEqual({
+    id: 9000,
+    holder: 'peer-b',
+    status: 'open',
+    createdAt: '2026-11-04T07:00:00Z',
+    takenAt: '2026-11-05T07:00:00Z',
+    closedAt: null,
+    closeOutcome: null,
+  });
+  expect(etape?.events).toEqual([
+    { at: '2026-11-04T07:00:00Z', by: 'peer-a', kind: 'mint', holder: 'peer-b', outcome: null },
+    { at: '2026-11-05T07:00:00Z', by: 'peer-b', kind: 'take', holder: null, outcome: null },
+    { at: '2026-11-05T08:00:00Z', by: 'peer-a', kind: 'amend', holder: 'peer-a', outcome: null },
+    { at: '2026-11-05T09:00:00Z', by: 'peer-a', kind: 'close', holder: null, outcome: 'PASS' },
+  ]);
+  expect(etape?.priorRows).toBe(2);
+});
+
+test('graphe : ligne entière compatible, objets lus champ par champ, autres valeurs refusées', () => {
+  const lignes = [
+    42,
+    {},
+    {
+      id: '42',
+      holder: 3,
+      status: false,
+      created_at: [],
+      taken_at: {},
+      closed_at: 'date',
+      close_outcome: 'PASS',
+    },
+    null,
+    '42',
+    1.5,
+    [],
+    true,
+  ];
+  const etapes = parseGraph({ steps: lignes.map((row) => ({ row })) })?.value.steps;
+  const vide = {
+    id: null,
+    holder: null,
+    status: null,
+    createdAt: null,
+    takenAt: null,
+    closedAt: null,
+    closeOutcome: null,
+  };
+  expect(etapes?.map((etape) => etape.row)).toEqual([
+    { ...vide, id: 42 },
+    vide,
+    { ...vide, closedAt: 'date', closeOutcome: 'PASS' },
+    null,
+    null,
+    null,
+    null,
+    null,
+  ]);
+});
+
+test('graphe : détails défensifs, limite de 200 caractères et kind obligatoire', () => {
+  const details = [
+    'illisible',
+    JSON.stringify({ holder: 'a'.repeat(201), outcome: 'b'.repeat(201) }),
+    JSON.stringify({ holder: 'a'.repeat(200), outcome: 'b'.repeat(200), autre: 'ignoré' }),
+    'null',
+    '[]',
+    '42',
+    JSON.stringify({ holder: 42, outcome: false }),
+    { holder: 'peer-a' },
+  ];
+  const etape = parseGraph({
+    steps: [
+      {
+        events: [
+          ...details.map((detail) => ({ kind: 'inconnu', detail, at: 42, by: false })),
+          null,
+          {},
+          { kind: 42 },
+          { kind: '' },
+        ],
+        prior_rows: [1, 2, null, '3', {}, 1.5],
+      },
+    ],
+  })?.value.steps[0];
+  expect(etape?.events).toHaveLength(details.length);
+  expect(etape?.events[2]).toEqual({
+    at: null,
+    by: null,
+    kind: 'inconnu',
+    holder: 'a'.repeat(200),
+    outcome: 'b'.repeat(200),
+  });
+  expect(etape?.events.filter((_, i) => i !== 2)).toEqual(
+    Array.from({ length: details.length - 1 }, () => ({
+      at: null,
+      by: null,
+      kind: 'inconnu',
+      holder: null,
+      outcome: null,
+    })),
+  );
+  expect(etape?.priorRows).toBe(2);
+  expect(
+    parseGraph({ steps: [{ events: {}, prior_rows: 'illisible' }] })?.value.steps[0],
+  ).toMatchObject({ events: [], priorRows: 0 });
 });

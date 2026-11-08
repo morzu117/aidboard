@@ -63,7 +63,7 @@ test('la fiche : corps brut, graphe, fil, obligation retirée fermée', async ({
   await expect(node(page, 'carte-board.corps.texte').locator('b')).toHaveCount(0);
   await expect(node(page, 'carte-board.graphe.manque')).toHaveText('build, validate');
   await expect(node(page, 'carte-board.graphe.etape-0')).toContainText(/unstaffable .* then ask\)/);
-  await expect(page.locator('.carte-board-fil .carte-board-auteur')).toHaveText([
+  await expect(node(page, 'carte-board.fil').locator('.carte-board-auteur')).toHaveText([
     'peer-a',
     'peer-b',
   ]);
@@ -85,6 +85,39 @@ test('403 : « Tu ne peux pas lire cette carte », retour au board', async ({ br
   erreur(null);
   await node(page, 'carte-board.corps.message.retour').click();
   await expect(page).toHaveURL(/\/board$/);
+});
+
+test('la carte 102 : chronologie décroissante, filtre Fil et lignes antérieures', async ({
+  browser,
+}) => {
+  const page = await openApp(await browser.newContext());
+  await node(page, '1-1.barre.nav-board').click();
+  await node(page, 'board.carte-102').click();
+  await node(page, 'carte-board.relire').click();
+  const chronologie = node(page, 'carte-board.chronologie');
+  await expect(chronologie.getByRole('heading', { name: 'Chronologie' })).toBeVisible();
+  const textes = chronologie.locator('li .carte-board-texte');
+  const attendus = [
+    'Obligation build fermée : PASS',
+    'Obligation build modifiée',
+    'Étape → build (déduite par le gateway, ligne 9000)',
+    'Obligation build prise',
+    'Étape → idea',
+    'Build commencé.',
+    'Obligation build ouverte pour peer-b',
+  ];
+  await expect(textes).toHaveText(attendus);
+  for (const source of ['etape', 'obligation', 'fil']) {
+    await expect(node(page, `carte-board.chronologie.filtre-${source}`)).toBeChecked();
+  }
+  await expect(node(page, 'carte-board.chronologie.limites')).toHaveText(
+    '2 lignes antérieures, sans leurs événements',
+  );
+  await node(page, 'carte-board.chronologie.filtre-fil').uncheck();
+  await expect(textes).toHaveText(attendus.filter((texte) => texte !== 'Build commencé.'));
+  await expect(node(page, 'carte-board.fil')).toContainText('Build commencé.');
+  await node(page, 'carte-board.chronologie.filtre-fil').check();
+  await expect(textes).toHaveText(attendus);
 });
 
 test('gateway injoignable puis rétabli : tout revient après Relire', async ({ browser }) => {

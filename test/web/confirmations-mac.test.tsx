@@ -67,7 +67,10 @@ test('merge 202 : attente, exécution, rafraîchissement et arrêt de la relectu
   fireEvent.click(screen.getByText('Merge'));
   await screen.findByText('En attente de confirmation sur le téléphone');
   expect(screen.queryByRole('button', { name: 'Merge' })).toBeNull();
-  await waitFor(() => expect(h.calls.some((c) => c.url === '/api/confirmations')).toBe(true));
+  await waitFor(async () => {
+    await avancer();
+    expect(h.calls.some((c) => c.url === '/api/confirmations')).toBe(true);
+  });
   const avant = h.calls.filter((c) => c.url === '/api/state').length;
   h.respond.set(
     'GET /api/confirmations',
@@ -393,7 +396,10 @@ test('écran Livraison : le merge 202 ferme le dialogue et remplace le bouton pa
     },
   );
   const bouton = await screen.findByRole('button', { name: 'Autoriser le merge de aaaaaaa' });
-  await waitFor(() => expect((bouton as HTMLButtonElement).disabled).toBe(false));
+  await waitFor(async () => {
+    await avancer();
+    expect((bouton as HTMLButtonElement).disabled).toBe(false);
+  });
   fireEvent.click(bouton);
   fireEvent.click(screen.getByRole('button', { name: 'Fusionner aaaaaaa' }));
   await screen.findByText('En attente de confirmation sur le téléphone');
