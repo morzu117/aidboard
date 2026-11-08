@@ -203,6 +203,7 @@ Ce document.
 - `src/daemon/pda/file.ts` gère `creerDemande(action, sujet)`, le sondage, la vérification de D218, la consommation, puis la clôture.
 - `config.modeHost.pda`, `config.modeHost.relais` et `PUT /api/host/pda` ; l'allumage expire les demandes restantes.
 - Tests : le relais est injecté et hostile. Il rejoue, permute, retarde ou modifie une réponse, et chaque fois l'action n'a pas lieu. Un « non » annule. L'échéance est lue sur l'horloge du daemon.
+- *Révision 43.6.* La relecture a trouvé trois défauts de disponibilité, qui échouaient fermé mais sans bruit. (1) Le daemon tire toujours avec `apres=0`, puisque le relais purge ce qui est tiré : un relais redémarré, ou qui annonce un curseur énorme, ne bloque plus le canal. (2) La liste autorisée est republiée avant chaque dépôt, et à chaque tour si elle a plus de 5 min. (3) Un dépôt qui échoue fait passer la demande en `expiree`, et l'essai répond 502 `relais injoignable`. Le déclencheur du push gagne `compterPda` et `signaler`. Les deux échecs de charge (`agents-pilotage` au 43.5, `livraison` ici) passent au rejeu. Gate 2294.
 
 ### 43.7 La CSP et la clé épinglée (D211, D213)
 - `GET /pda-cle.js` est servi par le daemon et mis en cache par le service worker.

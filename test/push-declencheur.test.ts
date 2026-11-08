@@ -12,7 +12,7 @@ afterEach(async () => {
   vi.useRealTimers();
 });
 
-function preparer() {
+function preparer(compterPda?: () => number) {
   vi.useFakeTimers();
   vi.setSystemTime(new Date('2026-11-07T10:00:00Z'));
   const db = new Database(':memory:');
@@ -43,6 +43,7 @@ function preparer() {
   const log = vi.fn();
   const config = { host: true, push: true };
   const declencheur = creerDeclencheur({
+    compterPda,
     db,
     store,
     log,
@@ -259,5 +260,33 @@ test('32b.11 : JSON invalide isolé dans l’observateur et la minuterie, puis r
   expect(t.log).toHaveBeenCalledTimes(2);
   t.retirer(suivant);
   t.ajouter();
+  expect(t.envoyer).toHaveBeenCalledTimes(2);
+});
+
+test('le signal PDA partage le regroupement et le compteur des décisions', async () => {
+  let ouvertes = 0;
+  const t = preparer(() => ouvertes);
+  ouvertes = 1;
+  t.declencheur.signaler();
+  await Promise.resolve();
+  expect(t.envoyer).toHaveBeenCalledWith(expect.anything(), 1, expect.anything());
+  t.ajouter();
+  ouvertes = 2;
+  t.declencheur.signaler();
+  expect(t.envoyer).toHaveBeenCalledTimes(1);
+  await vi.advanceTimersByTimeAsync(30_000);
+  expect(t.envoyer).toHaveBeenLastCalledWith(expect.anything(), 3, expect.anything());
+});
+
+test('un nouveau PDA réveille aussi après la clôture du précédent', async () => {
+  let ouvertes = 0;
+  const t = preparer(() => ouvertes);
+  ouvertes = 1;
+  t.declencheur.signaler();
+  ouvertes = 0;
+  t.declencheur.signaler();
+  await vi.advanceTimersByTimeAsync(30_000);
+  ouvertes = 1;
+  t.declencheur.signaler();
   expect(t.envoyer).toHaveBeenCalledTimes(2);
 });

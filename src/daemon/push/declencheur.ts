@@ -7,6 +7,7 @@ import { envoyer, type DependancesEnvoi } from './envoi.js';
 export interface DependancesDeclencheur {
   log?: (message: string) => void;
   db: Db;
+  compterPda?: () => number;
   store: EventStore;
   actif: () => boolean;
   envoi: () => DependancesEnvoi;
@@ -34,13 +35,14 @@ export function creerDeclencheur(deps: DependancesDeclencheur) {
          WHERE a.closed_at IS NULL AND t.state != 'archived'`,
       )
       .all() as Array<{ pending: string | null; statusReason: string | null }>;
-    return agents.filter((a) =>
+    const decisions = agents.filter((a) =>
       attendDecision({
         attend: a.pending !== null,
         question: a.pending !== null && JSON.parse(a.pending).kind === 'question',
         statusReason: a.statusReason,
       }),
     ).length;
+    return decisions + (deps.compterPda?.() ?? 0);
   }
 
   let precedent = compter();
@@ -95,6 +97,7 @@ export function creerDeclencheur(deps: DependancesDeclencheur) {
   }
   deps.store.on('event', observer);
   return {
+    signaler: observer,
     async arreter() {
       arrete = true;
       deps.store.off('event', observer);

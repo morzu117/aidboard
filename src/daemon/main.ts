@@ -1,3 +1,7 @@
+import { FilePda } from './pda/file.js';
+import { ClientRelais } from './pda/relais.js';
+import { RegistrePda } from './pda/registre.js';
+import { creerFournisseurClePda } from './pda/cle.js';
 import { creerDeclencheur } from './push/declencheur.js';
 import { livraisonPourAppareil } from './host/livraison.js';
 import { rmSync, writeFileSync } from 'node:fs';
@@ -291,7 +295,50 @@ export async function startDaemon(
       logger: opts.logger,
       log,
     });
+    const fournisseurPda = creerFournisseurClePda(paths.home);
+    let filePda: FilePda | null = null;
+    let relaisPda: string | null = null;
+    let signalerPda = () => {};
+    let basculePda: Promise<void> = Promise.resolve();
+    const pda = {
+      obtenir: () => filePda,
+      synchroniser: () => {
+        basculePda = basculePda.then(async () => {
+          const actif = () =>
+            config.modeHost.actif && config.modeHost.pda && !!config.modeHost.relais;
+          if (filePda && (!actif() || relaisPda !== config.modeHost.relais)) {
+            await filePda.arreter();
+            filePda = null;
+          }
+          if (!filePda && actif()) {
+            relaisPda = config.modeHost.relais;
+            filePda = new FilePda({
+              db: opened,
+              registre: new RegistrePda(opened, (type, donnees) =>
+                log(`${type} ${JSON.stringify(donnees)}`),
+              ),
+              fournisseur: fournisseurPda,
+              relais: new ClientRelais({
+                relais: relaisPda!,
+                fournisseur: fournisseurPda,
+                journal: log,
+              }),
+              actif,
+              contexte: () => {
+                const nom = modeHost.nomLu();
+                // D176 : Serve expose le port local des appareils en HTTPS public 443.
+                return nom?.endsWith('.ts.net') ? { origine: `https://${nom}`, rpId: nom } : null;
+              },
+              journal: (type, donnees) => log(`${type} ${JSON.stringify(donnees)}`),
+              signaler: () => signalerPda(),
+            });
+          }
+        });
+        return basculePda;
+      },
+    };
     const app = await buildServer({
+      pda,
       webRoot,
       modeHost,
       onRoute: opts.onRoute,
@@ -355,12 +402,22 @@ export async function startDaemon(
     // 12.3 : relit l'état d'un monitor détaché qui aurait survécu, sans le relancer
     void mesh?.init();
     const declencheurPush = creerDeclencheur({
+      compterPda: () =>
+        config.modeHost.actif && config.modeHost.pda
+          ? (
+              opened
+                .prepare("SELECT COUNT(*) AS n FROM pda_demandes WHERE etat = 'ouverte'")
+                .get() as { n: number }
+            ).n
+          : 0,
       db: opened,
       store,
       actif: () => config.modeHost.actif && config.modeHost.push,
       log,
       envoi: () => ({ clesVapid: modeHost.fournisseurPush!.obtenir() }),
     });
+    signalerPda = declencheurPush.signaler;
+    await pda.synchroniser();
     return {
       app,
       port,
@@ -373,6 +430,8 @@ export async function startDaemon(
       updates: () => updates?.status() ?? null,
       modeHost,
       async stop() {
+        await basculePda;
+        await filePda?.arreter();
         await declencheurPush.arreter();
         mesh?.dispose();
         await agents.stopAll('daemon_stop', 5000);

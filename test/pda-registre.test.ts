@@ -104,6 +104,10 @@ test('refus des clés, algorithmes et coordonnées invalides', async () => {
 });
 
 test('routes PDA : interrupteur, gardes, corps strict, admin et séparation des ports', async () => {
+  const transport = vi
+    .spyOn(globalThis, 'fetch')
+    .mockResolvedValue(new Response(null, { status: 204 }));
+  nettoyages.push(() => transport.mockRestore());
   const t = await startTestDaemon(undefined, {
     tailscaleExec: async (_bin, args) => ({
       code: null,
@@ -144,7 +148,9 @@ test('routes PDA : interrupteur, gardes, corps strict, admin et séparation des 
     });
   const e = entree();
   expect((await envoyer(e)).json()).toEqual({ raison: 'pda_coupe' });
-  expect((await mac('PUT', '/api/host/pda', { actif: true })).statusCode).toBe(200);
+  expect(
+    (await mac('PUT', '/api/host/pda', { actif: true, relais: 'https://example.com' })).statusCode,
+  ).toBe(200);
   expect((await envoyer(e, { ...headers, cookie: '' })).statusCode).toBe(401);
   expect((await envoyer(e, { ...headers, 'sec-fetch-site': 'cross-site' })).statusCode).toBe(403);
   expect((await envoyer({ ...e, extra: true })).statusCode).toBe(400);

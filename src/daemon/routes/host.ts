@@ -1,3 +1,4 @@
+import { RelaisInjoignable, type FilePda } from '../pda/file.js';
 import { RegistrePda } from '../pda/registre.js';
 import type { Db } from '../db.js';
 import { abonnementsActifs } from '../push/abonnements.js';
@@ -5,6 +6,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import {
   type AidConfig,
   ConfigError,
+  validerRelais,
   ecrireModeHostActif,
   ecrireModeHostPush,
   ecrireModeHostPda,
@@ -49,6 +51,7 @@ export function registerHostRoutes(
     db: Db;
     getPort: () => number;
     modeHost: ModeHost;
+    pda?: { obtenir: () => FilePda | null; synchroniser: () => Promise<void> };
     tailscaleExec?: TailscaleExec;
   },
 ): void {
@@ -89,6 +92,7 @@ export function registerHostRoutes(
       throw err;
     }
     deps.config.modeHost.actif = actif;
+    await deps.pda?.synchroniser();
     if (actif) await deps.modeHost.demarrer();
     else await deps.modeHost.arreter({ couper: true });
     return etat();
@@ -96,16 +100,58 @@ export function registerHostRoutes(
 
   app.put('/api/host/pda', async (req, reply) => {
     if (!admin(req, reply)) return reply;
-    const actif = (req.body as { actif?: unknown } | null)?.actif;
-    if (typeof actif !== 'boolean') return reply.code(400).send({ error: 'actif : true ou false' });
+    const corps = req.body as { actif?: unknown; relais?: unknown } | null;
+    const actif = corps?.actif;
+    if (
+      typeof actif !== 'boolean' ||
+      Object.keys(corps!).some((c) => !['actif', 'relais'].includes(c))
+    )
+      return reply.code(400).send({ error: 'actif : true ou false, relais optionnel' });
+    let relais = deps.config.modeHost.relais;
     try {
-      ecrireModeHostPda(deps.paths, actif);
+      if (Object.hasOwn(corps!, 'relais')) relais = validerRelais(corps!.relais);
+    } catch {
+      return reply.code(400).send({ error: 'relais invalide' });
+    }
+    if (actif && (!deps.config.modeHost.actif || !relais))
+      return reply.code(409).send({ error: 'mode host actif et relais requis' });
+    try {
+      ecrireModeHostPda(deps.paths, actif, relais);
     } catch (err) {
       if (err instanceof ConfigError) return reply.code(409).send({ error: err.message });
       throw err;
     }
     deps.config.modeHost.pda = actif;
-    return { actif };
+    deps.config.modeHost.relais = relais;
+    await deps.pda?.synchroniser();
+    return { actif, relais };
+  });
+  app.post('/api/host/pda/essai', async (req, reply) => {
+    if (!admin(req, reply)) return reply;
+    const corps = req.body as { sujet?: unknown } | null;
+    if (
+      !corps ||
+      typeof corps.sujet !== 'string' ||
+      corps.sujet.length > 80 ||
+      Object.keys(corps).some((c) => c !== 'sujet')
+    )
+      return reply.code(400).send({ error: 'sujet : 80 caractères au plus' });
+    const file = deps.pda?.obtenir();
+    if (!file || !deps.modeHost.nomLu()?.endsWith('.ts.net'))
+      return reply.code(409).send({ error: 'PDA ou nom Tailscale indisponible' });
+    try {
+      return await file.creerDemande({ action: 'essai', sujet: corps.sujet });
+    } catch (err) {
+      if (err instanceof RelaisInjoignable)
+        return reply.code(502).send({ error: 'relais injoignable' });
+      return reply.code(409).send({ error: 'PDA indisponible' });
+    }
+  });
+  app.get('/api/host/pda/demandes/:id', async (req, reply) => {
+    if (!admin(req, reply)) return reply;
+    const { id } = req.params as { id: string };
+    const demande = deps.db.prepare('SELECT etat FROM pda_demandes WHERE id = ?').get(id);
+    return demande ?? reply.code(404).send({ error: 'demande inconnue' });
   });
   const pda = new RegistrePda(deps.db, (type, donnees) => app.log.info(donnees, type));
   app.get('/api/host/pda/appareils', async (req, reply) => {
@@ -117,6 +163,7 @@ export function registerHostRoutes(
       if (!admin(req, reply)) return reply;
       const { id } = req.params as { id: string };
       if (!pda[action](id)) return reply.code(409).send({ raison: 'etat' });
+      await deps.pda?.obtenir()?.publierAutorises();
       return { ok: true };
     });
   }

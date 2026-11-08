@@ -36,6 +36,7 @@ import { registerServerRoutes } from './routes/servers.js';
 import { registerServerDiscussionRoutes } from './routes/serverDiscussions.js';
 import { registerMachineRoutes } from './routes/machines.js';
 import { type ArtefactsDeps, registerArtefactRoutes } from './routes/artefacts.js';
+import type { FilePda } from './pda/file.js';
 import { registerHostRoutes } from './routes/host.js';
 import type { TailscaleExec } from './mesh/tailscale.js';
 import type { ModeHost } from './host/controleur.js';
@@ -88,6 +89,7 @@ export interface ServerDeps {
   tailscaleExec?: TailscaleExec;
   /** chantier 31 (D172) : le port des appareils ; absent = pas de route du mode host */
   modeHost?: ModeHost;
+  pda?: { obtenir: () => FilePda | null; synchroniser: () => Promise<void> };
   /** chantier 31 (D174), tests : chaque route déclarée sur le port du Mac */
   onRoute?: (r: { method: string | string[]; url: string }) => void;
 }
@@ -217,6 +219,7 @@ export async function buildServer(deps: ServerDeps): Promise<FastifyInstance> {
       paths: deps.paths,
       getPort: () => (app.server.address() as AddressInfo | null)?.port ?? deps.config.port,
       modeHost: deps.modeHost,
+      pda: deps.pda,
       db: deps.db,
       tailscaleExec: deps.tailscaleExec,
     });
