@@ -1,6 +1,33 @@
 export const CONTEXTE_DEMANDE = 'aid-pda-demande-v1\n';
 export const CONTEXTE_RELAIS = 'aid-pda-relais-v1\n';
 
+export const ORDRE_P256 = 0xffffffff00000000ffffffffffffffffbce6faada7179e84f3b9cac2fc632551n;
+
+function lireS(sig: Uint8Array): bigint {
+  if (sig.length !== 64) throw new Error('Signature r‖s attendue sur 64 octets');
+  let s = 0n;
+  for (const octet of sig.subarray(32)) s = (s << 8n) | BigInt(octet);
+  return s;
+}
+
+export function signatureBasse(sig: Uint8Array): Uint8Array<ArrayBuffer> {
+  let s = lireS(sig);
+  if (s <= 0n || s >= ORDRE_P256) throw new Error('Valeur s invalide');
+  if (s > ORDRE_P256 / 2n) s = ORDRE_P256 - s;
+  const basse = new Uint8Array(sig);
+  for (let i = 63; i >= 32; i--) {
+    basse[i] = Number(s & 255n);
+    s >>= 8n;
+  }
+  return basse;
+}
+
+export function estBasse(sig: Uint8Array): boolean {
+  if (sig.length !== 64) return false;
+  const s = lireS(sig);
+  return s > 0n && s <= ORDRE_P256 / 2n;
+}
+
 export function octetsRequeteRelais(requete: {
   methode: string;
   chemin: string;

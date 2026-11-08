@@ -196,6 +196,7 @@ Ce document.
   - les bornes de taille et de nombre tiennent ;
   - les purges se font ;
   - le journal ne contient jamais le sujet.
+- *Révision 43.5.* La relecture a trouvé que l'anti-rejeu, indexé par le texte de la signature, se contournait par la malléabilité d'ECDSA : (r, n − s) est aussi valide. Il est désormais indexé par le SHA-256 des octets signés, et une signature en s haut est refusée. Le daemon (43.6) et l'app (43.8) doivent donc signer en s bas : `signatureBasse` et `estBasse` sont dans `src/shared/pda.ts`. Une limite : au-delà de 4 096 adresses suivies dans la minute, une nouvelle adresse reçoit 429, et le refus est fermé. Gate 2254.
 
 ### 43.6 Le daemon vers le relais, et la file (D210, D215, D219)
 - `src/daemon/pda/relais.ts` porte le client signé : un transport injectable dans les tests, aucun réglage qui le redirige.

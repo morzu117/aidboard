@@ -7,6 +7,8 @@ import { creerFournisseurClePda } from '../src/daemon/pda/cle.js';
 import { creerSigneurDemande } from '../src/daemon/pda/demande.js';
 import {
   CONTEXTE_DEMANDE,
+  estBasse,
+  signatureBasse,
   octetsRequeteRelais,
   defiReponse,
   jsonCanonique,
@@ -27,6 +29,33 @@ function contexte() {
 const entree = { action: 'essai' as const, sujet: 'Sujet exemple', maintenant: 1000 };
 
 describe('format PDA', () => {
+  it('normalise 50 signatures Node sans invalider leur vérification', () => {
+    const { fournisseur } = contexte();
+    const cle = createPublicKey({ key: fournisseur.clePubliqueJwk(), format: 'jwk' });
+    for (let i = 0; i < 50; i++) {
+      const octets = Buffer.from(`requête ${i}`);
+      const signature = sign('sha256', octets, {
+        key: fournisseur.obtenir(),
+        dsaEncoding: 'ieee-p1363',
+      });
+      const originale = Buffer.from(signature);
+      const basse = signatureBasse(signature);
+      expect(estBasse(basse)).toBe(true);
+      expect(verify('sha256', octets, { key: cle, dsaEncoding: 'ieee-p1363' }, basse)).toBe(true);
+      expect(signature).toEqual(originale);
+    }
+  });
+  it('conserve une signature déjà basse octet pour octet', () => {
+    const { fournisseur } = contexte();
+    const basse = signatureBasse(
+      sign('sha256', Buffer.from('requête'), {
+        key: fournisseur.obtenir(),
+        dsaEncoding: 'ieee-p1363',
+      }),
+    );
+    expect(estBasse(basse)).toBe(true);
+    expect(signatureBasse(basse)).toEqual(basse);
+  });
   it('trie récursivement les clés et refuse les valeurs non JSON', () => {
     expect(jsonCanonique({ z: [{ b: 2, a: 1 }], a: true })).toBe(
       jsonCanonique({ a: true, z: [{ a: 1, b: 2 }] }),
