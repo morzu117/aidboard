@@ -174,7 +174,7 @@ Le refus fermé de D225 bloquerait tout merge sur une installation qui n'a jamai
 
 ### 34.5 La porte et l'exécution (D225, D228, D230)
 
-`src/daemon/confirmations/porte.ts` : `preparer` et `executer` pour les huit actions, la création de la demande, le 202, le 409 `confirmation_impossible`, l'exécution depuis `FilePda` après la consommation, `perime` sur tout écart, le résultat en base. Les routes `GET /api/confirmations`, `DELETE /api/confirmations/:id`, `GET /api/confirmations/:id/numero` et `PUT /api/confirmations/reglage`. Tests : chaque action confirmée puis exécutée, refusée, expirée, annulée, périmée ; le numéro absent des journaux et des événements.
+`src/daemon/confirmations/porte.ts` : `preparer` et `executer` pour les neuf actions, la création de la demande, le 202, le 409 `confirmation_impossible`, l'exécution depuis `FilePda` après la consommation, `perime` sur tout écart, le résultat en base. Les routes `GET /api/confirmations`, `DELETE /api/confirmations/:id`, `GET /api/confirmations/:id/numero` et `PUT /api/confirmations/reglage`. Tests : chaque action confirmée puis exécutée, refusée, expirée, annulée, périmée ; le numéro absent des journaux et des événements.
 
 ### 34.6 L'amorçage (D226)
 
