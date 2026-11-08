@@ -161,6 +161,18 @@ Le refus fermé de D225 bloquerait tout merge sur une installation qui n'a jamai
   - il passe par l'API du daemon, jamais par une écriture directe en base : la règle vit à un seul endroit.
 - **Limite**, la même que D226 : un agent sous le même utilisateur Unix peut lire le jeton de session ou écrire dans la base. La barrière arrête les chemins prévus, pas un agent déterminé. Le journal et le bandeau rendent l'acte visible. La parade complète est le chantier à part de D226.
 
+### D234. Un faux numéro annule la demande (décidé par Julien, d'après la V4)
+
+Les fiches V4 (`specs/meta-edge.md`, DM 92552 de morzu-mac) disent : « Une erreur annule et signale la demande. » Julien garde la saisie des 4 chiffres, et y ajoute cette règle.
+- Seule une réponse **signée** par une passkey active, valide en tout sauf le numéro, annule la demande. Le daemon vérifie le défi et la signature **avec le numéro saisi**, puis le compare au numéro attendu. Un relais ne peut donc pas annuler une demande en forgeant une réponse fausse.
+- La demande passe à `etat = 'expiree'`, `resultat = 'annulee'`, `raison = 'numero'`. Elle est retirée du relais, et l'événement `pda.numero_faux` est journalisé (`{ id, appareil }`, sans le numéro).
+- Le Mac affiche « Annulée : mauvais numéro saisi sur le téléphone ».
+- La règle vaut pour les deux classes. En classe « par défaut », l'app vérifie déjà le numéro avant d'activer « Confirmer ».
+
+Les deux autres écarts avec la V4 sont tranchés par Julien en faveur du 34 :
+- **Le réglage.** La V4 met les interrupteurs sur le téléphone. Le 34 garde la coupure lancée sur le Mac et confirmée sur le téléphone avec le numéro, et le rallumage direct.
+- **Le contournement.** La V4 dit « jamais de contournement par le Mac seul ». Le 34 garde le désarmement par l'UI seule quand aucun appareil n'est actif (D233), journalisé et affiché par un bandeau.
+
 ## 5. Points
 
 ### 34.1 Le plan
@@ -189,6 +201,10 @@ Le refus fermé de D225 bloquerait tout merge sur une installation qui n'a jamai
 
 `appairage`, `pda.activer`, `host.option` et `desarmement` dans la porte. Le chemin d'amorçage par cookie seul, avec l'empreinte exigée, `pda.amorcage`, l'armement et le bandeau. Le désarmement par l'UI seule, avec « DÉSARMER ». Tests : le bearer est refusé ; après la révocation du dernier appareil, toute action sous confirmation est refusée, et l'amorçage par cookie fonctionne ; le désarmement sans appareil est journalisé.
 - *Révision 34.6.* `src/daemon/confirmations/host.ts` porte `appairage`, `pda.activer`, `host.option` et `desarmement`. L'appairage signe `hIdentite` (le SHA-256 de l'identité Tailscale) et jamais le login. Les noms d'appairage et de PDA sont bornés à 40 caractères, comme dans les routes. L'activation exige `{ empreinte }`. Si les confirmations sont armées et qu'un appareil est actif, elle passe par une demande. Sinon, c'est l'amorçage : cookie seul (le bearer reçoit 403 `amorcage_ui_seulement`), puis `armer()` et `pda.amorcage`. Le désarmement passe par le cookie seul, avec « DÉSARMER ». Le réarmement est direct, et il n'existe aucune commande CLI. Les retraits restent immédiats une fois armé. Lignes existantes modifiées : 36. Gate 2425.
+
+### 34.6b Le faux numéro annule (D234)
+
+Dans `verifierAssertion` et `FilePda` : en cas de numéro faux, la vérification continue jusqu'à la signature, puis la demande est annulée si la réponse est signée. Tests : une réponse signée avec un faux numéro annule la demande ; une réponse non signée, ou signée par un appareil révoqué, avec un faux numéro ne l'annule pas.
 
 ### 34.7 L'app du téléphone (D232)
 
