@@ -2,7 +2,7 @@
 
 | Champ | Valeur |
 |---|---|
-| État | **Révision 0, 9 novembre 2026.** Julien a retenu Q1 à Q3 de la spec. Le lab a donné son PASS sur la spec, révision 1 (DM 92942), avec ses réponses L1 à L7 et la décision du commander sur #1512 (DM 92804). |
+| État | **Révision 1, 9 novembre 2026.** Julien a retenu Q1 à Q3 de la spec. Le lab a donné son PASS sur la spec, révision 1 (DM 92942), avec ses réponses L1 à L7, et le commander a tranché #1512 (DM 92804). Le lab a aussi donné son PASS sur le plan, révision 0 (DM 92955), avec deux changements obligatoires, intégrés dans D239 : l'environnement de `memory` et `--` avant la requête de `codegraph`. |
 | Emplacement final | `docs/chantiers/37-onglets-swarph.md` sur `main`, dans le premier commit du chantier |
 | Base | **dc6c162** (`origin/main`, PR #132). |
 | Spec | `specs/onglets-37.md`, révision 1 (dossier de travail, hors dépôt). |
@@ -67,14 +67,21 @@ Les lectures swarph-cli du 37, d'après le code de swarph-cli et les réponses d
   - le même `mesh.read(args)`, donc le même environnement et le même délai.
 - **Les lectures sont exactement celles du tableau du §2.** Il y en a six, plus `monitor status`, déjà lu. Aucune autre forme n'est construite.
 - **Les arguments venus de l'interface** sont validés avant tout lancement. Un argument refusé donne une erreur 400, et swarph n'est pas lancé.
-  - La requête `codegraph` fait de 1 à 200 caractères, sans caractère de contrôle, et **ne commence jamais par `-`**, pour qu'argparse ne la lise pas comme une option. Elle est placée seule en argument positionnel.
+  - La requête `codegraph` fait de 1 à 200 caractères, sans caractère de contrôle, et **ne commence jamais par `-`**. Il y a **deux défenses** (lab, DM 92955) : ce refus, et un `--` placé juste avant la requête dans l'argv. La requête est le dernier argument.
+  - Les slugs reçus dans les liens d'une page viennent d'autres cellules. Ils repassent par la même regex avant tout `memory get`.
   - Un `tag` ou un `slug` suit `^[A-Za-z0-9][A-Za-z0-9._:/-]{0,199}$`.
   - `N` est fixé par le daemon : 50 pour `codegraph`, 100 pour `memory list`.
 - **Les cas propres à `codegraph`.**
   - Un code de sortie non nul avec `NO INDEX AVAILABLE` sur `stderr` donne un nouveau `kind`, `no-index`. Ce n'est pas `unknown`.
   - `STALE INDEX` sur `stderr` donne `ok: true`, avec `perime: true`.
-- **L'identité.**
-  - `memory` et `codegraph` n'ont pas d'option `--as`. Le lecteur passe `SWARPH_SELF=<cell>` dans l'environnement de ces lectures seulement, et `--caller-cell <cell>` à `codegraph`.
+- **L'identité et le chemin de `memory`** (lab, DM 92955, changement obligatoire).
+  - Le choix du chemin dépend de l'environnement. Si `SWARPH_BRAIN_GATEWAY` est posé, `memory` passe par le gateway avec le jeton de pair de `SWARPH_SELF`. Sinon, il va droit au cerveau, avec `GBRAIN_TOKEN`, `SWARPH_BRAIN_TOKEN` ou le jeton de pair.
+  - Le chemin direct contournerait la future réduction de portée de #1512, et le bandeau mentirait. Pour les trois lectures `memory`, le lecteur :
+    - pose `SWARPH_BRAIN_GATEWAY`, tiré du `gateway` de la config mesh d'A-I-D, et `SWARPH_SELF=<cell>` ;
+    - **retire** `GBRAIN_TOKEN` et `SWARPH_BRAIN_TOKEN` de l'environnement du sous-processus ;
+    - ne passe jamais `--token-file`.
+  - Sans adresse de gateway dans la config, Memory affiche « non configuré » (un nouveau `kind`, `not-configured`) et ne lance rien. Il ne retombe jamais sur le chemin direct.
+  - `codegraph` n'a pas d'option `--as` : le lecteur lui passe `SWARPH_SELF=<cell>` et `--caller-cell <cell>`.
   - Aucun jeton n'est passé ni lu par A-I-D.
 
 ### D240. Les parseurs, tolérants
@@ -178,7 +185,8 @@ Ils couvrent aussi :
 - `src/daemon/mesh/lectures.ts`, `src/daemon/routes/swarph.ts` et leur câblage dans `server.ts`.
 - Les tests passent par le faux swarph, comme `test/board-reader.test.ts` et `test/board-routes.test.ts`. Ils couvrent :
   - chaque route ;
-  - chaque argument refusé, y compris une requête qui commence par `-`, et le fait que swarph n'est alors pas lancé ;
+  - chaque argument refusé, et le fait que swarph n'est alors pas lancé. Une requête `-x` donne 400. Une requête valide arrive avec `--` juste avant elle dans l'argv ;
+  - un `GBRAIN_TOKEN` et un `SWARPH_BRAIN_TOKEN` présents dans l'environnement du daemon n'arrivent pas dans celui de `memory`, qui reçoit `SWARPH_BRAIN_GATEWAY` et `SWARPH_SELF`. Sans gateway configuré, on obtient `not-configured`, et swarph n'est pas lancé ;
   - `no-index` et `stale` ;
   - `SWARPH_SELF` et `--caller-cell` ;
   - le cache et la fusion des demandes ;
@@ -209,7 +217,7 @@ Ils couvrent aussi :
   - le bandeau d'index périmé et l'état `no-index` ;
   - le bandeau permanent de Memory ;
   - une page qui contient `<img src=x onerror=alert(1)>` et `https://exemple.invalid`, rendus en texte, sans balise `img` ni `a` ;
-  - la navigation entre pages par les liens ;
+  - la navigation entre pages par les liens ; un slug de lien qui ne passe pas la regex ne s'affiche pas en lien et ne lance aucun `memory get` ;
   - le refus montré comme un état normal ;
   - l'absence de bouton d'export.
 
@@ -219,13 +227,13 @@ Ils couvrent aussi :
 - La fiche `docs/recette-chantier-37-onglets.md`, pour Julien, sur son vrai mesh. Elle vérifie :
   - les versions déclarées ;
   - une recherche dans l'index local ;
-  - une page de mémoire ;
+  - une page de mémoire, en relevant que la lecture passe bien par le gateway ;
   - les droits de sa cellule ;
   - l'absence de toute écriture. Pour cela, on relève `wc -l inbox.log` et l'état lu avant et après, comme au 24.10.
 
 ## 6. Pièges
 
-- **L'environnement.** `memory` résout son identité par `SWARPH_SELF`, et son chemin, gateway ou cerveau direct, par l'environnement. Le lecteur ne doit pas changer d'autre variable que `SWARPH_SELF`. La recette réelle dira par quel chemin passe le Mac.
+- **L'environnement.** `memory` choisit son chemin, gateway ou cerveau direct, d'après l'environnement. D239 force le gateway et retire les jetons du cerveau. Le daemon lancé par launchd n'a pas l'environnement du shell, et le lecteur ne doit dépendre ni de l'un ni de l'autre.
 - **La forme de gbrain** n'a pas de contrat versionné. Les parseurs restent tolérants, et une forme inattendue donne `format`, jamais un écran vide.
 - **Le contenu venu des cellules.** `docstring`, `signature`, le corps des pages et les slugs viennent d'autres cellules. Ils ne s'affichent qu'en texte.
 - **`codegraph`.** Une requête FTS mal formée rend `[]`, pas une erreur : « aucun résultat » doit rester neutre. Le code de sortie, lui, distingue l'absence d'index.
