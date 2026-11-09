@@ -213,6 +213,7 @@ Ils couvrent aussi :
   - les droits directs et hérités ;
   - aucune adresse ni aucun chemin dans le rendu des Réglages ;
   - les états d'erreur.
+- *Révision 37.5.* `Cells.tsx` et `ReglagesSwarph.tsx`, avec `ui/EcranSwarph37_5.tsx` (`EtatMonitor37_5` : l'état du monitor est rendu par une liste fermée de libellés, jamais par ses champs libres). Une cellule locale absente de `mesh peers` est affichée en tête, avec « Non déclarée ». Gate 2571.
 
 ### 37.6 Federation et Memory (D243)
 
