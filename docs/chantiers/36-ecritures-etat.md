@@ -2,7 +2,7 @@
 
 | Champ | Valeur |
 |---|---|
-| État | **Révision 0, 9 novembre 2026.** Spec rév. 2 (E5 et E6, morzu-vps), d'après le contrat du proxy de #20, draft 2 avec le §10, et les réponses du lab (DM 93681). Julien a retenu : confirmation du téléphone, le 35 bis avant le 36. |
+| État | **Révision 1, 9 novembre 2026** : réponses du lab à L5–L7 (DM 93986), lues dans le gateway déployé (657e7e9) et la PR proxy 702. Révision 0 : Spec rév. 2 (E5 et E6, morzu-vps), d'après le contrat du proxy de #20, draft 2 avec le §10, et les réponses du lab (DM 93681). Julien a retenu : confirmation du téléphone, le 35 bis avant le 36. |
 | Emplacement final | `docs/chantiers/36-ecritures-etat.md` sur `main`, dans le premier commit du chantier |
 | Base | **`feat/35bis-envoi-reel`** (cd07f1b) : le 36 réutilise `ProxyClient` (D263) et l'écran d'envoi (D267). Il se rebase sur `main` quand le 35 bis est mergé. |
 | Organisation | Comme au 35 bis. |
@@ -57,7 +57,7 @@ La clôture côté CLI (0.72.47) : `--outcome` parmi `pass`, `fail`, `cannot_eva
 ### D271. Les boutons, d'après la lecture
 
 Les boutons sont un confort ; c'est le gateway qui décide (#1525). Sur une obligation lue :
-- **Prendre** et **Refuser** : `status` vaut `open`, `taken_at` est `null`, et `holder` est `null` ou la cellule (sous réserve de L6) ;
+- **Prendre** et **Refuser** : `status` vaut `open`, `taken_at` est `null`, et `holder` est la cellule, ou `holder` est `null` et la cellule figure dans `eligible` de l'étape de l'obligation, lu dans le graphe de la carte (L6, `server.py:15176`). Le graphe se lit par le CLI, comme au 24 : `parseStep` gagne `eligible` (une liste de cellules). Sans graphe lisible, aucun bouton pour une offre ;
 - **Clore** : `status` vaut `open`, `holder` est la cellule, `unclosable_reason` est `null` ;
 - aucun bouton sinon, ni pour une obligation détenue par une autre cellule.
 
@@ -72,6 +72,7 @@ Les boutons sont un confort ; c'est le gateway qui décide (#1525). Sur une obli
   - refuse sans proxy (D262).
 - Au « oui », `preparer` est rappelé avec les `params` signés (D225) : la relecture est refaite, juste avant `executer`.
 - `executer` appelle le verbe du proxy avec `expect_status` et, pour `close`, `expect_accept_sha256` (noms du contrat), puis lit la réponse.
+- **`expect_status` vaut toujours `open`** pour les trois verbes (L5, `server.py:17843`) : une ligne prise garde `status = open`, et c'est `taken_at` qui marque la prise. `preparer` refuse donc tôt si le `status` relu n'est pas `open`, et, pour prendre ou refuser, si `taken_at` n'est plus `null`.
 - Le résultat (champ `envoi`, comme au 35b.4) garde le code et le statut, **jamais** la preuve.
 
 ### D273. Le refus pour état périmé
@@ -91,7 +92,8 @@ Les boutons sont un confort ; c'est le gateway qui décide (#1525). Sur une obli
 
 - Sur `CarteBoard`, à côté de chaque obligation, les boutons de D271.
 - « Prendre » et « Refuser » ouvrent une petite confirmation locale (« Prendre l'obligation #81 ? »), puis la demande.
-- « Clore » ouvre une boîte : l'issue (une liste fermée ; `skipped` seulement si l'étape est facultative, sous réserve de L7), puis la preuve : un champ par condition si `conditions` n'est pas vide, sinon un seul champ. Le texte de l'`accept` est affiché en texte brut au-dessus, pour savoir ce qu'on atteste.
+- « Clore » ouvre une boîte : l'issue (une liste fermée ; `skipped` seulement si l'étape de l'obligation a `mandatory: false` dans le graphe, L7, `server.py:20461-20475`), puis la preuve : un champ par condition si `conditions` n'est pas vide (le gateway exige alors `evidence_json`, `:13970` et `:14010`), sinon un seul champ.
+- **Tant que le verbe `close` du proxy n'accepte ni `evidence_json` ni `skipped`** (PR 702, `proxy_routes.py:73-76`), une obligation à conditions n'a pas de bouton « Clore », et `skipped` n'est pas proposé. Le lab propose de les ajouter à la PR 702. Le texte de l'`accept` est affiché en texte brut au-dessus, pour savoir ce qu'on atteste.
 - Après la demande : l'attente de confirmation, puis le libellé du résultat, puis la relecture de la carte.
 - **Le déplacement** : une ligne « Déplacer : bientôt, quand le gateway donnera la version de la carte. », sans bouton.
 
@@ -119,9 +121,10 @@ Après le build mergé. Un test contre le vrai `swarph proxy serve` avec une fau
 
 ## 6. Questions au lab
 
-- **L5.** `expect_status` porte-t-il sur `status` (`open`, …) ou sur `state` ? Quelles valeurs attend-on pour `take`, `decline` et `close` ?
-- **L6.** Qui peut prendre ou refuser une offre (`holder` à `null`) : l'ensemble éligible est-il lisible dans `obligations list` ?
-- **L7.** `close` par le proxy accepte-t-il la preuve par condition (`evidence_json`), et comment A-I-D sait-il qu'une étape est facultative (pour `skipped`) ?
+Réponses du lab (DM 93986) :
+- **L5.** `expect_status` compare `status`. Les trois verbes attendent `open`. Un 409 rend `current_status` (et `current_accept_sha256` si demandé).
+- **L6.** Une offre se prend par tout pair éligible ; l'ensemble éligible est dans `GET /board/cards/{id}/graph`, champ `eligible` par étape. A-I-D le lit par le CLI ; il ne demande **pas** de verbe graph au proxy.
+- **L7.** Le gateway accepte et exige `evidence_json` pour un accept à conditions ; `skipped` seulement sur une étape facultative (`mandatory` dans le graphe). **Le proxy (PR 702) n'accepte aujourd'hui ni l'un ni l'autre** : à ajouter, sinon D275 les retire.
 
 ## 7. Pièges
 
