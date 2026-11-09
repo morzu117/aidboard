@@ -167,6 +167,7 @@ test('mesh (12.2) : les défauts — désactivé, Tailscale lu mais jamais pilot
   expect(DEFAULT_CONFIG.mesh).toEqual({
     bin: 'swarph',
     cell: '',
+    proxySocket: '',
     cellFile: '',
     gateway: '',
     stateRoot: '',

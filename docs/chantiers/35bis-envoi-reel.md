@@ -121,6 +121,7 @@ Ce document, sur `feat/35bis-envoi-reel`.
 ### 35b.2 Le client du proxy (D262, D263)
 
 `mesh.proxySocket` dans la config, `src/daemon/mesh/proxy.ts`, et un **faux proxy** de test (`test/fixtures/faux-proxy.ts`), un serveur sur une socket Unix temporaire qui répond selon un scénario. Les tests couvrent : le succès ; chacun des sept codes ; un `request_id` différent ; une ligne illisible ; un `ok: true` sans 2xx ; le délai dépassé ; la socket absente ; un verbe hors liste refusé sans connexion ; `detail` absent du résultat. Ne dépend que du contrat.
+- *Révision 35b.2.* `creerProxyClient({socket, delaiMs, uuid})` et `lireReponseProxy(ligne, requestId)`, avec `DELAI_PROXY_MS = 20_000`. Le drapeau « ligne écrite » est posé dès l'appel à `write`, par prudence : après lui, une coupure donne `interrompu`. Le faux proxy (`test/fixtures/faux-proxy.ts`) joue les scénarios du plan. Une ligne existante modifiée (`MeshConfig`). Gate 2753.
 
 ### 35b.3 L'action `mesh.ecrire` et la route (D264 à D266, D268)
 

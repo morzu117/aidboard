@@ -66,6 +66,8 @@ export interface MeshConfig {
   /** nom ou chemin du binaire swarph */
   bin: string;
   cell: string;
+  /** D262 : vide = aucun proxy configuré ; jamais exposé par les routes. */
+  proxySocket: string;
   /** vide = `~/.config/swarph/cells/<cell>.yaml` */
   cellFile: string;
   /** `MESH_GATEWAY_URL` passé à swarph : une URL, pas un secret */
@@ -98,6 +100,7 @@ export const DEFAULT_CONFIG: AidConfig = {
   mesh: {
     bin: 'swarph',
     cell: '',
+    proxySocket: '',
     cellFile: '',
     gateway: '',
     stateRoot: '',
@@ -315,7 +318,13 @@ function strOrEmpty(v: unknown, name: string): string {
 
 function parseMesh(raw: unknown, cfg: MeshConfig): void {
   if (!isRecord(raw)) throw new ConfigError('config.yaml : mesh doit être un objet');
-  rejectUnknown(raw, ['bin', 'cell', 'cellFile', 'gateway', 'stateRoot', 'tailscale'], 'mesh.');
+  rejectUnknown(
+    raw,
+    ['bin', 'cell', 'cellFile', 'gateway', 'stateRoot', 'tailscale', 'proxySocket'],
+    'mesh.',
+  );
+  if (raw.proxySocket !== undefined)
+    cfg.proxySocket = strOrEmpty(raw.proxySocket, 'mesh.proxySocket');
   if (raw.bin !== undefined) cfg.bin = str(raw.bin, 'mesh.bin');
   if (raw.cell !== undefined) {
     cfg.cell = strOrEmpty(raw.cell, 'mesh.cell');
