@@ -153,6 +153,7 @@ _Fait (révision 1)._ `src/daemon/routes/ecritures.ts`, avec `BoardReader.obliga
 - les boutons dans `CarteBoard`, dans la Boîte et à l'écran Swarph ;
 - `web/src/data/ecritures.ts` ;
 - les tests web.
+_Fait (révision 1)._ `web/src/ui/EcrireAuMesh.tsx` et `web/src/data/ecritures.ts`, avec 20 tests web. Un fil de DM absent, ou qui n'est pas un UUID, donne `fil: null`.
 
 ### 35.5 L'e2e et la fiche de recette
 - **`e2e/ecritures-a-blanc.spec.ts`** couvre :

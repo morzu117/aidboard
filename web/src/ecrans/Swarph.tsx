@@ -1,3 +1,5 @@
+import { useState } from 'react';
+import { EcrireAuMesh } from '../ui/EcrireAuMesh.js';
 import { DemandesAvis } from '../ui/DemandesAvis.js';
 import { Link } from 'react-router';
 import { useAid } from '../data/useAidState.js';
@@ -13,6 +15,7 @@ const EXEMPLE_CONFIG = `mesh:
 function Contenu() {
   const { state } = useAid();
   const mesh = state?.mesh;
+  const [ecriture, setEcriture] = useState(false);
   return (
     <main className="page">
       <div className="entete" data-node="swarph.entete">
@@ -26,6 +29,14 @@ function Contenu() {
           </p>
         </div>
       </div>
+      {mesh && (
+        <>
+          <button onClick={() => setEcriture(true)}>Écrire au mesh (à blanc)</button>
+          {ecriture && (
+            <EcrireAuMesh action="dm.envoyer" choix onClose={() => setEcriture(false)} />
+          )}
+        </>
+      )}
       {state?.swairm?.enabled && <DemandesAvis />}
       {mesh ? (
         <section className="groupe" data-node="swarph.configure" aria-label="Déjà configuré">
