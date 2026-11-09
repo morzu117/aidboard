@@ -1,0 +1,13 @@
+{
+  "format": "swairm-asks/1",
+  "demandes": [
+    {
+      "id": "20261109T071500Z-3f2a",
+      "genere_a": "2026-11-09T07:15:00+00:00",
+      "question": "Faut-il vérifier les tests ?",
+      "accord": [{ "n": 1, "accord": "insuffisant", "verdict": null, "compte": { "oui": 1 } }],
+      "n": 1
+    }
+  ],
+  "erreurs": []
+}
