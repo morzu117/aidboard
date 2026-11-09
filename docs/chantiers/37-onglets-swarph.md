@@ -281,3 +281,4 @@ La recette du lab (DM 93323) a validé la sécurité du 37, mais relevé deux po
   - l'absence des deux jetons dans l'environnement de `codegraph`, de `mesh peers` et de `rights` ;
   - l'écran : « Tous » par défaut, « Lister » actif sans texte, le champ selon le choix, la note sur le type.
 - *Révision 37.8.* `memory(tag, opts, type)` : un filtre au plus, validé avant tout lancement ; l'argv sans filtre est `memory list -n 100 --json`. `typeValide` dans `src/shared/swarph.ts`. `exec()` pose `unset` des deux jetons pour toutes les lectures. L'écran garde la lecture à la soumission ; un type invalide désactive « Lister » sans message de raison (le tag garde le sien). 33 lignes existantes remplacées dans les fichiers du 37. Gate 2720, e2e 125.
+- *Révision 37.9.* Un type invalide affiche sa raison (`memoire-swarph.raison`), comme le tag, demandé par le lab (DM 93507). 22 lignes ajoutées, aucune modifiée.

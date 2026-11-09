@@ -106,6 +106,22 @@ test('tag validé et liste ouvrant une page', async () => {
   await screen.findByRole('heading', { name: 'Page test' });
 });
 
+test('type invalide expliqué et Lister désactivé, puis type valide sans message', async () => {
+  await ouvrir(page, '/swarph/memoire');
+  fireEvent.change(screen.getByLabelText('Filtre'), { target: { value: 'type' } });
+  const message =
+    'Saisis un type de 1 à 64 caractères : minuscules, chiffres, soulignement ou tiret, en commençant par une lettre.';
+  const lister = screen.getByRole('button', { name: 'Lister' }) as HTMLButtonElement;
+  for (const valeur of ['', 'Note']) {
+    fireEvent.change(screen.getByLabelText('Type'), { target: { value: valeur } });
+    expect(screen.getByText(message).getAttribute('data-node')).toBe('memoire-swarph.raison');
+    expect(lister.disabled).toBe(true);
+  }
+  fireEvent.change(screen.getByLabelText('Type'), { target: { value: 'note' } });
+  expect(screen.queryByText(message)).toBeNull();
+  expect(lister.disabled).toBe(false);
+});
+
 test.each([
   ['forbidden', "Ta cellule n'a pas, ou plus, accès à cette mémoire."],
   ['not-configured', "Le gateway n'est pas configuré pour la mémoire."],
