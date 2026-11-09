@@ -194,6 +194,7 @@ Ils couvrent aussi :
   - le cache et la fusion des demandes ;
   - le 404 sans mesh ;
   - le 404 en mode host.
+- *Révision 37.3.* **Écart au plan (D241) :** la page de mémoire se lit par `GET /api/swarph/memory/page?slug=`, et non par `/memory/:slug`, parce qu'un slug peut contenir `/`. La réponse est `{page, links}`, deux résultats discriminés lus en parallèle. Federation rend `data: {lignes, perime}`. `monitor` reprend l'état courant complet de `MeshService`, sans relancer swarph. `MeshService.read(args, {env, unset})` : seule la signature est modifiée (1 ligne). Le test `test/swarph-host.test.ts` vérifie le 404 côté host, dans un fichier nouveau. Gate 2533.
 
 ### 37.4 La coque et les données web (D242)
 

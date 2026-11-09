@@ -33,6 +33,8 @@ import { registerStateRoutes } from './routes/state.js';
 import { registerMemoryRoutes } from './routes/memory.js';
 import { registerStructuralRoutes } from './routes/structural.js';
 import { registerMeshRoutes } from './routes/mesh.js';
+import { registerSwarphRoutes } from './routes/swarph.js';
+import type { SwarphReader } from './mesh/lectures.js';
 import { registerBoardRoutes } from './routes/board.js';
 import { registerNavRoutes } from './routes/nav.js';
 import { registerServerRoutes } from './routes/servers.js';
@@ -81,6 +83,7 @@ export interface ServerDeps {
   mesh?: MeshService | null;
   /** chantier 24 : null ou absent = mesh désactivé, les routes /api/board répondent 404 */
   board?: BoardReader | null;
+  swarph?: SwarphReader | null;
   devOrigin?: string;
   /** Chantier 17 : binaire `ssh` et environnement du transport distant ; un faux ssh en test (D79). */
   remote?: TransportOptions;
@@ -190,6 +193,7 @@ export async function buildServer(deps: ServerDeps): Promise<FastifyInstance> {
   );
   registerMeshRoutes(app, { mesh: deps.mesh ?? null });
   registerBoardRoutes(app, { board: deps.board ?? null });
+  registerSwarphRoutes(app, { swarph: deps.swarph ?? null });
   registerDaemonRoutes(app, {
     db: deps.db,
     requestStop: deps.requestStop ?? (() => undefined),
