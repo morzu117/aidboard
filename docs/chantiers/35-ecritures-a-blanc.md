@@ -162,6 +162,7 @@ _Fait (révision 1)._ `web/src/ui/EcrireAuMesh.tsx` et `web/src/data/ecritures.t
   - le rappel d'une obligation ouverte sur une note ;
   - la preuve qu'aucun processus d'écriture n'est lancé : le faux swarph journalise chaque appel.
 - **`docs/recette-chantier-35-a-blanc.md`.**
+_Fait (révision 1)._ `e2e/ecritures-a-blanc.spec.ts` et `docs/recette-chantier-35-a-blanc.md`. Correctif de la boîte du 35.4 : les champs avaient leur libellé enveloppant, si bien que le nom accessible de la zone de texte incluait sa valeur. Ils ont maintenant chacun un libellé séparé (`useId`, `htmlFor`). La copie n'est pas testée en e2e : les tests web la couvrent. Gate : 2 714 tests. E2e : 125 passés.
 
 ## 6. Pièges
 

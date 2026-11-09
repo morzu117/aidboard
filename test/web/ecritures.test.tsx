@@ -254,3 +254,30 @@ test.each(['Carte', 'Destinataire facultatif', 'Canal'])(
     expect(screen.queryByText('Résumé de l’écriture')).toBeNull();
   },
 );
+
+test('ressaisir le texte garde son nom accessible et renouvelle l’aperçu', async () => {
+  const h = ouvrir();
+  h.respond.set('POST /api/swarph/ecrire/apercu', (body) => {
+    const { params } = body as { params: { texte: string } };
+    return json(200, { ...h.resultat, texte: params.texte })();
+  });
+  const utilisateur = userEvent.setup();
+  const zone = () => screen.getByRole('textbox', { name: /^Texte$/ });
+  await utilisateur.clear(zone());
+  await utilisateur.type(zone(), 'Premier texte.');
+  expect(zone()).toHaveProperty('value', 'Premier texte.');
+  await voir();
+  await screen.findByRole('region', { name: 'Aperçu' });
+  expect(document.querySelector('section[aria-label="Aperçu"] pre:last-of-type')?.textContent).toBe(
+    'Premier texte.',
+  );
+  await utilisateur.clear(zone());
+  await utilisateur.type(zone(), 'Nouveau texte.');
+  expect(zone()).toHaveProperty('value', 'Nouveau texte.');
+  expect(screen.queryByRole('region', { name: 'Aperçu' })).toBeNull();
+  await voir();
+  await screen.findByRole('region', { name: 'Aperçu' });
+  expect(document.querySelector('section[aria-label="Aperçu"] pre:last-of-type')?.textContent).toBe(
+    'Nouveau texte.',
+  );
+});

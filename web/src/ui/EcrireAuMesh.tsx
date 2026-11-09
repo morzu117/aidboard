@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import {
   KINDS_ECRITURE,
   type ActionEcriture,
@@ -28,6 +28,13 @@ export function EcrireAuMesh({
   onClose: () => void;
 }) {
   const client = useAidClient();
+  const idTexte = useId();
+  const idKind = useId();
+  const idDestination = useId();
+  const idCarte = useId();
+  const idDestinataire = useId();
+  const idPair = useId();
+  const idCanal = useId();
   const [action, setAction] = useState(depart);
   const [texte, setTexte] = useState(valeurs.texte ?? '');
   const [kind, setKind] = useState<KindEcriture>(valeurs.kind ?? 'fyi');
@@ -107,47 +114,54 @@ export function EcrireAuMesh({
         }}
       >
         <fieldset disabled={attente} onChange={effacer}>
-          <label>
-            Texte <textarea value={texte} onChange={(e) => setTexte(e.target.value)} />
-          </label>
-          <label>
-            Kind{' '}
-            <select value={kind} onChange={(e) => setKind(e.target.value as KindEcriture)}>
-              {KINDS_ECRITURE.map((k) => (
-                <option key={k}>{k}</option>
-              ))}
-            </select>
-          </label>
+          <label htmlFor={idTexte}>Texte</label>
+          <textarea id={idTexte} value={texte} onChange={(e) => setTexte(e.target.value)} />
+          <label htmlFor={idKind}>Kind</label>
+          <select
+            id={idKind}
+            value={kind}
+            onChange={(e) => setKind(e.target.value as KindEcriture)}
+          >
+            {KINDS_ECRITURE.map((k) => (
+              <option key={k}>{k}</option>
+            ))}
+          </select>
           {choix && (
-            <label>
-              Destination{' '}
-              <select value={action} onChange={(e) => setAction(e.target.value as ActionEcriture)}>
+            <>
+              <label htmlFor={idDestination}>Destination</label>
+              <select
+                id={idDestination}
+                value={action}
+                onChange={(e) => setAction(e.target.value as ActionEcriture)}
+              >
                 <option value="dm.envoyer">DM</option>
                 <option value="canal.poster">Canal</option>
               </select>
-            </label>
+            </>
           )}
           {action === 'carte.note' && (
             <>
-              <label>
-                Carte{' '}
-                <input type="number" value={carte} onChange={(e) => setCarte(e.target.value)} />
-              </label>
-              <label>
-                Destinataire facultatif <input value={a} onChange={(e) => setA(e.target.value)} />
-              </label>
+              <label htmlFor={idCarte}>Carte</label>
+              <input
+                id={idCarte}
+                type="number"
+                value={carte}
+                onChange={(e) => setCarte(e.target.value)}
+              />
+              <label htmlFor={idDestinataire}>Destinataire facultatif</label>
+              <input id={idDestinataire} value={a} onChange={(e) => setA(e.target.value)} />
             </>
           )}
           {action === 'dm.envoyer' && (
-            <label>
-              Pair <input value={pair} onChange={(e) => setPair(e.target.value)} />
-            </label>
+            <>
+              <label htmlFor={idPair}>Pair</label>
+              <input id={idPair} value={pair} onChange={(e) => setPair(e.target.value)} />
+            </>
           )}
           {action === 'canal.poster' && (
             <>
-              <label>
-                Canal <input value={canal} onChange={(e) => setCanal(e.target.value)} />
-              </label>
+              <label htmlFor={idCanal}>Canal</label>
+              <input id={idCanal} value={canal} onChange={(e) => setCanal(e.target.value)} />
               <p>Ce post serait lu par tous les membres du canal.</p>
             </>
           )}
