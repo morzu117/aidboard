@@ -196,6 +196,7 @@ swairm ask --n N [--modeles sonnet,opus] [--budget USD] --question-file F --json
 - un `X-AID-Confirm` absent, qui donne 403 sans rien lancer ;
 - le fichier temporaire supprimé ;
 - le 404 en mode host.
+- *Révision 39.4.* `SwairmAsk` lance `[bin, 'ask', '--n', N, '--modeles', m, '--question-file', F, '--json']`, sans `--budget` : le budget de swairm par défaut, 0,50 USD, est exposé en `BUDGET_ASK_USD`. Un `swairm.bin` vide prend `swairm` dans le `PATH`, et la cell garde son comportement. `GET /api/swairm/ask/etat` rend `{enCours, depuis, budgetUsd}` pour la boîte. `annule` est un état en plus de ceux de D249. Gate 2517.
 
 ### 39.5 La boîte et le tableau (aidboard, D250)
 

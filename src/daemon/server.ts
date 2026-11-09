@@ -1,3 +1,5 @@
+import { registerSwairmRoutes } from './routes/swairm.js';
+import { SwairmAsk } from './swairm/ask.js';
 import { creerActionsConfirmation } from './confirmations/actions.js';
 import { creerPorte } from './confirmations/porte.js';
 import type { LigneDemande } from './pda/file.js';
@@ -84,6 +86,7 @@ export interface ServerDeps {
   /** chantier 24 : null ou absent = mesh désactivé, les routes /api/board répondent 404 */
   board?: BoardReader | null;
   swarph?: SwarphReader | null;
+  swairmAsk?: SwairmAsk;
   devOrigin?: string;
   /** Chantier 17 : binaire `ssh` et environnement du transport distant ; un faux ssh en test (D79). */
   remote?: TransportOptions;
@@ -194,6 +197,7 @@ export async function buildServer(deps: ServerDeps): Promise<FastifyInstance> {
   registerMeshRoutes(app, { mesh: deps.mesh ?? null });
   registerBoardRoutes(app, { board: deps.board ?? null });
   registerSwarphRoutes(app, { swarph: deps.swarph ?? null });
+  registerSwairmRoutes(app, deps.swairmAsk ?? new SwairmAsk(deps.config.swairm.bin));
   registerDaemonRoutes(app, {
     db: deps.db,
     requestStop: deps.requestStop ?? (() => undefined),

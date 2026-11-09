@@ -1,3 +1,4 @@
+import { SwairmAsk } from './swairm/ask.js';
 import type { LigneDemande } from './pda/file.js';
 import { FilePda } from './pda/file.js';
 import { ClientRelais } from './pda/relais.js';
@@ -376,6 +377,7 @@ export async function startDaemon(
       mesh,
       board,
       swarph,
+      swairmAsk: new SwairmAsk(config.swairm.bin),
       requestStop: opts.onStopRequested,
       requestUpdate: opts.onUpdateRequested,
       requestCycle: opts.onCycleRequested,
