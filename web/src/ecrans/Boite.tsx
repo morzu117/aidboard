@@ -1,3 +1,4 @@
+import { EcrireAuMesh } from '../ui/EcrireAuMesh.js';
 import { type ReactNode, useState } from 'react';
 import { Link, useNavigate } from 'react-router';
 import type { Agent, MeshDm, Topic, Workspace } from '../../../src/shared/model.js';
@@ -346,6 +347,7 @@ function ArticleMesh({ n, dm, state }: { n: number; dm: MeshDm; state: StateSnap
   const [busy, setBusy] = useState(false);
   const [erreur, setErreur] = useState<string | null>(null);
   const id = (rest: string) => `1-2.mesh.dm-${n}.${rest}`;
+  const [ecriture, setEcriture] = useState(false);
   const enDecision = natureDm(dm) === 'decision';
   const urgent = enDecision || A_TRAITER.has(dm.kind);
   const marquer = async (marque: 'seen' | 'decision') => {
@@ -426,6 +428,21 @@ function ArticleMesh({ n, dm, state }: { n: number; dm: MeshDm; state: StateSnap
         >
           Vu
         </button>
+        {state.mesh && <button onClick={() => setEcriture(true)}>Répondre (à blanc)</button>}
+        {state.mesh && ecriture && (
+          <EcrireAuMesh
+            action="dm.envoyer"
+            valeurs={{
+              pair: dm.from,
+              kind: 'answer',
+              fil:
+                dm.threadId && /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(dm.threadId)
+                  ? dm.threadId
+                  : null,
+            }}
+            onClose={() => setEcriture(false)}
+          />
+        )}
         <OuvrirCell n={n} state={state} />
       </div>
       {erreur && (

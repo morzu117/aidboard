@@ -1,3 +1,4 @@
+import { EcrireAuMesh } from '../ui/EcrireAuMesh.js';
 import { useState, type ReactNode } from 'react';
 import { Link, Navigate, useParams } from 'react-router';
 import type {
@@ -275,6 +276,8 @@ function GitHub({ card }: { card: BoardCard }) {
 
 function Fiche({ s, relire }: { s: BoardCardSheet; relire: () => void }) {
   const c = s.card.ok ? s.card.data : null;
+  const { state } = useAid();
+  const [ecriture, setEcriture] = useState(false);
   return (
     <>
       {c && (
@@ -294,6 +297,18 @@ function Fiche({ s, relire }: { s: BoardCardSheet; relire: () => void }) {
       <Bloc id="obligations" titre="Obligations" result={s.obligations} onRelire={relire}>
         {s.obligations.ok && <Obligations o={s.obligations.data} />}
       </Bloc>
+      {state?.mesh && c && (
+        <>
+          <button onClick={() => setEcriture(true)}>Écrire une note (à blanc)</button>
+          {ecriture && (
+            <EcrireAuMesh
+              action="carte.note"
+              valeurs={{ carte: c.id }}
+              onClose={() => setEcriture(false)}
+            />
+          )}
+        </>
+      )}
       <Bloc id="fil" titre="Fil" result={s.thread} onRelire={relire}>
         {s.thread.ok && <Fil t={s.thread.data} />}
       </Bloc>

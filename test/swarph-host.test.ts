@@ -30,6 +30,25 @@ test('les lectures swarph restent absentes du serveur host authentifié', async 
   const { jeton } = new RegistreAppareils(t.db).emettre({ nom: 'Téléphone', identite: null });
   const host = t.d.modeHost.instance()!;
   expect(host).toBeTruthy();
+  expect(host.hasRoute({ method: 'POST', url: '/api/swarph/ecrire/apercu' })).toBe(false);
+  expect(
+    (
+      await host.inject({
+        method: 'POST',
+        url: '/api/swarph/ecrire/apercu',
+        headers: {
+          host: nom,
+          'sec-fetch-site': 'same-origin',
+          origin: `https://${nom}`,
+          cookie: `${COOKIE_APPAREIL}=${jeton}`,
+        },
+        payload: {
+          action: 'canal.poster',
+          params: { canal: 'general', kind: 'fyi', texte: 'Bonjour' },
+        },
+      })
+    ).statusCode,
+  ).toBe(404);
   for (const route of [
     'cells',
     'federation?q=test',

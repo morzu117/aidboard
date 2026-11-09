@@ -295,3 +295,12 @@ test('chronologie : limites des étapes et obligations non lues', async () => {
   expect(node('carte-board.chronologie.limites')!.textContent).toContain('Étapes non lues');
   expect(node('carte-board.chronologie.limites')!.textContent).toContain('Obligations non lues');
 });
+
+test('35.4 : note à blanc près du fil, carte préremplie et destinataire vide', async () => {
+  await ouvrir('/board/cartes/101', { 101: fiche(101) });
+  const bouton = await screen.findByRole('button', { name: 'Écrire une note (à blanc)' });
+  fireEvent.click(bouton);
+  expect(screen.getByLabelText('Carte')).toHaveProperty('value', '101');
+  expect(screen.getByLabelText('Destinataire facultatif')).toHaveProperty('value', '');
+  expect(screen.queryByRole('button', { name: 'Envoyer' })).toBeNull();
+});
