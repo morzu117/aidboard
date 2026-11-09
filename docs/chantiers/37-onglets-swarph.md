@@ -236,6 +236,7 @@ Ils couvrent aussi :
   - une page de mémoire, en relevant que la lecture passe bien par le gateway ;
   - les droits de sa cellule ;
   - l'absence de toute écriture. Pour cela, on relève `wc -l inbox.log` et l'état lu avant et après, comme au 24.10.
+- *Révision 37.7.* Trois e2e : le parcours, puis les erreurs de Cells, Réglages et Memory, puis Federation sans index, sur un daemon temporaire à part, parce que le mode du faux swarph se fixe au démarrage. La fiche de recette ne contient que des formes génériques. Gate 2584, e2e 121.
 
 ## 6. Pièges
 
