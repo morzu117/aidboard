@@ -252,3 +252,32 @@ Ils couvrent aussi :
 - La CI est verte.
 - Le lab a validé le chantier.
 - La recette de Julien est faite.
+
+## 8. Le 37 bis : Memory sans tag, et codegraph sans jetons
+
+La recette du lab (DM 93323) a validé la sécurité du 37, mais relevé deux points. Julien a dit oui au correctif le 2026-11-09.
+
+### D260. Memory liste sans filtre par défaut
+
+- **Le constat.** Memory ne liste que par tag (`memory list --tag`). Quand les pages du cerveau n'ont pas de tag, l'onglet reste vide, quel que soit le tag tapé.
+- **La route.** `GET /api/swarph/memory` accepte au plus un filtre :
+  - sans paramètre (ou avec `tag` vide) : `memory list -n 100 --json`, sans `--tag` ;
+  - avec `tag=` : `memory list --tag <tag> -n 100 --json`, comme avant ;
+  - avec `type=` : `memory list --type <type> -n 100 --json`. Le type suit `^[a-z][a-z0-9_-]{0,63}$` ;
+  - `tag` et `type` non vides ensemble donnent 400, et swarph n'est pas lancé. Une valeur invalide donne 400, comme avant.
+- **L'écran.** Un choix « Tous », « Par tag » ou « Par type », puis le champ (masqué pour « Tous ») et « Lister ». « Tous » est le choix par défaut, et « Lister » y est actif sans rien taper. La lecture reste à la demande (révision 37.6), jamais à la frappe. Sous « Par type » : « Le type peut être reclassé par le cerveau ; le tag est plus fiable. »
+- **Le faux swarph** sert `memory list` sans filtre depuis `memory-list.json`, et avec `--type` depuis `memory-list-type-<type>.json`. Les fixtures existantes ne changent pas.
+
+### D261. Aucune lecture swarph ne reçoit les jetons du cerveau
+
+- **Le constat.** `codegraph` recevait `GBRAIN_TOKEN` et `SWARPH_BRAIN_TOKEN` de l'environnement du daemon. Il n'en a pas besoin.
+- **La règle.** `SwarphReader` retire ces deux variables pour **toutes** ses lectures, et plus seulement pour `memory`. Le reste de D239 ne change pas : `memory` reçoit `SWARPH_BRAIN_GATEWAY` et `SWARPH_SELF`, les autres lectures `SWARPH_SELF`.
+
+### 37.8 Le correctif
+
+- Le lecteur, la route, le faux swarph, l'écran Memory, leurs tests, l'e2e de Memory et la fiche de recette du 37 (un tri « Tous » à vérifier).
+- Les tests couvrent :
+  - les trois formes de l'argv, et le 400 pour les deux filtres ensemble ou un type invalide, sans lancement ;
+  - l'absence des deux jetons dans l'environnement de `codegraph`, de `mesh peers` et de `rights` ;
+  - l'écran : « Tous » par défaut, « Lister » actif sans texte, le champ selon le choix, la note sur le type.
+- *Révision 37.8.* `memory(tag, opts, type)` : un filtre au plus, validé avant tout lancement ; l'argv sans filtre est `memory list -n 100 --json`. `typeValide` dans `src/shared/swarph.ts`. `exec()` pose `unset` des deux jetons pour toutes les lectures. L'écran garde la lecture à la soumission ; un type invalide désactive « Lister » sans message de raison (le tag garde le sien). 33 lignes existantes remplacées dans les fichiers du 37. Gate 2720, e2e 125.

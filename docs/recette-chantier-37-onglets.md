@@ -25,7 +25,9 @@ Version de swarph (`swarph --version`) : ____________________
 - [ ] Cells affiche les versions déclarées et la note précisant qu'elles datent de la dernière inscription ; ne pas les interpréter comme une preuve de présence.
 - [ ] Ouvrir Federation par la barre. Saisir une requête connue : aucune lecture avant « Chercher ». Soumettre et vérifier un résultat de l'index local (nom, dépôt, fichier et ligne, signature, appelants).
 - [ ] Si une cellule sans index est déjà disponible et facilement utilisable, y vérifier « Aucun index local […] rien n'a été cherché ». Sinon noter « non exercé » ; ne supprimer aucun index pour provoquer ce cas.
-- [ ] Ouvrir Memory, saisir un tag : aucune liste avant « Lister ». Soumettre, ouvrir une page puis suivre un lien entrant ou sortant vers une autre page. Le corps reste du texte, sans HTML exécuté ni URL du corps transformée en lien ; le bandeau de mémoire partagée reste visible.
+- [ ] Ouvrir Memory : « Tous » est sélectionné, aucun champ à saisir. Cliquer « Lister » : des pages s'affichent sans tag.
+- [ ] Choisir « Par type », saisir un type accessible (par exemple `note`) et cliquer « Lister ». Vérifier la liste filtrée et la note « Le type peut être reclassé par le cerveau ; le tag est plus fiable. ».
+- [ ] Ouvrir Memory, choisir « Par tag », saisir un tag : aucune liste avant « Lister ». Soumettre, ouvrir une page puis suivre un lien entrant ou sortant vers une autre page. Le corps reste du texte, sans HTML exécuté ni URL du corps transformée en lien ; le bandeau de mémoire partagée reste visible.
 - [ ] Vérifier localement dans le journal du daemon (`~/.aid/…`, emplacement selon l'installation) que la lecture Memory passe par le gateway configuré. Ne recopier aucune ligne contenant une adresse ou un secret. Si le journal ne permet pas de l'établir, noter « non vérifiable » : la réussite de la page seule ne prouve pas ce chemin.
 - [ ] Vérifier l'absence des noms `GBRAIN_TOKEN` et `SWARPH_BRAIN_TOKEN` dans l'environnement du sous-processus **memory**, sans afficher de valeur. Sur macOS, relever son PID pendant une lecture puis exécuter uniquement ce filtre (jamais `ps eww` seul) :
 

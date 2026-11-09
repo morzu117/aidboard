@@ -44,6 +44,8 @@ async function ouvrir(reponse = page, chemin = '/swarph/memoire?page=notes%2Ftes
     chemin,
     {
       'GET /api/nav': json(200, { groups: [], placements: [], prefs: { reduit: false } }),
+      'GET /api/swarph/memory': json(200, ok([])),
+      'GET /api/swarph/memory?type=note': json(200, ok([])),
       'GET /api/swarph/memory?tag=test': json(
         200,
         ok([{ slug: 'notes/test', title: 'Page test' }]),
@@ -92,6 +94,7 @@ test('bandeau permanent, texte brut, liens des deux directions et slug invalide 
 
 test('tag validé et liste ouvrant une page', async () => {
   const h = await ouvrir(page, '/swarph/memoire');
+  fireEvent.change(screen.getByLabelText('Filtre'), { target: { value: 'tag' } });
   fireEvent.change(screen.getByLabelText('Tag'), { target: { value: '-x' } });
   expect(screen.getByText(/Saisis un tag/)).toBeTruthy();
   expect(h.calls.some((c) => c.url.startsWith('/api/swarph/'))).toBe(false);
@@ -120,4 +123,34 @@ test('slug invalide dans URL : aucune lecture', async () => {
   const h = await ouvrir(page, '/swarph/memoire?page=-invalide');
   expect(screen.getByText('Slug invalide.')).toBeTruthy();
   expect(h.calls.some((c) => c.url.startsWith('/api/swarph/'))).toBe(false);
+});
+
+test('Tous par défaut, champ selon le filtre et type envoyé seulement au clic', async () => {
+  const h = await ouvrir(page, '/swarph/memoire');
+  expect((screen.getByLabelText('Filtre') as HTMLSelectElement).value).toBe('tous');
+  expect(screen.queryByRole('textbox')).toBeNull();
+  expect((screen.getByRole('button', { name: 'Lister' }) as HTMLButtonElement).disabled).toBe(
+    false,
+  );
+  expect(h.calls.some((c) => c.url.startsWith('/api/swarph/'))).toBe(false);
+  fireEvent.click(screen.getByRole('button', { name: 'Lister' }));
+  await waitFor(() => expect(h.calls.some((c) => c.url === '/api/swarph/memory')).toBe(true));
+  await waitFor(() =>
+    expect((screen.getByRole('button', { name: 'Lister' }) as HTMLButtonElement).disabled).toBe(
+      false,
+    ),
+  );
+  fireEvent.change(screen.getByLabelText('Filtre'), { target: { value: 'type' } });
+  expect(
+    screen.getByText('Le type peut être reclassé par le cerveau ; le tag est plus fiable.'),
+  ).toBeTruthy();
+  fireEvent.change(screen.getByLabelText('Type'), { target: { value: 'note' } });
+  expect(h.calls.some((c) => c.url.includes('type='))).toBe(false);
+  fireEvent.click(screen.getByRole('button', { name: 'Lister' }));
+  await waitFor(() =>
+    expect(h.calls.some((c) => c.url === '/api/swarph/memory?type=note')).toBe(true),
+  );
+  fireEvent.change(screen.getByLabelText('Filtre'), { target: { value: 'tous' } });
+  expect(screen.queryByRole('textbox')).toBeNull();
+  expect(screen.queryByText(/Le type peut être reclassé/)).toBeNull();
 });

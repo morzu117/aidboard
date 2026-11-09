@@ -87,7 +87,7 @@ test.each(ONGLETS_SWARPH.slice(1))('route %s sans mesh : connexion swarph', asyn
 
 function Lectures({ valeur }: { valeur: string }) {
   const federation = useFederation(valeur);
-  const memoire = useMemoire(valeur);
+  const memoire = useMemoire(valeur || null);
   const page = usePageMemoire(valeur);
   return (
     <button

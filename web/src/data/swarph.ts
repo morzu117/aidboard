@@ -1,7 +1,12 @@
 import { useEffect, useSyncExternalStore } from 'react';
 import type { BoardResult } from '../../../src/shared/board.js';
 import type { MeshState } from '../../../src/shared/model.js';
-import { requeteCodegraphValide, tagValide, slugValide } from '../../../src/shared/swarph.js';
+import {
+  requeteCodegraphValide,
+  tagValide,
+  typeValide,
+  slugValide,
+} from '../../../src/shared/swarph.js';
 import type {
   PairSwarph,
   DroitsSwarph,
@@ -171,9 +176,11 @@ export const useFederation = (q: string) =>
     requeteCodegraphValide(q) ? `/api/swarph/federation?q=${encodeURIComponent(q)}` : null,
     luResultat,
   );
-export const useMemoire = (tag: string) =>
+export const useMemoire = (tag: string | null, type = '') =>
   useLecture<BoardResult<ResumeMemoire[]>>(
-    tagValide(tag) ? `/api/swarph/memory?tag=${encodeURIComponent(tag)}` : null,
+    tag === null || (tag && !tagValide(tag)) || (type && !typeValide(type)) || (tag && type)
+      ? null
+      : `/api/swarph/memory${tag ? `?tag=${encodeURIComponent(tag)}` : type ? `?type=${encodeURIComponent(type)}` : ''}`,
     luResultat,
   );
 export const usePageMemoire = (slug: string) =>

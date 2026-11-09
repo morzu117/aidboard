@@ -19,6 +19,8 @@ const lectures: [string[], string][] = [
   [['mesh', 'peers', '--as', 'morzu-mac'], 'mesh-peers.txt'],
   [['rights', '--json', '--as', 'morzu-mac'], 'rights.json'],
   [codegraph, 'codegraph-lecture_test.json'],
+  [['memory', 'list', '-n', '100', '--json'], 'memory-list.json'],
+  [['memory', 'list', '--type', 'note', '-n', '100', '--json'], 'memory-list-type-note.json'],
   [['memory', 'list', '--tag', 'test', '-n', '100', '--json'], 'memory-list-test.json'],
   [['memory', 'get', 'page-test', '--json'], 'memory-get-page-test.json'],
   [

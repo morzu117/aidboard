@@ -15,7 +15,13 @@ export function registerSwarphRoutes(
   for (const route of routes) {
     app.get(`/api/swarph/${route}`, async (req) => {
       const s = lecteur();
-      const query = req.query as { fresh?: string; q?: string; tag?: string; slug?: string };
+      const query = req.query as {
+        fresh?: string;
+        q?: string;
+        tag?: string;
+        type?: string;
+        slug?: string;
+      };
       const opts = { fresh: query.fresh === '1' };
       try {
         switch (route) {
@@ -26,7 +32,7 @@ export function registerSwarphRoutes(
           case 'federation':
             return await s.codegraph(query.q ?? '', opts);
           case 'memory':
-            return await s.memory(query.tag ?? '', opts);
+            return await s.memory(query.tag ?? '', opts, query.type ?? '');
           case 'memory/page':
             return await s.page(query.slug ?? '', opts);
         }

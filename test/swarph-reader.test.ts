@@ -87,10 +87,11 @@ test('six argv fermés, identité et environnement mémoire isolé du daemon', a
     'memory get page-test --json',
     'memory links page-test --direction both --json',
   ]);
-  for (const env of t.environnements.slice(3)) {
+  for (const env of t.environnements) {
     expect(env.GBRAIN_TOKEN).toBeUndefined();
     expect(env.SWARPH_BRAIN_TOKEN).toBeUndefined();
-    expect(env.SWARPH_BRAIN_GATEWAY).toBe('https://example.com');
+    if (t.environnements.indexOf(env) >= 3)
+      expect(env.SWARPH_BRAIN_GATEWAY).toBe('https://example.com');
     expect(env.SWARPH_SELF).toBe('peer-a');
   }
   expect(t.environnements[2]!.SWARPH_SELF).toBe('peer-a');
@@ -104,6 +105,8 @@ test('arguments refusés et gateway absent ne lancent rien', async () => {
   await expect(t.reader.codegraph('-x')).rejects.toThrow(RangeError);
   await expect(t.reader.memory('!')).rejects.toThrow(RangeError);
   await expect(t.reader.page('../x')).rejects.toThrow(RangeError);
+  expect(await t.reader.memory()).toMatchObject({ kind: 'not-configured' });
+  expect(await t.reader.memory('', {}, 'note')).toMatchObject({ kind: 'not-configured' });
   expect(await t.reader.memory('test')).toMatchObject({ kind: 'not-configured' });
   expect(await t.reader.page('page-test')).toMatchObject({
     page: { kind: 'not-configured' },
@@ -181,4 +184,15 @@ test('page et liens démarrent ensemble et gardent leur résultat propre', async
   expect(appels).toEqual(['get', 'links']);
   liberer();
   expect(await page).toMatchObject({ page: { ok: true }, links: { ok: false, kind: 'forbidden' } });
+});
+
+test('liste sans filtre, tag vide et type : argv et cache distincts', async () => {
+  const t = lecteur();
+  expect((await t.reader.memory()).ok).toBe(true);
+  expect((await t.reader.memory('')).ok).toBe(true);
+  expect((await t.reader.memory('', {}, 'note')).ok).toBe(true);
+  expect(t.appels()).toEqual([
+    'memory list -n 100 --json',
+    'memory list --type note -n 100 --json',
+  ]);
 });
