@@ -14,6 +14,7 @@ import { ServeurConfig } from './ecrans/ServeurConfig.js';
 import { Serveurs } from './ecrans/Serveurs.js';
 import { Sujet } from './ecrans/Sujet.js';
 import { Swarph } from './ecrans/Swarph.js';
+import { EcranSwarphProvisoire, ONGLETS_SWARPH } from './ui/OngletsSwarph.js';
 import { Notifieur } from './ui/Notifieur.js';
 
 export function App() {
@@ -27,6 +28,9 @@ export function App() {
         <Route path="/reglages" element={<Reglages />} />
         {/* chantier 25 (D102) */}
         <Route path="/swarph" element={<Swarph />} />
+        {ONGLETS_SWARPH.slice(1).map(([id, chemin, titre]) => (
+          <Route key={id} path={chemin} element={<EcranSwarphProvisoire titre={titre} />} />
+        ))}
         <Route path="/board" element={<Board />} />
         <Route path="/board/cartes/:cardId" element={<CarteBoard />} />
         {/* chantier 29 (D151) */}

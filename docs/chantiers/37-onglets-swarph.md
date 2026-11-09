@@ -203,6 +203,7 @@ Ils couvrent aussi :
   - la barre d'onglets ;
   - le lien « Board » actif sur les nouvelles routes ;
   - le renvoi vers `/swarph` sans mesh.
+- *Révision 37.4.* `OngletsSwarph` est affiché en tête du Board et des quatre routes. `ONGLETS_SWARPH` fixe l'ordre. Pour l'instant, chaque route passe par l'écran provisoire `EcranSwarphProvisoire`. `SwarphStore` reprend la mécanique du store du Board, avec un magasin par chemin. Une requête, un tag ou un slug invalide ne crée aucun magasin. 9 lignes sont insérées dans des fichiers existants, aucune n'est modifiée. Gate 2551.
 
 ### 37.5 Cells et Réglages swarph (D243)
 

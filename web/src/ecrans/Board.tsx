@@ -9,6 +9,7 @@ import type {
 import { useBoardCards, useBoardProjects } from '../data/board.js';
 import { useAid } from '../data/useAidState.js';
 import { Bandeau } from '../ui/Bandeau.js';
+import { OngletsSwarph } from '../ui/OngletsSwarph.js';
 import { Layout } from '../ui/Layout.js';
 import { useViewport } from '../ui/useViewport.js';
 
@@ -317,6 +318,7 @@ export function Contenu({ cell }: { cell: string }) {
   };
   return (
     <main className="page board" data-node="board">
+      <OngletsSwarph />
       <div className="entete" data-node="board.entete">
         <div className="entete-texte">
           <h1 className="titre-ecran" data-node="board.entete.titre">
