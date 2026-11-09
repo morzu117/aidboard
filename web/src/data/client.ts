@@ -111,8 +111,9 @@ export class AidClient {
     method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE',
     path: string,
     body?: unknown,
+    headers?: Record<string, string>,
   ): Promise<T> {
-    return api<T>(method, path, body, this.o.fetchImpl)
+    return api<T>(method, path, body, this.o.fetchImpl, headers)
       .then((resultat) => {
         if (
           this.o.flux === 'signal' &&

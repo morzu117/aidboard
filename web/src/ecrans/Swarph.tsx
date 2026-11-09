@@ -1,3 +1,4 @@
+import { DemandesAvis } from '../ui/DemandesAvis.js';
 import { Link } from 'react-router';
 import { useAid } from '../data/useAidState.js';
 import { Layout } from '../ui/Layout.js';
@@ -25,6 +26,7 @@ function Contenu() {
           </p>
         </div>
       </div>
+      {state?.swairm?.enabled && <DemandesAvis />}
       {mesh ? (
         <section className="groupe" data-node="swarph.configure" aria-label="Déjà configuré">
           <article className="element">
