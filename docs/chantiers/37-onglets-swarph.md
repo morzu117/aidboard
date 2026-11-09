@@ -166,6 +166,7 @@ Ils couvrent aussi :
 - une ligne `peers` à trois colonnes, qui donne `format` ;
 - un `docstring` et un corps trop longs ;
 - un droit sans `direct`.
+- *Révision 37.1.* `src/shared/swarph.ts` contient les six parseurs et les trois validations d'arguments. `BoardErrorKind` gagne `no-index` et `not-configured`, avec leurs libellés dans `MESSAGES_BOARD` (4 lignes insérées, aucune modifiée). Une page de mémoire garde `content`, tiré de `compiled_truth` ou à défaut de `content`. Gate 2507.
 
 ### 37.2 Le faux swarph apprend les six lectures
 
