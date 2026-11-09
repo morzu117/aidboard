@@ -7,7 +7,12 @@ import {
   type ActionEcriture,
   type ParametresEcriture,
 } from '../../src/shared/ecritures.js';
-import type { ApercuEcriture } from '../../web/src/data/ecritures.js';
+import {
+  libelleEnvoi,
+  type CodeEnvoi,
+  type ResultatEnvoi,
+  type ApercuEcriture,
+} from '../../web/src/data/ecritures.js';
 import { EcrireAuMesh } from '../../web/src/ui/EcrireAuMesh.js';
 import { Swarph } from '../../web/src/ecrans/Swarph.js';
 import { Boite } from '../../web/src/ecrans/Boite.js';
@@ -45,11 +50,13 @@ function ouvrir(action: ActionEcriture = 'dm.envoyer', reponse?: ApercuEcriture)
     rappel: null,
   };
   const fermer = vi.fn();
+  const relire = vi.fn();
   const h = setup(
     <EcrireAuMesh
       action={action}
       valeurs={{ texte, carte: 101, pair: 'pair-test', canal: 'canal-test' }}
       onClose={fermer}
+      onRelire={relire}
     />,
     snapshot(),
     '/',
@@ -57,7 +64,7 @@ function ouvrir(action: ActionEcriture = 'dm.envoyer', reponse?: ApercuEcriture)
       'POST /api/swarph/ecrire/apercu': json(200, resultat),
     },
   );
-  return { ...h, resultat, fermer };
+  return { ...h, resultat, fermer, relire };
 }
 async function voir() {
   await userEvent.click(screen.getByRole('button', { name: "Voir l'aperçu" }));
@@ -77,7 +84,7 @@ test.each(['carte.note', 'dm.envoyer', 'canal.poster'] as const)(
       document.querySelector('section[aria-label="Aperçu"] pre:last-of-type')?.textContent,
     ).toBe(texte);
     expect(document.querySelector('section[aria-label="Aperçu"] b')).toBeNull();
-    expect(screen.queryByRole('button', { name: 'Envoyer' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Envoyer' })).toHaveProperty('disabled', false);
     expect(h.calls.filter((c) => c.method === 'POST')).toHaveLength(1);
     const appel = h.calls.find((c) => c.method === 'POST');
     expect(appel?.body).toMatchObject({ action, params: { texte, kind: 'fyi' } });
@@ -280,4 +287,215 @@ test('ressaisir le texte garde son nom accessible et renouvelle l’aperçu', as
   expect(document.querySelector('section[aria-label="Aperçu"] pre:last-of-type')?.textContent).toBe(
     'Nouveau texte.',
   );
+});
+
+test.each([
+  ['succes', 'Parti.'],
+  ['proxy_unavailable', "Le proxy de ta cellule ne répond pas. Rien n'est parti."],
+  ['connexion', "Le proxy de ta cellule ne répond pas. Rien n'est parti."],
+  ['upstream_unreachable', "Le gateway est injoignable. Rien n'est parti."],
+  ...(['upstream_ambiguous', 'delai', 'interrompu', 'format'] as const).map((code) => [
+    code,
+    'Envoi incertain : il est peut-être parti. Relis le fil avant de réessayer.',
+  ]),
+  ['upstream_error', 'Le gateway a refusé (statut 503).'],
+  ...(['verb_not_allowed', 'bad_args', 'peer_not_allowed'] as const).map((code) => [
+    code,
+    `Le proxy a refusé cette écriture (${code}). C'est un défaut d'A-I-D ou de configuration.`,
+  ]),
+])('libellé %s exact et sans texte', (code, libelle) => {
+  expect(
+    libelleEnvoi({
+      code: code as CodeEnvoi,
+      status: 503,
+      open_obligations: [],
+      texte,
+    } as ResultatEnvoi),
+  ).toBe(libelle);
+  expect(libelle).not.toContain(texte);
+});
+
+test('proxy absent : bouton désactivé, bandeau et copie conservés', async () => {
+  const h = ouvrir();
+  h.respond.set('POST /api/swarph/ecrire/envoyer', json(409, { error: 'proxy_absent' }));
+  await voir();
+  await userEvent.click(await screen.findByRole('button', { name: 'Envoyer' }));
+  expect(
+    await screen.findByText(
+      "Le proxy de ta cellule n'est pas configuré. Rien ne peut partir ; l'aperçu reste disponible.",
+    ),
+  ).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Envoyer' })).toHaveProperty('disabled', true);
+  expect(screen.getByText(/À blanc :/)).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Copier le texte' })).toHaveProperty('disabled', false);
+  fireEvent.change(screen.getByLabelText('Texte'), { target: { value: 'Autre texte' } });
+  await voir();
+  expect(screen.getByRole('button', { name: 'Envoyer' })).toHaveProperty('disabled', true);
+});
+
+test('un seul envoi direct par aperçu, un champ modifié rouvre l’envoi', async () => {
+  const h = ouvrir();
+  h.respond.set(
+    'POST /api/swarph/ecrire/envoyer',
+    json(200, { code: 'succes', id: 12, open_obligations: [] }),
+  );
+  await voir();
+  const bouton = await screen.findByRole('button', { name: 'Envoyer' });
+  fireEvent.click(bouton);
+  fireEvent.click(bouton);
+  expect(await screen.findByText('Parti.')).toBeTruthy();
+  expect(h.calls.filter((c) => c.url.endsWith('/envoyer'))).toHaveLength(1);
+  expect(bouton).toHaveProperty('disabled', true);
+  expect(screen.getByRole('button', { name: "Voir l'aperçu" })).toHaveProperty('disabled', true);
+  fireEvent.change(screen.getByLabelText('Texte'), { target: { value: 'Autre texte' } });
+  await voir();
+  expect(screen.getByRole('button', { name: 'Envoyer' })).toHaveProperty('disabled', false);
+});
+
+test('attente du téléphone puis résultat de cette demande', async () => {
+  const h = ouvrir();
+  const demande = {
+    id: 'demande-test',
+    classe: 'defaut',
+    resume: 'DM',
+    echeance: 1,
+    etat: 'ouverte',
+    resultat: null,
+  };
+  h.respond.set('POST /api/swarph/ecrire/envoyer', json(202, { confirmation: demande.id }));
+  h.respond.set('GET /api/confirmations', json(200, { ouvertes: [demande], recentes: [] }));
+  await voir();
+  await userEvent.click(await screen.findByRole('button', { name: 'Envoyer' }));
+  expect(await screen.findByText('En attente de ta confirmation sur le téléphone.')).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Envoyer' })).toHaveProperty('disabled', true);
+  h.respond.set(
+    'GET /api/confirmations',
+    json(200, {
+      ouvertes: [],
+      recentes: [
+        {
+          ...demande,
+          etat: 'consommee',
+          resultat: 'executee',
+          envoi: { code: 'succes', id: 12, open_obligations: [] },
+        },
+      ],
+    }),
+  );
+  expect(await screen.findByText('Parti.', {}, { timeout: 4500 })).toBeTruthy();
+  expect(screen.queryByText('En attente de ta confirmation sur le téléphone.')).toBeNull();
+});
+
+test.each(['dm.envoyer', 'canal.poster', 'carte.note'] as const)(
+  'incertain %s sans réessai',
+  async (action) => {
+    const h = ouvrir(action);
+    h.respond.set(
+      'POST /api/swarph/ecrire/envoyer',
+      json(200, { code: 'interrompu', open_obligations: [] }),
+    );
+    await voir();
+    await userEvent.click(await screen.findByRole('button', { name: 'Envoyer' }));
+    const statut = await screen.findByRole('status');
+    expect(statut.textContent).toBe(
+      'Envoi incertain : il est peut-être parti. Relis le fil avant de réessayer.',
+    );
+    expect(statut.textContent).not.toContain(texte);
+    expect(screen.queryByRole('button', { name: 'Réessayer' })).toBeNull();
+    if (action === 'carte.note') {
+      await userEvent.click(screen.getByRole('button', { name: 'Relire le fil' }));
+      expect(h.relire).toHaveBeenCalledOnce();
+      expect(h.fermer).toHaveBeenCalledOnce();
+    } else
+      expect(screen.getByText('Vérifie la Boîte ou le canal avant de réessayer.')).toBeTruthy();
+  },
+);
+
+test.each([
+  [
+    409,
+    {
+      error: 'confirmation_impossible',
+      message: 'Allume le PDA et active un téléphone pour cette action',
+    },
+  ],
+  [400, { error: 'schema', message: 'Paramètres invalides' }],
+  [422, { error: 'nettoyage', message: 'Adresse privée détectée' }],
+])('refus %s lisible sans texte', async (status, corps) => {
+  const h = ouvrir();
+  h.respond.set('POST /api/swarph/ecrire/envoyer', json(status, corps));
+  await voir();
+  await userEvent.click(await screen.findByRole('button', { name: 'Envoyer' }));
+  const alerte = await screen.findByRole('alert');
+  expect(alerte.textContent).toBe(corps.message);
+  expect(alerte.textContent).not.toContain(texte);
+});
+
+test.each([
+  ['consommee', 'annulee', 'Annulée'],
+  ['expiree', null, 'Expirée'],
+] as const)('demande %s/%s sans envoi : même aperçu envoyable', async (etat, resultat, libelle) => {
+  const h = ouvrir();
+  h.respond.set('POST /api/swarph/ecrire/envoyer', json(202, { confirmation: 'sans-envoi' }));
+  h.respond.set(
+    'GET /api/confirmations',
+    json(200, {
+      ouvertes: [],
+      recentes: [{ id: 'sans-envoi', classe: 'defaut', resume: 'DM', echeance: 1, etat, resultat }],
+    }),
+  );
+  await voir();
+  await userEvent.click(await screen.findByRole('button', { name: 'Envoyer' }));
+  expect(await screen.findByText(libelle)).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Envoyer' })).toHaveProperty('disabled', false);
+  expect(screen.getByRole('region', { name: 'Aperçu' })).toBeTruthy();
+  h.respond.set(
+    'POST /api/swarph/ecrire/envoyer',
+    json(200, { code: 'succes', open_obligations: [] }),
+  );
+  await userEvent.click(screen.getByRole('button', { name: 'Envoyer' }));
+  expect(await screen.findByText('Parti.')).toBeTruthy();
+  expect(h.calls.filter((c) => c.url.endsWith('/envoyer'))).toHaveLength(2);
+});
+
+test('annuler sur le cockpit rend le même aperçu envoyable', async () => {
+  const h = ouvrir();
+  h.respond.set('POST /api/swarph/ecrire/envoyer', json(202, { confirmation: 'annulation' }));
+  h.respond.set('GET /api/confirmations', json(200, { ouvertes: [], recentes: [] }));
+  h.respond.set('DELETE /api/confirmations/annulation', json(204, {}));
+  await voir();
+  await userEvent.click(await screen.findByRole('button', { name: 'Envoyer' }));
+  await userEvent.click(await screen.findByRole('button', { name: 'Annuler' }));
+  expect(await screen.findByText('Annulée')).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Envoyer' })).toHaveProperty('disabled', false);
+});
+
+test('un envoi incertain est une demande exécutée et reste verrouillé', async () => {
+  const h = ouvrir();
+  h.respond.set('POST /api/swarph/ecrire/envoyer', json(202, { confirmation: 'incertain' }));
+  h.respond.set(
+    'GET /api/confirmations',
+    json(200, {
+      ouvertes: [],
+      recentes: [
+        {
+          id: 'incertain',
+          classe: 'defaut',
+          resume: 'DM',
+          echeance: 1,
+          etat: 'consommee',
+          resultat: 'executee',
+          envoi: { code: 'interrompu', open_obligations: [] },
+        },
+      ],
+    }),
+  );
+  await voir();
+  await userEvent.click(await screen.findByRole('button', { name: 'Envoyer' }));
+  expect(
+    await screen.findByText(libelleEnvoi({ code: 'interrompu', open_obligations: [] })),
+  ).toBeTruthy();
+  expect(screen.getByText('Exécutée')).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Envoyer' })).toHaveProperty('disabled', true);
+  expect(screen.queryByRole('button', { name: 'Réessayer' })).toBeNull();
 });

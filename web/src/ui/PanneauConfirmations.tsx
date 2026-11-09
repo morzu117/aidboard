@@ -14,6 +14,7 @@ interface Reglage {
   bandeau: 'amorcage' | 'desarme' | null;
 }
 const noms: Record<string, string> = {
+  'mesh.ecrire': 'Écrire sur le mesh',
   merge: 'Merge',
   push: 'Push',
   nettoyage: 'Nettoyage',

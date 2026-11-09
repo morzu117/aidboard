@@ -65,7 +65,9 @@ test('trois aperçus, deux refus et aucune écriture sur le faux swarph', async 
     const apercu = boite.getByRole('region', { name: 'Aperçu' });
     const voir = boite.getByRole('button', { name: "Voir l'aperçu" });
     const sansEnvoi = async () => {
-      await expect(boite.getByRole('button', { name: /envoyer/i })).toHaveCount(0);
+      await expect(boite.getByRole('button', { name: /envoyer/i })).toHaveCount(
+        await apercu.count(),
+      );
     };
     await sansEnvoi();
     await boite.getByLabel('Texte', { exact: true }).fill('Note synthétique à blanc.');

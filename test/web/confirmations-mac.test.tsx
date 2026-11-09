@@ -441,3 +441,17 @@ test('faux numéro signé : motif dans l’attente et les dernières demandes', 
   });
   await screen.findByText('Merge du sujet — Annulée : mauvais numéro saisi sur le téléphone');
 });
+
+test('le réglage mesh.ecrire fourni par le daemon porte son libellé', async () => {
+  setup(<PanneauConfirmations />, snapshot(), '/', {
+    ...routes,
+    'GET /api/confirmations/reglage': json(200, {
+      ...reglage,
+      actions: [{ action: 'mesh.ecrire', actif: true }],
+    }),
+  });
+  expect(await screen.findByRole('switch', { name: 'Écrire sur le mesh' })).toHaveProperty(
+    'checked',
+    true,
+  );
+});

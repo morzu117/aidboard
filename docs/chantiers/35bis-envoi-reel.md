@@ -130,6 +130,7 @@ Après le document de schéma. L'action dans la porte, la migration 025, la rout
 ### 35b.4 L'UI (D267)
 
 « Envoyer » dans `EcrireAuMesh`, l'attente, les libellés, l'envoi incertain sans « Réessayer », la ligne de réglage dans l'écran des confirmations. Contre une route simulée ; ne dépend pas du schéma.
+- *Révision 35b.4.* `envoyerEcriture`, `libelleEnvoi` et `envoiIncertain` dans `web/src/data/ecritures.ts`. **À aligner au 35b.3 :** le daemon remplit `envoi: {code, id?, open_obligations, status?}` (code `succes` en cas de réussite) sur une demande `mesh.ecrire`, à côté de `resultat`, qui reste une chaîne. Le web ne sait pas d'avance si le proxy est configuré : il le déduit du premier 409 `proxy_absent`. 12 lignes existantes modifiées (dont `AttenteConfirmation` et l'e2e du 35). Gate 2778.
 
 ### 35b.5 Le vrai proxy, l'e2e et la fiche de recette
 

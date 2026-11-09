@@ -1,3 +1,4 @@
+import type { ResultatEnvoi } from '../data/ecritures.js';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAidClient } from '../data/useAidState.js';
 
@@ -8,6 +9,7 @@ export interface Confirmation {
   echeance: number;
   etat: string;
   resultat: string | null;
+  envoi?: ResultatEnvoi | null;
   raison?: string | null;
 }
 export interface FileConfirmations {
@@ -36,7 +38,7 @@ export function AttenteConfirmation({
   id: string;
   toujours?: boolean;
   onExecutee?: () => void | Promise<void>;
-  onTerminee?: () => void;
+  onTerminee?: (demande?: Confirmation) => void;
   onFermer?: () => void;
 }) {
   const client = useAidClient();
@@ -66,7 +68,7 @@ export function AttenteConfirmation({
           termine = true;
           setNumero(null);
           setResultat(fin);
-          finie.current?.();
+          finie.current?.(d);
           setErreur('');
           if (d.resultat === 'executee') await suite.current?.();
         } else if (d?.classe === 'toujours' || toujours) {
