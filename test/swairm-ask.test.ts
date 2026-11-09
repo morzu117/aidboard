@@ -154,6 +154,38 @@ test('exclusion, état, annulation et suppression', async () => {
   expect(service.etat()).toEqual({ enCours: false, depuis: null, budgetUsd: 0.5 });
 });
 
+test('annuler arrête aussi les petits-enfants de swairm (les avis claude -p)', async () => {
+  const temp = mkdtempSync(join(tmpdir(), 'aid-test-enfant-'));
+  dossiers.push(temp);
+  const pidFichier = join(temp, 'enfant.pid');
+  // lecteur() copie process.env à sa construction : la variable doit être posée avant
+  process.env.FAKE_SWAIRM_ENFANT_PID = pidFichier;
+  const { service, copie } = lecteur('enfant');
+  try {
+    const resultat = service.demander(demande);
+    await attendre(copie + '.path');
+    await attendre(pidFichier);
+    const pid = Number(lire(pidFichier).trim());
+    expect(vivant(pid)).toBe(true);
+    service.annuler();
+    expect(await resultat).toMatchObject({ ok: false, kind: 'annule' });
+    const fin = Date.now() + 2000;
+    while (vivant(pid) && Date.now() < fin) await new Promise((r) => setTimeout(r, 20));
+    expect(vivant(pid)).toBe(false);
+  } finally {
+    delete process.env.FAKE_SWAIRM_ENFANT_PID;
+  }
+});
+
+function vivant(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 test.each([
   { n: 0 },
   { n: 6 },

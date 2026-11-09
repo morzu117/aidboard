@@ -1,4 +1,4 @@
-import { execFile, type ChildProcess } from 'node:child_process';
+import { spawn, type ChildProcess } from 'node:child_process';
 import { chmod, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -14,6 +14,19 @@ import {
 } from '../../shared/swairm-ask.js';
 
 export const BUDGET_ASK_USD = 0.5;
+
+/**
+ * Python ne relaie pas SIGTERM à ses enfants : tuer seulement swairm laisserait les avis
+ * `claude -p` tourner (et coûter). On signale donc tout le groupe, créé par `detached`.
+ */
+function arreterGroupe(enfant: ChildProcess): void {
+  try {
+    if (enfant.pid !== undefined) process.kill(-enfant.pid, 'SIGTERM');
+    else enfant.kill('SIGTERM');
+  } catch {
+    enfant.kill('SIGTERM');
+  }
+}
 export interface DemandeAsk {
   question: string;
   n: number;
@@ -54,7 +67,7 @@ export class SwairmAsk {
   annuler(): void {
     if (this.courant) {
       this.courant.annule = true;
-      this.courant.enfant?.kill('SIGTERM');
+      if (this.courant.enfant) arreterGroupe(this.courant.enfant);
     }
   }
   async demander(d: DemandeAsk): Promise<AskResult<Ask>> {
@@ -120,51 +133,73 @@ export class SwairmAsk {
       delete env[cle];
     return new Promise((resolve) => {
       let delaiDepasse = false;
-      const enfant = execFile(
-        this.bin || 'swairm',
-        args,
-        {
-          env,
-          killSignal: 'SIGTERM',
-          maxBuffer: 4 * 1024 * 1024,
-        },
-        (err, stdout, stderr) => {
-          clearTimeout(delai);
-          const readAt = new Date().toISOString();
-          const e = err as
-            (Omit<NodeJS.ErrnoException, 'code'> & { code?: string | number }) | null;
-          if (courant?.annule) return resolve({ ok: false, kind: 'annule', readAt });
-          if (e?.code === 'ENOENT') return resolve({ ok: false, kind: 'absent', readAt });
-          if (delaiDepasse) return resolve({ ok: false, kind: 'timeout', readAt });
-          if (e?.code === 2)
-            return resolve(
-              stderr.includes('invalid choice')
-                ? { ok: false, kind: 'too-old', readAt }
-                : {
-                    ok: false,
-                    kind: 'refusee',
-                    message: stderr.split(/\r?\n/)[0]!.slice(0, 300),
-                    readAt,
-                  },
-            );
-          if (e && e.code !== 3) return resolve({ ok: false, kind: 'unknown', readAt });
-          let data: T | null = null;
-          try {
-            data = parse(JSON.parse(stdout));
-          } catch {
-            /* JSON illisible */
-          }
-          if (data === null) return resolve({ ok: false, kind: 'format', readAt });
-          resolve(e ? { ok: false, kind: 'aucun-avis', data, readAt } : { ok: true, data, readAt });
-        },
-      );
+      let fini = false;
+      const sortie: Buffer[] = [];
+      const erreurs: Buffer[] = [];
+      let taille = 0;
+      const MAX = 4 * 1024 * 1024;
+      // spawn et non execFile, qui ignore `detached` : swairm a son propre groupe, pour que
+      // SIGTERM atteigne aussi les `claude -p` qu'il lance (Python ne le leur relaie pas)
+      const enfant = spawn(this.bin || 'swairm', args, {
+        env,
+        detached: true,
+        stdio: ['ignore', 'pipe', 'pipe'],
+      });
+      const finir = (r: AskResult<T>) => {
+        if (fini) return;
+        fini = true;
+        clearTimeout(delai);
+        resolve(r);
+      };
+      const lire = (cible: Buffer[]) => (morceau: Buffer) => {
+        taille += morceau.length;
+        if (taille > MAX) {
+          arreterGroupe(enfant);
+          return;
+        }
+        cible.push(morceau);
+      };
+      enfant.stdout.on('data', lire(sortie));
+      enfant.stderr.on('data', lire(erreurs));
+      enfant.on('error', (err: NodeJS.ErrnoException) => {
+        const readAt = new Date().toISOString();
+        finir({ ok: false, kind: err.code === 'ENOENT' ? 'absent' : 'unknown', readAt });
+      });
+      enfant.on('close', (code) => {
+        const readAt = new Date().toISOString();
+        const stdout = Buffer.concat(sortie).toString('utf8');
+        const stderr = Buffer.concat(erreurs).toString('utf8');
+        if (courant?.annule) return finir({ ok: false, kind: 'annule', readAt });
+        if (delaiDepasse) return finir({ ok: false, kind: 'timeout', readAt });
+        if (taille > MAX) return finir({ ok: false, kind: 'format', readAt });
+        if (code === 2)
+          return finir(
+            stderr.includes('invalid choice')
+              ? { ok: false, kind: 'too-old', readAt }
+              : {
+                  ok: false,
+                  kind: 'refusee',
+                  message: stderr.split(/\r?\n/)[0]!.slice(0, 300),
+                  readAt,
+                },
+          );
+        if (code !== 0 && code !== 3) return finir({ ok: false, kind: 'unknown', readAt });
+        let data: T | null = null;
+        try {
+          data = parse(JSON.parse(stdout));
+        } catch {
+          /* JSON illisible */
+        }
+        if (data === null) return finir({ ok: false, kind: 'format', readAt });
+        finir(
+          code === 3 ? { ok: false, kind: 'aucun-avis', data, readAt } : { ok: true, data, readAt },
+        );
+      });
       const delai = setTimeout(() => {
         delaiDepasse = true;
-        enfant.kill('SIGTERM');
+        arreterGroupe(enfant);
       }, this.options.timeoutMs ?? 600000);
       if (courant) courant.enfant = enfant;
-      enfant.stdin?.on('error', () => undefined);
-      enfant.stdin?.end();
     });
   }
 }

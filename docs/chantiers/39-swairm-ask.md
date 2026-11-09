@@ -216,6 +216,7 @@ swairm ask --n N [--modeles sonnet,opus] [--budget USD] --question-file F --json
   - le coût réel comparé au plafond ;
   - une question volontairement refusée, par exemple avec une fausse clé ;
   - la vérification qu'aucun avis n'a touché au disque.
+- *Révision 39.6.* Trois e2e, un daemon par mode du faux swairm. La fiche de recette ne contient que des formes génériques, et la fausse clé y est écrite en `X`. **Correction du 39.4 :** SIGTERM ne visait que swairm, alors que Python ne le relaie pas à ses enfants. `SwairmAsk` lance donc swairm par `spawn`, avec `detached`, dans son propre groupe, et `annuler()` comme le délai envoient `SIGTERM` à `-pid`. Le test `annuler arrête aussi les petits-enfants` le vérifie (faux swairm en mode `enfant`). La sortie est bornée à 4 Mio, et au-delà, l'état est `format`. Gate 2534, e2e 121.
 
 ## 6. Pièges
 

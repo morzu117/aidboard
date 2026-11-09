@@ -38,6 +38,13 @@ if [ "${1:-}" = "ask" ]; then
     format) echo '{}'; exit 0 ;;
     aucun) cat "$fixtures/ask-aucun.json"; exit 3 ;;
     lent) trap 'exit 0' TERM; while :; do sleep 0.05; done ;;
+    # comme swairm et ses avis : un petit-enfant qui ignore la mort du parent
+    enfant)
+      sleep 60 &
+      echo "$!" >"${FAKE_SWAIRM_ENFANT_PID:-/dev/null}"
+      trap 'exit 0' TERM
+      while :; do sleep 0.05; done
+      ;;
   esac
   cat "$fichier"
   exit "$?"
