@@ -1,0 +1,22 @@
+{
+  "format": "swairm-ask/1",
+  "id": "20261109T071500Z-3f2a",
+  "genere_a": "2026-11-09T07:15:00+00:00",
+  "prompt_version": "1",
+  "question": "Faut-il vérifier les tests ?",
+  "sous_questions": [{ "n": 1, "texte": "Faut-il vérifier les tests ?" }],
+  "avis": [
+    {
+      "i": 1,
+      "modele_demande": "sonnet",
+      "modele_servi": null,
+      "etat": "echec",
+      "cout_usd": null,
+      "duree_s": null,
+      "reponses": [],
+      "brut": null
+    }
+  ],
+  "accord": [{ "n": 1, "accord": "insuffisant", "verdict": null, "compte": {} }],
+  "cout_total_usd": 0
+}
