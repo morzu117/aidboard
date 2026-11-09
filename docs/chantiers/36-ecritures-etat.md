@@ -111,6 +111,7 @@ Ce document, sur `feat/36-ecritures-etat`.
 ### 36.3 L'UI (D271, D275)
 
 Les boutons d'après la lecture, la boîte de clôture, l'attente et les libellés, contre une route simulée. Ne dépend de rien.
+- *Révision 36.3.* `web/src/data/etats.ts` (`actionsPossibles`, `envoyerEtat`, `CLOTURE_PAR_CONDITION`) et `web/src/ui/ChangerEtat.tsx`. `board.ts` : 10 lignes ajoutées, aucune modifiée ; `str()` ne retouche pas le texte, donc l'`accept` hashé est celui du gateway. Après une demande, l'envoi reste verrouillé jusqu'à la fermeture de la boîte. 2 lignes existantes modifiées (`CarteBoard`). Gate 2820.
 
 ### 36.4 L'action et la route (D272 à D274)
 
