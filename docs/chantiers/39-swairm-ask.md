@@ -206,6 +206,7 @@ swairm ask --n N [--modeles sonnet,opus] [--budget USD] --question-file F --json
 - le tri ;
 - une justification avec `<img src=x onerror=alert(1)>`, rendue en texte ;
 - les états.
+- *Révision 39.5.* `api()` et `AidClient.request` acceptent des en-têtes optionnels, utilisés seulement par `demanderAvis` (1 ligne modifiée). `ui/DemandesAvis.tsx` porte le bouton et la liste sur l'écran Swarph. L'état de la demande et la liste reprennent la mécanique de relecture du Board. Fermer la boîte n'annule pas la demande : en la rouvrant, l'attente en cours s'affiche. Gate 2533.
 
 ### 39.6 L'e2e et la fiche de recette (aidboard)
 

@@ -23,6 +23,7 @@ export async function api<T>(
   path: string,
   body?: unknown,
   fetchImpl: typeof fetch = fetch,
+  headers?: Record<string, string>,
 ): Promise<T> {
   const res = await fetchImpl(path, {
     method,
@@ -30,6 +31,7 @@ export async function api<T>(
     // chantier 30 (D165) : la marque du cockpit, qu'une navigation ne peut pas imiter
     headers: {
       [EN_TETE_COCKPIT]: '1',
+      ...headers,
       ...(body === undefined ? {} : { 'content-type': 'application/json' }),
     },
     body: body === undefined ? undefined : JSON.stringify(body),
