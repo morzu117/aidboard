@@ -142,6 +142,7 @@ Ce fichier, et sa ligne dans `docs/chantiers/README.md`.
 
 ### 35.2 Le catalogue, l'argv, le résumé et le nettoyage (D251 à D254)
 `src/shared/ecritures.ts` et `src/shared/nettoyage.ts`, avec leurs tests, dont l'argv figé et un test par motif.
+_Fait (révision 1)._ `src/shared/ecritures.ts` et `src/shared/nettoyage.ts`, avec 65 tests. Choix de Codex : `a` et `fil` sont obligatoires mais acceptent `null`. Le validateur rend pour l'instant un message unique, « Paramètres d'écriture invalides » : le 35.3 y ajoute un message par champ, dont le DM à soi-même.
 
 ### 35.3 La route d'aperçu et la garde des obligations (D255 à D257)
 `src/daemon/routes/swarph.ts` ou une nouvelle `ecritures.ts`, le rappel des obligations, le parseur de réponse qui refuse un `closed_obligations` non vide, et le test « aucun chemin d'envoi ». Le faux swarph sert la lecture des obligations depuis les fixtures du 24.
