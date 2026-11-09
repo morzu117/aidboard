@@ -58,7 +58,8 @@ Le contrat du proxy (résumé) :
   - `request_id` différent de celui envoyé, JSON illisible, ligne absente : `format` ;
   - `ok: true` sans `status` 2xx ou sans `body` objet : `format` ;
   - `ok: false` avec un `error` hors des sept codes : `format`.
-- Le résultat est discriminé : `{ok: true, status, body}` ou `{ok: false, code}`, avec `code` parmi les sept, plus `delai` (délai dépassé), `connexion` (socket absente ou refusée, assimilé à `proxy_unavailable`) et `format`.
+- Le résultat est discriminé : `{ok: true, status, body}` ou `{ok: false, code}`, avec `code` parmi les sept, plus `delai` (délai dépassé), `interrompu` (coupure après l'écriture), `connexion` (socket absente ou refusée, assimilé à `proxy_unavailable`) et `format`.
+- **Avant ou après l'écriture.** `connexion` ne vaut que si la requête n'a pas été écrite sur la socket (socket absente, connexion refusée, erreur avant `connect`). Une erreur ou une fermeture **après** l'écriture de la ligne donne `interrompu` : l'écriture a pu avoir lieu, comme `upstream_ambiguous`. Une réponse `format` reçue après l'écriture se montre aussi comme incertaine dans l'UI (D267).
 - `detail` n'est jamais remonté à l'UI ni au journal.
 
 ### D264. Les arguments de chaque verbe
@@ -96,9 +97,9 @@ La correspondance prévue, depuis les `params` du 35 : `carte.note` → `board.c
 | succès | « Parti. » |
 | `proxy_unavailable`, `connexion` | « Le proxy de ta cellule ne répond pas. Rien n'est parti. » |
 | `upstream_unreachable` | « Le gateway est injoignable. Rien n'est parti. » |
-| `upstream_ambiguous`, `delai` | « Envoi incertain : il est peut-être parti. Relis le fil avant de réessayer. » |
+| `upstream_ambiguous`, `delai`, `interrompu`, `format` | « Envoi incertain : il est peut-être parti. Relis le fil avant de réessayer. » |
 | `upstream_error` | « Le gateway a refusé (statut N). » |
-| `verb_not_allowed`, `bad_args`, `peer_not_allowed`, `format` | « Le proxy a refusé cette écriture (code). C'est un défaut d'A-I-D ou de configuration. » |
+| `verb_not_allowed`, `bad_args`, `peer_not_allowed` | « Le proxy a refusé cette écriture (code). C'est un défaut d'A-I-D ou de configuration. » |
 
 - Pour un envoi incertain, aucun bouton « Réessayer ». L'UI propose « Relire le fil » (la carte), ou rappelle de vérifier la Boîte ou le canal.
 - Le bandeau « À blanc » du 35 reste quand le proxy n'est pas configuré. Les boutons « Copier » restent.
