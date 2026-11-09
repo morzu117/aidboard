@@ -1,0 +1,20 @@
+{
+  "peer": "morzu-mac",
+  "groups": ["lecture"],
+  "grants": [
+    {
+      "grant_type": "memory",
+      "target": "*",
+      "level": "read",
+      "direct": true,
+      "via_group": null
+    },
+    {
+      "grant_type": "board",
+      "target": "projet-test",
+      "level": "read",
+      "direct": false,
+      "via_group": "lecture"
+    }
+  ]
+}

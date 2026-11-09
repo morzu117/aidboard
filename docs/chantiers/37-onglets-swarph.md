@@ -180,6 +180,7 @@ Ils couvrent aussi :
 - Il simule aussi les modes `no-index` et `stale` pour `codegraph`.
 - Il refuse toute forme inconnue, comme au 24.
 - Les fixtures vont dans `test/fixtures/board/`, avec des noms de pairs d'exemple (`peer-a`, `peer-b`). Aucun vrai nom de cellule n'y figure.
+- *Révision 37.2.* Le faux swarph accepte les six lectures sous l'argv exact du plan, avec `--` avant la requête de `codegraph`. Il sert des fichiers, avec la requête normalisée en `[A-Za-z0-9._-]`. `FAKE_SWARPH_CODEGRAPH_MODE` vaut `no-index` ou `stale`. Les fixtures sont `mesh-peers.txt`, `rights.json`, `codegraph-lecture_test.json`, puis `memory-list-test.json`, `memory-get-page-test.json` et `memory-links-page-test.json`. 59 lignes sont insérées, aucune n'est modifiée. Gate 2520.
 
 ### 37.3 Le lecteur et les routes (D239, D241)
 

@@ -1,0 +1,18 @@
+[
+  {
+    "type": "edge",
+    "from": "page-test",
+    "to": "page-liee",
+    "rel": "references",
+    "direction": "outgoing",
+    "hop": 1
+  },
+  {
+    "type": "edge",
+    "from": "page-source",
+    "to": "page-test",
+    "rel": "references",
+    "direction": "incoming",
+    "hop": 1
+  }
+]
