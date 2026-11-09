@@ -1,0 +1,14 @@
+[
+  {
+    "repo": "exemple",
+    "name": "lecture",
+    "kind": "function",
+    "file_path": "src/lecture.ts",
+    "start_line": 12,
+    "callers": 2,
+    "score": 1,
+    "qualified_name": "exemple.lecture",
+    "docstring": "Lecture de test",
+    "signature": "lecture(): void"
+  }
+]

@@ -9,6 +9,7 @@ import type {
 import { useBoardCards, useBoardProjects } from '../data/board.js';
 import { useAid } from '../data/useAidState.js';
 import { Bandeau } from '../ui/Bandeau.js';
+import { OngletsSwarph } from '../ui/OngletsSwarph.js';
 import { Layout } from '../ui/Layout.js';
 import { useViewport } from '../ui/useViewport.js';
 
@@ -21,6 +22,8 @@ type Action = 'retour' | 'relire' | 'doctor' | null;
 
 /** Message et action de chaque erreur classée par le daemon (D95, spec Board « Messages »). */
 export const MESSAGES_BOARD: Record<BoardErrorKind, { texte: string; action: Action }> = {
+  'no-index': { texte: 'Aucun index local', action: null },
+  'not-configured': { texte: 'Non configuré', action: null },
   forbidden: { texte: 'Tu ne peux pas lire cette carte', action: 'retour' },
   unreachable: { texte: 'Le gateway ne répond pas', action: 'relire' },
   'too-old': { texte: 'Mets à jour swarph', action: 'doctor' },
@@ -315,6 +318,7 @@ export function Contenu({ cell }: { cell: string }) {
   };
   return (
     <main className="page board" data-node="board">
+      <OngletsSwarph />
       <div className="entete" data-node="board.entete">
         <div className="entete-texte">
           <h1 className="titre-ecran" data-node="board.entete.titre">

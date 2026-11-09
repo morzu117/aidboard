@@ -34,6 +34,7 @@ import { MemoryWorker } from './memory/worker.js';
 import { MemoryService } from './memory/service.js';
 import { MemoryStore } from './memory/store.js';
 import { MeshService } from './mesh/service.js';
+import { SwarphReader } from './mesh/lectures.js';
 import { BoardReader } from './mesh/board.js';
 import { acquireLock } from './lock.js';
 import { ensureHome, resolvePaths } from './paths.js';
@@ -255,6 +256,9 @@ export async function startDaemon(
       : null;
     // chantier 24 : les lectures du board passent par le même service, donc n'existent qu'avec lui
     const board = mesh ? new BoardReader({ mesh, cell: config.mesh.cell, log }) : null;
+    const swarph = mesh
+      ? new SwarphReader({ mesh, cell: config.mesh.cell, gateway: config.mesh.gateway, log })
+      : null;
     // 08.8 : construit ici, et non dans buildServer, pour lancer le rattrapage après `listen`
     const indexer = new Indexer({ store, paths, engine: structural });
     // chantier 30 (D162) : le second port s'ouvre après le principal (son CSP cite le port
@@ -371,6 +375,7 @@ export async function startDaemon(
       indexer,
       mesh,
       board,
+      swarph,
       requestStop: opts.onStopRequested,
       requestUpdate: opts.onUpdateRequested,
       requestCycle: opts.onCycleRequested,

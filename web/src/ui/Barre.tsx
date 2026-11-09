@@ -177,6 +177,9 @@ export function Barre({
             data-action="nav.board"
             to="/board"
             aria-current={pathname === '/board' ? 'page' : undefined}
+            {...(/^\/swarph\/(cells|federation|memoire|reglages)(\/|$)/.test(pathname)
+              ? { className: 'nav-lien est-actif', 'aria-current': 'page' as const }
+              : {})}
           >
             Board
           </Link>

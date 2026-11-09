@@ -81,7 +81,15 @@ export class MeshService {
    * hors de la file `serial()` — une lecture de 3 s ne retarde ni `connect` ni `refresh`. Les arguments
    * viennent de `BoardReader`, qui n'en construit que six formes (D93).
    */
-  read(args: string[]) {
+  read(args: string[], options?: { env?: Record<string, string>; unset?: string[] }) {
+    if (options) {
+      const env = { ...this.env(), ...options.env };
+      for (const nom of options.unset ?? []) delete env[nom];
+      return (this.deps.exec ?? meshExec)(this.deps.config.bin, args, {
+        env,
+        timeoutMs: this.deps.timeoutMs ?? 30_000,
+      });
+    }
     return this.run(this.deps.config.bin, args);
   }
 

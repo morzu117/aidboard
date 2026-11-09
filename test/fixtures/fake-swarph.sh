@@ -73,6 +73,65 @@ if [ "$1" = "spawn" ]; then
   echo "claude --name $2 --session-id 00000000-0000-4000-8000-000000000000"
   exit 0
 fi
+# Lectures fermées du chantier 37 ; les modes d'erreur du board restent partagés.
+if [[ "$1" = "mesh" || "$1" = "rights" || "$1" = "codegraph" || "$1" = "memory" ]]; then
+  fichier=""
+  identifiant='^[A-Za-z0-9][A-Za-z0-9._:/-]{0,199}$'
+  case "$1" in
+    mesh)
+      if [ $# -eq 4 ] && [ "$2" = "peers" ] && [ "$3" = "--as" ] && [ -n "$4" ]; then fichier="mesh-peers.txt"; fi
+      ;;
+    rights)
+      if [ $# -eq 4 ] && [ "$2" = "--json" ] && [ "$3" = "--as" ] && [ -n "$4" ]; then fichier="rights.json"; fi
+      ;;
+    codegraph)
+      if [ $# -eq 9 ] && [ "$2" = "--local" ] && [ "$3" = "--json" ] && [ "$4" = "--limit" ] &&
+        [ "$6" = "--caller-cell" ] && [ "$8" = "--" ] &&
+        [[ "$5" =~ ^[1-9][0-9]*$ ]] && [ -n "$7" ] && [ "${#9}" -le 200 ] &&
+        [[ -n "$9" && "$9" != -* && ! "$9" =~ [[:cntrl:]] ]]; then
+        # Chaque caractère hors ASCII alphanumérique, point, tiret et soulignement devient _.
+        requete=$(printf '%s' "$9" | LC_ALL=C sed 's/[^A-Za-z0-9._-]/_/g')
+        fichier="codegraph-$requete.json"
+      fi
+      ;;
+    memory)
+      if [ $# -eq 7 ] && [ "$2" = "list" ] && [ "$3" = "--tag" ] && [ "$5" = "-n" ] && [ "$7" = "--json" ] &&
+        [[ "$4" =~ $identifiant && "$6" =~ ^[1-9][0-9]*$ ]]; then fichier="memory-list-$4.json"; fi
+      if [ $# -eq 4 ] && [ "$2" = "get" ] && [[ "$3" =~ $identifiant ]] &&
+        [ "$4" = "--json" ]; then fichier="memory-get-$3.json"; fi
+      if [ $# -eq 6 ] && [ "$2" = "links" ] && [[ "$3" =~ $identifiant ]] &&
+        [ "$4" = "--direction" ] && [ "$5" = "both" ] && [ "$6" = "--json" ]; then fichier="memory-links-$3.json"; fi
+      ;;
+  esac
+  if [ -z "$fichier" ]; then
+    echo "fake-swarph : lecture inconnue : $*" >&2
+    exit 2
+  fi
+  [ -n "${FAKE_SWARPH_BOARD_SLEEP:-}" ] && sleep "${FAKE_SWARPH_BOARD_SLEEP}"
+  if [ -z "${FAKE_SWARPH_BOARD_ERROR:-}" ] && [ -f "${FAKE_SWARPH_BOARD_ERROR_FILE:-/nonexistent}" ]; then
+    FAKE_SWARPH_BOARD_ERROR=$(head -n 1 "$FAKE_SWARPH_BOARD_ERROR_FILE")
+  fi
+  case "${FAKE_SWARPH_BOARD_ERROR:-}" in
+    forbidden) echo "swarph $1: gateway 403: no read grant" >&2; exit 1 ;;
+    unreachable) echo "swarph $1: gateway unreachable" >&2; exit 1 ;;
+    credential) echo "swarph $1: cannot resolve a mesh credential for 'morzu-mac'" >&2; exit 1 ;;
+    other) echo "swarph $1: something nobody planned for" >&2; exit 1 ;;
+    too-old) echo "swarph $1: error: argument: invalid choice" >&2; exit 2 ;;
+  esac
+  # FAKE_SWARPH_CODEGRAPH_MODE : no-index (échec) ou stale (sortie normale).
+  if [ "$1" = "codegraph" ]; then
+    case "${FAKE_SWARPH_CODEGRAPH_MODE:-}" in
+      no-index) echo "NO INDEX AVAILABLE" >&2; exit 1 ;;
+      stale) echo "STALE INDEX" >&2 ;;
+    esac
+  fi
+  if [ ! -f "${FAKE_SWARPH_BOARD:-/nonexistent}/$fichier" ]; then
+    echo "swarph board: gateway 404: not found" >&2
+    exit 1
+  fi
+  cat "${FAKE_SWARPH_BOARD}/$fichier"
+  exit 0
+fi
 if [ "$1" = "board" ]; then
   # Lectures du board (chantier 24) : seulement les six formes que le daemon construit (D93), toujours
   # `--json --as <cell>` en fin. Le nom du fichier servi est déduit des arguments :

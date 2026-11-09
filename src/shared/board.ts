@@ -15,6 +15,8 @@ export type BoardErrorKind =
   | 'too-large'
   // `gateway 404` : la carte n'existe pas (D95 bis)
   | 'not-found'
+  | 'no-index'
+  | 'not-configured'
   | 'unknown';
 
 /** Réponse de chaque route `/api/board/…` (D95) : toujours 200, un résultat discriminé. */

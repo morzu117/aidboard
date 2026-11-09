@@ -1,0 +1,7 @@
+{
+  "slug": "page-test",
+  "title": "Page de test",
+  "type": "note",
+  "tags": ["test"],
+  "compiled_truth": "Texte de peer-a : <img src=x onerror=alert(1)>\nhttps://exemple.invalid"
+}

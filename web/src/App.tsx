@@ -1,7 +1,11 @@
+import { Federation } from './ecrans/Federation.js';
+import { MemoireSwarph } from './ecrans/MemoireSwarph.js';
 import { Navigate, Route, Routes } from 'react-router';
 import { AidProvider } from './data/useAidState.js';
 import { Accueil } from './ecrans/Accueil.js';
 import { Board } from './ecrans/Board.js';
+import { Cells } from './ecrans/Cells.js';
+import { ReglagesSwarph } from './ecrans/ReglagesSwarph.js';
 import { CarteBoard } from './ecrans/CarteBoard.js';
 import { Boite } from './ecrans/Boite.js';
 import { Consignes } from './ecrans/Consignes.js';
@@ -27,6 +31,11 @@ export function App() {
         <Route path="/reglages" element={<Reglages />} />
         {/* chantier 25 (D102) */}
         <Route path="/swarph" element={<Swarph />} />
+        {/* chantier 37 (D242) */}
+        <Route path="/swarph/cells" element={<Cells />} />
+        <Route path="/swarph/federation" element={<Federation />} />
+        <Route path="/swarph/memoire" element={<MemoireSwarph />} />
+        <Route path="/swarph/reglages" element={<ReglagesSwarph />} />
         <Route path="/board" element={<Board />} />
         <Route path="/board/cartes/:cardId" element={<CarteBoard />} />
         {/* chantier 29 (D151) */}
