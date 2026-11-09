@@ -84,6 +84,12 @@ function ContenuMemoire() {
             deux-points, barre oblique ou tiret.
           </p>
         )}
+        {!valide && filtre === 'type' && (
+          <p data-node="memoire-swarph.raison">
+            Saisis un type de 1 à 64 caractères : minuscules, chiffres, soulignement ou tiret, en
+            commençant par une lettre.
+          </p>
+        )}
       </form>
       <LectureSwarph376 {...liste} node="memoire-swarph.liste" desactive={soumis === null} />
       <EtatsSwarph376 {...liste} node="memoire-swarph.liste" memoire />
