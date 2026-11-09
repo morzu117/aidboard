@@ -225,6 +225,7 @@ Ils couvrent aussi :
   - la navigation entre pages par les liens ; un slug de lien qui ne passe pas la regex ne s'affiche pas en lien et ne lance aucun `memory get` ;
   - le refus montré comme un état normal ;
   - l'absence de bouton d'export.
+- *Révision 37.6.* **Écart à D243 :** la page de mémoire s'ouvre par `/swarph/memoire?page=<slug>`, et non par `/:slug`, parce qu'un slug peut contenir `/`. Federation et Memory ne lisent qu'à la soumission (« Chercher », « Lister »), jamais à la frappe, pour ne lancer swarph qu'à la demande. Leurs états vivent dans `ecrans/EtatsSwarph376.tsx`, sur `MESSAGES_BOARD`. Les quatre routes sont explicites, et `EcranSwarphProvisoire` est retiré. Le test instable `conversation.test.tsx` (chip Remote, un minuteur de 3 s) a échoué une fois sous la charge du gate ; il passe en isolé, et le gate relancé est vert. Gate 2584.
 
 ### 37.7 L'e2e et la fiche de recette
 

@@ -1,3 +1,5 @@
+import { Federation } from './ecrans/Federation.js';
+import { MemoireSwarph } from './ecrans/MemoireSwarph.js';
 import { Navigate, Route, Routes } from 'react-router';
 import { AidProvider } from './data/useAidState.js';
 import { Accueil } from './ecrans/Accueil.js';
@@ -16,7 +18,6 @@ import { ServeurConfig } from './ecrans/ServeurConfig.js';
 import { Serveurs } from './ecrans/Serveurs.js';
 import { Sujet } from './ecrans/Sujet.js';
 import { Swarph } from './ecrans/Swarph.js';
-import { EcranSwarphProvisoire, ONGLETS_SWARPH } from './ui/OngletsSwarph.js';
 import { Notifieur } from './ui/Notifieur.js';
 
 export function App() {
@@ -30,12 +31,10 @@ export function App() {
         <Route path="/reglages" element={<Reglages />} />
         {/* chantier 25 (D102) */}
         <Route path="/swarph" element={<Swarph />} />
-        {ONGLETS_SWARPH.slice(1)
-          .filter(([id]) => id !== 'cells' && id !== 'reglages')
-          .map(([id, chemin, titre]) => (
-            <Route key={id} path={chemin} element={<EcranSwarphProvisoire titre={titre} />} />
-          ))}
+        {/* chantier 37 (D242) */}
         <Route path="/swarph/cells" element={<Cells />} />
+        <Route path="/swarph/federation" element={<Federation />} />
+        <Route path="/swarph/memoire" element={<MemoireSwarph />} />
         <Route path="/swarph/reglages" element={<ReglagesSwarph />} />
         <Route path="/board" element={<Board />} />
         <Route path="/board/cartes/:cardId" element={<CarteBoard />} />

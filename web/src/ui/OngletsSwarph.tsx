@@ -1,6 +1,4 @@
-import { NavLink, Navigate } from 'react-router';
-import { useAid } from '../data/useAidState.js';
-import { Layout } from './Layout.js';
+import { NavLink } from 'react-router';
 
 export const ONGLETS_SWARPH = [
   ['board', '/board', 'Board'],
@@ -19,21 +17,5 @@ export function OngletsSwarph() {
         </NavLink>
       ))}
     </nav>
-  );
-}
-
-/** Écran provisoire du 37.4, remplacé aux points 37.5 et 37.6. */
-export function EcranSwarphProvisoire({ titre }: { titre: string }) {
-  const { state } = useAid();
-  if (state && !state.mesh) return <Navigate to="/swarph" replace />;
-  return (
-    <Layout screen="board">
-      {state?.mesh && (
-        <main className="page">
-          <OngletsSwarph />
-          <h1 className="titre-ecran">{titre}</h1>
-        </main>
-      )}
-    </Layout>
   );
 }
