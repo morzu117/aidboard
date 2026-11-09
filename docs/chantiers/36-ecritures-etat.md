@@ -106,6 +106,7 @@ Ce document, sur `feat/36-ecritures-etat`.
 ### 36.2 Le catalogue et le hash (D269, D270)
 
 `src/shared/etats.ts` et ses tests : le hash figé sur fixtures (daemon et web) ; chaque refus de schéma ; le résumé sans la preuve ; le nettoyage des preuves. Ne dépend de rien.
+- *Révision 36.2.* `hashAccept` est `async` (Web Crypto), sans implémentation propre. `preuves: {}` seul ne suffit pas pour clore. Le nettoyage reste dans la route (36.4), sur `textesAPurger(params)`. Aucune ligne existante modifiée. Gate 2789.
 
 ### 36.3 L'UI (D271, D275)
 
