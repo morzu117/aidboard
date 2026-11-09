@@ -115,6 +115,37 @@ describe('écritures à blanc', () => {
     ).toBe(false);
     expect(lireParamsEcriture('inconnue' as ActionEcriture, {}, 'peer-a').ok).toBe(false);
   });
+  it('nomme le premier champ refusé sans reprendre le texte', () => {
+    const cas = [
+      ['carte.note', { ...bases['carte.note'], carte: 0 }, 'numéro de carte invalide'],
+      ['carte.note', { ...bases['carte.note'], a: '!' }, 'nom de pair invalide'],
+      ['dm.envoyer', { ...bases['dm.envoyer'], pair: '!' }, 'nom de pair invalide'],
+      [
+        'dm.envoyer',
+        { ...bases['dm.envoyer'], pair: 'peer-a' },
+        'un DM ne peut pas viser ta propre cell',
+      ],
+      ['dm.envoyer', { ...bases['dm.envoyer'], fil: '!' }, 'identifiant de fil invalide'],
+      ['canal.poster', { ...bases['canal.poster'], canal: '!' }, 'nom de canal invalide'],
+      ['carte.note', { ...bases['carte.note'], texte: '' }, 'texte vide'],
+      [
+        'carte.note',
+        { ...bases['carte.note'], texte: 'x'.repeat(4001) },
+        'texte trop long (4 000 caractères au plus)',
+      ],
+      [
+        'carte.note',
+        { ...bases['carte.note'], texte: 'a\r' },
+        'texte contenant un caractère de contrôle',
+      ],
+      ['carte.note', { ...bases['carte.note'], texte: 42 }, 'texte invalide'],
+      ['carte.note', { ...bases['carte.note'], kind: '!', texte: '' }, 'kind inconnu'],
+      ['carte.note', { ...bases['carte.note'], x: true }, 'clé inconnue : x'],
+      ['carte.note', { carte: 1, kind: 'fyi', texte }, 'champ manquant : a'],
+    ] as const;
+    for (const [action, params, message] of cas)
+      expect(lireParamsEcriture(action, params, 'peer-a')).toEqual({ ok: false, message });
+  });
   it('lit le rappel et interdit toute clôture', () => {
     expect(lireReponseEcriture({ id: 1, open_obligations: [21], closed_obligations: [] })).toEqual({
       ok: true,

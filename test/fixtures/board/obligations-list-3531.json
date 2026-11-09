@@ -1,0 +1,14 @@
+{
+  "obligations": [
+    {
+      "id": 81,
+      "holder": "peer-a",
+      "status": "open"
+    },
+    {
+      "id": 82,
+      "holder": "peer-a",
+      "status": "closed"
+    }
+  ]
+}

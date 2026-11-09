@@ -24,33 +24,49 @@ export function lireParamsEcriture<A extends ActionEcriture>(
   brut: unknown,
   cell: string,
 ): { ok: true; params: ParametresEcriture[A] } | { ok: false; message: string } {
-  const refus = { ok: false as const, message: 'Paramètres d’écriture invalides' };
-  if (!brut || typeof brut !== 'object' || Array.isArray(brut)) return refus;
+  const refus = (message: string) => ({ ok: false as const, message });
+  if (!brut || typeof brut !== 'object' || Array.isArray(brut))
+    return refus('params doit être un objet');
   const p = brut as Record<string, unknown>;
   const commun = {
-    kind: (v: unknown) => KINDS_ECRITURE.includes(v as KindEcriture),
-    texte: (v: unknown) =>
-      typeof v === 'string' &&
-      v.trim().length > 0 &&
-      Array.from(v).length <= 4000 &&
-      !/\p{Cc}/u.test(v.replace(/[\n\t]/g, '')),
+    kind: (v: unknown) => (KINDS_ECRITURE.includes(v as KindEcriture) ? null : 'kind inconnu'),
+    texte: (v: unknown) => {
+      if (typeof v !== 'string') return 'texte invalide';
+      if (!v.trim()) return 'texte vide';
+      if (Array.from(v).length > 4000) return 'texte trop long (4 000 caractères au plus)';
+      if (/\p{Cc}/u.test(v.replace(/[\n\t]/g, '')))
+        return 'texte contenant un caractère de contrôle';
+      return null;
+    },
   };
-  const schemas: Record<ActionEcriture, Record<string, (v: unknown) => boolean>> = {
-    'carte.note': { ...commun, carte: entier, a: (v) => v === null || nom(v) },
+  const schemas: Record<ActionEcriture, Record<string, (v: unknown) => string | null>> = {
+    'carte.note': {
+      ...commun,
+      carte: (v) => (entier(v) ? null : 'numéro de carte invalide'),
+      a: (v) => (v === null || nom(v) ? null : 'nom de pair invalide'),
+    },
     'dm.envoyer': {
       ...commun,
-      pair: (v) => nom(v) && v !== cell,
-      fil: (v) => v === null || uuid(v),
+      pair: (v) =>
+        !nom(v)
+          ? 'nom de pair invalide'
+          : v === cell
+            ? 'un DM ne peut pas viser ta propre cell'
+            : null,
+      fil: (v) => (v === null || uuid(v) ? null : 'identifiant de fil invalide'),
     },
-    'canal.poster': { ...commun, canal: nom },
+    'canal.poster': { ...commun, canal: (v) => (nom(v) ? null : 'nom de canal invalide') },
   };
-  if (!Object.hasOwn(schemas, action)) return refus;
+  if (!Object.hasOwn(schemas, action)) return refus('action inconnue');
   const schema = schemas[action];
-  if (
-    Reflect.ownKeys(p).length !== Object.keys(schema).length ||
-    !Object.entries(schema).every(([k, valider]) => Object.hasOwn(p, k) && valider(p[k]))
-  )
-    return refus;
+  for (const cle of Reflect.ownKeys(p))
+    if (typeof cle !== 'string' || !Object.hasOwn(schema, cle))
+      return refus(`clé inconnue : ${String(cle)}`);
+  for (const [cle, valider] of Object.entries(schema)) {
+    if (!Object.hasOwn(p, cle)) return refus(`champ manquant : ${cle}`);
+    const message = valider(p[cle]);
+    if (message) return refus(message);
+  }
   return { ok: true, params: { ...p } as unknown as ParametresEcriture[A] };
 }
 export function argvEcriture<A extends ActionEcriture>(

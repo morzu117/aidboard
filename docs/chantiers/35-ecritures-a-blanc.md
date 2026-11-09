@@ -146,6 +146,7 @@ _Fait (révision 1)._ `src/shared/ecritures.ts` et `src/shared/nettoyage.ts`, av
 
 ### 35.3 La route d'aperçu et la garde des obligations (D255 à D257)
 `src/daemon/routes/swarph.ts` ou une nouvelle `ecritures.ts`, le rappel des obligations, le parseur de réponse qui refuse un `closed_obligations` non vide, et le test « aucun chemin d'envoi ». Le faux swarph sert la lecture des obligations depuis les fixtures du 24.
+_Fait (révision 1)._ `src/daemon/routes/ecritures.ts`, avec `BoardReader.obligations()`, une lecture sans cache. Un refus métier répond en HTTP 200 avec `ok: false`. Le test D257 exempte `routes/host.ts`, où `'post'` est la méthode HTTP de la rotation de clé du PDA.
 
 ### 35.4 L'UI (D258, D259)
 - la boîte `EcrireAuMesh` ;

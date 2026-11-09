@@ -33,6 +33,7 @@ export interface BoardReaderDeps {
 export interface ReadOpts {
   /** contourne le cache (bouton Relire) */
   fresh?: boolean;
+  sansCache?: boolean;
 }
 
 /** Un numéro de projet ou de carte : un entier positif, rien d'autre ne va jusqu'à swarph (D93). */
@@ -106,6 +107,15 @@ export class BoardReader {
     return { card, graph, thread, obligations };
   }
 
+  /** Lecture seule pour l’aperçu, sans conserver le rappel en cache. */
+  obligations(cardId: number): Promise<BoardResult<BoardObligations>> {
+    return this.load(
+      ['board', 'obligations', 'list', '--card', this.id(cardId)],
+      parseObligations,
+      { sansCache: true },
+    );
+  }
+
   private id(v: number): string {
     if (!isBoardId(v)) throw new RangeError(`board : identifiant invalide : ${String(v)}`);
     return String(v);
@@ -121,7 +131,7 @@ export class BoardReader {
     opts: ReadOpts,
   ): Promise<BoardResult<T>> {
     const args = [...verb, '--json', '--as', this.deps.cell];
-    const { exec, readAt } = await this.exec(args, opts.fresh === true);
+    const { exec, readAt } = await this.exec(args, opts.fresh === true, opts.sansCache === true);
     const kind = classify(exec);
     if (kind !== null) {
       this.deps.log(
@@ -144,13 +154,13 @@ export class BoardReader {
     return { ok: true, data: value.value, readAt, schemaVersion: value.schemaVersion };
   }
 
-  private exec(args: string[], fresh: boolean): Promise<Read> {
+  private exec(args: string[], fresh: boolean, sansCache = false): Promise<Read> {
     const key = args.join('\0');
     const at = this.now();
     const ttl = this.deps.cacheMs ?? CACHE_MS;
     // une lecture en cours (at === -1) est toujours rejointe, même pour `fresh` : elle est déjà fraîche
     const hit = this.cache.get(key);
-    if (hit && (hit.at === -1 || (!fresh && at - hit.at < ttl))) return hit.result;
+    if (!sansCache && hit && (hit.at === -1 || (!fresh && at - hit.at < ttl))) return hit.result;
     for (const [k, e] of this.cache) if (e.at !== -1 && at - e.at >= ttl) this.cache.delete(k);
     const entry = { at: -1 } as Entry;
     entry.result = this.deps.mesh.read(args).then(
@@ -169,7 +179,7 @@ export class BoardReader {
         return { exec, readAt: new Date(entry.at).toISOString() };
       },
     );
-    this.cache.set(key, entry);
+    if (!sansCache) this.cache.set(key, entry);
     return entry.result;
   }
 }
