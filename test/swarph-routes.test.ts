@@ -97,7 +97,9 @@ test('arguments invalides en 400 sans lancement ; slug avec / en query', async (
     'federation',
     'federation?q=%00',
     'memory?tag=!',
-    'memory',
+    'memory?tag=test&type=note',
+    'memory?type=Note',
+    'memory?type=!',
     'memory/page?slug=..%2Fx',
     'memory/page',
   ])
@@ -149,4 +151,15 @@ test('chaque route rend aussi les erreurs système, format et not-found en 200',
         expect(resultat).toMatchObject({ ok: false, kind });
     }
   }
+});
+
+test('liste sans filtre, tag vide et type', async () => {
+  const journal = await boot();
+  for (const url of ['memory', 'memory?tag=', 'memory?type=note', 'memory?tag=&type=note']) {
+    const r = await get(url);
+    expect(r.statusCode).toBe(200);
+    expect(r.json()).toMatchObject({ ok: true, data: [{ slug: 'page-sans-tag' }] });
+  }
+  expect(journal()).toContain('memory list -n 100 --json');
+  expect(journal()).toContain('memory list --type note -n 100 --json');
 });

@@ -176,3 +176,6 @@ export const slugValide = (valeur: unknown): valeur is string =>
   typeof valeur === 'string' && /^[A-Za-z0-9][A-Za-z0-9._:/-]{0,199}$/.test(valeur);
 
 export const tagValide = slugValide;
+
+export const typeValide = (valeur: unknown): valeur is string =>
+  typeof valeur === 'string' && /^[a-z][a-z0-9_-]{0,63}$/.test(valeur);

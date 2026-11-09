@@ -95,6 +95,10 @@ if [[ "$1" = "mesh" || "$1" = "rights" || "$1" = "codegraph" || "$1" = "memory" 
       fi
       ;;
     memory)
+      if [ $# -eq 5 ] && [ "$2" = "list" ] && [ "$3" = "-n" ] && [ "$4" = "100" ] &&
+        [ "$5" = "--json" ]; then fichier="memory-list.json"; fi
+      if [ $# -eq 7 ] && [ "$2" = "list" ] && [ "$3" = "--type" ] && [ "$5" = "-n" ] &&
+        [ "$6" = "100" ] && [ "$7" = "--json" ] && [[ "$4" =~ ^[a-z][a-z0-9_-]{0,63}$ ]]; then fichier="memory-list-type-$4.json"; fi
       if [ $# -eq 7 ] && [ "$2" = "list" ] && [ "$3" = "--tag" ] && [ "$5" = "-n" ] && [ "$7" = "--json" ] &&
         [[ "$4" =~ $identifiant && "$6" =~ ^[1-9][0-9]*$ ]]; then fichier="memory-list-$4.json"; fi
       if [ $# -eq 4 ] && [ "$2" = "get" ] && [[ "$3" =~ $identifiant ]] &&

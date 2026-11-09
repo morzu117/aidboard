@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { Navigate, useSearchParams } from 'react-router';
-import { slugValide, tagValide } from '../../../src/shared/swarph.js';
+import { slugValide, tagValide, typeValide } from '../../../src/shared/swarph.js';
 import { useMemoire, usePageMemoire } from '../data/swarph.js';
 import { useAid } from '../data/useAidState.js';
 import { Layout } from '../ui/Layout.js';
@@ -11,9 +11,12 @@ function ContenuMemoire() {
   const [params, setParams] = useSearchParams();
   const slug = params.get('page') ?? '';
   const [tag, setTag] = useState('');
-  // le tag n'est lu qu'à la soumission, pour ne pas lancer swarph à chaque frappe
-  const [tagSoumis, setTagSoumis] = useState('');
-  const liste = useMemoire(tagSoumis);
+  const id = useId();
+  const [filtre, setFiltre] = useState('tous');
+  // Le filtre n'est lu qu'à la soumission.
+  const [soumis, setSoumis] = useState<{ tag: string; type: string } | null>(null);
+  const liste = useMemoire(soumis?.tag ?? null, soumis?.type);
+  const valide = filtre === 'tous' || (filtre === 'tag' ? tagValide(tag) : typeValide(tag));
   const page = usePageMemoire(slug);
   const ouvrir = (valeur: string) => {
     if (slugValide(valeur)) setParams({ page: valeur });
@@ -37,34 +40,52 @@ function ContenuMemoire() {
       <form
         onSubmit={(event) => {
           event.preventDefault();
-          if (!tagValide(tag) || liste.enLecture) return;
-          if (tag === tagSoumis) void liste.relire();
-          else setTagSoumis(tag);
+          if (!valide || liste.enLecture) return;
+          const suivant = { tag: filtre === 'tag' ? tag : '', type: filtre === 'type' ? tag : '' };
+          if (soumis?.tag === suivant.tag && soumis?.type === suivant.type) void liste.relire();
+          else setSoumis(suivant);
         }}
       >
-        <label htmlFor="memoire-tag">Tag</label>
-        <input
-          id="memoire-tag"
-          data-node="memoire-swarph.tag"
-          value={tag}
-          onChange={(event) => setTag(event.target.value)}
-        />
+        <label htmlFor={`${id}-filtre`}>Filtre</label>
+        <select
+          id={`${id}-filtre`}
+          value={filtre}
+          onChange={(event) => setFiltre(event.target.value)}
+        >
+          <option value="tous">Tous</option>
+          <option value="tag">Par tag</option>
+          <option value="type">Par type</option>
+        </select>
+        {filtre !== 'tous' && (
+          <>
+            <label htmlFor={`${id}-valeur`}>{filtre === 'tag' ? 'Tag' : 'Type'}</label>
+            <input
+              id={`${id}-valeur`}
+              data-node="memoire-swarph.tag"
+              value={tag}
+              onChange={(event) => setTag(event.target.value)}
+            />
+          </>
+        )}
+        {filtre === 'type' && (
+          <p>Le type peut être reclassé par le cerveau ; le tag est plus fiable.</p>
+        )}
         <button
           type="submit"
           className="bouton"
           data-node="memoire-swarph.lister"
-          disabled={!tagValide(tag) || liste.enLecture}
+          disabled={!valide || liste.enLecture}
         >
           Lister
         </button>
-        {!tagValide(tag) && (
+        {!valide && filtre === 'tag' && (
           <p data-node="memoire-swarph.raison">
             Saisis un tag de 1 à 200 caractères : lettres, chiffres, point, soulignement,
             deux-points, barre oblique ou tiret.
           </p>
         )}
       </form>
-      <LectureSwarph376 {...liste} node="memoire-swarph.liste" desactive={!tagValide(tagSoumis)} />
+      <LectureSwarph376 {...liste} node="memoire-swarph.liste" desactive={soumis === null} />
       <EtatsSwarph376 {...liste} node="memoire-swarph.liste" memoire />
       {liste.result?.ok && (
         <ul data-node="memoire-swarph.liste">

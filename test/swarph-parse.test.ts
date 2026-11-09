@@ -9,6 +9,7 @@ import {
   requeteCodegraphValide,
   slugValide,
   tagValide,
+  typeValide,
 } from '../src/shared/swarph.js';
 
 test('pairs : deux colonnes, espaces et lignes vides ; toute ligne mal formée invalide la lecture', () => {
@@ -230,4 +231,10 @@ test('slugs et tags : alphabet fermé, premier caractère alphanumérique, limit
     for (const valeur of ['', 'a'.repeat(201), '-a', '/a', '.a', 'é', 'a b', 'a\n', 'a?', null, 3])
       expect(valide(valeur)).toBe(false);
   }
+});
+
+test('types : minuscule initiale, alphabet fermé et limite de 64 caractères', () => {
+  for (const valeur of ['a', 'note', 'a0_-', 'a'.repeat(64)]) expect(typeValide(valeur)).toBe(true);
+  for (const valeur of ['', 'Note', '0note', '-note', 'a/b', 'a b', 'a\n', 'a'.repeat(65), null, 3])
+    expect(typeValide(valeur)).toBe(false);
 });

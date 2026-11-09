@@ -33,8 +33,11 @@ test('depuis le Board : quatre onglets, recherche et navigation mémoire en text
   await expect(page).toHaveURL(/\?q=lecture\+test$/);
   await expect(node(page, 'federation.resultat-0')).toContainText('exemple.lecture');
   await node(page, 'onglets-swarph.memoire').click();
+  await node(page, 'memoire-swarph.lister').click();
+  await expect(node(page, 'memoire-swarph.liste')).toContainText('Page sans tag');
+  await page.getByLabel('Filtre', { exact: true }).selectOption('tag');
   await node(page, 'memoire-swarph.tag').fill('test');
-  await expect(node(page, 'memoire-swarph.liste')).toHaveCount(0);
+  await expect(node(page, 'memoire-swarph.liste')).toContainText('Page sans tag');
   await node(page, 'memoire-swarph.lister').click();
   await node(page, 'memoire-swarph.liste')
     .getByRole('button', { name: 'page-test', exact: true })
@@ -71,6 +74,7 @@ test('Cells et Réglages injoignables, Memory refusée', async ({ browser }) => 
   }
   erreur('forbidden');
   await node(page, 'onglets-swarph.memoire').click();
+  await page.getByLabel('Filtre', { exact: true }).selectOption('tag');
   await node(page, 'memoire-swarph.tag').fill('test');
   await node(page, 'memoire-swarph.lister').click();
   await node(page, 'memoire-swarph.liste.recharger').click();

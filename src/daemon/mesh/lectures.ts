@@ -8,6 +8,7 @@ import {
   parseMemoryLinks,
   requeteCodegraphValide,
   tagValide,
+  typeValide,
   slugValide,
 } from '../../shared/swarph.js';
 import { classify, type ReadOpts } from './board.js';
@@ -70,10 +71,19 @@ export class SwarphReader {
     );
   }
 
-  async memory(tag: string, opts: ReadOpts = {}) {
-    this.valider(tag, tagValide);
+  async memory(tag = '', opts: ReadOpts = {}, type = '') {
+    if (tag && type) throw new RangeError('argument swarph invalide');
+    if (tag) this.valider(tag, tagValide);
+    if (type) this.valider(type, typeValide);
     return this.load(
-      ['memory', 'list', '--tag', tag, '-n', '100', '--json'],
+      [
+        'memory',
+        'list',
+        ...(tag ? ['--tag', tag] : type ? ['--type', type] : []),
+        '-n',
+        '100',
+        '--json',
+      ],
       parseMemoryList,
       opts,
     );
@@ -143,9 +153,9 @@ export class SwarphReader {
       args[0] === 'memory'
         ? {
             env: { SWARPH_BRAIN_GATEWAY: this.deps.gateway!, SWARPH_SELF: this.deps.cell },
-            unset: ['GBRAIN_TOKEN', 'SWARPH_BRAIN_TOKEN'],
           }
         : { env: { SWARPH_SELF: this.deps.cell } };
+    options.unset = ['GBRAIN_TOKEN', 'SWARPH_BRAIN_TOKEN'];
     entree.result = this.deps.mesh
       .read(args, options)
       .catch((err: unknown): MeshExecResult => ({
