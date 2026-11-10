@@ -41,6 +41,7 @@ const etat = snapshot({
     state: {
       ecritures: false,
       proxyConfigure: false,
+      superviseur: null,
       connected: true,
       tailscale: 'running',
       monitor: 'running',
