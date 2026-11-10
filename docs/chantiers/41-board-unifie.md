@@ -86,6 +86,7 @@ Le parseur des lignes `Swairm:` et ses tests de frontière. La recherche `q` dan
 ### 41.3 La vue (D287)
 
 La pastille et le bloc Swairm de la fiche ; la section « Sujets Swairm sans carte » et les deux « Copier ».
+- *Révision 41.3.* La commande copiée cite le titre et le corps entre quotes simples POSIX (apostrophe : `'"'"'`), plus sûr que les guillemets doubles de D287 : `$(…)` et les backquotes d'un titre restent du texte. 0 ligne existante modifiée, 22 tests ajoutés. E2E Board 8/8. Gate 3016 (échecs connus hors CI ; `self-update` instable dans le gate complet, 11/11 isolé avec et sans le diff).
 
 ### 41.4 Les notes proposées (D288)
 
