@@ -1,3 +1,4 @@
+import { ACTIONS_MESH } from '../../shared/confirmations.js';
 import type { FastifyInstance } from 'fastify';
 import type { Db } from '../db.js';
 import { creerReglage } from '../confirmations/reglage.js';
@@ -57,6 +58,8 @@ export function registerConfirmationRoutes(
       !reglage.lire().some((ligne) => ligne.action === corps.action)
     )
       return reply.code(400).send({ error: 'reglage invalide' });
+    if (ACTIONS_MESH.has(corps.action))
+      return reply.code(400).send({ error: 'confirmation obligatoire' });
     if (!corps.actif) {
       const entree = {
         action: corps.action as

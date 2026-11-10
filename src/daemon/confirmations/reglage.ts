@@ -1,6 +1,15 @@
+import { ACTIONS_MESH } from '../../shared/confirmations.js';
+import { AidHttpError } from '../errors.js';
 import type { Db } from '../db.js';
 
-const TOUJOURS = new Set(['appairage', 'pda.activer', 'host.option', 'reglage', 'desarmement']);
+const TOUJOURS = new Set([
+  'appairage',
+  'pda.activer',
+  'host.option',
+  'reglage',
+  'desarmement',
+  ...ACTIONS_MESH,
+]);
 interface LigneReglage {
   action: string;
   actif: number;
@@ -24,7 +33,11 @@ export function creerReglage(db: Db) {
       const lignes = db
         .prepare('SELECT action, actif, modifie_a FROM confirmations_reglage ORDER BY rowid')
         .all() as LigneReglage[];
-      return lignes.map((l) => ({ action: l.action, actif: l.actif === 1, modifieA: l.modifie_a }));
+      return lignes.map((l) => ({
+        action: l.action,
+        actif: TOUJOURS.has(l.action) || l.actif === 1,
+        modifieA: l.modifie_a,
+      }));
     },
     exige(action: string) {
       if (action === 'essai' || TOUJOURS.has(action)) return true;
@@ -38,6 +51,7 @@ export function creerReglage(db: Db) {
     },
     // Réservé à l'exécution d'une demande reglage confirmée par la porte.
     couperConfirme(action: string) {
+      if (TOUJOURS.has(action)) throw new AidHttpError(400, 'confirmation obligatoire');
       modifier(action, 0);
     },
     arme() {
