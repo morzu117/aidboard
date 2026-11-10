@@ -117,6 +117,14 @@ export function EcrireAuMesh({
     } catch (e) {
       if (e instanceof AidApiError && e.status === 409 && e.body.error === 'proxy_absent')
         setProxyAbsent(true);
+      else if (
+        e instanceof AidApiError &&
+        e.status === 409 &&
+        e.body.error === 'confirmation_requise'
+      )
+        setErreur(
+          "La porte des confirmations n'est pas armée : arme-la depuis ton téléphone pour écrire sur le mesh. Rien n'est parti.",
+        );
       else
         setErreur(
           e instanceof AidApiError && typeof e.body.message === 'string'

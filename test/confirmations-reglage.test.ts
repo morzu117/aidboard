@@ -197,3 +197,12 @@ test('routes admin du Mac seulement, rallumage immédiat et coupure différée',
     ).toBe(404);
   }
 });
+
+test('mesh.ecrire reste exigée et affichée active malgré une ancienne ligne à zéro', () => {
+  const db = base();
+  const reglage = creerReglage(db);
+  db.prepare("UPDATE confirmations_reglage SET actif = 0 WHERE action = 'mesh.ecrire'").run();
+  expect(reglage.exige('mesh.ecrire')).toBe(true);
+  expect(reglage.lire().find((l) => l.action === 'mesh.ecrire')?.actif).toBe(true);
+  expect(() => reglage.couperConfirme('mesh.ecrire')).toThrow('confirmation obligatoire');
+});

@@ -296,14 +296,45 @@ test('route : sans proxy, schéma, fil et nettoyage sans texte ; preparer seul n
   });
   expect(t.proxy.lignes).toHaveLength(0);
 });
-test('réglage coupé : exécution directe, succès ou connexion, aucune demande', async () => {
+test('porte désarmée : refus avant préparation, aucun envoi ni demande', async () => {
   const t = await preparer();
-  t.reglage.couperConfirme('mesh.ecrire');
+  t.reglage.desarmerConfirme();
+  const preparation = vi.spyOn(t.actions['mesh.ecrire'], 'preparer');
   const r = await t.demander();
-  expect(r.statusCode).toBe(200);
-  expect(r.json()).toEqual({ code: 'succes', id: 72, status: 201, open_obligations: [81] });
-  t.config.mesh.proxySocket += '-absente';
-  expect((await t.demander()).json()).toEqual({ code: 'connexion', open_obligations: [] });
+  expect(r.statusCode).toBe(409);
+  expect(r.json()).toEqual({ error: 'confirmation_requise' });
+  expect(preparation).not.toHaveBeenCalled();
+  expect(t.proxy.lignes).toHaveLength(0);
+  expect(t.proxy.nombreConnexions).toBe(0);
+  expect(t.db.prepare('SELECT count(*) AS n FROM pda_demandes').get()).toEqual({ n: 0 });
+});
+
+test('réglage forcé à zéro : confirmation obligatoire et un seul envoi après oui', async () => {
+  const t = await preparer();
+  t.db.prepare("UPDATE confirmations_reglage SET actif = 0 WHERE action = 'mesh.ecrire'").run();
+  expect(t.reglage.exige('mesh.ecrire')).toBe(true);
+  const r = await t.demander();
+  expect(r.statusCode).toBe(202);
+  expect(t.proxy.lignes).toHaveLength(0);
+  const { confirmation } = r.json();
+  expect(await t.oui(confirmation)).toMatchObject({ resultat: 'executee' });
+  expect(t.proxy.lignes).toHaveLength(1);
+  await t.oui(confirmation);
+  expect(t.proxy.lignes).toHaveLength(1);
+});
+
+test.each([false, true])('modification mesh.ecrire refusée, porte armée : %s', async (arme) => {
+  const t = await preparer();
+  if (!arme) t.reglage.desarmerConfirme();
+  const r = await t.app.inject({
+    method: 'PUT',
+    url: '/api/confirmations/reglage',
+    payload: { action: 'mesh.ecrire', actif: false },
+  });
+  expect(r.statusCode).toBe(400);
+  expect(t.reglage.exige('mesh.ecrire')).toBe(true);
+  expect(() => t.reglage.couperConfirme('mesh.ecrire')).toThrow('confirmation obligatoire');
+  expect(t.proxy.lignes).toHaveLength(0);
   expect(t.db.prepare('SELECT count(*) AS n FROM pda_demandes').get()).toEqual({ n: 0 });
 });
 
@@ -409,27 +440,19 @@ test('proxy retiré au oui : perime sans connexion ; obligations indisponibles n
   expect(t.proxy.lignes).toHaveLength(0);
 });
 
-test('mesh.ecrire : couper exige une confirmation, rallumer est immédiat', async () => {
+test('mesh.ecrire : toute modification de sa ligne est refusée', async () => {
   const t = await preparer();
-  const r = await t.app.inject({
-    method: 'PUT',
-    url: '/api/confirmations/reglage',
-    payload: { action: 'mesh.ecrire', actif: false },
-  });
-  expect(r.statusCode).toBe(202);
-  expect(t.reglage.exige('mesh.ecrire')).toBe(true);
-  expect(await t.oui(r.json().confirmation)).toMatchObject({ resultat: 'executee' });
-  expect(t.reglage.exige('mesh.ecrire')).toBe(false);
-  expect(
-    (
-      await t.app.inject({
-        method: 'PUT',
-        url: '/api/confirmations/reglage',
-        payload: { action: 'mesh.ecrire', actif: true },
-      })
-    ).statusCode,
-  ).toBe(200);
-  expect(t.reglage.exige('mesh.ecrire')).toBe(true);
+  for (const actif of [false, true]) {
+    const r = await t.app.inject({
+      method: 'PUT',
+      url: '/api/confirmations/reglage',
+      payload: { action: 'mesh.ecrire', actif },
+    });
+    expect(r.statusCode).toBe(400);
+    expect(r.json()).toEqual({ error: 'confirmation obligatoire' });
+    expect(t.reglage.exige('mesh.ecrire')).toBe(true);
+  }
+  expect(t.db.prepare('SELECT count(*) AS n FROM pda_demandes').get()).toEqual({ n: 0 });
 });
 
 test('obligation-close est affiché comme incertain par le web', () => {

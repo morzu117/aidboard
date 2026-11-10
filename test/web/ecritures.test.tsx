@@ -499,3 +499,13 @@ test('un envoi incertain est une demande exécutée et reste verrouillé', async
   expect(screen.getByRole('button', { name: 'Envoyer' })).toHaveProperty('disabled', true);
   expect(screen.queryByRole('button', { name: 'Réessayer' })).toBeNull();
 });
+
+test('porte désarmée : explique le refus et confirme que rien ne part', async () => {
+  const h = ouvrir();
+  h.respond.set('POST /api/swarph/ecrire/envoyer', json(409, { error: 'confirmation_requise' }));
+  await voir();
+  await userEvent.click(await screen.findByRole('button', { name: 'Envoyer' }));
+  expect((await screen.findByRole('alert')).textContent).toBe(
+    "La porte des confirmations n'est pas armée : arme-la depuis ton téléphone pour écrire sur le mesh. Rien n'est parti.",
+  );
+});

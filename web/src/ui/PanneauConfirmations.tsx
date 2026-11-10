@@ -1,3 +1,4 @@
+import { ACTIONS_MESH } from '../../../src/shared/confirmations.js';
 import { useCallback, useEffect, useState } from 'react';
 import { useAidClient } from '../data/useAidState.js';
 import {
@@ -136,8 +137,8 @@ export function PanneauConfirmations() {
               <input
                 type="checkbox"
                 role="switch"
-                checked={a.actif}
-                disabled={occupe || enAttente}
+                checked={ACTIONS_MESH.has(a.action) || a.actif}
+                disabled={ACTIONS_MESH.has(a.action) || occupe || enAttente}
                 onChange={() =>
                   void agir(
                     () =>
@@ -150,6 +151,7 @@ export function PanneauConfirmations() {
                 }
               />
               {noms[a.action] ?? a.action}
+              {ACTIONS_MESH.has(a.action) && ' — Toujours confirmée'}
             </label>
           )}
         </div>

@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import type { ResultatEnvoi } from '../../shared/ecritures.js';
-import { validerParamsAction } from '../../shared/confirmations.js';
+import { ACTIONS_MESH, validerParamsAction } from '../../shared/confirmations.js';
 import type { FastifyRequest } from 'fastify';
 import { jsonCanonique, type ParametresActions, type ParamsAction } from '../../shared/pda.js';
 import type { Db } from '../db.js';
@@ -120,7 +120,11 @@ export function creerPorte(deps: {
     },
     async demander<A extends ActionPorte>(action: A, entree: EntreeAction, req: FastifyRequest) {
       if (req.principal?.kind !== 'admin') throw new AidHttpError(403, 'admin seulement');
-      const confirmation = reglage.arme() && reglage.exige(action);
+      const arme = reglage.arme();
+      if (ACTIONS_MESH.has(action) && !arme) throw new AidHttpError(409, 'confirmation_requise');
+      const confirmation = arme && reglage.exige(action);
+      if (ACTIONS_MESH.has(action) && !confirmation)
+        throw new AidHttpError(409, 'confirmation_requise');
       const params = await deps.actions[action].preparer(entree, { confirmation, entree });
       if (!confirmation) return { direct: params };
       const file = deps.file();
@@ -133,11 +137,6 @@ export function creerPorte(deps: {
         });
       const { id } = await file.creerDemande({ action, params } as ParamsAction);
       return { confirmation: id };
-    },
-    async envoyer(params: ParametresActions['mesh.ecrire']) {
-      const ctx: ContexteAction = { confirmation: false };
-      await deps.actions['mesh.ecrire'].executer(params, ctx);
-      return ctx.envoi!;
     },
     async executer<A extends ActionPorte>(
       action: A,

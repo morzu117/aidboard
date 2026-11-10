@@ -145,6 +145,11 @@ Après le document de schéma. L'action dans la porte, la migration 025, la rout
 
 Après le build mergé. Un test contre le vrai `swarph proxy serve` avec une fausse gateway (L4), l'e2e sur le faux proxy, et la fiche `docs/recette-chantier-35bis-envoi.md` : une note, un DM et un post réels, chacun confirmé au téléphone, puis relus dans le fil ; un envoi avec le proxy arrêté (rien ne part) ; aucune trace du texte dans le journal.
 
+### 35b.6 Correctif : la confirmation toujours exigée (revue du lab #5036)
+
+`mesh.ecrire` entre dans les actions toujours confirmées ; porte désarmée → 409 `confirmation_requise`, rien envoyé ; plus d'exécution directe.
+- *Révision 35b.6 (correctif de sécurité, revue du lab #1551 / #5036, approuvé par Julien le 2026-11-10).* **D265 révisée :** `mesh.ecrire` appartient aux actions toujours confirmées ; son réglage n'est pas modifiable, et une ancienne valeur à 0 en base ne dispense jamais de la confirmation du téléphone. **D266 révisée :** `ecrire/envoyer` crée une demande de confirmation, ou refuse en 409 `confirmation_requise` avant `preparer` si la porte est désarmée ; il n'existe plus de chemin d'exécution directe. Ceci revient sur la reco Q1 (« tu peux couper la première »). Pas de migration : `exige` et `lire` ignorent la valeur stockée pour ces actions. 47 lignes existantes modifiées. Gate 2809 (échecs connus hors CI : install, update-check).
+
 ## 6. Pièges
 
 - **Un envoi incertain n'est pas un échec.** Ne jamais le présenter comme « rien n'est parti », ni proposer de le refaire sans relire.
