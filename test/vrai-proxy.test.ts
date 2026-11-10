@@ -21,6 +21,16 @@ import { preparerPda, assertionPda } from './helpers/pda.js';
 
 const python = process.env.AID_SWARPH_PROXY_PYTHON;
 const disponible = !!python && spawnSync(python, ['-c', 'pass'], { timeout: 5000 }).status === 0;
+const accepteBoucleLocale =
+  disponible &&
+  spawnSync(
+    python!,
+    [
+      '-c',
+      'from swarph_cli.local_proxy import Config; import sys; sys.exit(not hasattr(Config, "allow_loopback_tcp"))',
+    ],
+    { timeout: 5000 },
+  ).status === 0;
 const jeton = 'jeton-de-test';
 const texte = 'Message de test';
 const fil = '00000000-0000-4000-8000-000000000000';
@@ -71,6 +81,8 @@ async function preparer(status = 201, closed_obligations: number[] = [], lecture
       read_only: lectureSeule,
       cell_uid: process.getuid!() === 60000 ? 60001 : 60000,
       gateway_url: `http://127.0.0.1:${adresse.port}`,
+      // #1557 : réservé au test, avec une fausse gateway locale.
+      ...(accepteBoucleLocale ? { allow_loopback_tcp: true } : {}),
       token_file: join(dossier, 'token'),
       socket_path: socket,
       audit_path: join(dossier, 'audit'),
@@ -192,6 +204,39 @@ async function preparer(status = 201, closed_obligations: number[] = [], lecture
 }
 
 describe.skipIf(!disponible)('L4 — vrai swarph proxy serve (35b.5 et 36.5)', () => {
+  test.skipIf(!accepteBoucleLocale)(
+    'refuse au démarrage une gateway locale sans autorisation',
+    async () => {
+      const dossier = await mkdtemp(join(process.cwd(), 'node_modules', '.aid-vrai-'));
+      nettoyages.push(() => rm(dossier, { recursive: true, force: true }));
+      await chmod(dossier, 0o700);
+      const socket = join(dossier, 'proxy.sock');
+      const cheminConfig = join(dossier, 'config.json');
+      await writeFile(join(dossier, 'token'), jeton, { mode: 0o600 });
+      await writeFile(join(dossier, 'audit'), '', { mode: 0o640 });
+      await writeFile(
+        cheminConfig,
+        JSON.stringify({
+          cell_uid: process.getuid!() === 60000 ? 60001 : 60000,
+          gateway_url: 'http://127.0.0.1:1',
+          token_file: join(dossier, 'token'),
+          socket_path: socket,
+          audit_path: join(dossier, 'audit'),
+        }),
+        { mode: 0o600 },
+      );
+      const resultat = spawnSync(python!, ['test/fixtures/vrai-proxy.py', cheminConfig], {
+        encoding: 'utf8',
+        timeout: 3000,
+      });
+      expect(resultat.error).toBeUndefined();
+      expect(resultat.signal).toBeNull();
+      expect(resultat.status).toBe(1);
+      expect(JSON.parse(resultat.stdout)).toMatchObject({ ok: false, error: 'proxy_unavailable' });
+      expect(existsSync(socket)).toBe(false);
+    },
+  );
+
   test.each([
     [
       'carte.note',
