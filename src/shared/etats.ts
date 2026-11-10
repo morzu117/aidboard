@@ -28,7 +28,7 @@ export async function hashAccept(accept: string | null): Promise<string> {
 const objet = (v: unknown): v is Record<string, unknown> =>
   v !== null && typeof v === 'object' && !Array.isArray(v);
 const entier = (v: unknown): boolean => typeof v === 'number' && Number.isSafeInteger(v) && v > 0;
-function validerPreuve(v: unknown, champ: string, maximum = 4000): string | null {
+function validerPreuve(v: unknown, champ: string, maximum = 3900): string | null {
   if (typeof v !== 'string') return `${champ} invalide`;
   if (!v.trim()) return `${champ} vide`;
   if (Array.from(v).length > maximum)
@@ -100,12 +100,12 @@ export function lireParamsEtat<A extends ActionEtat>(
       for (const cle of cles) {
         if (typeof cle !== 'string' || !/^[A-Za-z0-9_.:-]{1,64}$/.test(cle) || cle.endsWith('\n'))
           return refus('identifiant de condition invalide');
-        const message = validerPreuve(brut.preuves[cle], 'texte de preuves', 16000);
+        const message = validerPreuve(brut.preuves[cle], 'texte de preuves', 12000);
         if (message) return refus(message);
       }
     }
-    if (objet(brut.preuves) && tailleJsonPython(brut.preuves as Record<string, string>) > 64000)
-      return refus('preuves : 64 000 caractères sérialisés au plus');
+    if (objet(brut.preuves) && tailleJsonPython(brut.preuves as Record<string, string>) > 12000)
+      return refus('preuves : 12 000 caractères sérialisés au plus');
     if (
       !Object.hasOwn(brut, 'preuve') &&
       (!objet(brut.preuves) || !Reflect.ownKeys(brut.preuves).length)

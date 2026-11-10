@@ -13,7 +13,7 @@ import { FilePda } from '../src/daemon/pda/file.js';
 import { AidHttpError } from '../src/daemon/errors.js';
 import { BoardReader } from '../src/daemon/mesh/board.js';
 import { parseObligations } from '../src/shared/board.js';
-import { hashAccept } from '../src/shared/etats.js';
+import { hashAccept, tailleJsonPython } from '../src/shared/etats.js';
 import { preparerPda, assertionPda } from './helpers/pda.js';
 import { creerFauxProxy, type ScenarioProxy } from './fixtures/faux-proxy.js';
 const texte = 'Texte confidentiel de test';
@@ -322,7 +322,7 @@ test('mesh désactivé : 404 ; mode host : aucune route d’envoi', async () => 
   expect(r.statusCode).toBe(404);
 });
 
-test('D276 : evidence_json au-delà de 64 000 refusé avant toute lecture', async () => {
+test('D276 : evidence_json au-delà de 12 000 refusé avant toute lecture', async () => {
   const t = await preparer();
   const exemple = await cloture();
   const preuves = { c1: 'é'.repeat(4000), c2: 'é'.repeat(4000), c3: 'é'.repeat(4000) };
@@ -349,4 +349,97 @@ test('params signés et nettoyage du motif revérifiés au oui', async () => {
     );
   expect(await t.oui(autre)).toMatchObject({ resultat: 'perimee', raison: 'perime' });
   expect(t.proxy.lignes).toHaveLength(0);
+});
+
+test.each([
+  [11991, 202],
+  [11992, 400],
+])('D276 : preuves ASCII (%i caractères de texte) → %i', async (longueur, statut) => {
+  const t = await preparer();
+  const exemple = await cloture();
+  const preuves = { a: 'x'.repeat(longueur) };
+  expect(tailleJsonPython(preuves)).toBe(longueur + 9);
+  const r = await t.demander({ ...exemple, params: { ...exemple.params, preuves } });
+  expect(r.statusCode).toBe(statut);
+  expect(t.db.prepare('SELECT count(*) AS n FROM pda_demandes').get()).toEqual({
+    n: statut === 202 ? 1 : 0,
+  });
+  expect(t.proxy.lignes).toHaveLength(0);
+  expect(t.proxy.nombreConnexions).toBe(0);
+});
+
+test('D276 : repro du lab, quatre textes de 15 991 caractères → 400', async () => {
+  const t = await preparer();
+  const exemple = await cloture();
+  const preuves = Object.fromEntries(['a', 'b', 'c', 'd'].map((cle) => [cle, 'x'.repeat(15991)]));
+  const r = await t.demander({ ...exemple, params: { ...exemple.params, preuves } });
+  expect(r.statusCode).toBe(400);
+  expect(t.db.prepare('SELECT count(*) AS n FROM pda_demandes').get()).toEqual({ n: 0 });
+  expect(t.obligations).not.toHaveBeenCalled();
+  expect(t.proxy.lignes).toHaveLength(0);
+  expect(t.proxy.nombreConnexions).toBe(0);
+});
+
+test('D276 : preuve simple de 3 900 caractères de quatre octets, demande créée', async () => {
+  const t = await preparer();
+  const exemple = await cloture();
+  const params = { ...exemple.params };
+  delete (params as { preuves?: object }).preuves;
+  t.obligations.mockResolvedValue({
+    ok: true,
+    data: {
+      obligations: [obligation({ id: Number.MAX_SAFE_INTEGER })],
+      truncated: false,
+      asOf: null,
+    },
+    schemaVersion: null,
+    readAt: '',
+  });
+  const r = await t.demander({
+    ...exemple,
+    params: {
+      ...params,
+      carte: Number.MAX_SAFE_INTEGER,
+      obligation: Number.MAX_SAFE_INTEGER,
+      issue: 'cannot_evaluate',
+      preuve: '😀'.repeat(3900),
+    },
+  });
+  expect(r.statusCode).toBe(202);
+});
+
+test('D276 : 12 000 sérialisés et preuve simple de quatre octets → 413 sans demande ni proxy', async () => {
+  const t = await preparer();
+  const exemple = await cloture();
+  const preuves = { a: 'x'.repeat(11991) };
+  expect(tailleJsonPython(preuves)).toBe(12000);
+  const r = await t.demander({
+    ...exemple,
+    params: {
+      ...exemple.params,
+      preuves,
+      preuve: '😀'.repeat(3900),
+    },
+  });
+  expect(r.statusCode).toBe(413);
+  expect(r.json()).toEqual({ error: 'demande_trop_grande' });
+  expect(t.db.prepare('SELECT count(*) AS n FROM pda_demandes').get()).toEqual({ n: 0 });
+  expect(t.proxy.lignes).toHaveLength(0);
+  expect(t.proxy.nombreConnexions).toBe(0);
+});
+
+test('D276 : 12 000 caractères de quatre octets dépassent le plafond Python → 400', async () => {
+  const t = await preparer();
+  const exemple = await cloture();
+  const r = await t.demander({
+    ...exemple,
+    params: {
+      ...exemple.params,
+      preuves: { a: '😀'.repeat(12000) },
+    },
+  });
+  expect(r.statusCode).toBe(400);
+  expect(t.db.prepare('SELECT count(*) AS n FROM pda_demandes').get()).toEqual({ n: 0 });
+  expect(t.proxy.lignes).toHaveLength(0);
+  expect(t.proxy.nombreConnexions).toBe(0);
 });

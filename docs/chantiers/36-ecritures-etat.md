@@ -144,6 +144,11 @@ Après le build mergé. Un test contre le vrai `swarph proxy serve` avec une fau
 `mesh.etat` rejoint `ACTIONS_MESH` (35b.6) : classe « toujours », réglage non modifiable, porte désarmée → 409 `confirmation_requise`, rien envoyé.
 - *Révision 36.6 (correctif de sécurité, revue du lab #1551 / #5036, approuvé par Julien le 2026-11-10).* **D272 révisée :** `mesh.etat` appartient à la classe « toujours », avec un réglage non modifiable, même si la base contient 0 ; porte désarmée → 409 `confirmation_requise`, rien envoyé. Plus de chemin d'exécution directe (`envoyerEtat` retiré au merge de 35b.6). 9 lignes existantes modifiées. Vrai proxy 11/11. Gate 2880 (échecs connus hors CI : install, update-check).
 
+### 36.7 Correctif : des preuves qui tiennent dans la demande signée (validation du lab #5060)
+
+D276 abaissé pour tenir dans les 16 Kio de la demande signée du téléphone ; le reste dépassé donne le 413 de 35b.7.
+- *Révision 36.7.* **D276 révisée :** `preuves` est limité à 12 000 caractères sérialisés à la Python, et chaque texte à 12 000 ; la preuve simple passe à 3 900 caractères (4 000 caractères de 4 octets donnaient un corps signé de 16 484 octets). Le proxy accepte jusqu'à 64 000 : A-I-D est seulement plus strict. Un cumul qui dépasse encore les 16 Kio une fois signé donne 413 `demande_trop_grande` (35b.7). 19 lignes existantes modifiées. Vrai proxy 11/11. Gate 2892 (échecs connus hors CI : install, update-check).
+
 ## 6. Questions au lab
 
 Réponses du lab (DM 93986) :

@@ -1,6 +1,11 @@
 import { useId, useRef, useState } from 'react';
 import type { BoardObligation, BoardStep } from '../../../src/shared/board.js';
-import { hashAccept, ISSUES_CLOTURE, type IssueCloture } from '../../../src/shared/etats.js';
+import {
+  hashAccept,
+  ISSUES_CLOTURE,
+  tailleJsonPython,
+  type IssueCloture,
+} from '../../../src/shared/etats.js';
 import { AidApiError } from '../data/api.js';
 import {
   actionsPossibles,
@@ -118,6 +123,14 @@ function DemandeEtat({
         relire();
       } else if (e instanceof AidApiError && e.body.error === 'proxy_absent') {
         setErreur("Le proxy de ta cellule n'est pas configuré. Rien ne peut partir.");
+      } else if (
+        e instanceof AidApiError &&
+        e.status === 413 &&
+        e.body.error === 'demande_trop_grande'
+      ) {
+        setErreur(
+          "Trop long pour être confirmé au téléphone : raccourcis la preuve. Rien n'est parti.",
+        );
       } else if (confirmationEtatRequise(e)) {
         setErreur(
           "La porte des confirmations n'est pas armée : arme-la depuis ton téléphone pour changer un état. Rien n'est parti.",
@@ -173,7 +186,7 @@ function DemandeEtat({
                     <textarea
                       id={`${id}-${cle}`}
                       required
-                      maxLength={16000}
+                      maxLength={12000}
                       value={preuves[cle] ?? ''}
                       onChange={(e) => setPreuves({ ...preuves, [cle]: e.target.value })}
                     />
@@ -185,7 +198,7 @@ function DemandeEtat({
                 <label htmlFor={`${id}-preuve`}>Preuve</label>
                 <textarea
                   id={`${id}-preuve`}
-                  maxLength={4000}
+                  maxLength={3900}
                   value={preuve}
                   onChange={(e) => setPreuve(e.target.value)}
                 />
@@ -193,14 +206,19 @@ function DemandeEtat({
             )}
           </>
         )}
+        {action === 'clore' && lecture.conditions.length > 0 && (
+          <p>{tailleJsonPython(preuves)} / 12 000 caractères sérialisés</p>
+        )}
         <button
           disabled={
             envoye ||
             (action === 'refuser' && !motif.trim()) ||
             (action === 'clore' &&
               (lecture.conditions.length
-                ? Object.values(preuves).filter((p) => p.trim()).length !==
-                  lecture.conditions.length
+                ? tailleJsonPython(preuves) > 12000 ||
+                  Object.values(preuves).some((p) => Array.from(p).length > 12000) ||
+                  Object.values(preuves).filter((p) => p.trim()).length !==
+                    lecture.conditions.length
                 : !preuve.trim()))
           }
           onClick={() => void envoyer()}
