@@ -1,3 +1,4 @@
+import { ErreursSwairm, SwairmCarte } from '../ui/SwairmBoard.js';
 import { ChangerEtat } from '../ui/ChangerEtat.js';
 import { EcrireAuMesh } from '../ui/EcrireAuMesh.js';
 import { useState, type ReactNode } from 'react';
@@ -401,6 +402,8 @@ export function Contenu({ cardId }: { cardId: number }) {
           {erreur}
         </p>
       )}
+      <ErreursSwairm />
+      <SwairmCarte carte={cardId} fiche />
       {result && <Fiche s={result} relire={() => void relire()} />}
     </main>
   );

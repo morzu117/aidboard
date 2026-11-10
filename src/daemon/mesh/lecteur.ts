@@ -59,7 +59,8 @@ export function creerLecteurProxy(socket: string): Lecteur {
           args.card_id = Number(argv[4]);
         } else if (argv[2] === 'list') {
           verb = 'board.cards.list';
-          args.project = Number(argv[4]);
+          if (argv[3] === '--search') args.q = argv[4];
+          else args.project = Number(argv[4]);
         } else {
           verb =
             argv[2] === 'show'

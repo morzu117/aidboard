@@ -77,11 +77,13 @@ export function envoyerEcriture<A extends ActionEcriture>(
   action: A,
   params: ParametresEcriture[A],
   client: AidClient,
+  propositionSwairm?: number,
 ): Promise<{ confirmation: string } | ResultatEnvoi> {
   return client
     .request<{ confirmation: string } | ResultatEnvoi>('POST', '/api/swarph/ecrire/envoyer', {
       action,
       params,
+      ...(propositionSwairm === undefined ? {} : { propositionSwairm }),
     })
     .catch((e: unknown) => {
       if (e instanceof AidApiError && e.status === 409 && e.body.error === 'proxy_lecture_seule')

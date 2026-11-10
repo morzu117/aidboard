@@ -31,6 +31,7 @@ test('les cinq routes ask sont absentes du serveur host, même authentifié', as
   const { jeton } = new RegistreAppareils(t.db).emettre({ nom: 'Téléphone', identite: null });
   const app = t.d.modeHost.instance()!;
   for (const [method, url] of [
+    ['GET', '/api/swairm/board'],
     ['POST', '/api/swairm/ask'],
     ['POST', '/api/swairm/ask/annuler'],
     ['GET', '/api/swairm/ask/etat'],

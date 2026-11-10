@@ -2,6 +2,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, expect, test, vi } from 'vitest';
+import { issueRunToken } from '../src/daemon/security.js';
 import { startTestDaemon, type TestDaemon } from './helpers/daemon.js';
 
 let t: TestDaemon | undefined;
@@ -68,4 +69,28 @@ test('409 pendant une demande, annulation et fichier supprimé', async () => {
   expect((await resultat).json()).toMatchObject({ ok: false, kind: 'annule' });
   expect(existsSync(readFileSync(copie + '.path', 'utf8'))).toBe(false);
   expect(readFileSync(log, 'utf8').trim().split('\n')).toHaveLength(1);
+});
+
+test('board Swairm réservé à l’admin, disponible sans configuration', async () => {
+  t = await startTestDaemon();
+  expect(
+    (await t.d.app.inject({ url: '/api/swairm/board', headers: { host: t.headers.host! } }))
+      .statusCode,
+  ).toBe(401);
+  const jeton = issueRunToken(t.d.auth, 'run-test');
+  expect(
+    (
+      await t.d.app.inject({
+        url: '/api/swairm/board',
+        headers: { host: t.headers.host!, authorization: `Bearer ${jeton}` },
+      })
+    ).statusCode,
+  ).toBe(403);
+  const reponse = await t.d.app.inject({ url: '/api/swairm/board', headers: t.headers });
+  expect(reponse.statusCode).toBe(200);
+  expect(reponse.json()).toMatchObject({
+    sujets: [],
+    cartes: [],
+    swairm: { etat: 'non-configure' },
+  });
 });

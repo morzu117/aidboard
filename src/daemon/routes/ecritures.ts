@@ -1,3 +1,4 @@
+import type { Db } from '../db.js';
 import type { Porte } from '../confirmations/porte.js';
 import type { FastifyInstance } from 'fastify';
 import { argvEcriture, lireParamsEcriture, resumeEcriture } from '../../shared/ecritures.js';
@@ -8,6 +9,7 @@ import type { BoardReader } from '../mesh/board.js';
 export function registerEcrituresRoutes(
   app: FastifyInstance,
   deps: {
+    db?: Db;
     board: BoardReader | null;
     cell: string;
     hotesPrives?: string[];
@@ -42,7 +44,11 @@ export function registerEcrituresRoutes(
   });
   app.post('/api/swarph/ecrire/envoyer', async (req, reply) => {
     if (!deps.cell || !deps.board) throw new AidHttpError(404, 'mesh désactivé');
-    const corps = req.body as { action?: unknown; params?: unknown } | null;
+    const corps = req.body as {
+      action?: unknown;
+      params?: unknown;
+      propositionSwairm?: unknown;
+    } | null;
     if (
       !corps ||
       (corps.action !== 'carte.note' &&
@@ -52,11 +58,29 @@ export function registerEcrituresRoutes(
       throw new AidHttpError(400, 'action inconnue');
     if (deps.proxySocket && deps.proxyLectureSeule)
       return reply.code(409).send({ error: 'proxy_lecture_seule' });
+    const proposition = corps.propositionSwairm;
+    if (proposition !== undefined) {
+      const ouverte =
+        typeof proposition === 'number' &&
+        (deps.db
+          ?.prepare('SELECT carte FROM swairm_propositions WHERE id = ? AND fermee_a IS NULL')
+          .get(proposition) as { carte: number } | undefined);
+      if (
+        !ouverte ||
+        corps.action !== 'carte.note' ||
+        (corps.params as { carte?: unknown } | null)?.carte !== ouverte.carte
+      )
+        throw new AidHttpError(400, 'proposition invalide');
+    }
     const demande = await deps.porte!.demander(
       'mesh.ecrire',
       { action: corps.action, params: corps.params },
       req,
     );
+    if ('confirmation' in demande && proposition !== undefined)
+      deps
+        .db!.prepare('UPDATE swairm_propositions SET confirmation = ? WHERE id = ?')
+        .run(demande.confirmation, proposition);
     if ('confirmation' in demande)
       return reply.code(202).send({ confirmation: demande.confirmation });
     throw new AidHttpError(409, 'confirmation_requise');

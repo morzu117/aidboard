@@ -22,6 +22,7 @@ import {
   parseProjects,
   parseThread,
 } from '../../shared/board.js';
+import { parseRechercheCartes, type RechercheCartes } from '../../shared/swairm-board.js';
 import type { MeshExecResult } from './exec.js';
 
 /** Sans `--limit`, le gateway rend les 200 messages les plus anciens, sans dire que le fil est tronqué. */
@@ -97,6 +98,11 @@ export class BoardReader {
   async cards(projectId: number, opts: ReadOpts = {}): Promise<BoardResult<BoardCardSummary[]>> {
     const id = this.id(projectId);
     return this.load(['board', 'cards', 'list', '--project', id], parseCards, opts);
+  }
+
+  chercherCartes(q: string): Promise<BoardResult<RechercheCartes>> {
+    if (q.length > 1000) throw new RangeError('board : recherche trop longue');
+    return this.load(['board', 'cards', 'list', '--search', q], parseRechercheCartes, {});
   }
 
   /** La fiche : `show`, `graph`, `thread` et `obligations` en parallèle, chacun avec son propre résultat. */

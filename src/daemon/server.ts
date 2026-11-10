@@ -1,3 +1,4 @@
+import { SwairmStatut } from './swairm/statut.js';
 import { registerEcrituresRoutes } from './routes/ecritures.js';
 import { registerSwairmRoutes } from './routes/swairm.js';
 import { SwairmAsk } from './swairm/ask.js';
@@ -198,7 +199,13 @@ export async function buildServer(deps: ServerDeps): Promise<FastifyInstance> {
   registerMeshRoutes(app, { mesh: deps.mesh ?? null });
   registerBoardRoutes(app, { board: deps.board ?? null });
   registerSwarphRoutes(app, { swarph: deps.swarph ?? null });
-  registerSwairmRoutes(app, deps.swairmAsk ?? new SwairmAsk(deps.config.swairm.bin));
+  registerSwairmRoutes(
+    app,
+    deps.swairmAsk ?? new SwairmAsk(deps.config.swairm.bin),
+    deps.board ?? null,
+    new SwairmStatut(deps.config.swairm.bin),
+    deps.db,
+  );
   registerDaemonRoutes(app, {
     db: deps.db,
     requestStop: deps.requestStop ?? (() => undefined),
@@ -225,6 +232,7 @@ export async function buildServer(deps: ServerDeps): Promise<FastifyInstance> {
     signaler: () => deps.pda?.obtenir()?.signaler(),
   });
   registerEcrituresRoutes(app, {
+    db: deps.db,
     board: deps.board ?? null,
     cell: deps.config.mesh.cell,
     porte,
