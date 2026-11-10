@@ -1,10 +1,11 @@
 import type { BoardObligation, BoardStep } from '../../../src/shared/board.js';
 import type { ActionEtat, ParametresEtat } from '../../../src/shared/etats.js';
 import type { AidClient } from './client.js';
-import type { ResultatEnvoi } from './ecritures.js';
+import type { ResultatEnvoi as EnvoiEcriture } from './ecritures.js';
+export type ResultatEtat = Pick<EnvoiEcriture, 'code' | 'status'>;
 
-// D275 : attendre evidence_json et skipped dans la PR proxy 702.
-export const CLOTURE_PAR_CONDITION = false;
+// D275 levé : la PR proxy 702 accepte evidence_json et skipped.
+export const CLOTURE_PAR_CONDITION = true;
 export type ActionPossible = 'prendre' | 'refuser' | 'clore';
 
 export function actionsPossibles(
@@ -32,6 +33,6 @@ export function envoyerEtat<A extends ActionEtat>(
   action: A,
   params: ParametresEtat[A],
   client: AidClient,
-): Promise<{ confirmation: string } | ResultatEnvoi> {
+): Promise<{ confirmation: string } | ResultatEtat> {
   return client.request('POST', '/api/swarph/etat/envoyer', { action, params });
 }

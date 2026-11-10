@@ -43,7 +43,7 @@ afterEach(async () => {
 
 type ActionGit = Exclude<
   ActionPorte,
-  'appairage' | 'pda.activer' | 'host.option' | 'desarmement' | 'mesh.ecrire'
+  'appairage' | 'pda.activer' | 'host.option' | 'desarmement' | 'mesh.ecrire' | 'mesh.etat'
 >;
 async function preparer(action: ActionGit = 'push', arme = true) {
   const t = preparerPda();

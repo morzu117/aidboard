@@ -318,17 +318,18 @@ test('migration 025 préserve les réglages 024, ajoute mesh.ecrire actif et env
     db.exec("UPDATE confirmations_reglage SET actif = 0, modifie_a = 123 WHERE action = 'push'");
     const avant = creerReglage(db).lire();
     migrate(db);
-    expect(db.pragma('user_version', { simple: true })).toBe(25);
+    expect(db.pragma('user_version', { simple: true })).toBe(26);
     expect(creerReglage(db).lire()).toEqual([
       ...avant,
       { action: 'mesh.ecrire', actif: true, modifieA: null },
+      { action: 'mesh.etat', actif: true, modifieA: null },
     ]);
     expect(() => db.exec("INSERT INTO confirmations_reglage VALUES ('inconnu', 1, NULL)")).toThrow(
       /CHECK/,
     );
     expect(() => db.exec('UPDATE confirmations_reglage SET actif = 2')).toThrow(/CHECK/);
     migrate(db);
-    expect(creerReglage(db).lire()).toHaveLength(5);
+    expect(creerReglage(db).lire()).toHaveLength(6);
     expect(db.prepare('SELECT envoi FROM pda_demandes').all()).toEqual([]);
   } finally {
     db.close();

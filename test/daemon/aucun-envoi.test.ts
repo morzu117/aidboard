@@ -14,7 +14,7 @@ function verifier(source: string, nom: string): string[] {
   const erreurs: string[] = [];
   const arbre = ts.createSourceFile(nom, source, ts.ScriptTarget.Latest, true);
   const texte = (n: ts.Node) => (ts.isStringLiteralLike(n) ? n.text : '');
-  const ecriture = (s: string) => /^(say|send|post)$/.test(s);
+  const ecriture = (s: string) => /^(say|send|post|take|decline|close)$/.test(s);
   const visiter = (n: ts.Node, dansArgv = false) => {
     const autorise =
       dansArgv ||
@@ -48,15 +48,19 @@ function verifier(source: string, nom: string): string[] {
     if (
       ts.isStringLiteralLike(n) &&
       n.text.startsWith('/api/') &&
-      /(?:ecrire\/|envoyer|\/(?:say|send|post)(?:\/|$))/.test(n.text) &&
-      !['/api/swarph/ecrire/apercu', '/api/swarph/ecrire/envoyer'].includes(n.text)
+      /(?:(?:ecrire|etat)\/|envoyer|\/(?:say|send|post|take|decline|close)(?:\/|$))/.test(n.text) &&
+      ![
+        '/api/swarph/ecrire/apercu',
+        '/api/swarph/ecrire/envoyer',
+        '/api/swarph/etat/envoyer',
+      ].includes(n.text)
     )
       erreurs.push('route écriture');
     if (
       ts.isCallExpression(n) &&
       /(?:spawn|execFile)(?:Sync)?$/.test(n.expression.getText(arbre)) &&
       n.arguments.some((a) => /swarph/.test(texte(a))) &&
-      /['"](?:say|send|post)['"]/.test(n.getText(arbre))
+      /['"](?:say|send|post|take|decline|close)['"]/.test(n.getText(arbre))
     )
       erreurs.push('spawn écriture');
     ts.forEachChild(n, (enfant) => visiter(enfant, autorise));
@@ -81,4 +85,15 @@ test('le garde-fou détecte argv, import, route et spawn hors porte', () => {
   expect(verifier(`function autre() { return ['send']; }`, 'src/shared/ecritures.ts')).toContain(
     'argv écriture',
   );
+});
+
+test('D268 étendu : ni argv ni route parallèle pour les états', () => {
+  expect(
+    verifier("const argv = ['board', 'obligations', 'take'];", 'src/daemon/autre.ts'),
+  ).toContain('argv écriture');
+  for (const chemin of ['/api/swarph/etat/autre', '/api/swarph/obligations/close']) {
+    expect(verifier(`app.post('${chemin}', handler);`, 'src/daemon/autre.ts')).toContain(
+      'route écriture',
+    );
+  }
 });

@@ -59,7 +59,8 @@ export function registerConfirmationRoutes(
       return reply.code(400).send({ error: 'reglage invalide' });
     if (!corps.actif) {
       const entree = {
-        action: corps.action as 'merge' | 'push' | 'nettoyage' | 'projet.retirer' | 'mesh.ecrire',
+        action: corps.action as
+          'merge' | 'push' | 'nettoyage' | 'projet.retirer' | 'mesh.ecrire' | 'mesh.etat',
         actif: false as const,
       };
       const demande = await porte.demander('reglage', entree, req);
@@ -75,7 +76,7 @@ export function registerConfirmationRoutes(
     const avecEnvoi = (lignes: unknown[]) =>
       lignes.map((ligne) => {
         const l = ligne as Record<string, unknown>;
-        if (l.action !== 'mesh.ecrire') {
+        if (l.action !== 'mesh.ecrire' && l.action !== 'mesh.etat') {
           delete l.envoi;
           return l;
         }

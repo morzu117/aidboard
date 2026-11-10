@@ -7,8 +7,9 @@ import {
   CLOTURE_PAR_CONDITION,
   envoyerEtat,
   type ActionPossible,
+  type ResultatEtat,
 } from '../data/etats.js';
-import { envoiIncertain, libelleEnvoi, type ResultatEnvoi } from '../data/ecritures.js';
+import { envoiIncertain, libelleEnvoi } from '../data/ecritures.js';
 import { useAid, useAidClient } from '../data/useAidState.js';
 import { Dialogue } from '../dialogues/Dialogue.js';
 import { AttenteConfirmation } from './AttenteConfirmation.js';
@@ -74,11 +75,13 @@ function DemandeEtat({
   const [envoye, setEnvoye] = useState(false);
   const [issue, setIssue] = useState<IssueCloture>('pass');
   const [preuve, setPreuve] = useState('');
+  const [motif, setMotif] = useState('');
+  const [preuves, setPreuves] = useState<Record<string, string>>({});
   const [confirmation, setConfirmation] = useState<string | null>(null);
-  const [resultat, setResultat] = useState<ResultatEnvoi | null>(null);
+  const [resultat, setResultat] = useState<ResultatEtat | null>(null);
   const [erreur, setErreur] = useState('');
   const id = useId();
-  function terminer(r: ResultatEnvoi) {
+  function terminer(r: ResultatEtat) {
     setResultat(r);
     relire();
   }
@@ -99,11 +102,13 @@ function DemandeEtat({
                   acceptSha256: await hashAccept(lecture.accept),
                 },
                 issue,
-                preuve,
+                ...(lecture.conditions.length ? { preuves } : { preuve }),
               },
               client,
             )
-          : await envoyerEtat(`obligation.${action}`, cible, client);
+          : action === 'refuser'
+            ? await envoyerEtat('obligation.refuser', { ...cible, motif }, client)
+            : await envoyerEtat('obligation.prendre', cible, client);
       if ('confirmation' in r) setConfirmation(r.confirmation);
       else terminer(r);
     } catch (e) {
@@ -124,6 +129,18 @@ function DemandeEtat({
   return (
     <Dialogue titre={`${LIBELLES[action]} l'obligation #${lecture.id} ?`} onClose={fermer}>
       <fieldset disabled={envoye}>
+        {action === 'refuser' && (
+          <>
+            <label htmlFor={`${id}-motif`}>Motif</label>
+            <textarea
+              id={`${id}-motif`}
+              required
+              maxLength={2000}
+              value={motif}
+              onChange={(e) => setMotif(e.target.value)}
+            />
+          </>
+        )}
         {action === 'clore' && (
           <>
             <pre>{lecture.accept ?? ''}</pre>
@@ -139,17 +156,48 @@ function DemandeEtat({
                 <option key={i}>{i}</option>
               ))}
             </select>
-            <label htmlFor={`${id}-preuve`}>Preuve</label>
-            <textarea
-              id={`${id}-preuve`}
-              maxLength={4000}
-              value={preuve}
-              onChange={(e) => setPreuve(e.target.value)}
-            />
+            {lecture.conditions.length ? (
+              lecture.conditions.map((condition) => {
+                const cle =
+                  typeof condition === 'string'
+                    ? condition
+                    : String((condition as { id: string }).id);
+                return (
+                  <div key={cle}>
+                    <label htmlFor={`${id}-${cle}`}>Preuve {cle}</label>
+                    <textarea
+                      id={`${id}-${cle}`}
+                      required
+                      maxLength={16000}
+                      value={preuves[cle] ?? ''}
+                      onChange={(e) => setPreuves({ ...preuves, [cle]: e.target.value })}
+                    />
+                  </div>
+                );
+              })
+            ) : (
+              <>
+                <label htmlFor={`${id}-preuve`}>Preuve</label>
+                <textarea
+                  id={`${id}-preuve`}
+                  maxLength={4000}
+                  value={preuve}
+                  onChange={(e) => setPreuve(e.target.value)}
+                />
+              </>
+            )}
           </>
         )}
         <button
-          disabled={envoye || (action === 'clore' && !preuve.trim())}
+          disabled={
+            envoye ||
+            (action === 'refuser' && !motif.trim()) ||
+            (action === 'clore' &&
+              (lecture.conditions.length
+                ? Object.values(preuves).filter((p) => p.trim()).length !==
+                  lecture.conditions.length
+                : !preuve.trim()))
+          }
           onClick={() => void envoyer()}
         >
           Confirmer
@@ -164,9 +212,18 @@ function DemandeEtat({
           }}
         />
       )}
-      {resultat && <p role="status">{perime ? PERIME : libelleEnvoi(resultat)}</p>}
+      {resultat && (
+        <p role="status">
+          {perime
+            ? PERIME
+            : envoiIncertain({ ...resultat, open_obligations: [] })
+              ? 'Envoi incertain : relis la carte avant toute nouvelle action.'
+              : libelleEnvoi({ ...resultat, open_obligations: [] })}
+        </p>
+      )}
       {erreur && <p role="alert">{erreur}</p>}
-      {(erreur || (resultat && (perime || envoiIncertain(resultat)))) && (
+      {(erreur ||
+        (resultat && (perime || envoiIncertain({ ...resultat, open_obligations: [] })))) && (
         <button onClick={relire}>Relire la carte</button>
       )}
       <button onClick={fermer}>Fermer</button>

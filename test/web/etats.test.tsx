@@ -36,7 +36,7 @@ test.each([
   [{ holder: null }, undefined, []],
   [{ holder: 'peer-b' }, etape(), []],
   [{ taken_at: '2026-01-01' }, etape(), ['clore']],
-  [{ conditions: [{ id: 'c1' }] }, etape(), ['prendre', 'refuser']],
+  [{ conditions: [{ id: 'c1' }] }, etape(), ['prendre', 'refuser', 'clore']],
   [{ unclosable_reason: 'bloquée' }, etape(), ['prendre', 'refuser']],
   [{ status: 'closed' }, etape(), []],
   [{ status: 'fallback_fired' }, etape(), []],
@@ -107,13 +107,22 @@ test.each(['Prendre', 'Refuser'])('confirmation locale : %s', async (nom) => {
   fireEvent.click(await screen.findByRole('button', { name: nom }));
   expect(screen.getByRole('dialog').textContent).toContain(`${nom} l'obligation #81 ?`);
   expect(envois(h)).toHaveLength(0);
+  if (nom === 'Refuser') {
+    expect(screen.getByRole('button', { name: 'Confirmer' })).toHaveProperty('disabled', true);
+    fireEvent.change(screen.getByLabelText('Motif'), { target: { value: 'Motif confidentiel' } });
+  }
   fireEvent.click(screen.getByRole('button', { name: 'Confirmer' }));
   fireEvent.click(screen.getByRole('button', { name: 'Confirmer' }));
   await screen.findByText('Parti.');
   expect(envois(h)).toHaveLength(1);
   expect(envois(h)[0]!.body).toEqual({
     action: `obligation.${nom === 'Prendre' ? 'prendre' : 'refuser'}`,
-    params: { carte: 1457, obligation: 81, attendu: { status: 'open' } },
+    params: {
+      carte: 1457,
+      obligation: 81,
+      attendu: { status: 'open' },
+      ...(nom === 'Refuser' && { motif: 'Motif confidentiel' }),
+    },
   });
   expect(h.relire).toHaveBeenCalledOnce();
 });
@@ -129,7 +138,7 @@ test.each(['<img src=x onerror=alert(1)> https://example.com', 'Accept fixé '])
     expect(dialogue.querySelector('img, a')).toBeNull();
     expect(
       [...screen.getByLabelText('Issue').querySelectorAll('option')].map((o) => o.value),
-    ).toEqual(['pass', 'fail', 'cannot_evaluate']);
+    ).toEqual(['pass', 'fail', 'cannot_evaluate', 'skipped']);
     fireEvent.change(screen.getByLabelText('Preuve'), {
       target: { value: 'preuve confidentielle' },
     });
@@ -235,4 +244,22 @@ test('envoyerEtat conserve les erreurs HTTP du client', async () => {
       client,
     ),
   ).rejects.toBeInstanceOf(AidApiError);
+});
+
+test('D275 levé : une obligation à conditions se clôt avec preuves et skipped', async () => {
+  vi.stubGlobal('crypto', webcrypto);
+  const h = ouvrir({ conditions: [{ id: 'c1' }, { id: 'c2' }], accept: 'Conditions' });
+  fireEvent.click(await screen.findByRole('button', { name: 'Clore' }));
+  expect(screen.getByRole('button', { name: 'Confirmer' })).toHaveProperty('disabled', true);
+  fireEvent.change(screen.getByLabelText('Issue'), { target: { value: 'skipped' } });
+  fireEvent.change(screen.getByLabelText('Preuve c1'), { target: { value: 'Première preuve' } });
+  expect(screen.getByRole('button', { name: 'Confirmer' })).toHaveProperty('disabled', true);
+  fireEvent.change(screen.getByLabelText('Preuve c2'), { target: { value: 'Seconde preuve' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Confirmer' }));
+  await screen.findByText('Parti.');
+  expect(envois(h)[0]!.body).toMatchObject({
+    action: 'obligation.clore',
+    params: { issue: 'skipped', preuves: { c1: 'Première preuve', c2: 'Seconde preuve' } },
+  });
+  expect((envois(h)[0]!.body as { params: object }).params).not.toHaveProperty('preuve');
 });

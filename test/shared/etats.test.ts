@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
+  argsEtat,
+  tailleJsonPython,
   hashAccept,
   ISSUES_CLOTURE,
   lireParamsEtat,
@@ -34,7 +36,12 @@ describe('états', () => {
   });
   for (const action of actions) {
     it(`ferme le schéma ${action} et nomme le premier refus`, () => {
-      const base = action === 'obligation.clore' ? fermeture : cible;
+      const base =
+        action === 'obligation.clore'
+          ? fermeture
+          : action === 'obligation.refuser'
+            ? { ...cible, motif: 'Motif confidentiel' }
+            : cible;
       const refuser = (brut: unknown, message?: string) => {
         const resultat = lireParamsEtat(action, brut);
         if (message) expect(resultat).toEqual({ ok: false, message });
@@ -120,6 +127,7 @@ describe('états', () => {
       ['a\u0085', 'contenant un caractère de contrôle'],
     ] as const) {
       expect(lire({ preuve: texte })).toEqual({ ok: false, message: `preuve ${motif}` });
+      if (typeof texte === 'string' && texte.length === 4001) continue;
       expect(lire({ preuves: { condition: texte } })).toEqual({
         ok: false,
         message: `texte de preuves ${motif}`,
@@ -157,7 +165,12 @@ describe('états', () => {
       ['obligation.clore', 'Clore'],
     ] as const) {
       const params = { ...fermeture, preuves: { condition: 'Preuve confidentielle distincte' } };
-      const base = action === 'obligation.clore' ? params : cible;
+      const base =
+        action === 'obligation.clore'
+          ? params
+          : action === 'obligation.refuser'
+            ? { ...cible, motif: 'Motif confidentiel' }
+            : cible;
       const resume = resumeEtat(action, base);
       expect(resume).toBe(
         `${verbe} l'obligation #81 (carte #1457)${action === 'obligation.clore' ? ' : pass' : ''}`,
@@ -185,4 +198,52 @@ describe('états', () => {
     expect(textes).toEqual([fermeture.preuve, ...Object.values(preuves)]);
     expect(textes.map((texte) => nettoyer(texte).ok)).toEqual([true, true, false]);
   });
+});
+
+it('proxy-protocol.md « Argument types » : taille Python avec échappements ASCII', () => {
+  // Calcul séparé : python3 -c 'import json; print(len(json.dumps(..., sort_keys=True)))'
+  expect(tailleJsonPython({ z: 'é', a: '😀' })).toBe(36);
+  expect(tailleJsonPython({ clé: '"\\\n\t\b\f\r' })).toBe(30);
+  expect(tailleJsonPython({ a: '\u0001\u007f\u0085' })).toBe(27);
+  const preuves = Object.fromEntries(
+    Array.from({ length: 3 }, (_, i) => [String(i), 'é'.repeat(4000)]),
+  );
+  expect(lireParamsEtat('obligation.clore', { ...fermeture, preuves }).ok).toBe(false);
+});
+
+it('D276 : motif obligatoire, limité, nettoyable et absent du résumé', () => {
+  for (const motif of [undefined, '', ' \n\t', 'x'.repeat(2001), 'a\r', 'a\u0000']) {
+    expect(lireParamsEtat('obligation.refuser', { ...cible, motif }).ok).toBe(false);
+  }
+  const params = { ...cible, motif: 'Motif secret\n\t' };
+  expect(lireParamsEtat('obligation.refuser', params).ok).toBe(true);
+  expect(textesAPurger(params)).toEqual([params.motif]);
+  expect(resumeEtat('obligation.refuser', params)).not.toContain(params.motif);
+  expect(lireParamsEtat('obligation.refuser', { ...cible, motif: 'x'.repeat(2000) }).ok).toBe(true);
+});
+
+it('proxy-protocol.md « Argument types » et table des verbes : aucun champ additionnel', () => {
+  expect(argsEtat('obligation.prendre', cible)).toEqual({
+    verb: 'board.obligations.take',
+    args: { id: 81, expect_status: 'open' },
+  });
+  expect(argsEtat('obligation.refuser', { ...cible, motif: 'Non' })).toEqual({
+    verb: 'board.obligations.decline',
+    args: { id: 81, expect_status: 'open', why: 'Non' },
+  });
+  expect(argsEtat('obligation.clore', { ...fermeture, preuves: {} }).args).not.toHaveProperty(
+    'evidence_json',
+  );
+  for (const cle of ['obligation_id', 'actor', 'author', 'usage']) {
+    expect(() => argsEtat('obligation.prendre', { ...cible, [cle]: 1 })).toThrow();
+  }
+});
+
+it('D276 « Argument types » : chaque evidence_json accepte 16 000 caractères au plus', () => {
+  expect(
+    lireParamsEtat('obligation.clore', { ...fermeture, preuves: { c1: 'x'.repeat(16000) } }).ok,
+  ).toBe(true);
+  expect(
+    lireParamsEtat('obligation.clore', { ...fermeture, preuves: { c1: 'x'.repeat(16001) } }).ok,
+  ).toBe(false);
 });

@@ -132,6 +132,7 @@ Les boutons d'après la lecture, la boîte de clôture, l'attente et les libell�
 ### 36.4 L'action et la route (D272 à D274)
 
 Après le 35b.3. D276 : les arguments, le motif de refus, la taille de `evidence_json`, `CLOTURE_PAR_CONDITION` à `true`. La relecture et le refus tôt, le 409 relu sans nouvelle tentative, le résultat sans preuve, le mode host, le journal.
+- *Révision 36.4.* `src/daemon/confirmations/etats.ts` (`creerActionEtat`), `argsEtat` et `tailleJsonPython` dans `src/shared/etats.ts`, la migration `026_mesh_etat.sql`, et la route `etat/envoyer`. Une relecture indisponible donne aussi `perime` : sans lecture fiable, rien ne part. `CLOTURE_PAR_CONDITION = true` ; « Refuser » demande le motif. 47 lignes existantes modifiées. Gate 2871, e2e board 8/8.
 
 ### 36.5 Le vrai proxy, l'e2e et la fiche de recette
 
