@@ -23,7 +23,11 @@ export function EcrireAuMesh({
   choix = false,
   onClose,
   onRelire,
+  propositionSwairm,
+  onEnvoye,
 }: {
+  propositionSwairm?: number;
+  onEnvoye?: () => void;
   action: ActionEcriture;
   valeurs?: {
     texte?: string;
@@ -110,12 +114,20 @@ export function EcrireAuMesh({
     const commun = { texte, kind };
     try {
       const r = await (action === 'carte.note'
-        ? envoyerEcriture(action, { ...commun, carte: Number(carte), a: a || null }, client)
+        ? envoyerEcriture(
+            action,
+            { ...commun, carte: Number(carte), a: a || null },
+            client,
+            propositionSwairm,
+          )
         : action === 'dm.envoyer'
           ? envoyerEcriture(action, { ...commun, pair, fil: valeurs.fil ?? null }, client)
           : envoyerEcriture(action, { ...commun, canal }, client));
       if ('confirmation' in r) setConfirmation(r.confirmation);
-      else setResultat(r);
+      else {
+        setResultat(r);
+        if (r.code === 'succes') onEnvoye?.();
+      }
     } catch (e) {
       if (e instanceof AidApiError && e.status === 409 && e.body.error === 'proxy_absent')
         setProxyAbsent(true);
@@ -278,6 +290,7 @@ export function EcrireAuMesh({
                     id={confirmation}
                     onTerminee={(d) => {
                       if (d?.envoi) setResultat(d.envoi);
+                      if (d?.envoi?.code === 'succes') onEnvoye?.();
                       if (!d || (!d.envoi && (d.resultat === 'annulee' || d.etat === 'expiree'))) {
                         verrou.current = false;
                         setEnvoye(false);

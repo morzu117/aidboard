@@ -204,6 +204,7 @@ export async function buildServer(deps: ServerDeps): Promise<FastifyInstance> {
     deps.swairmAsk ?? new SwairmAsk(deps.config.swairm.bin),
     deps.board ?? null,
     new SwairmStatut(deps.config.swairm.bin),
+    deps.db,
   );
   registerDaemonRoutes(app, {
     db: deps.db,
@@ -231,6 +232,7 @@ export async function buildServer(deps: ServerDeps): Promise<FastifyInstance> {
     signaler: () => deps.pda?.obtenir()?.signaler(),
   });
   registerEcrituresRoutes(app, {
+    db: deps.db,
     board: deps.board ?? null,
     cell: deps.config.mesh.cell,
     porte,

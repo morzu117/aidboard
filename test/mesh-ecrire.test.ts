@@ -1,3 +1,4 @@
+import { propositionsSwairm } from '../src/daemon/swairm/propositions.js';
 import { envoiIncertain, libelleEnvoi } from '../web/src/data/ecritures.js';
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
@@ -95,7 +96,7 @@ async function preparer(scenario: ScenarioProxy = succes) {
     if (e instanceof AidHttpError) return reply.code(e.status).send({ error: e.message });
     throw e;
   });
-  registerEcrituresRoutes(app, { cell: config.mesh.cell, board, porte });
+  registerEcrituresRoutes(app, { db: t.db, cell: config.mesh.cell, board, porte });
   registerConfirmationRoutes(app, t.db, porte, () => file);
   const demander = (payload: unknown = exemples[0]) =>
     app.inject({ method: 'POST', url: '/api/swarph/ecrire/envoyer', payload: payload as object });
@@ -351,7 +352,7 @@ test('migration 025 préserve les réglages 024, ajoute mesh.ecrire actif et env
     db.exec("UPDATE confirmations_reglage SET actif = 0, modifie_a = 123 WHERE action = 'push'");
     const avant = creerReglage(db).lire();
     migrate(db);
-    expect(db.pragma('user_version', { simple: true })).toBe(26);
+    expect(db.pragma('user_version', { simple: true })).toBe(27);
     expect(creerReglage(db).lire()).toEqual([
       ...avant,
       { action: 'mesh.ecrire', actif: true, modifieA: null },
@@ -499,4 +500,25 @@ test('DM de 4 000 caractères ASCII : demande créée sans envoi au proxy', asyn
   expect(t.db.prepare('SELECT count(*) AS n FROM pda_demandes').get()).toEqual({ n: 1 });
   expect(t.deposer).toHaveBeenCalledOnce();
   expect(t.proxy.lignes).toHaveLength(0);
+});
+
+test('D288 : proposition liée à la confirmation, fermeture persistante uniquement après succès au téléphone', async () => {
+  const t = await preparer();
+  t.db
+    .prepare(
+      `INSERT INTO swairm_propositions (projet, sujet, etat, titre, carte, cree_a)
+    VALUES ('exemple/depot', '41', 'merged', 'Un sujet', 42, '2026-11-10')`,
+    )
+    .run();
+  const p = propositionsSwairm(t.db)[0]!;
+  expect((await t.demander({ ...exemples[0], propositionSwairm: p.id + 1 })).statusCode).toBe(400);
+  expect((await t.demander({ ...exemples[1], propositionSwairm: p.id })).statusCode).toBe(400);
+  const r = await t.demander({ ...exemples[0], propositionSwairm: p.id });
+  expect(r.statusCode).toBe(202);
+  expect(t.proxy.lignes).toHaveLength(0);
+  expect(propositionsSwairm(t.db)).toHaveLength(1);
+  await t.oui(r.json().confirmation);
+  expect(t.proxy.lignes).toHaveLength(1);
+  expect(propositionsSwairm(t.db)).toEqual([]);
+  expect(propositionsSwairm(t.db)).toEqual([]);
 });

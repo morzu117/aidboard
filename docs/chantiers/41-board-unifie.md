@@ -91,6 +91,7 @@ La pastille et le bloc Swairm de la fiche ; la section « Sujets Swairm sans car
 ### 41.4 Les notes proposées (D288)
 
 La migration 027, la détection des transitions, les propositions dans la Boîte, et l'ouverture de l'écriture préremplie.
+- *Révision 41.4.* La proposition est une table `swairm_propositions` (une seule ouverte par projet, sujet et état). L'envoi garde la route du 35 et sa porte ; il porte seulement l'id de la proposition, refusé (400) si elle est fermée ou si la carte diffère, et la proposition se ferme au succès confirmé au téléphone. La détection suit la lecture de l'assemblage, sans minuterie nouvelle. 8 lignes existantes modifiées (3 `user_version` 26 → 27). 17 tests ajoutés. Vrai proxy 25/25, e2e Boîte 5/5, gate 3034 (échecs connus hors CI).
 
 ### 41.5 L'e2e et la fiche de recette
 

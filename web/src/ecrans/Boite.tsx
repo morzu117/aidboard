@@ -1,3 +1,4 @@
+import { PropositionSwairmVue, usePropositionsSwairm } from '../ui/PropositionsSwairm.js';
 import { EcrireAuMesh } from '../ui/EcrireAuMesh.js';
 import { type ReactNode, useState } from 'react';
 import { Link, useNavigate } from 'react-router';
@@ -518,6 +519,7 @@ const plusAncien = (x: Element, y: Element) => x.at.localeCompare(y.at);
 const plusRecent = (x: Element, y: Element) => y.at.localeCompare(x.at);
 
 function Contenu() {
+  const propositionsSwairm = usePropositionsSwairm();
   const { state, daemon, retry } = useAid();
   const { openNewTopic } = useLayout();
   const [filtre, setFiltre] = useState<string | null>(null);
@@ -532,6 +534,9 @@ function Contenu() {
         <p className="resume" data-node="1-2.entete.resume">
           {resume}
         </p>
+        {propositionsSwairm.erreur && (
+          <p role="alert">Propositions Swairm : {propositionsSwairm.erreur}</p>
+        )}
       </div>
       {filtres}
     </div>
@@ -636,6 +641,7 @@ function Contenu() {
     information: dms.filter((d) => natureDm(d) === 'information').sort((x, y) => y.id - x.id),
   };
   const comptes = compterNatures([
+    ...propositionsSwairm.propositions.map(() => 'decision' as const),
     ...elements.map((e) => e.nature),
     ...dms.map((d) => natureDm(d)!),
   ]);
@@ -735,6 +741,14 @@ function Contenu() {
             Rien ici pour le moment.
           </p>
         )}
+        {n === 'decision' &&
+          propositionsSwairm.propositions.map((p) => (
+            <PropositionSwairmVue
+              key={`swairm-${p.id}`}
+              proposition={p}
+              relire={() => void propositionsSwairm.relire()}
+            />
+          ))}
         {dmsPar[n].map((d) => (
           <ArticleMesh key={`dm-${d.id}`} n={numeroDm.get(d.id)!} dm={d} state={state} />
         ))}
