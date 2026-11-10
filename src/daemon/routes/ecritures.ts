@@ -7,7 +7,14 @@ import type { BoardReader } from '../mesh/board.js';
 
 export function registerEcrituresRoutes(
   app: FastifyInstance,
-  deps: { board: BoardReader | null; cell: string; hotesPrives?: string[]; porte?: Porte },
+  deps: {
+    board: BoardReader | null;
+    cell: string;
+    hotesPrives?: string[];
+    porte?: Porte;
+    proxySocket?: string;
+    proxyLectureSeule?: boolean;
+  },
 ): void {
   app.post('/api/swarph/etat/envoyer', async (req, reply) => {
     if (!deps.cell || !deps.board) throw new AidHttpError(404, 'mesh désactivé');
@@ -19,6 +26,8 @@ export function registerEcrituresRoutes(
       )
     )
       throw new AidHttpError(400, 'action inconnue');
+    if (deps.proxySocket && deps.proxyLectureSeule)
+      return reply.code(409).send({ error: 'proxy_lecture_seule' });
     const demande = await deps.porte!.demander(
       'mesh.etat',
       {
@@ -41,6 +50,8 @@ export function registerEcrituresRoutes(
         corps.action !== 'canal.poster')
     )
       throw new AidHttpError(400, 'action inconnue');
+    if (deps.proxySocket && deps.proxyLectureSeule)
+      return reply.code(409).send({ error: 'proxy_lecture_seule' });
     const demande = await deps.porte!.demander(
       'mesh.ecrire',
       { action: corps.action, params: corps.params },

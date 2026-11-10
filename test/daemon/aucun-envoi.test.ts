@@ -2,6 +2,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import ts from 'typescript';
 import { expect, test } from 'vitest';
+import { VERBES_LECTURE, VERBES_PROXY } from '../../src/daemon/mesh/proxy.js';
 
 const racine = join(import.meta.dirname, '../..');
 function fichiers(dossier: string): string[] {
@@ -34,7 +35,9 @@ function verifier(source: string, nom: string): string[] {
       if (
         module &&
         /(?:mesh\/proxy|\.\/proxy)\.js$/.test(module) &&
-        !nom.startsWith('src/daemon/confirmations/')
+        !nom.startsWith('src/daemon/confirmations/') &&
+        // 44.2 : le lecteur n'a que VERBES_LECTURE (test « les lectures ne disposent que… »)
+        nom !== 'src/daemon/mesh/lecteur.ts'
       )
         erreurs.push('import proxy');
     }
@@ -95,5 +98,17 @@ test('D268 étendu : ni argv ni route parallèle pour les états', () => {
     expect(verifier(`app.post('${chemin}', handler);`, 'src/daemon/autre.ts')).toContain(
       'route écriture',
     );
+  }
+});
+
+test('D268 : les lectures ne disposent que des verbes de VERBES_LECTURE', () => {
+  const source = readFileSync(join(racine, 'src/daemon/mesh/lecteur.ts'), 'utf8');
+  expect(source).toContain('creerProxyClient({ socket, verbes: VERBES_LECTURE })');
+  for (const verbe of VERBES_PROXY) expect(source).not.toContain(verbe);
+  const verbes = [...source.matchAll(/verb = '(.*?)'/g)].map((m) => m[1]);
+  for (const verbe of verbes) expect(VERBES_LECTURE).toContain(verbe);
+  for (const nom of ['board.ts', 'lectures.ts']) {
+    const reader = readFileSync(join(racine, 'src/daemon/mesh', nom), 'utf8');
+    expect(reader).not.toMatch(/creerProxyClient|\.appeler\(/);
   }
 });

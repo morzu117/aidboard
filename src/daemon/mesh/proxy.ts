@@ -11,6 +11,18 @@ export const VERBES_PROXY = [
   'board.obligations.decline',
   'board.obligations.close',
 ] as const;
+export const VERBES_LECTURE = [
+  'board.projects.list',
+  'board.cards.list',
+  'board.card.get',
+  'board.cards.graph',
+  'board.cards.thread',
+  'board.obligations.list',
+  'mesh.peers',
+  'rights',
+  'memory.list',
+  'memory.get',
+] as const;
 const CODES_PROXY = [
   'verb_not_allowed',
   'bad_args',
@@ -23,16 +35,30 @@ const CODES_PROXY = [
 const MAX_LIGNE = 1024 * 1024;
 
 type CodeProxy = (typeof CODES_PROXY)[number] | 'delai' | 'interrompu' | 'connexion' | 'format';
-export type ResultatProxy =
-  | { ok: true; status: number; body: Record<string, unknown> }
-  | { ok: false; code: CodeProxy; status?: number };
+type CorpsProxy = Record<string, unknown> | unknown[];
+export type ResultatProxy<Corps = CorpsProxy> =
+  { ok: true; status: number; body: Corps } | { ok: false; code: CodeProxy; status?: number };
 
 function estObjet(valeur: unknown): valeur is Record<string, unknown> {
   return typeof valeur === 'object' && valeur !== null && !Array.isArray(valeur);
 }
 
 /** Ne conserve jamais le détail du proxy, même dans les réponses valides. */
-export function lireReponseProxy(ligne: string, requestId: string): ResultatProxy {
+export function lireReponseProxy(
+  ligne: string,
+  requestId: string,
+  verbes?: typeof VERBES_PROXY,
+): ResultatProxy<Record<string, unknown>>;
+export function lireReponseProxy(
+  ligne: string,
+  requestId: string,
+  verbes: typeof VERBES_PROXY | typeof VERBES_LECTURE,
+): ResultatProxy;
+export function lireReponseProxy(
+  ligne: string,
+  requestId: string,
+  verbes: typeof VERBES_PROXY | typeof VERBES_LECTURE = VERBES_PROXY,
+): ResultatProxy {
   const format = { ok: false, code: 'format' } as const;
   let reponse: unknown;
   try {
@@ -47,7 +73,7 @@ export function lireReponseProxy(ligne: string, requestId: string): ResultatProx
       !Number.isInteger(reponse.status) ||
       reponse.status < 200 ||
       reponse.status >= 300 ||
-      !estObjet(reponse.body)
+      !(estObjet(reponse.body) || (verbes[0] === VERBES_LECTURE[0] && Array.isArray(reponse.body)))
     )
       return format;
     return { ok: true, status: reponse.status, body: reponse.body };
@@ -67,15 +93,80 @@ export function lireReponseProxy(ligne: string, requestId: string): ResultatProx
   return format;
 }
 
-export function creerProxyClient(options: {
+/** Schéma publié, section « Argument types » et table des verbes de lecture. */
+export function argumentsLectureValides(verbe: string, args: Record<string, unknown>): boolean {
+  const champs: Record<string, string[]> = {
+    'board.projects.list': [],
+    'board.cards.list': ['project', 'stage', 'assignee', 'label', 'q'],
+    'board.card.get': ['id'],
+    'board.cards.graph': ['id'],
+    'board.cards.thread': ['id', 'limit'],
+    'board.obligations.list': [
+      'id',
+      'card_id',
+      'status',
+      'holder',
+      'created_by',
+      'limit',
+      'overdue',
+      'grandfathered',
+    ],
+    'mesh.peers': ['enabled_only'],
+    rights: [],
+    'memory.get': ['slug'],
+    'memory.list': ['type', 'tag', 'limit'],
+  };
+  const autorises = champs[verbe];
+  if (!autorises || Object.keys(args).some((cle) => !autorises.includes(cle))) return false;
+  if (
+    ['board.card.get', 'board.cards.graph', 'board.cards.thread'].includes(verbe) &&
+    !('id' in args)
+  )
+    return false;
+  if (verbe === 'memory.get' && !('slug' in args)) return false;
+  return Object.entries(args).every(([cle, valeur]) => {
+    if (['id', 'card_id', 'project', 'limit'].includes(cle))
+      return (
+        typeof valeur === 'number' &&
+        Number.isSafeInteger(valeur) &&
+        valeur > 0 &&
+        (cle !== 'limit' || valeur <= 1000)
+      );
+    if (['overdue', 'grandfathered', 'enabled_only'].includes(cle))
+      return typeof valeur === 'boolean';
+    if (cle === 'slug')
+      return typeof valeur === 'string' && /^[A-Za-z0-9][A-Za-z0-9_.-]{0,199}$/.test(valeur);
+    return typeof valeur === 'string';
+  });
+}
+
+interface OptionsProxy {
   socket: string;
   delaiMs?: number;
   uuid?: () => string;
-}) {
+}
+interface ClientProxy<Corps = CorpsProxy> {
+  appeler(verbe: string, args: Record<string, unknown>): Promise<ResultatProxy<Corps>>;
+}
+
+export function creerProxyClient(
+  options: OptionsProxy & { verbes?: typeof VERBES_PROXY },
+): ClientProxy<Record<string, unknown>>;
+export function creerProxyClient(
+  options: OptionsProxy & { verbes: typeof VERBES_LECTURE },
+): ClientProxy;
+export function creerProxyClient(
+  options: OptionsProxy & { verbes?: typeof VERBES_PROXY | typeof VERBES_LECTURE },
+): ClientProxy {
   return {
     appeler(verbe: string, args: Record<string, unknown>): Promise<ResultatProxy> {
-      if (!VERBES_PROXY.some((autorise) => autorise === verbe))
+      if (!(options.verbes ?? VERBES_PROXY).some((autorise) => autorise === verbe))
         throw new Error('Verbe proxy non autorisé');
+      if (
+        VERBES_LECTURE.some((lecture) => lecture === verbe) &&
+        !argumentsLectureValides(verbe, args)
+      )
+        return Promise.resolve({ ok: false, code: 'bad_args' });
       const requestId = (options.uuid ?? randomUUID)();
       const ligne = JSON.stringify({ verb: verbe, args, request_id: requestId }) + '\n';
       if (!options.socket) return Promise.resolve({ ok: false, code: 'connexion' });
@@ -115,7 +206,13 @@ export function creerProxyClient(options: {
           }
           morceaux.push(contenu);
           if (fin >= 0)
-            finir(lireReponseProxy(Buffer.concat(morceaux).toString('utf8'), requestId));
+            finir(
+              lireReponseProxy(
+                Buffer.concat(morceaux).toString('utf8'),
+                requestId,
+                options.verbes ?? VERBES_PROXY,
+              ),
+            );
         });
       });
     },

@@ -1,3 +1,4 @@
+import { closeSync, openSync, readSync } from 'node:fs';
 import type { MeshConfig } from '../config.js';
 import type { Db } from '../db.js';
 import type { EventStore } from '../events/store.js';
@@ -58,6 +59,8 @@ export class MeshService {
   constructor(private readonly deps: MeshServiceDeps) {
     this.paths = meshPaths(deps.config, deps.home);
     this.state = {
+      ecritures: !!deps.config.proxySocket && !deps.config.proxyLectureSeule,
+      proxyConfigure: !!deps.config.proxySocket,
       connected: false,
       tailscale: 'absent',
       monitor: 'absent',
@@ -161,8 +164,9 @@ export class MeshService {
       const persisted = this.readPersisted();
       const tailscale = await this.tailscale();
       const { monitor, pending } = await this.monitorStatus();
-      const connected = monitor === 'running';
+      const connected = monitor === 'running' || monitor === 'proxy';
       if (connected) this.startFollower();
+      if (this.deps.config.inboxLog) this.startRefresh();
       this.publish({
         connected,
         tailscale,
@@ -186,6 +190,14 @@ export class MeshService {
       }
       if (tailscale !== 'running') {
         this.publish({ connected: false, tailscale, since: this.sinceIf(false) });
+        return;
+      }
+      if (config.inboxLog) {
+        const { monitor, pending } = await this.monitorStatus();
+        const connected = monitor === 'proxy';
+        if (connected) this.startFollower();
+        this.startRefresh();
+        this.publish({ connected, tailscale, monitor, pending, since: this.sinceIf(connected) });
         return;
       }
       const start = await this.run(config.bin, [
@@ -224,8 +236,10 @@ export class MeshService {
       const { config } = this.deps;
       this.stopFollower();
       this.stopRefresh();
-      const stop = await this.run(config.bin, ['monitor', 'stop', '--as', config.cell]);
-      if (!stop.ok) this.deps.log(`mesh : swarph monitor stop a échoué : ${stop.stderr.trim()}`);
+      if (!config.inboxLog) {
+        const stop = await this.run(config.bin, ['monitor', 'stop', '--as', config.cell]);
+        if (!stop.ok) this.deps.log(`mesh : swarph monitor stop a échoué : ${stop.stderr.trim()}`);
+      }
       if (config.tailscale.manage && this.tailscaleUpByUs) {
         const down = await this.run(config.tailscale.bin, ['down']);
         if (!down.ok) this.deps.log(`mesh : tailscale down a échoué : ${down.stderr.trim()}`);
@@ -243,10 +257,13 @@ export class MeshService {
     await this.serial(async () => {
       const tailscale = await this.tailscale();
       const { monitor, pending } = await this.monitorStatus();
-      const connected = this.state.connected && monitor === 'running' && tailscale === 'running';
+      const connected = this.deps.config.inboxLog
+        ? this.refreshTimer !== null && monitor === 'proxy' && tailscale === 'running'
+        : this.state.connected && monitor === 'running' && tailscale === 'running';
+      if (connected && this.deps.config.inboxLog) this.startFollower();
       if (this.state.connected && !connected) {
         this.stopFollower();
-        this.stopRefresh();
+        if (!this.deps.config.inboxLog) this.stopRefresh();
       }
       this.publish({ connected, tailscale, monitor, pending, since: this.sinceIf(connected) });
     });
@@ -303,6 +320,27 @@ export class MeshService {
   }
 
   private async monitorStatus(): Promise<{ monitor: MeshMonitor; pending: number }> {
+    if (this.deps.config.inboxLog) {
+      this.checked = this.now();
+      this.deps.store.emitEphemeral({
+        kind: 'ephemeral',
+        type: 'mesh.checked',
+        checkedAt: this.checked,
+      });
+      let fichier: number | undefined;
+      try {
+        fichier = openSync(this.paths.inboxLog, 'r');
+        readSync(fichier, Buffer.alloc(1), 0, 1, 0);
+        return { monitor: 'proxy', pending: 0 };
+      } catch (erreur) {
+        return {
+          monitor: (erreur as NodeJS.ErrnoException).code === 'ENOENT' ? 'absent' : 'stopped',
+          pending: 0,
+        };
+      } finally {
+        if (fichier !== undefined) closeSync(fichier);
+      }
+    }
     const r = await this.run(this.deps.config.bin, [
       'monitor',
       'status',

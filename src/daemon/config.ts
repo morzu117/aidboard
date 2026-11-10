@@ -1,3 +1,4 @@
+import { isAbsolute } from 'node:path';
 import { isIP } from 'node:net';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { parse, parseDocument } from 'yaml';
@@ -68,6 +69,10 @@ export interface MeshConfig {
   cell: string;
   /** D262 : vide = aucun proxy configuré ; jamais exposé par les routes. */
   proxySocket: string;
+  /** D283 : sans proxySocket, ce réglage est sans effet. */
+  proxyLectureSeule: boolean;
+  /** D281 : fichier du monitor géré par le proxy ; vide = monitor CLI. Jamais exposé. */
+  inboxLog: string;
   /** vide = `~/.config/swarph/cells/<cell>.yaml` */
   cellFile: string;
   /** `MESH_GATEWAY_URL` passé à swarph : une URL, pas un secret */
@@ -101,6 +106,8 @@ export const DEFAULT_CONFIG: AidConfig = {
     bin: 'swarph',
     cell: '',
     proxySocket: '',
+    proxyLectureSeule: false,
+    inboxLog: '',
     cellFile: '',
     gateway: '',
     stateRoot: '',
@@ -320,11 +327,32 @@ function parseMesh(raw: unknown, cfg: MeshConfig): void {
   if (!isRecord(raw)) throw new ConfigError('config.yaml : mesh doit être un objet');
   rejectUnknown(
     raw,
-    ['bin', 'cell', 'cellFile', 'gateway', 'stateRoot', 'tailscale', 'proxySocket'],
+    [
+      'bin',
+      'cell',
+      'cellFile',
+      'gateway',
+      'stateRoot',
+      'tailscale',
+      'proxySocket',
+      'inboxLog',
+      'proxyLectureSeule',
+    ],
     'mesh.',
   );
+  if (raw.proxyLectureSeule !== undefined)
+    cfg.proxyLectureSeule = bool(raw.proxyLectureSeule, 'mesh.proxyLectureSeule');
   if (raw.proxySocket !== undefined)
     cfg.proxySocket = strOrEmpty(raw.proxySocket, 'mesh.proxySocket');
+  if (raw.inboxLog !== undefined) cfg.inboxLog = strOrEmpty(raw.inboxLog, 'mesh.inboxLog');
+  if (cfg.inboxLog && !isAbsolute(cfg.inboxLog)) {
+    throw new ConfigError('config.yaml : mesh.inboxLog doit être un chemin absolu');
+  }
+  if (cfg.proxySocket && !cfg.inboxLog) {
+    throw new ConfigError(
+      'config.yaml : mesh.inboxLog est requis quand mesh.proxySocket est réglé (le monitor appartient au proxy).',
+    );
+  }
   if (raw.bin !== undefined) cfg.bin = str(raw.bin, 'mesh.bin');
   if (raw.cell !== undefined) {
     cfg.cell = strOrEmpty(raw.cell, 'mesh.cell');

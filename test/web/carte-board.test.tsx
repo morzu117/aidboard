@@ -40,6 +40,8 @@ const fiche = (id: 101 | 102): BoardCardSheet => ({
 });
 
 const meshEtat: MeshState = {
+  ecritures: true,
+  proxyConfigure: true,
   connected: true,
   tailscale: 'running',
   monitor: 'running',
@@ -329,4 +331,49 @@ test('36.3 : actions près des obligations, déplacement annoncé et carte relue
   await waitFor(() =>
     expect(h.calls.some((c) => c.url === '/api/board/cards/101?fresh=1')).toBe(true),
   );
+});
+
+test.each([true, false])(
+  'D283 : sans écritures, aucun bouton d’état (proxy=%s)',
+  async (proxyConfigure) => {
+    const s = fiche(101);
+    if (!s.obligations.ok) throw new Error('Fixture illisible');
+    s.obligations.data = parseObligations({
+      obligations: [81, 82].map((id) => ({ id, holder: meshEtat.cell, status: 'open' })),
+    })!.value;
+    await ouvrir(
+      '/board/cartes/101',
+      { 101: s },
+      snapshot({
+        mesh: {
+          state: { ...meshEtat, ecritures: false, proxyConfigure },
+          inbox: [],
+          tailscaleManage: false,
+        },
+      }),
+    );
+    await waitFor(() => expect(node('carte-board.corps.texte')).not.toBeNull());
+    for (const name of ['Prendre', 'Refuser', 'Clore'])
+      expect(screen.queryByRole('button', { name })).toBeNull();
+    expect(screen.queryAllByText('Le proxy de ta cellule est en lecture seule.')).toHaveLength(
+      proxyConfigure ? 1 : 0,
+    );
+  },
+);
+
+test('D283 : lecture seule annoncée même si les obligations ne sont pas lues', async () => {
+  const s = fiche(101);
+  s.obligations = { ok: false, kind: 'unreachable', readAt: READ_AT };
+  await ouvrir(
+    '/board/cartes/101',
+    { 101: s },
+    snapshot({
+      mesh: {
+        state: { ...meshEtat, ecritures: false, proxyConfigure: true },
+        inbox: [],
+        tailscaleManage: false,
+      },
+    }),
+  );
+  expect(await screen.findByText('Le proxy de ta cellule est en lecture seule.')).toBeTruthy();
 });

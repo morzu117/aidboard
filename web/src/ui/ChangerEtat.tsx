@@ -37,7 +37,7 @@ export function ChangerEtat({
 }) {
   const { state } = useAid();
   const [action, choisir] = useState<ActionPossible | null>(null);
-  if (!state?.mesh) return null;
+  if (!state?.mesh || !state.mesh.state.ecritures) return null;
   return (
     <>
       {actionsPossibles(obligation, etape, state.mesh.state.cell).map((a) => (

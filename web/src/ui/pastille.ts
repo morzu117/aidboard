@@ -17,6 +17,7 @@ export const dureeDepuis = (iso: string, now = Date.now()) => {
 
 export function etatMonitor(s: MeshState, aTraiter: number, enCours: boolean, now = Date.now()) {
   if (enCours) return s.connected ? 'déconnexion du mesh…' : 'connexion au mesh…';
+  if (s.monitor === 'proxy') return 'géré par le proxy';
   if (s.connected) return `monitor actif · ${aTraiter} à traiter`;
   if (s.monitor === 'stale') return 'monitor périmé';
   if (s.monitor === 'absent') return 'swarph introuvable';

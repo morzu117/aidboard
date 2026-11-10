@@ -224,7 +224,13 @@ export async function buildServer(deps: ServerDeps): Promise<FastifyInstance> {
     file: () => deps.pda?.obtenir() ?? null,
     signaler: () => deps.pda?.obtenir()?.signaler(),
   });
-  registerEcrituresRoutes(app, { board: deps.board ?? null, cell: deps.config.mesh.cell, porte });
+  registerEcrituresRoutes(app, {
+    board: deps.board ?? null,
+    cell: deps.config.mesh.cell,
+    porte,
+    proxySocket: deps.config.mesh.proxySocket,
+    proxyLectureSeule: deps.config.mesh.proxyLectureSeule,
+  });
   deps.pda?.lierExecuteur?.(
     (ligne) => porte.executerConfirmee(ligne),
     (ligne) => porte.preparerConsommation(ligne),

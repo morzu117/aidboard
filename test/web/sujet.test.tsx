@@ -82,6 +82,8 @@ test.each([
     ...(mesh && {
       mesh: {
         state: {
+          ecritures: false,
+          proxyConfigure: false,
           connected: false,
           tailscale: 'absent' as const,
           monitor: 'absent' as const,
@@ -929,6 +931,8 @@ test('« Ouvrir la cell swarph » n’apparaît qu’avec un mesh configuré, et
     ...snapshot({ workspaces: [ws()], topics: [topic()], runs: [run] }),
     mesh: {
       state: {
+        ecritures: false,
+        proxyConfigure: false,
         connected: true,
         tailscale: 'running',
         monitor: 'running',

@@ -101,6 +101,8 @@ function snapshot(): StateSnapshot {
     swairm: { enabled: true },
     mesh: {
       state: {
+        ecritures: true,
+        proxyConfigure: true,
         connected: true,
         tailscale: 'running',
         monitor: 'running',

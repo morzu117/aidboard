@@ -1,0 +1,59 @@
+{
+  "peers": [
+    {
+      "url": "https://example.com",
+      "capabilities": {
+        "swarph_cli_version": "1.0"
+      },
+      "registered_at": "2026-11-01T00:00:00Z",
+      "last_health": null,
+      "last_seen": null,
+      "enabled": 1,
+      "ratified": false,
+      "ratified_at": null,
+      "ratified_by": null,
+      "ratification_reason": null,
+      "name": "peer-a"
+    },
+    {
+      "url": "https://example.com",
+      "capabilities": {},
+      "registered_at": "2026-11-01T00:00:00Z",
+      "last_health": null,
+      "last_seen": null,
+      "enabled": 1,
+      "ratified": false,
+      "ratified_at": null,
+      "ratified_by": null,
+      "ratification_reason": null,
+      "name": "peer-b"
+    },
+    {
+      "url": "https://example.com",
+      "capabilities": {},
+      "registered_at": "2026-11-01T00:00:00Z",
+      "last_health": null,
+      "last_seen": null,
+      "enabled": 1,
+      "ratified": false,
+      "ratified_at": null,
+      "ratified_by": null,
+      "ratification_reason": null
+    },
+    {
+      "url": "https://example.com",
+      "capabilities": {
+        "swarph_cli_version": 42
+      },
+      "registered_at": "2026-11-01T00:00:00Z",
+      "last_health": null,
+      "last_seen": null,
+      "enabled": 1,
+      "ratified": false,
+      "ratified_at": null,
+      "ratified_by": null,
+      "ratification_reason": null,
+      "name": "peer-c"
+    }
+  ]
+}

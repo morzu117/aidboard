@@ -22,6 +22,10 @@ type Action = 'retour' | 'relire' | 'doctor' | null;
 
 /** Message et action de chaque erreur classée par le daemon (D95, spec Board « Messages »). */
 export const MESSAGES_BOARD: Record<BoardErrorKind, { texte: string; action: Action }> = {
+  'proxy-indisponible': {
+    texte: 'Les liens ne sont pas disponibles par le proxy.',
+    action: null,
+  },
   'no-index': { texte: 'Aucun index local', action: null },
   'not-configured': { texte: 'Non configuré', action: null },
   forbidden: { texte: 'Tu ne peux pas lire cette carte', action: 'retour' },

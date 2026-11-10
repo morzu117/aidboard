@@ -148,6 +148,8 @@ test('liens discrets, serveurs, et « Connecter à swarph » sans mesh ; l’ét
     etat({
       mesh: {
         state: {
+          ecritures: false,
+          proxyConfigure: false,
           connected: true,
           tailscale: 'running',
           monitor: 'running',

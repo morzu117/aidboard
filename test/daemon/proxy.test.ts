@@ -1,6 +1,11 @@
 import { writeFile } from 'node:fs/promises';
-import { afterEach, expect, test } from 'vitest';
-import { creerProxyClient, lireReponseProxy, VERBES_PROXY } from '../../src/daemon/mesh/proxy.js';
+import { afterEach, expect, expectTypeOf, test } from 'vitest';
+import {
+  creerProxyClient,
+  lireReponseProxy,
+  VERBES_LECTURE,
+  VERBES_PROXY,
+} from '../../src/daemon/mesh/proxy.js';
 import { parseConfig } from '../../src/daemon/config.js';
 import { creerFauxProxy, type ScenarioProxy } from '../fixtures/faux-proxy.js';
 
@@ -143,9 +148,35 @@ test('une connexion et un UUID par appel ; UUID injectable', async () => {
 test('D262 : proxySocket vide par défaut, chaîne acceptée, autres types refusés', () => {
   expect(parseConfig('').mesh.proxySocket).toBe('');
   expect(parseConfig('mesh:\n  proxySocket: ""').mesh.proxySocket).toBe('');
-  expect(parseConfig('mesh:\n  proxySocket: /tmp/proxy.sock').mesh.proxySocket).toBe(
-    '/tmp/proxy.sock',
-  );
+  expect(
+    parseConfig('mesh:\n  proxySocket: /tmp/proxy.sock\n  inboxLog: /tmp/inbox.log').mesh
+      .proxySocket,
+  ).toBe('/tmp/proxy.sock');
   for (const valeur of ['42', 'true', 'null', '[]', '{}'])
     expect(() => parseConfig(`mesh:\n  proxySocket: ${valeur}`)).toThrow('mesh.proxySocket');
 });
+
+test('body tableau accepté uniquement par le client de lecture', async () => {
+  const body = [{ slug: 'page-a' }];
+  const { proxy, client } = await preparer({ reponse: { ok: true, status: 200, body } });
+  const lecture = creerProxyClient({ socket: proxy.socket, verbes: VERBES_LECTURE });
+  expect(await lecture.appeler('memory.list', {})).toEqual({ ok: true, status: 200, body });
+  expect(await client.appeler('mesh.send', {})).toEqual({ ok: false, code: 'format' });
+  const ecriture = creerProxyClient({ socket: proxy.socket, verbes: VERBES_PROXY });
+  const resultat = await ecriture.appeler('mesh.send', {});
+  expect(resultat).toEqual({ ok: false, code: 'format' });
+  if (resultat.ok) expectTypeOf(resultat.body).toEqualTypeOf<Record<string, unknown>>();
+  const resultatParDefaut = await client.appeler('mesh.send', {});
+  if (resultatParDefaut.ok)
+    expectTypeOf(resultatParDefaut.body).toEqualTypeOf<Record<string, unknown>>();
+});
+
+test.each([null, 'texte', 42, true])(
+  'body primitif refusé dans les deux modes : %j',
+  async (body) => {
+    const { proxy, client } = await preparer({ reponse: { ok: true, status: 200, body } });
+    const lecture = creerProxyClient({ socket: proxy.socket, verbes: VERBES_LECTURE });
+    expect(await lecture.appeler('mesh.peers', {})).toEqual({ ok: false, code: 'format' });
+    expect(await client.appeler('mesh.send', {})).toEqual({ ok: false, code: 'format' });
+  },
+);

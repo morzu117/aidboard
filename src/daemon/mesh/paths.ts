@@ -20,6 +20,6 @@ export function meshPaths(cfg: MeshConfig, home: string): MeshPaths {
     cellFile: cfg.cellFile || join(confDir, 'cells', `${cfg.cell}.yaml`),
     tokenFile: join(confDir, `${cfg.cell}.peer_token`),
     stateRoot,
-    inboxLog: join(stateRoot, cfg.cell, 'mesh-sidecar', 'inbox.log'),
+    inboxLog: cfg.inboxLog || join(stateRoot, cfg.cell, 'mesh-sidecar', 'inbox.log'),
   };
 }

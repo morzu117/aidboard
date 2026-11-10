@@ -84,6 +84,8 @@ function ouvrir(champs = {}, mesh = true) {
             mesh: {
               state: {
                 cell: 'peer-a',
+                ecritures: true,
+                proxyConfigure: true,
                 connected: true,
                 tailscale: 'running',
                 monitor: 'running',
@@ -271,6 +273,29 @@ test('D275 levé : une obligation à conditions se clôt avec preuves et skipped
     params: { issue: 'skipped', preuves: { c1: 'Première preuve', c2: 'Seconde preuve' } },
   });
   expect((envois(h)[0]!.body as { params: object }).params).not.toHaveProperty('preuve');
+});
+
+test('D283 : envoyerEtat reconnaît le 409 lecture seule', async () => {
+  const client = new AidClient({
+    fetchImpl: async () => json(409, { error: 'proxy_lecture_seule' })(),
+  });
+  expect(
+    await envoyerEtat(
+      'obligation.prendre',
+      { carte: 42, obligation: 81, attendu: { status: 'open' } },
+      client,
+    ),
+  ).toEqual({ code: 'proxy_lecture_seule' });
+});
+
+test('D283 : le dialogue traduit le 409 lecture seule', async () => {
+  const h = ouvrir();
+  h.respond.set('POST /api/swarph/etat/envoyer', json(409, { error: 'proxy_lecture_seule' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Prendre' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Confirmer' }));
+  expect(
+    await screen.findByText('Le proxy de ta cellule est en lecture seule : rien ne peut partir.'),
+  ).toBeTruthy();
 });
 
 test('envoyerEtat reconnaît la confirmation requise sans relancer', async () => {

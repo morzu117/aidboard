@@ -17,6 +17,13 @@ export function EtatsSwarph376<T>({
 }) {
   if (erreur) return <MessageBoard kind="unknown" node={`${node}.erreur`} onRelire={relire} />;
   if (!result || result.ok) return null;
+  if (result.kind === 'proxy-indisponible') {
+    return (
+      <p data-node={`${node}.etat`} data-kind={result.kind}>
+        Les liens ne sont pas disponibles par le proxy.
+      </p>
+    );
+  }
   const texte =
     result.kind === 'no-index'
       ? "Aucun index local. Ce n'est pas un résultat négatif : rien n'a été cherché."

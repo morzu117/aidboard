@@ -16,6 +16,7 @@ export type BoardErrorKind =
   // `gateway 404` : la carte n'existe pas (D95 bis)
   | 'not-found'
   | 'no-index'
+  | 'proxy-indisponible'
   | 'not-configured'
   | 'unknown';
 

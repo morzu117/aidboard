@@ -1,3 +1,9 @@
+import {
+  creerLecteurCli,
+  creerLecteurProxy,
+  type Lecteur,
+  type ResultatLecture,
+} from './lecteur.js';
 import type { BoardResult, Parsed } from '../../shared/board.js';
 import {
   parsePeers,
@@ -16,7 +22,7 @@ import type { MeshService } from './service.js';
 import type { MeshExecResult } from './exec.js';
 
 interface Lecture {
-  exec: MeshExecResult;
+  exec: ResultatLecture;
   readAt: string;
 }
 interface Entree {
@@ -27,6 +33,7 @@ interface Entree {
 export interface SwarphReaderDeps {
   mesh: Pick<MeshService, 'read' | 'current'>;
   cell: string;
+  proxySocket?: string;
   gateway?: string;
   log: (ligne: string) => void;
   now?: () => number;
@@ -35,7 +42,12 @@ export interface SwarphReaderDeps {
 /** Six lectures fermées, cache de 5 s et fusion des demandes en cours (D239). */
 export class SwarphReader {
   private readonly cache = new Map<string, Entree>();
-  constructor(private readonly deps: SwarphReaderDeps) {}
+  private readonly lecteur: Lecteur;
+  constructor(private readonly deps: SwarphReaderDeps) {
+    this.lecteur = deps.proxySocket
+      ? creerLecteurProxy(deps.proxySocket)
+      : creerLecteurCli(deps.mesh);
+  }
 
   monitor() {
     return this.deps.mesh.current();
@@ -112,7 +124,7 @@ export class SwarphReader {
     opts: ReadOpts,
   ): Promise<BoardResult<T>> {
     const memoire = args[0] === 'memory';
-    if (memoire && !this.deps.gateway) {
+    if (memoire && !this.deps.gateway && !this.deps.proxySocket) {
       return { ok: false, kind: 'not-configured', readAt: new Date(this.now()).toISOString() };
     }
     const { exec, readAt } = await this.exec(args, opts.fresh === true);
@@ -124,14 +136,16 @@ export class SwarphReader {
     ) {
       return { ok: false, kind: 'no-index', readAt };
     }
-    const kind = classify(exec);
+    const kind = exec.kind ?? classify(exec);
     if (kind !== null) {
       this.deps.log(`swarph : ${args[0]} : ${kind} : ${exec.stderr.trim()}`);
       return { ok: false, kind, readAt };
     }
     let valeur: Parsed<T> | null;
     try {
-      valeur = parse(args[0] === 'mesh' ? exec.stdout : JSON.parse(exec.stdout));
+      valeur = parse(
+        args[0] === 'mesh' && !this.deps.proxySocket ? exec.stdout : JSON.parse(exec.stdout),
+      );
     } catch {
       valeur = null;
     }
@@ -156,8 +170,8 @@ export class SwarphReader {
           }
         : { env: { SWARPH_SELF: this.deps.cell } };
     options.unset = ['GBRAIN_TOKEN', 'SWARPH_BRAIN_TOKEN'];
-    entree.result = this.deps.mesh
-      .read(args, options)
+    entree.result = (args[0] === 'codegraph' ? creerLecteurCli(this.deps.mesh) : this.lecteur)
+      .lire(args, options)
       .catch((err: unknown): MeshExecResult => ({
         ok: false,
         timedOut: false,

@@ -1,0 +1,38 @@
+{
+  "id": 101,
+  "project_id": 42,
+  "title": "Carte de test sans responsable",
+  "body": "Corps de la carte 101.\n<b>pas du HTML</b>",
+  "stage": "idea",
+  "assignee": null,
+  "ai2": false,
+  "priority": 5,
+  "checklists": {
+    "spec": [],
+    "plan": [],
+    "build": [],
+    "test": []
+  },
+  "links": {},
+  "created_by": "peer-a",
+  "created_at": "2026-11-04T07:10:56.879631+00:00",
+  "updated_at": "2026-11-04T07:10:56.879631+00:00",
+  "stage_history": [
+    {
+      "stage": "idea",
+      "by": "peer-a",
+      "at": "2026-11-04T07:10:56.879631+00:00"
+    }
+  ],
+  "move_ready": false,
+  "body_history": [],
+  "link_stamps": {},
+  "labels": [],
+  "due_at": null,
+  "thread_uuid": "00000000-0000-0000-0000-000000000101",
+  "claimed_actor": "peer-a",
+  "trusted_author_column": "created_by",
+  "body_version": 1,
+  "open_obligations": [],
+  "tasks": []
+}

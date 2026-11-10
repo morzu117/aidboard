@@ -252,6 +252,8 @@ const dm = (over: Partial<MeshDm>): MeshDm => ({
 });
 const meshEtat = (over: Partial<MeshState> = {}, tailscaleManage = false) => ({
   state: {
+    ecritures: false,
+    proxyConfigure: false,
     connected: true,
     tailscale: 'running' as const,
     monitor: 'running' as const,

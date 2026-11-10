@@ -1,0 +1,80 @@
+{
+  "menu": {
+    "source": "fleet",
+    "version": 1
+  },
+  "menu_version": 1,
+  "labels": [],
+  "steps": [
+    {
+      "step": "build",
+      "mandatory": true,
+      "state": "unstaffable (no registered peer holds an explicit execute grant on project 42 outside distinct_from — grant one, then ask)",
+      "default": null,
+      "holder": null,
+      "hours": 24,
+      "delivery": "ref",
+      "evidence": null,
+      "row": null,
+      "needs": [],
+      "due": null,
+      "retries": null,
+      "events": [],
+      "eligible": [],
+      "prior_rows": []
+    },
+    {
+      "step": "validate",
+      "mandatory": true,
+      "state": "unstaffable (no registered peer holds an explicit execute grant on project 42 outside distinct_from — grant one, then ask)",
+      "default": null,
+      "holder": null,
+      "hours": 24,
+      "delivery": "ref",
+      "evidence": null,
+      "row": null,
+      "needs": [],
+      "due": null,
+      "retries": null,
+      "events": [],
+      "eligible": [],
+      "prior_rows": []
+    },
+    {
+      "step": "spec-review",
+      "mandatory": false,
+      "state": "not-taken",
+      "default": null,
+      "holder": null,
+      "hours": 24,
+      "delivery": "ref",
+      "evidence": null,
+      "row": null,
+      "needs": [],
+      "due": null,
+      "retries": null,
+      "events": [],
+      "eligible": [],
+      "prior_rows": []
+    }
+  ],
+  "unstepped": [],
+  "missing": ["build", "validate"],
+  "flow": {
+    "confirmed": false,
+    "unconfirmed": ["build", "validate"],
+    "defaults": {},
+    "confirm_with": "…"
+  },
+  "grandfathered": null,
+  "stage_implied": "pre-build (graph unfilled)",
+  "gate": {
+    "mode": "enforce"
+  },
+  "review_routing": "both",
+  "judge": null,
+  "as_of": "2026-11-04T07:10:56.879631+00:00",
+  "card_id": 101,
+  "stage": "idea",
+  "assignee": null
+}
