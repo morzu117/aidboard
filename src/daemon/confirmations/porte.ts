@@ -1,12 +1,16 @@
-import { validerParamsAction } from '../../shared/confirmations.js';
+import { createHash } from 'node:crypto';
+import type { ResultatEnvoi } from '../../shared/ecritures.js';
+import { ACTIONS_MESH, validerParamsAction } from '../../shared/confirmations.js';
 import type { FastifyRequest } from 'fastify';
 import { jsonCanonique, type ParametresActions, type ParamsAction } from '../../shared/pda.js';
 import type { Db } from '../db.js';
 import { AidHttpError } from '../errors.js';
+import { DemandeTropGrande } from '../pda/demande.js';
 import type { FilePda, LigneDemande } from '../pda/file.js';
 import { creerReglage } from './reglage.js';
 
 export type ActionPorte =
+  | 'mesh.ecrire'
   | 'merge'
   | 'push'
   | 'nettoyage'
@@ -17,6 +21,7 @@ export type ActionPorte =
   | 'host.option'
   | 'desarmement';
 export interface EntreeAction {
+  params?: unknown;
   topicId?: string;
   workspaceId?: string;
   strategy?: 'squash' | 'merge' | 'rebase';
@@ -27,7 +32,7 @@ export interface EntreeAction {
   confirmUnmerged?: number;
   dirtyAction?: 'stash' | 'force';
   confirmed?: boolean;
-  action?: ParametresActions['reglage']['action'];
+  action?: ParametresActions['reglage']['action'] | ParametresActions['mesh.ecrire']['action'];
   actif?: boolean;
   appairageId?: string;
   sansIdentite?: boolean;
@@ -36,6 +41,7 @@ export interface EntreeAction {
   option?: 'code' | 'push';
 }
 export interface ContexteAction {
+  envoi?: ResultatEnvoi;
   confirmation: boolean;
   amorcage?: boolean;
   entree?: EntreeAction;
@@ -115,7 +121,11 @@ export function creerPorte(deps: {
     },
     async demander<A extends ActionPorte>(action: A, entree: EntreeAction, req: FastifyRequest) {
       if (req.principal?.kind !== 'admin') throw new AidHttpError(403, 'admin seulement');
-      const confirmation = reglage.arme() && reglage.exige(action);
+      const arme = reglage.arme();
+      if (ACTIONS_MESH.has(action) && !arme) throw new AidHttpError(409, 'confirmation_requise');
+      const confirmation = arme && reglage.exige(action);
+      if (ACTIONS_MESH.has(action) && !confirmation)
+        throw new AidHttpError(409, 'confirmation_requise');
       const params = await deps.actions[action].preparer(entree, { confirmation, entree });
       if (!confirmation) return { direct: params };
       const file = deps.file();
@@ -126,7 +136,10 @@ export function creerPorte(deps: {
         throw new AidHttpError(409, 'confirmation_impossible', {
           message: 'Allume le PDA et active un téléphone pour cette action',
         });
-      const { id } = await file.creerDemande({ action, params } as ParamsAction);
+      const { id } = await file.creerDemande({ action, params } as ParamsAction).catch((e) => {
+        if (e instanceof DemandeTropGrande) throw new AidHttpError(413, 'demande_trop_grande');
+        throw e;
+      });
       return { confirmation: id };
     },
     async executer<A extends ActionPorte>(
@@ -148,6 +161,26 @@ export function creerPorte(deps: {
       let params: ParametresActions[ActionPorte];
       try {
         params = JSON.parse(ligne.params);
+        if (action === 'mesh.ecrire') {
+          const stockee = deps.db
+            .prepare('SELECT resume, cree_a FROM pda_demandes WHERE id = ?')
+            .get(ligne.id) as { resume: string; cree_a: string };
+          const corps = {
+            v: 2,
+            id: ligne.id,
+            action,
+            classe: ligne.classe,
+            params,
+            resume: stockee.resume,
+            numero: ligne.numero,
+            echeance: ligne.echeance,
+            emise: Date.parse(stockee.cree_a),
+          };
+          if (
+            createHash('sha256').update(jsonCanonique(corps)).digest('base64url') !== ligne.hDemande
+          )
+            throw new Error('perime');
+        }
         if (!validerParamsAction(action, params)) throw new Error('schema');
         const relus = await definition.preparer(reconstruire(action, params), {
           confirmation: true,
@@ -159,8 +192,14 @@ export function creerPorte(deps: {
         return;
       }
       try {
-        await definition.executer(params, { confirmation: true });
-        terminer(ligne.id, 'executee');
+        const ctx: ContexteAction = { confirmation: true };
+        await definition.executer(params, ctx);
+        if (ctx.envoi) {
+          deps.db
+            .prepare('UPDATE pda_demandes SET envoi = ? WHERE id = ?')
+            .run(JSON.stringify(ctx.envoi), ligne.id);
+          terminer(ligne.id, ctx.envoi.code === 'succes' ? 'executee' : 'echouee');
+        } else terminer(ligne.id, 'executee');
       } catch (e) {
         terminer(
           ligne.id,

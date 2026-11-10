@@ -441,3 +441,20 @@ test('faux numéro signé : motif dans l’attente et les dernières demandes', 
   });
   await screen.findByText('Merge du sujet — Annulée : mauvais numéro saisi sur le téléphone');
 });
+
+test('le réglage mesh.ecrire est toujours actif et non modifiable', async () => {
+  const h = setup(<PanneauConfirmations />, snapshot(), '/', {
+    ...routes,
+    'GET /api/confirmations/reglage': json(200, {
+      ...reglage,
+      actions: [{ action: 'mesh.ecrire', actif: false }],
+    }),
+  });
+  const ligne = await screen.findByRole('switch', {
+    name: 'Écrire sur le mesh — Toujours confirmée',
+  });
+  expect(ligne).toHaveProperty('checked', true);
+  expect(ligne).toHaveProperty('disabled', true);
+  ligne.click();
+  expect(h.calls.some((c) => c.method === 'PUT')).toBe(false);
+});

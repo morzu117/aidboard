@@ -197,7 +197,6 @@ export async function buildServer(deps: ServerDeps): Promise<FastifyInstance> {
   );
   registerMeshRoutes(app, { mesh: deps.mesh ?? null });
   registerBoardRoutes(app, { board: deps.board ?? null });
-  registerEcrituresRoutes(app, { board: deps.board ?? null, cell: deps.config.mesh.cell });
   registerSwarphRoutes(app, { swarph: deps.swarph ?? null });
   registerSwairmRoutes(app, deps.swairmAsk ?? new SwairmAsk(deps.config.swairm.bin));
   registerDaemonRoutes(app, {
@@ -225,6 +224,7 @@ export async function buildServer(deps: ServerDeps): Promise<FastifyInstance> {
     file: () => deps.pda?.obtenir() ?? null,
     signaler: () => deps.pda?.obtenir()?.signaler(),
   });
+  registerEcrituresRoutes(app, { board: deps.board ?? null, cell: deps.config.mesh.cell, porte });
   deps.pda?.lierExecuteur?.(
     (ligne) => porte.executerConfirmee(ligne),
     (ligne) => porte.preparerConsommation(ligne),

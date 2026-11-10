@@ -302,6 +302,7 @@ function Fiche({ s, relire }: { s: BoardCardSheet; relire: () => void }) {
           <button onClick={() => setEcriture(true)}>Écrire une note (à blanc)</button>
           {ecriture && (
             <EcrireAuMesh
+              onRelire={relire}
               action="carte.note"
               valeurs={{ carte: c.id }}
               onClose={() => setEcriture(false)}

@@ -1,6 +1,7 @@
 import { randomBytes, randomInt, sign } from 'node:crypto';
 import {
   CONTEXTE_DEMANDE,
+  TAILLE_MAX_DEMANDE,
   hacher,
   jsonCanonique,
   lireCorpsDemande,
@@ -12,6 +13,12 @@ import {
   type CorpsDemandeV1,
 } from '../../shared/pda.js';
 import { creerFournisseurClePda } from './cle.js';
+
+export class DemandeTropGrande extends Error {
+  constructor() {
+    super('Demande trop grande');
+  }
+}
 
 type EntreeV1 = { action: 'essai'; sujet: string; maintenant: number };
 type EntreeSignee = EntreeV1 | (ParamsAction & { maintenant: number });
@@ -59,6 +66,7 @@ export async function signerDemande(
           emise: maintenant,
         } as CorpsDemandeV2);
   const octets = Buffer.from(jsonCanonique(corps), 'utf8');
+  if (octets.byteLength > TAILLE_MAX_DEMANDE) throw new DemandeTropGrande();
   lireCorpsDemande(octets);
   const sig = sign('sha256', Buffer.concat([Buffer.from(CONTEXTE_DEMANDE), octets]), {
     key: fournisseur.obtenir(),

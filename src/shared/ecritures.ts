@@ -10,7 +10,7 @@ export interface ParametresEcriture {
   'canal.poster': MessageEcriture & { canal: string };
 }
 export type ActionEcriture = keyof ParametresEcriture;
-type Ecriture = {
+export type Ecriture = {
   [A in ActionEcriture]: { action: A; params: ParametresEcriture[A] };
 }[ActionEcriture];
 const nom = (v: unknown): v is string =>
@@ -151,4 +151,49 @@ export function lireReponseEcriture(
   if (!entier(p.id) || !Array.isArray(p.open_obligations) || !p.open_obligations.every(entier))
     return { ok: false, kind: 'format' };
   return { ok: true, id: p.id, open_obligations: [...p.open_obligations], closed_obligations: [] };
+}
+
+/** Schéma fermé du proxy : seuls les champs de D264 quittent le daemon. */
+export function argsProxy<A extends ActionEcriture>(action: A, params: ParametresEcriture[A]) {
+  if (!lireParamsEcriture(action, params, '').ok)
+    throw new Error('Paramètres d’écriture invalides');
+  const p = { action, params } as Ecriture;
+  const commun = { content: p.params.texte, kind: p.params.kind };
+  switch (p.action) {
+    case 'carte.note':
+      return {
+        verb: 'board.cards.say',
+        args: {
+          id: p.params.carte,
+          ...commun,
+          ...(p.params.a !== null && { to_node: p.params.a }),
+        },
+      };
+    case 'dm.envoyer':
+      if (p.params.fil !== null) throw new Error(REFUS_FIL_PROXY);
+      return { verb: 'mesh.send', args: { to_node: p.params.pair, ...commun } };
+    case 'canal.poster':
+      return { verb: 'channel.post', args: { channel: p.params.canal, ...commun } };
+  }
+}
+export const REFUS_FIL_PROXY =
+  'Un DM dans un fil ne peut pas encore partir par le proxy. Copie la commande, ou envoie-le hors fil.';
+export interface ResultatEnvoi {
+  code:
+    | 'succes'
+    | 'verb_not_allowed'
+    | 'bad_args'
+    | 'peer_not_allowed'
+    | 'proxy_unavailable'
+    | 'upstream_unreachable'
+    | 'upstream_ambiguous'
+    | 'upstream_error'
+    | 'delai'
+    | 'interrompu'
+    | 'connexion'
+    | 'format'
+    | 'obligation-close';
+  id?: number;
+  open_obligations: number[];
+  status?: number;
 }

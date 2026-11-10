@@ -1,10 +1,19 @@
+import { AidApiError } from '../data/api.js';
+import { AttenteConfirmation } from './AttenteConfirmation.js';
 import { useEffect, useId, useRef, useState } from 'react';
 import {
   KINDS_ECRITURE,
   type ActionEcriture,
   type KindEcriture,
 } from '../../../src/shared/ecritures.js';
-import { apercuEcriture, type ApercuEcriture } from '../data/ecritures.js';
+import {
+  envoyerEcriture,
+  envoiIncertain,
+  libelleEnvoi,
+  type ResultatEnvoi,
+  apercuEcriture,
+  type ApercuEcriture,
+} from '../data/ecritures.js';
 import { useAidClient } from '../data/useAidState.js';
 import { Dialogue } from '../dialogues/Dialogue.js';
 
@@ -13,6 +22,7 @@ export function EcrireAuMesh({
   valeurs = {},
   choix = false,
   onClose,
+  onRelire,
 }: {
   action: ActionEcriture;
   valeurs?: {
@@ -26,8 +36,15 @@ export function EcrireAuMesh({
   };
   choix?: boolean;
   onClose: () => void;
+  onRelire?: () => void;
 }) {
   const client = useAidClient();
+  const [proxyAbsent, setProxyAbsent] = useState(false);
+  const [envoye, setEnvoye] = useState(false);
+  const verrou = useRef(false);
+  const [terminee, setTerminee] = useState(false);
+  const [confirmation, setConfirmation] = useState<string | null>(null);
+  const [resultat, setResultat] = useState<ResultatEnvoi | null>(null);
   const idTexte = useId();
   const idKind = useId();
   const idDestination = useId();
@@ -54,6 +71,11 @@ export function EcrireAuMesh({
   }, []);
   function effacer() {
     setApercu(null);
+    verrou.current = false;
+    setEnvoye(false);
+    setConfirmation(null);
+    setTerminee(false);
+    setResultat(null);
     setErreur('');
     setCopie('');
   }
@@ -71,6 +93,46 @@ export function EcrireAuMesh({
       );
     } catch {
       setErreur('Impossible de lire l’aperçu. Réessaie.');
+    } finally {
+      setAttente(false);
+    }
+  }
+  async function envoyer() {
+    if (verrou.current || proxyAbsent) return;
+    verrou.current = true;
+    setEnvoye(true);
+    setConfirmation(null);
+    setTerminee(false);
+    setErreur('');
+    setAttente(true);
+    const commun = { texte, kind };
+    try {
+      const r = await (action === 'carte.note'
+        ? envoyerEcriture(action, { ...commun, carte: Number(carte), a: a || null }, client)
+        : action === 'dm.envoyer'
+          ? envoyerEcriture(action, { ...commun, pair, fil: valeurs.fil ?? null }, client)
+          : envoyerEcriture(action, { ...commun, canal }, client));
+      if ('confirmation' in r) setConfirmation(r.confirmation);
+      else setResultat(r);
+    } catch (e) {
+      if (e instanceof AidApiError && e.status === 409 && e.body.error === 'proxy_absent')
+        setProxyAbsent(true);
+      else if (
+        e instanceof AidApiError &&
+        e.status === 409 &&
+        e.body.error === 'confirmation_requise'
+      )
+        setErreur(
+          "La porte des confirmations n'est pas armée : arme-la depuis ton téléphone pour écrire sur le mesh. Rien n'est parti.",
+        );
+      else
+        setErreur(
+          e instanceof AidApiError && typeof e.body.message === 'string'
+            ? e.body.message
+            : e instanceof Error
+              ? e.message
+              : 'Envoi impossible.',
+        );
     } finally {
       setAttente(false);
     }
@@ -113,7 +175,7 @@ export function EcrireAuMesh({
           }
         }}
       >
-        <fieldset disabled={attente} onChange={effacer}>
+        <fieldset disabled={attente || (confirmation !== null && !terminee)} onChange={effacer}>
           <label htmlFor={idTexte}>Texte</label>
           <textarea id={idTexte} value={texte} onChange={(e) => setTexte(e.target.value)} />
           <label htmlFor={idKind}>Kind</label>
@@ -165,7 +227,9 @@ export function EcrireAuMesh({
               <p>Ce post serait lu par tous les membres du canal.</p>
             </>
           )}
-          <button onClick={() => void voir()}>Voir l&apos;aperçu</button>
+          <button disabled={envoye} onClick={() => void voir()}>
+            Voir l&apos;aperçu
+          </button>
         </fieldset>
         {apercu &&
           (apercu.ok ? (
@@ -184,9 +248,52 @@ export function EcrireAuMesh({
                     </p>
                   ))
                 ))}
-              <p>
-                À blanc : rien n&apos;est parti. L&apos;envoi viendra avec le proxy local (#20).
-              </p>
+              {!resultat && !confirmation && (
+                <p>
+                  À blanc : rien n&apos;est parti. L&apos;envoi viendra avec le proxy local (#20).
+                </p>
+              )}
+              <button disabled={proxyAbsent || envoye} onClick={() => void envoyer()}>
+                Envoyer
+              </button>
+              {proxyAbsent && (
+                <p>
+                  Le proxy de ta cellule n&apos;est pas configuré. Rien ne peut partir ;
+                  l&apos;aperçu reste disponible.
+                </p>
+              )}
+              {confirmation && (
+                <>
+                  {!terminee && <p>En attente de ta confirmation sur le téléphone.</p>}
+                  <AttenteConfirmation
+                    key={confirmation}
+                    id={confirmation}
+                    onTerminee={(d) => {
+                      if (d?.envoi) setResultat(d.envoi);
+                      if (!d || (!d.envoi && (d.resultat === 'annulee' || d.etat === 'expiree'))) {
+                        verrou.current = false;
+                        setEnvoye(false);
+                      }
+                      setTerminee(true);
+                    }}
+                  />
+                </>
+              )}
+              {resultat && <p role="status">{libelleEnvoi(resultat)}</p>}
+              {resultat &&
+                envoiIncertain(resultat) &&
+                (action === 'carte.note' ? (
+                  <button
+                    onClick={() => {
+                      onClose();
+                      onRelire?.();
+                    }}
+                  >
+                    Relire le fil
+                  </button>
+                ) : (
+                  <p>Vérifie la Boîte ou le canal avant de réessayer.</p>
+                ))}
               <button onClick={() => void copier(commande, 'commande')}>Copier la commande</button>
               {copie === 'commande' && <span role="status">Copié</span>}
               <p>

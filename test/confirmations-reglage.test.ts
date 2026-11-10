@@ -38,10 +38,10 @@ test('migration additive : anciennes demandes, valeurs initiales et contraintes'
     VALUES ('ancienne', 'essai', 'test', 'hash', '1234', 100, 'ouverte', 'date')`,
   ).run();
   migrate(db);
-  expect(db.pragma('user_version', { simple: true })).toBe(24);
+  expect(db.pragma('user_version', { simple: true })).toBe(25);
   const reglage = creerReglage(db);
   expect(reglage.lire()).toEqual(
-    ['merge', 'push', 'nettoyage', 'projet.retirer'].map((action) => ({
+    ['merge', 'push', 'nettoyage', 'projet.retirer', 'mesh.ecrire'].map((action) => ({
       action,
       actif: true,
       modifieA: null,
@@ -73,7 +73,7 @@ test('migration additive : anciennes demandes, valeurs initiales et contraintes'
     db.exec("INSERT INTO confirmations_reglage (action, actif) VALUES ('inconnue', 0)"),
   ).toThrow(/CHECK/);
   migrate(db);
-  expect(reglage.lire()).toHaveLength(4);
+  expect(reglage.lire()).toHaveLength(5);
 });
 
 test('plancher toujours et essai, réglage immédiat, armement idempotent et réarmement', () => {
@@ -196,4 +196,13 @@ test('routes admin du Mac seulement, rallumage immédiat et coupure différée',
       ).statusCode,
     ).toBe(404);
   }
+});
+
+test('mesh.ecrire reste exigée et affichée active malgré une ancienne ligne à zéro', () => {
+  const db = base();
+  const reglage = creerReglage(db);
+  db.prepare("UPDATE confirmations_reglage SET actif = 0 WHERE action = 'mesh.ecrire'").run();
+  expect(reglage.exige('mesh.ecrire')).toBe(true);
+  expect(reglage.lire().find((l) => l.action === 'mesh.ecrire')?.actif).toBe(true);
+  expect(() => reglage.couperConfirme('mesh.ecrire')).toThrow('confirmation obligatoire');
 });

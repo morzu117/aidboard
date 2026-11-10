@@ -1,7 +1,9 @@
+import { creerActionEcriture } from './ecritures.js';
+import type { BoardReader } from '../mesh/board.js';
 import { creerActionsHost, type DependancesHost } from './host.js';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
-import { resumeAction, type ParametresActions } from '../../shared/confirmations.js';
+import { ACTIONS_MESH, resumeAction, type ParametresActions } from '../../shared/confirmations.js';
 import { lirePr } from '../../shared/livraison.js';
 import { startAction, scriptEnv, type ActionContext, type ActionSpec } from '../actions/service.js';
 import { findAssetDir } from '../assets.js';
@@ -33,6 +35,7 @@ const LIVE = ['starting', 'working', 'needs_input', 'idle'];
 
 export function creerActionsConfirmation(
   deps: DependancesHost & {
+    board?: BoardReader | null;
     db: Db;
     config?: AidConfig;
     actions?: ActionContext;
@@ -120,6 +123,7 @@ export function creerActionsConfirmation(
   };
   return {
     ...creerActionsHost(deps),
+    'mesh.ecrire': creerActionEcriture(deps),
     push: {
       async preparer(entree, ctx) {
         const { topic, ws } = lireSujet(entree.topicId);
@@ -386,12 +390,18 @@ export function creerActionsConfirmation(
     },
     reglage: {
       async preparer(entree, ctx) {
+        if (ACTIONS_MESH.has(entree.action ?? ''))
+          throw new AidHttpError(400, 'confirmation obligatoire');
         if (
           entree.actif !== false ||
           !reglage.lire().some((l) => l.action === entree.action && l.actif)
         )
           throw new AidHttpError(409, 'réglage déjà coupé ou inconnu');
-        return signables('reglage', { action: entree.action!, actif: false }, ctx);
+        return signables(
+          'reglage',
+          { action: entree.action! as ParametresActions['reglage']['action'], actif: false },
+          ctx,
+        );
       },
       async executer(params) {
         deps.db.transaction(() => {

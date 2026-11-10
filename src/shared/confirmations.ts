@@ -1,4 +1,11 @@
+import {
+  lireParamsEcriture,
+  resumeEcriture,
+  type Ecriture,
+  type ActionEcriture,
+} from './ecritures.js';
 export interface ParametresActions {
+  'mesh.ecrire': Ecriture;
   merge: {
     topicId: string;
     depot: string;
@@ -22,13 +29,18 @@ export interface ParametresActions {
   appairage: { appairageId: string; nom: string; hIdentite: string | null; sansIdentite: boolean };
   'pda.activer': { appareilId: string; nom: string; empreinte: string };
   'host.option': { option: 'code' | 'push'; actif: boolean };
-  reglage: { action: 'merge' | 'push' | 'nettoyage' | 'projet.retirer'; actif: false };
+  reglage: {
+    action: 'merge' | 'push' | 'nettoyage' | 'projet.retirer' | 'mesh.ecrire';
+    actif: false;
+  };
   desarmement: Record<string, never>;
   essai: Record<string, never>;
 }
 export type ActionConfirmee = keyof ParametresActions;
+export const ACTIONS_MESH: ReadonlySet<string> = new Set(['mesh.ecrire']);
 export type ClasseConfirmation = 'toujours' | 'defaut';
 export const CLASSE_ACTION = Object.freeze({
+  'mesh.ecrire': 'toujours',
   merge: 'defaut',
   push: 'defaut',
   nettoyage: 'defaut',
@@ -89,6 +101,10 @@ const branche: Validation = (v) =>
   !v.includes('..') &&
   !/^[-/]/.test(v);
 const schemas: Record<ActionConfirmee, Record<string, Validation>> = {
+  'mesh.ecrire': {
+    action: choix('carte.note', 'dm.envoyer', 'canal.poster'),
+    params: () => true,
+  },
   merge: {
     topicId: identifiant,
     depot: (v) =>
@@ -124,7 +140,10 @@ const schemas: Record<ActionConfirmee, Record<string, Validation>> = {
     empreinte: motif(/^[A-Z2-7]{4}-[A-Z2-7]{4}$/),
   },
   'host.option': { option: choix('code', 'push'), actif: booleen },
-  reglage: { action: choix('merge', 'push', 'nettoyage', 'projet.retirer'), actif: choix(false) },
+  reglage: {
+    action: choix('merge', 'push', 'nettoyage', 'projet.retirer', 'mesh.ecrire'),
+    actif: choix(false),
+  },
   desarmement: {},
   essai: {},
 };
@@ -134,6 +153,7 @@ export function validerParamsAction(action: ActionConfirmee, params: unknown): b
   const schema = schemas[action];
   const p = params as Record<string, unknown>;
   return (
+    (action !== 'mesh.ecrire' || lireParamsEcriture(p.action as ActionEcriture, p.params, '').ok) &&
     (action !== 'merge' || p.nettoyer === true || p.teteNettoyage === null) &&
     Object.keys(p).length === Object.keys(schema).length &&
     Object.entries(schema).every(([cle, valider]) => Object.hasOwn(p, cle) && valider(p[cle]))
@@ -153,6 +173,9 @@ export function resumeAction(
   const p = { action, params } as ParamsAction;
   let resume: string;
   switch (p.action) {
+    case 'mesh.ecrire':
+      resume = resumeEcriture(p.params.action, p.params.params);
+      break;
     case 'merge':
       resume = `Merge de ${p.params.depot}#${p.params.pr} (${p.params.tete.slice(0, 7)}), ${p.params.strategie}, branche supprimée ${p.params.supprimerBranche ? 'oui' : 'non'}${p.params.nettoyer ? ', puis nettoyage' : ''}`;
       break;

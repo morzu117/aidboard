@@ -1,3 +1,4 @@
+import type { Porte } from '../confirmations/porte.js';
 import type { FastifyInstance } from 'fastify';
 import { argvEcriture, lireParamsEcriture, resumeEcriture } from '../../shared/ecritures.js';
 import { nettoyer } from '../../shared/nettoyage.js';
@@ -6,8 +7,27 @@ import type { BoardReader } from '../mesh/board.js';
 
 export function registerEcrituresRoutes(
   app: FastifyInstance,
-  deps: { board: BoardReader | null; cell: string; hotesPrives?: string[] },
+  deps: { board: BoardReader | null; cell: string; hotesPrives?: string[]; porte?: Porte },
 ): void {
+  app.post('/api/swarph/ecrire/envoyer', async (req, reply) => {
+    if (!deps.cell || !deps.board) throw new AidHttpError(404, 'mesh désactivé');
+    const corps = req.body as { action?: unknown; params?: unknown } | null;
+    if (
+      !corps ||
+      (corps.action !== 'carte.note' &&
+        corps.action !== 'dm.envoyer' &&
+        corps.action !== 'canal.poster')
+    )
+      throw new AidHttpError(400, 'action inconnue');
+    const demande = await deps.porte!.demander(
+      'mesh.ecrire',
+      { action: corps.action, params: corps.params },
+      req,
+    );
+    if ('confirmation' in demande)
+      return reply.code(202).send({ confirmation: demande.confirmation });
+    throw new AidHttpError(409, 'confirmation_requise');
+  });
   app.post('/api/swarph/ecrire/apercu', async (req) => {
     if (!deps.cell || !deps.board)
       throw new AidHttpError(404, 'mesh désactivé : `mesh.cell` vide dans config.yaml');

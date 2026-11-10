@@ -12,6 +12,10 @@ import { verifierAssertion } from '../src/daemon/pda/webauthn.js';
 
 const tete = 'abcdef0' + '1'.repeat(33);
 const exemples: ParametresActions = {
+  'mesh.ecrire': {
+    action: 'dm.envoyer',
+    params: { pair: 'peer-b', fil: null, kind: 'fyi', texte: 'Bonjour' },
+  },
   merge: {
     topicId: 'sujet_1',
     depot: 'exemple/projet',
@@ -163,6 +167,7 @@ it('valide les bornes et types des paramètres sans conversion implicite', () =>
 });
 it('construit exactement les invites D229', () => {
   const attendus: Record<ActionConfirmee, string> = {
+    'mesh.ecrire': 'DM fyi à peer-b',
     merge: 'Merge de exemple/projet#42 (abcdef0), squash, branche supprimée oui',
     push: 'Push de sujet/test (abcdef0)',
     nettoyage: 'Nettoyage du sujet sujet/test',

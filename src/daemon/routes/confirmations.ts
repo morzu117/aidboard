@@ -1,3 +1,4 @@
+import { ACTIONS_MESH } from '../../shared/confirmations.js';
 import type { FastifyInstance } from 'fastify';
 import type { Db } from '../db.js';
 import { creerReglage } from '../confirmations/reglage.js';
@@ -57,9 +58,11 @@ export function registerConfirmationRoutes(
       !reglage.lire().some((ligne) => ligne.action === corps.action)
     )
       return reply.code(400).send({ error: 'reglage invalide' });
+    if (ACTIONS_MESH.has(corps.action))
+      return reply.code(400).send({ error: 'confirmation obligatoire' });
     if (!corps.actif) {
       const entree = {
-        action: corps.action as 'merge' | 'push' | 'nettoyage' | 'projet.retirer',
+        action: corps.action as 'merge' | 'push' | 'nettoyage' | 'projet.retirer' | 'mesh.ecrire',
         actif: false as const,
       };
       const demande = await porte.demander('reglage', entree, req);
@@ -71,18 +74,31 @@ export function registerConfirmationRoutes(
   });
   app.get('/api/confirmations', async (req, reply) => {
     if (req.principal?.kind !== 'admin') return reply.code(403).send({ error: 'admin seulement' });
-    const champs = 'id, action, classe, resume, etat, resultat, raison, cree_a, echeance';
+    const champs = 'id, action, classe, resume, etat, resultat, raison, cree_a, echeance, envoi';
+    const avecEnvoi = (lignes: unknown[]) =>
+      lignes.map((ligne) => {
+        const l = ligne as Record<string, unknown>;
+        if (l.action !== 'mesh.ecrire') {
+          delete l.envoi;
+          return l;
+        }
+        return { ...l, envoi: typeof l.envoi === 'string' ? JSON.parse(l.envoi) : null };
+      });
     return {
-      ouvertes: db
-        .prepare(
-          `SELECT ${champs} FROM pda_demandes WHERE etat = 'ouverte' ORDER BY cree_a DESC, id DESC`,
-        )
-        .all(),
-      recentes: db
-        .prepare(
-          `SELECT ${champs} FROM pda_demandes WHERE etat != 'ouverte' ORDER BY COALESCE(consomme_a, cree_a) DESC, id DESC LIMIT 20`,
-        )
-        .all(),
+      ouvertes: avecEnvoi(
+        db
+          .prepare(
+            `SELECT ${champs} FROM pda_demandes WHERE etat = 'ouverte' ORDER BY cree_a DESC, id DESC`,
+          )
+          .all(),
+      ),
+      recentes: avecEnvoi(
+        db
+          .prepare(
+            `SELECT ${champs} FROM pda_demandes WHERE etat != 'ouverte' ORDER BY COALESCE(consomme_a, cree_a) DESC, id DESC LIMIT 20`,
+          )
+          .all(),
+      ),
     };
   });
   app.delete('/api/confirmations/:id', async (req, reply) => {
