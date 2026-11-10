@@ -1,0 +1,9 @@
+{
+  "result": {
+    "slug": "page-a",
+    "title": "Page A",
+    "type": "note",
+    "tags": ["test"],
+    "compiled_truth": "Texte de peer-a."
+  }
+}

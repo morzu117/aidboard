@@ -67,6 +67,22 @@ const parsed = <T>(racine: unknown, value: T): Parsed<T> => ({
 });
 
 export const parsePeers = (texte: unknown): Parsed<PairSwarph[]> | null => {
+  if (objet(texte) && Array.isArray(texte.peers)) {
+    return parsed(
+      texte,
+      compacter(
+        texte.peers.map((pair): PairSwarph | null => {
+          if (!objet(pair) || !str(pair.name)?.trim()) return null;
+          return {
+            nom: pair.name as string,
+            version: objet(pair.capabilities)
+              ? (str(pair.capabilities.swarph_cli_version) ?? '')
+              : '',
+          };
+        }),
+      ),
+    );
+  }
   if (typeof texte !== 'string') return null;
   const pairs: PairSwarph[] = [];
   for (const ligne of texte.split(/\r?\n/)) {
@@ -136,11 +152,16 @@ const resumeMemoire = (json: unknown): ResumeMemoire | null => {
 };
 
 export const parseMemoryList = (json: unknown): Parsed<ResumeMemoire[]> | null => {
+  if (objet(json) && 'result' in json) {
+    json = json.result;
+    if (objet(json)) json = json.pages;
+  }
   if (!Array.isArray(json)) return null;
   return parsed(json, compacter(json.map(resumeMemoire)));
 };
 
 export const parseMemoryPage = (json: unknown): Parsed<PageMemoire> | null => {
+  if (objet(json) && 'result' in json) json = json.result;
   const resume = resumeMemoire(json);
   if (!resume || !objet(json)) return null;
   return parsed(json, {

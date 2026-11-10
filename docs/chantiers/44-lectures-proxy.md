@@ -106,6 +106,7 @@ Le port `Lecteur`, `VERBES_LECTURE`, le choix au démarrage, la traduction des e
 ### 44.3 Les formes brutes (D279)
 
 D'après L12–L14 (DM 94888) : `POST /messages` rend toujours `id`, `closed_obligations` et `open_obligations` (une clé absente est `format`) ; Memory rend `{result: …}`, et la liste peut être un tableau ou `{pages: […]}` ; le fil et `rights` sont identiques au CLI ; `mesh peers` diffère par le filtrage de la PR 693. Une fixture par lecture et par forme ; les parseurs acceptent les deux.
+- *Révision 44.3.* `src/shared/swarph.ts` : 21 lignes ajoutées, aucune modifiée. Une version absente donne `""`. Un pair sans `name` est ignoré, pas la liste. 11 fixtures dans `test/fixtures/proxy/`, avec seulement des valeurs d'exemple. Gate 2845.
 
 ### 44.4 Les DM (D281)
 
