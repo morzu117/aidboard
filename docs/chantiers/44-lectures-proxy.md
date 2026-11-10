@@ -121,6 +121,7 @@ Le message des liens de Memory, et l'état du monitor dans Réglages.
 ### 44.6 Le vrai proxy et la recette
 
 Un test contre le vrai `swarph proxy serve`, en lecture seule, avec une fausse gateway (L4). La fiche de recette du Mac, après l'installation du proxy en lecture seule par Julien : Board, fiche d'une carte, Cells, Memory, Boîte, et la preuve qu'aucune écriture ne part (le proxy les refuse).
+- *Révision 44.6.* `test/vrai-proxy-lectures.test.ts` : 12 tests, aucun écart révélé par le vrai proxy. Avec les écritures, `npm run test:vrai-proxy` donne 23 tests verts contre swarph-cli `main` (be8ed2b). La recette du Mac attend l'installation du proxy en lecture seule par Julien (le build `read_only` de #5022). Gate 2943.
 
 ## 6. Pièges
 
