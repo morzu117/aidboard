@@ -100,6 +100,15 @@ Le proxy du Mac est en lecture seule par défaut (#1539 (b) ; swarph-cli PR 712,
 - L'état du mesh vu par le web dit `ecritures: false` ; le web désactive « Envoyer » avec « Le proxy de ta cellule est en lecture seule : rien ne peut partir. », et n'affiche ni « Prendre », ni « Refuser », ni « Clore ».
 - Le réglage ne crée aucune garantie : c'est le proxy qui refuse. Un `verb_not_allowed` reçu malgré tout garde son libellé du 35 bis.
 
+### D284. Un monitor supervisé n'est ni démarré ni arrêté par A-I-D
+
+Depuis le 10 novembre, le monitor du Mac tourne sous un LaunchAgent (`--supervisor launchd:<label>`, KeepAlive), comme celui de morzu-vps sous systemd. Aujourd'hui, A-I-D lance `swarph monitor start` à la connexion et `swarph monitor stop` à la déconnexion. Or un `stop` pose une « supervision hold » : le superviseur ne relance plus le monitor, et le `start` suivant d'A-I-D, lancé sans superviseur, lève le hold puis démarre un monitor détaché, hors de toute supervision.
+- `parseMonitorStatus` lit le champ `supervisor` de `swarph monitor status --json` : une chaîne non vide, ou rien.
+- **Monitor vivant et supervisé :** à la connexion, A-I-D n'appelle pas `monitor start` ; à la déconnexion, il n'appelle pas `monitor stop`, et il arrête seulement son propre suivi (follower et rafraîchissement). Le monitor continue de recevoir les DM.
+- **Monitor arrêté, ou vivant sans superviseur :** rien ne change.
+- L'état du mesh gagne `superviseur: string | null`, le nom brut rendu par swarph, sans chemin. Les Réglages affichent « Supervisé par <superviseur> : A-I-D ne le démarre ni ne l'arrête. »
+- En mode proxy (`mesh.inboxLog`), rien ne change : A-I-D n'appelle déjà aucune commande du monitor.
+
 ## 5. Points
 
 ### 44.1 Le plan
@@ -135,6 +144,10 @@ Le message des liens de Memory, et l'état du monitor dans Réglages.
 
 Un test contre le vrai `swarph proxy serve`, en lecture seule, avec une fausse gateway (L4). La fiche de recette du Mac, après l'installation du proxy en lecture seule par Julien : Board, fiche d'une carte, Cells, Memory, Boîte, et la preuve qu'aucune écriture ne part (le proxy les refuse).
 - *Révision 44.6.* `test/vrai-proxy-lectures.test.ts` : 12 tests, aucun écart révélé par le vrai proxy. Avec les écritures, `npm run test:vrai-proxy` donne 23 tests verts contre swarph-cli `main` (be8ed2b). La recette du Mac attend l'installation du proxy en lecture seule par Julien (le build `read_only` de #5022). Gate 2943.
+
+### 44.8 Le monitor supervisé (D284)
+
+`supervisor` lu dans le statut ; ni start ni stop pour un monitor vivant et supervisé ; `superviseur` dans l'état du mesh et les Réglages.
 
 ## 6. Pièges
 
