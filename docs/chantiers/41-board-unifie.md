@@ -96,6 +96,7 @@ La migration 027, la détection des transitions, les propositions dans la Boîte
 ### 41.5 L'e2e et la fiche de recette
 
 Un e2e Board avec un faux `swairm` et un faux `swarph`, et la fiche `docs/recette-chantier-41-board-unifie.md`.
+- *Révision 41.5.* Aucun défaut révélé par l'e2e. E2e nouveau 1/1, Board 8/8, Boîte 5/5 ; gate 3034 (échecs connus hors CI).
 
 ## 6. Pièges
 
