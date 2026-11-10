@@ -21,6 +21,7 @@ export function apercuEcriture<A extends ActionEcriture>(
 }
 
 export type CodeEnvoi =
+  | 'obligation-close'
   | 'succes'
   | 'proxy_unavailable'
   | 'connexion'
@@ -42,7 +43,9 @@ export interface ResultatEnvoi {
 }
 
 export function envoiIncertain(resultat: ResultatEnvoi): boolean {
-  return ['upstream_ambiguous', 'delai', 'interrompu', 'format'].includes(resultat.code);
+  return ['upstream_ambiguous', 'delai', 'interrompu', 'format', 'obligation-close'].includes(
+    resultat.code,
+  );
 }
 
 export function libelleEnvoi(resultat: ResultatEnvoi): string {

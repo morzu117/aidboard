@@ -41,7 +41,10 @@ afterEach(async () => {
   for (const nettoyer of nettoyages.splice(0).reverse()) await nettoyer();
 });
 
-type ActionGit = Exclude<ActionPorte, 'appairage' | 'pda.activer' | 'host.option' | 'desarmement'>;
+type ActionGit = Exclude<
+  ActionPorte,
+  'appairage' | 'pda.activer' | 'host.option' | 'desarmement' | 'mesh.ecrire'
+>;
 async function preparer(action: ActionGit = 'push', arme = true) {
   const t = preparerPda();
   nettoyages.push(t.nettoyer);

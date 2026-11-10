@@ -134,6 +134,7 @@ Ce document, sur `feat/35bis-envoi-reel`.
 ### 35b.3 L'action `mesh.ecrire` et la route (D264 à D266, D268)
 
 Après le document de schéma. L'action dans la porte, la migration 025, la route, le test D268, et les tests : la chaîne refaite par `preparer` ; un `params` modifié entre la demande et le « oui » refusé (`perime`) ; `closed_obligations` non vide ; le résultat sans texte ; le mode host ; le journal sans texte.
+- *Révision 35b.3.* `src/daemon/confirmations/ecritures.ts` (`creerActionEcriture`), `argsProxy` et `ResultatEnvoi` dans `src/shared/ecritures.ts`, la migration `025_mesh_ecrire.sql`, et la route dans `routes/ecritures.ts`. Un 400 de schéma ne renvoie aucune clé venue du client. Un `closed_obligations` non vide donne le code `obligation-close`, affiché comme un envoi incertain (le web gagne ce code). La réponse du gateway rend toujours les trois clés (lab, L12, DM 94888) : une clé absente est `format`. 41 lignes existantes modifiées. Gate 2805, plus un test instable du chip Remote, vert seul.
 
 ### 35b.4 L'UI (D267)
 
