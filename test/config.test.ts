@@ -168,6 +168,7 @@ test('mesh (12.2) : les défauts — désactivé, Tailscale lu mais jamais pilot
     bin: 'swarph',
     cell: '',
     proxySocket: '',
+    proxyLectureSeule: false,
     inboxLog: '',
     cellFile: '',
     gateway: '',
@@ -312,3 +313,18 @@ test.each(['42', 'true', 'null', '[]', '{}'])(
     );
   },
 );
+
+test('D283 : lecture seule booléenne, fausse par défaut, sans socket acceptée', () => {
+  expect(parseConfig('').mesh.proxyLectureSeule).toBe(false);
+  expect(parseConfig('mesh:\n  proxyLectureSeule: false').mesh.proxyLectureSeule).toBe(false);
+  expect(parseConfig('mesh:\n  proxyLectureSeule: true').mesh).toMatchObject({
+    proxySocket: '',
+    proxyLectureSeule: true,
+  });
+});
+test.each(['null', '0', '"true"', '[]', '{}'])('D283 : lecture seule refuse %s', (valeur) => {
+  expect(() => parseConfig(`mesh:\n  proxyLectureSeule: ${valeur}`)).toThrow(ConfigError);
+  expect(() => parseConfig(`mesh:\n  proxyLectureSeule: ${valeur}`)).toThrow(
+    'mesh.proxyLectureSeule doit être true ou false',
+  );
+});

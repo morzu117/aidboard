@@ -129,6 +129,7 @@ Le message des liens de Memory, et l'état du monitor dans Réglages.
 ### 44.7 Le proxy en lecture seule (D283)
 
 `mesh.proxyLectureSeule`, le 409 avant la porte, `ecritures` dans l'état du mesh, l'UI sans boutons d'écriture, et un test contre le vrai proxy réglé `read_only: true`.
+- *Révision 44.7.* `proxyLectureSeule` dans `MeshConfig` ; l'état du mesh gagne `ecritures` et `proxyConfigure`, ce qui distingue « pas de proxy » de « lecture seule ». Les fixtures d'état du web et `host-masque.test.ts` gagnent ces deux booléens, sans aucun changement de masquage (autorisé par morzu-vps). Vrai proxy 24/24, e2e board 8/8. 14 lignes existantes modifiées. Gate 2964.
 
 ### 44.6 Le vrai proxy et la recette
 

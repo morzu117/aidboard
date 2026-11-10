@@ -96,6 +96,8 @@ test('connect : monitor start une fois, suivi démarré, un seul mesh.state « c
   const t = setup();
   const state = await t.svc.connect();
   expect(state).toEqual({
+    ecritures: false,
+    proxyConfigure: false,
     connected: true,
     tailscale: 'running',
     monitor: 'running',

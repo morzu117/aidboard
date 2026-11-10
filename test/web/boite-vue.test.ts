@@ -101,6 +101,8 @@ test('D140 : le compteur de la barre compte les agents en attente et les DM mis 
     ],
     mesh: {
       state: {
+        ecritures: false,
+        proxyConfigure: false,
         connected: true,
         tailscale: 'running',
         monitor: 'running',

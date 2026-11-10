@@ -28,6 +28,8 @@ const dm = (id: number, kind: MeshDm['kind'], seenAt: string | null = null): Mes
   decidedAt: null,
 });
 const etat = (over: Partial<MeshState> = {}): MeshState => ({
+  ecritures: false,
+  proxyConfigure: false,
   connected: true,
   tailscale: 'running',
   monitor: 'running',

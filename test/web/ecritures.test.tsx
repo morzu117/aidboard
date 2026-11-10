@@ -25,6 +25,8 @@ afterEach(() => {
 const texte = '<b>Texte exact</b>\n**sans Markdown**';
 const mesh = {
   state: {
+    ecritures: false,
+    proxyConfigure: false,
     connected: false,
     tailscale: 'running' as const,
     monitor: 'stopped' as const,
@@ -35,7 +37,11 @@ const mesh = {
   inbox: [],
   tailscaleManage: false,
 };
-function ouvrir(action: ActionEcriture = 'dm.envoyer', reponse?: ApercuEcriture) {
+function ouvrir(
+  action: ActionEcriture = 'dm.envoyer',
+  reponse?: ApercuEcriture,
+  etat = snapshot(),
+) {
   const params = {
     'carte.note': { carte: 101, a: null, kind: 'fyi', texte },
     'dm.envoyer': { pair: 'pair-test', fil: null, kind: 'fyi', texte },
@@ -58,7 +64,7 @@ function ouvrir(action: ActionEcriture = 'dm.envoyer', reponse?: ApercuEcriture)
       onClose={fermer}
       onRelire={relire}
     />,
-    snapshot(),
+    etat,
     '/',
     {
       'POST /api/swarph/ecrire/apercu': json(200, resultat),
@@ -498,4 +504,38 @@ test('un envoi incertain est une demande exécutée et reste verrouillé', async
   expect(screen.getByText('Exécutée')).toBeTruthy();
   expect(screen.getByRole('button', { name: 'Envoyer' })).toHaveProperty('disabled', true);
   expect(screen.queryByRole('button', { name: 'Réessayer' })).toBeNull();
+});
+
+test('D283 : lecture seule désactive Envoyer et conserve aperçu et copie', async () => {
+  const h = ouvrir(
+    'dm.envoyer',
+    undefined,
+    snapshot({
+      mesh: { ...mesh, state: { ...mesh.state, proxyConfigure: true, ecritures: false } },
+    }),
+  );
+  await voir();
+  expect(
+    await screen.findByText('Le proxy de ta cellule est en lecture seule : rien ne peut partir.'),
+  ).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Envoyer' })).toHaveProperty('disabled', true);
+  expect(screen.getByRole('button', { name: 'Copier le texte' })).toHaveProperty('disabled', false);
+  expect(h.calls.some((c) => c.url === '/api/swarph/ecrire/envoyer')).toBe(false);
+});
+
+test('D283 : un 409 reçu malgré tout garde le message de lecture seule', async () => {
+  const h = ouvrir(
+    'dm.envoyer',
+    undefined,
+    snapshot({
+      mesh: { ...mesh, state: { ...mesh.state, proxyConfigure: true, ecritures: true } },
+    }),
+  );
+  h.respond.set('POST /api/swarph/ecrire/envoyer', json(409, { error: 'proxy_lecture_seule' }));
+  await voir();
+  await userEvent.click(screen.getByRole('button', { name: 'Envoyer' }));
+  expect(
+    await screen.findByText('Le proxy de ta cellule est en lecture seule : rien ne peut partir.'),
+  ).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Envoyer' })).toHaveProperty('disabled', true);
 });

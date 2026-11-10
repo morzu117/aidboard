@@ -14,6 +14,8 @@ afterEach(cleanup);
 const node = (id: string) => document.querySelector(`[data-node="${id}"]`) as HTMLElement | null;
 
 const meshEtat: MeshState = {
+  ecritures: false,
+  proxyConfigure: false,
   connected: true,
   tailscale: 'running',
   monitor: 'running',

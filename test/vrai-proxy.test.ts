@@ -12,7 +12,7 @@ import { creerActionsConfirmation } from '../src/daemon/confirmations/actions.js
 import { creerPorte } from '../src/daemon/confirmations/porte.js';
 import { creerReglage } from '../src/daemon/confirmations/reglage.js';
 import { BoardReader } from '../src/daemon/mesh/board.js';
-import { creerProxyClient } from '../src/daemon/mesh/proxy.js';
+import { VERBES_LECTURE, creerProxyClient } from '../src/daemon/mesh/proxy.js';
 import { registerEcrituresRoutes } from '../src/daemon/routes/ecritures.js';
 import { parseObligations } from '../src/shared/board.js';
 import { hashAccept } from '../src/shared/etats.js';
@@ -28,7 +28,7 @@ afterEach(async () => {
   for (const nettoyer of nettoyages.splice(0).reverse()) await nettoyer();
 });
 
-async function preparer(status = 201, closed_obligations: number[] = []) {
+async function preparer(status = 201, closed_obligations: number[] = [], lectureSeule = false) {
   // Le proxy refuse les ancêtres inscriptibles par la cellule, même un TMPDIR partagé.
   const dossier = await mkdtemp(join(process.cwd(), 'node_modules', '.aid-vrai-'));
   nettoyages.push(() => rm(dossier, { recursive: true, force: true }));
@@ -67,6 +67,7 @@ async function preparer(status = 201, closed_obligations: number[] = []) {
   await writeFile(
     cheminConfig,
     JSON.stringify({
+      read_only: lectureSeule,
       cell_uid: process.getuid!() === 60000 ? 60001 : 60000,
       gateway_url: `http://127.0.0.1:${adresse.port}`,
       token_file: join(dossier, 'token'),
@@ -115,7 +116,13 @@ async function preparer(status = 201, closed_obligations: number[] = []) {
   app.addHook('onRequest', async (req) => {
     req.principal = { kind: 'admin', via: 'bearer' };
   });
-  registerEcrituresRoutes(app, { cell: 'peer-a', board, porte });
+  registerEcrituresRoutes(app, {
+    cell: 'peer-a',
+    board,
+    porte,
+    proxySocket: config.mesh.proxySocket,
+    proxyLectureSeule: config.mesh.proxyLectureSeule,
+  });
   return {
     requetes,
     socket,
@@ -250,3 +257,24 @@ describe.skipIf(!disponible)('L4 — vrai swarph proxy serve (35b.5 et 36.5)', (
     expect(t.requetes).toHaveLength(0);
   });
 });
+
+test.skipIf(!disponible)(
+  'D283 : le vrai proxy refuse les écritures mais sert les lectures',
+  async () => {
+    const t = await preparer(201, [], true);
+    expect(
+      await creerProxyClient({ socket: t.socket }).appeler('mesh.send', {
+        to_node: 'peer-b',
+        content: texte,
+      }),
+    ).toEqual({ ok: false, code: 'verb_not_allowed' });
+    expect(t.requetes).toHaveLength(0);
+    expect(
+      await creerProxyClient({ socket: t.socket, verbes: VERBES_LECTURE }).appeler(
+        'board.card.get',
+        { id: 42 },
+      ),
+    ).toMatchObject({ ok: true });
+    expect(t.requetes.map((r) => r.methode)).toEqual(['GET']);
+  },
+);

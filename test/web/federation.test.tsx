@@ -8,6 +8,8 @@ afterEach(cleanup);
 const etat = snapshot({
   mesh: {
     state: {
+      ecritures: false,
+      proxyConfigure: false,
       connected: true,
       tailscale: 'running',
       monitor: 'running',

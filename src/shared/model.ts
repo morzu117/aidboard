@@ -215,6 +215,9 @@ export type MeshTailscale = 'running' | 'stopped' | 'absent';
 export type MeshMonitor = 'running' | 'stopped' | 'stale' | 'absent' | 'proxy';
 
 export interface MeshState {
+  ecritures: boolean;
+  /** Présence du proxy seulement, jamais son chemin. */
+  proxyConfigure: boolean;
   connected: boolean;
   tailscale: MeshTailscale;
   monitor: MeshMonitor;

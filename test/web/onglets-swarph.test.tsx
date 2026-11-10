@@ -29,6 +29,8 @@ afterEach(cleanup);
 const avecMesh = snapshot({
   mesh: {
     state: {
+      ecritures: false,
+      proxyConfigure: false,
       connected: true,
       tailscale: 'running',
       monitor: 'running',

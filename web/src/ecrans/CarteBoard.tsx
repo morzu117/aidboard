@@ -318,6 +318,9 @@ function Fiche({ s, relire }: { s: BoardCardSheet; relire: () => void }) {
       <Bloc id="graphe" titre="Graphe d’étapes" result={s.graph} onRelire={relire}>
         {s.graph.ok && <Graphe g={s.graph.data} />}
       </Bloc>
+      {state?.mesh?.state.proxyConfigure && !state.mesh.state.ecritures && (
+        <p>Le proxy de ta cellule est en lecture seule.</p>
+      )}
       <Bloc id="obligations" titre="Obligations" result={s.obligations} onRelire={relire}>
         {s.obligations.ok && <Obligations o={s.obligations.data} s={s} relire={relire} />}
       </Bloc>

@@ -59,6 +59,8 @@ export class MeshService {
   constructor(private readonly deps: MeshServiceDeps) {
     this.paths = meshPaths(deps.config, deps.home);
     this.state = {
+      ecritures: !!deps.config.proxySocket && !deps.config.proxyLectureSeule,
+      proxyConfigure: !!deps.config.proxySocket,
       connected: false,
       tailscale: 'absent',
       monitor: 'absent',

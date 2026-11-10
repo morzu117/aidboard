@@ -39,6 +39,8 @@ test('D102 : mesh déjà configuré, la page renvoie à Réglages au lieu de ré
     snapshot({
       mesh: {
         state: {
+          ecritures: false,
+          proxyConfigure: false,
           connected: false,
           tailscale: 'running',
           monitor: 'stopped',

@@ -1,4 +1,5 @@
 import type { ActionEcriture, ParametresEcriture } from '../../../src/shared/ecritures.js';
+import { AidApiError } from './api.js';
 import type { AidClient } from './client.js';
 
 export type ApercuEcriture =
@@ -21,6 +22,7 @@ export function apercuEcriture<A extends ActionEcriture>(
 }
 
 export type CodeEnvoi =
+  | 'proxy_lecture_seule'
   | 'obligation-close'
   | 'succes'
   | 'proxy_unavailable'
@@ -52,6 +54,8 @@ export function libelleEnvoi(resultat: ResultatEnvoi): string {
   if (envoiIncertain(resultat))
     return 'Envoi incertain : il est peut-être parti. Relis le fil avant de réessayer.';
   switch (resultat.code) {
+    case 'proxy_lecture_seule':
+      return 'Le proxy de ta cellule est en lecture seule : rien ne peut partir.';
     case 'succes':
       return 'Parti.';
     case 'proxy_unavailable':
@@ -71,5 +75,14 @@ export function envoyerEcriture<A extends ActionEcriture>(
   params: ParametresEcriture[A],
   client: AidClient,
 ): Promise<{ confirmation: string } | ResultatEnvoi> {
-  return client.request('POST', '/api/swarph/ecrire/envoyer', { action, params });
+  return client
+    .request<{ confirmation: string } | ResultatEnvoi>('POST', '/api/swarph/ecrire/envoyer', {
+      action,
+      params,
+    })
+    .catch((e: unknown) => {
+      if (e instanceof AidApiError && e.status === 409 && e.body.error === 'proxy_lecture_seule')
+        return { code: 'proxy_lecture_seule', open_obligations: [] };
+      throw e;
+    });
 }

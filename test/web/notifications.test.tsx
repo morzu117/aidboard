@@ -139,6 +139,8 @@ const dm = (id: number, kind: MeshDm['kind'], over: Partial<MeshDm> = {}): MeshD
 });
 const mesh = (inbox: MeshDm[]) => ({
   state: {
+    ecritures: false,
+    proxyConfigure: false,
     connected: true,
     tailscale: 'running' as const,
     monitor: 'running' as const,

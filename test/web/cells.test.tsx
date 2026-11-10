@@ -8,6 +8,8 @@ import { FakeSocket, json, setup, snapshot } from './helpers.js';
 
 afterEach(cleanup);
 const monitor: MeshState = {
+  ecritures: false,
+  proxyConfigure: false,
   connected: true,
   tailscale: 'running',
   monitor: 'running',

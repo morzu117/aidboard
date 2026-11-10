@@ -14,7 +14,7 @@ import {
   apercuEcriture,
   type ApercuEcriture,
 } from '../data/ecritures.js';
-import { useAidClient } from '../data/useAidState.js';
+import { useAid, useAidClient } from '../data/useAidState.js';
 import { Dialogue } from '../dialogues/Dialogue.js';
 
 export function EcrireAuMesh({
@@ -39,6 +39,8 @@ export function EcrireAuMesh({
   onRelire?: () => void;
 }) {
   const client = useAidClient();
+  const { state } = useAid();
+  const lectureSeule = state?.mesh?.state.proxyConfigure && !state.mesh.state.ecritures;
   const [proxyAbsent, setProxyAbsent] = useState(false);
   const [envoye, setEnvoye] = useState(false);
   const verrou = useRef(false);
@@ -98,7 +100,7 @@ export function EcrireAuMesh({
     }
   }
   async function envoyer() {
-    if (verrou.current || proxyAbsent) return;
+    if (verrou.current || proxyAbsent || lectureSeule) return;
     verrou.current = true;
     setEnvoye(true);
     setConfirmation(null);
@@ -245,9 +247,15 @@ export function EcrireAuMesh({
                   À blanc : rien n&apos;est parti. L&apos;envoi viendra avec le proxy local (#20).
                 </p>
               )}
-              <button disabled={proxyAbsent || envoye} onClick={() => void envoyer()}>
+              <button
+                disabled={lectureSeule || proxyAbsent || envoye}
+                onClick={() => void envoyer()}
+              >
                 Envoyer
               </button>
+              {lectureSeule && (
+                <p>Le proxy de ta cellule est en lecture seule : rien ne peut partir.</p>
+              )}
               {proxyAbsent && (
                 <p>
                   Le proxy de ta cellule n&apos;est pas configuré. Rien ne peut partir ;

@@ -1,5 +1,6 @@
 import type { BoardObligation, BoardStep } from '../../../src/shared/board.js';
 import type { ActionEtat, ParametresEtat } from '../../../src/shared/etats.js';
+import { AidApiError } from './api.js';
 import type { AidClient } from './client.js';
 import type { ResultatEnvoi as EnvoiEcriture } from './ecritures.js';
 export type ResultatEtat = Pick<EnvoiEcriture, 'code' | 'status'>;
@@ -34,5 +35,14 @@ export function envoyerEtat<A extends ActionEtat>(
   params: ParametresEtat[A],
   client: AidClient,
 ): Promise<{ confirmation: string } | ResultatEtat> {
-  return client.request('POST', '/api/swarph/etat/envoyer', { action, params });
+  return client
+    .request<{ confirmation: string } | ResultatEtat>('POST', '/api/swarph/etat/envoyer', {
+      action,
+      params,
+    })
+    .catch((e: unknown) => {
+      if (e instanceof AidApiError && e.status === 409 && e.body.error === 'proxy_lecture_seule')
+        return { code: 'proxy_lecture_seule' };
+      throw e;
+    });
 }
