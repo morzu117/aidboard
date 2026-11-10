@@ -19,6 +19,16 @@ import {
 import { parsePeers, parseRights, parseMemoryList, parseMemoryPage } from '../src/shared/swarph.js';
 const python = process.env.AID_SWARPH_PROXY_PYTHON;
 const disponible = !!python && spawnSync(python, ['-c', 'pass'], { timeout: 5000 }).status === 0;
+const accepteBoucleLocale =
+  disponible &&
+  spawnSync(
+    python!,
+    [
+      '-c',
+      'from swarph_cli.local_proxy import Config; import sys; sys.exit(not hasattr(Config, "allow_loopback_tcp"))',
+    ],
+    { timeout: 5000 },
+  ).status === 0;
 const jeton = 'jeton-de-test';
 const nettoyages: (() => unknown | Promise<unknown>)[] = [];
 afterEach(async () => {
@@ -89,6 +99,8 @@ async function preparer(status = 200, forme = 'memory-list') {
     JSON.stringify({
       cell_uid: process.getuid!() === 60000 ? 60001 : 60000,
       gateway_url: `http://127.0.0.1:${adresse.port}`,
+      // #1557 : réservé au test, avec une fausse gateway locale.
+      ...(accepteBoucleLocale ? { allow_loopback_tcp: true } : {}),
       token_file: join(dossier, 'token'),
       socket_path: socket,
       audit_path: join(dossier, 'audit'),
