@@ -212,7 +212,7 @@ export interface MeshDm {
 }
 
 export type MeshTailscale = 'running' | 'stopped' | 'absent';
-export type MeshMonitor = 'running' | 'stopped' | 'stale' | 'absent';
+export type MeshMonitor = 'running' | 'stopped' | 'stale' | 'absent' | 'proxy';
 
 export interface MeshState {
   connected: boolean;

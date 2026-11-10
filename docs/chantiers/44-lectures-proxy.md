@@ -110,6 +110,7 @@ D'après L12–L14 (DM 94888) : `POST /messages` rend toujours `id`, `closed_obl
 ### 44.4 Les DM (D281)
 
 `mesh.inboxLog`, `MeshService` sans monitor en mode proxy, l'état « géré par le proxy », le refus de config.
+- *Révision 44.4.* `mesh.inboxLog` dans `config.ts` (absolu, requis avec `proxySocket`), `MeshService` sans aucun `run` de `monitor` en mode proxy, `MeshMonitor` gagne `'proxy'`. Un fichier absent donne `'absent'`, illisible `'stopped'` ; le rafraîchissement reprend le suivi dès qu'il redevient lisible. Au démarrage du daemon, le suivi reprend si le fichier se lit, comme un monitor détaché en mode CLI. 11 lignes existantes modifiées, 2 ajoutées côté web. Gate 2831.
 
 ### 44.5 L'UI (D282)
 

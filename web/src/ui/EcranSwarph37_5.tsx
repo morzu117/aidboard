@@ -13,6 +13,7 @@ export function EtatMonitor37_5({ etat }: { etat: MeshMonitor }) {
     running: 'En marche',
     stopped: 'Arrêté',
     stale: 'Périmé',
+    proxy: 'géré par le proxy',
     absent: 'Absent',
   };
   return <>{Object.hasOwn(libelles, etat) ? `${etat} · ${libelles[etat]}` : 'inconnu'}</>;

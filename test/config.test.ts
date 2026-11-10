@@ -168,6 +168,7 @@ test('mesh (12.2) : les défauts — désactivé, Tailscale lu mais jamais pilot
     bin: 'swarph',
     cell: '',
     proxySocket: '',
+    inboxLog: '',
     cellFile: '',
     gateway: '',
     stateRoot: '',
@@ -279,3 +280,35 @@ test('31.5 (D172) : ecrireModeHostActif garde le reste du fichier, commentaires 
     expect(readFileSync(p.config, 'utf8')).toBe(brut);
   }
 });
+
+test('D281 : inboxLog vide par défaut ou explicite, chemin absolu accepté', () => {
+  expect(parseConfig('').mesh.inboxLog).toBe('');
+  expect(parseConfig('mesh:\n  inboxLog: ""').mesh.inboxLog).toBe('');
+  expect(parseConfig('mesh:\n  inboxLog: /tmp/inbox.log').mesh.inboxLog).toBe('/tmp/inbox.log');
+});
+
+test.each(['', '\n  inboxLog: ""'])('D281 : proxySocket exige inboxLog (%s)', (suite) => {
+  const lire = () => parseConfig(`mesh:\n  proxySocket: /tmp/proxy.sock${suite}`);
+  expect(lire).toThrow(ConfigError);
+  expect(lire).toThrow(
+    'config.yaml : mesh.inboxLog est requis quand mesh.proxySocket est réglé (le monitor appartient au proxy).',
+  );
+});
+
+test.each(['inbox.log', './inbox.log', '../inbox.log', '~/inbox.log'])(
+  'D281 : inboxLog relatif refusé (%s)',
+  (chemin) => {
+    expect(() => parseConfig(`mesh:\n  inboxLog: ${chemin}`)).toThrow(
+      'mesh.inboxLog doit être un chemin absolu',
+    );
+  },
+);
+
+test.each(['42', 'true', 'null', '[]', '{}'])(
+  'D281 : inboxLog doit être une chaîne (%s)',
+  (valeur) => {
+    expect(() => parseConfig(`mesh:\n  inboxLog: ${valeur}`)).toThrow(
+      'mesh.inboxLog doit être une chaîne',
+    );
+  },
+);

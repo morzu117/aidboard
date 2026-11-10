@@ -152,9 +152,10 @@ test('une connexion et un UUID par appel ; UUID injectable', async () => {
 test('D262 : proxySocket vide par défaut, chaîne acceptée, autres types refusés', () => {
   expect(parseConfig('').mesh.proxySocket).toBe('');
   expect(parseConfig('mesh:\n  proxySocket: ""').mesh.proxySocket).toBe('');
-  expect(parseConfig('mesh:\n  proxySocket: /tmp/proxy.sock').mesh.proxySocket).toBe(
-    '/tmp/proxy.sock',
-  );
+  expect(
+    parseConfig('mesh:\n  proxySocket: /tmp/proxy.sock\n  inboxLog: /tmp/inbox.log').mesh
+      .proxySocket,
+  ).toBe('/tmp/proxy.sock');
   for (const valeur of ['42', 'true', 'null', '[]', '{}'])
     expect(() => parseConfig(`mesh:\n  proxySocket: ${valeur}`)).toThrow('mesh.proxySocket');
 });
