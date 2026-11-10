@@ -150,6 +150,11 @@ Après le build mergé. Un test contre le vrai `swarph proxy serve` avec une fau
 `mesh.ecrire` entre dans les actions toujours confirmées ; porte désarmée → 409 `confirmation_requise`, rien envoyé ; plus d'exécution directe.
 - *Révision 35b.6 (correctif de sécurité, revue du lab #1551 / #5036, approuvé par Julien le 2026-11-10).* **D265 révisée :** `mesh.ecrire` appartient aux actions toujours confirmées ; son réglage n'est pas modifiable, et une ancienne valeur à 0 en base ne dispense jamais de la confirmation du téléphone. **D266 révisée :** `ecrire/envoyer` crée une demande de confirmation, ou refuse en 409 `confirmation_requise` avant `preparer` si la porte est désarmée ; il n'existe plus de chemin d'exécution directe. Ceci revient sur la reco Q1 (« tu peux couper la première »). Pas de migration : `exige` et `lire` ignorent la valeur stockée pour ces actions. 47 lignes existantes modifiées. Gate 2809 (échecs connus hors CI : install, update-check).
 
+### 35b.7 Correctif : une demande trop grande est refusée proprement (validation du lab #5060)
+
+Une demande signée de plus de 16 Kio (`TAILLE_MAX_DEMANDE`) répond 413 `demande_trop_grande` au lieu d'un 500, sans demande ni envoi. La limite et le format signé ne changent pas.
+- *Révision 35b.7.* L'erreur typée est levée dans `demande.ts` et traduite par `porte.demander`. Tests : 4 000 caractères hors BMP → 413, 0 demande, 0 requête au proxy ; 4 000 ASCII → demande créée. 4 lignes existantes modifiées. Gate 2812 (échecs connus hors CI : install, update-check).
+
 ## 6. Pièges
 
 - **Un envoi incertain n'est pas un échec.** Ne jamais le présenter comme « rien n'est parti », ni proposer de le refaire sans relire.
