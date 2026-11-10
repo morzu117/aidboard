@@ -17,7 +17,8 @@ const MAX_LIGNE = 1024 * 1024;
 
 type CodeProxy = (typeof CODES_PROXY)[number] | 'delai' | 'interrompu' | 'connexion' | 'format';
 export type ResultatProxy =
-  { ok: true; status: number; body: Record<string, unknown> } | { ok: false; code: CodeProxy };
+  | { ok: true; status: number; body: Record<string, unknown> }
+  | { ok: false; code: CodeProxy; status?: number };
 
 function estObjet(valeur: unknown): valeur is Record<string, unknown> {
   return typeof valeur === 'object' && valeur !== null && !Array.isArray(valeur);
@@ -46,7 +47,15 @@ export function lireReponseProxy(ligne: string, requestId: string): ResultatProx
   }
   if (reponse.ok === false) {
     const code = CODES_PROXY.find((code) => code === reponse.error);
-    if (code) return { ok: false, code };
+    if (code)
+      return {
+        ok: false,
+        code,
+        ...(typeof reponse.status === 'number' &&
+          Number.isInteger(reponse.status) &&
+          reponse.status >= 100 &&
+          reponse.status <= 599 && { status: reponse.status }),
+      };
   }
   return format;
 }

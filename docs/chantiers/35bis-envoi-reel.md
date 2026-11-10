@@ -7,7 +7,7 @@
 | Base | **05ca283** (`origin/main`, PR #137). |
 | Organisation | Comme au 35. morzu-vps gère le chantier ; Codex CLI écrit le code et les tests de chaque point ; morzu-vps relit, lance le gate, commite et ouvre la PR. |
 | Validation | Le lab valide le 35 bis : il ouvre la première écriture d'A-I-D sur le mesh. Merge : CI verte, validation du lab, oui de Julien. |
-| Bloqué par | Le point 35b.3 attend le **document de schéma des arguments** publié avec la PR de build du proxy. Le point 35b.5 attend le **build mergé** de `swarph proxy serve`. Les points 35b.2 et 35b.4 n'attendent rien. |
+| Bloqué par | Le point 35b.5 attend une installation de `swarph proxy serve` pour le test réel (le build est mergé, PR 702). Le document de schéma est publié : 35b.3 n'attend plus rien. |
 
 ## 1. Pourquoi
 
@@ -64,11 +64,19 @@ Le contrat du proxy (résumé) :
 
 ### D264. Les arguments de chaque verbe
 
-Sous réserve du document de schéma (bloquant pour 35b.3). Ce que le contrat fixe déjà :
-- les ids sont des entiers, les noms suivent une regex fixe ;
-- aucun expéditeur, `obligation_id` ni `cc` n'est passé.
+Fixés par le document de schéma, `docs/proxy-protocol.md` de swarph-cli (PR 702, mergée le 2026-11-09), § « Argument types » et la table des verbes. Depuis les `params` du 35 :
 
-La correspondance prévue, depuis les `params` du 35 : `carte.note` → `board.cards.say {card_id, content, kind, to?}` ; `dm.envoyer` → `mesh.send {to, content, kind, thread?}` ; `canal.poster` → `channel.post {channel, content, kind}`. Les noms exacts viendront du schéma, et les tests citeront ses lignes (L4).
+| Action | Verbe | `args` |
+|---|---|---|
+| `carte.note` | `board.cards.say` | `{id: carte, content: texte, kind}`, plus `to_node: a` si `a` n'est pas nul |
+| `dm.envoyer` | `mesh.send` | `{to_node: pair, content: texte, kind}` |
+| `canal.poster` | `channel.post` | `{channel: canal, content: texte, kind}` |
+
+- Aucun autre champ : le schéma est fermé, et le proxy refuse `from_node`, `actor`, `cc`, `thread_id`. Le fil d'une note de carte est lu par le proxy lui-même.
+- **Un DM dans un fil** (`fil` non nul) n'a pas d'équivalent : `mesh.send` ne connaît que `reply_to` (un id de message entier), pas l'UUID de fil. `preparer` le refuse en 400 : « Un DM dans un fil ne peut pas encore partir par le proxy. Copie la commande, ou envoie-le hors fil. » `reply_to` n'est pas exposé dans ce chantier.
+- Les règles d'A-I-D sont plus strictes que celles du proxy, ou égales : nom `^[a-z0-9][a-z0-9-]{0,62}$` (proxy : `[A-Za-z0-9][A-Za-z0-9_.-]{0,63}`), texte de 4 000 caractères au plus (proxy : 200 000), `kind` parmi les cinq du proxy. Aucune valeur n'est convertie.
+- Le délai publié est de 15 s en amont, et 20 s côté client : `DELAI_PROXY_MS = 20_000` est confirmé.
+- Les tests du 35b.3 citent ces lignes du document de schéma (L4).
 
 ### D265. L'envoi sous confirmation
 
@@ -126,6 +134,7 @@ Ce document, sur `feat/35bis-envoi-reel`.
 ### 35b.3 L'action `mesh.ecrire` et la route (D264 à D266, D268)
 
 Après le document de schéma. L'action dans la porte, la migration 025, la route, le test D268, et les tests : la chaîne refaite par `preparer` ; un `params` modifié entre la demande et le « oui » refusé (`perime`) ; `closed_obligations` non vide ; le résultat sans texte ; le mode host ; le journal sans texte.
+- *Révision 35b.3.* `src/daemon/confirmations/ecritures.ts` (`creerActionEcriture`), `argsProxy` et `ResultatEnvoi` dans `src/shared/ecritures.ts`, la migration `025_mesh_ecrire.sql`, et la route dans `routes/ecritures.ts`. Un 400 de schéma ne renvoie aucune clé venue du client. Un `closed_obligations` non vide donne le code `obligation-close`, affiché comme un envoi incertain (le web gagne ce code). La réponse du gateway rend toujours les trois clés (lab, L12, DM 94888) : une clé absente est `format`. 41 lignes existantes modifiées. Gate 2805, plus un test instable du chip Remote, vert seul.
 
 ### 35b.4 L'UI (D267)
 
@@ -141,7 +150,7 @@ Après le build mergé. Un test contre le vrai `swarph proxy serve` avec une fau
 - **Un envoi incertain n'est pas un échec.** Ne jamais le présenter comme « rien n'est parti », ni proposer de le refaire sans relire.
 - **Le texte vit dans la demande signée** jusqu'à sa consommation (15 min au plus, D223). Il est déjà nettoyé, mais il ne doit sortir ni dans le journal ni dans un événement.
 - **Pas de repli.** Aucun chemin ne doit retomber sur `swarph … say/send/post` en sous-processus, même en erreur.
-- **Le schéma n'est pas encore publié.** 35b.3 ne commence pas sur des noms d'arguments devinés.
+- **Le schéma est publié (PR 702).** Les noms d'arguments viennent de lui seul, jamais du CLI.
 
 ## 7. Fini quand
 
