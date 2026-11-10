@@ -141,6 +141,7 @@ const mesh = (inbox: MeshDm[]) => ({
   state: {
     ecritures: false,
     proxyConfigure: false,
+    superviseur: null,
     connected: true,
     tailscale: 'running' as const,
     monitor: 'running' as const,

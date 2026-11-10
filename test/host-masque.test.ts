@@ -103,6 +103,7 @@ function snapshot(): StateSnapshot {
       state: {
         ecritures: true,
         proxyConfigure: true,
+        superviseur: null,
         connected: true,
         tailscale: 'running',
         monitor: 'running',

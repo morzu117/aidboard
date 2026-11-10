@@ -42,6 +42,7 @@ const fiche = (id: 101 | 102): BoardCardSheet => ({
 const meshEtat: MeshState = {
   ecritures: true,
   proxyConfigure: true,
+  superviseur: null,
   connected: true,
   tailscale: 'running',
   monitor: 'running',

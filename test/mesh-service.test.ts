@@ -98,6 +98,7 @@ test('connect : monitor start une fois, suivi démarré, un seul mesh.state « c
   expect(state).toEqual({
     ecritures: false,
     proxyConfigure: false,
+    superviseur: null,
     connected: true,
     tailscale: 'running',
     monitor: 'running',
@@ -251,12 +252,13 @@ test('environnement de swarph : MESH_GATEWAY_URL et SWARPH_STATE, jamais un toke
 test('parseMonitorStatus et parseInboxLine : tolérants aux champs manquants', () => {
   expect(
     parseMonitorStatus('{"running": true, "sinks": [{"pending": 2}, {"pending": 3}]}'),
-  ).toEqual({ monitor: 'running', pending: 5 });
+  ).toEqual({ monitor: 'running', pending: 5, superviseur: null });
   expect(parseMonitorStatus('{"running": false, "pidfile_status": "missing"}')).toEqual({
     monitor: 'stopped',
     pending: 0,
+    superviseur: null,
   });
-  expect(parseMonitorStatus('rien')).toEqual({ monitor: 'stopped', pending: 0 });
+  expect(parseMonitorStatus('rien')).toEqual({ monitor: 'stopped', pending: 0, superviseur: null });
   expect(parseInboxLine('{"id": 7, "kind": "fyi"}')).toEqual({
     id: 7,
     threadId: null,
@@ -318,3 +320,75 @@ test('D99 bis : chaque lecture de monitor status date checkedAt et part en éph�
   expect(t.states()).toHaveLength(etats);
   t.svc.dispose();
 });
+
+test.each([
+  ['launchd:dev.swarph.monitor.peer-a', 'launchd:dev.swarph.monitor.peer-a'],
+  [' swarph-monitor@peer-a.service ', 'swarph-monitor@peer-a.service'],
+  ['a'.repeat(200), 'a'.repeat(200)],
+  ['a'.repeat(201), null],
+  ['', null],
+  ['   ', null],
+  ['service\n', null],
+  ['ser\u007fvice', null],
+  ['ser\u0085vice', null],
+  [null, null],
+  [undefined, null],
+  [42, null],
+  [{}, null],
+])('parseMonitorStatus : superviseur %j', (supervisor, attendu) => {
+  expect(parseMonitorStatus(JSON.stringify({ running: true, supervisor })).superviseur).toBe(
+    attendu,
+  );
+});
+
+test.each([
+  [true, 'launchd:dev.swarph.monitor.peer-a', false],
+  [true, null, true],
+  [false, 'swarph-monitor@peer-a.service', true],
+  [false, null, true],
+])('D284 : running=%s, superviseur=%s, commandes=%s', async (running, supervisor, commandes) => {
+  const fichier = join(mkdtempSync(join(tmpdir(), 'aid-superviseur-')), 'status.json');
+  writeFileSync(fichier, JSON.stringify({ running, supervisor, supervision_hold: !running }));
+  const t = setup({}, { FAKE_SWARPH_STATUS: fichier });
+  try {
+    t.writeInbox([record(901)]);
+    const etat = await t.svc.connect();
+    expect(etat).toMatchObject({ connected: running, superviseur: supervisor });
+    expect(t.swarph()[0]).toMatch(/^monitor status /);
+    expect(t.swarph().some((ligne) => ligne.startsWith('monitor start'))).toBe(commandes);
+    expect(t.dms()).toHaveLength(running ? 1 : 0);
+    const deconnecte = await t.svc.disconnect();
+    expect(deconnecte).toMatchObject({ connected: false, superviseur: supervisor });
+    expect(t.swarph().some((ligne) => ligne.startsWith('monitor stop'))).toBe(commandes);
+    t.writeInbox([record(902)]);
+    expect(t.svc.tick()).toBe(0);
+    const appels = t.swarph().length;
+    await new Promise((resolve) => setTimeout(resolve, 120));
+    expect(t.swarph()).toHaveLength(appels);
+  } finally {
+    t.svc.dispose();
+    t.db.close();
+  }
+});
+
+test.each([null, 'swarph-monitor@peer-a.service'])(
+  'D284 : disconnect relit le superviseur devenu %s',
+  async (supervisor) => {
+    const fichier = join(mkdtempSync(join(tmpdir(), 'aid-superviseur-')), 'status.json');
+    const ecrire = (valeur: string | null) =>
+      writeFileSync(fichier, JSON.stringify({ running: true, supervisor: valeur }));
+    ecrire(supervisor === null ? 'swarph-monitor@peer-a.service' : null);
+    const t = setup({}, { FAKE_SWARPH_STATUS: fichier });
+    try {
+      await t.svc.connect();
+      ecrire(supervisor);
+      await t.svc.disconnect();
+      expect(t.swarph().some((ligne) => ligne.startsWith('monitor stop'))).toBe(
+        supervisor === null,
+      );
+    } finally {
+      t.svc.dispose();
+      t.db.close();
+    }
+  },
+);

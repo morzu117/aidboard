@@ -10,6 +10,7 @@ afterEach(cleanup);
 const monitor: MeshState = {
   ecritures: false,
   proxyConfigure: false,
+  superviseur: null,
   connected: true,
   tailscale: 'running',
   monitor: 'running',
@@ -141,3 +142,12 @@ test.each(['proxy', 'absent', 'stopped'] as const)(
     expect(document.body.innerHTML).not.toContain(sensible.state_dir);
   },
 );
+
+test('D284 : les Réglages swarph affichent le superviseur', async () => {
+  await ouvrir(ok(droits), { ...monitor, superviseur: 'launchd:dev.swarph.monitor.peer-a' });
+  expect(
+    screen.getByText(
+      "Supervisé par launchd:dev.swarph.monitor.peer-a : A-I-D ne le démarre ni ne l'arrête.",
+    ),
+  ).toBeTruthy();
+});

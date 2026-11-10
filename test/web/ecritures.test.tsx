@@ -27,6 +27,7 @@ const mesh = {
   state: {
     ecritures: false,
     proxyConfigure: false,
+    superviseur: null,
     connected: false,
     tailscale: 'running' as const,
     monitor: 'stopped' as const,

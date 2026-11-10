@@ -204,3 +204,18 @@ test('D281 : Tailscale reste monté puis descendu par A-I-D, sans appel monitor'
     ['tailscale-test', ['down']],
   ]);
 });
+
+test('D284 : le mode proxy garde superviseur nul et ne lit pas le statut CLI', async () => {
+  const t = preparer();
+  writeFileSync(t.inboxLog, dm(1));
+  t.exec.mockResolvedValue({
+    ok: true,
+    timedOut: false,
+    stdout: JSON.stringify({ running: true, supervisor: 'swarph-monitor@peer-a.service' }),
+    stderr: '',
+  });
+  const service = t.creer();
+  expect(await service.connect()).toMatchObject({ connected: true, superviseur: null });
+  expect(await service.disconnect()).toMatchObject({ connected: false, superviseur: null });
+  expect(t.exec).not.toHaveBeenCalled();
+});

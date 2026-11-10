@@ -59,6 +59,12 @@ function ContenuReglagesSwarph() {
       {lecture.result && (
         <section data-node="reglages-swarph.monitor">
           <h2>Monitor</h2>
+          {lecture.result.monitor.superviseur !== null && (
+            <p>
+              Supervisé par {lecture.result.monitor.superviseur} : A-I-D ne le démarre ni ne
+              l&apos;arrête.
+            </p>
+          )}
           <p>
             <EtatMonitor37_5 etat={lecture.result.monitor.monitor} />
           </p>

@@ -298,6 +298,9 @@ function Mesh() {
             Cell {mesh.state.cell} · {TAILSCALE_TEXTE[mesh.state.tailscale]} ·{' '}
             {pluriel(mesh.state.pending, 'DM')} en attente côté monitor
           </p>
+          {mesh.state.superviseur !== null && (
+            <p>Supervisé par {mesh.state.superviseur} : A-I-D ne le démarre ni ne l&apos;arrête.</p>
+          )}
           {bloque && (
             <p className="texte-faible" data-node="reglages.mesh.bloque">
               {bloque}

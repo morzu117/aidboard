@@ -16,6 +16,7 @@ const node = (id: string) => document.querySelector(`[data-node="${id}"]`) as HT
 const meshEtat: MeshState = {
   ecritures: false,
   proxyConfigure: false,
+  superviseur: null,
   connected: true,
   tailscale: 'running',
   monitor: 'running',

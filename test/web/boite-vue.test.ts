@@ -103,6 +103,7 @@ test('D140 : le compteur de la barre compte les agents en attente et les DM mis 
       state: {
         ecritures: false,
         proxyConfigure: false,
+        superviseur: null,
         connected: true,
         tailscale: 'running',
         monitor: 'running',

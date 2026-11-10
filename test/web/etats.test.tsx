@@ -86,6 +86,7 @@ function ouvrir(champs = {}, mesh = true) {
                 cell: 'peer-a',
                 ecritures: true,
                 proxyConfigure: true,
+                superviseur: null,
                 connected: true,
                 tailscale: 'running',
                 monitor: 'running',

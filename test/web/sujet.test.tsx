@@ -84,6 +84,7 @@ test.each([
         state: {
           ecritures: false,
           proxyConfigure: false,
+          superviseur: null,
           connected: false,
           tailscale: 'absent' as const,
           monitor: 'absent' as const,
@@ -933,6 +934,7 @@ test('« Ouvrir la cell swarph » n’apparaît qu’avec un mesh configuré, et
       state: {
         ecritures: false,
         proxyConfigure: false,
+        superviseur: null,
         connected: true,
         tailscale: 'running',
         monitor: 'running',
