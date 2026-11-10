@@ -7,7 +7,7 @@
 | Base | **`feat/35bis-envoi-reel`** (cd07f1b) : le 36 réutilise `ProxyClient` (D263) et l'écran d'envoi (D267). Il se rebase sur `main` quand le 35 bis est mergé. |
 | Organisation | Comme au 35 bis. |
 | Validation | Le lab valide le 36. Merge : CI verte, validation du lab, oui de Julien, **après** le 35 bis. |
-| Bloqué par | 36.4 attend le document de schéma des arguments et les réponses L5 à L7. 36.5 attend le build mergé du proxy. 36.2 et 36.3 n'attendent rien. |
+| Bloqué par | 36.4 suit le 35b.3 (l'action de la porte et la migration). 36.5 attend une installation de `swarph proxy serve` pour le test réel (le build est mergé, PR 702). |
 
 ## 1. Pourquoi
 
@@ -93,9 +93,25 @@ Les boutons sont un confort ; c'est le gateway qui décide (#1525). Sur une obli
 - Sur `CarteBoard`, à côté de chaque obligation, les boutons de D271.
 - « Prendre » et « Refuser » ouvrent une petite confirmation locale (« Prendre l'obligation #81 ? »), puis la demande.
 - « Clore » ouvre une boîte : l'issue (une liste fermée ; `skipped` seulement si l'étape de l'obligation a `mandatory: false` dans le graphe, L7, `server.py:20461-20475`), puis la preuve : un champ par condition si `conditions` n'est pas vide (le gateway exige alors `evidence_json`, `:13970` et `:14010`), sinon un seul champ.
-- **Tant que le verbe `close` du proxy n'accepte ni `evidence_json` ni `skipped`** (PR 702, `proxy_routes.py:73-76`), une obligation à conditions n'a pas de bouton « Clore », et `skipped` n'est pas proposé. Le lab propose de les ajouter à la PR 702. Le texte de l'`accept` est affiché en texte brut au-dessus, pour savoir ce qu'on atteste.
+- ~~Tant que le verbe `close` du proxy n'accepte ni `evidence_json` ni `skipped`, une obligation à conditions n'a pas de bouton « Clore », et `skipped` n'est pas proposé.~~ **Levé** : la PR 702 mergée accepte les deux (document de schéma, « Argument types »). `CLOTURE_PAR_CONDITION` passe à `true` au 36.4. Le texte de l'`accept` est affiché en texte brut au-dessus, pour savoir ce qu'on atteste.
 - Après la demande : l'attente de confirmation, puis le libellé du résultat, puis la relecture de la carte.
 - **Le déplacement** : une ligne « Déplacer : bientôt, quand le gateway donnera la version de la carte. », sans bouton.
+
+### D276. Les arguments des verbes d'état, d'après le schéma publié
+
+Document de schéma du proxy (swarph-cli `docs/proxy-protocol.md`, PR 702, mergée le 2026-11-09) :
+
+| Action | Verbe | `args` |
+|---|---|---|
+| `obligation.prendre` | `board.obligations.take` | `{id: obligation, expect_status: 'open'}` |
+| `obligation.refuser` | `board.obligations.decline` | `{id: obligation, expect_status: 'open', why: preuve}` |
+| `obligation.clore` | `board.obligations.close` | `{id: obligation, expect_status: 'open', expect_accept_sha256, outcome: issue}`, plus `evidence: preuve` et/ou `evidence_json: preuves` |
+
+- **Refuser demande un motif** : `why`, de 1 à 2 000 caractères, non blanc. `obligation.refuser` gagne donc un champ `motif` obligatoire dans le catalogue (mêmes règles qu'une preuve, 2 000 caractères au plus), nettoyé, et jamais dans le résumé ni le journal. L'UI du 36.3 le demande dans la confirmation locale de « Refuser ».
+- `evidence` : 1 à 4 000 caractères (comme `preuve`). `evidence_json` : chaque valeur au plus 16 000 caractères, et l'objet sérialisé par `json.dumps(..., sort_keys=True)` de Python (échappements ASCII compris) au plus 64 000 caractères. Avec 20 preuves de 4 000 caractères, ce plafond peut être dépassé : `lireParamsEtat` vérifie aussi la taille sérialisée, calculée comme Python (clés triées, séparateurs `", "` et `": "`, tout caractère hors ASCII en `\uXXXX`, en paires de substitution au-delà du BMP).
+- `skipped` passe tel quel : c'est le gateway qui décide si l'étape est facultative.
+- **Le graphe** : L6 disait « par le CLI ». La table du proxy a maintenant `board.cards.graph` ; au 36.4 il reste lu par le CLI, et passe au proxy avec le 44.
+- Aucun `obligation_id`, `actor`, `author` ni `usage`.
 
 ## 5. Points
 
@@ -115,7 +131,7 @@ Les boutons d'après la lecture, la boîte de clôture, l'attente et les libell�
 
 ### 36.4 L'action et la route (D272 à D274)
 
-Après le document de schéma et les réponses L5 à L7. La relecture et le refus tôt, le 409 relu sans nouvelle tentative, le résultat sans preuve, le mode host, le journal.
+Après le 35b.3. D276 : les arguments, le motif de refus, la taille de `evidence_json`, `CLOTURE_PAR_CONDITION` à `true`. La relecture et le refus tôt, le 409 relu sans nouvelle tentative, le résultat sans preuve, le mode host, le journal.
 
 ### 36.5 Le vrai proxy, l'e2e et la fiche de recette
 
