@@ -6,6 +6,7 @@ import {
   actionsPossibles,
   CLOTURE_PAR_CONDITION,
   envoyerEtat,
+  confirmationEtatRequise,
   type ActionPossible,
   type ResultatEtat,
 } from '../data/etats.js';
@@ -117,6 +118,10 @@ function DemandeEtat({
         relire();
       } else if (e instanceof AidApiError && e.body.error === 'proxy_absent') {
         setErreur("Le proxy de ta cellule n'est pas configuré. Rien ne peut partir.");
+      } else if (confirmationEtatRequise(e)) {
+        setErreur(
+          "La porte des confirmations n'est pas armée : arme-la depuis ton téléphone pour changer un état. Rien n'est parti.",
+        );
       } else
         setErreur(
           e instanceof AidApiError && typeof e.body.message === 'string'

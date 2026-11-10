@@ -3,7 +3,11 @@ import { createHash, webcrypto } from 'node:crypto';
 import { cleanup, fireEvent, screen } from '@testing-library/react';
 import { afterEach, expect, test, vi } from 'vitest';
 import { parseGraph, parseObligations } from '../../src/shared/board.js';
-import { actionsPossibles, envoyerEtat } from '../../web/src/data/etats.js';
+import {
+  actionsPossibles,
+  confirmationEtatRequise,
+  envoyerEtat,
+} from '../../web/src/data/etats.js';
 import { AidApiError } from '../../web/src/data/api.js';
 import { AidClient } from '../../web/src/data/client.js';
 import { ChangerEtat } from '../../web/src/ui/ChangerEtat.js';
@@ -218,6 +222,11 @@ test('confirmation du téléphone puis envoi et relecture', async () => {
 });
 
 test.each([
+  [
+    409,
+    { error: 'confirmation_requise' },
+    /^La porte des confirmations n'est pas armée : arme-la depuis ton téléphone pour changer un état\. Rien n'est parti\.$/,
+  ],
   [409, { error: 'proxy_absent' }, /proxy.*pas configuré/],
   [409, { error: 'confirmation_impossible', message: 'Téléphone requis' }, /Téléphone requis/],
   [400, { error: 'schema', message: 'Paramètres invalides' }, /Paramètres invalides/],
@@ -262,4 +271,17 @@ test('D275 levé : une obligation à conditions se clôt avec preuves et skipped
     params: { issue: 'skipped', preuves: { c1: 'Première preuve', c2: 'Seconde preuve' } },
   });
   expect((envois(h)[0]!.body as { params: object }).params).not.toHaveProperty('preuve');
+});
+
+test('envoyerEtat reconnaît la confirmation requise sans relancer', async () => {
+  const fetchImpl = vi.fn(async () => json(409, { error: 'confirmation_requise' })());
+  const client = new AidClient({ fetchImpl });
+  const erreur = await envoyerEtat(
+    'obligation.prendre',
+    { carte: 1, obligation: 81, attendu: { status: 'open' } },
+    client,
+  ).catch((e: unknown) => e);
+  expect(confirmationEtatRequise(erreur)).toBe(true);
+  expect(confirmationEtatRequise(new AidApiError(409, 'perime', { error: 'perime' }))).toBe(false);
+  expect(fetchImpl).toHaveBeenCalledOnce();
 });

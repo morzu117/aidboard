@@ -1,5 +1,6 @@
 import type { BoardObligation, BoardStep } from '../../../src/shared/board.js';
 import type { ActionEtat, ParametresEtat } from '../../../src/shared/etats.js';
+import { AidApiError } from './api.js';
 import type { AidClient } from './client.js';
 import type { ResultatEnvoi as EnvoiEcriture } from './ecritures.js';
 export type ResultatEtat = Pick<EnvoiEcriture, 'code' | 'status'>;
@@ -35,4 +36,12 @@ export function envoyerEtat<A extends ActionEtat>(
   client: AidClient,
 ): Promise<{ confirmation: string } | ResultatEtat> {
   return client.request('POST', '/api/swarph/etat/envoyer', { action, params });
+}
+
+export function confirmationEtatRequise(erreur: unknown): boolean {
+  return (
+    erreur instanceof AidApiError &&
+    erreur.status === 409 &&
+    erreur.body.error === 'confirmation_requise'
+  );
 }

@@ -139,6 +139,11 @@ Après le 35b.3. D276 : les arguments, le motif de refus, la taille de `evidence
 Après le build mergé. Un test contre le vrai `swarph proxy serve` avec une fausse gateway ; la fiche : prendre puis clore une obligation de test réelle, au téléphone ; un refus 409 provoqué en changeant l'obligation entre l'aperçu et le « oui ».
 - *Révision 35b.5 et 36.5.* `test/vrai-proxy.test.ts` et le lanceur `test/fixtures/vrai-proxy.py` : le seul ajout au vrai proxy est le remplacement de `peer_uid`, pour qu'un seul utilisateur joue à la fois le proxy et la cellule, en test seulement. 11 tests verts contre swarph-cli `main` (be8ed2b), aucun écart révélé. Sautée en CI. Gate 2871.
 
+### 36.6 Correctif : la confirmation toujours exigée (revue du lab #5036)
+
+`mesh.etat` rejoint `ACTIONS_MESH` (35b.6) : classe « toujours », réglage non modifiable, porte désarmée → 409 `confirmation_requise`, rien envoyé.
+- *Révision 36.6 (correctif de sécurité, revue du lab #1551 / #5036, approuvé par Julien le 2026-11-10).* **D272 révisée :** `mesh.etat` appartient à la classe « toujours », avec un réglage non modifiable, même si la base contient 0 ; porte désarmée → 409 `confirmation_requise`, rien envoyé. Plus de chemin d'exécution directe (`envoyerEtat` retiré au merge de 35b.6). 9 lignes existantes modifiées. Vrai proxy 11/11. Gate 2880 (échecs connus hors CI : install, update-check).
+
 ## 6. Questions au lab
 
 Réponses du lab (DM 93986) :

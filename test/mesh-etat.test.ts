@@ -221,7 +221,7 @@ test('409 gateway gardé sans retry et sans détail', async () => {
   expect(t.proxy.lignes).toHaveLength(1);
 });
 
-test('route : schéma, nettoyage, proxy absent, lecture indisponible et réglage coupé', async () => {
+test('route : schéma, nettoyage, proxy absent, lecture indisponible et réglage forcé à zéro', async () => {
   const t = await preparer();
   expect((await t.demander({ action: 'obligation.refuser', params: cible })).statusCode).toBe(400);
   expect(
@@ -237,8 +237,43 @@ test('route : schéma, nettoyage, proxy absent, lecture indisponible et réglage
   t.config.mesh.proxySocket = t.proxy.socket;
   t.obligations.mockRejectedValueOnce(new Error('indisponible'));
   expect((await t.demander()).json()).toEqual({ error: 'perime' });
-  t.reglage.couperConfirme('mesh.etat');
-  expect((await t.demander()).json()).toEqual({ code: 'succes', status: 200 });
+  t.db.prepare("UPDATE confirmations_reglage SET actif = 0 WHERE action = 'mesh.etat'").run();
+  expect(t.reglage.exige('mesh.etat')).toBe(true);
+  const r = await t.demander();
+  expect(r.statusCode).toBe(202);
+  expect(t.proxy.lignes).toHaveLength(0);
+  expect(t.proxy.nombreConnexions).toBe(0);
+  const { confirmation } = r.json();
+  expect(await t.oui(confirmation)).toMatchObject({ resultat: 'executee' });
+  expect(t.proxy.lignes).toHaveLength(1);
+  await t.oui(confirmation);
+  expect(t.proxy.lignes).toHaveLength(1);
+});
+test('porte désarmée : confirmation requise, aucun envoi ni demande', async () => {
+  const t = await preparer();
+  t.reglage.desarmerConfirme();
+  const preparation = vi.spyOn(t.actions['mesh.etat'], 'preparer');
+  const r = await t.demander();
+  expect(r.statusCode).toBe(409);
+  expect(r.json()).toEqual({ error: 'confirmation_requise' });
+  expect(preparation).not.toHaveBeenCalled();
+  expect(t.proxy.lignes).toHaveLength(0);
+  expect(t.proxy.nombreConnexions).toBe(0);
+  expect(t.db.prepare('SELECT count(*) AS n FROM pda_demandes').get()).toEqual({ n: 0 });
+});
+test.each([false, true])('couper mesh.etat est refusé, porte armée : %s', async (arme) => {
+  const t = await preparer();
+  if (!arme) t.reglage.desarmerConfirme();
+  const r = await t.app.inject({
+    method: 'PUT',
+    url: '/api/confirmations/reglage',
+    payload: { action: 'mesh.etat', actif: false },
+  });
+  expect(r.statusCode).toBe(400);
+  expect(r.json()).toEqual({ error: 'confirmation obligatoire' });
+  expect(t.reglage.exige('mesh.etat')).toBe(true);
+  expect(() => t.reglage.couperConfirme('mesh.etat')).toThrow('confirmation obligatoire');
+  expect(t.proxy.lignes).toHaveLength(0);
   expect(t.db.prepare('SELECT count(*) AS n FROM pda_demandes').get()).toEqual({ n: 0 });
 });
 test('mesh désactivé : 404 ; mode host : aucune route d’envoi', async () => {

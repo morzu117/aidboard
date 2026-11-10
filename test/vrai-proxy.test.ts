@@ -16,7 +16,8 @@ import { creerProxyClient } from '../src/daemon/mesh/proxy.js';
 import { registerEcrituresRoutes } from '../src/daemon/routes/ecritures.js';
 import { parseObligations } from '../src/shared/board.js';
 import { hashAccept } from '../src/shared/etats.js';
-import { preparerPda } from './helpers/pda.js';
+import { FilePda } from '../src/daemon/pda/file.js';
+import { preparerPda, assertionPda } from './helpers/pda.js';
 
 const python = process.env.AID_SWARPH_PROXY_PYTHON;
 const disponible = !!python && spawnSync(python, ['-c', 'pass'], { timeout: 5000 }).status === 0;
@@ -107,8 +108,25 @@ async function preparer(status = 201, closed_obligations: number[] = []) {
     readAt: '',
   });
   const actions = creerActionsConfirmation({ ...t, config, board });
-  const porte = creerPorte({ db: t.db, actions, file: () => null });
-  expect(creerReglage(t.db).arme()).toBe(false);
+  creerReglage(t.db).armer();
+  const appareil = await t.appareil();
+  let reponses: { id: string; appareil: string; corps: string; curseur: number }[] = [];
+  const porte = creerPorte({ db: t.db, actions, file: () => file });
+  const file = new FilePda({
+    ...t,
+    actif: () => true,
+    contexte: () => ({ origine: 'https://aid-e2e.ts.net', rpId: 'aid-e2e.ts.net' }),
+    signaler: vi.fn(),
+    executer: (ligne) => porte.executerConfirmee(ligne),
+    preparerConsommation: (ligne) => porte.preparerConsommation(ligne),
+    relais: {
+      publierAutorises: async () => true,
+      deposer: async () => true,
+      retirer: async () => {},
+      tirer: async () => reponses,
+    },
+  });
+  nettoyages.push(() => file.arreter());
   const app = Fastify();
   nettoyages.push(() => app.close());
   app.decorateRequest('principal', null);
@@ -116,6 +134,31 @@ async function preparer(status = 201, closed_obligations: number[] = []) {
     req.principal = { kind: 'admin', via: 'bearer' };
   });
   registerEcrituresRoutes(app, { cell: 'peer-a', board, porte });
+  const oui = async (id: string) => {
+    const ligne = t.db
+      .prepare('SELECT numero, numero_mac FROM pda_demandes WHERE id = ?')
+      .get(id) as { numero: string; numero_mac: string | null };
+    // Comme dans confirmations-porte : adapter la fausse passkey aux demandes toujours.
+    if (ligne.numero_mac !== null)
+      t.db.prepare('UPDATE pda_demandes SET numero = ? WHERE id = ?').run(ligne.numero_mac, id);
+    const assertion = await assertionPda(t.db, id, appareil);
+    if (ligne.numero_mac !== null)
+      t.db.prepare('UPDATE pda_demandes SET numero = ? WHERE id = ?').run(ligne.numero, id);
+    reponses = [
+      {
+        id,
+        appareil: appareil.id,
+        curseur: 1,
+        corps: Buffer.from(JSON.stringify(assertion)).toString('base64url'),
+      },
+    ];
+    await file.tour();
+    reponses = [];
+    const ligneEnvoi = t.db.prepare('SELECT envoi FROM pda_demandes WHERE id = ?').get(id) as {
+      envoi: string;
+    };
+    return JSON.parse(ligneEnvoi.envoi);
+  };
   return {
     requetes,
     socket,
@@ -125,11 +168,18 @@ async function preparer(status = 201, closed_obligations: number[] = []) {
         url: `/api/swarph/${action.startsWith('obligation.') ? 'etat' : 'ecrire'}/envoyer`,
         payload: { action, params },
       });
-      expect(reponse.statusCode).toBe(200);
+      expect(reponse.statusCode).toBe(202);
+      expect(requetes).toHaveLength(0);
+      const id = reponse.json().confirmation;
+      const envoi = await oui(id);
+      const nombre = requetes.length;
+      expect(requetes.filter((r) => r.methode === 'POST')).toHaveLength(1);
+      await oui(id);
+      expect(requetes).toHaveLength(nombre);
       expect(reponse.body).not.toContain(jeton);
       expect(JSON.stringify(t.journal.mock.calls)).not.toContain(jeton);
       expect(requetes.every((r) => r.autorisation === `Bearer ${jeton}`)).toBe(true);
-      return reponse.json();
+      return envoi;
     },
   };
 }
