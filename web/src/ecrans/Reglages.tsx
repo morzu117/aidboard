@@ -1,3 +1,4 @@
+import { pluriel } from '../ui/pluriel.js';
 import { useConfirmation } from '../ui/AttenteConfirmation.js';
 import { useEffect, useRef, useState } from 'react';
 import type { Workspace } from '../../../src/shared/model.js';
@@ -20,7 +21,6 @@ interface HooksState {
 }
 
 const message = (err: unknown) => (err instanceof Error ? err.message : String(err));
-const pluriel = (n: number, mot: string) => `${n} ${mot}${n > 1 ? 's' : ''}`;
 
 function Projets() {
   const { state, call, refresh } = useAid();
@@ -255,7 +255,7 @@ const TAILSCALE_TEXTE: Record<MeshTailscale, string> = {
 };
 
 // Chantier 25 (D100) : connecter et déconnecter le mesh, sortis de la pastille de la barre. Déconnecter arrête le
-// monitor de la cell, pas seulement la vue d'A-I-D : la confirmation le dit.
+// monitor de la cell sauf s'il est supervisé : seul le suivi d'A-I-D s'arrête alors.
 function Mesh() {
   const { meshBascule } = useLayout();
   const { hash } = useLocation();
@@ -343,8 +343,18 @@ function Mesh() {
       {confirmer && mesh && (
         <Dialogue titre="Déconnecter le mesh ?" onClose={() => setConfirmer(false)}>
           <p className="texte-discret" data-node="reglages.mesh.confirmation">
-            Le monitor de la cell {mesh.state.cell} s’arrête. Toutes les sessions de cette cell,
-            Claude compris, ne seront plus réveillées par les DM jusqu’à la reconnexion.
+            {mesh.state.superviseur !== null ? (
+              <>
+                Le monitor de la cell {mesh.state.cell} reste en marche sous{' '}
+                {mesh.state.superviseur} : les DM continuent d’arriver et de réveiller les sessions.
+                A-I-D cesse seulement de les suivre jusqu’à la reconnexion.
+              </>
+            ) : (
+              <>
+                Le monitor de la cell {mesh.state.cell} s’arrête. Toutes les sessions de cette cell,
+                Claude compris, ne seront plus réveillées par les DM jusqu’à la reconnexion.
+              </>
+            )}
           </p>
           <div className="dialogue-actions">
             <button className="bouton" type="button" onClick={() => setConfirmer(false)}>

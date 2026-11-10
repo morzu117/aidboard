@@ -16,7 +16,7 @@ const lectures = (carte = {}, graphe = {}, fil = {}) => ({
   thread: reussite(parseThread({ messages: [], ...fil }, 1000)!.value),
 });
 
-test('tri décroissant stable, dates égales, absentes et illisibles, sans mutation', () => {
+test('tri décroissant, dates égales, absentes et illisibles, sans mutation', () => {
   const donnees = lectures(
     {
       stage_history: [
@@ -47,12 +47,12 @@ test('tri décroissant stable, dates égales, absentes et illisibles, sans mutat
   const resultat = chronologie(donnees);
   expect(resultat.entrees.map((e) => e.cle)).toEqual([
     'fil-1-0',
-    'etape-1',
-    'obligation-0-0',
     'fil-2-1',
-    'etape-0',
-    'obligation-0-1',
+    'obligation-0-0',
+    'etape-1',
     'fil-3-2',
+    'obligation-0-1',
+    'etape-0',
   ]);
   expect(new Set(resultat.entrees.map((e) => e.cle)).size).toBe(7);
   expect(donnees).toEqual(avant);
@@ -69,11 +69,11 @@ test('phrases des étapes et entrée déduite par le gateway', () => {
     }),
   );
   expect(resultat.entrees.map((e) => e.texte)).toEqual([
-    'Étape → idea',
-    'Étape → build (déduite par le gateway, ligne 42)',
     'Étape → inconnu',
+    'Étape → build (déduite par le gateway, ligne 42)',
+    'Étape → idea',
   ]);
-  expect(resultat.entrees[0]).toMatchObject({ auteur: 'peer-a', source: 'etape', date: null });
+  expect(resultat.entrees[2]).toMatchObject({ auteur: 'peer-a', source: 'etape', date: null });
 });
 
 test.each([
@@ -123,9 +123,9 @@ test('champs absents : compléments omis et auteur inconnu', () => {
     lectures({}, { steps: [{ events: ['mint', 'close', 'reassign'].map((kind) => ({ kind })) }] }),
   );
   expect(resultat.entrees.map((e) => e.texte)).toEqual([
-    'Obligation inconnu ouverte',
-    'Obligation inconnu fermée',
     'Obligation inconnu réattribuée',
+    'Obligation inconnu fermée',
+    'Obligation inconnu ouverte',
   ]);
   expect(resultat.entrees.every((e) => e.auteur === 'inconnu')).toBe(true);
 });
@@ -187,3 +187,39 @@ test('trois lectures en échec : toutes les limites', () => {
     limites: [{ 'non-lu': 'etapes' }, { 'non-lu': 'obligations' }, { 'non-lu': 'fil' }],
   });
 });
+
+test('même milliseconde : fractions précises puis réception inverse, y compris les zéros finaux', () => {
+  const dates = [
+    '2026-11-05T07:00:00.123456Z',
+    '2026-11-05T07:00:00.123457Z',
+    '2026-11-05T07:00:00.123455Z',
+    '2026-11-05T07:00:00.1234560Z',
+    '2026-11-05T07:00:00.123Z',
+    '2026-11-05T08:00:00.123000+01:00',
+    '2026-11-05T07:00:00.1234560001Z',
+  ];
+  const donnees = lectures(
+    {},
+    {
+      steps: [{ events: dates.map((at) => ({ kind: 'amend', at })) }],
+    },
+  );
+  const attendu = [1, 6, 3, 0, 2, 5, 4].map((indice) => `obligation-0-${indice}`);
+  expect(chronologie(donnees).entrees.map((e) => e.cle)).toEqual(attendu);
+  expect(chronologie(donnees).entrees.map((e) => e.cle)).toEqual(attendu);
+});
+
+test.each(['Z', '+00:00', ''])(
+  'fractions nulles, précision variable et date sans fraction (fuseau %j)',
+  (fuseau) => {
+    const dates = ['', '.0000001', '.00000010', '.00000009', '.000'].map(
+      (fraction) => `2026-11-05T07:00:00${fraction}${fuseau}`,
+    );
+    const resultat = chronologie(
+      lectures({}, { steps: [{ events: dates.map((at) => ({ kind: 'amend', at })) }] }),
+    );
+    expect(resultat.entrees.map((e) => e.cle)).toEqual(
+      [2, 1, 3, 4, 0].map((indice) => `obligation-0-${indice}`),
+    );
+  },
+);

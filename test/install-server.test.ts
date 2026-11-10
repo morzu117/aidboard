@@ -1,5 +1,12 @@
 import { execFile } from 'node:child_process';
-import { existsSync, mkdtempSync, readlinkSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
@@ -76,5 +83,49 @@ test('install-server.sh : archive introuvable (version inconnue) → code 1 sans
     expect(existsSync(join(home, 'server', 'current'))).toBe(false);
   } finally {
     await srv.close();
+  }
+});
+
+test.each([false, true])('current → A, installer B (mv BSD simulé : %s)', async (bsd) => {
+  const home = mkdtempSync(join(tmpdir(), 'aid-ish-'));
+  const premiere = await fakeReleaseServer('0.2.0');
+  const seconde = await fakeReleaseServer('0.3.0');
+  const extra: Record<string, string> = {};
+  if (bsd) {
+    const bin = join(home, 'bin');
+    mkdirSync(bin);
+    // Sans -h, le mv BSD suit current ; -T est refusé avant toute mutation.
+    writeFileSync(
+      join(bin, 'mv'),
+      `#!${process.execPath}
+const fs = require('node:fs');
+const path = require('node:path');
+const args = process.argv.slice(2);
+const options = args.filter((arg) => arg.startsWith('-')).join('');
+if (options.includes('T')) process.exit(1);
+const [source, cible] = args.filter((arg) => !arg.startsWith('-'));
+let destination = cible;
+if (!options.includes('h') && fs.existsSync(cible) && fs.statSync(cible).isDirectory()) {
+  destination = path.join(cible, path.basename(source));
+}
+fs.renameSync(source, destination);
+`,
+      { mode: 0o755 },
+    );
+    extra.PATH = `${bin}:${process.env.PATH ?? '/usr/bin:/bin'}`;
+  }
+  try {
+    const a = await run(home, `${premiere.base}/download`, extra);
+    expect(a.code, a.out).toBe(0);
+    expect(readlinkSync(join(home, 'server', 'current'))).toBe('0.2.0');
+    const b = await run(home, `${seconde.base}/download`, extra);
+    expect(b.code, b.out).toBe(0);
+    expect(readlinkSync(join(home, 'server', 'current'))).toBe('0.3.0');
+    for (const dossier of [join(home, 'server'), join(home, 'server', '0.2.0')]) {
+      expect(readdirSync(dossier).filter((nom) => nom.startsWith('.current-'))).toEqual([]);
+    }
+  } finally {
+    await premiere.close();
+    await seconde.close();
   }
 });

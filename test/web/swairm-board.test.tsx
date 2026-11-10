@@ -295,3 +295,25 @@ test('host : aucun appel Swairm', async () => {
   act(() => FakeSocket.all.at(-1)!.open());
   expect(appels).not.toContain('/api/swairm/board');
 });
+
+test.each([
+  [1, 'Sujets Swairm sans carte (1)', '1 sujet merged ou abandoned sans carte non listé.'],
+  [2, 'Sujets Swairm sans carte (2)', '2 sujets merged ou abandoned sans carte non listés.'],
+])('sans carte : titre fixe et accord pour %i sujet(s) terminés', async (nombre, titre, texte) => {
+  await ouvrir(
+    reponse([
+      ...Array.from({ length: nombre }, (_, indice) =>
+        sujet({ id: `vivant-${indice}`, carte: null }),
+      ),
+      ...Array.from({ length: nombre }, (_, indice) =>
+        sujet({
+          id: `termine-${indice}`,
+          carte: null,
+          etat: indice === 0 ? 'merged' : 'abandoned',
+        }),
+      ),
+    ]),
+  );
+  expect(await screen.findByText(titre)).toBeTruthy();
+  expect(screen.getByText(texte)).toBeTruthy();
+});
