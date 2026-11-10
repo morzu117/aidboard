@@ -92,6 +92,14 @@ Vers les `BoardErrorKind` existants (`src/shared/board.ts`) :
 - **Memory, les liens** (L9) : en mode proxy, la page affiche « Les liens ne sont pas disponibles par le proxy. », sans appel.
 - **Swairm** : `swairm ask` est le CLI local de swairm, sans mesh ni jeton (L15 retirée, DM 94888) : inchangé, comme `codegraph`.
 
+### D283. Le proxy en lecture seule
+
+Le proxy du Mac est en lecture seule par défaut (#1539 (b) ; swarph-cli PR 712, `d029fea`, DM 95003) : chaque verbe d'écriture répond `verb_not_allowed` sans appeler le gateway. Sans le savoir, A-I-D proposerait « Envoyer », « Prendre », « Refuser » et « Clore », ferait confirmer chaque acte au téléphone, puis échouerait.
+- Un réglage `mesh.proxyLectureSeule` (booléen, `false` par défaut ; `true` sur le Mac tant que #1539 (a) n'est pas livré). Il ne vaut que si `mesh.proxySocket` est réglé.
+- S'il vaut `true`, les routes `ecrire/envoyer` et `etat/envoyer` répondent 409 `proxy_lecture_seule` **avant** la porte : aucune demande de confirmation n'est créée. L'aperçu et « Copier » du 35 restent.
+- L'état du mesh vu par le web dit `ecritures: false` ; le web désactive « Envoyer » avec « Le proxy de ta cellule est en lecture seule : rien ne peut partir. », et n'affiche ni « Prendre », ni « Refuser », ni « Clore ».
+- Le réglage ne crée aucune garantie : c'est le proxy qui refuse. Un `verb_not_allowed` reçu malgré tout garde son libellé du 35 bis.
+
 ## 5. Points
 
 ### 44.1 Le plan
@@ -117,6 +125,10 @@ D'après L12–L14 (DM 94888) : `POST /messages` rend toujours `id`, `closed_obl
 
 Le message des liens de Memory, et l'état du monitor dans Réglages.
 - *Révision 44.5.* `BoardErrorKind` gagne `proxy-indisponible`, pour les liens de Memory seulement. Sans indicateur de transport côté web, `'absent'` et `'stopped'` gardent leurs libellés du mode CLI ; seul `'proxy'` dit « Géré par le proxy de ta cellule. ». 2 lignes existantes modifiées (des assertions). Gate 2849, plus un test instable de `conversation-codex`, vert seul trois fois.
+
+### 44.7 Le proxy en lecture seule (D283)
+
+`mesh.proxyLectureSeule`, le 409 avant la porte, `ecritures` dans l'état du mesh, l'UI sans boutons d'écriture, et un test contre le vrai proxy réglé `read_only: true`.
 
 ### 44.6 Le vrai proxy et la recette
 
