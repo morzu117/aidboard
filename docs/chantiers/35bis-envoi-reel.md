@@ -154,5 +154,7 @@ Après le build mergé. Un test contre le vrai `swarph proxy serve` avec une fau
 
 ## 7. Fini quand
 
+- La recette des écritures sur le Mac attend #1539 (a) : le proxy du Mac est en lecture seule par configuration (DM 94977). Le test contre le vrai `swarph proxy serve` (`npm run test:vrai-proxy`, avec `AID_SWARPH_PROXY_PYTHON`) tient lieu de preuve d'intégration d'ici là (L4).
+
 - 35b.2 à 35b.5 sont commités, avec `npm run gate` et `npm run e2e` verts.
 - La CI est verte, le lab a validé, la recette de Julien est faite.

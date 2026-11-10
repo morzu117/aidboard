@@ -137,6 +137,7 @@ Après le 35b.3. D276 : les arguments, le motif de refus, la taille de `evidence
 ### 36.5 Le vrai proxy, l'e2e et la fiche de recette
 
 Après le build mergé. Un test contre le vrai `swarph proxy serve` avec une fausse gateway ; la fiche : prendre puis clore une obligation de test réelle, au téléphone ; un refus 409 provoqué en changeant l'obligation entre l'aperçu et le « oui ».
+- *Révision 35b.5 et 36.5.* `test/vrai-proxy.test.ts` et le lanceur `test/fixtures/vrai-proxy.py` : le seul ajout au vrai proxy est le remplacement de `peer_uid`, pour qu'un seul utilisateur joue à la fois le proxy et la cellule, en test seulement. 11 tests verts contre swarph-cli `main` (be8ed2b), aucun écart révélé. Sautée en CI. Gate 2871.
 
 ## 6. Questions au lab
 
@@ -152,6 +153,8 @@ Réponses du lab (DM 93986) :
 - **La preuve est un texte libre** : elle passe par le nettoyage et ne sort ni dans le journal ni dans le résultat.
 
 ## 8. Fini quand
+
+- La recette des écritures sur le Mac attend #1539 (a) : le proxy du Mac est en lecture seule par configuration (DM 94977). Le test contre le vrai `swarph proxy serve` (`npm run test:vrai-proxy`, avec `AID_SWARPH_PROXY_PYTHON`) tient lieu de preuve d'intégration d'ici là (L4).
 
 - 36.2 à 36.5 sont commités, avec `npm run gate` et `npm run e2e` verts.
 - La CI est verte, le lab a validé, la recette de Julien est faite, et le 35 bis est mergé avant.
