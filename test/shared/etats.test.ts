@@ -121,19 +121,19 @@ describe('états', () => {
       [undefined, 'invalide'],
       ['', 'vide'],
       [' \n\t', 'vide'],
-      ['x'.repeat(4001), 'trop longue (4 000 caractères au plus)'],
+      ['x'.repeat(3901), 'trop longue (3 900 caractères au plus)'],
       ['a\r', 'contenant un caractère de contrôle'],
       ['a\0', 'contenant un caractère de contrôle'],
       ['a\u0085', 'contenant un caractère de contrôle'],
     ] as const) {
       expect(lire({ preuve: texte })).toEqual({ ok: false, message: `preuve ${motif}` });
-      if (typeof texte === 'string' && texte.length === 4001) continue;
+      if (typeof texte === 'string' && texte.length === 3901) continue;
       expect(lire({ preuves: { condition: texte } })).toEqual({
         ok: false,
         message: `texte de preuves ${motif}`,
       });
     }
-    for (const preuve of ['x', '😀'.repeat(4000), 'oui\n\t'])
+    for (const preuve of ['x', '😀'.repeat(3900), 'oui\n\t'])
       expect(lire({ preuve }).ok).toBe(true);
     for (const preuves of [null, [], 1, 'texte'])
       expect(lire({ preuves })).toEqual({ ok: false, message: 'preuves doit être un objet' });
@@ -239,11 +239,29 @@ it('proxy-protocol.md « Argument types » et table des verbes : aucun champ add
   }
 });
 
-it('D276 « Argument types » : chaque evidence_json accepte 16 000 caractères au plus', () => {
+it('D276 : preuves limitées à 12 000 caractères sérialisés Python', () => {
+  const preuves = { a: 'x'.repeat(11991) };
+  expect(tailleJsonPython(preuves)).toBe(12000);
+  expect(lireParamsEtat('obligation.clore', { ...fermeture, preuves }).ok).toBe(true);
   expect(
-    lireParamsEtat('obligation.clore', { ...fermeture, preuves: { c1: 'x'.repeat(16000) } }).ok,
-  ).toBe(true);
+    lireParamsEtat('obligation.clore', {
+      ...fermeture,
+      preuves: { a: 'x'.repeat(11992) },
+    }),
+  ).toEqual({ ok: false, message: 'preuves : 12 000 caractères sérialisés au plus' });
   expect(
-    lireParamsEtat('obligation.clore', { ...fermeture, preuves: { c1: 'x'.repeat(16001) } }).ok,
-  ).toBe(false);
+    lireParamsEtat('obligation.clore', {
+      ...fermeture,
+      preuves: { a: 'x'.repeat(12001) },
+    }),
+  ).toEqual({ ok: false, message: 'texte de preuves trop longue (12 000 caractères au plus)' });
+});
+
+it('D276 : preuve simple limitée à 3 900 caractères', () => {
+  expect(lireParamsEtat('obligation.clore', { ...fermeture, preuve: '😀'.repeat(3900) }).ok).toBe(
+    true,
+  );
+  expect(lireParamsEtat('obligation.clore', { ...fermeture, preuve: 'x'.repeat(3901) }).ok).toBe(
+    false,
+  );
 });

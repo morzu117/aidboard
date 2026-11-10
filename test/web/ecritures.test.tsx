@@ -549,3 +549,19 @@ test('porte désarmée : explique le refus et confirme que rien ne part', async 
     "La porte des confirmations n'est pas armée : arme-la depuis ton téléphone pour écrire sur le mesh. Rien n'est parti.",
   );
 });
+
+test('demande trop grande : message précis et aperçu conservé', async () => {
+  const h = ouvrir();
+  h.respond.set('POST /api/swarph/ecrire/envoyer', json(413, { error: 'demande_trop_grande' }));
+  await voir();
+  await userEvent.click(await screen.findByRole('button', { name: 'Envoyer' }));
+  expect((await screen.findByRole('status')).textContent).toBe(
+    "Trop long pour être confirmé au téléphone : raccourcis le texte. Rien n'est parti.",
+  );
+  expect(screen.getByRole('region', { name: 'Aperçu' })).toBeTruthy();
+  expect(document.querySelector('section[aria-label="Aperçu"] pre:last-of-type')?.textContent).toBe(
+    texte,
+  );
+  expect(screen.queryByText('En attente de ta confirmation sur le téléphone.')).toBeNull();
+  expect(screen.getByRole('button', { name: 'Copier le texte' })).toHaveProperty('disabled', false);
+});

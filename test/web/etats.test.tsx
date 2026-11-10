@@ -310,3 +310,34 @@ test('envoyerEtat reconnaît la confirmation requise sans relancer', async () =>
   expect(confirmationEtatRequise(new AidApiError(409, 'perime', { error: 'perime' }))).toBe(false);
   expect(fetchImpl).toHaveBeenCalledOnce();
 });
+
+test('D276 : le compteur Python bloque au-delà de 12 000, y compris hors ASCII', async () => {
+  const h = ouvrir({ conditions: [{ id: 'a' }] });
+  fireEvent.click(await screen.findByRole('button', { name: 'Clore' }));
+  const champ = screen.getByLabelText('Preuve a');
+  expect(champ).toHaveProperty('maxLength', 12000);
+  fireEvent.change(champ, { target: { value: 'x'.repeat(11991) } });
+  expect(screen.getByText('12000 / 12 000 caractères sérialisés')).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Confirmer' })).toHaveProperty('disabled', false);
+  fireEvent.change(champ, { target: { value: 'x'.repeat(11992) } });
+  expect(screen.getByRole('button', { name: 'Confirmer' })).toHaveProperty('disabled', true);
+  fireEvent.change(champ, { target: { value: '😀'.repeat(1000) } });
+  expect(screen.getByText('12009 / 12 000 caractères sérialisés')).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Confirmer' })).toHaveProperty('disabled', true);
+  expect(envois(h)).toHaveLength(0);
+});
+
+test('clôture : 413 demande_trop_grande expliqué sans nouvelle demande', async () => {
+  vi.stubGlobal('crypto', webcrypto);
+  const h = ouvrir();
+  h.respond.set('POST /api/swarph/etat/envoyer', json(413, { error: 'demande_trop_grande' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Clore' }));
+  expect(screen.getByLabelText('Preuve')).toHaveProperty('maxLength', 3900);
+  fireEvent.change(screen.getByLabelText('Preuve'), { target: { value: 'Une preuve' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Confirmer' }));
+  expect((await screen.findByRole('alert')).textContent).toBe(
+    "Trop long pour être confirmé au téléphone : raccourcis la preuve. Rien n'est parti.",
+  );
+  expect(envois(h)).toHaveLength(1);
+  expect(screen.queryByText('En attente de ta confirmation sur le téléphone.')).toBeNull();
+});
