@@ -39,10 +39,11 @@ export interface ParametresActions {
   essai: Record<string, never>;
 }
 export type ActionConfirmee = keyof ParametresActions;
+export const ACTIONS_MESH: ReadonlySet<string> = new Set(['mesh.ecrire', 'mesh.etat']);
 export type ClasseConfirmation = 'toujours' | 'defaut';
 export const CLASSE_ACTION = Object.freeze({
-  'mesh.etat': 'defaut',
-  'mesh.ecrire': 'defaut',
+  'mesh.etat': 'toujours',
+  'mesh.ecrire': 'toujours',
   merge: 'defaut',
   push: 'defaut',
   nettoyage: 'defaut',

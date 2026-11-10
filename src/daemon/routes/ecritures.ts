@@ -38,7 +38,7 @@ export function registerEcrituresRoutes(
     );
     if ('confirmation' in demande)
       return reply.code(202).send({ confirmation: demande.confirmation });
-    return deps.porte!.envoyerEtat(demande.direct);
+    throw new AidHttpError(409, 'confirmation_requise');
   });
   app.post('/api/swarph/ecrire/envoyer', async (req, reply) => {
     if (!deps.cell || !deps.board) throw new AidHttpError(404, 'mesh désactivé');
@@ -59,7 +59,7 @@ export function registerEcrituresRoutes(
     );
     if ('confirmation' in demande)
       return reply.code(202).send({ confirmation: demande.confirmation });
-    return deps.porte!.envoyer(demande.direct);
+    throw new AidHttpError(409, 'confirmation_requise');
   });
   app.post('/api/swarph/ecrire/apercu', async (req) => {
     if (!deps.cell || !deps.board)

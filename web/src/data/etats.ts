@@ -46,3 +46,11 @@ export function envoyerEtat<A extends ActionEtat>(
       throw e;
     });
 }
+
+export function confirmationEtatRequise(erreur: unknown): boolean {
+  return (
+    erreur instanceof AidApiError &&
+    erreur.status === 409 &&
+    erreur.body.error === 'confirmation_requise'
+  );
+}

@@ -539,3 +539,13 @@ test('D283 : un 409 reçu malgré tout garde le message de lecture seule', async
   ).toBeTruthy();
   expect(screen.getByRole('button', { name: 'Envoyer' })).toHaveProperty('disabled', true);
 });
+
+test('porte désarmée : explique le refus et confirme que rien ne part', async () => {
+  const h = ouvrir();
+  h.respond.set('POST /api/swarph/ecrire/envoyer', json(409, { error: 'confirmation_requise' }));
+  await voir();
+  await userEvent.click(await screen.findByRole('button', { name: 'Envoyer' }));
+  expect((await screen.findByRole('alert')).textContent).toBe(
+    "La porte des confirmations n'est pas armée : arme-la depuis ton téléphone pour écrire sur le mesh. Rien n'est parti.",
+  );
+});

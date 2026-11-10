@@ -442,16 +442,35 @@ test('faux numéro signé : motif dans l’attente et les dernières demandes', 
   await screen.findByText('Merge du sujet — Annulée : mauvais numéro saisi sur le téléphone');
 });
 
-test('le réglage mesh.ecrire fourni par le daemon porte son libellé', async () => {
-  setup(<PanneauConfirmations />, snapshot(), '/', {
+test('le réglage mesh.ecrire est toujours actif et non modifiable', async () => {
+  const h = setup(<PanneauConfirmations />, snapshot(), '/', {
     ...routes,
     'GET /api/confirmations/reglage': json(200, {
       ...reglage,
-      actions: [{ action: 'mesh.ecrire', actif: true }],
+      actions: [{ action: 'mesh.ecrire', actif: false }],
     }),
   });
-  expect(await screen.findByRole('switch', { name: 'Écrire sur le mesh' })).toHaveProperty(
-    'checked',
-    true,
-  );
+  const ligne = await screen.findByRole('switch', {
+    name: 'Écrire sur le mesh — Toujours confirmée',
+  });
+  expect(ligne).toHaveProperty('checked', true);
+  expect(ligne).toHaveProperty('disabled', true);
+  ligne.click();
+  expect(h.calls.some((c) => c.method === 'PUT')).toBe(false);
+});
+test('le réglage mesh.etat est toujours actif et non modifiable', async () => {
+  const h = setup(<PanneauConfirmations />, snapshot(), '/', {
+    ...routes,
+    'GET /api/confirmations/reglage': json(200, {
+      ...reglage,
+      actions: [{ action: 'mesh.etat', actif: false }],
+    }),
+  });
+  const ligne = await screen.findByRole('switch', {
+    name: 'Changer un état — Toujours confirmée',
+  });
+  expect(ligne).toHaveProperty('checked', true);
+  expect(ligne).toHaveProperty('disabled', true);
+  ligne.click();
+  expect(h.calls.some((c) => c.method === 'PUT')).toBe(false);
 });

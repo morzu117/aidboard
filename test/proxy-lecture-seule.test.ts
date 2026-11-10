@@ -99,6 +99,8 @@ test('D283 : sans proxy, lecture seule est sans effet sur le refus D262', async 
       payload: { action, params },
     });
     expect(r.statusCode).toBe(409);
-    expect(r.json().error).toBe('proxy_absent');
+    // Porte désarmée : le refus de 35b.6 vient avant la préparation (D262) ; jamais la lecture seule.
+    expect(r.json().error).toBe('confirmation_requise');
+    expect(r.json().error).not.toBe('proxy_lecture_seule');
   }
 });
