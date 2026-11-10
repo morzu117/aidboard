@@ -221,6 +221,7 @@ export interface MeshState {
   connected: boolean;
   tailscale: MeshTailscale;
   monitor: MeshMonitor;
+  superviseur: string | null;
   /** DM en attente côté monitor (`sinks[].pending`) */
   pending: number;
   /** depuis quand l'état `connected` courant tient (D41 : « hors mesh depuis <durée> ») */

@@ -30,6 +30,7 @@ const dm = (id: number, kind: MeshDm['kind'], seenAt: string | null = null): Mes
 const etat = (over: Partial<MeshState> = {}): MeshState => ({
   ecritures: false,
   proxyConfigure: false,
+  superviseur: null,
   connected: true,
   tailscale: 'running',
   monitor: 'running',
@@ -153,4 +154,13 @@ test('sans cell configurée, la section dit pourquoi il n’y a rien à connecte
   setup(<Reglages />, snapshot());
   await waitFor(() => expect(node('reglages.mesh.absent')).not.toBeNull());
   expect(node('reglages.mesh.connecter')).toBeNull();
+});
+
+test('D284 : les Réglages expliquent la supervision du monitor', async () => {
+  setup(<Reglages />, avecMesh({ superviseur: 'swarph-monitor@peer-a.service' }));
+  await waitFor(() =>
+    expect(document.body.textContent).toContain(
+      "Supervisé par swarph-monitor@peer-a.service : A-I-D ne le démarre ni ne l'arrête.",
+    ),
+  );
 });

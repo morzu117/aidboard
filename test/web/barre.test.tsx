@@ -174,6 +174,7 @@ const avecMesh = (checkedAt: string | null = null) =>
       state: {
         ecritures: false,
         proxyConfigure: false,
+        superviseur: null,
         connected: true,
         tailscale: 'running',
         monitor: 'running',

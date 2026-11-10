@@ -24,13 +24,27 @@ export interface MeshServiceDeps {
 }
 
 /** `swarph monitor status --json` : ce qu'on en garde. */
-export function parseMonitorStatus(stdout: string): { monitor: MeshMonitor; pending: number } {
-  let parsed: { running?: unknown; pidfile_status?: unknown; sinks?: unknown };
+export function parseMonitorStatus(stdout: string): {
+  monitor: MeshMonitor;
+  pending: number;
+  superviseur: string | null;
+} {
+  let parsed: {
+    running?: unknown;
+    pidfile_status?: unknown;
+    sinks?: unknown;
+    supervisor?: unknown;
+  };
   try {
     parsed = JSON.parse(stdout) as typeof parsed;
   } catch {
-    return { monitor: 'stopped', pending: 0 };
+    return { monitor: 'stopped', pending: 0, superviseur: null };
   }
+  const candidat = typeof parsed?.supervisor === 'string' ? parsed.supervisor.trim() : '';
+  const superviseur =
+    candidat.length > 0 && candidat.length <= 200 && !/\p{Cc}/u.test(parsed.supervisor as string)
+      ? candidat
+      : null;
   const sinks = Array.isArray(parsed.sinks) ? (parsed.sinks as { pending?: unknown }[]) : [];
   const pending = sinks.reduce(
     (n, s) => n + (Number.isInteger(s?.pending) ? (s.pending as number) : 0),
@@ -38,7 +52,7 @@ export function parseMonitorStatus(stdout: string): { monitor: MeshMonitor; pend
   );
   const monitor: MeshMonitor =
     parsed.running === true ? 'running' : parsed.pidfile_status === 'stale' ? 'stale' : 'stopped';
-  return { monitor, pending };
+  return { monitor, pending, superviseur };
 }
 
 /**
@@ -64,6 +78,7 @@ export class MeshService {
       connected: false,
       tailscale: 'absent',
       monitor: 'absent',
+      superviseur: null,
       pending: 0,
       since: null,
       cell: deps.config.cell,
@@ -163,7 +178,7 @@ export class MeshService {
     await this.serial(async () => {
       const persisted = this.readPersisted();
       const tailscale = await this.tailscale();
-      const { monitor, pending } = await this.monitorStatus();
+      const { monitor, pending, superviseur } = await this.monitorStatus();
       const connected = monitor === 'running' || monitor === 'proxy';
       if (connected) this.startFollower();
       if (this.deps.config.inboxLog) this.startRefresh();
@@ -171,6 +186,7 @@ export class MeshService {
         connected,
         tailscale,
         monitor,
+        superviseur,
         pending,
         since: persisted?.connected === connected ? (persisted.since ?? this.now()) : this.now(),
       });
@@ -193,11 +209,25 @@ export class MeshService {
         return;
       }
       if (config.inboxLog) {
-        const { monitor, pending } = await this.monitorStatus();
+        const { monitor, pending, superviseur } = await this.monitorStatus();
         const connected = monitor === 'proxy';
         if (connected) this.startFollower();
         this.startRefresh();
-        this.publish({ connected, tailscale, monitor, pending, since: this.sinceIf(connected) });
+        this.publish({
+          connected,
+          tailscale,
+          monitor,
+          pending,
+          superviseur,
+          since: this.sinceIf(connected),
+        });
+        return;
+      }
+      const statut = await this.monitorStatus();
+      if (statut.monitor === 'running' && statut.superviseur !== null) {
+        this.startFollower();
+        this.startRefresh();
+        this.publish({ ...statut, connected: true, tailscale, since: this.sinceIf(true) });
         return;
       }
       const start = await this.run(config.bin, [
@@ -215,18 +245,26 @@ export class MeshService {
         this.publish({
           connected: false,
           tailscale,
+          superviseur: null,
           monitor: start.spawnErrorCode === 'ENOENT' ? 'absent' : 'stopped',
           since: this.sinceIf(false),
         });
         return;
       }
-      const { monitor, pending } = await this.monitorStatus();
+      const { monitor, pending, superviseur } = await this.monitorStatus();
       const connected = monitor === 'running';
       if (connected) {
         this.startFollower();
         this.startRefresh();
       }
-      this.publish({ connected, tailscale, monitor, pending, since: this.sinceIf(connected) });
+      this.publish({
+        connected,
+        tailscale,
+        monitor,
+        pending,
+        superviseur,
+        since: this.sinceIf(connected),
+      });
     });
     return this.current();
   }
@@ -237,8 +275,12 @@ export class MeshService {
       this.stopFollower();
       this.stopRefresh();
       if (!config.inboxLog) {
-        const stop = await this.run(config.bin, ['monitor', 'stop', '--as', config.cell]);
-        if (!stop.ok) this.deps.log(`mesh : swarph monitor stop a échoué : ${stop.stderr.trim()}`);
+        const statut = await this.monitorStatus();
+        if (statut.monitor !== 'running' || statut.superviseur === null) {
+          const stop = await this.run(config.bin, ['monitor', 'stop', '--as', config.cell]);
+          if (!stop.ok)
+            this.deps.log(`mesh : swarph monitor stop a échoué : ${stop.stderr.trim()}`);
+        }
       }
       if (config.tailscale.manage && this.tailscaleUpByUs) {
         const down = await this.run(config.tailscale.bin, ['down']);
@@ -246,8 +288,15 @@ export class MeshService {
         this.tailscaleUpByUs = false;
       }
       const tailscale = await this.tailscale();
-      const { monitor, pending } = await this.monitorStatus();
-      this.publish({ connected: false, tailscale, monitor, pending, since: this.sinceIf(false) });
+      const { monitor, pending, superviseur } = await this.monitorStatus();
+      this.publish({
+        connected: false,
+        tailscale,
+        monitor,
+        pending,
+        superviseur,
+        since: this.sinceIf(false),
+      });
     });
     return this.current();
   }
@@ -256,7 +305,7 @@ export class MeshService {
   async refresh(): Promise<MeshState> {
     await this.serial(async () => {
       const tailscale = await this.tailscale();
-      const { monitor, pending } = await this.monitorStatus();
+      const { monitor, pending, superviseur } = await this.monitorStatus();
       const connected = this.deps.config.inboxLog
         ? this.refreshTimer !== null && monitor === 'proxy' && tailscale === 'running'
         : this.state.connected && monitor === 'running' && tailscale === 'running';
@@ -265,7 +314,14 @@ export class MeshService {
         this.stopFollower();
         if (!this.deps.config.inboxLog) this.stopRefresh();
       }
-      this.publish({ connected, tailscale, monitor, pending, since: this.sinceIf(connected) });
+      this.publish({
+        connected,
+        tailscale,
+        monitor,
+        pending,
+        superviseur,
+        since: this.sinceIf(connected),
+      });
     });
     return this.current();
   }
@@ -319,7 +375,11 @@ export class MeshService {
     });
   }
 
-  private async monitorStatus(): Promise<{ monitor: MeshMonitor; pending: number }> {
+  private async monitorStatus(): Promise<{
+    monitor: MeshMonitor;
+    pending: number;
+    superviseur: string | null;
+  }> {
     if (this.deps.config.inboxLog) {
       this.checked = this.now();
       this.deps.store.emitEphemeral({
@@ -331,11 +391,12 @@ export class MeshService {
       try {
         fichier = openSync(this.paths.inboxLog, 'r');
         readSync(fichier, Buffer.alloc(1), 0, 1, 0);
-        return { monitor: 'proxy', pending: 0 };
+        return { monitor: 'proxy', pending: 0, superviseur: null };
       } catch (erreur) {
         return {
           monitor: (erreur as NodeJS.ErrnoException).code === 'ENOENT' ? 'absent' : 'stopped',
           pending: 0,
+          superviseur: null,
         };
       } finally {
         if (fichier !== undefined) closeSync(fichier);
@@ -355,7 +416,7 @@ export class MeshService {
       type: 'mesh.checked',
       checkedAt: this.checked,
     });
-    if (r.spawnErrorCode === 'ENOENT') return { monitor: 'absent', pending: 0 };
+    if (r.spawnErrorCode === 'ENOENT') return { monitor: 'absent', pending: 0, superviseur: null };
     // `status` peut sortir en code 1 quand rien ne tourne, avec un JSON lisible quand même
     return parseMonitorStatus(r.stdout);
   }

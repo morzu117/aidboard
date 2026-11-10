@@ -148,6 +148,7 @@ Un test contre le vrai `swarph proxy serve`, en lecture seule, avec une fausse g
 ### 44.8 Le monitor supervisé (D284)
 
 `supervisor` lu dans le statut ; ni start ni stop pour un monitor vivant et supervisé ; `superviseur` dans l'état du mesh et les Réglages.
+- *Révision 44.8.* Le statut est lu avant le `start` à la connexion, et relu juste avant le `stop` à la déconnexion. Les fixtures d'état du web et `host-masque.test.ts` gagnent seulement `superviseur: null`. 20 lignes existantes modifiées, 22 tests ajoutés. Gate 3007 (échecs connus hors CI : install, update-check).
 
 ## 6. Pièges
 
