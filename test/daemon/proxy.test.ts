@@ -49,11 +49,7 @@ test.each([
   const { client } = await preparer({
     reponse: { ok: false, error: code, status: 503, detail: 'privé' },
   });
-  expect(await client.appeler('mesh.send', {})).toEqual({
-    ok: false,
-    code,
-    ...(code === 'upstream_error' ? { status: 503 } : {}),
-  });
+  expect(await client.appeler('mesh.send', {})).toEqual({ ok: false, code, status: 503 });
 });
 
 test.each<ScenarioProxy>(['request_id_faux', 'illisible', 'trop_longue'])(

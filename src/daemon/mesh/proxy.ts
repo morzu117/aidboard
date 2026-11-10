@@ -3,7 +3,14 @@ import { createConnection } from 'node:net';
 
 /** D263 : 15 s visées en amont + 5 s ; à recaler sur le document de schéma du proxy. */
 export const DELAI_PROXY_MS = 20_000;
-export const VERBES_PROXY = ['board.cards.say', 'mesh.send', 'channel.post'] as const;
+export const VERBES_PROXY = [
+  'board.cards.say',
+  'mesh.send',
+  'channel.post',
+  'board.obligations.take',
+  'board.obligations.decline',
+  'board.obligations.close',
+] as const;
 export const VERBES_LECTURE = [
   'board.projects.list',
   'board.cards.list',
@@ -77,9 +84,10 @@ export function lireReponseProxy(
       return {
         ok: false,
         code,
-        ...(code === 'upstream_error' && Number.isInteger(reponse.status)
-          ? { status: reponse.status as number }
-          : {}),
+        ...(typeof reponse.status === 'number' &&
+          Number.isInteger(reponse.status) &&
+          reponse.status >= 100 &&
+          reponse.status <= 599 && { status: reponse.status }),
       };
   }
   return format;

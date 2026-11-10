@@ -1,3 +1,6 @@
+import { creerActionEtat } from './etats.js';
+import { creerActionEcriture } from './ecritures.js';
+import type { BoardReader } from '../mesh/board.js';
 import { creerActionsHost, type DependancesHost } from './host.js';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
@@ -33,6 +36,7 @@ const LIVE = ['starting', 'working', 'needs_input', 'idle'];
 
 export function creerActionsConfirmation(
   deps: DependancesHost & {
+    board?: BoardReader | null;
     db: Db;
     config?: AidConfig;
     actions?: ActionContext;
@@ -120,6 +124,8 @@ export function creerActionsConfirmation(
   };
   return {
     ...creerActionsHost(deps),
+    'mesh.ecrire': creerActionEcriture(deps),
+    'mesh.etat': creerActionEtat(deps),
     push: {
       async preparer(entree, ctx) {
         const { topic, ws } = lireSujet(entree.topicId);
@@ -391,7 +397,11 @@ export function creerActionsConfirmation(
           !reglage.lire().some((l) => l.action === entree.action && l.actif)
         )
           throw new AidHttpError(409, 'réglage déjà coupé ou inconnu');
-        return signables('reglage', { action: entree.action!, actif: false }, ctx);
+        return signables(
+          'reglage',
+          { action: entree.action! as ParametresActions['reglage']['action'], actif: false },
+          ctx,
+        );
       },
       async executer(params) {
         deps.db.transaction(() => {

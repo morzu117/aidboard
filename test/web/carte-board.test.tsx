@@ -304,3 +304,29 @@ test('35.4 : note à blanc près du fil, carte préremplie et destinataire vide'
   expect(screen.getByLabelText('Destinataire facultatif')).toHaveProperty('value', '');
   expect(screen.queryByRole('button', { name: 'Envoyer' })).toBeNull();
 });
+
+test('36.3 : actions près des obligations, déplacement annoncé et carte relue après envoi', async () => {
+  const s = fiche(101);
+  if (!s.obligations.ok || !s.graph.ok) throw new Error('Fixture illisible');
+  s.obligations.data = parseObligations({
+    obligations: [{ id: 81, step: 'build', holder: null, status: 'open' }],
+  })!.value;
+  s.graph.data.steps[0]!.eligible = [meshEtat.cell];
+  const h = await ouvrir('/board/cartes/101', { 101: s });
+  await screen.findByRole('button', { name: 'Prendre' });
+  expect(
+    screen.getByText('Déplacer : bientôt, quand le gateway donnera la version de la carte.'),
+  ).toBeTruthy();
+  expect(screen.queryByRole('button', { name: /Déplacer/ })).toBeNull();
+  h.respond.set(
+    'POST /api/swarph/etat/envoyer',
+    json(200, { code: 'succes', open_obligations: [] }),
+  );
+  h.respond.set('GET /api/board/cards/101?fresh=1', json(200, s));
+  fireEvent.click(screen.getByRole('button', { name: 'Prendre' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Confirmer' }));
+  await screen.findByText('Parti.');
+  await waitFor(() =>
+    expect(h.calls.some((c) => c.url === '/api/board/cards/101?fresh=1')).toBe(true),
+  );
+});

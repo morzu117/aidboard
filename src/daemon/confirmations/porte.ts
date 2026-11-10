@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto';
+import type { ResultatEnvoi } from '../../shared/ecritures.js';
 import { validerParamsAction } from '../../shared/confirmations.js';
 import type { FastifyRequest } from 'fastify';
 import { jsonCanonique, type ParametresActions, type ParamsAction } from '../../shared/pda.js';
@@ -7,6 +9,8 @@ import type { FilePda, LigneDemande } from '../pda/file.js';
 import { creerReglage } from './reglage.js';
 
 export type ActionPorte =
+  | 'mesh.etat'
+  | 'mesh.ecrire'
   | 'merge'
   | 'push'
   | 'nettoyage'
@@ -17,6 +21,7 @@ export type ActionPorte =
   | 'host.option'
   | 'desarmement';
 export interface EntreeAction {
+  params?: unknown;
   topicId?: string;
   workspaceId?: string;
   strategy?: 'squash' | 'merge' | 'rebase';
@@ -27,7 +32,10 @@ export interface EntreeAction {
   confirmUnmerged?: number;
   dirtyAction?: 'stash' | 'force';
   confirmed?: boolean;
-  action?: ParametresActions['reglage']['action'];
+  action?:
+    | ParametresActions['reglage']['action']
+    | ParametresActions['mesh.ecrire']['action']
+    | ParametresActions['mesh.etat']['action'];
   actif?: boolean;
   appairageId?: string;
   sansIdentite?: boolean;
@@ -36,6 +44,7 @@ export interface EntreeAction {
   option?: 'code' | 'push';
 }
 export interface ContexteAction {
+  envoi?: ResultatEnvoi | Pick<ResultatEnvoi, 'code' | 'status'>;
   confirmation: boolean;
   amorcage?: boolean;
   entree?: EntreeAction;
@@ -129,6 +138,16 @@ export function creerPorte(deps: {
       const { id } = await file.creerDemande({ action, params } as ParamsAction);
       return { confirmation: id };
     },
+    async envoyerEtat(params: ParametresActions['mesh.etat']) {
+      const ctx: ContexteAction = { confirmation: false };
+      await deps.actions['mesh.etat'].executer(params, ctx);
+      return ctx.envoi!;
+    },
+    async envoyer(params: ParametresActions['mesh.ecrire']) {
+      const ctx: ContexteAction = { confirmation: false };
+      await deps.actions['mesh.ecrire'].executer(params, ctx);
+      return ctx.envoi!;
+    },
     async executer<A extends ActionPorte>(
       action: A,
       params: ParametresActions[A],
@@ -148,6 +167,26 @@ export function creerPorte(deps: {
       let params: ParametresActions[ActionPorte];
       try {
         params = JSON.parse(ligne.params);
+        if (action === 'mesh.ecrire' || action === 'mesh.etat') {
+          const stockee = deps.db
+            .prepare('SELECT resume, cree_a FROM pda_demandes WHERE id = ?')
+            .get(ligne.id) as { resume: string; cree_a: string };
+          const corps = {
+            v: 2,
+            id: ligne.id,
+            action,
+            classe: ligne.classe,
+            params,
+            resume: stockee.resume,
+            numero: ligne.numero,
+            echeance: ligne.echeance,
+            emise: Date.parse(stockee.cree_a),
+          };
+          if (
+            createHash('sha256').update(jsonCanonique(corps)).digest('base64url') !== ligne.hDemande
+          )
+            throw new Error('perime');
+        }
         if (!validerParamsAction(action, params)) throw new Error('schema');
         const relus = await definition.preparer(reconstruire(action, params), {
           confirmation: true,
@@ -159,8 +198,14 @@ export function creerPorte(deps: {
         return;
       }
       try {
-        await definition.executer(params, { confirmation: true });
-        terminer(ligne.id, 'executee');
+        const ctx: ContexteAction = { confirmation: true };
+        await definition.executer(params, ctx);
+        if (ctx.envoi) {
+          deps.db
+            .prepare('UPDATE pda_demandes SET envoi = ? WHERE id = ?')
+            .run(JSON.stringify(ctx.envoi), ligne.id);
+          terminer(ligne.id, ctx.envoi.code === 'succes' ? 'executee' : 'echouee');
+        } else terminer(ligne.id, 'executee');
       } catch (e) {
         terminer(
           ligne.id,

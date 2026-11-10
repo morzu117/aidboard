@@ -15,6 +15,7 @@ interface Reglage {
 }
 const noms: Record<string, string> = {
   'mesh.ecrire': 'Écrire sur le mesh',
+  'mesh.etat': 'Changer un état',
   merge: 'Merge',
   push: 'Push',
   nettoyage: 'Nettoyage',
