@@ -2,12 +2,12 @@
 
 | Champ | Valeur |
 |---|---|
-| État | **Révision 0, 10 novembre 2026.** Spec rév. 1 (morzu-vps), d'après le document de schéma publié du proxy (swarph-cli `docs/proxy-protocol.md`, PR 702), les réponses du lab à L8–L11 (DM 94174), la décision de Julien sur #1539 (b) et le relevé du Mac (DM 94859). Questions L12–L15 en attente (DM 94883 et 94884). |
+| État | **Révision 0, 10 novembre 2026.** Spec rév. 1 (morzu-vps), d'après le document de schéma publié du proxy (swarph-cli `docs/proxy-protocol.md`, PR 702), les réponses du lab à L8–L11 (DM 94174), la décision de Julien sur #1539 (b) et le relevé du Mac (DM 94859). Réponses du lab à L12–L14 (DM 94888) ; L15 retirée. |
 | Emplacement final | `docs/chantiers/44-lectures-proxy.md` sur `main` |
 | Base | `feat/35bis-envoi-reel` (eca9903) : le 44 réutilise le client du proxy du 35b.2 (D263). |
 | Organisation | Comme au 35 bis. morzu-vps gère le chantier ; Codex CLI écrit le code et les tests de chaque point ; morzu-vps relit, lance le gate, commite et ouvre la PR. |
 | Validation | Le lab valide le 44, qui conditionne la bascule du Mac. Merge : CI verte, validation du lab, oui de Julien. |
-| Bloqué par | 44.3 attend les réponses à L12–L14 (les formes brutes). 44.6 attend le proxy du Mac installé en lecture seule (#1539 (b)). |
+| Bloqué par | 44.6 attend le proxy du Mac installé en lecture seule (#1539 (b)). |
 
 ## 1. Pourquoi
 
@@ -28,7 +28,7 @@ Après la bascule, la cellule n'a plus **aucun** jeton, lectures comprises (cont
 | Memory, liste et page (37) | idem | `memory list`, `memory get` | `memory.list` `{type?, tag?, limit?}`, `memory.get` `{slug}` |
 | Memory, liens (37) | idem | `memory links` | **aucun** (L9) |
 | Federation (37) | idem | `codegraph` | local, sans jeton : **inchangé** |
-| Swairm (39) | `src/daemon/swairm/ask.ts` | `ask --list`, `ask --show <id>` | **aucun** (L15, en attente) |
+| Swairm (39) | `src/daemon/swairm/ask.ts` | `swairm ask` (le CLI local de swairm, sans mesh ni jeton) | **inchangé** |
 | DM reçus (12) | `src/daemon/mesh/service.ts`, `inbox.ts` | A-I-D lance `swarph monitor` et suit `inbox.log` | le monitor passe sous l'utilisateur du proxy (L11) |
 
 Sur le Mac (DM 94859) : swarph-cli 0.72.40, le daemon lancé par l'app de bureau, un monitor non supervisé, une config `mesh` réduite à `cell` et `gateway`.
@@ -90,7 +90,7 @@ Vers les `BoardErrorKind` existants (`src/shared/board.ts`) :
 ### D282. Ce qui n'a pas de verbe
 
 - **Memory, les liens** (L9) : en mode proxy, la page affiche « Les liens ne sont pas disponibles par le proxy. », sans appel.
-- **Swairm** (L15, en attente) : sans verbe `ask`, l'onglet Swairm affiche en mode proxy « Swairm n'est pas disponible par le proxy de ta cellule. », sans appel. Si le lab ajoute `ask.list` et `ask.show`, un point de plus les branche.
+- **Swairm** : `swairm ask` est le CLI local de swairm, sans mesh ni jeton (L15 retirée, DM 94888) : inchangé, comme `codegraph`.
 
 ## 5. Points
 
@@ -104,7 +104,7 @@ Le port `Lecteur`, `VERBES_LECTURE`, le choix au démarrage, la traduction des e
 
 ### 44.3 Les formes brutes (D279)
 
-Après L12–L14. Une fixture par lecture et par forme ; les parseurs acceptent les deux.
+D'après L12–L14 (DM 94888) : `POST /messages` rend toujours `id`, `closed_obligations` et `open_obligations` (une clé absente est `format`) ; Memory rend `{result: …}`, et la liste peut être un tableau ou `{pages: […]}` ; le fil et `rights` sont identiques au CLI ; `mesh peers` diffère par le filtrage de la PR 693. Une fixture par lecture et par forme ; les parseurs acceptent les deux.
 
 ### 44.4 Les DM (D281)
 
@@ -112,7 +112,7 @@ Après L12–L14. Une fixture par lecture et par forme ; les parseurs acceptent 
 
 ### 44.5 L'UI (D282)
 
-Les messages des liens de Memory et de Swairm, et l'état du monitor dans Réglages.
+Le message des liens de Memory, et l'état du monitor dans Réglages.
 
 ### 44.6 Le vrai proxy et la recette
 
