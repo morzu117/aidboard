@@ -38,10 +38,10 @@ test('migration additive : anciennes demandes, valeurs initiales et contraintes'
     VALUES ('ancienne', 'essai', 'test', 'hash', '1234', 100, 'ouverte', 'date')`,
   ).run();
   migrate(db);
-  expect(db.pragma('user_version', { simple: true })).toBe(25);
+  expect(db.pragma('user_version', { simple: true })).toBe(26);
   const reglage = creerReglage(db);
   expect(reglage.lire()).toEqual(
-    ['merge', 'push', 'nettoyage', 'projet.retirer', 'mesh.ecrire'].map((action) => ({
+    ['merge', 'push', 'nettoyage', 'projet.retirer', 'mesh.ecrire', 'mesh.etat'].map((action) => ({
       action,
       actif: true,
       modifieA: null,
@@ -73,7 +73,7 @@ test('migration additive : anciennes demandes, valeurs initiales et contraintes'
     db.exec("INSERT INTO confirmations_reglage (action, actif) VALUES ('inconnue', 0)"),
   ).toThrow(/CHECK/);
   migrate(db);
-  expect(reglage.lire()).toHaveLength(5);
+  expect(reglage.lire()).toHaveLength(6);
 });
 
 test('plancher toujours et essai, réglage immédiat, armement idempotent et réarmement', () => {

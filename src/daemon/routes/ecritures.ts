@@ -9,6 +9,28 @@ export function registerEcrituresRoutes(
   app: FastifyInstance,
   deps: { board: BoardReader | null; cell: string; hotesPrives?: string[]; porte?: Porte },
 ): void {
+  app.post('/api/swarph/etat/envoyer', async (req, reply) => {
+    if (!deps.cell || !deps.board) throw new AidHttpError(404, 'mesh désactivé');
+    const corps = req.body as { action?: unknown; params?: unknown } | null;
+    if (
+      !corps ||
+      !['obligation.prendre', 'obligation.refuser', 'obligation.clore'].includes(
+        String(corps.action),
+      )
+    )
+      throw new AidHttpError(400, 'action inconnue');
+    const demande = await deps.porte!.demander(
+      'mesh.etat',
+      {
+        action: corps.action as import('../../shared/etats.js').ActionEtat,
+        params: corps.params,
+      },
+      req,
+    );
+    if ('confirmation' in demande)
+      return reply.code(202).send({ confirmation: demande.confirmation });
+    throw new AidHttpError(409, 'confirmation_requise');
+  });
   app.post('/api/swarph/ecrire/envoyer', async (req, reply) => {
     if (!deps.cell || !deps.board) throw new AidHttpError(404, 'mesh désactivé');
     const corps = req.body as { action?: unknown; params?: unknown } | null;

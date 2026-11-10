@@ -157,6 +157,7 @@ test('champ absent ou d’un mauvais type : null, sans exception', () => {
     {
       step: 'build',
       mandatory: null,
+      eligible: [],
       state: null,
       holder: null,
       due: null,

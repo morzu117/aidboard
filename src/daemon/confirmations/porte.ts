@@ -10,6 +10,7 @@ import type { FilePda, LigneDemande } from '../pda/file.js';
 import { creerReglage } from './reglage.js';
 
 export type ActionPorte =
+  | 'mesh.etat'
   | 'mesh.ecrire'
   | 'merge'
   | 'push'
@@ -32,7 +33,10 @@ export interface EntreeAction {
   confirmUnmerged?: number;
   dirtyAction?: 'stash' | 'force';
   confirmed?: boolean;
-  action?: ParametresActions['reglage']['action'] | ParametresActions['mesh.ecrire']['action'];
+  action?:
+    | ParametresActions['reglage']['action']
+    | ParametresActions['mesh.ecrire']['action']
+    | ParametresActions['mesh.etat']['action'];
   actif?: boolean;
   appairageId?: string;
   sansIdentite?: boolean;
@@ -41,7 +45,7 @@ export interface EntreeAction {
   option?: 'code' | 'push';
 }
 export interface ContexteAction {
-  envoi?: ResultatEnvoi;
+  envoi?: ResultatEnvoi | Pick<ResultatEnvoi, 'code' | 'status'>;
   confirmation: boolean;
   amorcage?: boolean;
   entree?: EntreeAction;
@@ -161,7 +165,7 @@ export function creerPorte(deps: {
       let params: ParametresActions[ActionPorte];
       try {
         params = JSON.parse(ligne.params);
-        if (action === 'mesh.ecrire') {
+        if (action === 'mesh.ecrire' || action === 'mesh.etat') {
           const stockee = deps.db
             .prepare('SELECT resume, cree_a FROM pda_demandes WHERE id = ?')
             .get(ligne.id) as { resume: string; cree_a: string };

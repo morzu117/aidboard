@@ -1,3 +1,4 @@
+import { creerActionEtat } from './etats.js';
 import { creerActionEcriture } from './ecritures.js';
 import type { BoardReader } from '../mesh/board.js';
 import { creerActionsHost, type DependancesHost } from './host.js';
@@ -124,6 +125,7 @@ export function creerActionsConfirmation(
   return {
     ...creerActionsHost(deps),
     'mesh.ecrire': creerActionEcriture(deps),
+    'mesh.etat': creerActionEtat(deps),
     push: {
       async preparer(entree, ctx) {
         const { topic, ws } = lireSujet(entree.topicId);

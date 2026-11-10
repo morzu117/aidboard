@@ -1,3 +1,4 @@
+import { ChangerEtat } from '../ui/ChangerEtat.js';
 import { EcrireAuMesh } from '../ui/EcrireAuMesh.js';
 import { useState, type ReactNode } from 'react';
 import { Link, Navigate, useParams } from 'react-router';
@@ -117,7 +118,15 @@ function Graphe({ g }: { g: BoardGraph }) {
   );
 }
 
-function Obligations({ o }: { o: BoardObligations }) {
+function Obligations({
+  o,
+  s,
+  relire,
+}: {
+  o: BoardObligations;
+  s: BoardCardSheet;
+  relire: () => void;
+}) {
   return (
     <>
       {o.truncated && (
@@ -138,6 +147,7 @@ function Obligations({ o }: { o: BoardObligations }) {
               <th>Indication</th>
               <th>Fermée</th>
               <th>Preuve</th>
+              <th>Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -154,6 +164,20 @@ function Obligations({ o }: { o: BoardObligations }) {
                   {x.closeOutcome
                     ? `${x.closeOutcome}${x.closeEvidence ? ` · ${x.closeEvidence}` : ''}`
                     : TIRET}
+                </td>
+                <td>
+                  {s.card.ok && (
+                    <ChangerEtat
+                      obligation={x}
+                      carte={s.card.data.id}
+                      etape={
+                        s.graph.ok
+                          ? s.graph.data.steps.find((e) => x.step !== null && e.step === x.step)
+                          : undefined
+                      }
+                      relire={relire}
+                    />
+                  )}
                 </td>
               </tr>
             ))}
@@ -295,7 +319,7 @@ function Fiche({ s, relire }: { s: BoardCardSheet; relire: () => void }) {
         {s.graph.ok && <Graphe g={s.graph.data} />}
       </Bloc>
       <Bloc id="obligations" titre="Obligations" result={s.obligations} onRelire={relire}>
-        {s.obligations.ok && <Obligations o={s.obligations.data} />}
+        {s.obligations.ok && <Obligations o={s.obligations.data} s={s} relire={relire} />}
       </Bloc>
       {state?.mesh && c && (
         <>
@@ -313,6 +337,7 @@ function Fiche({ s, relire }: { s: BoardCardSheet; relire: () => void }) {
       <Bloc id="fil" titre="Fil" result={s.thread} onRelire={relire}>
         {s.thread.ok && <Fil t={s.thread.data} />}
       </Bloc>
+      <p>Déplacer : bientôt, quand le gateway donnera la version de la carte.</p>
       <Chronologie s={s} />
       <Bloc id="github" titre="GitHub" result={s.card} onRelire={relire}>
         {c && <GitHub card={c} />}

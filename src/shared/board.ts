@@ -80,6 +80,7 @@ export interface BoardEvent {
 export interface BoardStep {
   step: string | null;
   mandatory: boolean | null;
+  eligible: string[];
   /** texte complet, jamais abrégé : il explique le blocage */
   state: string | null;
   holder: string | null;
@@ -104,6 +105,10 @@ export interface BoardObligation {
   status: string | null;
   /** indicatif seulement, peut contredire `status` */
   state: string | null;
+  takenAt: string | null;
+  unclosableReason: string | null;
+  accept: string | null;
+  conditions: unknown[];
   closed: boolean;
   closedAt: string | null;
   closeOutcome: string | null;
@@ -284,6 +289,7 @@ const parseStep = (s: unknown): BoardStep | null => {
   return {
     step: str(s.step),
     mandatory: bool(s.mandatory),
+    eligible: strings(s.eligible),
     state: str(s.state),
     holder: str(s.holder),
     due: str(s.due),
@@ -308,6 +314,10 @@ const parseObligation = (o: unknown): BoardObligation | null => {
     holder: str(o.holder),
     status,
     state: str(o.state),
+    takenAt: str(o.taken_at),
+    unclosableReason: str(o.unclosable_reason),
+    accept: str(o.accept),
+    conditions: arr(o.conditions),
     // status fait foi (#1456) : closed_at ne décide que sans status
     closed: status !== null ? CLOSED_STATUSES.has(status) : closedAt !== null,
     closedAt,
