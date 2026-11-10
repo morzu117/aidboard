@@ -1,3 +1,4 @@
+import { SwairmPr } from './swairm/pr.js';
 import { SwairmStatut } from './swairm/statut.js';
 import { registerEcrituresRoutes } from './routes/ecritures.js';
 import { registerSwairmRoutes } from './routes/swairm.js';
@@ -205,6 +206,7 @@ export async function buildServer(deps: ServerDeps): Promise<FastifyInstance> {
     deps.board ?? null,
     new SwairmStatut(deps.config.swairm.bin),
     deps.db,
+    new SwairmPr(deps.config.github.bin),
   );
   registerDaemonRoutes(app, {
     db: deps.db,

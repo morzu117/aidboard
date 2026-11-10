@@ -1,3 +1,6 @@
+import { liensSwairm } from '../../../src/shared/swairm-board.js';
+import type { LecturePrSwairm } from '../../../src/shared/swairm-trailers.js';
+import { useSwairmCommits } from '../data/swairm-commits.js';
 import { ErreursSwairm, SwairmCarte } from '../ui/SwairmBoard.js';
 import { ChangerEtat } from '../ui/ChangerEtat.js';
 import { EcrireAuMesh } from '../ui/EcrireAuMesh.js';
@@ -218,9 +221,21 @@ function Fil({ t }: { t: BoardThread }) {
   );
 }
 
-function Chronologie({ s }: { s: BoardCardSheet }) {
-  const [filtres, setFiltres] = useState({ etape: true, obligation: true, fil: true });
-  const { entrees, limites } = chronologie(s);
+function Chronologie({
+  s,
+  commits: lecture,
+}: {
+  s: BoardCardSheet;
+  commits: LecturePrSwairm | null;
+}) {
+  const commits = s.card.ok && liensSwairm(s.card.data.body ?? '').length > 0 ? lecture : null;
+  const [filtres, setFiltres] = useState({
+    etape: true,
+    obligation: true,
+    fil: true,
+    commit: true,
+  });
+  const { entrees, limites } = chronologie({ ...s, commits: commits?.commits });
   return (
     <section className="carte-board-bloc" data-node="carte-board.chronologie">
       <h2 className="carte-board-bloc-titre">Chronologie</h2>
@@ -236,6 +251,17 @@ function Chronologie({ s }: { s: BoardCardSheet }) {
             {{ etape: 'Étapes', obligation: 'Obligations', fil: 'Fil' }[source]}
           </label>
         ))}
+        {commits && (
+          <label>
+            <input
+              type="checkbox"
+              data-node="carte-board.chronologie.filtre-commit"
+              checked={filtres.commit}
+              onChange={() => setFiltres((avant) => ({ ...avant, commit: !avant.commit }))}
+            />{' '}
+            Commits
+          </label>
+        )}
       </p>
       <ol className="carte-board-fil">
         {entrees
@@ -247,11 +273,18 @@ function Chronologie({ s }: { s: BoardCardSheet }) {
                   {date(entree.date)} · {age(entree.date)}
                 </span>
                 <span>
-                  {{ etape: 'étape', obligation: 'obligation', fil: 'fil' }[entree.source]}
+                  {
+                    { etape: 'étape', obligation: 'obligation', fil: 'fil', commit: 'commit' }[
+                      entree.source
+                    ]
+                  }
                 </span>
                 <span className="carte-board-auteur">{entree.auteur}</span>
               </p>
-              <p className="carte-board-texte">{entree.texte}</p>
+              <p className="carte-board-texte">
+                {entree.texte}
+                {entree.sha && ` · ${entree.sha.slice(0, 7)}`}
+              </p>
             </li>
           ))}
       </ol>
@@ -270,6 +303,28 @@ function Chronologie({ s }: { s: BoardCardSheet }) {
           </p>
         ))}
       </div>
+      {commits?.etat === 'non-lu' && <p>PR non lue : {commits.raison}</p>}
+      {commits?.etat === 'ok' &&
+        (commits.pr ? (
+          <p>
+            PR #{commits.pr.number} (
+            {commits.pr.state === 'OPEN'
+              ? 'ouverte'
+              : commits.pr.state === 'MERGED'
+                ? 'mergée'
+                : commits.pr.state === 'CLOSED'
+                  ? 'fermée'
+                  : commits.pr.state}
+            ){' '}
+            {commits.pr.url?.startsWith('https://github.com/') && (
+              <a href={commits.pr.url} target="_blank" rel="noreferrer noopener">
+                {commits.pr.url}
+              </a>
+            )}
+          </p>
+        ) : (
+          <p>Aucune PR ouverte.</p>
+        ))}
     </section>
   );
 }
@@ -299,7 +354,15 @@ function GitHub({ card }: { card: BoardCard }) {
   );
 }
 
-function Fiche({ s, relire }: { s: BoardCardSheet; relire: () => void }) {
+function Fiche({
+  s,
+  relire,
+  commits,
+}: {
+  s: BoardCardSheet;
+  relire: () => void;
+  commits: LecturePrSwairm | null;
+}) {
   const c = s.card.ok ? s.card.data : null;
   const { state } = useAid();
   const [ecriture, setEcriture] = useState(false);
@@ -342,7 +405,7 @@ function Fiche({ s, relire }: { s: BoardCardSheet; relire: () => void }) {
         {s.thread.ok && <Fil t={s.thread.data} />}
       </Bloc>
       <p>Déplacer : bientôt, quand le gateway donnera la version de la carte.</p>
-      <Chronologie s={s} />
+      <Chronologie s={s} commits={commits} />
       <Bloc id="github" titre="GitHub" result={s.card} onRelire={relire}>
         {c && <GitHub card={c} />}
       </Bloc>
@@ -352,6 +415,7 @@ function Fiche({ s, relire }: { s: BoardCardSheet; relire: () => void }) {
 
 /** Chantier 31 (D180) : aussi monté par l'interface d'un appareil, sans la coque du Mac. */
 export function Contenu({ cardId }: { cardId: number }) {
+  const commits = useSwairmCommits(cardId);
   const { result, enLecture, luA, erreur, relire, reussieA } = useBoardCard(cardId);
   const c = result?.card.ok ? result.card.data : null;
   return (
@@ -404,7 +468,7 @@ export function Contenu({ cardId }: { cardId: number }) {
       )}
       <ErreursSwairm />
       <SwairmCarte carte={cardId} fiche />
-      {result && <Fiche s={result} relire={() => void relire()} />}
+      {result && <Fiche s={result} relire={() => void relire()} commits={commits} />}
     </main>
   );
 }

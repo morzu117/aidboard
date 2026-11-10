@@ -115,6 +115,7 @@ Un e2e Board avec un faux `swairm` et un faux `swarph`, et la fiche `docs/recett
 ### 41.6 La traçabilité GitHub (D289)
 
 Côté Swairm, une PR sur `morzu117/swairm` : le trailer `Swairm-Drone`, facultatif à la lecture, et son contrat dans `docs/cli-swairm.md`. Côté A-I-D : le lecteur de PR par `gh`, le parseur des trailers, la source « Commits » de la chronologie, et leurs tests.
+- *Révision 41.6.* La PR est cherchée par `gh pr list --head <sujet> --state all`. Reprise r1 : la première version ne cherchait que les PR ouvertes, donc aucune trace pour un sujet mergé. À 50 PR, la lecture rend « non-lu » plutôt que de choisir en silence. Forme du JSON de `gh` vérifiée sur une vraie PR (`state` MERGED, `mergedAt`, `commits[].oid`, `committedDate`, `messageHeadline`, `messageBody`). 10 lignes existantes modifiées, 36 tests ajoutés. E2e Board 9/9, gate 3101 (échecs connus hors CI).
 
 ## 6. Pièges
 

@@ -32,6 +32,7 @@ test('les cinq routes ask sont absentes du serveur host, même authentifié', as
   const app = t.d.modeHost.instance()!;
   for (const [method, url] of [
     ['GET', '/api/swairm/board'],
+    ['GET', '/api/swairm/board/1/commits'],
     ['POST', '/api/swairm/ask'],
     ['POST', '/api/swairm/ask/annuler'],
     ['GET', '/api/swairm/ask/etat'],
