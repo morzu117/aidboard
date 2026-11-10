@@ -28,7 +28,7 @@ Le programme (§5, phase 5) veut **un seul board**. Les sujets de la ruche Swair
 
 **Hors périmètre :**
 - La création de carte par A-I-D, la clôture par un drone, et la règle « rien sans carte » appliquée dans Swairm. C'est le 41 b.
-- Les trailers `Swairm-Drone` et `Swarph-Card`. Ils se posent dans Swairm, par une PR sur `morzu117/swairm` gérée à part. Leur lecture dans la chronologie (38) viendra en 41.6, après cette PR.
+- Le trailer `Swarph-Card` : A-I-D déduit la carte par le lien (D289). Le trailer viendra au 41 b, quand le drone écrira les cartes.
 - Le 42.
 
 ## 4. Décisions
@@ -72,6 +72,20 @@ Le programme (§5, phase 5) veut **un seul board**. Les sujets de la ruche Swair
 - La note ne part que par l'envoi du 35 bis, **sous confirmation du téléphone** (35b.6). Rien ne part sans geste. La proposition se ferme à l'envoi, ou par « Ignorer ».
 - **Au premier relevé d'un sujet**, quand aucun état n'est encore connu, A-I-D enregistre l'état sans rien proposer.
 
+### D289. La traçabilité GitHub (41.6) — choix de Julien, 11 novembre 2026
+
+- **Pas de trailer `Swarph-Card`.** Un commit est relié à une carte par son `Swairm-Subject`, et le sujet à la carte par la ligne `Swairm:` (D285). Swairm n'a pas à connaître le board swarph.
+- **Le trailer `Swairm-Drone`** s'ajoute, côté Swairm, aux lignes de fin d'un commit de pas : `Swairm-Drone: <machine>/<pid>@<depuis>`, d'après le bail (le vol) qui a fait le pas. Il est **facultatif** à la lecture : les commits d'avant n'en ont pas, et ils restent lisibles. C'est une PR sur `morzu117/swairm`, fiche `docs/chantiers/09-trailer-drone.md` de Swairm.
+- **A-I-D lit la PR sur GitHub**, en lecture seule, pour chaque sujet relié à une seule carte :
+  - la PR est retrouvée par la branche du sujet, comme le fait Swairm ;
+  - la lecture se fait par `gh pr list` puis `gh pr view --json number,state,url,commits` sur `owner/dépôt`, avec un cache de 60 s, un délai de 15 s et la fusion des demandes ;
+  - sans `gh`, ou sans accès au dépôt, l'écran dit « PR non lue », sans erreur bloquante.
+- **Dans la chronologie de la carte (38)**, une quatrième source, « Commits », avec sa case :
+  - une entrée par commit qui porte `Swairm-Subject` égal au sujet : « Pas <step> prouvé (<proof>), essai <attempt> », puis le sha court, et le drone s'il est connu ;
+  - la date est celle du commit ;
+  - en pied, le numéro, l'état et le lien de la PR, en texte brut, avec un lien `https://github.com/...` seulement.
+- Les trailers sont relus avec la règle de Swairm : la dernière section seulement, chaque ligne de la forme `Clé: valeur`, et une clé `Swairm-*` en double rend le commit illisible.
+
 ## 5. Points
 
 ### 41.1 Le plan
@@ -97,6 +111,10 @@ La migration 027, la détection des transitions, les propositions dans la Boîte
 
 Un e2e Board avec un faux `swairm` et un faux `swarph`, et la fiche `docs/recette-chantier-41-board-unifie.md`.
 - *Révision 41.5.* Aucun défaut révélé par l'e2e. E2e nouveau 1/1, Board 8/8, Boîte 5/5 ; gate 3034 (échecs connus hors CI).
+
+### 41.6 La traçabilité GitHub (D289)
+
+Côté Swairm, une PR sur `morzu117/swairm` : le trailer `Swairm-Drone`, facultatif à la lecture, et son contrat dans `docs/cli-swairm.md`. Côté A-I-D : le lecteur de PR par `gh`, le parseur des trailers, la source « Commits » de la chronologie, et leurs tests.
 
 ## 6. Pièges
 
