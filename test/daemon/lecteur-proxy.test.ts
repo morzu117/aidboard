@@ -56,7 +56,7 @@ test('table des verbes de lecture : argv traduits exactement, aucun CLI, liens s
   await swarph.memory('tag-a');
   await swarph.memory('', {}, 'lesson');
   const page = await swarph.page('page-a');
-  expect(page.links).toMatchObject({ ok: false, kind: 'not-configured' });
+  expect(page.links).toMatchObject({ ok: false, kind: 'proxy-indisponible' });
   const requetes = proxy.lignes.map((l) => {
     const { verb, args } = JSON.parse(l);
     return { verb, args };
@@ -197,4 +197,29 @@ test('Argument types : bad_args local ne connecte pas et ne convertit pas', asyn
     code: 'bad_args',
   });
   expect(proxy.nombreConnexions).toBe(0);
+});
+
+test('Memory proxy : la page reste lisible et les liens ne font aucun appel, même fresh', async () => {
+  const proxy = await creerFauxProxy({
+    reponse: {
+      ok: true,
+      status: 200,
+      body: { result: { slug: 'page-a', title: 'Page test', content: 'Contenu' } },
+    },
+  });
+  proxies.push(proxy);
+  const read = vi.fn();
+  const lecteur = new SwarphReader({
+    mesh: { read, current: vi.fn() },
+    cell: 'peer-a',
+    proxySocket: proxy.socket,
+    log: vi.fn(),
+  });
+  for (const fresh of [false, true]) {
+    const resultat = await lecteur.page('page-a', { fresh });
+    expect(resultat.page).toMatchObject({ ok: true, data: { content: 'Contenu' } });
+    expect(resultat.links).toMatchObject({ ok: false, kind: 'proxy-indisponible' });
+  }
+  expect(proxy.lignes.map((ligne) => JSON.parse(ligne).verb)).toEqual(['memory.get', 'memory.get']);
+  expect(read).not.toHaveBeenCalled();
 });

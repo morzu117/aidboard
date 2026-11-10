@@ -80,6 +80,8 @@ export function creerLecteurProxy(socket: string): Lecteur {
       } else if (argv[0] === 'memory' && argv[1] === 'get') {
         verb = 'memory.get';
         args.slug = argv[2];
+      } else if (argv[0] === 'memory' && argv[1] === 'links') {
+        return { ok: false, timedOut: false, stdout: '', stderr: '', kind: 'proxy-indisponible' };
       } else return { ok: false, timedOut: false, stdout: '', stderr: '', kind: 'not-configured' };
       // Les nombres proviennent uniquement des identifiants déjà validés par BoardReader.
       const resultat = await client.appeler(verb, args);

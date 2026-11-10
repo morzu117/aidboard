@@ -116,6 +116,7 @@ D'après L12–L14 (DM 94888) : `POST /messages` rend toujours `id`, `closed_obl
 ### 44.5 L'UI (D282)
 
 Le message des liens de Memory, et l'état du monitor dans Réglages.
+- *Révision 44.5.* `BoardErrorKind` gagne `proxy-indisponible`, pour les liens de Memory seulement. Sans indicateur de transport côté web, `'absent'` et `'stopped'` gardent leurs libellés du mode CLI ; seul `'proxy'` dit « Géré par le proxy de ta cellule. ». 2 lignes existantes modifiées (des assertions). Gate 2849, plus un test instable de `conversation-codex`, vert seul trois fois.
 
 ### 44.6 Le vrai proxy et la recette
 

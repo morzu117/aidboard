@@ -9,6 +9,7 @@ import { OngletsSwarph } from './OngletsSwarph.js';
 
 /** Liste fermée : ne jamais afficher les champs libres du monitor. */
 export function EtatMonitor37_5({ etat }: { etat: MeshMonitor }) {
+  if (etat === 'proxy') return <>Géré par le proxy de ta cellule.</>;
   const libelles: Record<MeshMonitor, string> = {
     running: 'En marche',
     stopped: 'Arrêté',

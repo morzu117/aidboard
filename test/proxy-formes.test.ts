@@ -142,7 +142,7 @@ test('cells, Memory et fiche complète : formes gateway de bout en bout sans CLI
     ok: true,
     data: parseMemoryPage(fixture('memory-get'))!.value,
   });
-  expect(page.links).toMatchObject({ ok: false, kind: 'not-configured' });
+  expect(page.links).toMatchObject({ ok: false, kind: 'proxy-indisponible' });
   const fiche = await board.card(101);
   for (const [partie, nom, parseur] of [
     ['card', 'cards-show-101', parseCard],

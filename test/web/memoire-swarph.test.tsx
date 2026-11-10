@@ -170,3 +170,16 @@ test('Tous par défaut, champ selon le filtre et type envoyé seulement au clic'
   expect(screen.queryByRole('textbox')).toBeNull();
   expect(screen.queryByText(/Le type peut être reclassé/)).toBeNull();
 });
+
+test('proxy : page affichée, liens indisponibles sans Relire', async () => {
+  await ouvrir({
+    ...page,
+    links: { ok: false, kind: 'proxy-indisponible', readAt: '2026-11-09T10:00:00Z' },
+  } as unknown as typeof page);
+  await screen.findByText('Les liens ne sont pas disponibles par le proxy.');
+  expect(screen.getByRole('heading', { name: 'Page test' })).toBeTruthy();
+  expect(document.querySelector('[data-node="memoire-swarph.corps"]')!.textContent).toBe(corps);
+  expect(screen.queryByRole('button', { name: 'Relire' })).toBeNull();
+  expect(screen.queryByRole('heading', { name: 'Liens entrants et sortants' })).toBeNull();
+  expect(screen.queryByText("Le gateway n'est pas configuré pour la mémoire.")).toBeNull();
+});

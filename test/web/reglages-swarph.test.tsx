@@ -126,3 +126,16 @@ test('Recharger relit en fresh et affiche Lu à', async () => {
     expect(h.calls.some((c) => c.url === '/api/swarph/reglages?fresh=1')).toBe(true),
   );
 });
+
+test.each(['proxy', 'absent', 'stopped'] as const)(
+  'monitor %s : aucun contrôle ni chemin du proxy',
+  async (etat) => {
+    const sensible = { ...monitor, monitor: etat, state_dir: '/tmp/monitor-prive/inbox.log' };
+    await ouvrir(ok(droits), sensible);
+    if (etat === 'proxy') {
+      expect(screen.getByText('Géré par le proxy de ta cellule.')).toBeTruthy();
+    }
+    expect(screen.queryByRole('button', { name: /Démarrer|Arrêter|Relancer/ })).toBeNull();
+    expect(document.body.innerHTML).not.toContain(sensible.state_dir);
+  },
+);
