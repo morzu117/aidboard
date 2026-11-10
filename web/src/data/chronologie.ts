@@ -94,11 +94,18 @@ export function chronologie({
     const valeur = date === null ? NaN : Date.parse(date);
     return Number.isNaN(valeur) ? -Infinity : valeur;
   };
-  // Le tri stable conserve l'ordre reçu : étapes, événements du graphe, puis fil.
+  const reception = new Map(entrees.map((entree, indice) => [entree, indice]));
+  const fraction = (date: string | null): string =>
+    (date?.match(/\.(\d+)(?:Z|[+-]\d{2}:?\d{2})?$/i)?.[1] ?? '').slice(3).replace(/0+$/, '');
+  // À milliseconde égale, comparer la précision restante puis inverser la réception.
   entrees.sort((a, b) => {
     const premier = horodatage(a.date);
     const second = horodatage(b.date);
-    return premier === second ? 0 : premier > second ? -1 : 1;
+    if (premier !== second) return premier > second ? -1 : 1;
+    const fractionA = premier === -Infinity ? '' : fraction(a.date);
+    const fractionB = second === -Infinity ? '' : fraction(b.date);
+    if (fractionA !== fractionB) return fractionA > fractionB ? -1 : 1;
+    return reception.get(b)! - reception.get(a)!;
   });
   return { entrees, limites };
 }

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { pluriel } from './pluriel.js';
 import {
   commandeSwairm,
   libelleSwairm,
@@ -100,7 +101,10 @@ export function SansCarteSwairm() {
       <ErreursSwairm />
       <details>
         <summary>Sujets Swairm sans carte ({vivants.length})</summary>
-        <p>{termines.length} sujets merged ou abandoned sans carte non listés.</p>
+        <p>
+          {pluriel(termines.length, 'sujet')} merged ou abandoned sans carte non{' '}
+          {termines.length > 1 ? 'listés' : 'listé'}.
+        </p>
         <ul>
           {vivants.map((s) => (
             <li key={`${s.projet}#${s.id}`}>

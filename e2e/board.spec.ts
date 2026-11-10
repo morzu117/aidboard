@@ -100,10 +100,10 @@ test('la carte 102 : chronologie décroissante, filtre Fil et lignes antérieure
   const attendus = [
     'Obligation build fermée : PASS',
     'Obligation build modifiée',
-    'Étape → build (déduite par le gateway, ligne 9000)',
     'Obligation build prise',
-    'Étape → idea',
+    'Étape → build (déduite par le gateway, ligne 9000)',
     'Build commencé.',
+    'Étape → idea',
     'Obligation build ouverte pour peer-b',
   ];
   await expect(textes).toHaveText(attendus);

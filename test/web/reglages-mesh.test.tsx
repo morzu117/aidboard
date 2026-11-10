@@ -164,3 +164,12 @@ test('D284 : les Réglages expliquent la supervision du monitor', async () => {
     ),
   );
 });
+
+test('supervisé : Déconnecter annonce la poursuite des DM et l’arrêt du seul suivi', async () => {
+  setup(<Reglages />, avecMesh({ cell: 'aid-e2e.ts.net', superviseur: 'launchd:example.com' }));
+  await waitFor(() => expect(node('reglages.mesh.deconnecter')).not.toBeNull());
+  await userEvent.click(node('reglages.mesh.deconnecter')!);
+  expect(text('reglages.mesh.confirmation')).toBe(
+    'Le monitor de la cell aid-e2e.ts.net reste en marche sous launchd:example.com : les DM continuent d’arriver et de réveiller les sessions. A-I-D cesse seulement de les suivre jusqu’à la reconnexion.',
+  );
+});

@@ -97,7 +97,10 @@ fi
 tmp="$server/.current-$$"
 rm -f "$tmp"
 ln -s "$version" "$tmp"
-mv -f "$tmp" "$server/current"
+if ! mv -fT "$tmp" "$server/current" 2> /dev/null; then
+  # BSD refuse -T ; -h empêche aussi de suivre le lien vers un dossier.
+  mv -fh "$tmp" "$server/current"
+fi
 
 echo "AID Server $version installé : $server/current → $version"
 echo "Ajoute $server/current/bin à ton PATH, ou lance AID Board."
