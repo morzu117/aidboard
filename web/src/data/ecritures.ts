@@ -1,4 +1,5 @@
 import type { ActionEcriture, ParametresEcriture } from '../../../src/shared/ecritures.js';
+import { AidApiError } from './api.js';
 import type { AidClient } from './client.js';
 
 export type ApercuEcriture =
@@ -21,6 +22,7 @@ export function apercuEcriture<A extends ActionEcriture>(
 }
 
 export type CodeEnvoi =
+  | 'demande_trop_grande'
   | 'obligation-close'
   | 'succes'
   | 'proxy_unavailable'
@@ -52,6 +54,8 @@ export function libelleEnvoi(resultat: ResultatEnvoi): string {
   if (envoiIncertain(resultat))
     return 'Envoi incertain : il est peut-être parti. Relis le fil avant de réessayer.';
   switch (resultat.code) {
+    case 'demande_trop_grande':
+      return "Trop long pour être confirmé au téléphone : raccourcis le texte. Rien n'est parti.";
     case 'succes':
       return 'Parti.';
     case 'proxy_unavailable':
@@ -71,5 +75,14 @@ export function envoyerEcriture<A extends ActionEcriture>(
   params: ParametresEcriture[A],
   client: AidClient,
 ): Promise<{ confirmation: string } | ResultatEnvoi> {
-  return client.request('POST', '/api/swarph/ecrire/envoyer', { action, params });
+  return client
+    .request<{ confirmation: string } | ResultatEnvoi>('POST', '/api/swarph/ecrire/envoyer', {
+      action,
+      params,
+    })
+    .catch((e) => {
+      if (e instanceof AidApiError && e.status === 413 && e.body.error === 'demande_trop_grande')
+        return { code: 'demande_trop_grande' as const, open_obligations: [] };
+      throw e;
+    });
 }

@@ -69,6 +69,7 @@ async function preparer(scenario: ScenarioProxy = succes) {
   const appareil = await t.appareil();
   let reponses: { id: string; appareil: string; corps: string; curseur: number }[] = [];
   const porte = creerPorte({ db: t.db, actions, file: () => file });
+  const deposer = vi.fn(async () => true);
   const file = new FilePda({
     ...t,
     actif: () => true,
@@ -78,7 +79,7 @@ async function preparer(scenario: ScenarioProxy = succes) {
     preparerConsommation: (ligne) => porte.preparerConsommation(ligne),
     relais: {
       publierAutorises: async () => true,
-      deposer: async () => true,
+      deposer,
       retirer: async () => {},
       tirer: async () => reponses,
     },
@@ -127,6 +128,7 @@ async function preparer(scenario: ScenarioProxy = succes) {
   return {
     ...t,
     proxy,
+    deposer,
     config,
     actions,
     board,
@@ -461,4 +463,39 @@ test('obligation-close est affiché comme incertain par le web', () => {
   expect(libelleEnvoi(envoi)).toBe(
     'Envoi incertain : il est peut-être parti. Relis le fil avant de réessayer.',
   );
+});
+
+test('DM de 4 000 caractères hors BMP : refus 413 avant demande et envoi', async () => {
+  const t = await preparer();
+  const texte = '😀'.repeat(4000);
+  // Le nom de pair maximal fait dépasser 16 Kio au corps canonique complet.
+  expect(Array.from(texte)).toHaveLength(4000);
+  const r = await t.demander({
+    action: 'dm.envoyer',
+    params: {
+      pair: 'p'.repeat(63),
+      fil: null,
+      kind: 'question',
+      texte,
+    },
+  });
+  expect(r.statusCode).toBe(413);
+  expect(r.json()).toEqual({ error: 'demande_trop_grande' });
+  expect(t.db.prepare('SELECT count(*) AS n FROM pda_demandes').get()).toEqual({ n: 0 });
+  expect(t.deposer).not.toHaveBeenCalled();
+  expect(t.proxy.lignes).toHaveLength(0);
+  expect(t.proxy.nombreConnexions).toBe(0);
+});
+
+test('DM de 4 000 caractères ASCII : demande créée sans envoi au proxy', async () => {
+  const t = await preparer();
+  const r = await t.demander({
+    action: 'dm.envoyer',
+    params: { pair: 'peer-b', fil: null, kind: 'fyi', texte: 'a'.repeat(4000) },
+  });
+  expect(r.statusCode).toBe(202);
+  expect(r.json()).toEqual({ confirmation: expect.any(String) });
+  expect(t.db.prepare('SELECT count(*) AS n FROM pda_demandes').get()).toEqual({ n: 1 });
+  expect(t.deposer).toHaveBeenCalledOnce();
+  expect(t.proxy.lignes).toHaveLength(0);
 });

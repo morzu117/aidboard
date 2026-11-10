@@ -5,6 +5,7 @@ import type { FastifyRequest } from 'fastify';
 import { jsonCanonique, type ParametresActions, type ParamsAction } from '../../shared/pda.js';
 import type { Db } from '../db.js';
 import { AidHttpError } from '../errors.js';
+import { DemandeTropGrande } from '../pda/demande.js';
 import type { FilePda, LigneDemande } from '../pda/file.js';
 import { creerReglage } from './reglage.js';
 
@@ -135,7 +136,10 @@ export function creerPorte(deps: {
         throw new AidHttpError(409, 'confirmation_impossible', {
           message: 'Allume le PDA et active un téléphone pour cette action',
         });
-      const { id } = await file.creerDemande({ action, params } as ParamsAction);
+      const { id } = await file.creerDemande({ action, params } as ParamsAction).catch((e) => {
+        if (e instanceof DemandeTropGrande) throw new AidHttpError(413, 'demande_trop_grande');
+        throw e;
+      });
       return { confirmation: id };
     },
     async executer<A extends ActionPorte>(

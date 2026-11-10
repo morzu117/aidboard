@@ -14,6 +14,8 @@ export type {
   CorpsDemandeV2,
 } from './confirmations.js';
 
+export const TAILLE_MAX_DEMANDE = 16 * 1024;
+
 export const CONTEXTE_DEMANDE = 'aid-pda-demande-v1\n';
 export const CONTEXTE_RELAIS = 'aid-pda-relais-v1\n';
 
@@ -115,7 +117,7 @@ export function decoderBase64url(texte: string): Uint8Array<ArrayBuffer> {
 }
 
 export function lireCorpsDemande(octets: Uint8Array): CorpsDemande {
-  if (octets.byteLength > 16 * 1024) throw new Error('Demande trop grande');
+  if (octets.byteLength > TAILLE_MAX_DEMANDE) throw new Error('Demande trop grande');
   const o: unknown = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(octets));
   if (!o || typeof o !== 'object' || Array.isArray(o)) throw new Error('Demande invalide');
   const c = o as Record<string, unknown>;
