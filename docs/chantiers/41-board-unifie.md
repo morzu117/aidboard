@@ -81,6 +81,7 @@ Ce document, et une ligne dans `README.md`.
 ### 41.2 Les lectures et l'assemblage (D285, D286)
 
 Le parseur des lignes `Swairm:` et ses tests de frontière. La recherche `q` dans `BoardReader`, par le CLI et par le proxy. Le lecteur `SwairmStatut`. L'assemblage, les conflits, et la route `GET /api/swairm/board`.
+- *Révision 41.2.* Plusieurs vols sur un même sujet : le premier est retenu. Reprise r1 : `searched` est un entier (le nombre de cartes examinées, mesuré sur le vrai CLI : 682), pas la chaîne cherchée ; le parseur a été vérifié sur une vraie réponse du CLI, et toutes les cartes passent. 3 lignes existantes modifiées. Vrai proxy 25/25. Gate 2996 (échecs connus hors CI).
 
 ### 41.3 La vue (D287)
 

@@ -134,6 +134,7 @@ export function argumentsLectureValides(verbe: string, args: Record<string, unkn
       );
     if (['overdue', 'grandfathered', 'enabled_only'].includes(cle))
       return typeof valeur === 'boolean';
+    if (cle === 'q') return typeof valeur === 'string' && valeur.length <= 1000;
     if (cle === 'slug')
       return typeof valeur === 'string' && /^[A-Za-z0-9][A-Za-z0-9_.-]{0,199}$/.test(valeur);
     return typeof valeur === 'string';
