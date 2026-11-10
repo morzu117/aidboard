@@ -101,6 +101,7 @@ Ce document, sur `feat/44-lectures-proxy`.
 ### 44.2 Le transport (D277, D278, D280)
 
 Le port `Lecteur`, `VERBES_LECTURE`, le choix au démarrage, la traduction des erreurs, et les tests contre le faux proxy du 35b.2 : chaque lecture en mode proxy appelle le bon verbe avec les bons `args` ; aucun appel au CLI en mode proxy ; aucun appel au proxy en mode CLI ; le cache et la fusion inchangés ; chaque ligne de D280.
+- *Révision 44.2.* `src/daemon/mesh/lecteur.ts` (`creerLecteurCli`, `creerLecteurProxy`, `classerErreurProxy`), `VERBES_LECTURE` et `argumentsLectureValides` dans `proxy.ts`, avec un paramètre `verbes` du client. Une lecture accepte un `body` objet ou tableau ; une écriture garde l'objet. Le body est sérialisé puis reparsé pour les parseurs existants. Les liens de Memory rendent `not-configured`, sans appel, jusqu'au 44.5. `parsePeers` attend encore une chaîne : `mesh.peers` par le proxy donne `format` jusqu'au 44.3. 29 lignes existantes modifiées. Gate 2813.
 
 ### 44.3 Les formes brutes (D279)
 

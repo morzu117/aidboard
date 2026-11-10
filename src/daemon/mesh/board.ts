@@ -1,4 +1,10 @@
 import {
+  creerLecteurCli,
+  creerLecteurProxy,
+  type Lecteur,
+  type ResultatLecture,
+} from './lecteur.js';
+import {
   type BoardCard,
   type BoardCardSheet,
   type BoardCardSummary,
@@ -25,6 +31,7 @@ const CACHE_MS = 5000;
 export interface BoardReaderDeps {
   mesh: { read(args: string[]): Promise<MeshExecResult> };
   cell: string;
+  proxySocket?: string;
   log: (line: string) => void;
   now?: () => number;
   cacheMs?: number;
@@ -64,7 +71,7 @@ interface Entry {
 }
 
 interface Read {
-  exec: MeshExecResult;
+  exec: ResultatLecture;
   readAt: string;
 }
 
@@ -76,7 +83,12 @@ interface Read {
 export class BoardReader {
   private readonly cache = new Map<string, Entry>();
 
-  constructor(private readonly deps: BoardReaderDeps) {}
+  private readonly lecteur: Lecteur;
+  constructor(private readonly deps: BoardReaderDeps) {
+    this.lecteur = deps.proxySocket
+      ? creerLecteurProxy(deps.proxySocket)
+      : creerLecteurCli(deps.mesh);
+  }
 
   projects(opts: ReadOpts = {}): Promise<BoardResult<BoardProject[]>> {
     return this.load(['board', 'projects', 'list'], parseProjects, opts);
@@ -132,7 +144,7 @@ export class BoardReader {
   ): Promise<BoardResult<T>> {
     const args = [...verb, '--json', '--as', this.deps.cell];
     const { exec, readAt } = await this.exec(args, opts.fresh === true, opts.sansCache === true);
-    const kind = classify(exec);
+    const kind = exec.kind ?? classify(exec);
     if (kind !== null) {
       this.deps.log(
         `board : ${verb.join(' ')} : ${kind}${exec.spawnErrorCode ? ` (${exec.spawnErrorCode})` : ''} : ${exec.stderr.trim()}`,
@@ -163,7 +175,7 @@ export class BoardReader {
     if (!sansCache && hit && (hit.at === -1 || (!fresh && at - hit.at < ttl))) return hit.result;
     for (const [k, e] of this.cache) if (e.at !== -1 && at - e.at >= ttl) this.cache.delete(k);
     const entry = { at: -1 } as Entry;
-    entry.result = this.deps.mesh.read(args).then(
+    entry.result = this.lecteur.lire(args).then(
       (exec) => {
         entry.at = this.now();
         return { exec, readAt: new Date(entry.at).toISOString() };

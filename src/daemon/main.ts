@@ -256,9 +256,17 @@ export async function startDaemon(
         })
       : null;
     // chantier 24 : les lectures du board passent par le même service, donc n'existent qu'avec lui
-    const board = mesh ? new BoardReader({ mesh, cell: config.mesh.cell, log }) : null;
+    const board = mesh
+      ? new BoardReader({ mesh, proxySocket: config.mesh.proxySocket, cell: config.mesh.cell, log })
+      : null;
     const swarph = mesh
-      ? new SwarphReader({ mesh, cell: config.mesh.cell, gateway: config.mesh.gateway, log })
+      ? new SwarphReader({
+          mesh,
+          proxySocket: config.mesh.proxySocket,
+          cell: config.mesh.cell,
+          gateway: config.mesh.gateway,
+          log,
+        })
       : null;
     // 08.8 : construit ici, et non dans buildServer, pour lancer le rattrapage après `listen`
     const indexer = new Indexer({ store, paths, engine: structural });
@@ -298,7 +306,15 @@ export async function startDaemon(
       etat: () => buildSnapshot(opened, structural, false, mesh, !!config.swairm.bin),
       signal: store,
       // D178 : un lecteur à part, 60 s ; les appareils partagent ses lectures, le Mac garde ses 5 s
-      board: mesh ? new BoardReader({ mesh, cell: config.mesh.cell, log, cacheMs: 60_000 }) : null,
+      board: mesh
+        ? new BoardReader({
+            mesh,
+            proxySocket: config.mesh.proxySocket,
+            cell: config.mesh.cell,
+            log,
+            cacheMs: 60_000,
+          })
+        : null,
       tailscaleExec: opts.tailscaleExec,
       logger: opts.logger,
       log,
