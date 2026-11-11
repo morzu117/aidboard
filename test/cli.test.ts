@@ -138,6 +138,12 @@ describe.skipIf(!built)('aid en sous-processus', () => {
     const agentPid = agent.pid as number;
     expect(alive(agentPid)).toBe(true);
 
+    // Une ouverture de l'app conserve aussi les terminaux et n'écrit aucun manifeste.
+    expect([0, 3]).toContain((await run('--cycle')).code);
+    expect(info().pid).toBe(pid);
+    expect(alive(agentPid)).toBe(true);
+    expect(existsSync(join(home, 'reprise.json'))).toBe(false);
+
     const refused = await run('stop');
     expect(refused.code).toBe(2);
     expect(refused.out).toContain('1 agent(s) tournent encore');

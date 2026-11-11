@@ -95,8 +95,13 @@ fn bootstrap_script() -> String {
     format!("curl -fsSL \"${{AID_SERVER_INSTALL_URL:-{INSTALL_SCRIPT_URL}}}\" | sh")
 }
 
-fn cycle_shell_command(bin: &str) -> String {
-    format!("AID_NO_BROWSER=1 {} --cycle", shell_quote(bin))
+fn cycle_shell_command(bin: &str, accord: bool) -> String {
+    format!("AID_NO_BROWSER=1 {} --cycle{}", shell_quote(bin), if accord { " --force" } else { "" })
+}
+
+// Seul le code 3 indique une mise à jour connue ; aucune erreur ne vaut consentement.
+fn accord_cycle(code: Option<i32>, demander: &dyn Fn() -> bool) -> bool {
+    code == Some(3) && demander()
 }
 
 // Le shell de login de la plateforme : `-i -l` pour que zsh lise ~/.zshrc (c'est là que mise et
@@ -173,11 +178,9 @@ pub fn bootstrap_server() -> Result<(), String> {
     Ok(())
 }
 
-// `aid --cycle` interrompt proprement les agents, met à jour si possible, relance, et n'attend
-// que le nouveau daemon réponde avant de rendre la main (src/cli/aid.ts, bloc --cycle) : rien à
-// réimplémenter ici, juste attendre la fin du process puis relire daemon.json à froid.
+// `aid --cycle` réutilise le daemon et rend 3 si une mise à jour attend un accord.
 // `on_state` reçoit chaque étape, pour la page d'attente (app/loading/index.html).
-pub fn spawn_cycle(on_state: &dyn Fn(&str)) -> Result<DaemonInfo, String> {
+pub fn spawn_cycle(on_state: &dyn Fn(&str), demander: &dyn Fn() -> bool) -> Result<DaemonInfo, String> {
     on_state("Recherche d'AID Server…");
     let bin = match resolve_server() {
         Some(bin) => bin,
@@ -191,9 +194,19 @@ pub fn spawn_cycle(on_state: &dyn Fn(&str)) -> Result<DaemonInfo, String> {
     };
     log::info!("AID Server : {bin}");
     on_state("Démarrage d'AID Server…");
-    let status = login_shell(&cycle_shell_command(&bin))
+    let mut status = login_shell(&cycle_shell_command(&bin, false))
         .status()
         .map_err(|e| e.to_string())?;
+    if status.code() == Some(3) {
+        if accord_cycle(status.code(), demander) {
+            on_state("Mise à jour d'AID Server…");
+            status = login_shell(&cycle_shell_command(&bin, true))
+                .status()
+                .map_err(|e| e.to_string())?;
+        } else {
+            return read_daemon_json().ok_or_else(|| "daemon.json introuvable".to_string());
+        }
+    }
     if !status.success() {
         return Err(format!(
             "aid --cycle a échoué{WHERE} (code {:?}) — voir ~/.aid/daemon.log{WHERE}",
@@ -277,7 +290,7 @@ fn handle_restart_request(mut stream: TcpStream) {
     // appelante n'a pas à attendre — elle se reconnectera seule via AidClient une fois le nouveau
     // daemon debout.
     thread::spawn(move || {
-        if let Err(message) = spawn_cycle(&|step| log::info!("redémarrage : {step}")) {
+        if let Err(message) = spawn_cycle(&|step| log::info!("redémarrage : {step}"), &|| false) {
             log::warn!("redémarrage demandé depuis la page a échoué : {message}");
         }
     });
@@ -286,6 +299,17 @@ fn handle_restart_request(mut stream: TcpStream) {
 #[cfg(test)]
 mod tests_wsl {
     use super::*;
+
+    #[test]
+    fn choix_du_dialogue() {
+        assert!(accord_cycle(Some(3), &|| true));
+        assert!(!accord_cycle(Some(3), &|| false));
+        for code in [Some(0), Some(1), None] {
+            assert!(!accord_cycle(code, &|| panic!("aucun dialogue attendu")));
+        }
+        assert!(cycle_shell_command("/tmp/aid serveur", true).ends_with(" --cycle --force"));
+        assert!(cycle_shell_command("/tmp/aid serveur", false).ends_with(" --cycle"));
+    }
 
     #[test]
     fn shell_interactif_et_sortie_isolee() {

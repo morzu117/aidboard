@@ -1,4 +1,6 @@
-import { readFileSync, writeFileSync } from 'node:fs';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { delimiter, join } from 'node:path';
 import { afterEach, expect, test } from 'vitest';
 import { resolvePaths } from '../src/daemon/paths.js';
@@ -133,3 +135,19 @@ test('resumeFromManifest : une entrée Swairm fabriquée est ignorée sans spawn
     input.mockRestore();
   }
 });
+
+for (const kind of ['claude', 'shell'] as const) {
+  test('cycle sans mise à jour : conserve ' + kind + ' sans résumé ni manifeste', async () => {
+    const { live, topic } = await spawn(kind);
+    // Le helper démarre le daemon avec checkUpdates:false : état du watcher inconnu.
+    const cli = join(import.meta.dirname, '../dist/cli/aid.js');
+    const resultat = await promisify(execFile)(process.execPath, [cli, '--cycle'], {
+      env: { ...process.env, AID_HOME: c!.t.home, AID_NO_BROWSER: '1' },
+      timeout: 10000,
+    });
+    expect(resultat.stdout).toContain(`http://127.0.0.1:${c!.t.d.port}/?token=`);
+    expect(live.exited).toBe(false);
+    expect(existsSync(resolvePaths(c!.t.home).repriseJson)).toBe(false);
+    expect(existsSync(`/tmp/aid-reprise-${topic.topicId}.md`)).toBe(false);
+  });
+}
