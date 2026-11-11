@@ -125,6 +125,7 @@ Le reste du brouillon tient : l'objet de la salle, le format JSON du bulletin, l
 ### 40.1 Le cœur pur (D297, D298, D299)
 
 `src/shared/charter-avis.ts` (le charter, le jeton, le refus des marqueurs) et `src/shared/avis-mesh.ts` (le découpage, la lecture des bulletins, l'accord, la forme `aid-avis-mesh/1`). Tests unitaires sur chaque cas de D299, sur le jeton et sur une question qui contient un marqueur. Ne dépend ni de C1 ni de C6.
+- 40.1 : `src/shared/charter-avis.ts` et `src/shared/avis-mesh.ts`, 41 tests. Ajout de l'état `attendu` (un siège qui n'a encore rien déposé) et du drapeau `vote_scelle`. `BulletinAvis` est défini aussi dans `src/shared/committee.ts` (40.2) : les deux définitions sont fusionnées au 40.3.
 
 ### 40.2 La lecture des résultats (D296, D300)
 
