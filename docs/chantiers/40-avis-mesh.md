@@ -2,12 +2,12 @@
 
 | Champ | Valeur |
 |---|---|
-| État | **Spec et plan, révision 0, 11 novembre 2026.** Écrite contre `swarph committee` de swarph-cli 0.75.0, comme le lab l'a demandé (DM 93080, point 6). Reprend la spec révision 0 (9 novembre), les réponses du lab C2, C3 et C5 (DM 93087 et 93255), et le PASS du lab sur le charter, sous quatre corrections, intégrées en D297 (DM 93110). **À valider par Julien**, puis à relire par le lab : le 40 touche au contrat swarph. |
+| État | **Spec et plan, révision 1, 11 novembre 2026. Spec validée par Julien.** Écrite contre `swarph committee` de swarph-cli 0.75.0, comme le lab l'a demandé (DM 93080, point 6). Reprend la spec révision 0 (9 novembre), les réponses du lab C2, C3 et C5 (DM 93087 et 93255), et le PASS du lab sur le charter, sous quatre corrections, intégrées en D297 (DM 93110). Révision 1 : réponses du lab à C6, C7 et C8 (DM 96738). Le lab relit la spec : le 40 touche au contrat swarph. |
 | Emplacement final | `docs/chantiers/40-avis-mesh.md` sur `main` |
 | Base | `main` (c6d3332, v0.7.2) |
 | Organisation | Comme au 42. morzu-vps gère le chantier. Codex CLI écrit le code et les tests de chaque point. morzu-vps relit, lance le gate, commite et ouvre la PR. |
 | Validation | Le lab valide le chantier, comme pair distinct du constructeur, parce qu'il touche au mesh. Julien fait la recette. Merge : CI verte, validation du lab, puis oui de Julien. |
-| Bloqué par | **C1** (le commander) et **C6** (le lab), voir §8. 40.1 et 40.2 peuvent être construits avant leur réponse ; 40.3 et la suite attendent. |
+| Bloqué par | **C1** (le commander), voir §8. 40.1 et 40.2 se construisent sans lui, par le CLI. 40.3 l'attend. Le passage par le proxy attend la carte #1581, après la phase proxy de #20. |
 
 ## 1. Pourquoi
 
@@ -46,22 +46,22 @@ Le 39 donne un deuxième avis : la même question part à N agents Claude indép
 ### D294. Une salle « avis » par demande, une motion par question
 
 - **La salle.** Une demande au mesh ouvre une salle, liée à une carte (`--card-id`), avec la liste fermée des sièges : les cells choisies, `role: "seat"`. Son nom est `avis-<id>`, où `<id>` est l'id de la demande, au format du 39 (`ID_ASK`).
-- **La motion.** Une seule motion par demande (C3), quel que soit le nombre de sous-questions. Le texte de la motion est la question citée (D297). Les `--options` valent `repondu,sans_avis` : le gateway en exige deux, et le vrai verdict est dans le corps du bulletin (C7).
+- **La motion.** Une seule motion par demande (C3), quel que soit le nombre de sous-questions. Le texte de la motion est la question citée (D297). Les `--options` valent `avis,objection` (C7, DM 96738) : le gateway en exige deux distinctes, et le vrai verdict est dans le corps du bulletin. **L'abstention passe uniquement par `--outcome cannot_evaluate`**, jamais par une option : le charter le dit.
 - **Les échéances.** Le tour `positions` est obligatoire : 24 h par défaut, entre 1 h et 7 jours. Les tours `rebuttal` et `vote` sont facultatifs, désactivés par défaut.
 - **L'id de la motion** rendu par `motion --open --json` est gardé dans la base d'A-I-D, car le gateway ne liste plus une motion close (DM 93255).
 
 ### D295. Qui préside (C1, ouvert)
 
 - **Variante A, A-I-D préside.** La cell d'A-I-D reçoit le rôle de chair. A-I-D lance `rooms open` puis `motion --open`, et lit les résultats.
-- **Variante B, le lab préside.** A-I-D prépare le paquet : le charter, la question citée, les sièges, la carte et les échéances. Il l'envoie au chair du lab par `mesh.send`, sous confirmation. Le chair ouvre la salle et répond avec le canal et l'id de la motion, qu'A-I-D enregistre à la main ou à partir de la réponse. A-I-D ne fait ensuite que lire.
+- **Variante B, le lab préside.** A-I-D prépare le paquet : le charter, la question citée, les sièges, la carte et les échéances. Il l'envoie au chair du lab par `mesh.send`, sous confirmation. Le chair ouvre la salle, y ajoute la cell d'A-I-D comme **membre du canal, sans siège** (C8 : lire une motion demande d'être membre, `_require_member`), et répond avec le canal et l'id de la motion, qu'A-I-D enregistre à la main ou à partir de la réponse. A-I-D ne fait ensuite que lire.
 - **Le plan construit les deux.** Une option de configuration, `mesh.avis.chair` (`aid` ou `lab`), choisit la variante. Sa valeur par défaut est `lab`, tant que le commander n'a pas tranché. La boîte est la même dans les deux cas ; seul l'envoi change.
 
 ### D296. Les verbes et leur passage
 
-- **Lectures** : `committee.motion` (la motion ouverte d'un canal) et `committee.results` (une motion par son id). Elles ne consomment rien (invariant 4).
-- **Écritures, variante A seulement** : `committee.rooms.open` et `committee.motion.open`. Elles passent par la porte des confirmations, comme une nouvelle action `mesh.avis`, toujours confirmée, avec un aperçu qui montre la salle, les sièges, la carte, les échéances et le texte exact de la motion.
+- **Lectures** : la motion ouverte d'un canal (`swarph committee motion --json`, verbe proxy `committee.motions.list`) et une motion par son id (`swarph committee results --motion ID --json`, verbe proxy `committee.motion.get`). Elles ne consomment rien (invariant 4).
+- **Écritures, variante A seulement** : `committee.rooms.open` et `committee.motion.open`. Le lab ne les ajoutera au proxy que si le commander répond oui à C1. Elles passent par la porte des confirmations, comme une nouvelle action `mesh.avis`, toujours confirmée, avec un aperçu qui montre la salle, les sièges, la carte, les échéances et le texte exact de la motion.
 - **Le transport.** Les deux formes du 44 :
-  - par le proxy, si les verbes y sont relayés (C6) ;
+  - par le proxy, quand la carte #1581 y aura ajouté les verbes `committee` (C6) ; #1581 dépend de la phase proxy de #20, sans date ;
   - par le CLI, si la cell a encore son jeton (avant la bascule du 44).
   Tant que C6 n'a pas de réponse, le transport proxy rend « non relayé par le proxy » et ne tente rien d'autre. Il n'y a jamais de repli automatique du proxy vers le CLI.
 - **Variante B** : un seul `mesh.send`, l'écriture déjà connue du 35 bis, vers le chair du lab.
@@ -99,7 +99,7 @@ Le reste du brouillon tient : l'objet de la salle, le format JSON du bulletin, l
 
 ### D300. Le scellé, dit tel qu'il est
 
-- Tant que le tour `positions` est ouvert, une case montre « scellé par le gateway », sans contenu. Jamais « invisible » ni « secret » : le scellé n'est pas étanche (#1319, #1326).
+- Le scellé, côté serveur (`_visible`, DM 96738) : un bulletin `positions` devient visible aux autres à partir de la phase `rebuttal`, un bulletin `vote` à la phase `closed`. Tant qu'un bulletin n'est pas visible, sa case montre « scellé par le gateway », sans contenu. Jamais « invisible » ni « secret » : le scellé n'est pas étanche (#1319, #1326).
 - La boîte affiche la phase et les échéances en tête du tableau, et un bouton « Relire » qui relance `committee.results`. Il n'y a ni sondage périodique, ni relance des sièges.
 
 ### D301. Les routes et la base
@@ -149,6 +149,7 @@ Un e2e avec un faux `swarph`. La fiche `docs/recette-chantier-40-avis-mesh.md` :
 - **L'id de la motion se perd** si A-I-D ne le garde pas : le gateway ne liste pas les motions closes.
 - **`--as` explicite** à chaque appel de `swarph committee` : sinon le CLI retombe sur `$SWARPH_SELF`.
 - **Aucun repli du proxy vers le CLI** : un verbe non relayé est une réponse, pas une panne à contourner.
+- **Le fan-out pendant le scellé n'est pas vérifié** (DM 96738) : un membre non-siège reçoit-il le texte d'un bulletin pendant que le tour est scellé (la fuite de #1326) ? La recette le teste avant d'y compter.
 - **Le coût est chez les autres.** Chaque siège dépense le quota de son propriétaire, qui consent à l'ouverture de la salle. Rien ne relance un siège.
 
 ## 7. Fini quand
@@ -160,8 +161,10 @@ Un e2e avec un faux `swarph`. La fiche `docs/recette-chantier-40-avis-mesh.md` :
 
 ## 8. Questions ouvertes
 
-- **C1, pour le commander, par le lab** : la cell d'A-I-D peut-elle être chair ? Sinon, variante B : le lab préside, et A-I-D lit (D295).
-- **C6, pour le lab** : le proxy de #20 relaiera-t-il `committee.motion` et `committee.results` en lecture, et, pour la variante A, `committee.rooms.open` et `committee.motion.open` en écriture ? Sans ces verbes, A-I-D ne peut rien faire du 40 une fois basculé sur le proxy (44).
-- **C7, pour le lab** : `--options repondu,sans_avis` convient-il, puisque le gateway exige deux options et que le verdict est dans le corps ?
-- **C8, pour le lab** : en variante B, la cell d'A-I-D doit-elle être un siège, ou un observateur, pour lire les bulletins après la clôture ?
+- **C1, pour le commander, par le lab** : la cell d'A-I-D peut-elle être chair ? Sinon, variante B : le lab préside, et A-I-D lit (D295). Le lab relance le commander (DM 96737).
 - **C4, pour Julien** : les sièges et les échéances de la première recette.
+
+**Réponses du lab (DM 96738), intégrées :**
+- **C6** : le proxy ne relaie aucun verbe `committee`. La carte #1581 ajoutera `committee.motion.get` et `committee.motions.list` en lecture, et les écritures seulement si C1 est oui. Elle dépend de la phase proxy de #20 : D296.
+- **C7** : `--options avis,objection`, et l'abstention par l'outcome seulement : D294.
+- **C8** : un membre du canal sans siège suffit pour lire ; le scellé est appliqué par phase : D295 et D300. Le fan-out pendant le scellé reste à tester (§6).
