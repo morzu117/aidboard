@@ -1,4 +1,6 @@
 mod daemon_bridge;
+#[cfg(any(target_os = "windows", test))]
+mod diagnostic_wsl;
 mod joignabilite;
 mod navigation;
 

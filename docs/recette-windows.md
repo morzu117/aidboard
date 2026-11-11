@@ -347,3 +347,25 @@ Constat lanceurs / cookie / liens externes : _à remplir_.
 
 Décision finale : _à remplir_. Une fonction non faite reste non validée ;
 le succès du MSI ou du gate Linux ne suffit pas à annoncer « prêt pour Windows ».
+
+## Diagnostic WSL au démarrage
+
+Avant « Recherche d'AID Server… », Windows affiche « Vérification de WSL… ».
+
+- [ ] Sans `wsl.exe` ou sans distribution installée : vérifier l'aide
+      « WSL2 n'est pas installé », avec `wsl --install -d Ubuntu` à lancer
+      dans un terminal administrateur, puis redémarrage Windows et relance d'AID.
+- [ ] Avec la distribution visée en WSL1 : vérifier le message qui donne son
+      nom et `wsl --set-version <nom> 2`, puis demande de relancer AID.
+- [ ] Avec une distribution explicitement choisie mais absente : vérifier
+      « La distribution <nom> est introuvable. Distributions présentes : <liste>. »
+
+Pour choisir une distribution, exécuter `setx AID_WSL_DISTRO Ubuntu` dans un
+terminal Windows, puis relancer AID pour qu'il hérite de la variable. Le nom
+peut contenir des espaces ; les noms vides ou contenant un caractère de contrôle
+sont refusés. Sans variable, AID utilise la distribution marquée `*` dans
+`wsl.exe --list --verbose`, avec son utilisateur par défaut. Ce choix s'applique
+au cycle, à la lecture de `daemon.json` et au pont de redémarrage. Adapter aussi
+les commandes de recette en ajoutant `-d Ubuntu` avant `-e` si nécessaire.
+Une erreur non reconnue de la commande de diagnostic ou une sortie illisible
+laisse le démarrage continuer.
