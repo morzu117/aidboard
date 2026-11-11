@@ -505,37 +505,83 @@ test('D293 : version changée avant le oui, demande périmée, aucune écriture'
   expect(t.proxy.lignes).toEqual([]);
 });
 test.each([
-  [403, 'execute manquant <b>brut</b>', undefined, 'Droit manquant'],
-  [409, 'conflit', 'ready', 'La carte a changé (ready)'],
-  [409, 'stage gate : swarph board cards confirm-flow', undefined, "Porte d'étape"],
-  [409, 'open obligations', undefined, 'Obligations ouvertes'],
-  [400, 'unknown stage', undefined, 'Étape inconnue'],
-  [404, 'missing', undefined, 'Carte absente'],
+  [403, undefined, undefined, 'Droit manquant'],
+  [409, 'precondition', 'ready', 'La carte a changé (ready)'],
+  [409, 'step_gate', undefined, "Porte d'étape"],
+  [409, 'flow_unconfirmed', undefined, "Flow non confirmé (l'orchestrateur doit le confirmer)"],
+  [409, 'open_obligations', undefined, 'Obligations ouvertes'],
+  [403, 'forbidden', undefined, 'Droit manquant'],
+  [400, 'bad_stage', undefined, 'Étape inconnue'],
+  [404, 'not_found', undefined, 'Carte absente'],
+  [
+    409,
+    'other',
+    undefined,
+    'Déplacement non confirmé. Relis la carte avant toute nouvelle action.',
+  ],
+  [
+    409,
+    'secret-amont',
+    'secret-amont',
+    'La carte a changé ou une porte a refusé le déplacement. Relis la carte.',
+  ],
 ] as const)(
-  'D293 : code %s, détail texte, pas de seconde écriture',
-  async (status, detail, current_stage, libelle) => {
+  'D293 : refus structuré %s/%s sans texte amont',
+  async (status, refusal, current_stage, libelle) => {
     const { libelleDeplacement } = await import('../src/shared/deplacements.js');
     const t = await preparerDeplacement({
-      reponse: { ok: false, error: 'upstream_error', status, detail, current_stage },
+      reponse: {
+        ok: false,
+        error: 'upstream_error',
+        status,
+        detail: 'secret-amont',
+        refusal,
+        current_stage,
+      },
     });
     const r = await t.demander(deplacement);
     const fin = await t.oui(r.json().confirmation);
-    expect(libelleDeplacement(fin.envoi)).toBe(`${libelle} : ${detail}`);
+    expect(libelleDeplacement(fin.envoi)).toBe(libelle);
+    expect(JSON.stringify(fin)).not.toContain('secret-amont');
+    expect(JSON.stringify(t.db.prepare('SELECT * FROM pda_demandes').all())).not.toContain(
+      'secret-amont',
+    );
+    expect(JSON.stringify(t.journal.mock.calls)).not.toContain('secret-amont');
     expect(t.proxy.lignes).toHaveLength(1);
-    expect(JSON.parse(t.proxy.lignes[0]!).verb).toBe('board.cards.move');
   },
 );
-test('D293 : détail borné et warn 2xx conservé', async () => {
+test('D293 : warn 2xx réduit à un booléen, corps amont supprimé', async () => {
   const t = await preparerDeplacement({
-    reponse: { ok: false, error: 'upstream_error', status: 403, detail: 'x'.repeat(3000) },
+    reponse: { ok: true, status: 200, body: { warn: 'secret-amont', detail: 'secret-amont' } },
   });
   const r = await t.demander(deplacement);
-  expect((await t.oui(r.json().confirmation)).envoi.detail).toHaveLength(2000);
-  const u = await preparerDeplacement({
-    reponse: { ok: true, status: 200, body: { warn: 'Porte d’étape en mode avertissement' } },
-  });
-  const s = await u.demander(deplacement);
-  expect((await u.oui(s.json().confirmation)).envoi.warn).toBe(
-    'Porte d’étape en mode avertissement',
+  const fin = await t.oui(r.json().confirmation);
+  expect(fin.envoi).toEqual({ code: 'succes', status: 200, avertissement: true });
+  expect(JSON.stringify(fin)).not.toContain('secret-amont');
+  expect(JSON.stringify(t.db.prepare('SELECT * FROM pda_demandes').all())).not.toContain(
+    'secret-amont',
   );
+  expect(JSON.stringify(t.journal.mock.calls)).not.toContain('secret-amont');
+});
+test('D293 : assignee changé au oui, demande périmée sans envoi', async () => {
+  const t = await preparerDeplacement();
+  const r = await t.demander(deplacement);
+  const fiche = await t.board.card(42);
+  if (fiche.card.ok) fiche.card.data.assignee = 'peer-b';
+  t.card.mockClear();
+  expect((await t.oui(r.json().confirmation)).resultat).toBe('perimee');
+  expect(t.card).toHaveBeenCalledWith(42, { fresh: true, sansCache: true });
+  expect(t.proxy.lignes).toEqual([]);
+});
+test('D293 : demande manuelle non assignée refusée sans envoi', async () => {
+  const t = await preparerDeplacement();
+  const fiche = await t.board.card(42);
+  if (fiche.card.ok) fiche.card.data.assignee = null;
+  t.card.mockClear();
+  const r = await t.demander(deplacement);
+  expect(r.statusCode).toBe(409);
+  expect(r.json()).toEqual({ error: 'perime' });
+  expect(t.card).toHaveBeenCalledWith(42, { fresh: true, sansCache: true });
+  expect(t.db.prepare('SELECT * FROM pda_demandes').all()).toEqual([]);
+  expect(t.proxy.lignes).toEqual([]);
 });

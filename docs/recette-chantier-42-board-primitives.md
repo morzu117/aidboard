@@ -95,10 +95,14 @@ Les tests de frontière host restent inchangés.
   proposition disparaît, y compris après rechargement. Constat : _à remplir_.
 - [ ] 42.R.8 **Ce pas tente une écriture sur le gateway**, sur une carte de
   recette dont le droit `execute` manque : après confirmation du téléphone,
-  vérifier « Droit manquant » et le détail disponible en texte brut. Aucun
+  vérifier « Droit manquant », sans texte amont. Aucun
   bouton `confirm-flow`, aucun enchaînement de cette commande. La carte garde
-  son étape. Le proxy installé peut retirer le détail amont (révision 42.5) ;
-  le libellé générique doit rester visible. Constat : _à remplir_.
+  son étape. Aucun détail amont ne doit être affiché. Constat : _à remplir_.
+- [ ] 42.R.8bis **Ce pas tente une écriture sur le gateway.** Provoquer un
+  409 de précondition après la relecture locale, sur une carte de recette
+  autorisée. Avec swarph-cli 0.75.0, le libellé reste générique jusqu’à la
+  carte #1575 du lab : « La carte a changé ou une porte a refusé le
+  déplacement. Relis la carte. » Constat : _à remplir_.
 - [ ] 42.R.9 Sur une nouvelle proposition, « Ignorer » ne déplace rien. Recharger
   puis redémarrer A-I-D : aucun nouvel événement local ne doit reproposer le
   même déplacement ; aucun au premier relevé après redémarrage. Un sujet
@@ -151,3 +155,61 @@ Sous Node 22.23.3, toutes les commandes de vérification sont lancées avec
 - Deux fichiers créés, **zéro ligne existante modifiée**. Un test e2e couvre
   les six scénarios demandés. Aucun défaut produit révélé, aucun écart
   fonctionnel au point 42.6. La recette réelle et Node 24 restent à effectuer.
+
+## Handoff du point 42.7
+
+Les corrections retirent tout texte amont des réponses de déplacement, y
+compris du corps 2xx en mémoire. Seuls les étapes et refus connus sont
+conservés ; `warn` devient `avertissement: true`. Les libellés sont locaux.
+La branche dépend de l'action et l'éligibilité D293 est relue sans cache à
+la demande et au oui, y compris pour une demande manuelle.
+
+Fichiers modifiés :
+
+- Production : `src/shared/deplacements.ts`, `src/shared/etats.ts`,
+  `src/daemon/confirmations/etats.ts`, `src/daemon/mesh/proxy.ts`.
+- Tests : `test/carte-deplacer.test.ts`, `test/mesh-etat.test.ts`,
+  `test/daemon/proxy.test.ts`, `test/web/aid-propositions.test.tsx`,
+  `e2e/board-aid.spec.ts`.
+- Documentation : cette fiche. Aucun fichier créé.
+
+78 lignes existantes remplacées ou supprimées (somme des suppressions de
+`git diff --numstat`, hors fichiers nouveaux). Sept cas supplémentaires :
+quatre cas de refus structurés, assignee changé au oui, demande manuelle
+non assignée, et frontière du parseur (neuf étapes, huit refus, valeurs
+inconnues, corps 2xx). Les tests existants vérifient désormais l'absence de
+`secret-amont` dans la réponse, la base et le journal, l'avertissement
+booléen, le texte de flow non confirmé sans bouton et l'absence du détail
+dans l'e2e. Aucun test de frontière host modifié.
+
+Sous Node 22.23.3, commandes lancées avec
+`env -u SWARPH_SELF -u MESH_GATEWAY_URL` :
+
+- `npm run typecheck` et `npm run lint` : code 0 ; également réussis dans
+  le gate final, avec le build.
+- `npx vitest run test/carte-deplacer.test.ts test/mesh-etat.test.ts test/aid-propositions.test.ts test/mesh-proxy.test.ts test/daemon/proxy.test.ts test/web/aid-propositions.test.tsx` :
+  160 réussis, six fichiers, code 0.
+- `AID_SWARPH_PROXY_PYTHON=/var/tmp/aid-swarph-proxy-venv/bin/python npm run test:vrai-proxy` :
+  26 réussis, deux fichiers, code 0.
+- `npx playwright test e2e/board-aid.spec.ts --output=/tmp/42.7-playwright` :
+  1 réussi, code 0. Le premier lancement sans build a échoué sur le module
+  absent `dist/cli/aid.js` ; le build du gate a fourni le binaire.
+- `TMPDIR=/var/tmp/aid-tmp-42.7 npm run gate` : 3 240 réussis,
+  28 ignorés, deux échecs ; 266 fichiers réussis, quatre ignorés, deux en
+  échec ; code 1. Aucun test exclu ni contourné.
+- Les deux échecs sont présents sur `HEAD` (`8ce69a8`), tous les fichiers
+  du diff temporairement restaurés à leur contenu de base, puis le diff
+  rétabli intégralement. Rejeu avec les mêmes variables et TMPDIR :
+  `npx vitest run test/install.test.ts test/update-check.test.ts`, neuf
+  réussis, deux échecs, code 1. Messages identiques au gate final :
+  `test/install.test.ts:37`, `expected 'repo' to be 'inconnu'` ;
+  `test/update-check.test.ts:13`,
+  `expected '/var/tmp/aid-tmp-42.7' to be null`.
+
+Index structurel et gbrain absents : lecture directe, sans rayon d'impact
+établi par l'index ni handoff mémoire. Cette section sert de handoff local.
+Aucun écart fonctionnel au point 42.7. Les attentes du test proxy et de
+l'e2e ont été adaptées au retrait demandé des textes amont. Aucune nouvelle
+dépendance, aucun changement de manifeste, configuration ou CI. Aucun
+commit ni push ; le manager relit et relance le gate hors environnement
+isolé avant de committer.

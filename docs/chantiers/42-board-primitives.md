@@ -116,6 +116,7 @@ Ses remarques, toutes retenues :
 - relire l'`assignee` au oui, et appliquer la règle de D293 à toute demande `carte.deplacer`, qu'elle vienne d'une proposition ou non ;
 - ne garder aucun texte amont, ni en base ni ailleurs (L8).
 Le proxy rendra `refusal` et `current_stage` en champs structurés (carte #1575, projet 8). A-I-D lit déjà `refusal` s'il est présent, et l'ignore s'il a une valeur inconnue.
+- *Révision 42.7.* Ce point applique la revue du lab (DM 96427). Les 78 lignes remplacées le sont toutes dans le code du chantier (42.5, 42.6). Un test vérifie que `secret-amont` n'apparaît ni en réponse, ni en base, ni au journal. Vrai proxy 26/26, e2e 1/1, gate 3240 (échecs connus hors CI).
 
 ## 6. Pièges
 

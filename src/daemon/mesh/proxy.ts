@@ -1,3 +1,8 @@
+import {
+  ETAPES_PROXY,
+  REFUS_DEPLACEMENT,
+  type ReponseDeplacement,
+} from '../../shared/deplacements.js';
 import { randomUUID } from 'node:crypto';
 import { createConnection } from 'node:net';
 
@@ -39,13 +44,19 @@ type CodeProxy = (typeof CODES_PROXY)[number] | 'delai' | 'interrompu' | 'connex
 type CorpsProxy = Record<string, unknown> | unknown[];
 export type ResultatProxy<Corps = CorpsProxy> =
   | { ok: true; status: number; body: Corps }
-  | { ok: false; code: CodeProxy; status?: number; detail?: string; current_stage?: string };
+  | {
+      ok: false;
+      code: CodeProxy;
+      status?: number;
+      current_stage?: string;
+      refusal?: ReponseDeplacement['refusal'];
+    };
 
 function estObjet(valeur: unknown): valeur is Record<string, unknown> {
   return typeof valeur === 'object' && valeur !== null && !Array.isArray(valeur);
 }
 
-/** D263 : détail retiré, sauf pour le déplacement D293 qui l’affiche en texte borné. */
+/** D293 : aucun texte amont conservé pour un déplacement. */
 export function lireReponseProxy(
   ligne: string,
   requestId: string,
@@ -81,7 +92,13 @@ export function lireReponseProxy(
       !(estObjet(reponse.body) || (verbes[0] === VERBES_LECTURE[0] && Array.isArray(reponse.body)))
     )
       return format;
-    return { ok: true, status: reponse.status, body: reponse.body };
+    return {
+      ok: true,
+      status: reponse.status,
+      body: deplacement
+        ? { ...(Object.hasOwn(reponse.body, 'warn') && { avertissement: true }) }
+        : reponse.body,
+    };
   }
   if (reponse.ok === false) {
     const code = CODES_PROXY.find((code) => code === reponse.error);
@@ -90,12 +107,12 @@ export function lireReponseProxy(
         ok: false,
         code,
         ...(deplacement &&
-          typeof reponse.detail === 'string' && {
-            detail: Array.from(reponse.detail).slice(0, 2000).join(''),
+          ETAPES_PROXY.find((e) => e === reponse.current_stage) && {
+            current_stage: ETAPES_PROXY.find((e) => e === reponse.current_stage),
           }),
         ...(deplacement &&
-          typeof reponse.current_stage === 'string' && {
-            current_stage: Array.from(reponse.current_stage).slice(0, 80).join(''),
+          REFUS_DEPLACEMENT.find((r) => r === reponse.refusal) && {
+            refusal: REFUS_DEPLACEMENT.find((r) => r === reponse.refusal),
           }),
         ...(typeof reponse.status === 'number' &&
           Number.isInteger(reponse.status) &&

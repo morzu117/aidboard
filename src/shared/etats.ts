@@ -159,8 +159,10 @@ export function lireParamsEtat<A extends ActionEtat>(
 
 export function resumeEtat<A extends ActionEtat>(action: A, params: ParametresEtat[A]): string {
   if (!lireParamsEtat(action, params).ok) throw new Error('Paramètres d’état invalides');
-  if ('etape' in params)
-    return `Déplace la carte #${params.carte} de ${params.attendu.stage} vers ${params.etape}. Aucune obligation ni message.`;
+  if (action === 'carte.deplacer') {
+    const deplacement = params as ParametresEtat['carte.deplacer'];
+    return `Déplace la carte #${params.carte} de ${deplacement.attendu.stage} vers ${deplacement.etape}. Aucune obligation ni message.`;
+  }
   const verbe = {
     'obligation.prendre': 'Prendre',
     'obligation.refuser': 'Refuser',
@@ -170,7 +172,7 @@ export function resumeEtat<A extends ActionEtat>(action: A, params: ParametresEt
     action === 'obligation.clore'
       ? ` : ${(params as ParametresEtat['obligation.clore']).issue}`
       : '';
-  return `${verbe} l'obligation #${params.obligation} (carte #${params.carte})${issue}`;
+  return `${verbe} l'obligation #${(params as ParametresEtat['obligation.prendre']).obligation} (carte #${params.carte})${issue}`;
 }
 
 export function textesAPurger(params: ParametresEtat[ActionEtat]): string[] {
@@ -215,17 +217,22 @@ export function argsEtat<A extends ActionEtat>(
   params: ParametresEtat[A],
 ): { verb: string; args: Record<string, unknown> } {
   if (!lireParamsEtat(action, params).ok) throw new Error('Paramètres d’état invalides');
-  if ('etape' in params)
+  if (action === 'carte.deplacer') {
+    const deplacement = params as ParametresEtat['carte.deplacer'];
     return {
       verb: 'board.cards.move',
       args: {
         id: params.carte,
-        stage: params.etape,
-        expect_stage: params.attendu.stage,
-        expect_stage_version: params.attendu.stageVersion,
+        stage: deplacement.etape,
+        expect_stage: deplacement.attendu.stage,
+        expect_stage_version: deplacement.attendu.stageVersion,
       },
     };
-  const args = { id: params.obligation, expect_status: 'open' };
+  }
+  const args = {
+    id: (params as ParametresEtat['obligation.prendre']).obligation,
+    expect_status: 'open',
+  };
   if (action === 'obligation.prendre') return { verb: 'board.obligations.take', args };
   if ('motif' in params)
     return { verb: 'board.obligations.decline', args: { ...args, why: params.motif } };

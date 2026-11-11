@@ -5,7 +5,7 @@ import { Boite } from '../../web/src/ecrans/Boite.js';
 import { FakeSocket, json, setup, snapshot } from './helpers.js';
 const p = { id: 1, sujet: 's', carte: 42, etape: 'review' };
 afterEach(cleanup);
-async function ouvrir(code = 'succes', status = 200, detail?: string) {
+async function ouvrir(code = 'succes', status = 200, refusal?: string) {
   let propositions = [p];
   const etat = snapshot();
   etat.mesh = {
@@ -48,8 +48,8 @@ async function ouvrir(code = 'succes', status = 200, detail?: string) {
             envoi: {
               code,
               status,
-              detail,
-              warn: code === 'succes' ? 'Avertissement du gateway' : undefined,
+              refusal,
+              avertissement: code === 'succes',
             },
           },
         ],
@@ -74,16 +74,10 @@ test('Boîte : aperçu exact, fermer et Ignorer sans écriture mesh', async () =
   expect(h.calls.filter((c) => c.method === 'POST')).toEqual([]);
 });
 test('409 confirm-flow : texte brut, aucun bouton ni autre envoi, proposition conservée', async () => {
-  const h = await ouvrir(
-    'upstream_error',
-    409,
-    'stage gate <b>swarph board cards confirm-flow</b>',
-  );
+  const h = await ouvrir('upstream_error', 409, 'flow_unconfirmed');
   fireEvent.click(screen.getByRole('button', { name: 'Ouvrir' }));
   fireEvent.click(await screen.findByRole('button', { name: 'Envoyer' }));
-  const r = await screen.findByText(
-    "Porte d'étape : stage gate <b>swarph board cards confirm-flow</b>",
-  );
+  const r = await screen.findByText("Flow non confirmé (l'orchestrateur doit le confirmer)");
   expect(r.querySelector('b')).toBeNull();
   expect(screen.queryByRole('button', { name: /confirm-flow/ })).toBeNull();
   expect(h.calls.filter((c) => c.method === 'POST')).toHaveLength(1);
@@ -95,7 +89,7 @@ test('succès confirmé : proposition fermée', async () => {
   fireEvent.click(screen.getByRole('button', { name: 'Ouvrir' }));
   fireEvent.click(await screen.findByRole('button', { name: 'Envoyer' }));
   await waitFor(() => expect(screen.queryByText('Déplacer la carte #42 vers review')).toBeNull());
-  expect(screen.getByText('Avertissement du gateway')).toBeTruthy();
+  expect(screen.getByText("Porte d'étape en mode avertissement")).toBeTruthy();
   expect(h.calls.find((c) => c.url === '/api/swarph/etat/envoyer')?.body).toMatchObject({
     action: 'carte.deplacer',
     propositionAid: 1,

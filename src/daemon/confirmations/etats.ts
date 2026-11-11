@@ -1,3 +1,4 @@
+import { raisonDeplacement } from '../../shared/deplacements.js';
 import { randomUUID } from 'node:crypto';
 import {
   argsEtat,
@@ -5,6 +6,7 @@ import {
   lireParamsEtat,
   textesAPurger,
   type Etat,
+  type ParametresEtat,
 } from '../../shared/etats.js';
 import { nettoyer } from '../../shared/nettoyage.js';
 import type { AidConfig } from '../config.js';
@@ -39,14 +41,16 @@ export function creerActionEtat(deps: {
         if (!nettoyage.ok) throw new AidHttpError(422, nettoyage.classe);
       }
       if (!mesh.proxySocket) throw new AidHttpError(409, 'proxy_absent');
-      if ('etape' in params) {
+      if (action === 'carte.deplacer') {
+        const deplacement = params as ParametresEtat['carte.deplacer'];
         const fiche = await deps.board
           .card(params.carte, { fresh: true, sansCache: true })
           .catch(() => null);
         if (
           !fiche?.card.ok ||
-          fiche.card.data.stage !== params.attendu.stage ||
-          fiche.card.data.stageVersion !== params.attendu.stageVersion
+          raisonDeplacement(fiche.card.data, mesh.cell) !== null ||
+          fiche.card.data.stage !== deplacement.attendu.stage ||
+          fiche.card.data.stageVersion !== deplacement.attendu.stageVersion
         )
           throw new AidHttpError(409, 'perime');
         return { action, params } as Etat;
@@ -54,7 +58,9 @@ export function creerActionEtat(deps: {
       // Sans lecture fiable, aucune écriture : le téléphone devra relire la carte.
       const resultat = await deps.board.obligations(params.carte).catch(() => null);
       const obligation = resultat?.ok
-        ? resultat.data.obligations.find((o) => o.id === params.obligation)
+        ? resultat.data.obligations.find(
+            (o) => o.id === (params as ParametresEtat['obligation.prendre']).obligation,
+          )
         : null;
       if (
         !obligation ||
@@ -77,11 +83,11 @@ export function creerActionEtat(deps: {
         code: reponse.ok ? ('succes' as const) : reponse.code,
         ...('status' in reponse && { status: reponse.status }),
         ...(etat.action === 'carte.deplacer' &&
-          !reponse.ok && { detail: reponse.detail, current_stage: reponse.current_stage }),
+          !reponse.ok && { refusal: reponse.refusal, current_stage: reponse.current_stage }),
         ...(etat.action === 'carte.deplacer' &&
           reponse.ok &&
-          typeof reponse.body.warn === 'string' && {
-            warn: reponse.body.warn,
+          reponse.body.avertissement === true && {
+            avertissement: true,
           }),
       };
       ctx.envoi = envoi;

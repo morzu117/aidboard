@@ -74,7 +74,55 @@ test.each([undefined, null, '1', true, -1, 0.5])(
 
 test('409 générique du gateway sans diagnostic de porte inventé', async () => {
   const { libelleDeplacement } = await import('../src/shared/deplacements.js');
+  expect(libelleDeplacement({ code: 'upstream_error', status: 409 })).toBe(
+    'La carte a changé ou une porte a refusé le déplacement. Relis la carte.',
+  );
+});
+
+test('frontière proxy : seules les valeurs structurées connues survivent en mémoire', async () => {
+  const { lireReponseProxy, VERBES_PROXY } = await import('../src/daemon/mesh/proxy.js');
+  const { ETAPES_PROXY, REFUS_DEPLACEMENT } = await import('../src/shared/deplacements.js');
+  const lire = (champs: Record<string, unknown>) =>
+    lireReponseProxy(JSON.stringify({ request_id: 'test', ...champs }), 'test', VERBES_PROXY, true);
+  for (const current_stage of ETAPES_PROXY) {
+    for (const refusal of REFUS_DEPLACEMENT) {
+      expect(
+        lire({
+          ok: false,
+          error: 'upstream_error',
+          current_stage,
+          refusal,
+          detail: 'secret-amont',
+        }),
+      ).toEqual({
+        ok: false,
+        code: 'upstream_error',
+        current_stage,
+        refusal,
+      });
+    }
+  }
+  for (const inconnu of ['secret-amont', null, 42, {}, ['build']]) {
+    expect(
+      lire({
+        ok: false,
+        error: 'upstream_error',
+        current_stage: inconnu,
+        refusal: inconnu,
+        detail: 'secret-amont',
+      }),
+    ).toEqual({ ok: false, code: 'upstream_error' });
+  }
   expect(
-    libelleDeplacement({ code: 'upstream_error', status: 409, detail: 'gateway rejected request' }),
-  ).toBe('La carte a changé : gateway rejected request');
+    lire({
+      ok: true,
+      status: 200,
+      body: { detail: 'secret-amont', warn: 'secret-amont', autre: 'secret-amont' },
+    }),
+  ).toEqual({ ok: true, status: 200, body: { avertissement: true } });
+  expect(lire({ ok: true, status: 200, body: { detail: 'secret-amont' } })).toEqual({
+    ok: true,
+    status: 200,
+    body: {},
+  });
 });
