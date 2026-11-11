@@ -104,6 +104,7 @@ La pastille et le bloc A-I-D de la fiche de la carte, et la section « Sujets sa
 - *Révision 42.5.* L'étape attendue est relue deux fois : à l'aperçu, puis au oui. Si la carte a changé entre-temps, la demande est périmée. Quand la demande vient d'une proposition, les paramètres envoyés par le navigateur sont ignorés. Le détail du proxy n'est gardé que pour `board.cards.move` : borné à 2000 caractères, et 80 pour `current_stage`. Il n'est jamais journalisé. Les gardes « aucun envoi » reconnaissent maintenant `move`. Limite : le proxy installé (swarph-cli 0.75.0) retire le détail amont et `current_stage`. A-I-D affiche donc pour l'instant les libellés génériques ; question posée au lab. 28 lignes existantes modifiées, dont les gardes renforcées et la version de schéma 28. Vrai proxy 26/26, e2e Board et Boîte 14/14, gate 3233 (échecs connus hors CI).
 
 ### 42.6 L'e2e et la fiche de recette
+- *Révision 42.6.* Un seul parcours e2e couvre les six scénarios, et n'a révélé aucun défaut. La fiche de recette sépare les pas de lecture, faisables sur le Mac, des pas qui demandent Julien : une carte assignée à sa cell, le droit `execute`, et le oui sur le téléphone. E2e AID, Board, Swairm et Boîte 15/15 ; gate 3233 (échecs connus hors CI).
 
 ## 6. Pièges
 
