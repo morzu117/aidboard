@@ -119,7 +119,8 @@ test('colonnes dans l’ordre des stage reçus, cartes « slug · #id », sans r
   expect(c101.textContent).toContain('<b>pas du HTML</b>');
   expect(node('board.carte-103')!.textContent).toContain('2 obligations ouvertes');
   expect(node('board.identite')!.textContent).toContain('morzu-mac');
-  expect(node('board.pastille')!.textContent).toMatch(/Board lu il y a \d+ s/);
+  // Les colonnes précèdent l’effet qui transmet la fin de lecture au parent.
+  await waitFor(() => expect(node('board.pastille')!.textContent).toMatch(/Board lu il y a \d+ s/));
   // lecture seule : aucun champ ni bouton d'écriture
   expect(document.querySelector('.board textarea, .board input')).toBeNull();
   expect(screen.queryByText(/Prendre|Commenter/)).toBeNull();
@@ -210,7 +211,7 @@ test('les cartes retirées pendant leur lecture ne laissent pas « Lecture du bo
   // les projets relus en erreur : plus de projet, les cartes disparaissent en pleine lecture
   fireEvent.click(node('board.relire')!);
   await waitFor(() => expect(node('board.message')).not.toBeNull());
-  expect(node('board.pastille')!.textContent).not.toBe('Lecture du board…');
+  await waitFor(() => expect(node('board.pastille')!.textContent).not.toBe('Lecture du board…'));
   // Relire depuis le message relit encore les cartes en fresh : sans quoi elles retombent sur l'erreur en cache
   const fraiches = () =>
     h.calls.filter((c) => c.url === '/api/board/projects/42/cards?fresh=1').length;
