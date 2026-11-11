@@ -129,6 +129,7 @@ Le reste du brouillon tient : l'objet de la salle, le format JSON du bulletin, l
 ### 40.2 La lecture des résultats (D296, D300)
 
 Le lecteur `committee.motion` et `committee.results` par le CLI (`--json`, argv en tableau, jamais de shell), avec la lecture défensive de la réponse du gateway. Côté proxy, les deux verbes sont déclarés mais rendent « non relayé par le proxy » tant que C6 n'est pas tranché. Tests avec un faux `swarph` qui rend des résultats scellés, ouverts, avec abstention, absent et invalide.
+- 40.2 : lecteur `CommitteeReader` (`src/daemon/mesh/committee.ts`), parseur `src/shared/committee.ts`, 9 tests. La forme exacte de la réponse du gateway et le type de l'id de motion restent à vérifier à la recette.
 
 ### 40.3 L'envoi, variantes A et B (D294, D295, D296, D301)
 
