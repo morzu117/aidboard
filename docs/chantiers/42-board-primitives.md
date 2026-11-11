@@ -106,6 +106,17 @@ La pastille et le bloc A-I-D de la fiche de la carte, et la section « Sujets sa
 ### 42.6 L'e2e et la fiche de recette
 - *Révision 42.6.* Un seul parcours e2e couvre les six scénarios, et n'a révélé aucun défaut. La fiche de recette sépare les pas de lecture, faisables sur le Mac, des pas qui demandent Julien : une carte assignée à sa cell, le droit `execute`, et le oui sur le téléphone. E2e AID, Board, Swairm et Boîte 15/15 ; gate 3233 (échecs connus hors CI).
 
+### 42.7 Les corrections de la revue du lab (DM 96427)
+
+Le lab a rendu un PASS sur la PR #147 (tête 25ae017), sous réserve de la CI verte et de deux corrections :
+- retirer « Obligations ouvertes », qui ne peut pas arriver vers `review` ni `ready` ;
+- dire, dans la recette, que le 409 de précondition reste générique tant que le proxy n'a pas changé.
+Ses remarques, toutes retenues :
+- choisir la branche par `action`, et non plus par la présence d'une clé ;
+- relire l'`assignee` au oui, et appliquer la règle de D293 à toute demande `carte.deplacer`, qu'elle vienne d'une proposition ou non ;
+- ne garder aucun texte amont, ni en base ni ailleurs (L8).
+Le proxy rendra `refusal` et `current_stage` en champs structurés (carte #1575, projet 8). A-I-D lit déjà `refusal` s'il est présent, et l'ignore s'il a une valeur inconnue.
+
 ## 6. Pièges
 
 - La recherche est une sous-chaîne (L3) : sans l'expression ancrée, `#a` relierait `#ab`.
