@@ -157,9 +157,19 @@ jobs:
         with:
           targets: ${{ runner.os == 'macOS' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
       - if: runner.os == 'Linux'
+        timeout-minutes: 8
         run: |
-          sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf
+          options_apt=(-o Acquire::Retries=0 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30)
+          for essai in 1 2 3; do
+            if sudo env DEBIAN_FRONTEND=noninteractive apt-get "${options_apt[@]}" -o APT::Update::Error-Mode=any update &&
+              sudo env DEBIAN_FRONTEND=noninteractive apt-get "${options_apt[@]}" install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf; then
+              break
+            fi
+            if [ "$essai" -eq 3 ]; then
+              exit 1
+            fi
+            sleep 10
+          done
       # Seul @tauri-apps/cli sert ici : pas de compilation de node-pty ni de better-sqlite3
       - run: npm ci --ignore-scripts
       # Trouve app/src-tauri/tauri.conf.json depuis la racine (recherche récursive), lance
