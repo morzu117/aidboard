@@ -210,6 +210,15 @@ test('session disparue : tour en cours fermé, relance par --resume, le fil cont
     { sessionId: sid, resume: true },
   ]);
   // la sortie du nouvel agent repart de zéro : le relancé a bien reçu --resume
+  // Le rattachement peut précéder l'écriture du faux agent : attendre sa ligne entière.
+  await waitFor(
+    () => {
+      const fichier = join(home, '.aid-remote/agents/sa_c2/out');
+      return existsSync(fichier) && readFileSync(fichier, 'utf8').endsWith('\n');
+    },
+    15_000,
+    'arguments de reprise écrits en entier',
+  );
   const out = readFileSync(join(home, '.aid-remote/agents/sa_c2/out'), 'utf8');
   expect(out).toContain('"mode":"resume"');
   expect(r.driver.committedOffset).toBeLessThanOrEqual(Buffer.byteLength(out));
@@ -273,7 +282,10 @@ test(`session perdue ${MAX_RESUMES + 1} fois sans un tour réussi : plus de repr
     redemarrer(home, transport, 'sa_c7');
     await r.attendre(type('connection_resumed'), `reprise ${n}`, n);
     await waitFor(
-      () => existsSync(join(home, '.aid-remote/agents/sa_c7/apid')),
+      () => {
+        const fichier = join(home, '.aid-remote/agents/sa_c7/apid');
+        return existsSync(fichier) && /^\d+\n$/.test(readFileSync(fichier, 'utf8'));
+      },
       10_000,
       `relance ${n}`,
     );
