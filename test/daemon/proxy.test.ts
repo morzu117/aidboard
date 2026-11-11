@@ -26,7 +26,7 @@ test.each(VERBES_PROXY)('succès et requête exacte : %s', async (verbe) => {
   expect(await client.appeler(verbe, { content: 'bonjour' })).toEqual({
     ok: true,
     status: 201,
-    body: { id: 1 },
+    body: verbe === 'board.cards.move' ? {} : { id: 1 },
   });
   expect(proxy.lignes).toHaveLength(1);
   const requete = JSON.parse(proxy.lignes[0]!);

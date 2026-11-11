@@ -15,7 +15,7 @@ function verifier(source: string, nom: string): string[] {
   const erreurs: string[] = [];
   const arbre = ts.createSourceFile(nom, source, ts.ScriptTarget.Latest, true);
   const texte = (n: ts.Node) => (ts.isStringLiteralLike(n) ? n.text : '');
-  const ecriture = (s: string) => /^(say|send|post|take|decline|close)$/.test(s);
+  const ecriture = (s: string) => /^(say|send|post|take|decline|close|move)$/.test(s);
   const visiter = (n: ts.Node, dansArgv = false) => {
     const autorise =
       dansArgv ||
@@ -51,7 +51,9 @@ function verifier(source: string, nom: string): string[] {
     if (
       ts.isStringLiteralLike(n) &&
       n.text.startsWith('/api/') &&
-      /(?:(?:ecrire|etat)\/|envoyer|\/(?:say|send|post|take|decline|close)(?:\/|$))/.test(n.text) &&
+      /(?:(?:ecrire|etat)\/|envoyer|\/(?:say|send|post|take|decline|close|move)(?:\/|$))/.test(
+        n.text,
+      ) &&
       ![
         '/api/swarph/ecrire/apercu',
         '/api/swarph/ecrire/envoyer',
@@ -63,7 +65,7 @@ function verifier(source: string, nom: string): string[] {
       ts.isCallExpression(n) &&
       /(?:spawn|execFile)(?:Sync)?$/.test(n.expression.getText(arbre)) &&
       n.arguments.some((a) => /swarph/.test(texte(a))) &&
-      /['"](?:say|send|post|take|decline|close)['"]/.test(n.getText(arbre))
+      /['"](?:say|send|post|take|decline|close|move)['"]/.test(n.getText(arbre))
     )
       erreurs.push('spawn écriture');
     ts.forEachChild(n, (enfant) => visiter(enfant, autorise));

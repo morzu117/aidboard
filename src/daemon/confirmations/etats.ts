@@ -1,3 +1,4 @@
+import { raisonDeplacement } from '../../shared/deplacements.js';
 import { randomUUID } from 'node:crypto';
 import {
   argsEtat,
@@ -5,6 +6,7 @@ import {
   lireParamsEtat,
   textesAPurger,
   type Etat,
+  type ParametresEtat,
 } from '../../shared/etats.js';
 import { nettoyer } from '../../shared/nettoyage.js';
 import type { AidConfig } from '../config.js';
@@ -27,7 +29,8 @@ export function creerActionEtat(deps: {
       if (
         action !== 'obligation.prendre' &&
         action !== 'obligation.refuser' &&
-        action !== 'obligation.clore'
+        action !== 'obligation.clore' &&
+        action !== 'carte.deplacer'
       )
         throw new AidHttpError(400, 'action inconnue');
       const lecture = lireParamsEtat(action, entree.params);
@@ -38,10 +41,26 @@ export function creerActionEtat(deps: {
         if (!nettoyage.ok) throw new AidHttpError(422, nettoyage.classe);
       }
       if (!mesh.proxySocket) throw new AidHttpError(409, 'proxy_absent');
+      if (action === 'carte.deplacer') {
+        const deplacement = params as ParametresEtat['carte.deplacer'];
+        const fiche = await deps.board
+          .card(params.carte, { fresh: true, sansCache: true })
+          .catch(() => null);
+        if (
+          !fiche?.card.ok ||
+          raisonDeplacement(fiche.card.data, mesh.cell) !== null ||
+          fiche.card.data.stage !== deplacement.attendu.stage ||
+          fiche.card.data.stageVersion !== deplacement.attendu.stageVersion
+        )
+          throw new AidHttpError(409, 'perime');
+        return { action, params } as Etat;
+      }
       // Sans lecture fiable, aucune écriture : le téléphone devra relire la carte.
       const resultat = await deps.board.obligations(params.carte).catch(() => null);
       const obligation = resultat?.ok
-        ? resultat.data.obligations.find((o) => o.id === params.obligation)
+        ? resultat.data.obligations.find(
+            (o) => o.id === (params as ParametresEtat['obligation.prendre']).obligation,
+          )
         : null;
       if (
         !obligation ||
@@ -63,12 +82,19 @@ export function creerActionEtat(deps: {
       const envoi = {
         code: reponse.ok ? ('succes' as const) : reponse.code,
         ...('status' in reponse && { status: reponse.status }),
+        ...(etat.action === 'carte.deplacer' &&
+          !reponse.ok && { refusal: reponse.refusal, current_stage: reponse.current_stage }),
+        ...(etat.action === 'carte.deplacer' &&
+          reponse.ok &&
+          reponse.body.avertissement === true && {
+            avertissement: true,
+          }),
       };
       ctx.envoi = envoi;
       deps.journal?.('mesh.etat', {
         action: etat.action,
         carte: String(etat.params.carte),
-        obligation: String(etat.params.obligation),
+        ...('obligation' in etat.params && { obligation: String(etat.params.obligation) }),
         request_id,
         code: envoi.code,
       });

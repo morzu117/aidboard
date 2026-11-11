@@ -1,5 +1,6 @@
+import type { BoardAid } from '../data/aid-board.js';
 import { type FormEvent, useEffect, useMemo, useRef, useState } from 'react';
-import { useLocation, useNavigate, useSearchParams } from 'react-router';
+import { Link, useLocation, useNavigate, useSearchParams } from 'react-router';
 import { MODES, type PermissionMode } from '../../../src/shared/agentSettings.js';
 import type { Agent, AgentsDisponibles, Topic, TopicType } from '../../../src/shared/model.js';
 import { slugify } from '../../../src/shared/slug.js';
@@ -54,14 +55,41 @@ type Phase =
 function Contenu() {
   const { state, call } = useAid();
   const { addWorkspaceThenTopic } = useLayout();
-  const navigate = useNavigate();
+  const navigation = useNavigate();
   const location = useLocation();
   const [params, setParams] = useSearchParams();
   const workspaces = state?.workspaces ?? [];
   // sans projet dans l'URL, le dernier enregistré : on vient en général de l'ajouter
   const latest = [...workspaces].sort((a, b) => a.createdAt.localeCompare(b.createdAt)).at(-1);
   const workspace = workspaces.find((w) => w.id === params.get('projet')) ?? latest;
-  const [title, setTitle] = useState('');
+  const [origine] = useState(() => {
+    const valeur = location.state as { carte?: unknown; titre?: unknown } | null;
+    return typeof valeur?.carte === 'number' &&
+      Number.isSafeInteger(valeur.carte) &&
+      valeur.carte > 0
+      ? {
+          carte: valeur.carte,
+          titre: typeof valeur.titre === 'string' ? valeur.titre.slice(0, 200) : '',
+        }
+      : null;
+  });
+  const destination = (location.state as { destination?: { page: string; state?: unknown } } | null)
+    ?.destination;
+  const navigate = (page: string | number, options?: { replace?: boolean; state?: unknown }) => {
+    if (
+      origine &&
+      typeof page === 'string' &&
+      page.startsWith('/sujets/') &&
+      page !== '/sujets/nouveau'
+    ) {
+      navigation('/sujets/nouveau', {
+        replace: true,
+        state: { ...origine, destination: { page, state: options?.state } },
+      });
+    } else if (typeof page === 'number') navigation(page);
+    else navigation(page, options);
+  };
+  const [title, setTitle] = useState(origine?.titre ?? '');
   const [type, setType] = useState<TopicType>('feat');
   const [error, setError] = useState<string | null>(null);
   const [phase, setPhase] = useState<Phase>({ etape: 'saisie' });
@@ -155,7 +183,7 @@ function Contenu() {
     if (phase.etape !== 'worktree' || lance.current) return;
     if (echoue) {
       lance.current = true;
-      navigate(`/sujets/${phase.topicId}`, { replace: true });
+      navigation(`/sujets/${phase.topicId}`, { replace: true });
       return;
     }
     if (!pret || !topicAttendu || agent === 'aucun' || !workspace) return;
@@ -177,6 +205,7 @@ function Contenu() {
     : [];
   const donnees = phraseDonnees(agent === 'aucun' ? null : agent);
   const modeles = disponible?.options.models ?? [];
+  if (destination && origine) return <LigneCarte carte={origine.carte} destination={destination} />;
   return (
     <main className="page nouveau-sujet" data-node={n('page')}>
       <div className="entete" data-node={n('entete')}>
@@ -431,5 +460,66 @@ export function NouveauSujet() {
     <Layout screen="nouveau-sujet">
       <Contenu />
     </Layout>
+  );
+}
+
+function LigneCarte({
+  carte,
+  destination,
+}: {
+  carte: number;
+  destination: { page: string; state?: unknown };
+}) {
+  const client = useAidClient();
+  const [resultat, setResultat] = useState<BoardAid | null>(null);
+  const [erreur, setErreur] = useState('');
+  const [copie, setCopie] = useState('');
+  useEffect(() => {
+    let actif = true;
+    client
+      .request<BoardAid>('GET', '/api/aid/board')
+      .then((r) => {
+        if (actif) setResultat(r);
+      })
+      .catch(() => {
+        if (actif) setErreur("Le lien A-I-D n'a pas pu être lu.");
+      });
+    return () => {
+      actif = false;
+    };
+  }, [client]);
+  const id = destination.page.split('?')[0]!.split('/').at(-1);
+  const sujet = resultat?.sujets.find((s) => s.sujetId === id);
+  async function copier() {
+    try {
+      await navigator.clipboard.writeText(`AID: ${sujet!.lien}`);
+      setCopie('Copié.');
+    } catch {
+      setCopie('Copie impossible : accès au presse-papiers refusé.');
+    }
+  }
+  return (
+    <main className="page nouveau-sujet">
+      <h1>Sujet créé</h1>
+      {sujet ? (
+        sujet.lien ? (
+          <>
+            <p>Ajoute cette ligne à la carte #{carte} :</p>
+            <pre>{`AID: ${sujet.lien}`}</pre>
+            <button onClick={() => void copier()}>Copier la ligne</button>
+          </>
+        ) : (
+          <p>Pas de remote GitHub : pas de lien possible</p>
+        )
+      ) : (
+        <p role="status">
+          {erreur || (resultat ? "Le lien A-I-D n'a pas pu être lu." : 'Lecture du lien A-I-D…')}
+        </p>
+      )}
+      <p role="status">{copie}</p>
+      <Link to={destination.page} state={destination.state}>
+        Ouvrir le sujet
+      </Link>
+    </main>
   );
 }

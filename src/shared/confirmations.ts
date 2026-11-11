@@ -105,7 +105,7 @@ const branche: Validation = (v) =>
   !/^[-/]/.test(v);
 const schemas: Record<ActionConfirmee, Record<string, Validation>> = {
   'mesh.etat': {
-    action: choix('obligation.prendre', 'obligation.refuser', 'obligation.clore'),
+    action: choix('obligation.prendre', 'obligation.refuser', 'obligation.clore', 'carte.deplacer'),
     params: () => true,
   },
   'mesh.ecrire': {

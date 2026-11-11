@@ -443,3 +443,145 @@ test('D276 : 12 000 caractères de quatre octets dépassent le plafond Python �
   expect(t.proxy.lignes).toHaveLength(0);
   expect(t.proxy.nombreConnexions).toBe(0);
 });
+
+const deplacement = {
+  action: 'carte.deplacer',
+  params: { carte: 42, etape: 'review', attendu: { stage: 'build', stageVersion: 3 } },
+};
+async function preparerDeplacement(scenario: ScenarioProxy = succes) {
+  const t = await preparer(scenario);
+  const { parseCard } = await import('../src/shared/board.js');
+  const card = vi.spyOn(t.board, 'card').mockResolvedValue({
+    card: {
+      ok: true,
+      data: parseCard({ id: 42, stage: 'build', stage_version: 3, assignee: 'peer-a' })!.value,
+      schemaVersion: null,
+      readAt: '',
+    },
+    graph: { ok: false, kind: 'unknown', readAt: '' },
+    thread: { ok: false, kind: 'unknown', readAt: '' },
+    obligations: { ok: false, kind: 'unknown', readAt: '' },
+  });
+  return { ...t, card };
+}
+test('D293 : demande toujours même avec réglage à zéro, aucune écriture avant le oui, une seule après', async () => {
+  const t = await preparerDeplacement();
+  t.db.prepare("UPDATE confirmations_reglage SET actif = 0 WHERE action = 'mesh.etat'").run();
+  const r = await t.demander(deplacement);
+  expect(r.statusCode).toBe(202);
+  expect(t.proxy.lignes).toEqual([]);
+  expect((await t.oui(r.json().confirmation)).envoi.code).toBe('succes');
+  expect(t.proxy.lignes.map((l) => JSON.parse(l))).toMatchObject([
+    {
+      verb: 'board.cards.move',
+      args: { id: 42, stage: 'review', expect_stage: 'build', expect_stage_version: 3 },
+    },
+  ]);
+  expect(t.card).toHaveBeenCalledWith(42, { fresh: true, sansCache: true });
+});
+test('D293 : porte désarmée, aucun chemin direct', async () => {
+  const t = await preparerDeplacement();
+  t.reglage.desarmerConfirme();
+  const r = await t.demander(deplacement);
+  expect(r.statusCode).toBe(409);
+  expect(r.json().error).toBe('confirmation_requise');
+  expect(t.card).not.toHaveBeenCalled();
+  expect(t.proxy.lignes).toEqual([]);
+});
+test('D293 : done refusé avant le proxy', async () => {
+  const t = await preparerDeplacement();
+  expect(
+    (await t.demander({ ...deplacement, params: { ...deplacement.params, etape: 'done' } }))
+      .statusCode,
+  ).toBe(400);
+  expect(t.proxy.lignes).toEqual([]);
+});
+test('D293 : version changée avant le oui, demande périmée, aucune écriture', async () => {
+  const t = await preparerDeplacement();
+  const r = await t.demander(deplacement);
+  const fiche = await t.board.card(42);
+  if (fiche.card.ok) fiche.card.data.stageVersion = 4;
+  expect((await t.oui(r.json().confirmation)).resultat).toBe('perimee');
+  expect(t.proxy.lignes).toEqual([]);
+});
+test.each([
+  [403, undefined, undefined, 'Droit manquant'],
+  [409, 'precondition', 'ready', 'La carte a changé (ready)'],
+  [409, 'step_gate', undefined, "Porte d'étape"],
+  [409, 'flow_unconfirmed', undefined, "Flow non confirmé (l'orchestrateur doit le confirmer)"],
+  [409, 'open_obligations', undefined, 'Obligations ouvertes'],
+  [403, 'forbidden', undefined, 'Droit manquant'],
+  [400, 'bad_stage', undefined, 'Étape inconnue'],
+  [404, 'not_found', undefined, 'Carte absente'],
+  [
+    409,
+    'other',
+    undefined,
+    'Déplacement non confirmé. Relis la carte avant toute nouvelle action.',
+  ],
+  [
+    409,
+    'secret-amont',
+    'secret-amont',
+    'La carte a changé ou une porte a refusé le déplacement. Relis la carte.',
+  ],
+] as const)(
+  'D293 : refus structuré %s/%s sans texte amont',
+  async (status, refusal, current_stage, libelle) => {
+    const { libelleDeplacement } = await import('../src/shared/deplacements.js');
+    const t = await preparerDeplacement({
+      reponse: {
+        ok: false,
+        error: 'upstream_error',
+        status,
+        detail: 'secret-amont',
+        refusal,
+        current_stage,
+      },
+    });
+    const r = await t.demander(deplacement);
+    const fin = await t.oui(r.json().confirmation);
+    expect(libelleDeplacement(fin.envoi)).toBe(libelle);
+    expect(JSON.stringify(fin)).not.toContain('secret-amont');
+    expect(JSON.stringify(t.db.prepare('SELECT * FROM pda_demandes').all())).not.toContain(
+      'secret-amont',
+    );
+    expect(JSON.stringify(t.journal.mock.calls)).not.toContain('secret-amont');
+    expect(t.proxy.lignes).toHaveLength(1);
+  },
+);
+test('D293 : warn 2xx réduit à un booléen, corps amont supprimé', async () => {
+  const t = await preparerDeplacement({
+    reponse: { ok: true, status: 200, body: { warn: 'secret-amont', detail: 'secret-amont' } },
+  });
+  const r = await t.demander(deplacement);
+  const fin = await t.oui(r.json().confirmation);
+  expect(fin.envoi).toEqual({ code: 'succes', status: 200, avertissement: true });
+  expect(JSON.stringify(fin)).not.toContain('secret-amont');
+  expect(JSON.stringify(t.db.prepare('SELECT * FROM pda_demandes').all())).not.toContain(
+    'secret-amont',
+  );
+  expect(JSON.stringify(t.journal.mock.calls)).not.toContain('secret-amont');
+});
+test('D293 : assignee changé au oui, demande périmée sans envoi', async () => {
+  const t = await preparerDeplacement();
+  const r = await t.demander(deplacement);
+  const fiche = await t.board.card(42);
+  if (fiche.card.ok) fiche.card.data.assignee = 'peer-b';
+  t.card.mockClear();
+  expect((await t.oui(r.json().confirmation)).resultat).toBe('perimee');
+  expect(t.card).toHaveBeenCalledWith(42, { fresh: true, sansCache: true });
+  expect(t.proxy.lignes).toEqual([]);
+});
+test('D293 : demande manuelle non assignée refusée sans envoi', async () => {
+  const t = await preparerDeplacement();
+  const fiche = await t.board.card(42);
+  if (fiche.card.ok) fiche.card.data.assignee = null;
+  t.card.mockClear();
+  const r = await t.demander(deplacement);
+  expect(r.statusCode).toBe(409);
+  expect(r.json()).toEqual({ error: 'perime' });
+  expect(t.card).toHaveBeenCalledWith(42, { fresh: true, sansCache: true });
+  expect(t.db.prepare('SELECT * FROM pda_demandes').all()).toEqual([]);
+  expect(t.proxy.lignes).toEqual([]);
+});

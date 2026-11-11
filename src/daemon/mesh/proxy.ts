@@ -1,9 +1,15 @@
+import {
+  ETAPES_PROXY,
+  REFUS_DEPLACEMENT,
+  type ReponseDeplacement,
+} from '../../shared/deplacements.js';
 import { randomUUID } from 'node:crypto';
 import { createConnection } from 'node:net';
 
 /** D263 : 15 s visées en amont + 5 s ; à recaler sur le document de schéma du proxy. */
 export const DELAI_PROXY_MS = 20_000;
 export const VERBES_PROXY = [
+  'board.cards.move',
   'board.cards.say',
   'mesh.send',
   'channel.post',
@@ -37,27 +43,37 @@ const MAX_LIGNE = 1024 * 1024;
 type CodeProxy = (typeof CODES_PROXY)[number] | 'delai' | 'interrompu' | 'connexion' | 'format';
 type CorpsProxy = Record<string, unknown> | unknown[];
 export type ResultatProxy<Corps = CorpsProxy> =
-  { ok: true; status: number; body: Corps } | { ok: false; code: CodeProxy; status?: number };
+  | { ok: true; status: number; body: Corps }
+  | {
+      ok: false;
+      code: CodeProxy;
+      status?: number;
+      current_stage?: string;
+      refusal?: ReponseDeplacement['refusal'];
+    };
 
 function estObjet(valeur: unknown): valeur is Record<string, unknown> {
   return typeof valeur === 'object' && valeur !== null && !Array.isArray(valeur);
 }
 
-/** Ne conserve jamais le détail du proxy, même dans les réponses valides. */
+/** D293 : aucun texte amont conservé pour un déplacement. */
 export function lireReponseProxy(
   ligne: string,
   requestId: string,
   verbes?: typeof VERBES_PROXY,
+  deplacement?: boolean,
 ): ResultatProxy<Record<string, unknown>>;
 export function lireReponseProxy(
   ligne: string,
   requestId: string,
   verbes: typeof VERBES_PROXY | typeof VERBES_LECTURE,
+  deplacement?: boolean,
 ): ResultatProxy;
 export function lireReponseProxy(
   ligne: string,
   requestId: string,
   verbes: typeof VERBES_PROXY | typeof VERBES_LECTURE = VERBES_PROXY,
+  deplacement = false,
 ): ResultatProxy {
   const format = { ok: false, code: 'format' } as const;
   let reponse: unknown;
@@ -76,7 +92,13 @@ export function lireReponseProxy(
       !(estObjet(reponse.body) || (verbes[0] === VERBES_LECTURE[0] && Array.isArray(reponse.body)))
     )
       return format;
-    return { ok: true, status: reponse.status, body: reponse.body };
+    return {
+      ok: true,
+      status: reponse.status,
+      body: deplacement
+        ? { ...(Object.hasOwn(reponse.body, 'warn') && { avertissement: true }) }
+        : reponse.body,
+    };
   }
   if (reponse.ok === false) {
     const code = CODES_PROXY.find((code) => code === reponse.error);
@@ -84,6 +106,14 @@ export function lireReponseProxy(
       return {
         ok: false,
         code,
+        ...(deplacement &&
+          ETAPES_PROXY.find((e) => e === reponse.current_stage) && {
+            current_stage: ETAPES_PROXY.find((e) => e === reponse.current_stage),
+          }),
+        ...(deplacement &&
+          REFUS_DEPLACEMENT.find((r) => r === reponse.refusal) && {
+            refusal: REFUS_DEPLACEMENT.find((r) => r === reponse.refusal),
+          }),
         ...(typeof reponse.status === 'number' &&
           Number.isInteger(reponse.status) &&
           reponse.status >= 100 &&
@@ -212,6 +242,7 @@ export function creerProxyClient(
                 Buffer.concat(morceaux).toString('utf8'),
                 requestId,
                 options.verbes ?? VERBES_PROXY,
+                verbe === 'board.cards.move',
               ),
             );
         });

@@ -196,4 +196,7 @@ export interface ResultatEnvoi {
   id?: number;
   open_obligations: number[];
   status?: number;
+  detail?: string;
+  current_stage?: string;
+  warn?: string;
 }

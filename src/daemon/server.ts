@@ -1,3 +1,4 @@
+import { registerAidRoutes } from './routes/aid.js';
 import { SwairmPr } from './swairm/pr.js';
 import { SwairmStatut } from './swairm/statut.js';
 import { registerEcrituresRoutes } from './routes/ecritures.js';
@@ -199,6 +200,7 @@ export async function buildServer(deps: ServerDeps): Promise<FastifyInstance> {
   );
   registerMeshRoutes(app, { mesh: deps.mesh ?? null });
   registerBoardRoutes(app, { board: deps.board ?? null });
+  registerAidRoutes(app, deps.db, deps.board ?? null, deps.config.mesh.cell);
   registerSwarphRoutes(app, { swarph: deps.swarph ?? null });
   registerSwairmRoutes(
     app,

@@ -5,7 +5,14 @@ interface CibleEtat {
   obligation: number;
   attendu: { status: 'open' };
 }
+export const ETAPES_DEPLACEMENT = ['build', 'review', 'ready'] as const;
+export type EtapeDeplacement = (typeof ETAPES_DEPLACEMENT)[number];
 export interface ParametresEtat {
+  'carte.deplacer': {
+    carte: number;
+    etape: 'review' | 'ready';
+    attendu: { stage: EtapeDeplacement; stageVersion: number };
+  };
   'obligation.prendre': CibleEtat;
   'obligation.refuser': CibleEtat & { motif: string };
   'obligation.clore': CibleEtat & {
@@ -43,6 +50,41 @@ export function lireParamsEtat<A extends ActionEtat>(
 ): { ok: true; params: ParametresEtat[A] } | { ok: false; message: string } {
   const refus = (message: string) => ({ ok: false as const, message });
   if (!objet(brut)) return refus('params doit être un objet');
+  if (action === 'carte.deplacer') {
+    if (!['carte', 'etape', 'attendu'].every((c) => Object.hasOwn(brut, c)))
+      return refus('champ manquant');
+    if (
+      Reflect.ownKeys(brut).some(
+        (c) => !['carte', 'etape', 'attendu'].includes(String(c)) || typeof c !== 'string',
+      )
+    )
+      return refus('clé inconnue');
+    if (!entier(brut.carte)) return refus('numéro de carte invalide');
+    if (brut.etape !== 'review' && brut.etape !== 'ready') return refus('étape inconnue');
+    if (!objet(brut.attendu)) return refus('attendu doit être un objet');
+    if (Reflect.ownKeys(brut.attendu).some((c) => c !== 'stage' && c !== 'stageVersion'))
+      return refus('clé inconnue dans attendu');
+    if (!['stage', 'stageVersion'].every((c) => Object.hasOwn(brut.attendu as object, c)))
+      return refus('champ manquant dans attendu');
+    const { stage, stageVersion } = brut.attendu;
+    if (!ETAPES_DEPLACEMENT.includes(stage as EtapeDeplacement))
+      return refus('attendu.stage invalide');
+    if (typeof stageVersion !== 'number' || !Number.isSafeInteger(stageVersion) || stageVersion < 0)
+      return refus('attendu.stageVersion invalide');
+    if (
+      ETAPES_DEPLACEMENT.indexOf(brut.etape) <=
+      ETAPES_DEPLACEMENT.indexOf(stage as EtapeDeplacement)
+    )
+      return refus('la cible doit être plus loin');
+    return {
+      ok: true,
+      params: {
+        carte: brut.carte,
+        etape: brut.etape,
+        attendu: { stage, stageVersion },
+      } as ParametresEtat[A],
+    };
+  }
   if (!['obligation.prendre', 'obligation.refuser', 'obligation.clore'].includes(action))
     return refus('action inconnue');
   const cloture = action === 'obligation.clore';
@@ -117,16 +159,20 @@ export function lireParamsEtat<A extends ActionEtat>(
 
 export function resumeEtat<A extends ActionEtat>(action: A, params: ParametresEtat[A]): string {
   if (!lireParamsEtat(action, params).ok) throw new Error('Paramètres d’état invalides');
+  if (action === 'carte.deplacer') {
+    const deplacement = params as ParametresEtat['carte.deplacer'];
+    return `Déplace la carte #${params.carte} de ${deplacement.attendu.stage} vers ${deplacement.etape}. Aucune obligation ni message.`;
+  }
   const verbe = {
     'obligation.prendre': 'Prendre',
     'obligation.refuser': 'Refuser',
     'obligation.clore': 'Clore',
-  }[action];
+  }[action as Exclude<ActionEtat, 'carte.deplacer'>];
   const issue =
     action === 'obligation.clore'
       ? ` : ${(params as ParametresEtat['obligation.clore']).issue}`
       : '';
-  return `${verbe} l'obligation #${params.obligation} (carte #${params.carte})${issue}`;
+  return `${verbe} l'obligation #${(params as ParametresEtat['obligation.prendre']).obligation} (carte #${params.carte})${issue}`;
 }
 
 export function textesAPurger(params: ParametresEtat[ActionEtat]): string[] {
@@ -171,7 +217,22 @@ export function argsEtat<A extends ActionEtat>(
   params: ParametresEtat[A],
 ): { verb: string; args: Record<string, unknown> } {
   if (!lireParamsEtat(action, params).ok) throw new Error('Paramètres d’état invalides');
-  const args = { id: params.obligation, expect_status: 'open' };
+  if (action === 'carte.deplacer') {
+    const deplacement = params as ParametresEtat['carte.deplacer'];
+    return {
+      verb: 'board.cards.move',
+      args: {
+        id: params.carte,
+        stage: deplacement.etape,
+        expect_stage: deplacement.attendu.stage,
+        expect_stage_version: deplacement.attendu.stageVersion,
+      },
+    };
+  }
+  const args = {
+    id: (params as ParametresEtat['obligation.prendre']).obligation,
+    expect_status: 'open',
+  };
   if (action === 'obligation.prendre') return { verb: 'board.obligations.take', args };
   if ('motif' in params)
     return { verb: 'board.obligations.decline', args: { ...args, why: params.motif } };

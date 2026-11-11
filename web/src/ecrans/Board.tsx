@@ -1,3 +1,4 @@
+import { AidCarte, ErreursAid } from '../ui/AidBoard.js';
 import { SansCarteSwairm, SwairmCarte } from '../ui/SwairmBoard.js';
 import { useEffect, useState } from 'react';
 import { Link, Navigate, useSearchParams } from 'react-router';
@@ -188,6 +189,7 @@ function CarteResume({ c, slug }: { c: BoardCardSummary; slug: string }) {
         </span>
         <span className="board-carte-titre">{c.title ?? 'sans titre'}</span>
         <SwairmCarte carte={c.id} />
+        <AidCarte carte={c.id} />
         <span className="board-carte-meta">
           <span>{c.assignee ?? 'sans responsable'}</span>
           <span>{c.dueAt ? `échéance ${c.dueAt.slice(0, 10)}` : 'sans échéance'}</span>
@@ -396,6 +398,7 @@ export function Contenu({ cell }: { cell: string }) {
         </p>
       )}
       <SansCarteSwairm />
+      <ErreursAid />
       {projet && <Cartes key={projet.id} projet={projet} onLecture={setCartes} />}
     </main>
   );
