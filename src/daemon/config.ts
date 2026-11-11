@@ -14,6 +14,7 @@ export interface AidConfig {
   structural: StructuralConfig;
   mesh: MeshConfig;
   swairm: SwairmConfig;
+  github: { bin: string };
   agents: AgentsConfig;
   artefacts: ArtefactsConfig;
   modeHost: ModeHostConfig;
@@ -90,6 +91,7 @@ export const DEFAULT_TAILSCALE_BIN =
 
 export const DEFAULT_CONFIG: AidConfig = {
   swairm: { bin: '' },
+  github: { bin: '' },
   agents: { transport: 'stream' },
   host: '127.0.0.1',
   port: 4870,
@@ -162,6 +164,7 @@ export function parseConfig(text: string): AidConfig {
       'structural',
       'mesh',
       'swairm',
+      'github',
       'agents',
       'artefacts',
       'modeHost',
@@ -199,6 +202,11 @@ export function parseConfig(text: string): AidConfig {
   if (doc.memory !== undefined) parseMemory(doc.memory, cfg.memory);
   if (doc.structural !== undefined) parseStructural(doc.structural, cfg.structural);
   if (doc.mesh !== undefined) parseMesh(doc.mesh, cfg.mesh);
+  if (doc.github !== undefined) {
+    if (!isRecord(doc.github)) throw new ConfigError('config.yaml : github doit être un objet');
+    rejectUnknown(doc.github, ['bin'], 'github.');
+    if (doc.github.bin !== undefined) cfg.github.bin = strOrEmpty(doc.github.bin, 'github.bin');
+  }
   if (doc.swairm !== undefined) parseSwairm(doc.swairm, cfg.swairm);
   if (doc.agents !== undefined) parseAgents(doc.agents, cfg.agents);
   if (doc.artefacts !== undefined) {
@@ -484,6 +492,8 @@ const DEFAULT_FILE = `# Configuration d'A-I-D. Tout est facultatif : ce sont les
 # swairm:
 #   bin: ""                # vide = désactivé ; préférer un chemin absolu, le PATH du daemon diffère du shell
 #                          # ex. /Users/vous/.local/bin/swairm
+# github:
+#   bin: ""                # vide = gh dans le PATH ; sinon chemin du binaire GitHub CLI
 # agents:
 #   transport: stream      # stream = claude/codex par pilote structuré (D63, défaut) ; pty = terminal
 # modeHost:                # chantier 31 : le cockpit sur ton tailnet, jamais sur internet

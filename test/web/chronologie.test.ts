@@ -223,3 +223,40 @@ test.each(['Z', '+00:00', ''])(
     );
   },
 );
+
+test('commits : quatrième source, phrase, auteur, précision et réception inverse', () => {
+  const commit = {
+    sha: 'abcdef0',
+    date: '2026-11-11T09:00:00.123456Z',
+    step: 's1',
+    proof: 'passed',
+    attempt: 2,
+    drone: null,
+  };
+  const donnees = {
+    ...lectures({ stage_history: [{ stage: 'build', at: commit.date, by: 'peer-a' }] }),
+    commits: [
+      commit,
+      { ...commit, sha: 'abcdef1', drone: 'machine-a/42@2026-11-11' },
+      { ...commit, sha: 'abcdef2', date: '2026-11-11T09:00:00.123457Z' },
+      { ...commit, sha: 'abcdef3', date: 'illisible' },
+    ],
+  };
+  const avant = structuredClone(donnees);
+  const { entrees } = chronologie(donnees);
+  expect(entrees.map((e) => e.cle)).toEqual([
+    'commit-abcdef2-2',
+    'commit-abcdef1-1',
+    'commit-abcdef0-0',
+    'etape-0',
+    'commit-abcdef3-3',
+  ]);
+  expect(entrees[1]).toMatchObject({
+    auteur: 'machine-a/42@2026-11-11',
+    source: 'commit',
+    texte: 'Pas s1 prouvé (passed), essai 2',
+    sha: 'abcdef1',
+  });
+  expect(entrees[0]?.auteur).toBe('inconnu');
+  expect(donnees).toEqual(avant);
+});

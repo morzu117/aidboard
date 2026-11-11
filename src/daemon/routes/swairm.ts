@@ -1,3 +1,5 @@
+import { liensSwairm } from '../../shared/swairm-board.js';
+import { SwairmPr } from '../swairm/pr.js';
 import type { Db } from '../db.js';
 import { propositionsSwairm, releverEtatsSwairm } from '../swairm/propositions.js';
 import type { BoardReader } from '../mesh/board.js';
@@ -15,11 +17,34 @@ export function registerSwairmRoutes(
   board: BoardReader | null = null,
   statut = new SwairmStatut(),
   db?: Db,
+  pr = new SwairmPr(),
 ): void {
   app.get('/api/swairm/board', async () => {
     const lecture = await lireBoardSwairm(board, statut);
     if (db) releverEtatsSwairm(db, lecture);
     return lecture;
+  });
+  app.get('/api/swairm/board/:carte/commits', async (req) => {
+    const carte = Number((req.params as { carte: string }).carte);
+    if (!Number.isSafeInteger(carte) || carte < 1) throw new AidHttpError(404, 'carte non reliée');
+    const lecture = await board?.chercherCartes('Swairm: ');
+    const cartes = lecture?.ok ? lecture.data.cards : [];
+    const liens = new Map(
+      cartes
+        .filter((c) => c.id === carte)
+        .flatMap((c) => liensSwairm(c.body ?? '').map((l) => [`${l.projet}#${l.id}`, l] as const)),
+    );
+    if (liens.size !== 1) throw new AidHttpError(404, 'carte non reliée');
+    const lien = [...liens.values()][0]!;
+    if (
+      cartes.some(
+        (c) =>
+          c.id !== carte &&
+          liensSwairm(c.body ?? '').some((l) => l.projet === lien.projet && l.id === lien.id),
+      )
+    )
+      throw new AidHttpError(404, 'lien en conflit');
+    return pr.lire(lien.projet, lien.id);
   });
   app.get('/api/swairm/propositions', async () => (db ? propositionsSwairm(db) : []));
   app.delete('/api/swairm/propositions/:id', async (req) => {

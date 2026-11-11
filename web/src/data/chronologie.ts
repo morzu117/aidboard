@@ -1,9 +1,11 @@
+import type { CommitSwairm } from '../../../src/shared/swairm-trailers.js';
 import type { BoardCardSheet, BoardEvent } from '../../../src/shared/board.js';
 
 export interface EntreeChronologie {
   cle: string;
   date: string | null;
-  source: 'etape' | 'obligation' | 'fil';
+  source: 'etape' | 'obligation' | 'fil' | 'commit';
+  sha?: string;
   auteur: string;
   texte: string;
 }
@@ -42,7 +44,8 @@ export function chronologie({
   card,
   graph,
   thread,
-}: Pick<BoardCardSheet, 'card' | 'graph' | 'thread'>): {
+  commits = [],
+}: { commits?: CommitSwairm[] } & Pick<BoardCardSheet, 'card' | 'graph' | 'thread'>): {
   entrees: EntreeChronologie[];
   limites: LimiteChronologie[];
 } {
@@ -89,6 +92,17 @@ export function chronologie({
     });
     if (thread.data.capped) limites.push('fil-limite');
   } else limites.push({ 'non-lu': 'fil' });
+
+  commits.forEach((commit, indice) =>
+    entrees.push({
+      cle: `commit-${commit.sha}-${indice}`,
+      source: 'commit',
+      date: commit.date,
+      auteur: commit.drone ?? 'inconnu',
+      texte: `Pas ${commit.step} prouvé (${commit.proof}), essai ${commit.attempt}`,
+      sha: commit.sha,
+    }),
+  );
 
   const horodatage = (date: string | null): number => {
     const valeur = date === null ? NaN : Date.parse(date);
