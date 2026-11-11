@@ -1,4 +1,5 @@
 mod daemon_bridge;
+mod joignabilite;
 mod navigation;
 
 use tauri::{WebviewUrl, WebviewWindowBuilder};
@@ -117,6 +118,11 @@ pub fn run() {
                         return;
                     }
                 };
+                set_state(&loading, "Connexion à AID Server…");
+                if let Err(message) = joignabilite::verifier(info.port) {
+                    set_state(&loading, &message);
+                    return;
+                }
                 let url = daemon_bridge::daemon_url(&info);
                 let parsed = match url::Url::parse(&url) {
                     Ok(u) => u,

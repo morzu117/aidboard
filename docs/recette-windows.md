@@ -163,6 +163,15 @@ Constat version / intégrité / erreurs / retour arrière : _à remplir_.
       lancement CLI et Board. Le Board doit lire le port de ce home, sans utiliser
       le home par défaut. Ne pas déplacer les données de travail pour ce test.
 
+- [ ] **Transfert localhost coupé** : dans une configuration de recette WSL2 en
+      mode NAT, poser `localhostForwarding=false` dans `%UserProfile%\.wslconfig`,
+      puis `wsl --shutdown` et lancer le Board. Vérifier « Connexion à AID Server… »,
+      puis, sous 10 secondes après cette étape, le message expliquant que Windows
+      ne joint pas `127.0.0.1:<port>` et proposant `localhostForwarding=true`
+      (ou `networkingMode=mirrored`), `wsl --shutdown` et une relance d'AID.
+      La page d'attente reste ouverte, aucune fenêtre principale ni page d'erreur
+      WebView. Rétablir la configuration, arrêter WSL et relancer : le Board s'ouvre.
+
 Constat loopback / pont / veille / home personnalisé : _à remplir_.
 
 ### W.R.8 — Terminaux et agents
