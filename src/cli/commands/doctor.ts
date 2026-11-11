@@ -6,7 +6,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { accessSync, constants, existsSync, readFileSync, statSync } from 'node:fs';
 import { onPath } from '../../daemon/actions/editor.js';
-import { readProcVersion } from '../../daemon/routes/workspaces.js';
+import { wslWarnings, readProcVersion } from '../../daemon/routes/workspaces.js';
 import { loadConfig } from '../../daemon/config.js';
 import { portArtefacts } from '../../daemon/config.js';
 import { etatModeHost } from '../../daemon/routes/host.js';
@@ -54,6 +54,7 @@ export interface Probes {
   nodeVersion: string;
   platform: NodeJS.Platform;
   procVersion: string | null;
+  cheminsWsl?(): Promise<{ home: string; depots: string[] }>;
   has(bin: string): boolean;
   version(bin: string, args: string[]): Promise<string | null>;
   loadPty(): Promise<string | null>; // null = chargé, sinon le message d'erreur
@@ -303,10 +304,24 @@ export async function runChecks(p: Probes): Promise<Check[]> {
   }
 
   if (isWsl(p.procVersion)) {
+    verify(/microsoft-standard|wsl2/i.test(p.procVersion ?? ''), 'WSL2', {
+      level: 'ko',
+      label: 'WSL1 détecté',
+      detail: 'WSL2 requis : wsl --set-version <distribution> 2 depuis PowerShell',
+    });
+    const chemins = await p.cheminsWsl?.();
+    if (chemins) {
+      if (wslWarnings(chemins.home, p.procVersion).length)
+        add('warn', 'AID_HOME sous /mnt', 'placer AID_HOME dans le système de fichiers Linux');
+      if (chemins.depots.some((root) => wslWarnings(root, p.procVersion).length))
+        add('warn', 'dépôt sous /mnt', 'placer les dépôts dans le système de fichiers Linux');
+    }
     verify(p.has('wslview'), 'wslview', {
       level: 'warn',
       label: 'wslview introuvable',
-      detail: 'le navigateur Windows ne s’ouvrira pas tout seul : sudo apt install wslu',
+      detail: p.has('cmd.exe')
+        ? 'repli disponible : cmd.exe /c start ; wslview conseillé : sudo apt install wslu'
+        : 'wslview et cmd.exe introuvables : ouverture automatique indisponible ; sudo apt install wslu',
     });
   }
 
@@ -418,6 +433,20 @@ export function realProbes(paths: AidPaths): Probes {
     nodeVersion: process.version,
     platform: process.platform,
     procVersion: readProcVersion(),
+    async cheminsWsl() {
+      const depots = [process.cwd()];
+      const info = await runningDaemon(paths);
+      if (info) {
+        try {
+          const state = await daemonFetch(info, 'GET', '/api/state');
+          const workspaces = (state.json as { workspaces?: Array<{ root: string }> }).workspaces;
+          if (state.status === 200) depots.push(...(workspaces ?? []).map((w) => w.root));
+        } catch {
+          // Daemon injoignable : le répertoire courant reste contrôlé.
+        }
+      }
+      return { home: paths.home, depots };
+    },
     has: (b) => onPath(b),
     version: run,
     async loadPty() {

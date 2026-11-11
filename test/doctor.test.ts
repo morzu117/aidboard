@@ -558,3 +558,33 @@ test('31.5 (D182) : la ligne du port des appareils, quand le daemon répond', as
   expect([c.level, c.label]).toEqual(['warn', 'mode host : port des appareils 4890 indisponible']);
   expect(c.detail).toContain('le port 4890 est occupé');
 });
+
+test('WSL : diagnostic de version, repli navigateur et chemins Linux', async () => {
+  const wsl = { ...good, platform: 'linux' as const, procVersion: 'microsoft-standard-WSL2' };
+  const checks = await runChecks({
+    ...wsl,
+    has: (b) => b !== 'wslview',
+    cheminsWsl: async () => ({ home: '/mnt/c/aid', depots: ['/mnt/c/repo'] }),
+  });
+  expect(checks).toContainEqual({ level: 'ok', label: 'WSL2' });
+  expect(checks.find((c) => c.label === 'wslview introuvable')).toMatchObject({
+    level: 'warn',
+    detail: expect.stringContaining('cmd.exe /c start'),
+  });
+  expect(checks.map((c) => c.label)).toEqual(
+    expect.arrayContaining(['AID_HOME sous /mnt', 'dépôt sous /mnt']),
+  );
+  expect(await levels({ procVersion: 'Linux version 4.4.0-Microsoft' })).toContain(
+    'ko:WSL1 détecté',
+  );
+  const linux = await runChecks({
+    ...wsl,
+    cheminsWsl: async () => ({ home: '/tmp/aid', depots: ['/tmp/repo'] }),
+  });
+  expect(linux.some((c) => c.label.includes('/mnt'))).toBe(false);
+  const sansLanceur = await runChecks({ ...wsl, has: (b) => !['wslview', 'cmd.exe'].includes(b) });
+  expect(sansLanceur.find((c) => c.label === 'wslview introuvable')).toMatchObject({
+    level: 'warn',
+    detail: expect.stringContaining('ouverture automatique indisponible'),
+  });
+});

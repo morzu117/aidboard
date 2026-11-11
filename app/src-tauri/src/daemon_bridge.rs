@@ -61,14 +61,13 @@ fn read_daemon_json() -> Option<DaemonInfo> {
 // daemon.json aussi. On le lit via WSL plutôt qu'un chemin Windows.
 #[cfg(target_os = "windows")]
 fn read_daemon_json() -> Option<DaemonInfo> {
-    let out = Command::new("wsl.exe")
-        .args(["-e", "bash", "-lc", "cat ~/.aid/daemon.json"])
+    let out = login_shell(LECTURE_DAEMON_SCRIPT)
         .output()
         .ok()?;
     if !out.status.success() {
         return None;
     }
-    serde_json::from_slice(&out.stdout).ok().map(remember_port)
+    serde_json::from_str(sortie_wsl(&out.stdout)?).ok().map(remember_port)
 }
 
 // Échappement shell minimal, même rôle que `quoted form of` dans l'ancien AID.applescript.
@@ -101,7 +100,7 @@ fn cycle_shell_command(bin: &str) -> String {
 }
 
 // Le shell de login de la plateforme : `-i -l` pour que zsh lise ~/.zshrc (c'est là que mise et
-// les PATH utilisateur sont posés) ; dans WSL2, `bash -lc` fait pareil avec ~/.profile.
+// les PATH utilisateur sont posés) ; dans WSL2, bash interactif lit aussi ~/.bashrc.
 #[cfg(not(target_os = "windows"))]
 fn login_shell(script: &str) -> Command {
     let mut c = Command::new("/bin/zsh");
@@ -109,10 +108,36 @@ fn login_shell(script: &str) -> Command {
     c
 }
 
+// Le démarrage du shell peut écrire sur stdout ; stderr reste distinct (job control).
+#[cfg(any(target_os = "windows", test))]
+const MARQUEUR_WSL: &str = "\x1eAID_SORTIE\x1f";
+#[cfg(any(target_os = "windows", test))]
+const LECTURE_DAEMON_SCRIPT: &str = r#"cat "${AID_HOME:-$HOME/.aid}/daemon.json""#;
+
+#[cfg(any(target_os = "windows", test))]
+fn arguments_wsl(script: &str) -> Vec<String> {
+    vec![
+        "-e".into(),
+        "bash".into(),
+        "-l".into(),
+        "-i".into(),
+        "-c".into(),
+        format!("printf '%s' '{}'; {}", MARQUEUR_WSL, script),
+    ]
+}
+
+#[cfg(any(target_os = "windows", test))]
+fn sortie_wsl(sortie: &[u8]) -> Option<&str> {
+    std::str::from_utf8(sortie)
+        .ok()?
+        .split_once(MARQUEUR_WSL)
+        .map(|(_, utile)| utile)
+}
+
 #[cfg(target_os = "windows")]
 fn login_shell(script: &str) -> Command {
     let mut c = Command::new("wsl.exe");
-    c.args(["-e", "bash", "-lc", script]);
+    c.args(arguments_wsl(script));
     c
 }
 
@@ -127,6 +152,9 @@ pub fn resolve_server() -> Option<String> {
     if !out.status.success() {
         return None;
     }
+    #[cfg(target_os = "windows")]
+    let bin = sortie_wsl(&out.stdout)?.trim().to_string();
+    #[cfg(not(target_os = "windows"))]
     let bin = String::from_utf8_lossy(&out.stdout).trim().to_string();
     if bin.is_empty() { None } else { Some(bin) }
 }
@@ -253,4 +281,64 @@ fn handle_restart_request(mut stream: TcpStream) {
             log::warn!("redémarrage demandé depuis la page a échoué : {message}");
         }
     });
+}
+
+#[cfg(test)]
+mod tests_wsl {
+    use super::*;
+
+    #[test]
+    fn shell_interactif_et_sortie_isolee() {
+        let args = arguments_wsl(RESOLVE_SCRIPT);
+        assert_eq!(&args[..5], ["-e", "bash", "-l", "-i", "-c"]);
+        assert!(args[5].ends_with(RESOLVE_SCRIPT));
+        let bruit = format!("Bienvenue\n{}{}", MARQUEUR_WSL, "/tmp/aid serveur\n");
+        assert_eq!(sortie_wsl(bruit.as_bytes()), Some("/tmp/aid serveur\n"));
+        assert_eq!(sortie_wsl(b"aucun marqueur"), None);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn home_personnalise_et_repli() {
+        let dossier = std::env::temp_dir().join(format!("aid-wsl-{}", std::process::id()));
+        let personnalise = dossier.join("home avec espaces");
+        let defaut = dossier.join(".aid");
+        for chemin in [&personnalise, &defaut] {
+            std::fs::create_dir_all(chemin).unwrap();
+            std::fs::write(
+                chemin.join("daemon.json"),
+                r#"{"port":4870,"token":"exemple"}"#,
+            )
+            .unwrap();
+        }
+        for home in [Some(&personnalise), None] {
+            let mut commande = Command::new("bash");
+            commande.args([
+                "--noprofile", "--norc", "-l", "-i", "-c",
+                &arguments_wsl(LECTURE_DAEMON_SCRIPT)[5],
+            ]);
+            commande.env("HOME", &dossier).env_remove("AID_HOME");
+            if let Some(home) = home {
+                commande.env("AID_HOME", home);
+            }
+            let sortie = commande.output().unwrap();
+            assert!(sortie.status.success());
+            let info: DaemonInfo =
+                serde_json::from_str(sortie_wsl(&sortie.stdout).unwrap()).unwrap();
+            assert_eq!(info.port, 4870);
+        }
+        std::fs::remove_dir_all(dossier).unwrap();
+    }
+
+    #[test]
+    fn lecture_home_et_port_avec_bruit() {
+        assert!(arguments_wsl(LECTURE_DAEMON_SCRIPT)[5]
+            .ends_with(r#"cat "${AID_HOME:-$HOME/.aid}/daemon.json""#));
+        let sortie = format!(
+            "message bash\n{}{}", MARQUEUR_WSL,
+            r#"{"port":4870,"token":"exemple"}"#,
+        );
+        let info: DaemonInfo = serde_json::from_str(sortie_wsl(sortie.as_bytes()).unwrap()).unwrap();
+        assert_eq!(info.port, 4870);
+    }
 }
