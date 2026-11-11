@@ -2,12 +2,12 @@
 
 | Champ | Valeur |
 |---|---|
-| État | **Révision 0, 11 novembre 2026.** Spec rév. 0 (morzu-vps). Choix de Julien : oui aux recos Q1 à Q4. Questions au lab L4 à L7 (DM 96343) en attente : elles conditionnent D293 et 42.5. |
+| État | **Révision 0, 11 novembre 2026.** Spec rév. 0 (morzu-vps). Choix de Julien : oui aux recos Q1 à Q4. Réponses du lab à L4–L7 (DM 96345) écrites en D293. |
 | Emplacement final | `docs/chantiers/42-board-primitives.md` sur `main` |
 | Base | `main` (4fec800) |
 | Organisation | Comme au 41. morzu-vps gère le chantier ; Codex CLI écrit le code et les tests de chaque point ; morzu-vps relit, lance le gate, commite et ouvre la PR. |
 | Validation | 42.2 à 42.4 n'écrivent rien sur le mesh. 42.5 ajoute une écriture, `carte.deplacer`, et le lab valide le chantier avant le merge (L7). Merge : CI verte, validation du lab, puis oui de Julien. |
-| Bloqué par | 42.5 attend les réponses du lab (L4 à L7). |
+| Bloqué par | Rien. |
 
 ## 1. Pourquoi
 
@@ -58,16 +58,28 @@ Le programme (§5, phase 5, bloc 21) veut un seul board, piloté dans A-I-D, sur
 - Il ouvre l'écran « Nouveau sujet » existant, avec le titre prérempli par celui de la carte (en texte brut, borné à la longueur permise) et le numéro de carte en mémoire.
 - Une fois le sujet créé, A-I-D montre la ligne `AID: …` à copier sur la carte. Aucune écriture sur le gateway.
 
-### D293. Le déplacement proposé (Q3), à compléter après L4 à L7
+### D293. Le déplacement proposé (Q3), d'après L4 à L7 (lab, DM 96345)
 
-- Une nouvelle action d'écriture, `carte.deplacer {carte, etape, attendu: {stage, stageVersion}}`. Elle passe par `board.cards.move` avec `expect_stage` et `expect_stage_version`, par la porte du 35 bis, **toujours sous confirmation du téléphone** (35b.6, classe « toujours »). `done` est refusé par A-I-D avant même le proxy.
-- Les transitions proposées, par défaut, à vérifier avec L4 :
-  - un sujet qui passe en phase `plan` propose `plan` ;
-  - en phase `dev`, `build` ;
-  - en phase `review`, ou à l'ouverture de sa PR, `review` ;
+- **L'action.** Une nouvelle action d'écriture, `carte.deplacer {carte, etape, attendu: {stage, stageVersion}}`. Elle part par `board.cards.move` avec `expect_stage` et `expect_stage_version`, par la porte du 35 bis, **toujours sous confirmation du téléphone** (35b.6, classe « toujours »). A-I-D refuse `done` avant même le proxy.
+- **Ce que le gateway permet (L4, L6).** Une cell qui n'est pas orchestratrice ne déplace une carte que si elle en est l'assignée, avec le droit `execute` sur le projet, et seulement entre `build`, `review` et `ready`. Sortir d'une étape avant `build` demande un flow confirmé (#801). A-I-D ne propose donc un déplacement que si :
+  - la carte a pour `assignee` la cell d'A-I-D ;
+  - son étape actuelle est `build`, `review` ou `ready` ;
+  - la cible est plus loin dans l'ordre `build` < `review` < `ready`.
+  Dans tous les autres cas, A-I-D ne propose rien. La fiche le dit sobrement (« Déplacement non proposé : carte non assignée à <cell> », ou « étape <x> hors de build, review, ready »).
+- **Les transitions proposées :**
+  - un sujet qui passe en phase `review`, ou dont la PR s'ouvre, propose `review` ;
   - un sujet `merged` propose `ready`.
-  Rien n'est proposé si la carte est déjà à cette étape, ou plus loin selon l'ordre de L4.
-- Une proposition dans la Boîte, « Déplacer la carte #n vers <étape> », sur le modèle de D288 : une seule par (carte, étape), aucune au premier relevé, aucune après un redémarrage. L'aperçu dit l'étape actuelle, la cible, et les effets de bord connus (L5).
+  Un sujet en phase `dev` sur une carte encore avant `build` ne propose rien : seul l'orchestrateur, ou `confirm-flow`, peut l'y faire entrer.
+- **`confirm-flow` n'est jamais enchaîné.** Un 409 #801 peut suggérer `swarph board cards confirm-flow`, qui frappe des offres pour d'autres cells (L5) : A-I-D l'affiche comme un texte, ne le propose pas comme bouton, et ne le lance jamais.
+- **Les réponses (L4, L6).**
+  - 403 : « Droit manquant », avec le détail du gateway en texte brut.
+  - 409 : « La carte a changé », avec `current_stage` si présent ; ou « Porte d'étape », ou « Obligations ouvertes ».
+  - 400 : étape inconnue.
+  - 404 : carte absente.
+  - Un champ `warn` dans une réponse 2xx s'affiche tel quel (« Porte d'étape en mode avertissement »).
+- **Les effets (L5).** Un déplacement ne frappe aucune obligation et n'envoie ni DM ni message de fil. Il écrit l'étape et une entrée `stage_history`, et recalcule le rappel de la carte. L'aperçu le dit : « Déplace la carte #n de <x> vers <y>. Aucune obligation ni message. »
+- **Les propositions.** Elles vont dans la Boîte, « Déplacer la carte #n vers <étape> », sur le modèle de D288 : une seule par (carte, étape), aucune au premier relevé, aucune après un redémarrage.
+- **La validation.** Le lab valide le 42 avant le merge (L7).
 
 ## 5. Points
 
