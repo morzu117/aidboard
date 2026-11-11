@@ -1,4 +1,5 @@
 mod daemon_bridge;
+mod navigation;
 
 use tauri::{WebviewUrl, WebviewWindowBuilder};
 use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogKind};
@@ -83,7 +84,10 @@ pub fn run() {
             // curl, token échangé puis redirection reconnue avec le cookie). Une vraie fenêtre
             // construite avec WebviewUrl::External évite ce chemin.
             let loading =
-                WebviewWindowBuilder::new(app, "loading", WebviewUrl::App("index.html".into()))
+                navigation::proteger(
+                    WebviewWindowBuilder::new(app, "loading", WebviewUrl::App("index.html".into())),
+                    None,
+                )
                     .title("AID")
                     .inner_size(1200.0, 800.0)
                     .build()?;
@@ -122,7 +126,10 @@ pub fn run() {
                     }
                 };
                 let built =
-                    WebviewWindowBuilder::new(&handle, "main", WebviewUrl::External(parsed))
+                    navigation::proteger(
+                        WebviewWindowBuilder::new(&handle, "main", WebviewUrl::External(parsed.clone())),
+                        Some(parsed),
+                    )
                         .title("AID")
                         .inner_size(1200.0, 800.0)
                         .build();
