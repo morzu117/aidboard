@@ -90,6 +90,7 @@ Ce document, et une ligne dans `README.md`.
 ### 42.2 Le lien et l'assemblage (D290, D291)
 
 Le parseur `AID:`, l'identité `owner/dépôt` d'un workspace, la recherche `q = "AID: "`, l'assemblage, les conflits, et la route `GET /api/aid/board`.
+- *Révision 42.2.* Reprise r1 : une URL `https` avec identifiants donne `owner/dépôt`, et les identifiants ne sont jamais capturés (test : `secret` absent du résultat, du journal et du cache sérialisé). Sont aussi acceptés une barre finale et le port SSH 22 ; les faux hôtes sont refusés. 0 ligne existante modifiée. Vrai proxy 25/25, gate 3106 (échecs connus hors CI).
 
 ### 42.3 La vue (D291)
 
