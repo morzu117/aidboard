@@ -1,3 +1,4 @@
+import { AidCarte, ErreursAid } from '../ui/AidBoard.js';
 import { liensSwairm } from '../../../src/shared/swairm-board.js';
 import type { LecturePrSwairm } from '../../../src/shared/swairm-trailers.js';
 import { useSwairmCommits } from '../data/swairm-commits.js';
@@ -468,6 +469,8 @@ export function Contenu({ cardId }: { cardId: number }) {
       )}
       <ErreursSwairm />
       <SwairmCarte carte={cardId} fiche />
+      <ErreursAid />
+      <AidCarte carte={cardId} fiche />
       {result && <Fiche s={result} relire={() => void relire()} commits={commits} />}
     </main>
   );

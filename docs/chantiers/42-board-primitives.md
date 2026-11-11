@@ -95,6 +95,7 @@ Le parseur `AID:`, l'identité `owner/dépôt` d'un workspace, la recherche `q =
 ### 42.3 La vue (D291)
 
 La pastille et le bloc A-I-D de la fiche de la carte, et la section « Sujets sans carte » de l'Accueil.
+- *Révision 42.3.* L'assemblage ne donne pas encore l'état des agents : le bloc ne l'affiche pas, rien n'est inventé. Il est ajouté en 42.4. 0 ligne existante modifiée, 17 tests ajoutés. E2e Board, Swairm et Accueil 14/14, gate 3123 (échecs connus hors CI).
 
 ### 42.4 Créer un sujet depuis une carte (D292)
 

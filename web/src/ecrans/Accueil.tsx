@@ -1,3 +1,4 @@
+import { SansCarteAid } from '../ui/AidBoard.js';
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router';
 import type { Agent, NavState, Topic, UpdateInfo } from '../../../src/shared/model.js';
@@ -713,6 +714,7 @@ function Contenu() {
         </section>
       )}
       {!down && <BandeauMaj />}
+      <SansCarteAid />
       <div className="accueil-disposition" data-node="1-1.disposition">
         <section className="accueil-table" aria-label="Tous les sujets" data-node="1-1.table">
           <div className="entete">
