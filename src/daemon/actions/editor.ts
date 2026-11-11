@@ -1,6 +1,8 @@
-import { spawn } from 'node:child_process';
-import { accessSync, constants } from 'node:fs';
+import { execFile, spawn } from 'node:child_process';
+import { accessSync, constants, readFileSync } from 'node:fs';
 import { delimiter, join } from 'node:path';
+import { promisify } from 'node:util';
+import { isWsl } from '../../cli/browser.js';
 
 export function onPath(bin: string, pathVar = process.env.PATH ?? ''): boolean {
   return pathVar.split(delimiter).some((dir) => {
@@ -13,14 +15,31 @@ export function onPath(bin: string, pathVar = process.env.PATH ?? ''): boolean {
   });
 }
 
-export function defaultEditor(platform: NodeJS.Platform, hasCode: boolean): string[] {
+export function defaultEditor(
+  platform: NodeJS.Platform,
+  hasCode: boolean,
+  versionProc: string | null = null,
+  present: (bin: string) => boolean = onPath,
+): string[] {
   if (hasCode) return ['code', '{path}'];
   if (platform === 'darwin') return ['open', '-a', 'Visual Studio Code', '{path}'];
+  if (platform === 'linux' && isWsl(versionProc)) {
+    return [present('wslview') ? 'wslview' : 'explorer.exe', '{path}'];
+  }
   return ['xdg-open', '{path}'];
 }
 
 export function editorCommand(configured: string[], platform = process.platform): string[] {
-  return configured.length > 0 ? configured : defaultEditor(platform, onPath('code'));
+  if (configured.length > 0) return configured;
+  let versionProc: string | null = null;
+  if (platform === 'linux') {
+    try {
+      versionProc = readFileSync('/proc/version', 'utf8');
+    } catch {
+      // Hors de procfs, conserver le repli Linux natif.
+    }
+  }
+  return defaultEditor(platform, onPath('code'), versionProc);
 }
 
 function spawnDetached(file: string, args: string[]): Promise<void> {
@@ -35,9 +54,13 @@ function spawnDetached(file: string, args: string[]): Promise<void> {
 }
 
 // spawn(fichier, args) : le chemin arrive comme un seul argument, jamais interprété par un shell.
-export function openInEditor(cmd: string[], path: string): Promise<void> {
+export async function openInEditor(cmd: string[], path: string): Promise<void> {
   const [file, ...args] = cmd;
   if (!file) return Promise.reject(new Error('commande d’éditeur vide'));
+  if (file === 'explorer.exe') {
+    const { stdout } = await promisify(execFile)('wslpath', ['-w', path]);
+    path = stdout.replace(/\r?\n$/, '');
+  }
   return spawnDetached(
     file,
     args.map((a) => (a === '{path}' ? path : a)),

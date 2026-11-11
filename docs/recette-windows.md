@@ -163,6 +163,15 @@ Constat version / intégrité / erreurs / retour arrière : _à remplir_.
       lancement CLI et Board. Le Board doit lire le port de ce home, sans utiliser
       le home par défaut. Ne pas déplacer les données de travail pour ce test.
 
+- [ ] **Transfert localhost coupé** : dans une configuration de recette WSL2 en
+      mode NAT, poser `localhostForwarding=false` dans `%UserProfile%\.wslconfig`,
+      puis `wsl --shutdown` et lancer le Board. Vérifier « Connexion à AID Server… »,
+      puis, sous 10 secondes après cette étape, le message expliquant que Windows
+      ne joint pas `127.0.0.1:<port>` et proposant `localhostForwarding=true`
+      (ou `networkingMode=mirrored`), `wsl --shutdown` et une relance d'AID.
+      La page d'attente reste ouverte, aucune fenêtre principale ni page d'erreur
+      WebView. Rétablir la configuration, arrêter WSL et relancer : le Board s'ouvre.
+
 Constat loopback / pont / veille / home personnalisé : _à remplir_.
 
 ### W.R.8 — Terminaux et agents
@@ -338,3 +347,25 @@ Constat lanceurs / cookie / liens externes : _à remplir_.
 
 Décision finale : _à remplir_. Une fonction non faite reste non validée ;
 le succès du MSI ou du gate Linux ne suffit pas à annoncer « prêt pour Windows ».
+
+## Diagnostic WSL au démarrage
+
+Avant « Recherche d'AID Server… », Windows affiche « Vérification de WSL… ».
+
+- [ ] Sans `wsl.exe` ou sans distribution installée : vérifier l'aide
+      « WSL2 n'est pas installé », avec `wsl --install -d Ubuntu` à lancer
+      dans un terminal administrateur, puis redémarrage Windows et relance d'AID.
+- [ ] Avec la distribution visée en WSL1 : vérifier le message qui donne son
+      nom et `wsl --set-version <nom> 2`, puis demande de relancer AID.
+- [ ] Avec une distribution explicitement choisie mais absente : vérifier
+      « La distribution <nom> est introuvable. Distributions présentes : <liste>. »
+
+Pour choisir une distribution, exécuter `setx AID_WSL_DISTRO Ubuntu` dans un
+terminal Windows, puis relancer AID pour qu'il hérite de la variable. Le nom
+peut contenir des espaces ; les noms vides ou contenant un caractère de contrôle
+sont refusés. Sans variable, AID utilise la distribution marquée `*` dans
+`wsl.exe --list --verbose`, avec son utilisateur par défaut. Ce choix s'applique
+au cycle, à la lecture de `daemon.json` et au pont de redémarrage. Adapter aussi
+les commandes de recette en ajoutant `-d Ubuntu` avant `-e` si nécessaire.
+Une erreur non reconnue de la commande de diagnostic ou une sortie illisible
+laisse le démarrage continuer.

@@ -1,4 +1,8 @@
 mod daemon_bridge;
+#[cfg(any(target_os = "windows", test))]
+mod diagnostic_wsl;
+mod joignabilite;
+mod navigation;
 
 use tauri::{WebviewUrl, WebviewWindowBuilder};
 use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogKind};
@@ -83,7 +87,10 @@ pub fn run() {
             // curl, token échangé puis redirection reconnue avec le cookie). Une vraie fenêtre
             // construite avec WebviewUrl::External évite ce chemin.
             let loading =
-                WebviewWindowBuilder::new(app, "loading", WebviewUrl::App("index.html".into()))
+                navigation::proteger(
+                    WebviewWindowBuilder::new(app, "loading", WebviewUrl::App("index.html".into())),
+                    None,
+                )
                     .title("AID")
                     .inner_size(1200.0, 800.0)
                     .build()?;
@@ -113,6 +120,11 @@ pub fn run() {
                         return;
                     }
                 };
+                set_state(&loading, "Connexion à AID Server…");
+                if let Err(message) = joignabilite::verifier(info.port) {
+                    set_state(&loading, &message);
+                    return;
+                }
                 let url = daemon_bridge::daemon_url(&info);
                 let parsed = match url::Url::parse(&url) {
                     Ok(u) => u,
@@ -122,7 +134,10 @@ pub fn run() {
                     }
                 };
                 let built =
-                    WebviewWindowBuilder::new(&handle, "main", WebviewUrl::External(parsed))
+                    navigation::proteger(
+                        WebviewWindowBuilder::new(&handle, "main", WebviewUrl::External(parsed.clone())),
+                        Some(parsed),
+                    )
                         .title("AID")
                         .inner_size(1200.0, 800.0)
                         .build();

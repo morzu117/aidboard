@@ -132,6 +132,16 @@ fn arguments_wsl(script: &str) -> Vec<String> {
 }
 
 #[cfg(any(target_os = "windows", test))]
+fn arguments_distribution_wsl(script: &str, distribution: Option<&str>) -> Vec<String> {
+    let mut arguments = Vec::new();
+    if let Some(nom) = distribution {
+        arguments.extend(["-d".into(), nom.into()]);
+    }
+    arguments.extend(arguments_wsl(script));
+    arguments
+}
+
+#[cfg(any(target_os = "windows", test))]
 fn sortie_wsl(sortie: &[u8]) -> Option<&str> {
     std::str::from_utf8(sortie)
         .ok()?
@@ -142,7 +152,8 @@ fn sortie_wsl(sortie: &[u8]) -> Option<&str> {
 #[cfg(target_os = "windows")]
 fn login_shell(script: &str) -> Command {
     let mut c = Command::new("wsl.exe");
-    c.args(arguments_wsl(script));
+    let distribution = std::env::var("AID_WSL_DISTRO").ok();
+    c.args(arguments_distribution_wsl(script, distribution.as_deref()));
     c
 }
 
@@ -181,6 +192,11 @@ pub fn bootstrap_server() -> Result<(), String> {
 // `aid --cycle` réutilise le daemon et rend 3 si une mise à jour attend un accord.
 // `on_state` reçoit chaque étape, pour la page d'attente (app/loading/index.html).
 pub fn spawn_cycle(on_state: &dyn Fn(&str), demander: &dyn Fn() -> bool) -> Result<DaemonInfo, String> {
+    #[cfg(target_os = "windows")]
+    {
+        on_state("Vérification de WSL…");
+        crate::diagnostic_wsl::verifier()?;
+    }
     on_state("Recherche d'AID Server…");
     let bin = match resolve_server() {
         Some(bin) => bin,
@@ -313,6 +329,10 @@ mod tests_wsl {
 
     #[test]
     fn shell_interactif_et_sortie_isolee() {
+        assert_eq!(arguments_distribution_wsl(RESOLVE_SCRIPT, None), arguments_wsl(RESOLVE_SCRIPT));
+        let cible = arguments_distribution_wsl(RESOLVE_SCRIPT, Some("Ubuntu Test"));
+        assert_eq!(&cible[..3], ["-d", "Ubuntu Test", "-e"]);
+        assert_eq!(&cible[2..], arguments_wsl(RESOLVE_SCRIPT));
         let args = arguments_wsl(RESOLVE_SCRIPT);
         assert_eq!(&args[..5], ["-e", "bash", "-l", "-i", "-c"]);
         assert!(args[5].ends_with(RESOLVE_SCRIPT));
