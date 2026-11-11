@@ -200,7 +200,7 @@ export async function buildServer(deps: ServerDeps): Promise<FastifyInstance> {
   );
   registerMeshRoutes(app, { mesh: deps.mesh ?? null });
   registerBoardRoutes(app, { board: deps.board ?? null });
-  registerAidRoutes(app, deps.db, deps.board ?? null);
+  registerAidRoutes(app, deps.db, deps.board ?? null, deps.config.mesh.cell);
   registerSwarphRoutes(app, { swarph: deps.swarph ?? null });
   registerSwairmRoutes(
     app,

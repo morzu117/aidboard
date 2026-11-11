@@ -443,3 +443,99 @@ test('D276 : 12 000 caractères de quatre octets dépassent le plafond Python �
   expect(t.proxy.lignes).toHaveLength(0);
   expect(t.proxy.nombreConnexions).toBe(0);
 });
+
+const deplacement = {
+  action: 'carte.deplacer',
+  params: { carte: 42, etape: 'review', attendu: { stage: 'build', stageVersion: 3 } },
+};
+async function preparerDeplacement(scenario: ScenarioProxy = succes) {
+  const t = await preparer(scenario);
+  const { parseCard } = await import('../src/shared/board.js');
+  const card = vi.spyOn(t.board, 'card').mockResolvedValue({
+    card: {
+      ok: true,
+      data: parseCard({ id: 42, stage: 'build', stage_version: 3, assignee: 'peer-a' })!.value,
+      schemaVersion: null,
+      readAt: '',
+    },
+    graph: { ok: false, kind: 'unknown', readAt: '' },
+    thread: { ok: false, kind: 'unknown', readAt: '' },
+    obligations: { ok: false, kind: 'unknown', readAt: '' },
+  });
+  return { ...t, card };
+}
+test('D293 : demande toujours même avec réglage à zéro, aucune écriture avant le oui, une seule après', async () => {
+  const t = await preparerDeplacement();
+  t.db.prepare("UPDATE confirmations_reglage SET actif = 0 WHERE action = 'mesh.etat'").run();
+  const r = await t.demander(deplacement);
+  expect(r.statusCode).toBe(202);
+  expect(t.proxy.lignes).toEqual([]);
+  expect((await t.oui(r.json().confirmation)).envoi.code).toBe('succes');
+  expect(t.proxy.lignes.map((l) => JSON.parse(l))).toMatchObject([
+    {
+      verb: 'board.cards.move',
+      args: { id: 42, stage: 'review', expect_stage: 'build', expect_stage_version: 3 },
+    },
+  ]);
+  expect(t.card).toHaveBeenCalledWith(42, { fresh: true, sansCache: true });
+});
+test('D293 : porte désarmée, aucun chemin direct', async () => {
+  const t = await preparerDeplacement();
+  t.reglage.desarmerConfirme();
+  const r = await t.demander(deplacement);
+  expect(r.statusCode).toBe(409);
+  expect(r.json().error).toBe('confirmation_requise');
+  expect(t.card).not.toHaveBeenCalled();
+  expect(t.proxy.lignes).toEqual([]);
+});
+test('D293 : done refusé avant le proxy', async () => {
+  const t = await preparerDeplacement();
+  expect(
+    (await t.demander({ ...deplacement, params: { ...deplacement.params, etape: 'done' } }))
+      .statusCode,
+  ).toBe(400);
+  expect(t.proxy.lignes).toEqual([]);
+});
+test('D293 : version changée avant le oui, demande périmée, aucune écriture', async () => {
+  const t = await preparerDeplacement();
+  const r = await t.demander(deplacement);
+  const fiche = await t.board.card(42);
+  if (fiche.card.ok) fiche.card.data.stageVersion = 4;
+  expect((await t.oui(r.json().confirmation)).resultat).toBe('perimee');
+  expect(t.proxy.lignes).toEqual([]);
+});
+test.each([
+  [403, 'execute manquant <b>brut</b>', undefined, 'Droit manquant'],
+  [409, 'conflit', 'ready', 'La carte a changé (ready)'],
+  [409, 'stage gate : swarph board cards confirm-flow', undefined, "Porte d'étape"],
+  [409, 'open obligations', undefined, 'Obligations ouvertes'],
+  [400, 'unknown stage', undefined, 'Étape inconnue'],
+  [404, 'missing', undefined, 'Carte absente'],
+] as const)(
+  'D293 : code %s, détail texte, pas de seconde écriture',
+  async (status, detail, current_stage, libelle) => {
+    const { libelleDeplacement } = await import('../src/shared/deplacements.js');
+    const t = await preparerDeplacement({
+      reponse: { ok: false, error: 'upstream_error', status, detail, current_stage },
+    });
+    const r = await t.demander(deplacement);
+    const fin = await t.oui(r.json().confirmation);
+    expect(libelleDeplacement(fin.envoi)).toBe(`${libelle} : ${detail}`);
+    expect(t.proxy.lignes).toHaveLength(1);
+    expect(JSON.parse(t.proxy.lignes[0]!).verb).toBe('board.cards.move');
+  },
+);
+test('D293 : détail borné et warn 2xx conservé', async () => {
+  const t = await preparerDeplacement({
+    reponse: { ok: false, error: 'upstream_error', status: 403, detail: 'x'.repeat(3000) },
+  });
+  const r = await t.demander(deplacement);
+  expect((await t.oui(r.json().confirmation)).envoi.detail).toHaveLength(2000);
+  const u = await preparerDeplacement({
+    reponse: { ok: true, status: 200, body: { warn: 'Porte d’étape en mode avertissement' } },
+  });
+  const s = await u.demander(deplacement);
+  expect((await u.oui(s.json().confirmation)).envoi.warn).toBe(
+    'Porte d’étape en mode avertissement',
+  );
+});

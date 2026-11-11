@@ -1,3 +1,4 @@
+import { preparerPropositionAid } from '../aid/envoi.js';
 import type { Db } from '../db.js';
 import type { Porte } from '../confirmations/porte.js';
 import type { FastifyInstance } from 'fastify';
@@ -20,24 +21,38 @@ export function registerEcrituresRoutes(
 ): void {
   app.post('/api/swarph/etat/envoyer', async (req, reply) => {
     if (!deps.cell || !deps.board) throw new AidHttpError(404, 'mesh désactivé');
-    const corps = req.body as { action?: unknown; params?: unknown } | null;
+    const corps = req.body as {
+      action?: unknown;
+      params?: unknown;
+      propositionAid?: unknown;
+    } | null;
     if (
       !corps ||
-      !['obligation.prendre', 'obligation.refuser', 'obligation.clore'].includes(
+      !['obligation.prendre', 'obligation.refuser', 'obligation.clore', 'carte.deplacer'].includes(
         String(corps.action),
       )
     )
       throw new AidHttpError(400, 'action inconnue');
     if (deps.proxySocket && deps.proxyLectureSeule)
       return reply.code(409).send({ error: 'proxy_lecture_seule' });
+    let params = corps.params;
+    if (corps.propositionAid !== undefined) {
+      if (corps.action !== 'carte.deplacer' || typeof corps.propositionAid !== 'number' || !deps.db)
+        throw new AidHttpError(400, 'proposition invalide');
+      params = await preparerPropositionAid(deps.db, deps.board, deps.cell, corps.propositionAid);
+    }
     const demande = await deps.porte!.demander(
       'mesh.etat',
       {
         action: corps.action as import('../../shared/etats.js').ActionEtat,
-        params: corps.params,
+        params,
       },
       req,
     );
+    if ('confirmation' in demande && corps.propositionAid !== undefined)
+      deps
+        .db!.prepare('UPDATE aid_propositions SET confirmation = ? WHERE id = ?')
+        .run(demande.confirmation, corps.propositionAid);
     if ('confirmation' in demande)
       return reply.code(202).send({ confirmation: demande.confirmation });
     throw new AidHttpError(409, 'confirmation_requise');

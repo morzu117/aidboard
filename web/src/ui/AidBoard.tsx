@@ -1,3 +1,5 @@
+import { raisonDeplacement } from '../../../src/shared/deplacements.js';
+import type { BoardCard } from '../../../src/shared/board.js';
 import { liensAid } from '../../../src/shared/aid-board.js';
 import { useState } from 'react';
 import { Link } from 'react-router';
@@ -44,6 +46,7 @@ export function AidCarte({ carte, fiche = false }: { carte: number; fiche?: bool
                           <dt>Agents</dt>
                           <dd>
                             {[
+                              ...(s.agents.enErreur ? [`${s.agents.enErreur} en erreur`] : []),
                               `${s.agents.enMarche} en marche`,
                               `${s.agents.enAttente} en attente`,
                               pluriel(s.agents.termine, 'terminé'),
@@ -62,6 +65,10 @@ export function AidCarte({ carte, fiche = false }: { carte: number; fiche?: bool
                         </>
                       )}
                     </dl>
+                    <RaisonDeplacement
+                      carte={result.cartes.find((c) => c.id === carte)}
+                      cell={state?.mesh?.state.cell ?? ''}
+                    />
                     <Link className="bouton" to={`/sujets/${s.sujetId}`}>
                       Ouvrir le sujet
                     </Link>
@@ -153,4 +160,9 @@ export function NouveauSujetCarte({
       Nouveau sujet
     </Link>
   );
+}
+
+function RaisonDeplacement({ carte, cell }: { carte?: BoardCard; cell: string }) {
+  const raison = carte && cell ? raisonDeplacement(carte, cell) : null;
+  return raison ? <p>Déplacement non proposé : {raison}</p> : null;
 }

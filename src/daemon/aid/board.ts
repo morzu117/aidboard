@@ -31,14 +31,17 @@ export async function lireBoardAid(
       state, phase, branch, pr_number AS prNumber, pr_url AS prUrl FROM topics ORDER BY created_at, id`,
       )
       .all() as Sujet[];
-    const comptes = new Map<string, { enMarche: number; enAttente: number; termine: number }>();
-    const groupes: Record<AgentStatus, 'enMarche' | 'enAttente' | 'termine'> = {
+    const comptes = new Map<
+      string,
+      { enMarche: number; enAttente: number; termine: number; enErreur?: number }
+    >();
+    const groupes: Record<AgentStatus, 'enMarche' | 'enAttente' | 'termine' | 'enErreur'> = {
       starting: 'enMarche',
       working: 'enMarche',
       needs_input: 'enAttente',
       idle: 'enAttente',
       done: 'termine',
-      error: 'termine',
+      error: 'enErreur',
       stopped: 'termine',
     };
     const agents = db
@@ -48,12 +51,12 @@ export async function lireBoardAid(
       )
       .all() as { sujet: string; status: AgentStatus }[];
     for (const a of agents) {
-      const compte = comptes.get(a.sujet) ?? { enMarche: 0, enAttente: 0, termine: 0 };
-      compte[groupes[a.status]]++;
+      const compte = comptes.get(a.sujet) ?? { enMarche: 0, enAttente: 0, termine: 0, enErreur: 0 };
+      compte[groupes[a.status]] = (compte[groupes[a.status]] ?? 0) + 1;
       comptes.set(a.sujet, compte);
     }
     return lignes.map((s) => ({
-      agents: comptes.get(s.sujetId) ?? { enMarche: 0, enAttente: 0, termine: 0 },
+      agents: comptes.get(s.sujetId) ?? { enMarche: 0, enAttente: 0, termine: 0, enErreur: 0 },
       ...s,
       prUrl: s.prUrl?.startsWith('https://github.com/') ? s.prUrl : null,
       lien: projets.get(s.workspace) ? `${projets.get(s.workspace)}#${s.slug}` : null,

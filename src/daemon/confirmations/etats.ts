@@ -27,7 +27,8 @@ export function creerActionEtat(deps: {
       if (
         action !== 'obligation.prendre' &&
         action !== 'obligation.refuser' &&
-        action !== 'obligation.clore'
+        action !== 'obligation.clore' &&
+        action !== 'carte.deplacer'
       )
         throw new AidHttpError(400, 'action inconnue');
       const lecture = lireParamsEtat(action, entree.params);
@@ -38,6 +39,18 @@ export function creerActionEtat(deps: {
         if (!nettoyage.ok) throw new AidHttpError(422, nettoyage.classe);
       }
       if (!mesh.proxySocket) throw new AidHttpError(409, 'proxy_absent');
+      if ('etape' in params) {
+        const fiche = await deps.board
+          .card(params.carte, { fresh: true, sansCache: true })
+          .catch(() => null);
+        if (
+          !fiche?.card.ok ||
+          fiche.card.data.stage !== params.attendu.stage ||
+          fiche.card.data.stageVersion !== params.attendu.stageVersion
+        )
+          throw new AidHttpError(409, 'perime');
+        return { action, params } as Etat;
+      }
       // Sans lecture fiable, aucune écriture : le téléphone devra relire la carte.
       const resultat = await deps.board.obligations(params.carte).catch(() => null);
       const obligation = resultat?.ok
@@ -63,12 +76,19 @@ export function creerActionEtat(deps: {
       const envoi = {
         code: reponse.ok ? ('succes' as const) : reponse.code,
         ...('status' in reponse && { status: reponse.status }),
+        ...(etat.action === 'carte.deplacer' &&
+          !reponse.ok && { detail: reponse.detail, current_stage: reponse.current_stage }),
+        ...(etat.action === 'carte.deplacer' &&
+          reponse.ok &&
+          typeof reponse.body.warn === 'string' && {
+            warn: reponse.body.warn,
+          }),
       };
       ctx.envoi = envoi;
       deps.journal?.('mesh.etat', {
         action: etat.action,
         carte: String(etat.params.carte),
-        obligation: String(etat.params.obligation),
+        ...('obligation' in etat.params && { obligation: String(etat.params.obligation) }),
         request_id,
         code: envoi.code,
       });

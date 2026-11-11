@@ -4,6 +4,7 @@ import { createConnection } from 'node:net';
 /** D263 : 15 s visées en amont + 5 s ; à recaler sur le document de schéma du proxy. */
 export const DELAI_PROXY_MS = 20_000;
 export const VERBES_PROXY = [
+  'board.cards.move',
   'board.cards.say',
   'mesh.send',
   'channel.post',
@@ -37,27 +38,31 @@ const MAX_LIGNE = 1024 * 1024;
 type CodeProxy = (typeof CODES_PROXY)[number] | 'delai' | 'interrompu' | 'connexion' | 'format';
 type CorpsProxy = Record<string, unknown> | unknown[];
 export type ResultatProxy<Corps = CorpsProxy> =
-  { ok: true; status: number; body: Corps } | { ok: false; code: CodeProxy; status?: number };
+  | { ok: true; status: number; body: Corps }
+  | { ok: false; code: CodeProxy; status?: number; detail?: string; current_stage?: string };
 
 function estObjet(valeur: unknown): valeur is Record<string, unknown> {
   return typeof valeur === 'object' && valeur !== null && !Array.isArray(valeur);
 }
 
-/** Ne conserve jamais le détail du proxy, même dans les réponses valides. */
+/** D263 : détail retiré, sauf pour le déplacement D293 qui l’affiche en texte borné. */
 export function lireReponseProxy(
   ligne: string,
   requestId: string,
   verbes?: typeof VERBES_PROXY,
+  deplacement?: boolean,
 ): ResultatProxy<Record<string, unknown>>;
 export function lireReponseProxy(
   ligne: string,
   requestId: string,
   verbes: typeof VERBES_PROXY | typeof VERBES_LECTURE,
+  deplacement?: boolean,
 ): ResultatProxy;
 export function lireReponseProxy(
   ligne: string,
   requestId: string,
   verbes: typeof VERBES_PROXY | typeof VERBES_LECTURE = VERBES_PROXY,
+  deplacement = false,
 ): ResultatProxy {
   const format = { ok: false, code: 'format' } as const;
   let reponse: unknown;
@@ -84,6 +89,14 @@ export function lireReponseProxy(
       return {
         ok: false,
         code,
+        ...(deplacement &&
+          typeof reponse.detail === 'string' && {
+            detail: Array.from(reponse.detail).slice(0, 2000).join(''),
+          }),
+        ...(deplacement &&
+          typeof reponse.current_stage === 'string' && {
+            current_stage: Array.from(reponse.current_stage).slice(0, 80).join(''),
+          }),
         ...(typeof reponse.status === 'number' &&
           Number.isInteger(reponse.status) &&
           reponse.status >= 100 &&
@@ -212,6 +225,7 @@ export function creerProxyClient(
                 Buffer.concat(morceaux).toString('utf8'),
                 requestId,
                 options.verbes ?? VERBES_PROXY,
+                verbe === 'board.cards.move',
               ),
             );
         });

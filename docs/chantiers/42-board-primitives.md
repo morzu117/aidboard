@@ -101,6 +101,7 @@ La pastille et le bloc A-I-D de la fiche de la carte, et la section « Sujets sa
 - *Révision 42.4.* Les agents sont comptés en trois groupes : en marche (`starting`, `working`), en attente (`needs_input`, `idle`) et terminés (`done`, `error`, `stopped`). En 42.5, `error` sort des terminés et devient un groupe à part : un agent en erreur doit se voir. Le titre est coupé à 200 caractères. 10 lignes existantes modifiées, 21 tests ajoutés. E2e 19/19, gate 3144 (échecs connus hors CI).
 
 ### 42.5 Le déplacement proposé (D293), après le lab
+- *Révision 42.5.* L'étape attendue est relue deux fois : à l'aperçu, puis au oui. Si la carte a changé entre-temps, la demande est périmée. Quand la demande vient d'une proposition, les paramètres envoyés par le navigateur sont ignorés. Le détail du proxy n'est gardé que pour `board.cards.move` : borné à 2000 caractères, et 80 pour `current_stage`. Il n'est jamais journalisé. Les gardes « aucun envoi » reconnaissent maintenant `move`. Limite : le proxy installé (swarph-cli 0.75.0) retire le détail amont et `current_stage`. A-I-D affiche donc pour l'instant les libellés génériques ; question posée au lab. 28 lignes existantes modifiées, dont les gardes renforcées et la version de schéma 28. Vrai proxy 26/26, e2e Board et Boîte 14/14, gate 3233 (échecs connus hors CI).
 
 ### 42.6 L'e2e et la fiche de recette
 

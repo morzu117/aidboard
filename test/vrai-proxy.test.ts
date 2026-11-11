@@ -39,7 +39,12 @@ afterEach(async () => {
   for (const nettoyer of nettoyages.splice(0).reverse()) await nettoyer();
 });
 
-async function preparer(status = 201, closed_obligations: number[] = [], lectureSeule = false) {
+async function preparer(
+  status = 201,
+  closed_obligations: number[] = [],
+  lectureSeule = false,
+  stageVersion: number | null = 1,
+) {
   // Le proxy refuse les ancêtres inscriptibles par la cellule, même un TMPDIR partagé.
   const dossier = await mkdtemp(join(process.cwd(), 'node_modules', '.aid-vrai-'));
   nettoyages.push(() => rm(dossier, { recursive: true, force: true }));
@@ -59,7 +64,12 @@ async function preparer(status = 201, closed_obligations: number[] = [], lecture
     res.end(
       JSON.stringify(
         req.method === 'GET'
-          ? { id: 42, thread_uuid: fil, assignee: 'peer-b' }
+          ? {
+              id: 42,
+              thread_uuid: fil,
+              assignee: 'peer-b',
+              ...(stageVersion !== null && { stage_version: stageVersion }),
+            }
           : { id: 72, open_obligations: [81], closed_obligations, detail: texte },
       ),
     );
@@ -373,3 +383,28 @@ test.skipIf(!disponible)(
     expect(t.requetes.map((r) => r.methode)).toEqual(['GET']);
   },
 );
+
+describe.skipIf(!disponible)('42.5 : contrat réel board.cards.move', () => {
+  test('review passe ; done et version absente refusés sans PATCH', async () => {
+    const t = await preparer(200);
+    const client = creerProxyClient({ socket: t.socket });
+    const args = { id: 42, stage: 'review', expect_stage: 'build', expect_stage_version: 1 };
+    expect(await client.appeler('board.cards.move', args)).toMatchObject({ ok: true, status: 200 });
+    expect(t.requetes.filter((r) => r.methode === 'PATCH')).toMatchObject([
+      {
+        corps: { actor: 'peer-a', stage: 'review', expect_stage: 'build', expect_stage_version: 1 },
+      },
+    ]);
+    const nombre = t.requetes.length;
+    expect(await client.appeler('board.cards.move', { ...args, stage: 'done' })).toMatchObject({
+      ok: false,
+      code: 'verb_not_allowed',
+    });
+    expect(t.requetes).toHaveLength(nombre);
+    const u = await preparer(200, [], false, null);
+    expect(
+      await creerProxyClient({ socket: u.socket }).appeler('board.cards.move', args),
+    ).toMatchObject({ ok: false, code: 'verb_not_allowed' });
+    expect(u.requetes.filter((r) => r.methode === 'PATCH')).toEqual([]);
+  });
+});

@@ -1,3 +1,4 @@
+import { PropositionAidVue, usePropositionsAid } from '../ui/PropositionsAid.js';
 import { PropositionSwairmVue, usePropositionsSwairm } from '../ui/PropositionsSwairm.js';
 import { EcrireAuMesh } from '../ui/EcrireAuMesh.js';
 import { type ReactNode, useState } from 'react';
@@ -519,6 +520,8 @@ const plusAncien = (x: Element, y: Element) => x.at.localeCompare(y.at);
 const plusRecent = (x: Element, y: Element) => y.at.localeCompare(x.at);
 
 function Contenu() {
+  const [resultatDeplacement, setResultatDeplacement] = useState('');
+  const propositionsAid = usePropositionsAid();
   const propositionsSwairm = usePropositionsSwairm();
   const { state, daemon, retry } = useAid();
   const { openNewTopic } = useLayout();
@@ -534,6 +537,10 @@ function Contenu() {
         <p className="resume" data-node="1-2.entete.resume">
           {resume}
         </p>
+        {resultatDeplacement && <p role="status">{resultatDeplacement}</p>}
+        {propositionsAid.erreur && (
+          <p role="alert">Propositions A-I-D : {propositionsAid.erreur}</p>
+        )}
         {propositionsSwairm.erreur && (
           <p role="alert">Propositions Swairm : {propositionsSwairm.erreur}</p>
         )}
@@ -641,6 +648,7 @@ function Contenu() {
     information: dms.filter((d) => natureDm(d) === 'information').sort((x, y) => y.id - x.id),
   };
   const comptes = compterNatures([
+    ...propositionsAid.propositions.map(() => 'decision' as const),
     ...propositionsSwairm.propositions.map(() => 'decision' as const),
     ...elements.map((e) => e.nature),
     ...dms.map((d) => natureDm(d)!),
@@ -741,6 +749,15 @@ function Contenu() {
             Rien ici pour le moment.
           </p>
         )}
+        {n === 'decision' &&
+          propositionsAid.propositions.map((p) => (
+            <PropositionAidVue
+              key={`aid-${p.id}`}
+              annoncer={setResultatDeplacement}
+              proposition={p}
+              relire={() => void propositionsAid.relire()}
+            />
+          ))}
         {n === 'decision' &&
           propositionsSwairm.propositions.map((p) => (
             <PropositionSwairmVue

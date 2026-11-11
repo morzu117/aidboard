@@ -246,7 +246,8 @@ test('D291 : comptes isolés par sujet et tous les statuts, tous les runs', asyn
   expect((await lireBoardAid(t.db, null, identites)).sujets[0]?.agents).toEqual({
     enMarche: 3,
     enAttente: 2,
-    termine: 3,
+    termine: 2,
+    enErreur: 1,
   });
   expect(t.db.prepare('SELECT total_changes() AS n').get()).toEqual(avant);
   t.db.prepare('DELETE FROM agents').run();
@@ -254,5 +255,6 @@ test('D291 : comptes isolés par sujet et tous les statuts, tous les runs', asyn
     enMarche: 0,
     enAttente: 0,
     termine: 0,
+    enErreur: 0,
   });
 });

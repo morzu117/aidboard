@@ -314,3 +314,24 @@ test.each([1, 2])('D291 : accord de %s agent terminé', async (termine) => {
     ),
   ).toBeTruthy();
 });
+
+test('42.5 : agents en erreur affichés en premier', async () => {
+  await ouvrir(
+    reponse([sujet({ agents: { enMarche: 2, enAttente: 1, termine: 3, enErreur: 1 } })]),
+    true,
+  );
+  expect(
+    await screen.findByText('1 en erreur, 2 en marche, 1 en attente, 3 terminés'),
+  ).toBeTruthy();
+});
+
+test.each([
+  ['peer-b', 'build', 'carte non assignée à cellule-test'],
+  ['cellule-test', 'spec', 'étape spec hors de build, review, ready'],
+])('42.5 : fiche explique le refus %s %s', async (assignee, stage, raison) => {
+  const { parseCard } = await import('../../src/shared/board.js');
+  const r = reponse([sujet()]);
+  r.cartes = [{ ...parseCard({ id: 101, assignee, stage, stage_version: 1 })!.value, sujets: [] }];
+  await ouvrir(r, true);
+  expect(await screen.findByText(`Déplacement non proposé : ${raison}`)).toBeTruthy();
+});

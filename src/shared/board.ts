@@ -52,6 +52,7 @@ export interface BoardStageEntry {
 }
 
 export interface BoardCard extends BoardCardSummary {
+  stageVersion?: number | null;
   body: string | null;
   author: string;
   createdAt: string | null;
@@ -367,6 +368,12 @@ export const parseCard = (json: unknown): Parsed<BoardCard> | null => {
   if (id === null) return null;
   return parsed(json, {
     ...parseSummary(json, id),
+    stageVersion:
+      typeof json.stage_version === 'number' &&
+      Number.isSafeInteger(json.stage_version) &&
+      json.stage_version >= 0
+        ? json.stage_version
+        : null,
     body: str(json.body),
     author: trustedAuthor(json),
     createdAt: str(json.created_at),
