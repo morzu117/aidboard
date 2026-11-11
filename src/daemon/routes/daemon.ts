@@ -81,8 +81,10 @@ export function registerDaemonRoutes(
   });
   // Troisième voie, à côté du refus (409) et du --force : interrompt proprement les agents vivants
   // (résumé écrit avant l'arrêt) puis redémarre. Appelée par `aid` à l'ouverture d'AID.app.
-  app.post('/api/daemon/cycle', async (_req, reply) => {
+  app.post('/api/daemon/cycle', async (req, reply) => {
     if (!deps.requestCycle) throw new AidHttpError(501, 'cycle non disponible');
+    const accord = (req.body as { force?: boolean } | undefined)?.force === true;
+    if (!accord || !deps.updates?.()?.available) return { cycling: false };
     reply.code(202).send({ cycling: true });
     setImmediate(deps.requestCycle);
   });

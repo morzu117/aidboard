@@ -96,10 +96,18 @@ test('POST /api/daemon/cycle : 501 quand aucun cycle n’est câblé', async () 
   expect(res.statusCode).toBe(501);
 });
 
-test('POST /api/daemon/cycle : se déclenche même avec un agent vivant, sans jamais refuser', async () => {
+test('POST /api/daemon/cycle : accord et mise à jour connue, même avec un agent vivant', async () => {
   let called = false;
-  const a = makeApp({ requestCycle: () => (called = true), withAgent: true });
-  const res = await a.inject({ method: 'POST', url: '/api/daemon/cycle' });
+  const a = makeApp({
+    requestCycle: () => (called = true),
+    withAgent: true,
+    updates: () => ({ available: true, latest: 'nouveau' }),
+  });
+  const res = await a.inject({
+    method: 'POST',
+    url: '/api/daemon/cycle',
+    payload: { force: true },
+  });
   expect(res.statusCode).toBe(202);
   await new Promise((r) => setImmediate(r));
   expect(called).toBe(true);
@@ -152,3 +160,26 @@ test('GET /api/daemon/update (13.2) : à jour → latest null ; sans câblage �
     lastError: null,
   });
 });
+
+for (const available of [true, false, null]) {
+  for (const accord of [true, false]) {
+    if (available === true && accord) continue;
+    test(`cycle sans relance : disponible=${available}, accord=${accord}`, async () => {
+      let called = false;
+      const a = makeApp({
+        requestCycle: () => (called = true),
+        withAgent: true,
+        updates: () => (available === null ? null : { available, latest: 'nouveau' }),
+      });
+      const res = await a.inject({
+        method: 'POST',
+        url: '/api/daemon/cycle',
+        payload: { force: accord },
+      });
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toEqual({ cycling: false });
+      await new Promise((r) => setImmediate(r));
+      expect(called).toBe(false);
+    });
+  }
+}

@@ -987,16 +987,21 @@ test('chip Remote : un POST refusé passe par l’erreur du composer et relit l�
 test('chip Remote : relu toutes les 3 s tant qu’il est en connexion, plus une fois connecté', async () => {
   vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
   try {
-    const { calls, lecture } = mountRemote({ status: 'connecting', url: URL_SESSION });
-    await waitFor(() => expect(chipRemote()?.textContent).toBe('Remote · connexion…'));
+    // Attendre aussi les effets React : le libellé peut précéder l'installation de l'intervalle.
+    const { calls, lecture } = await act(async () =>
+      mountRemote({ status: 'connecting', url: URL_SESSION }),
+    );
+    expect(chipRemote()?.textContent).toBe('Remote · connexion…');
     expect(lecturesRemote(calls)).toBe(1);
-    await act(async () => vi.advanceTimersByTime(3_000));
-    await waitFor(() => expect(lecturesRemote(calls)).toBe(2));
+    await act(async () => vi.advanceTimersByTimeAsync(2_999));
+    expect(lecturesRemote(calls)).toBe(1);
+    await act(async () => vi.advanceTimersByTimeAsync(1));
+    expect(lecturesRemote(calls)).toBe(2);
     lecture.etat = { status: 'connected', url: URL_SESSION };
-    await act(async () => vi.advanceTimersByTime(3_000));
-    await waitFor(() => expect(chipRemote()?.textContent).toBe('Remote · connecté'));
+    await act(async () => vi.advanceTimersByTimeAsync(3_000));
+    expect(chipRemote()?.textContent).toBe('Remote · connecté');
     expect(lecturesRemote(calls)).toBe(3);
-    await act(async () => vi.advanceTimersByTime(12_000));
+    await act(async () => vi.advanceTimersByTimeAsync(12_000));
     expect(lecturesRemote(calls)).toBe(3);
   } finally {
     vi.useRealTimers();

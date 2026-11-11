@@ -39,7 +39,7 @@ fn check_board_update(app: &tauri::AppHandle) {
         .dialog()
         .message(format!(
             "AID Board {} est disponible (installée : {}). L'installer et relancer maintenant ? \
-             Le daemon et ses agents continuent de tourner.",
+             Le daemon et ses agents continuent de tourner, sauf si vous acceptez ensuite une mise à jour d'AID Server.",
             update.version, update.current_version
         ))
         .title("Mise à jour d'AID Board")
@@ -96,7 +96,17 @@ pub fn run() {
                     let loading = loading.clone();
                     move |step: &str| set_state(&loading, step)
                 };
-                let info = match daemon_bridge::spawn_cycle(&progress) {
+                let info = match daemon_bridge::spawn_cycle(&progress, &|| {
+                    handle.dialog()
+                        .message("Une mise à jour d'AID Server est disponible. L'appliquer relance le daemon : les agents sont interrompus puis repris, et les terminaux ouverts sont fermés.")
+                        .title("Mise à jour d'AID Server")
+                        .kind(MessageDialogKind::Info)
+                        .buttons(MessageDialogButtons::OkCancelCustom(
+                            "Mettre à jour maintenant".into(),
+                            "Plus tard".into(),
+                        ))
+                        .blocking_show()
+                }) {
                     Ok(info) => info,
                     Err(message) => {
                         set_state(&loading, &format!("AID n'a pas pu démarrer : {message}"));

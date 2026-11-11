@@ -24,6 +24,16 @@ import { type Ctx, makeTopic, postAction, setupWorkspace } from './helpers/topic
 
 const FAKE = join(import.meta.dirname, 'fixtures/fake-editor.sh');
 const out = join(mkdtempSync(join(tmpdir(), 'aid-ed-')), 'argv.txt');
+// La redirection crée le fichier avant printf : attendre toutes les lignes, même en cas
+// d'écriture partielle, plutôt que sa seule existence.
+async function attendreArguments(nombre: number): Promise<void> {
+  await waitFor(
+    () => existsSync(out) && readFileSync(out, 'utf8').split('\n').length === nombre + 1,
+    3000,
+    'argv écrit en entier',
+  );
+}
+
 const ORIGINAL_PATH = process.env.PATH;
 let c: Ctx;
 afterEach(async () => {
@@ -53,7 +63,7 @@ test('un chemin avec espaces, point-virgule et $() arrive intact en un seul argu
   process.env.FAKE_EDITOR_OUT = out;
   const path = '/tmp/a b;c$(touch /tmp/pwned-aid)`x`';
   await openInEditor([FAKE, '--nouvelle-fenetre', '{path}'], path);
-  await waitFor(() => existsSync(out), 3000, 'argv écrit');
+  await attendreArguments(2);
   expect(readFileSync(out, 'utf8').split('\n').slice(0, 2)).toEqual(['--nouvelle-fenetre', path]);
   expect(existsSync('/tmp/pwned-aid')).toBe(false);
 });
@@ -69,7 +79,7 @@ test('editor.open : 204 et le worktree est passé à l’éditeur configuré', a
   const { wt, topicId } = await makeTopic(c);
   const r = await postAction(c, topicId, 'editor.open');
   expect(r.statusCode).toBe(204);
-  await waitFor(() => existsSync(out), 3000, 'argv écrit');
+  await attendreArguments(1);
   expect(readFileSync(out, 'utf8').trim()).toBe(wt);
 });
 
@@ -100,7 +110,7 @@ test('diffCommand : connu seulement pour « code », null pour tout autre édite
 test('openDiffInEditor : avant et après arrivent chacun en un seul argument', async () => {
   process.env.FAKE_EDITOR_OUT = out;
   await openDiffInEditor([FAKE, '--diff', '{before}', '{after}'], '/tmp/a v;ant', '/tmp/apr$(x)es');
-  await waitFor(() => existsSync(out), 3000, 'argv écrit');
+  await attendreArguments(3);
   expect(readFileSync(out, 'utf8').split('\n').slice(0, 3)).toEqual([
     '--diff',
     '/tmp/a v;ant',
@@ -115,7 +125,7 @@ test('editeur.ouvrir-fichier : chemin précis transmis par variable, résolu sou
   commitFile(wt, 'a.ts', 'contenu\n');
   const r = await postAction(c, topicId, 'editeur.ouvrir-fichier', { path: 'a.ts' });
   expect(r.statusCode).toBe(204);
-  await waitFor(() => existsSync(out), 3000, 'argv écrit');
+  await attendreArguments(1);
   expect(readFileSync(out, 'utf8').trim()).toBe(realpathSync(join(wt, 'a.ts')));
 });
 
@@ -141,7 +151,7 @@ test('diff.ouvrir : repli déclaré, ouvre le worktree (aucun visualiseur multi-
   const { wt, topicId } = await makeTopic(c);
   const r = await postAction(c, topicId, 'diff.ouvrir', { hash: 'peu-importe' });
   expect(r.statusCode).toBe(204);
-  await waitFor(() => existsSync(out), 3000, 'argv écrit');
+  await attendreArguments(1);
   expect(readFileSync(out, 'utf8').trim()).toBe(wt);
 });
 
@@ -154,7 +164,7 @@ test('diff.ouvrir-fichier : éditeur sans diff natif connu, repli sur le fichier
   commitFile(wt, 'a.txt', 'v2\n', 'maj a.txt');
   const r = await postAction(c, topicId, 'diff.ouvrir-fichier', { hash, path: 'a.txt' });
   expect(r.statusCode).toBe(204);
-  await waitFor(() => existsSync(out), 3000, 'argv écrit');
+  await attendreArguments(1);
   expect(readFileSync(out, 'utf8').trim()).toBe(realpathSync(join(wt, 'a.txt')));
 });
 
@@ -173,7 +183,7 @@ test('diff.ouvrir-fichier : éditeur « code », diff natif avec le contenu avan
 
   const r = await postAction(c, topicId, 'diff.ouvrir-fichier', { hash, path: 'nouveau.txt' });
   expect(r.statusCode).toBe(204);
-  await waitFor(() => existsSync(out), 3000, 'argv écrit');
+  await attendreArguments(3);
   const argv = readFileSync(out, 'utf8').split('\n');
   expect(argv[0]).toBe('--diff');
   expect(readFileSync(argv[1]!, 'utf8')).toBe('');
@@ -213,7 +223,7 @@ test('D135 : diff.ouvrir-fichier avec « depuis », avant pris à cette révisio
 
   const r = await postAction(c, topicId, 'diff.ouvrir-fichier', { hash, path: 'a.txt', depuis });
   expect(r.statusCode).toBe(204);
-  await waitFor(() => existsSync(out), 3000, 'argv écrit');
+  await attendreArguments(3);
   const argv = readFileSync(out, 'utf8').split('\n');
   expect(readFileSync(argv[1]!, 'utf8')).toBe('v1');
   expect(readFileSync(argv[2]!, 'utf8')).toBe('v3');
