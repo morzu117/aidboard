@@ -1,3 +1,4 @@
+import { liensAid } from '../../../src/shared/aid-board.js';
 import { useState } from 'react';
 import { Link } from 'react-router';
 import { libelleAid, useAidBoard } from '../data/aid-board.js';
@@ -38,6 +39,18 @@ export function AidCarte({ carte, fiche = false }: { carte: number; fiche?: bool
                       <dd>{s.branch}</dd>
                       <dt>Phase</dt>
                       <dd>{s.phase ? PHASES[s.phase] : '—'}</dd>
+                      {s.agents && (
+                        <>
+                          <dt>Agents</dt>
+                          <dd>
+                            {[
+                              `${s.agents.enMarche} en marche`,
+                              `${s.agents.enAttente} en attente`,
+                              pluriel(s.agents.termine, 'terminé'),
+                            ].join(', ')}
+                          </dd>
+                        </>
+                      )}
                       <dt>État</dt>
                       <dd>{libelleAid(s.state)}</dd>
                       {s.prNumber !== null && (
@@ -108,5 +121,36 @@ export function SansCarteAid() {
         <p role="status">{message}</p>
       </details>
     </section>
+  );
+}
+
+/** D292 : aucune écriture gateway ; le titre reste dans l'état de navigation. */
+export function NouveauSujetCarte({
+  carte,
+  titre,
+  corps,
+}: {
+  carte: number;
+  titre: string;
+  corps: string;
+}) {
+  const { state, appareil } = useAid();
+  const { result, erreur } = useAidBoard();
+  if (
+    !state ||
+    appareil ||
+    !result ||
+    erreur ||
+    result.erreurs?.length ||
+    !result.board?.ok ||
+    liensAid(corps).length ||
+    result.cartes.some((c) => c.id === carte) ||
+    result.sujets.some((s) => s.carte === carte || s.conflit.includes(carte))
+  )
+    return null;
+  return (
+    <Link className="bouton" to="/sujets/nouveau" state={{ carte, titre: titre.slice(0, 200) }}>
+      Nouveau sujet
+    </Link>
   );
 }

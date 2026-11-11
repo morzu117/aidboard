@@ -98,6 +98,7 @@ La pastille et le bloc A-I-D de la fiche de la carte, et la section « Sujets sa
 - *Révision 42.3.* L'assemblage ne donne pas encore l'état des agents : le bloc ne l'affiche pas, rien n'est inventé. Il est ajouté en 42.4. 0 ligne existante modifiée, 17 tests ajoutés. E2e Board, Swairm et Accueil 14/14, gate 3123 (échecs connus hors CI).
 
 ### 42.4 Créer un sujet depuis une carte (D292)
+- *Révision 42.4.* Les agents sont comptés en trois groupes : en marche (`starting`, `working`), en attente (`needs_input`, `idle`) et terminés (`done`, `error`, `stopped`). En 42.5, `error` sort des terminés et devient un groupe à part : un agent en erreur doit se voir. Le titre est coupé à 200 caractères. 10 lignes existantes modifiées, 21 tests ajoutés. E2e 19/19, gate 3144 (échecs connus hors CI).
 
 ### 42.5 Le déplacement proposé (D293), après le lab
 

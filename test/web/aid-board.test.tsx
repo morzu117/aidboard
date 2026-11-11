@@ -2,6 +2,7 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, expect, test, vi } from 'vitest';
 import { Route, Routes } from 'react-router';
+import { NouveauSujetCarte } from '../../web/src/ui/AidBoard.js';
 import { Board } from '../../web/src/ecrans/Board.js';
 import { CarteBoard } from '../../web/src/ecrans/CarteBoard.js';
 import { Accueil } from '../../web/src/ecrans/Accueil.js';
@@ -13,6 +14,7 @@ import { FakeSocket, json, setup, snapshot, ws, topic } from './helpers.js';
 const date = '2026-11-10T10:00:00Z';
 const ok = <T,>(data: T) => ({ ok: true as const, data, readAt: date, schemaVersion: null });
 const sujet = (over: Partial<SujetBoardAid> = {}): SujetBoardAid => ({
+  agents: { enMarche: 2, enAttente: 1, termine: 0 },
   sujetId: 'tp_1',
   workspace: 'ws_1',
   slug: 's',
@@ -138,7 +140,7 @@ test.each([null, 'https://github.com/exemple/depot/pull/42'])(
     for (const texte of ['aid', 'feat/s', 'Développement', 'actif', '#42'])
       expect(screen.getByText(texte)).toBeTruthy();
     expect(screen.queryByRole('link', { name: '#42' })?.getAttribute('href') ?? null).toBe(prUrl);
-    expect(screen.queryByText('Agents')).toBeNull();
+    expect(screen.getByText('2 en marche, 1 en attente, 0 terminé')).toBeTruthy();
     fireEvent.click(screen.getByRole('link', { name: 'Ouvrir le sujet' }));
     await screen.findByText('Sujet ouvert');
   },
@@ -252,6 +254,7 @@ test('host : aucun appel Aid', async () => {
   render(
     <AidProvider client={client}>
       <SansCarteAid />
+      <NouveauSujetCarte carte={101} titre="Titre" corps="" />
       <AidCarte carte={101} fiche />
       <ErreursAid />
     </AidProvider>,
@@ -259,6 +262,7 @@ test('host : aucun appel Aid', async () => {
   await waitFor(() => expect(client.getSnapshot().appareil).toBeTruthy());
   act(() => FakeSocket.all.at(-1)!.open());
   expect(appels).not.toContain('/api/aid/board');
+  expect(screen.queryByRole('link', { name: 'Nouveau sujet' })).toBeNull();
 });
 
 test('fiche sans phase ni PR : aucune valeur inventée', async () => {
@@ -266,5 +270,47 @@ test('fiche sans phase ni PR : aucune valeur inventée', async () => {
   await screen.findByRole('heading', { name: 'A-I-D' });
   expect(screen.getByText('—')).toBeTruthy();
   expect(screen.queryByText('PR')).toBeNull();
-  expect(screen.queryByText('Agents')).toBeNull();
+  expect(screen.getByText('2 en marche, 1 en attente, 0 terminé')).toBeTruthy();
+});
+
+test.each(['libre', 'reliee', 'conflit', 'absent', 'corps'])(
+  'D292 : bouton admin pour carte %s',
+  async (cas) => {
+    const r = reponse(
+      cas === 'reliee'
+        ? [sujet()]
+        : cas === 'conflit'
+          ? [sujet({ carte: null, conflit: [101, 102] })]
+          : [],
+    );
+    if (cas === 'absent')
+      r.cartes = [
+        { id: 101, sujets: [{ lien: 'o/d#absent', sujet: 'absent' }] },
+      ] as BoardAid['cartes'];
+    const h = setup(
+      <NouveauSujetCarte
+        carte={101}
+        titre="<b>Titre</b>"
+        corps={cas === 'corps' ? 'AID: o/d#s' : ''}
+      />,
+      etat,
+      '/',
+      { 'GET /api/aid/board': json(200, r) },
+    );
+    await waitFor(() => expect(FakeSocket.all.length).toBeGreaterThan(0));
+    act(() => FakeSocket.all[0]!.open());
+    await waitFor(() => expect(h.calls.some((c) => c.url === '/api/aid/board')).toBe(true));
+    if (cas === 'libre')
+      expect(await screen.findByRole('link', { name: 'Nouveau sujet' })).toBeTruthy();
+    else expect(screen.queryByRole('link', { name: 'Nouveau sujet' })).toBeNull();
+  },
+);
+
+test.each([1, 2])('D291 : accord de %s agent terminé', async (termine) => {
+  await ouvrir(reponse([sujet({ agents: { enMarche: 0, enAttente: 0, termine } })]), true);
+  expect(
+    await screen.findByText(
+      `0 en marche, 0 en attente, ${termine} terminé${termine > 1 ? 's' : ''}`,
+    ),
+  ).toBeTruthy();
 });

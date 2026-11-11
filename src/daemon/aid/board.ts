@@ -1,5 +1,5 @@
 import { liensAid } from '../../shared/aid-board.js';
-import type { Topic, Workspace } from '../../shared/model.js';
+import type { AgentStatus, Topic, Workspace } from '../../shared/model.js';
 import type { Db } from '../db.js';
 import type { BoardReader } from '../mesh/board.js';
 import { IdentitesWorkspaces } from './workspace.js';
@@ -31,7 +31,29 @@ export async function lireBoardAid(
       state, phase, branch, pr_number AS prNumber, pr_url AS prUrl FROM topics ORDER BY created_at, id`,
       )
       .all() as Sujet[];
+    const comptes = new Map<string, { enMarche: number; enAttente: number; termine: number }>();
+    const groupes: Record<AgentStatus, 'enMarche' | 'enAttente' | 'termine'> = {
+      starting: 'enMarche',
+      working: 'enMarche',
+      needs_input: 'enAttente',
+      idle: 'enAttente',
+      done: 'termine',
+      error: 'termine',
+      stopped: 'termine',
+    };
+    const agents = db
+      .prepare(
+        `SELECT r.topic_id AS sujet, a.status FROM agents a
+      JOIN runs r ON r.id = a.run_id`,
+      )
+      .all() as { sujet: string; status: AgentStatus }[];
+    for (const a of agents) {
+      const compte = comptes.get(a.sujet) ?? { enMarche: 0, enAttente: 0, termine: 0 };
+      compte[groupes[a.status]]++;
+      comptes.set(a.sujet, compte);
+    }
     return lignes.map((s) => ({
+      agents: comptes.get(s.sujetId) ?? { enMarche: 0, enAttente: 0, termine: 0 },
       ...s,
       prUrl: s.prUrl?.startsWith('https://github.com/') ? s.prUrl : null,
       lien: projets.get(s.workspace) ? `${projets.get(s.workspace)}#${s.slug}` : null,

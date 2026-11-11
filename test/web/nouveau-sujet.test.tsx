@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 import { act, cleanup, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { Route, Routes, useLocation } from 'react-router';
-import { afterEach, expect, test } from 'vitest';
+import { Link, Route, Routes, useLocation } from 'react-router';
+import { afterEach, expect, test, vi } from 'vitest';
 import { Accueil } from '../../web/src/ecrans/Accueil.js';
 import { NouveauSujet } from '../../web/src/ecrans/NouveauSujet.js';
 import type { AgentsDisponibles } from '../../src/shared/model.js';
@@ -381,4 +381,126 @@ test('D145 : le message refusé, le sujet s’ouvre sur l’agent avec l’erreu
   await pushEvent();
   await waitFor(() => expect(lieu()).toBe('/sujets/tp_9?agent=ag_9'));
   expect(screen.getByTestId('erreur-agent').textContent).toBe('agent arrêté');
+});
+
+test.each([1, 0, -1, 1.5, '2', null])(
+  'D292 : préremplissage borné et carte %s validée',
+  async (carte) => {
+    setup(
+      <Routes>
+        <Route
+          path="/"
+          element={
+            <Link to="/sujets/nouveau" state={{ carte, titre: '<b>' + 'a'.repeat(220) }}>
+              Depuis la carte
+            </Link>
+          }
+        />
+        <Route path="/sujets/nouveau" element={<NouveauSujet />} />
+      </Routes>,
+      deux(),
+    );
+    await userEvent.click(screen.getByText('Depuis la carte'));
+    await screen.findByLabelText('Titre');
+    expect((screen.getByLabelText('Titre') as HTMLInputElement).value).toBe(
+      carte === 1 ? ('<b>' + 'a'.repeat(220)).slice(0, 200) : '',
+    );
+    expect(document.querySelector('input b')).toBeNull();
+  },
+);
+
+test.each(['o/d#cree', null])('D292 : après création, ligne %s et D268', async (lien) => {
+  const copier = vi.fn().mockResolvedValue(undefined);
+  Object.defineProperty(navigator, 'clipboard', {
+    configurable: true,
+    value: { writeText: copier },
+  });
+  const h = setup(
+    <Routes>
+      <Route
+        path="/"
+        element={
+          <Link to="/sujets/nouveau" state={{ carte: 42, titre: 'Titre carte' }}>
+            Depuis la carte
+          </Link>
+        }
+      />
+      <Route path="/sujets/nouveau" element={<NouveauSujet />} />
+    </Routes>,
+    deux(),
+    '/',
+    {
+      'POST /api/topics': json(202, { topicId: 'tp_cree', actionId: 'act_cree' }),
+      'GET /api/aid/board': json(200, { sujets: [{ sujetId: 'tp_cree', lien }], erreurs: [] }),
+    },
+  );
+  await userEvent.click(screen.getByText('Depuis la carte'));
+  await screen.findByLabelText('Titre');
+  await userEvent.selectOptions(screen.getByLabelText('Agent'), 'aucun');
+  await userEvent.click(creer());
+  if (lien) {
+    await screen.findByText('Ajoute cette ligne à la carte #42 :');
+    expect(screen.getByText('AID: o/d#cree')).toBeTruthy();
+    await userEvent.click(screen.getByRole('button', { name: 'Copier la ligne' }));
+    expect(copier).toHaveBeenCalledWith('AID: o/d#cree');
+  } else {
+    await screen.findByText('Pas de remote GitHub : pas de lien possible');
+    expect(screen.queryByRole('button', { name: 'Copier la ligne' })).toBeNull();
+  }
+  expect(h.calls.filter((c) => c.method !== 'GET').map((c) => c.url)).toEqual(['/api/topics']);
+  expect(h.calls.find((c) => c.url === '/api/topics')?.body).toEqual({
+    workspaceId: 'ws_z',
+    title: 'Titre carte',
+    type: 'feat',
+  });
+});
+
+test.each(['-1', '1.5', 'texte', '0'])('D292 : paramètre URL carte=%s ignoré', async (carte) => {
+  const h = setup(app, deux(), `/sujets/nouveau?carte=${carte}&titre=ignore`, {
+    'POST /api/topics': json(202, { topicId: 'tp_cree', actionId: 'act_cree' }),
+  });
+  await screen.findByLabelText('Titre');
+  expect((screen.getByLabelText('Titre') as HTMLInputElement).value).toBe('');
+  await userEvent.type(screen.getByLabelText('Titre'), 'Sujet');
+  await userEvent.selectOptions(screen.getByLabelText('Agent'), 'aucun');
+  await userEvent.click(creer());
+  await screen.findByText('page du sujet');
+  expect(h.calls.some((c) => c.url === '/api/aid/board')).toBe(false);
+});
+
+test('D292 : la ligne suit le lancement de l’agent et conserve le lien du terminal', async () => {
+  const h = setup(
+    <Routes>
+      <Route
+        path="/"
+        element={
+          <Link to="/sujets/nouveau" state={{ carte: 42, titre: 'Abc' }}>
+            Depuis la carte
+          </Link>
+        }
+      />
+      <Route path="/sujets/nouveau" element={<NouveauSujet />} />
+    </Routes>,
+    deux(),
+    '/',
+    {
+      ...routesCreation,
+      'GET /api/aid/board': json(200, {
+        sujets: [{ sujetId: 'tp_9', lien: 'o/d#abc' }],
+        erreurs: [],
+      }),
+    },
+  );
+  await userEvent.click(screen.getByText('Depuis la carte'));
+  await waitFor(() => expect(select('modele')!.options.length).toBe(2));
+  await userEvent.click(creer());
+  await waitFor(() => expect(h.calls.some((c) => c.url === '/api/topics')).toBe(true));
+  expect(screen.queryByText('Ajoute cette ligne à la carte #42 :')).toBeNull();
+  h.state = brouillon('active');
+  await pushEvent();
+  await screen.findByText('Ajoute cette ligne à la carte #42 :');
+  expect(h.calls.some((c) => c.url === '/api/agents/ag_9/input')).toBe(true);
+  expect(screen.getByRole('link', { name: 'Ouvrir le sujet' }).getAttribute('href')).toBe(
+    '/sujets/tp_9?agent=ag_9',
+  );
 });

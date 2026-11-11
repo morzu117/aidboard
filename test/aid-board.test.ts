@@ -213,3 +213,46 @@ test('route réservée à l’admin, sans écriture ni route host', async () => 
     ).statusCode,
   ).toBe(404);
 });
+
+test('D291 : comptes isolés par sujet et tous les statuts, tous les runs', async () => {
+  t = await startTestDaemon();
+  seedTopic(t.db);
+  t.db.prepare("INSERT INTO runs VALUES ('run_2','tp_1','standard','closed','t0')").run();
+  const statuts = ['starting', 'working', 'needs_input', 'idle', 'done', 'error', 'stopped'];
+  for (const [i, statut] of statuts.entries())
+    t.db
+      .prepare(
+        `INSERT INTO agents
+    (id, run_id, kind, role, transport, status, cwd, command, created_at, updated_at)
+    VALUES (?, ?, 'shell','free','pty',?,'/tmp','[]','t0','t0')`,
+      )
+      .run(`agent_${i}`, i % 2 ? 'run_1' : 'run_2', statut);
+  t.db
+    .prepare(
+      `INSERT INTO topics SELECT 'tp_2', workspace_id, 'autre', title, type,
+    'feat/autre', base, '/tmp/autre', state, phase, index_state, created_at, updated_at,
+    pr_number, pr_url, stash_ref FROM topics WHERE id = 'tp_1'`,
+    )
+    .run();
+  t.db.prepare("INSERT INTO runs VALUES ('run_autre','tp_2','standard','open','t0')").run();
+  t.db
+    .prepare(
+      `INSERT INTO agents (id, run_id, kind, role, transport, status, cwd, command, created_at, updated_at)
+    VALUES ('agent_autre','run_autre','shell','free','pty','working','/tmp','[]','t0','t0')`,
+    )
+    .run();
+  const identites = new IdentitesWorkspaces(async () => null);
+  const avant = t.db.prepare('SELECT total_changes() AS n').get();
+  expect((await lireBoardAid(t.db, null, identites)).sujets[0]?.agents).toEqual({
+    enMarche: 3,
+    enAttente: 2,
+    termine: 3,
+  });
+  expect(t.db.prepare('SELECT total_changes() AS n').get()).toEqual(avant);
+  t.db.prepare('DELETE FROM agents').run();
+  expect((await lireBoardAid(t.db, null, identites)).sujets[0]?.agents).toEqual({
+    enMarche: 0,
+    enAttente: 0,
+    termine: 0,
+  });
+});
