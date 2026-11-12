@@ -55,6 +55,23 @@ export function TableauAvisMesh({ resultat }: { resultat: ResultatAvisMesh }) {
                 )}
               </th>
             ))}
+            {resultat.baseline && (
+              <th scope="col">
+                {resultat.baseline.cell} — baseline{' '}
+                <p>
+                  {resultat.baseline.etat === 'declare_absent' ? (
+                    <>
+                      baseline déclaré absent : {resultat.baseline.reason} — {resultat.baseline.by}{' '}
+                      — {resultat.baseline.at}
+                    </>
+                  ) : resultat.baseline.etat === 'attendu' ? (
+                    'pas encore posté'
+                  ) : (
+                    etats[resultat.baseline.etat]
+                  )}
+                </p>
+              </th>
+            )}
             <th scope="col">Accord</th>
           </tr>
         </thead>
@@ -80,6 +97,13 @@ export function TableauAvisMesh({ resultat }: { resultat: ResultatAvisMesh }) {
                   </td>
                 );
               })}
+              {resultat.baseline && (
+                <td>
+                  {resultat.baseline.reponses.find((r) => r.n === ligne.n)?.verdict}
+                  <p>{resultat.baseline.reponses.find((r) => r.n === ligne.n)?.justification}</p>
+                  {resultat.baseline.etat === 'invalide' && resultat.baseline.brut}
+                </td>
+              )}
               <td>{accord(ligne.n)}</td>
             </tr>
           ))}

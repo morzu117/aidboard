@@ -176,6 +176,7 @@ La bascule, le choix des cells, de la carte et des échéances, le tableau par c
 - 40.4 : client `web/src/data/avis-mesh.ts` (contrat de D301, à implémenter tel quel par le 40.3), `FormulaireAvisMesh`, `TableauAvisMesh` et la liste sœur `DemandesAvisMesh`. 3 lignes de la boîte et de la liste du 39 remplacées pour y brancher la bascule. 9 tests web ; les 1 105 tests web passent.
 
 **Reprise des révisions 2 et 3.** La famille de chaque cell dans la boîte, et ses deux refus. La cell du baseline retirée de la liste. Les trois tours toujours présents, avec leurs durées par défaut. La colonne « baseline » hors de l'accord, sans vote, et le bouton « Déclarer le baseline absent ». La reprise d'une `salle-sans-motion`. Le client suit les routes du 40.3 (`src/shared/avis-mesh-api.ts`).
+- 40.4, reprise des révisions 2 et 3 : le client sur `src/shared/avis-mesh-api.ts`, la config des familles, les trois durées, l'aperçu, la colonne du baseline (`attendu` et `declare_absent`), les deux boutons, les sept états, et les trois actions lisibles dans `AppPda`. 1 127 tests web. Écart accepté : le serveur ne transmet ni les paramètres signés au panneau des confirmations, ni le résultat d'exécution au téléphone ; ce sera une évolution serveur hors du 40.
 
 ### 40.5 L'e2e et la fiche de recette
 

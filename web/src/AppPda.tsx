@@ -251,7 +251,35 @@ export function LienPda() {
 
 function Parametres({ demande: d }: { demande: CorpsDemandeV2 }) {
   let lignes: string[] = [];
+  let texteMotion: string | undefined;
   switch (d.action) {
+    case 'mesh.avis':
+    case 'mesh.avis.motion': {
+      const p = d.params.params;
+      const roles = { chair: 'président', baseline: 'baseline', seat: 'siège' };
+      lignes =
+        d.action === 'mesh.avis'
+          ? [
+              `Salle : ${d.params.params.nom}`,
+              `Carte : ${d.params.params.carte}`,
+              ...d.params.params.sieges.map((s) => `${s.peer} — ${roles[s.role]} — ${s.family}`),
+            ]
+          : [`Canal : ${d.params.params.canal}`];
+      lignes.push(
+        ...(['positions', 'rebuttal', 'vote'] as const).map(
+          (tour) => `Échéance ${tour} : ${new Date(p.echeances[tour]).toLocaleString('fr-FR')}`,
+        ),
+      );
+      texteMotion = p.texte;
+      break;
+    }
+    case 'mesh.avis.baseline-absent':
+      lignes = [
+        `Canal : ${d.params.params.canal}`,
+        `Motion : ${d.params.params.motion}`,
+        `Raison : ${d.params.params.raison}`,
+      ];
+      break;
     case 'merge':
       lignes = [
         `Dépôt : ${d.params.depot}`,
@@ -300,6 +328,12 @@ function Parametres({ demande: d }: { demande: CorpsDemandeV2 }) {
       {lignes.map((ligne) => (
         <p key={ligne}>{ligne}</p>
       ))}
+      {texteMotion !== undefined && (
+        <>
+          <p>Texte de la motion :</p>
+          <div style={{ whiteSpace: 'pre-wrap' }}>{texteMotion}</div>
+        </>
+      )}
     </>
   );
 }

@@ -15,6 +15,9 @@ interface Reglage {
   bandeau: 'amorcage' | 'desarme' | null;
 }
 const noms: Record<string, string> = {
+  'mesh.avis': 'Demander des avis au mesh',
+  'mesh.avis.motion': 'Rouvrir la motion',
+  'mesh.avis.baseline-absent': 'Déclarer le baseline absent',
   'mesh.ecrire': 'Écrire sur le mesh',
   'mesh.etat': 'Changer un état',
   merge: 'Merge',
@@ -113,7 +116,8 @@ export function PanneauConfirmations() {
         {file.ouvertes.map((d) => (
           <li key={d.id}>
             <span>
-              {d.resume} — Échéance : {date(d.echeance)}
+              {d.action?.startsWith('mesh.avis') && noms[d.action]} {d.resume} — Échéance :{' '}
+              {date(d.echeance)}
             </span>
             <button className="bouton" disabled={occupe} onClick={() => void annuler(d.id)}>
               Annuler
@@ -124,7 +128,8 @@ export function PanneauConfirmations() {
       <ul>
         {file.recentes.slice(0, 20).map((d) => (
           <li key={d.id}>
-            {d.resume} — {resultatConfirmation(d)}
+            {d.action?.startsWith('mesh.avis') && noms[d.action]} {d.resume} —{' '}
+            {resultatConfirmation(d)}
           </li>
         ))}
       </ul>

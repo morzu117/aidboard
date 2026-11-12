@@ -1,29 +1,18 @@
 /** Contrat D301 : 40.3 doit implémenter ces réponses telles quelles. */
-import { useSyncExternalStore } from 'react';
-import type { AvisMesh, PhaseAvis } from '../../../src/shared/avis-mesh.js';
-import { boardStore } from './board.js';
+import { useCallback, useEffect, useState } from 'react';
 import type { AidClient } from './client.js';
 import { useAidClient } from './useAidState.js';
 
-/** Dates ISO 8601 absolues ; un tour absent est désactivé. */
-export interface EcheancesAvisMesh {
-  positions: string;
-  rebuttal?: string;
-  vote?: string;
-}
-export interface DemandeAvisMesh {
-  id: string;
-  etat: string;
-  date: string;
-  cells: string[];
-  carte: number;
-  canal?: string | null;
-  motion?: string | number | null;
-}
-export type ResultatAvisMesh = AvisMesh & {
-  phase: PhaseAvis;
-  echeances: EcheancesAvisMesh;
-};
+export type {
+  EcheancesAvisMesh,
+  DemandeAvisMesh,
+  ResultatAvisMesh,
+} from '../../../src/shared/avis-mesh-api.js';
+import type {
+  EcheancesAvisMesh,
+  DemandeAvisMesh,
+  ResultatAvisMesh,
+} from '../../../src/shared/avis-mesh-api.js';
 export function demanderAvisMesh(
   demande: { question: string; cells: string[]; carte: number; echeances: EcheancesAvisMesh },
   client: AidClient,
@@ -34,11 +23,42 @@ export function lireAvisMesh(id: string, client: AidClient): Promise<ResultatAvi
   return client.request('GET', `/api/avis-mesh/${encodeURIComponent(id)}`);
 }
 export function useDemandesAvisMesh() {
-  const magasin = boardStore<{ demandes: DemandeAvisMesh[] }>(
-    useAidClient(),
-    '/api/avis-mesh',
-    () => null,
-  );
-  const lecture = useSyncExternalStore(magasin.subscribe, magasin.getSnapshot);
-  return { ...lecture, relire: () => magasin.lire() };
+  const client = useAidClient();
+  const [result, setResult] = useState<{ demandes: DemandeAvisMesh[] } | null>(null);
+  const [erreur, setErreur] = useState<string | null>(null);
+  const relire = useCallback(async () => {
+    try {
+      setResult(await client.request('GET', '/api/avis-mesh'));
+      setErreur(null);
+    } catch (e) {
+      setErreur((e as Error).message);
+    }
+  }, [client]);
+  useEffect(() => {
+    void Promise.resolve().then(relire);
+  }, [relire]);
+  return { result, erreur, relire };
 }
+
+export function agirAvisMesh(
+  id: string,
+  action: 'motion' | 'baseline-absent',
+  client: AidClient,
+  echeances?: EcheancesAvisMesh,
+): Promise<{ confirmation: string }> {
+  return client.request(
+    'POST',
+    `/api/avis-mesh/${encodeURIComponent(id)}/${action}`,
+    action === 'motion' ? { echeances } : {},
+    { 'X-AID-Confirm': 'avis' },
+  );
+}
+export const ETATS_AVIS: Record<string, string> = {
+  confirmation: 'En attente de confirmation',
+  ouverture: 'Ouverture de la salle',
+  'ouverture-motion': 'Ouverture de la motion',
+  ouverte: 'Ouverte',
+  'salle-sans-motion': 'Salle sans motion',
+  echouee: 'Échouée',
+  abandonnee: 'Abandonnée',
+};

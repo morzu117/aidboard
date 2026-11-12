@@ -11,6 +11,7 @@ export interface Confirmation {
   resultat: string | null;
   envoi?: ResultatEnvoi | null;
   raison?: string | null;
+  action?: string;
 }
 export interface FileConfirmations {
   ouvertes: Confirmation[];
@@ -25,7 +26,16 @@ export function resultatConfirmation(d: Confirmation): string | null {
     echouee: 'Échouée',
     perimee: "Périmée : l'état a changé depuis la demande",
   }[d.resultat ?? ''];
-  return resultat ?? { refusee: 'Refusée sur le téléphone', expiree: 'Expirée' }[d.etat] ?? null;
+  const detail =
+    ['mesh.avis', 'mesh.avis.motion', 'mesh.avis.baseline-absent'].includes(d.action ?? '') &&
+    (d.envoi?.status !== undefined || d.envoi?.detail)
+      ? ` — ${d.envoi.status ?? ''} ${d.envoi.detail ?? ''}`
+      : '';
+  return (
+    (resultat ? resultat + detail : null) ??
+    { refusee: 'Refusée sur le téléphone', expiree: 'Expirée' }[d.etat] ??
+    null
+  );
 }
 
 export function AttenteConfirmation({
