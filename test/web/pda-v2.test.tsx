@@ -309,3 +309,78 @@ test('toujours : quatre chiffres, défi exact, envoi et vérification Node', asy
     ok: false,
   });
 });
+
+for (const action of ['mesh.avis', 'mesh.avis.motion', 'mesh.avis.baseline-absent'] as const) {
+  test(`${action} : paramètres signés affichés en texte`, async () => {
+    const hostile = '<img src=x onerror=alert(1)>';
+    const texte = `<<<QUESTION-abcd1234\n${hostile}\nQUESTION-abcd1234>>>`;
+    const echeances = {
+      positions: '2026-11-13T12:00:00.000Z',
+      rebuttal: '2026-11-13T13:00:00.000Z',
+      vote: '2026-11-13T14:00:00.000Z',
+    };
+    const entree: ParamsAction =
+      action === 'mesh.avis'
+        ? {
+            action,
+            params: {
+              params: {
+                id: 'avis-exemple',
+                nom: 'avis-exemple',
+                sieges: [
+                  { peer: 'pair-chair', role: 'chair', family: 'orchestrator' },
+                  { peer: 'pair-baseline', role: 'baseline', family: 'claude' },
+                  { peer: 'pair-siege', role: 'seat', family: 'gpt' },
+                ],
+                carte: 24,
+                echeances,
+                texte,
+              },
+            },
+          }
+        : action === 'mesh.avis.motion'
+          ? {
+              action,
+              params: { params: { id: 'avis-exemple', canal: 'canal-exemple', texte, echeances } },
+            }
+          : {
+              action,
+              params: {
+                params: {
+                  id: 'avis-exemple',
+                  canal: `canal-${hostile}`,
+                  motion: 1,
+                  raison: "baseline absent à l'échéance, déclaré par le chair",
+                },
+              },
+            };
+    choisir(entree);
+    signer();
+    render(<AppPda />);
+    if (entree.action === 'mesh.avis.baseline-absent') {
+      await screen.findByText(`Canal : ${entree.params.params.canal}`);
+      expect(screen.getByText('Motion : 1')).toBeTruthy();
+      expect(screen.getByText(`Raison : ${entree.params.params.raison}`)).toBeTruthy();
+    } else {
+      if (entree.action === 'mesh.avis') {
+        await screen.findByText('Salle : avis-exemple');
+        expect(screen.getByText('Carte : 24')).toBeTruthy();
+        for (const ligne of [
+          'pair-chair — président — orchestrator',
+          'pair-baseline — baseline — claude',
+          'pair-siege — siège — gpt',
+        ])
+          expect(screen.getByText(ligne)).toBeTruthy();
+      } else await screen.findByText('Canal : canal-exemple');
+      for (const [tour, date] of Object.entries(echeances))
+        expect(
+          screen.getByText(`Échéance ${tour} : ${new Date(date).toLocaleString('fr-FR')}`),
+        ).toBeTruthy();
+      expect(screen.getByText('Texte de la motion :')).toBeTruthy();
+      const motion = screen.getByText(texte, { normalizer: (valeur) => valeur });
+      expect(motion.textContent).toBe(texte);
+      expect(motion.style.whiteSpace).toBe('pre-wrap');
+    }
+    expect(document.querySelector('img')).toBeNull();
+  });
+}

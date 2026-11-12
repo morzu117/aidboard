@@ -474,3 +474,21 @@ test('le réglage mesh.etat est toujours actif et non modifiable', async () => {
   ligne.click();
   expect(h.calls.some((c) => c.method === 'PUT')).toBe(false);
 });
+
+test('mesh.ecrire : le résultat conserve son libellé sans status ni detail', async () => {
+  const { resultatConfirmation } = await import('../../web/src/ui/AttenteConfirmation.js');
+  expect(
+    resultatConfirmation({
+      ...ouverte,
+      action: 'mesh.ecrire',
+      etat: 'consommee',
+      resultat: 'echouee',
+      envoi: {
+        code: 'upstream_error',
+        status: 409,
+        detail: 'refus du gateway',
+        open_obligations: [],
+      },
+    }),
+  ).toBe('Échouée');
+});

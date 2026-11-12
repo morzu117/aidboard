@@ -1,3 +1,6 @@
+import { AvisMeshService } from './mesh/avis.js';
+import { CommitteeReader, CommitteeWriter } from './mesh/committee.js';
+import { registerAvisMeshRoutes } from './routes/avis-mesh.js';
 import { registerAidRoutes } from './routes/aid.js';
 import { SwairmPr } from './swairm/pr.js';
 import { SwairmStatut } from './swairm/statut.js';
@@ -224,10 +227,23 @@ export async function buildServer(deps: ServerDeps): Promise<FastifyInstance> {
   });
   registerAgentRoutes(app, { db: deps.db, agents: deps.agents, store: deps.store });
   const actionsConfirmation = { store: deps.store, paths: deps.paths, queue: new WorkspaceQueue() };
+  const committee =
+    deps.mesh && deps.config.mesh.cell
+      ? { mesh: deps.mesh, cell: deps.config.mesh.cell, proxySocket: deps.config.mesh.proxySocket }
+      : null;
+  const avis = committee
+    ? new AvisMeshService({
+        db: deps.db,
+        config: deps.config.mesh,
+        lecteur: new CommitteeReader(committee),
+        ecrivain: new CommitteeWriter(committee),
+      })
+    : undefined;
   const porte = creerPorte({
     db: deps.db,
     actions: creerActionsConfirmation({
       ...deps,
+      avis,
       journal: (type, donnees) => app.log.info(donnees, type),
       actions: actionsConfirmation,
       engine: structural,
@@ -235,6 +251,7 @@ export async function buildServer(deps: ServerDeps): Promise<FastifyInstance> {
     file: () => deps.pda?.obtenir() ?? null,
     signaler: () => deps.pda?.obtenir()?.signaler(),
   });
+  registerAvisMeshRoutes(app, { avis: avis ?? null, porte });
   registerEcrituresRoutes(app, {
     db: deps.db,
     board: deps.board ?? null,
