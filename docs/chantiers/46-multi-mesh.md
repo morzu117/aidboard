@@ -2,7 +2,7 @@
 
 | Champ | Valeur |
 |---|---|
-| État | **Révision 0, 12 novembre 2026.** Julien a validé la spec, révision 2, et tranché Q-J1 (a). PASS du lab sur la spec (DM 96850). Le commander autorise le branchement du mesh du lab (DM 96847). |
+| État | **Révision 1, 12 novembre 2026 (relecture du lab, DM 96861).** Julien a validé la spec, révision 2, et tranché Q-J1 (a). PASS du lab sur la spec (DM 96850). Le commander autorise le branchement du mesh du lab (DM 96847). |
 | Emplacement final | `docs/chantiers/46-multi-mesh.md` sur `main` |
 | Base | `feat/45-confirmations-completes` (#153), parce que le 46 touche les mêmes confirmations et les mêmes actions d'avis. Se rebase sur `main` après les merges de #152 et #153. |
 | Spec | `specs/multi-mesh-46.md`, révision 2 (dossier de travail, hors dépôt). |
@@ -54,10 +54,18 @@ A-I-D suppose un seul mesh partout.
 
 - **La nouvelle clé `meshes`** est une table `nom → MeshConfig`.
   - Le nom suit `^[a-z][a-z0-9-]{0,31}$`.
-  - Chaque mesh porte `cell`, `gateway`, `proxySocket`, `proxyLectureSeule`, `inboxLog`, `cellFile`, `stateRoot` et `avis`.
+  - Chaque mesh porte `cell`, `gateway`, `home`, `proxySocket`, `proxyLectureSeule`, `inboxLog`, `cellFile`, `stateRoot` et `avis`.
+  - **`home`** est le dossier personnel vu par swarph pour ce mesh. Il vaut par défaut le `HOME` du daemon. Les chemins d'une cell en sont tirés par son nom (`src/daemon/mesh/paths.ts`) : le fichier de jeton `<home>/.config/swarph/<cell>.peer_token`, le fichier de cell `<home>/.config/swarph/cells/<cell>.yaml`, et `stateRoot`, par défaut `<home>/swarph_state`. swarph-cli résout son jeton de la même façon, depuis son `HOME` et `SWARPH_SELF`.
   - `bin` et `tailscale` restent globaux, dans `mesh`.
 - **La forme actuelle `mesh: { cell, … }` se lit comme `meshes.principal`.** `principal` est un nom réservé : le mesh des données d'avant le chantier.
 - **Avoir les deux formes à la fois est une erreur de config**, avec un message clair. Deux meshes avec la même `cell` et le même `gateway` sont aussi une erreur.
+- **Deux meshes ne partagent jamais un fichier.** Un même nom de cell sur deux meshes est le cas attendu : chaque cell de Julien a une identité sur les deux. Sans ce refus, les deux meshes liraient le même fichier de jeton, et un appel au mesh B présenterait le jeton du mesh A au gateway de B. De même, deux `InboxFollower` suivraient le même `inbox.log`, et des DM se rangeraient sous le mauvais mesh. La config est donc refusée si deux meshes mènent :
+  - au même fichier de jeton ;
+  - au même fichier de cell ;
+  - au même dossier `<stateRoot>/<cell>` ;
+  - ou au même `inbox.log`.
+
+  Les chemins sont comparés après résolution, en absolu. Pour un même nom de cell, le second mesh pose donc un `home` à lui.
 - **Un mesh sans `cell` est désactivé**, comme aujourd'hui.
 - **Le nom d'un mesh** est une étiquette locale, choisie par Julien. Il n'est jamais lu depuis le serveur, et c'est lui que l'interface et le téléphone affichent.
 - Les exemples de la doc et des tests utilisent `principal` et `perso`, jamais un nom de cell réel.
@@ -65,6 +73,8 @@ A-I-D suppose un seul mesh partout.
 ### D312. L'identité des données : la clé de mesh
 
 La migration 030 ajoute une colonne `mesh` partout où un identifiant swarph est stocké. Les lignes existantes reçoivent `principal`.
+
+- **La colonne `mesh` n'a aucune valeur par défaut** une fois la migration faite. Le défaut ne sert qu'à la reprise des lignes, puis chaque table est reconstruite avec `mesh TEXT NOT NULL`, sans défaut. Sinon, un écrivain qui oublierait le mesh rangerait sa ligne sous `principal`, le mesh du lab, sans bruit, et une écriture prise sur cette ligne partirait vers le mauvais mesh, avec un numéro de carte qui y désigne autre chose.
 
 - **L'identité stable d'un mesh.** Les ids de DM et de carte sont en AUTOINCREMENT par base de gateway, et un second gateway repart de 1 (L5) : les collisions entre meshes sont certaines. Le nom n'est qu'une étiquette locale, qui peut être rebranchée.
   - Une table `meshes_connus(nom, empreinte, vu_a)` garde, pour chaque nom, l'empreinte de son couple : `sha256(jsonCanonique([cell, gateway normalisé]))`, un encodage canonique, pour que deux couples différents ne donnent jamais la même chaîne, en base64url.
@@ -79,7 +89,7 @@ La migration 030 ajoute une colonne `mesh` partout où un identifiant swarph est
 
 ### D313. Le corps signé v3 nomme le mesh
 
-- **`CorpsDemandeV3`** = `CorpsDemandeV2` plus `mesh: { nom, cell, gateway, proxy }`, pour toute action mesh. Ici, `gateway` est l'empreinte du gateway normalisé et `proxy` le chemin du socket du proxy de ce mesh (L4). Le nom de cell seul ne fixe pas la destination : il n'est unique que dans un gateway, et c'est la config du proxy qui fixe la cible (`mesh.ecrire`, `mesh.etat`, `mesh.avis`, `mesh.avis.motion`, `mesh.avis.baseline-absent`).
+- **`CorpsDemandeV3`** = `CorpsDemandeV2` plus `mesh: { nom, cell, gateway, proxy }`, pour toute action mesh. Ici, `gateway` est l'empreinte du gateway normalisé, et `proxy` l'empreinte du chemin absolu du socket du proxy de ce mesh (`sha256(jsonCanonique([chemin]))`, en base64url) (L4). On signe une empreinte, pas le chemin : le corps passe en clair par le relais, et aucun chemin de socket ne sort du daemon. Le nom de cell seul ne fixe pas la destination : il n'est unique que dans un gateway, et c'est la config du proxy qui fixe la cible (`mesh.ecrire`, `mesh.etat`, `mesh.avis`, `mesh.avis.motion`, `mesh.avis.baseline-absent`).
   - Les actions hors mesh (merge, push, etc.) restent en v2.
   - Le contexte de signature ne change pas, `aid-pda-demande-v1` (L1). La v3 a son propre jeu de clés exact. Elle ne vaut que pour les actions mesh, et la v2 refuse toute clé `mesh`. Une v3 échoue donc fermée sur un téléphone d'avant le 46.
 - **Le résumé** commence par le nom du mesh, par exemple « [perso] Note sur la carte #12 ».
@@ -97,7 +107,7 @@ La migration 030 ajoute une colonne `mesh` partout où un identifiant swarph est
 - **`MeshRegistry`** tient, pour chaque mesh actif : `MeshService` (un monitor, un `InboxFollower` sur son `inbox.log`), `BoardReader`, `SwarphReader`, `CommitteeReader` et `CommitteeWriter`, et le chemin de son proxy.
 - **Ce qui est créé une fois par mesh, au démarrage :** D277 du 44 reste vrai à l'intérieur de chaque mesh, avec un seul transport, choisi au démarrage.
 - **L'environnement de chaque appel à `swarph` est construit par liste blanche.**
-  - Il part d'un environnement vide, puis reçoit `PATH`, `HOME`, `LANG` et `LC_*`, puis les seules valeurs du mesh : `MESH_GATEWAY_URL`, `SWARPH_STATE` et `SWARPH_SELF`.
+  - Il part d'un environnement vide, puis reçoit `PATH`, `LANG` et `LC_*`, puis les seules valeurs du mesh : `HOME` (le `home` du mesh, D311), `MESH_GATEWAY_URL`, `SWARPH_STATE` et `SWARPH_SELF`.
   - Aucune autre variable n'est héritée du daemon. Par exemple, `MESH_GATEWAY_TOKEN`, `SWARPH_GATEWAY`, `SWARPH_STATE_ROOT`, `SWARPH_SERVICE_TOKEN`, `SWARPH_BRAIN_GATEWAY`, `MESH_DB_PATH`, `SWARPH_CHANNEL_CELL` ou `SWARPH_MEMORY_DIR` enverraient l'appel vers le mauvais mesh ou la mauvaise identité.
   - Un test le garde : un daemon lancé avec toutes ces variables les voit toutes absentes de l'environnement de chaque appel.
   - La même règle vaut pour l'agent PTY `swarph-cell`.
@@ -151,23 +161,27 @@ Elle va bouger : on ajoute le moins possible.
   - la clé `meshes` (nom → `MeshConfig` par mesh), avec la forme du nom ;
   - l'ancienne forme `mesh: { cell, … }`, lue comme `meshes.principal` ;
   - `bin` et `tailscale` restent globaux ;
-  - les erreurs : les deux formes à la fois, deux meshes avec le même couple (cell, gateway), un nom invalide.
+  - la clé `home` par mesh, et les chemins tirés de `home` (`paths.ts`) ;
+  - les erreurs : les deux formes à la fois, deux meshes avec le même couple (cell, gateway), deux meshes qui mènent au même fichier de jeton, au même fichier de cell, au même `<stateRoot>/<cell>` ou au même `inbox.log`, un nom invalide.
 
   Le reste du daemon continue de lire le mesh `principal` : rien ne change dans son comportement à ce point.
 - `src/shared/meshes.ts`, nouveau :
-  - `normaliserGateway(url)` : schéma et hôte en minuscules, port explicite gardé, barre finale retirée ;
+  - `normaliserGateway(url)` : schéma et hôte en minuscules ; le port par défaut retiré (80 en http, 443 en https), un autre port gardé ; la barre finale retirée. Elle **refuse** une URL avec des identifiants (userinfo), une requête, un fragment ou un chemin autre que la racine, et un schéma autre que http ou https ;
+  - `empreinteChemin(chemin)` = `sha256(jsonCanonique([chemin absolu]))`, en base64url, pour le socket du proxy (D313) ;
   - `empreinteMesh(cell, gateway)` = `sha256(jsonCanonique([cell, normaliserGateway(gateway)]))`, en base64url.
 - **`migrations/030_multi_mesh.sql` :**
   - `mesh_inbox`, reconstruite avec la clé `(mesh, id)`, en gardant les données ;
   - `mesh_state`, avec la clé `(mesh, k)` ;
-  - la colonne `mesh TEXT NOT NULL DEFAULT 'principal'` sur `aid_etats`, `aid_propositions`, `swairm_propositions` et `avis_mesh`, et les index uniques qui portent une carte ou un canal l'incluent ;
+  - la colonne `mesh` sur `aid_etats`, `aid_propositions`, `swairm_propositions` et `avis_mesh`, et les index uniques qui portent une carte ou un canal l'incluent. Le défaut `'principal'` ne sert qu'à la reprise : les quatre tables, comme `mesh_inbox` et `mesh_state`, sont reconstruites avec `mesh TEXT NOT NULL`, **sans défaut** (D312) ;
   - la table `meshes_connus(nom PRIMARY KEY, empreinte, vu_a)`.
 - **Les écrivains existants** (le projecteur de la boîte, les états, les propositions, l'avis) écrivent `mesh = 'principal'`. Les lecteurs filtrent sur `principal`.
 - **Les événements `mesh.dm` et `mesh.state`** gagnent le champ `mesh`. Un événement sans ce champ se lit comme `principal`.
 - **`activerMesh(db, nom, empreinte)`**, une fonction pure côté base. Elle rend `nouveau`, `connu` ou `rebranche`. `archiverMesh(db, nom)` renomme les lignes en `<nom>@archive-<date>`. Elles servent en 46.2.
 - **Tests :**
-  - la config dans ses deux formes et ses trois refus ;
-  - la normalisation et l'empreinte, avec deux couples qui se concatènent pareil mais donnent deux empreintes différentes ;
+  - la config dans ses deux formes et chacun de ses refus ;
+  - deux meshes avec le même nom de cell : refusés avec le même `home`, acceptés avec deux `home` distincts ;
+  - la normalisation (`http://h` et `http://h:80` donnent la même empreinte, et chaque refus) et l'empreinte, avec deux couples qui se concatènent pareil mais donnent deux empreintes différentes ;
+  - une insertion sans `mesh` échoue, dans chacune des six tables ;
   - la migration sur une base peuplée : les lignes passent en `principal`, et un même id peut exister dans deux meshes ;
   - `activerMesh` et `archiverMesh` ;
   - aucun test existant ne change de comportement, à part les attentes de version de migration.
@@ -214,7 +228,9 @@ Elle va bouger : on ajoute le moins possible.
 - Ne jamais hériter d'une variable d'environnement du daemon dans un appel à `swarph` : la liste blanche seulement.
 - Ne jamais choisir le mesh d'une écriture ailleurs que dans le corps signé.
 - Aucun nom de cell réel dans le code, les tests ou la doc : `principal` et `perso` seulement.
-- Aucun gateway ni chemin de socket dans `GET /api/meshes` ni dans l'interface.
+- Aucun gateway, chemin de socket ni `home` dans `GET /api/meshes`, dans l'interface ou dans un corps signé : seulement des empreintes.
+- Ne jamais donner de valeur par défaut à la colonne `mesh`.
+- Deux meshes ne partagent jamais un fichier de jeton, de cell, d'état ou de boîte.
 - Les tests de frontière host ne changent pas.
 
 ## 7. Fini quand
