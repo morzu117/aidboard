@@ -1,3 +1,5 @@
+import { EnteteMesh } from './SelecteurMesh.js';
+import { instantaneMesh } from '../data/meshLecture.js';
 import { useRef, useState, useSyncExternalStore } from 'react';
 import type { PropositionAid } from '../../../src/daemon/aid/propositions.js';
 import type { ParametresEtat } from '../../../src/shared/etats.js';
@@ -45,6 +47,7 @@ export function PropositionAidVue({
   const client = useAidClient();
   const { state } = useAid();
   const [apercu, setApercu] = useState<{
+    mesh: string;
     params: ParametresEtat['carte.deplacer'];
     resume: string;
   } | null>(null);
@@ -66,11 +69,12 @@ export function PropositionAidVue({
     }
   }
   async function envoyer() {
-    if (verrou.current || !apercu) return;
+    if (verrou.current || !apercu || apercu.mesh !== p.mesh) return;
     verrou.current = true;
     setEnvoye(true);
     try {
       const r = await client.request<{ confirmation: string }>('POST', '/api/swarph/etat/envoyer', {
+        mesh: p.mesh,
         action: 'carte.deplacer',
         params: apercu.params,
         propositionAid: p.id,
@@ -104,8 +108,12 @@ export function PropositionAidVue({
       {erreur && <p role="alert">{erreur}</p>}
       {apercu && (
         <Dialogue titre="Déplacer la carte" onClose={() => setApercu(null)}>
+          <EnteteMesh mesh={p.mesh} />
           <p>{apercu.resume}</p>
-          <button disabled={envoye || !state?.mesh?.state.ecritures} onClick={() => void envoyer()}>
+          <button
+            disabled={envoye || !instantaneMesh(state, p.mesh)?.state.ecritures}
+            onClick={() => void envoyer()}
+          >
             Envoyer
           </button>
           {confirmation && (

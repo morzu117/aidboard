@@ -1,3 +1,4 @@
+import { useMeshLecture } from './meshLecture.js';
 import { useSyncExternalStore } from 'react';
 import type { lireBoardSwairm } from '../../../src/daemon/swairm/board.js';
 import { boardStore, type BoardLecture } from './board.js';
@@ -17,9 +18,10 @@ const lireVide = () => vide;
 /** Même magasin et même rythme que les cartes ; aucun abonnement sur le port host. */
 export function useSwairmBoard() {
   const client = useAidClient();
+  const mesh = useMeshLecture();
   const { state, appareil } = useAid();
   const magasin =
-    state && !appareil
+    state && !appareil && mesh === 'principal'
       ? boardStore<BoardSwairm>(client, '/api/swairm/board', (r) => r.board?.readAt ?? null)
       : null;
   return useSyncExternalStore(

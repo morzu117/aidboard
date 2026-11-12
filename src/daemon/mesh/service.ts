@@ -1,3 +1,4 @@
+import { envSwarph } from './env.js';
 import { closeSync, openSync, readSync } from 'node:fs';
 import type { MeshConfig } from '../config.js';
 import type { Db } from '../db.js';
@@ -10,6 +11,7 @@ import { tailscaleState } from './tailscale.js';
 
 export interface MeshServiceDeps {
   config: MeshConfig;
+  nom?: string;
   home: string;
   db: Db;
   store: EventStore;
@@ -101,7 +103,7 @@ export class MeshService {
    */
   read(args: string[], options?: { env?: Record<string, string>; unset?: string[] }) {
     if (options) {
-      const env = { ...this.env(), ...options.env };
+      const env = this.env();
       for (const nom of options.unset ?? []) delete env[nom];
       return (this.deps.exec ?? meshExec)(this.deps.config.bin, args, {
         env,
@@ -123,8 +125,8 @@ export class MeshService {
   /** La boîte projetée (12.4) : les plus récents d'abord, bornée. */
   inbox(limit = 200): MeshDm[] {
     const rows = this.deps.db
-      .prepare('SELECT * FROM mesh_inbox ORDER BY created_at DESC, id DESC LIMIT ?')
-      .all(limit) as Record<string, unknown>[];
+      .prepare('SELECT * FROM mesh_inbox WHERE mesh = ? ORDER BY created_at DESC, id DESC LIMIT ?')
+      .all(this.deps.nom ?? 'principal', limit) as Record<string, unknown>[];
     return rows.map((r) => ({
       id: r.id as number,
       threadId: (r.thread_id as string | null) ?? null,
@@ -146,12 +148,15 @@ export class MeshService {
    * un signet d'affichage, pas un fait du mesh — il ne survit pas à une reconstruction depuis le journal.
    */
   markSeen(id: number): { id: number; seenAt: string } | null {
-    const row = this.deps.db.prepare('SELECT seen_at FROM mesh_inbox WHERE id = ?').get(id) as
-      { seen_at: string | null } | undefined;
+    const row = this.deps.db
+      .prepare('SELECT seen_at FROM mesh_inbox WHERE mesh = ? AND id = ?')
+      .get(this.deps.nom ?? 'principal', id) as { seen_at: string | null } | undefined;
     if (!row) return null;
     if (row.seen_at) return { id, seenAt: row.seen_at };
     const seenAt = this.now();
-    this.deps.db.prepare('UPDATE mesh_inbox SET seen_at = ? WHERE id = ?').run(seenAt, id);
+    this.deps.db
+      .prepare('UPDATE mesh_inbox SET seen_at = ? WHERE mesh = ? AND id = ?')
+      .run(seenAt, this.deps.nom ?? 'principal', id);
     return { id, seenAt };
   }
 
@@ -160,12 +165,15 @@ export class MeshService {
    * journal ; le DM reste une donnée du pair. Rend null si le DM est inconnu.
    */
   markDecision(id: number): { id: number; decidedAt: string } | null {
-    const row = this.deps.db.prepare('SELECT decided_at FROM mesh_inbox WHERE id = ?').get(id) as
-      { decided_at: string | null } | undefined;
+    const row = this.deps.db
+      .prepare('SELECT decided_at FROM mesh_inbox WHERE mesh = ? AND id = ?')
+      .get(this.deps.nom ?? 'principal', id) as { decided_at: string | null } | undefined;
     if (!row) return null;
     if (row.decided_at) return { id, decidedAt: row.decided_at };
     const decidedAt = this.now();
-    this.deps.db.prepare('UPDATE mesh_inbox SET decided_at = ? WHERE id = ?').run(decidedAt, id);
+    this.deps.db
+      .prepare('UPDATE mesh_inbox SET decided_at = ? WHERE mesh = ? AND id = ?')
+      .run(decidedAt, this.deps.nom ?? 'principal', id);
     return { id, decidedAt };
   }
 
@@ -353,14 +361,19 @@ export class MeshService {
   }
 
   private env(): NodeJS.ProcessEnv {
-    const env: NodeJS.ProcessEnv = { ...process.env, SWARPH_STATE: this.paths.stateRoot };
-    if (this.deps.config.gateway) env.MESH_GATEWAY_URL = this.deps.config.gateway;
-    return env;
+    return envSwarph({ ...this.deps.config, home: this.deps.config.home ?? this.deps.home });
   }
 
   private run(bin: string, args: string[]) {
     return (this.deps.exec ?? meshExec)(bin, args, {
-      env: this.env(),
+      env:
+        bin === this.deps.config.bin
+          ? this.env()
+          : {
+              ...process.env,
+              SWARPH_STATE: this.paths.stateRoot,
+              ...(this.deps.config.gateway && { MESH_GATEWAY_URL: this.deps.config.gateway }),
+            },
       timeoutMs: this.deps.timeoutMs ?? 30_000,
     });
   }
@@ -385,6 +398,7 @@ export class MeshService {
       this.deps.store.emitEphemeral({
         kind: 'ephemeral',
         type: 'mesh.checked',
+        mesh: this.deps.nom ?? 'principal',
         checkedAt: this.checked,
       });
       let fichier: number | undefined;
@@ -414,6 +428,7 @@ export class MeshService {
     this.deps.store.emitEphemeral({
       kind: 'ephemeral',
       type: 'mesh.checked',
+      mesh: this.deps.nom ?? 'principal',
       checkedAt: this.checked,
     });
     if (r.spawnErrorCode === 'ENOENT') return { monitor: 'absent', pending: 0, superviseur: null };
@@ -422,7 +437,9 @@ export class MeshService {
   }
 
   private readPersisted(): Partial<MeshState> | null {
-    const rows = this.deps.db.prepare('SELECT k, v FROM mesh_state').all() as {
+    const rows = this.deps.db
+      .prepare('SELECT k, v FROM mesh_state WHERE mesh = ?')
+      .all(this.deps.nom ?? 'principal') as {
       k: string;
       v: string;
     }[];
@@ -439,7 +456,9 @@ export class MeshService {
   }
 
   private cursorFromDb(): number {
-    const row = this.deps.db.prepare('SELECT MAX(id) AS m FROM mesh_inbox').get() as {
+    const row = this.deps.db
+      .prepare('SELECT MAX(id) AS m FROM mesh_inbox WHERE mesh = ?')
+      .get(this.deps.nom ?? 'principal') as {
       m: number | null;
     };
     return row.m ?? 0;
@@ -456,7 +475,7 @@ export class MeshService {
         this.deps.store.append({
           source: 'swarph',
           type: 'mesh.dm',
-          data: { ...dm, createdAt: dm.createdAt ?? undefined },
+          data: { ...dm, mesh: this.deps.nom ?? 'principal', createdAt: dm.createdAt ?? undefined },
         }),
     });
     this.follower.start();
@@ -483,6 +502,10 @@ export class MeshService {
     const next: MeshState = { ...this.state, ...patch };
     if (JSON.stringify(next) === JSON.stringify(this.state)) return;
     this.state = next;
-    this.deps.store.append({ source: 'swarph', type: 'mesh.state', data: { ...next } });
+    this.deps.store.append({
+      source: 'swarph',
+      type: 'mesh.state',
+      data: { ...next, mesh: this.deps.nom ?? 'principal' },
+    });
   }
 }

@@ -1,9 +1,11 @@
+import type { MeshRegistry } from '../mesh/registre.js';
 import type { FastifyInstance } from 'fastify';
 import { AidHttpError } from '../errors.js';
 import { type BoardReader, isBoardId } from '../mesh/board.js';
 
 export interface BoardRouteDeps {
   board: BoardReader | null;
+  meshes?: MeshRegistry;
 }
 
 /**
@@ -12,7 +14,10 @@ export interface BoardRouteDeps {
  * contourne le cache (bouton Relire). Un token de run n'arrive jamais ici (registerSecurity).
  */
 export function registerBoardRoutes(app: FastifyInstance, deps: BoardRouteDeps): void {
-  const board = () => {
+  const board = (query: unknown) => {
+    const nom = (query as { mesh?: string }).mesh ?? 'principal';
+    if (deps.meshes) return deps.meshes.obtenir(nom).board;
+    if (nom !== 'principal') throw new AidHttpError(404, 'mesh inconnu');
     if (!deps.board)
       throw new AidHttpError(404, 'mesh désactivé : `mesh.cell` vide dans config.yaml');
     return deps.board;
@@ -24,15 +29,15 @@ export function registerBoardRoutes(app: FastifyInstance, deps: BoardRouteDeps):
   };
   const fresh = (query: unknown) => ({ fresh: (query as { fresh?: string }).fresh === '1' });
 
-  app.get('/api/board/projects', async (req) => board().projects(fresh(req.query)));
+  app.get('/api/board/projects', async (req) => board(req.query).projects(fresh(req.query)));
 
   app.get('/api/board/projects/:projectId/cards', async (req) => {
-    const b = board();
+    const b = board(req.query);
     return b.cards(id((req.params as { projectId: string }).projectId), fresh(req.query));
   });
 
   app.get('/api/board/cards/:cardId', async (req) => {
-    const b = board();
+    const b = board(req.query);
     return b.card(id((req.params as { cardId: string }).cardId), fresh(req.query));
   });
 }

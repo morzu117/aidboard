@@ -41,11 +41,17 @@ export class AvisMeshService {
   constructor(
     private readonly deps: {
       db: Db;
+      nom?: string;
       config: MeshConfig;
       lecteur: CommitteeReader;
       ecrivain: CommitteeWriter;
     },
   ) {}
+
+  verifierTransport() {
+    if (this.deps.config.proxySocket)
+      throw new AidHttpError(409, 'committee : non relayé par le proxy');
+  }
 
   config() {
     return {
@@ -111,9 +117,10 @@ export class AvisMeshService {
   enregistrer(p: ParametresAvisMesh) {
     this.deps.db
       .prepare(
-        'INSERT INTO avis_mesh (id, question, sieges, carte, jeton, date, etat, echeances) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+        'INSERT INTO avis_mesh (mesh, id, question, sieges, carte, jeton, date, etat, echeances) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
       )
       .run(
+        this.deps.nom ?? 'principal',
         p.id,
         p.question,
         JSON.stringify(p.sieges),
@@ -125,18 +132,21 @@ export class AvisMeshService {
       );
   }
   oublier(id: string) {
-    this.deps.db.prepare("DELETE FROM avis_mesh WHERE id = ? AND etat = 'confirmation'").run(id);
+    this.deps.db
+      .prepare("DELETE FROM avis_mesh WHERE mesh = ? AND id = ? AND etat = 'confirmation'")
+      .run(this.deps.nom ?? 'principal', id);
   }
   ligne(id: string): LigneAvis {
-    const ligne = this.deps.db.prepare('SELECT * FROM avis_mesh WHERE id = ?').get(id) as
-      LigneAvis | undefined;
+    const ligne = this.deps.db
+      .prepare('SELECT * FROM avis_mesh WHERE mesh = ? AND id = ?')
+      .get(this.deps.nom ?? 'principal', id) as LigneAvis | undefined;
     if (!ligne) throw new AidHttpError(404, 'demande inconnue');
     return this.etatConfirmation(ligne);
   }
   lierConfirmation(id: string, confirmation: string) {
     this.deps.db
-      .prepare('UPDATE avis_mesh SET confirmation = ? WHERE id = ?')
-      .run(confirmation, id);
+      .prepare('UPDATE avis_mesh SET confirmation = ? WHERE mesh = ? AND id = ?')
+      .run(confirmation, this.deps.nom ?? 'principal', id);
   }
   private etatConfirmation(l: LigneAvis): LigneAvis {
     if (!l.confirmation || !['confirmation', 'salle-sans-motion'].includes(l.etat)) return l;
@@ -168,8 +178,8 @@ export class AvisMeshService {
     return {
       demandes: (
         this.deps.db
-          .prepare('SELECT * FROM avis_mesh ORDER BY date DESC, id DESC LIMIT 20')
-          .all() as LigneAvis[]
+          .prepare('SELECT * FROM avis_mesh WHERE mesh = ? ORDER BY date DESC, id DESC LIMIT 20')
+          .all(this.deps.nom ?? 'principal') as LigneAvis[]
       ).map((l) => this.demande(l)),
     };
   }
@@ -209,21 +219,25 @@ export class AvisMeshService {
     // La prise atomique interdit toute seconde ouverture, même après un arrêt du daemon.
     const prise = this.deps.db
       .prepare(
-        "UPDATE avis_mesh SET etat = 'ouverture' WHERE id = ? AND etat = 'confirmation' AND canal IS NULL",
+        "UPDATE avis_mesh SET etat = 'ouverture' WHERE mesh = ? AND id = ? AND etat = 'confirmation' AND canal IS NULL",
       )
-      .run(p.id);
+      .run(this.deps.nom ?? 'principal', p.id);
     if (prise.changes !== 1) throw new AidHttpError(409, 'demande déjà exécutée');
     let canal: string;
     try {
       canal = await this.deps.ecrivain.ouvrirSalle(p);
     } catch (e) {
-      this.deps.db.prepare("UPDATE avis_mesh SET etat = 'echouee' WHERE id = ?").run(p.id);
+      this.deps.db
+        .prepare("UPDATE avis_mesh SET etat = 'echouee' WHERE mesh = ? AND id = ?")
+        .run(this.deps.nom ?? 'principal', p.id);
       this.garderErreur(p.id, e);
       throw e;
     }
     this.deps.db
-      .prepare("UPDATE avis_mesh SET canal = ?, etat = 'ouverture-motion' WHERE id = ?")
-      .run(canal, p.id);
+      .prepare(
+        "UPDATE avis_mesh SET canal = ?, etat = 'ouverture-motion' WHERE mesh = ? AND id = ?",
+      )
+      .run(canal, this.deps.nom ?? 'principal', p.id);
     await this.ouvrirMotionPrise(p.id, canal, p.texte, p.echeances);
   }
   preparerMotion(id: string, echeances: EcheancesAvisMesh) {
@@ -246,9 +260,9 @@ export class AvisMeshService {
     this.preparerMotion(p.id, p.echeances);
     const prise = this.deps.db
       .prepare(
-        "UPDATE avis_mesh SET etat = 'ouverture-motion', echeances = ?, erreur = NULL WHERE id = ? AND canal = ? AND etat = 'salle-sans-motion' AND motion IS NULL",
+        "UPDATE avis_mesh SET etat = 'ouverture-motion', echeances = ?, erreur = NULL WHERE mesh = ? AND id = ? AND canal = ? AND etat = 'salle-sans-motion' AND motion IS NULL",
       )
-      .run(JSON.stringify(p.echeances), p.id, p.canal);
+      .run(JSON.stringify(p.echeances), this.deps.nom ?? 'principal', p.id, p.canal);
     if (prise.changes !== 1) throw new AidHttpError(409, 'motion déjà exécutée');
     try {
       const ouverte = await this.deps.lecteur.motionOuverte(p.canal);
@@ -257,7 +271,7 @@ export class AvisMeshService {
       if (ouverte.data) {
         this.deps.db
           .prepare(
-            "UPDATE avis_mesh SET motion = ?, echeances = ?, etat = 'ouverte', erreur = NULL WHERE id = ?",
+            "UPDATE avis_mesh SET motion = ?, echeances = ?, etat = 'ouverte', erreur = NULL WHERE mesh = ? AND id = ?",
           )
           .run(
             ouverte.data.id,
@@ -266,14 +280,15 @@ export class AvisMeshService {
               rebuttal: ouverte.data.rebuttal_deadline,
               vote: ouverte.data.vote_deadline,
             }),
+            this.deps.nom ?? 'principal',
             p.id,
           );
         return;
       }
     } catch (e) {
       this.deps.db
-        .prepare("UPDATE avis_mesh SET etat = 'salle-sans-motion' WHERE id = ?")
-        .run(p.id);
+        .prepare("UPDATE avis_mesh SET etat = 'salle-sans-motion' WHERE mesh = ? AND id = ?")
+        .run(this.deps.nom ?? 'principal', p.id);
       this.garderErreur(p.id, e);
       throw e;
     }
@@ -285,8 +300,8 @@ export class AvisMeshService {
         ? { status: erreur.status, message: erreur.message }
         : { status: 503, message: 'committee : écriture échouée' };
     this.deps.db
-      .prepare('UPDATE avis_mesh SET erreur = ? WHERE id = ?')
-      .run(JSON.stringify(detail), id);
+      .prepare('UPDATE avis_mesh SET erreur = ? WHERE mesh = ? AND id = ?')
+      .run(JSON.stringify(detail), this.deps.nom ?? 'principal', id);
   }
   private async ouvrirMotionPrise(
     id: string,
@@ -297,10 +312,14 @@ export class AvisMeshService {
     try {
       const motion = await this.deps.ecrivain.ouvrirMotion({ canal, texte, echeances });
       this.deps.db
-        .prepare("UPDATE avis_mesh SET motion = ?, etat = 'ouverte', erreur = NULL WHERE id = ?")
-        .run(motion, id);
+        .prepare(
+          "UPDATE avis_mesh SET motion = ?, etat = 'ouverte', erreur = NULL WHERE mesh = ? AND id = ?",
+        )
+        .run(motion, this.deps.nom ?? 'principal', id);
     } catch (e) {
-      this.deps.db.prepare("UPDATE avis_mesh SET etat = 'salle-sans-motion' WHERE id = ?").run(id);
+      this.deps.db
+        .prepare("UPDATE avis_mesh SET etat = 'salle-sans-motion' WHERE mesh = ? AND id = ?")
+        .run(this.deps.nom ?? 'principal', id);
       this.garderErreur(id, e);
       throw e;
     }

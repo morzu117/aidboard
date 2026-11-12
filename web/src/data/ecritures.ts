@@ -17,8 +17,9 @@ export function apercuEcriture<A extends ActionEcriture>(
   action: A,
   params: ParametresEcriture[A],
   client: AidClient,
+  mesh: string,
 ): Promise<ApercuEcriture> {
-  return client.request('POST', '/api/swarph/ecrire/apercu', { action, params });
+  return client.request('POST', '/api/swarph/ecrire/apercu', { action, params, mesh });
 }
 
 export type CodeEnvoi =
@@ -80,10 +81,12 @@ export function envoyerEcriture<A extends ActionEcriture>(
   action: A,
   params: ParametresEcriture[A],
   client: AidClient,
-  propositionSwairm?: number,
+  propositionSwairm: number | undefined,
+  mesh: string,
 ): Promise<{ confirmation: string } | ResultatEnvoi> {
   return client
     .request<{ confirmation: string } | ResultatEnvoi>('POST', '/api/swarph/ecrire/envoyer', {
+      mesh,
       action,
       params,
       ...(propositionSwairm === undefined ? {} : { propositionSwairm }),

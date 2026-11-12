@@ -5,6 +5,7 @@ import { useBoardLuA } from '../data/board.js';
 import { useAid } from '../data/useAidState.js';
 import { type MeshBascule, useMeshBascule } from '../data/useMeshBascule.js';
 import { NouveauWorkspace } from '../dialogues/NouveauWorkspace.js';
+import { EcranMesh } from './SelecteurMesh.js';
 import { Barre, type EcranId } from './Barre.js';
 import { decisionsEnAttente } from './boiteVue.js';
 import { Nav } from './Nav.js';
@@ -179,7 +180,29 @@ export function Layout({ screen, children }: { screen: EcranId; children: ReactN
             <Nav screen={screen} />
           </Volet>
           <div style={{ display: 'contents' }} inert={overlay === 'nav' || undefined}>
-            {children}
+            {/^(?:\/board(?:\/|$)|\/swarph(?:\/|$))/.test(location.pathname) ? (
+              <EcranMesh
+                key={location.pathname}
+                initial={new URLSearchParams(location.search).get('mesh') ?? undefined}
+                ecran={
+                  location.pathname.startsWith('/board/cartes/')
+                    ? '/board/cartes'
+                    : location.pathname
+                }
+                onChanger={(mesh) =>
+                  navigate(
+                    location.pathname.startsWith('/board/cartes/')
+                      ? `/board?mesh=${encodeURIComponent(mesh)}`
+                      : location.pathname,
+                    { replace: true },
+                  )
+                }
+              >
+                {children}
+              </EcranMesh>
+            ) : (
+              children
+            )}
           </div>
           {overlay === 'nav' && (
             <div

@@ -1,3 +1,5 @@
+import { EnteteMesh } from './SelecteurMesh.js';
+import { instantaneMesh } from '../data/meshLecture.js';
 import { useId, useRef, useState } from 'react';
 import type { BoardObligation, BoardStep } from '../../../src/shared/board.js';
 import {
@@ -25,29 +27,34 @@ const PERIME =
   "L'obligation a changé juste avant l'écriture. Rien n'a été modifié. Relis la carte.";
 
 export function ChangerEtat({
+  mesh,
   obligation,
   etape,
   carte,
   relire,
 }: {
+  mesh: string;
   obligation: BoardObligation;
   etape: BoardStep | undefined;
   carte: number;
   relire: () => void;
 }) {
   const { state } = useAid();
-  const [action, choisir] = useState<ActionPossible | null>(null);
-  if (!state?.mesh || !state.mesh.state.ecritures) return null;
+  const [action, choisir] = useState<{ mesh: string; action: ActionPossible } | null>(null);
+  const objetMesh = instantaneMesh(state, mesh);
+  if (!objetMesh?.state.ecritures) return null;
   return (
     <>
-      {actionsPossibles(obligation, etape, state.mesh.state.cell).map((a) => (
-        <button key={a} onClick={() => choisir(a)}>
+      {actionsPossibles(obligation, etape, objetMesh.state.cell).map((a) => (
+        <button key={a} onClick={() => choisir({ mesh, action: a })}>
           {LIBELLES[a]}
         </button>
       ))}
-      {action && (
+      {action?.mesh === mesh && (
         <DemandeEtat
-          action={action}
+          key={mesh}
+          mesh={mesh}
+          action={action.action}
           obligation={obligation}
           etape={etape}
           carte={carte}
@@ -60,6 +67,7 @@ export function ChangerEtat({
 }
 
 function DemandeEtat({
+  mesh,
   action,
   obligation,
   etape,
@@ -68,6 +76,7 @@ function DemandeEtat({
   fermer,
 }: {
   action: ActionPossible;
+  mesh: string;
   obligation: BoardObligation;
   etape: BoardStep | undefined;
   carte: number;
@@ -111,10 +120,11 @@ function DemandeEtat({
                 ...(lecture.conditions.length ? { preuves } : { preuve }),
               },
               client,
+              mesh,
             )
           : action === 'refuser'
-            ? await envoyerEtat('obligation.refuser', { ...cible, motif }, client)
-            : await envoyerEtat('obligation.prendre', cible, client);
+            ? await envoyerEtat('obligation.refuser', { ...cible, motif }, client, mesh)
+            : await envoyerEtat('obligation.prendre', cible, client, mesh);
       if ('confirmation' in r) setConfirmation(r.confirmation);
       else terminer(r);
     } catch (e) {
@@ -146,6 +156,7 @@ function DemandeEtat({
   const perime = resultat?.code === 'upstream_error' && resultat.status === 409;
   return (
     <Dialogue titre={`${LIBELLES[action]} l'obligation #${lecture.id} ?`} onClose={fermer}>
+      <EnteteMesh mesh={mesh} />
       <fieldset disabled={envoye}>
         {action === 'refuser' && (
           <>

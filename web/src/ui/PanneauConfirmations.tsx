@@ -116,6 +116,7 @@ export function PanneauConfirmations() {
       <ul>
         {file.ouvertes.map((d) => (
           <li key={d.id}>
+            {d.mesh && <strong>Mesh : {d.mesh.nom}</strong>}
             <span>
               {d.action?.startsWith('mesh.avis') && noms[d.action]} {d.resume} — Échéance :{' '}
               {date(d.echeance)}
@@ -133,6 +134,7 @@ export function PanneauConfirmations() {
       <ul>
         {file.recentes.slice(0, 20).map((d) => (
           <li key={d.id}>
+            {d.mesh && <strong>Mesh : {d.mesh.nom}</strong>}
             {d.action?.startsWith('mesh.avis') && noms[d.action]} {d.resume} —{' '}
             {resultatConfirmation(d)}
             <details>

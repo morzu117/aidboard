@@ -1,3 +1,4 @@
+import { ACTIONS_MESH } from '../../src/shared/confirmations.js';
 import { ParametresSignes } from './ui/ParametresSignes.js';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { empreintePda, encoderBase64url, type CorpsResultatV1 } from '../../src/shared/pda.js';
@@ -208,7 +209,7 @@ export function AppPda() {
           {
             id: demande.id,
             action: demande.action,
-            resume: demande.v === 2 ? demande.resume : 'Demande d’essai',
+            resume: demande.v !== 1 ? demande.resume : 'Demande d’essai',
             repondueA: Date.now(),
           },
         ]);
@@ -320,7 +321,16 @@ function Demande({
   const demande = entree.demande;
   return (
     <section>
-      <h2>{demande.v === 2 ? demande.resume : 'Demande d’essai'}</h2>
+      {demande.v === 3 ? (
+        <p className="pda-mesh">
+          <strong>Mesh : {demande.mesh.nom}</strong> — cell {demande.mesh.cell}
+        </p>
+      ) : demande.v === 2 && ACTIONS_MESH.has(demande.action) ? (
+        <p className="pda-mesh">
+          <strong>Mesh : principal (demande d’avant le multi-mesh)</strong>
+        </p>
+      ) : null}
+      <h2>{demande.v !== 1 ? demande.resume : 'Demande d’essai'}</h2>
       {demande.v === 1 ? (
         <p>{demande.sujet}</p>
       ) : (

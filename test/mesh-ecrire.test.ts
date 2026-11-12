@@ -53,6 +53,7 @@ async function preparer(scenario: ScenarioProxy = succes) {
   const config = structuredClone(DEFAULT_CONFIG);
   config.mesh.cell = 'peer-a';
   config.mesh.proxySocket = proxy.socket;
+  config.mesh.gateway = 'http://gateway.example.com';
   const board = new BoardReader({ mesh: { read: vi.fn() }, cell: config.mesh.cell, log: vi.fn() });
   const obligations = vi.spyOn(board, 'obligations').mockResolvedValue({
     ok: true,
@@ -69,7 +70,7 @@ async function preparer(scenario: ScenarioProxy = succes) {
   reglage.armer();
   const appareil = await t.appareil();
   let reponses: { id: string; appareil: string; corps: string; curseur: number }[] = [];
-  const porte = creerPorte({ db: t.db, actions, file: () => file });
+  const porte = creerPorte({ db: t.db, config, actions, file: () => file });
   const deposer = vi.fn(async () => true);
   const file = new FilePda({
     ...t,
@@ -100,7 +101,11 @@ async function preparer(scenario: ScenarioProxy = succes) {
   registerEcrituresRoutes(app, { db: t.db, cell: config.mesh.cell, board, porte });
   registerConfirmationRoutes(app, t.db, porte, () => file);
   const demander = (payload: unknown = exemples[0]) =>
-    app.inject({ method: 'POST', url: '/api/swarph/ecrire/envoyer', payload: payload as object });
+    app.inject({
+      method: 'POST',
+      url: '/api/swarph/ecrire/envoyer',
+      payload: { ...(payload as object), mesh: 'principal' },
+    });
   const resultat = async (id: string) => {
     const r = await app.inject('/api/confirmations');
     return [...r.json().ouvertes, ...r.json().recentes].find((d) => d.id === id);
@@ -355,7 +360,7 @@ test('migration 025 préserve les réglages 024, ajoute mesh.ecrire actif et env
     db.exec("UPDATE confirmations_reglage SET actif = 0, modifie_a = 123 WHERE action = 'push'");
     const avant = creerReglage(db).lire();
     migrate(db);
-    expect(db.pragma('user_version', { simple: true })).toBe(29);
+    expect(db.pragma('user_version', { simple: true })).toBe(31);
     expect(creerReglage(db).lire()).toEqual([
       ...avant,
       { action: 'mesh.ecrire', actif: true, modifieA: null },
@@ -393,7 +398,7 @@ test('mesh désactivé : 404 ; mode host : aucune route d’envoi', async () => 
         method: 'POST',
         url: '/api/swarph/ecrire/envoyer',
         headers: t.headers,
-        payload: exemples[0],
+        payload: { ...exemples[0], mesh: 'principal' },
       })
     ).statusCode,
   ).toBe(404);
@@ -407,7 +412,7 @@ test('mesh désactivé : 404 ; mode host : aucune route d’envoi', async () => 
   const r = await t.d.modeHost.instance()!.inject({
     method: 'POST',
     url: '/api/swarph/ecrire/envoyer',
-    payload: exemples[0],
+    payload: { ...exemples[0], mesh: 'principal' },
     headers: {
       host: 'aid-e2e.ts.net',
       origin: 'https://aid-e2e.ts.net',
@@ -510,8 +515,8 @@ test('D288 : proposition liée à la confirmation, fermeture persistante uniquem
   const t = await preparer();
   t.db
     .prepare(
-      `INSERT INTO swairm_propositions (projet, sujet, etat, titre, carte, cree_a)
-    VALUES ('exemple/depot', '41', 'merged', 'Un sujet', 42, '2026-11-10')`,
+      `INSERT INTO swairm_propositions (mesh, projet, sujet, etat, titre, carte, cree_a)
+    VALUES ('principal', 'exemple/depot', '41', 'merged', 'Un sujet', 42, '2026-11-10')`,
     )
     .run();
   const p = propositionsSwairm(t.db)[0]!;

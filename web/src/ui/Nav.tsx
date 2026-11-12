@@ -1,3 +1,5 @@
+import { useMeshes } from '../data/meshes.js';
+import { PastillesMeshes } from './PastillesMeshes.js';
 import { type DragEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation, useSearchParams } from 'react-router';
 import type { Agent, NavGroup, NavPlacement, NavState, Topic } from '../../../src/shared/model.js';
@@ -98,6 +100,7 @@ export function annoncerPlacementNav(topicId: string, patch: Partial<NavPlacemen
 /** Groupe B (D55) : barre gauche, lecture (B.2) et mode édition (B.3) — glisser-déposer, menu, renommage. */
 export function Nav({ screen }: { screen: EcranId }) {
   const { state, daemon, call } = useAid();
+  const { multiple } = useMeshes();
   const { pathname } = useLocation();
   const [params] = useSearchParams();
   const { openNewTopic } = useLayout();
@@ -663,11 +666,12 @@ export function Nav({ screen }: { screen: EcranId }) {
   ];
 
   const mesh = state?.mesh;
-  const meshTexte = mesh
-    ? mesh.state.connected
-      ? `mesh · cell ${mesh.state.cell}`
-      : 'mesh hors ligne'
-    : null;
+  const meshTexte =
+    !multiple && mesh
+      ? mesh.state.connected
+        ? `mesh · cell ${mesh.state.cell}`
+        : 'mesh hors ligne'
+      : null;
 
   // Chantier 25 (D104) : la barre par état. Les groupes du 15 restent intacts en `rangement: 'groupes'`, en mode
   // réduit (la V4 n'en a pas) et avant la première lecture de /api/nav.
@@ -690,6 +694,7 @@ export function Nav({ screen }: { screen: EcranId }) {
       data-node={n('racine')}
       aria-label="Navigation des sujets"
     >
+      <PastillesMeshes />
       {rail ? (
         <div className="barre-gauche-rail" data-node={n('rail')}>
           <button

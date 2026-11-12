@@ -1,3 +1,4 @@
+import { useMeshLecture, instantaneMesh } from '../data/meshLecture.js';
 import { useState } from 'react';
 import { EcrireAuMesh } from '../ui/EcrireAuMesh.js';
 import { DemandesAvis } from '../ui/DemandesAvis.js';
@@ -14,7 +15,8 @@ const EXEMPLE_CONFIG = `mesh:
 
 function Contenu() {
   const { state } = useAid();
-  const mesh = state?.mesh;
+  const nomMesh = useMeshLecture();
+  const mesh = instantaneMesh(state, nomMesh);
   const [ecriture, setEcriture] = useState(false);
   return (
     <main className="page">
@@ -33,7 +35,12 @@ function Contenu() {
         <>
           <button onClick={() => setEcriture(true)}>Écrire au mesh (à blanc)</button>
           {ecriture && (
-            <EcrireAuMesh action="dm.envoyer" choix onClose={() => setEcriture(false)} />
+            <EcrireAuMesh
+              mesh={nomMesh}
+              action="dm.envoyer"
+              choix
+              onClose={() => setEcriture(false)}
+            />
           )}
         </>
       )}

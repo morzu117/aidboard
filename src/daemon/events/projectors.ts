@@ -58,10 +58,12 @@ function projectStatus(tx: Db, e: AidEvent, d: Record<string, unknown>): void {
 
 // Un DM du mesh (12.1, D36) : idempotent par son id swarph, en plus de l'ULID de l'événement. Un rejeu ne duplique rien.
 function projectMeshDm(tx: Db, e: AidEvent, d: Record<string, unknown>): void {
+  if (!meshEvenementValide(d.mesh)) return;
   if (!Number.isInteger(d.id) || !MESH_DM_KINDS.includes(d.kind as never)) return;
   tx.prepare(
-    'INSERT OR IGNORE INTO mesh_inbox (id, thread_id, from_node, to_node, kind, content, created_at, reply_to, obligation_id, seen_at, event_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?)',
+    'INSERT OR IGNORE INTO mesh_inbox (mesh, id, thread_id, from_node, to_node, kind, content, created_at, reply_to, obligation_id, seen_at, event_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?)',
   ).run(
+    d.mesh ?? 'principal',
     d.id,
     clip(d.threadId, 200),
     clip(d.from, 200) ?? '',
@@ -78,10 +80,12 @@ function projectMeshDm(tx: Db, e: AidEvent, d: Record<string, unknown>): void {
 // L'état du mesh (12.1, D36) : une clé par champ, la valeur en JSON ; le dernier événement l'emporte.
 const MESH_STATE_KEYS = ['connected', 'tailscale', 'monitor', 'pending', 'since', 'cell'] as const;
 function projectMeshState(tx: Db, d: Record<string, unknown>): void {
+  if (!meshEvenementValide(d.mesh)) return;
   const upsert = tx.prepare(
-    'INSERT INTO mesh_state (k, v) VALUES (?, ?) ON CONFLICT(k) DO UPDATE SET v = excluded.v',
+    'INSERT INTO mesh_state (mesh, k, v) VALUES (?, ?, ?) ON CONFLICT(mesh, k) DO UPDATE SET v = excluded.v',
   );
-  for (const k of MESH_STATE_KEYS) if (d[k] !== undefined) upsert.run(k, JSON.stringify(d[k]));
+  for (const k of MESH_STATE_KEYS)
+    if (d[k] !== undefined) upsert.run(d.mesh ?? 'principal', k, JSON.stringify(d[k]));
 }
 
 export function project(tx: Db, e: AidEvent): void {
@@ -204,4 +208,15 @@ export function project(tx: Db, e: AidEvent): void {
     default:
       break;
   }
+}
+
+/** Les événements anciens restent associés à principal ; null n'est pas une absence. */
+function meshEvenementValide(mesh: unknown): boolean {
+  return (
+    mesh === undefined ||
+    (typeof mesh === 'string' &&
+      /^[a-z][a-z0-9-]{0,31}(?:@archive-\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2}:\d{2}\.\d{3}Z)?)?$/.test(
+        mesh,
+      ))
+  );
 }

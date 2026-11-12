@@ -1,3 +1,4 @@
+import { signatureMesh } from '../src/daemon/mesh/ecriture.js';
 import { afterEach, expect, test, vi } from 'vitest';
 import { FilePda } from '../src/daemon/pda/file.js';
 import { ClientRelais, type RelaisPda, type ReponseRelais } from '../src/daemon/pda/relais.js';
@@ -32,6 +33,9 @@ async function preparer(cas: Cas = 'succes', reecrire = false) {
   const appareil = await t.appareil();
   let heure = 1_800_000_000_000;
   const config = structuredClone(DEFAULT_CONFIG);
+  config.mesh.cell = 'principal';
+  config.mesh.gateway = 'http://gateway.example.com';
+  config.mesh.proxySocket = '/tmp/principal.sock';
   config.modeHost.actif = true;
   config.modeHost.pda = true;
   config.modeHost.relais = 'https://example.com';
@@ -81,6 +85,7 @@ async function preparer(cas: Cas = 'succes', reecrire = false) {
   };
   const porte = creerPorte({
     ...t,
+    config,
     actions: { push: definition, 'mesh.ecrire': definition } as unknown as ActionsPorte,
     file: () => file,
   });
@@ -98,7 +103,10 @@ async function preparer(cas: Cas = 'succes', reecrire = false) {
     executer: (ligne) => porte.executerConfirmee(ligne),
   });
   nettoyages.push(() => file.arreter());
-  const { id } = await file.creerDemande(entree);
+  const { id } = await file.creerDemande({
+    ...entree,
+    ...(mesh && { mesh: signatureMesh({ config }, 'principal') }),
+  });
   if (cas === 'json' || cas === 'schema' || cas === 'mesh-hachage')
     t.db
       .prepare('UPDATE pda_demandes SET params = ? WHERE id = ?')

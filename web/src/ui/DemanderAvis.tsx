@@ -1,3 +1,4 @@
+import { instantaneMesh } from '../data/meshLecture.js';
 import { useEffect, useRef, useState } from 'react';
 import {
   MODELES_ASK,
@@ -13,10 +14,12 @@ import { Dialogue } from '../dialogues/Dialogue.js';
 import { TableauAvis } from '../ecrans/TableauAvis.js';
 
 export function DemanderAvis({
+  mesh: nomMesh,
   etat,
   onClose,
   onResultat,
 }: {
+  mesh: string;
   etat: EtatAsk;
   onClose: () => void;
   onResultat?: () => void;
@@ -24,7 +27,7 @@ export function DemanderAvis({
   const client = useAidClient();
   const { state } = useAid();
   const [destination, setDestination] = useState('mac');
-  const mesh = destination === 'mesh' && state?.mesh?.state.connected;
+  const mesh = destination === 'mesh' && instantaneMesh(state, nomMesh)?.state.connected;
   const [question, setQuestion] = useState('');
   const [n, setN] = useState(3);
   const [modeles, setModeles] = useState<ModeleAsk[]>(['sonnet', 'opus']);
@@ -93,7 +96,7 @@ export function DemanderAvis({
           }
         }}
       >
-        {state?.mesh?.state.connected && !attente && !resultat && (
+        {instantaneMesh(state, nomMesh)?.state.connected && !attente && !resultat && (
           <div aria-label="Destination">
             <button aria-pressed={!mesh} onClick={() => setDestination('mac')}>
               Au Mac
@@ -104,7 +107,7 @@ export function DemanderAvis({
           </div>
         )}
         {mesh ? (
-          <FormulaireAvisMesh onResultat={onResultat} />
+          <FormulaireAvisMesh mesh={nomMesh} onResultat={onResultat} />
         ) : resultat ? (
           <TableauAvis resultat={resultat} />
         ) : (

@@ -1,5 +1,6 @@
 import { AidCarte, ErreursAid } from '../ui/AidBoard.js';
 import { SansCarteSwairm, SwairmCarte } from '../ui/SwairmBoard.js';
+import { instantaneMesh, useMeshLecture } from '../data/meshLecture.js';
 import { useEffect, useState } from 'react';
 import { Link, Navigate, useSearchParams } from 'react-router';
 import type {
@@ -176,11 +177,12 @@ export function colonnes(cards: BoardCardSummary[]): Array<[string, BoardCardSum
 }
 
 function CarteResume({ c, slug }: { c: BoardCardSummary; slug: string }) {
+  const mesh = useMeshLecture();
   return (
     <li>
       <Link
         className="board-carte"
-        to={`/board/cartes/${c.id}`}
+        to={`/board/cartes/${c.id}${mesh === 'principal' ? '' : `?mesh=${encodeURIComponent(mesh)}`}`}
         data-node={`board.carte-${c.id}`}
         data-action="board.carte.ouvrir"
       >
@@ -306,6 +308,9 @@ function Cartes({
 /** Chantier 31 (D180) : aussi monté par l'interface d'un appareil, sans la coque du Mac. */
 export function Contenu({ cell }: { cell: string }) {
   const projets = useBoardProjects();
+  const mesh = useMeshLecture();
+  const { state } = useAid();
+  const cellLue = instantaneMesh(state, mesh)?.state.cell ?? cell;
   const [params, setParams] = useSearchParams();
   const [cartes, setCartes] = useState<{
     enLecture: boolean;
@@ -333,7 +338,7 @@ export function Contenu({ cell }: { cell: string }) {
             Board
           </h1>
           <p className="resume" data-node="board.identite">
-            Lecture seule, sous l’identité de la cell <strong>{cell}</strong>
+            Lecture seule, sous l’identité de la cell <strong>{cellLue}</strong>
             {projet ? ` · projet ${projet.id}` : ''}.
           </p>
         </div>
@@ -407,8 +412,13 @@ export function Contenu({ cell }: { cell: string }) {
 export function Board() {
   const { state } = useAid();
   // l'écran n'existe que si le mesh est configuré : sinon, ni onglet ni message
-  if (state && !state.mesh) return <Navigate to="/" replace />;
+  if (state && !state.mesh && !Object.keys(state.meshes ?? {}).length)
+    return <Navigate to="/" replace />;
   return (
-    <Layout screen="board">{state?.mesh ? <Contenu cell={state.mesh.state.cell} /> : null}</Layout>
+    <Layout screen="board">
+      {state?.mesh || Object.keys(state?.meshes ?? {}).length ? (
+        <Contenu cell={state?.mesh?.state.cell ?? ''} />
+      ) : null}
+    </Layout>
   );
 }

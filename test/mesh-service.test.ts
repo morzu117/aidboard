@@ -189,7 +189,7 @@ test('init : un monitor détaché déjà vivant est suivi sans être relancé, e
   mkdirSync(dirname(t.marker), { recursive: true });
   writeFileSync(t.marker, '4242\n');
   t.db
-    .prepare('INSERT INTO mesh_state (k, v) VALUES (?, ?), (?, ?)')
+    .prepare("INSERT INTO mesh_state (mesh, k, v) VALUES ('principal', ?, ?), ('principal', ?, ?)")
     .run('connected', 'true', 'since', '"hier"');
   t.writeInbox([record(10)]);
   await t.svc.init();

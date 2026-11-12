@@ -43,7 +43,7 @@ test('le schéma connaît la source swarph et les deux types mesh', () => {
   expect(EVENT_TYPES).toContain('mesh.dm');
   expect(EVENT_TYPES).toContain('mesh.state');
   const { db } = setup();
-  expect(db.pragma('user_version', { simple: true })).toBe(29);
+  expect(db.pragma('user_version', { simple: true })).toBe(31);
   const tables = (
     db.prepare("SELECT name FROM sqlite_master WHERE type = 'table'").all() as {
       name: string;
@@ -126,6 +126,7 @@ test('reconstruction : rejouer le journal redonne mesh_inbox et mesh_state', () 
   const before = dump();
   expect(before.inbox).toHaveLength(25);
   expect(before.state.find((r) => (r as { k: string }).k === 'pending')).toEqual({
+    mesh: 'principal',
     k: 'pending',
     v: '21',
   });

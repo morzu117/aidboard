@@ -1,3 +1,5 @@
+import { verifierCibleMesh } from '../mesh/cible-ecriture.js';
+import type { MeshRegistry } from '../mesh/registre.js';
 import { creerActionsAvis } from './avis.js';
 import type { AvisMeshService } from '../mesh/avis.js';
 import { creerActionEtat } from './etats.js';
@@ -6,7 +8,12 @@ import type { BoardReader } from '../mesh/board.js';
 import { creerActionsHost, type DependancesHost } from './host.js';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
-import { ACTIONS_MESH, resumeAction, type ParametresActions } from '../../shared/confirmations.js';
+import {
+  ACTIONS_MESH,
+  resumeAction,
+  type ParametresActions,
+  type ParamsAction,
+} from '../../shared/confirmations.js';
 import { lirePr } from '../../shared/livraison.js';
 import { startAction, scriptEnv, type ActionContext, type ActionSpec } from '../actions/service.js';
 import { findAssetDir } from '../assets.js';
@@ -39,6 +46,7 @@ const LIVE = ['starting', 'working', 'needs_input', 'idle'];
 export function creerActionsConfirmation(
   deps: DependancesHost & {
     avis?: AvisMeshService;
+    meshes?: MeshRegistry;
     board?: BoardReader | null;
     db: Db;
     config?: AidConfig;
@@ -125,11 +133,45 @@ export function creerActionsConfirmation(
     }
     return params;
   };
+  const actionsMesh = (ctx: ContexteAction) => {
+    if (!deps.meshes) {
+      if (ctx.mesh && ctx.mesh !== 'principal') throw new AidHttpError(404, 'mesh inconnu');
+      return {
+        ...creerActionsAvis(deps.avis),
+        'mesh.ecrire': creerActionEcriture(deps),
+        'mesh.etat': creerActionEtat(deps),
+      };
+    }
+    if (!ctx.mesh) throw new AidHttpError(409, 'perime');
+    const services = deps.meshes.obtenir(ctx.mesh);
+    const config = { ...deps.config!, mesh: deps.meshes.configuration(ctx.mesh) };
+    return {
+      ...creerActionsAvis(services.avis),
+      'mesh.ecrire': creerActionEcriture({ ...deps, config, board: services.board }),
+      'mesh.etat': creerActionEtat({ ...deps, config, board: services.board }),
+    };
+  };
+  const parMesh = <A extends keyof ReturnType<typeof actionsMesh>>(action: A): ActionsPorte[A] =>
+    ({
+      preparer: async (entree, ctx) => {
+        const params = await actionsMesh(ctx)[action].preparer(entree, ctx);
+        if (deps.meshes && ctx.mesh)
+          await verifierCibleMesh(deps.meshes.obtenir(ctx.mesh), {
+            action,
+            params,
+          } as ParamsAction);
+        return params;
+      },
+      executer: (params, ctx) =>
+        (actionsMesh(ctx)[action] as ActionsPorte[A]).executer(params, ctx),
+    }) as ActionsPorte[A];
   return {
     ...creerActionsHost(deps),
-    ...creerActionsAvis(deps.avis),
-    'mesh.ecrire': creerActionEcriture(deps),
-    'mesh.etat': creerActionEtat(deps),
+    'mesh.avis': parMesh('mesh.avis'),
+    'mesh.avis.motion': parMesh('mesh.avis.motion'),
+    'mesh.avis.baseline-absent': parMesh('mesh.avis.baseline-absent'),
+    'mesh.ecrire': parMesh('mesh.ecrire'),
+    'mesh.etat': parMesh('mesh.etat'),
     push: {
       async preparer(entree, ctx) {
         const { topic, ws } = lireSujet(entree.topicId);

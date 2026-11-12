@@ -259,3 +259,8 @@
   font-size: 2rem;
   letter-spacing: 0.12em;
 }
+
+.pda-mesh {
+  border-inline-start: 0.25rem solid currentColor;
+  padding: 0.75rem;
+}

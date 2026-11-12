@@ -1,3 +1,5 @@
+import type { MeshRegistry } from '../mesh/registre.js';
+import { nomMeshEcriture } from '../mesh/ecriture.js';
 import { preparerPropositionAid } from '../aid/envoi.js';
 import type { Db } from '../db.js';
 import type { Porte } from '../confirmations/porte.js';
@@ -11,6 +13,7 @@ export function registerEcrituresRoutes(
   app: FastifyInstance,
   deps: {
     db?: Db;
+    meshes?: MeshRegistry;
     board: BoardReader | null;
     cell: string;
     hotesPrives?: string[];
@@ -19,7 +22,26 @@ export function registerEcrituresRoutes(
     proxyLectureSeule?: boolean;
   },
 ): void {
+  const selectionner = (corps: unknown) => {
+    const nom = nomMeshEcriture(corps);
+    if (deps.meshes) {
+      deps.meshes.signature(nom);
+      const services = deps.meshes.obtenir(nom);
+      const config = deps.meshes.configuration(nom);
+      return {
+        ...deps,
+        nom,
+        board: services.board,
+        cell: config.cell,
+        proxySocket: config.proxySocket,
+        proxyLectureSeule: config.proxyLectureSeule,
+      };
+    }
+    if (nom !== 'principal') throw new AidHttpError(404, 'mesh inconnu');
+    return { ...deps, nom };
+  };
   app.post('/api/swarph/etat/envoyer', async (req, reply) => {
+    const deps = selectionner(req.body);
     if (!deps.cell || !deps.board) throw new AidHttpError(404, 'mesh désactivé');
     const corps = req.body as {
       action?: unknown;
@@ -39,25 +61,33 @@ export function registerEcrituresRoutes(
     if (corps.propositionAid !== undefined) {
       if (corps.action !== 'carte.deplacer' || typeof corps.propositionAid !== 'number' || !deps.db)
         throw new AidHttpError(400, 'proposition invalide');
-      params = await preparerPropositionAid(deps.db, deps.board, deps.cell, corps.propositionAid);
+      params = await preparerPropositionAid(
+        deps.db,
+        deps.board,
+        deps.cell,
+        corps.propositionAid,
+        deps.nom,
+      );
     }
     const demande = await deps.porte!.demander(
       'mesh.etat',
       {
         action: corps.action as import('../../shared/etats.js').ActionEtat,
         params,
+        mesh: deps.nom,
       },
       req,
     );
     if ('confirmation' in demande && corps.propositionAid !== undefined)
       deps
-        .db!.prepare('UPDATE aid_propositions SET confirmation = ? WHERE id = ?')
-        .run(demande.confirmation, corps.propositionAid);
+        .db!.prepare('UPDATE aid_propositions SET confirmation = ? WHERE mesh = ? AND id = ?')
+        .run(demande.confirmation, deps.nom, corps.propositionAid);
     if ('confirmation' in demande)
       return reply.code(202).send({ confirmation: demande.confirmation });
     throw new AidHttpError(409, 'confirmation_requise');
   });
   app.post('/api/swarph/ecrire/envoyer', async (req, reply) => {
+    const deps = selectionner(req.body);
     if (!deps.cell || !deps.board) throw new AidHttpError(404, 'mesh désactivé');
     const corps = req.body as {
       action?: unknown;
@@ -78,8 +108,10 @@ export function registerEcrituresRoutes(
       const ouverte =
         typeof proposition === 'number' &&
         (deps.db
-          ?.prepare('SELECT carte FROM swairm_propositions WHERE id = ? AND fermee_a IS NULL')
-          .get(proposition) as { carte: number } | undefined);
+          ?.prepare(
+            'SELECT carte FROM swairm_propositions WHERE mesh = ? AND id = ? AND fermee_a IS NULL',
+          )
+          .get(deps.nom, proposition) as { carte: number } | undefined);
       if (
         !ouverte ||
         corps.action !== 'carte.note' ||
@@ -89,18 +121,19 @@ export function registerEcrituresRoutes(
     }
     const demande = await deps.porte!.demander(
       'mesh.ecrire',
-      { action: corps.action, params: corps.params },
+      { action: corps.action, params: corps.params, mesh: deps.nom },
       req,
     );
     if ('confirmation' in demande && proposition !== undefined)
       deps
-        .db!.prepare('UPDATE swairm_propositions SET confirmation = ? WHERE id = ?')
-        .run(demande.confirmation, proposition);
+        .db!.prepare('UPDATE swairm_propositions SET confirmation = ? WHERE mesh = ? AND id = ?')
+        .run(demande.confirmation, deps.nom, proposition);
     if ('confirmation' in demande)
       return reply.code(202).send({ confirmation: demande.confirmation });
     throw new AidHttpError(409, 'confirmation_requise');
   });
   app.post('/api/swarph/ecrire/apercu', async (req) => {
+    const deps = selectionner(req.body);
     if (!deps.cell || !deps.board)
       throw new AidHttpError(404, 'mesh désactivé : `mesh.cell` vide dans config.yaml');
     const corps = req.body as { action?: unknown; params?: unknown } | null;

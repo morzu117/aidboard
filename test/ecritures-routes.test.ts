@@ -1,9 +1,12 @@
+import { injecterEnvFauxSwarph } from './helpers/env-faux-swarph.js';
 import { mkdtempSync, symlinkSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, expect, test, vi } from 'vitest';
 import { DEFAULT_CONFIG } from '../src/daemon/config.js';
 import { startTestDaemon, waitFor, type TestDaemon } from './helpers/daemon.js';
+
+injecterEnvFauxSwarph();
 
 let t: TestDaemon | undefined;
 afterEach(async () => {
@@ -47,7 +50,7 @@ const apercu = (action: string, params: unknown) =>
     method: 'POST',
     url: '/api/swarph/ecrire/apercu',
     headers: t!.headers,
-    payload: { action, params },
+    payload: { mesh: 'principal', action, params },
   });
 test('trois aperçus exacts : seule la lecture des obligations part', async () => {
   const journal = await boot();

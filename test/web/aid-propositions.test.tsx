@@ -3,7 +3,7 @@ import { act, cleanup, fireEvent, screen, waitFor } from '@testing-library/react
 import { afterEach, expect, test } from 'vitest';
 import { Boite } from '../../web/src/ecrans/Boite.js';
 import { FakeSocket, json, setup, snapshot } from './helpers.js';
-const p = { id: 1, sujet: 's', carte: 42, etape: 'review' };
+const p = { mesh: 'principal', id: 1, sujet: 's', carte: 42, etape: 'review' };
 afterEach(cleanup);
 async function ouvrir(code = 'succes', status = 200, refusal?: string) {
   let propositions = [p];
@@ -32,6 +32,7 @@ async function ouvrir(code = 'succes', status = 200, refusal?: string) {
       return json(200, { ok: true })();
     },
     'GET /api/aid/propositions/1/apercu': json(200, {
+      mesh: 'principal',
       params: { carte: 42, etape: 'review', attendu: { stage: 'build', stageVersion: 2 } },
       resume: 'Déplace la carte #42 de build vers review. Aucune obligation ni message.',
     }),

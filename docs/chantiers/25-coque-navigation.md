@@ -33,6 +33,8 @@ La V4 refait la coque autour d'une question : qu'est-ce qui t'attend ? Les sujet
 
 **Hors-périmètre** (lignes « Plus tard » de la fiche) : mentions VPS et mesh sur un sujet, étape « 3/5 », preuve attendue, champ de démarrage, « Pas encore sur le board », Livrer (27), entrée Meshes et multi-mesh, compte de cells, numéro d'essai de reconnexion, dernier commit poussé, Transfert, bandeaux Fournisseur, Mesh injoignable, Téléphone et SSO, écran Machines (29), Modifier et mode réduit de la variante C, connexion par QR (33). Aucune écriture sur le board, aucune nouvelle commande swarph.
 
+Multi-mesh : voir le chantier 46 (D316), qui ajoute les pastilles par mesh et les sélecteurs à partir de deux meshes actifs, sans changer la présentation à un seul mesh.
+
 ## 4. Décisions
 
 | # | Décision | Pourquoi |

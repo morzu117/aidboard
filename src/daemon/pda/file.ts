@@ -5,6 +5,7 @@ import {
   signerResultat,
   type Enveloppe,
   type ParamsAction,
+  type MeshSigne,
 } from '../../shared/pda.js';
 import type { Db } from '../db.js';
 import type { creerFournisseurClePda } from './cle.js';
@@ -126,7 +127,7 @@ export class FilePda {
   publierAutorises() {
     return this.enFile(() => this.publier());
   }
-  creerDemande(entree: { action: 'essai'; sujet: string } | ParamsAction) {
+  creerDemande(entree: ({ action: 'essai'; sujet: string } | ParamsAction) & { mesh?: MeshSigne }) {
     return this.enFile(async () => {
       if (!this.actif() || !this.deps.contexte())
         throw new Error('PDA ou nom Tailscale indisponible');
@@ -138,8 +139,8 @@ export class FilePda {
       this.deps.db
         .prepare(
           `INSERT INTO pda_demandes
-        (id, action, sujet, h_demande, numero, echeance, etat, cree_a, classe, params, resume, numero_mac)
-        VALUES (?, ?, ?, ?, ?, ?, 'ouverte', ?, ?, ?, ?, ?)`,
+        (id, action, sujet, h_demande, numero, echeance, etat, cree_a, classe, params, resume, numero_mac, mesh)
+        VALUES (?, ?, ?, ?, ?, ?, 'ouverte', ?, ?, ?, ?, ?, ?)`,
         )
         .run(
           d.corps.id,
@@ -149,10 +150,11 @@ export class FilePda {
           d.corps.numero ?? '',
           d.corps.echeance,
           new Date(d.corps.emise).toISOString(),
-          d.corps.v === 2 ? d.corps.classe : null,
-          d.corps.v === 2 ? jsonCanonique(d.corps.params) : null,
-          d.corps.v === 2 ? d.corps.resume : null,
+          d.corps.v !== 1 ? d.corps.classe : null,
+          d.corps.v !== 1 ? jsonCanonique(d.corps.params) : null,
+          d.corps.v !== 1 ? d.corps.resume : null,
           d.numeroMac,
+          d.corps.v === 3 ? jsonCanonique(d.corps.mesh) : null,
         );
       await this.publier();
       if (!this.actif()) throw new Error('PDA indisponible');

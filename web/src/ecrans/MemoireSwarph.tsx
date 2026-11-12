@@ -151,6 +151,11 @@ function ContenuMemoire() {
 
 export function MemoireSwarph() {
   const { state } = useAid();
-  if (state && !state.mesh) return <Navigate to="/swarph" replace />;
-  return <Layout screen="board">{state?.mesh && <ContenuMemoire />}</Layout>;
+  if (state && !state.mesh && !Object.keys(state.meshes ?? {}).length)
+    return <Navigate to="/swarph" replace />;
+  return (
+    <Layout screen="board">
+      {(state?.mesh || Object.keys(state?.meshes ?? {}).length) && <ContenuMemoire />}
+    </Layout>
+  );
 }

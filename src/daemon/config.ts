@@ -1,5 +1,8 @@
 import { FAMILLES_AVIS } from '../shared/avis-mesh-api.js';
-import { isAbsolute } from 'node:path';
+import { isAbsolute, resolve, join } from 'node:path';
+import { homedir } from 'node:os';
+import { normaliserGateway } from '../shared/meshes.js';
+import { meshPaths } from './mesh/paths.js';
 import { isIP } from 'node:net';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { parse, parseDocument } from 'yaml';
@@ -14,6 +17,7 @@ export interface AidConfig {
   memory: MemoryConfig;
   structural: StructuralConfig;
   mesh: MeshConfig;
+  meshes: Record<string, ConfigMeshNomme>;
   swairm: SwairmConfig;
   github: { bin: string };
   agents: AgentsConfig;
@@ -65,7 +69,10 @@ export interface StructuralConfig {
 }
 
 /** Mesh swarph (chantier 12, D39). `cell` vide = mesh désactivé, rien n'apparaît dans l'UI. Le token n'y figure jamais. */
+export type ConfigMeshNomme = Omit<MeshConfig, 'bin' | 'tailscale'> & { home: string };
+
 export interface MeshConfig {
+  home?: string;
   avis?: { baseline?: string; familles: Record<string, string> };
   /** nom ou chemin du binaire swarph */
   bin: string;
@@ -92,6 +99,7 @@ export const DEFAULT_TAILSCALE_BIN =
     : 'tailscale';
 
 export const DEFAULT_CONFIG: AidConfig = {
+  meshes: {},
   swairm: { bin: '' },
   github: { bin: '' },
   agents: { transport: 'stream' },
@@ -120,6 +128,8 @@ export const DEFAULT_CONFIG: AidConfig = {
   artefacts: { port: null },
   modeHost: { actif: false, port: null, push: false, code: false, pda: false, relais: null },
 };
+
+DEFAULT_CONFIG.meshes.principal = configMeshNomme(DEFAULT_CONFIG.mesh);
 
 export class ConfigError extends Error {}
 
@@ -165,6 +175,7 @@ export function parseConfig(text: string): AidConfig {
       'memory',
       'structural',
       'mesh',
+      'meshes',
       'swairm',
       'github',
       'agents',
@@ -204,6 +215,7 @@ export function parseConfig(text: string): AidConfig {
   if (doc.memory !== undefined) parseMemory(doc.memory, cfg.memory);
   if (doc.structural !== undefined) parseStructural(doc.structural, cfg.structural);
   if (doc.mesh !== undefined) parseMesh(doc.mesh, cfg.mesh);
+  lireMeshes(doc, cfg);
   if (doc.github !== undefined) {
     if (!isRecord(doc.github)) throw new ConfigError('config.yaml : github doit être un objet');
     rejectUnknown(doc.github, ['bin'], 'github.');
@@ -340,6 +352,7 @@ function parseMesh(raw: unknown, cfg: MeshConfig): void {
     [
       'bin',
       'cell',
+      'home',
       'cellFile',
       'gateway',
       'stateRoot',
@@ -351,6 +364,7 @@ function parseMesh(raw: unknown, cfg: MeshConfig): void {
     ],
     'mesh.',
   );
+  if (raw.home !== undefined) cfg.home = resolve(str(raw.home, 'mesh.home'));
   if (raw.avis !== undefined) {
     if (!isRecord(raw.avis)) throw new ConfigError('config.yaml : mesh.avis doit être un objet');
     rejectUnknown(raw.avis, ['baseline', 'familles'], 'mesh.avis.');
@@ -400,8 +414,12 @@ function parseMesh(raw: unknown, cfg: MeshConfig): void {
   if (raw.cellFile !== undefined) cfg.cellFile = strOrEmpty(raw.cellFile, 'mesh.cellFile');
   if (raw.gateway !== undefined) {
     cfg.gateway = strOrEmpty(raw.gateway, 'mesh.gateway');
-    if (cfg.gateway !== '' && !/^https?:\/\//.test(cfg.gateway)) {
-      throw new ConfigError('config.yaml : mesh.gateway doit être une URL http(s)');
+    if (cfg.gateway !== '') {
+      try {
+        normaliserGateway(cfg.gateway);
+      } catch (e) {
+        throw new ConfigError(`config.yaml : mesh.gateway : ${(e as Error).message}`);
+      }
     }
   }
   if (raw.stateRoot !== undefined) cfg.stateRoot = strOrEmpty(raw.stateRoot, 'mesh.stateRoot');
@@ -412,6 +430,76 @@ function parseMesh(raw: unknown, cfg: MeshConfig): void {
     if (t.manage !== undefined) cfg.tailscale.manage = bool(t.manage, 'mesh.tailscale.manage');
     if (t.bin !== undefined) cfg.tailscale.bin = str(t.bin, 'mesh.tailscale.bin');
   }
+}
+
+function configMeshNomme(cfg: MeshConfig): ConfigMeshNomme {
+  const mesh = { ...cfg };
+  delete (mesh as Partial<MeshConfig>).bin;
+  delete (mesh as Partial<MeshConfig>).tailscale;
+  return { ...mesh, home: cfg.home ?? process.env.HOME ?? homedir() };
+}
+
+function lireMeshes(doc: Raw, cfg: AidConfig): void {
+  if (doc.meshes === undefined) {
+    cfg.meshes = { principal: configMeshNomme(cfg.mesh) };
+    return;
+  }
+  if (!isRecord(doc.meshes)) throw new ConfigError('config.yaml : meshes doit être une table');
+  if (isRecord(doc.mesh) && Object.keys(doc.mesh).some((k) => !['bin', 'tailscale'].includes(k)))
+    throw new ConfigError(
+      'config.yaml : mesh et meshes : les deux formes ne peuvent pas coexister',
+    );
+  cfg.meshes = {};
+  const couples = new Map<string, string>();
+  const fichiers = new Map<string, string>();
+  for (const [nom, raw] of Object.entries(doc.meshes)) {
+    if (!/^[a-z][a-z0-9-]{0,31}$/.test(nom))
+      throw new ConfigError(`config.yaml : nom de mesh invalide : ${nom}`);
+    if (!isRecord(raw)) throw new ConfigError(`config.yaml : meshes.${nom} doit être un objet`);
+    rejectUnknown(
+      raw,
+      [
+        'cell',
+        'gateway',
+        'home',
+        'proxySocket',
+        'proxyLectureSeule',
+        'inboxLog',
+        'cellFile',
+        'stateRoot',
+        'avis',
+      ],
+      `meshes.${nom}.`,
+    );
+    const mesh = structuredClone(DEFAULT_CONFIG.mesh);
+    parseMesh(raw, mesh);
+    const config = configMeshNomme(mesh);
+    cfg.meshes[nom] = config;
+    if (!config.cell) continue;
+    const couple = JSON.stringify([
+      config.cell,
+      config.gateway ? normaliserGateway(config.gateway) : '',
+    ]);
+    const autre = couples.get(couple);
+    if (autre)
+      throw new ConfigError(`config.yaml : meshes ${autre} et ${nom} : même couple cell/gateway`);
+    couples.set(couple, nom);
+    const chemins = meshPaths(config, config.home);
+    for (const [type, chemin] of Object.entries({
+      'fichier de jeton': chemins.tokenFile,
+      'fichier de cell': chemins.cellFile,
+      'dossier d’état': join(chemins.stateRoot, config.cell),
+      'inbox.log': chemins.inboxLog,
+    })) {
+      const absolu = resolve(chemin);
+      const precedent = fichiers.get(absolu);
+      if (precedent && precedent !== nom)
+        throw new ConfigError(`config.yaml : meshes ${precedent} et ${nom} : même ${type}`);
+      fichiers.set(absolu, nom);
+    }
+  }
+  // Compatibilité 46.1 : les services existants continuent à servir uniquement principal.
+  if (cfg.meshes.principal) Object.assign(cfg.mesh, cfg.meshes.principal);
 }
 
 function parseSwairm(raw: unknown, cfg: SwairmConfig): void {

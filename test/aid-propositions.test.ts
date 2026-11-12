@@ -66,7 +66,7 @@ function lecture(
 test('028 : migration idempotente', () => {
   const { db } = base();
   migrate(db);
-  expect(db.pragma('user_version', { simple: true })).toBe(29);
+  expect(db.pragma('user_version', { simple: true })).toBe(31);
 });
 test.each([{ phase: 'review' }, { prNumber: 7 }, { state: 'merged' as const }])(
   'D293 : premier relevé silencieux puis transition %j, unicité, D268',
@@ -175,7 +175,7 @@ test('aperçu puis envoi : attendu relu à chaque fois, jamais la version de la 
   const r = await app.inject({
     method: 'POST',
     url: '/api/swarph/etat/envoyer',
-    payload: { action: 'carte.deplacer', params: apercu, propositionAid: 1 },
+    payload: { mesh: 'principal', action: 'carte.deplacer', params: apercu, propositionAid: 1 },
   });
   expect(r.statusCode).toBe(202);
   expect(demander.mock.calls[0]?.slice(0, 2)).toMatchObject([
@@ -206,7 +206,7 @@ test('D283 : proxy lecture seule refuse avant la porte et toute relecture', asyn
   const r = await app.inject({
     method: 'POST',
     url: '/api/swarph/etat/envoyer',
-    payload: { action: 'carte.deplacer', params: { carte: 42 } },
+    payload: { mesh: 'principal', action: 'carte.deplacer', params: { carte: 42 } },
   });
   expect(r.statusCode).toBe(409);
   expect(r.json().error).toBe('proxy_lecture_seule');

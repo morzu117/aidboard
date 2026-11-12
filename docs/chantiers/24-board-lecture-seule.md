@@ -89,6 +89,8 @@ Les références sont prises sur `main`.
 - « où est passé le temps » ;
 - tout stockage en base.
 
+Multi-mesh : voir le chantier 46 (D314, D315, D316), qui donne à chaque mesh ses lecteurs et ses routes de board, choisis par un sélecteur à l’écran.
+
 ## 4. Décisions
 
 | # | Décision | Pourquoi |
