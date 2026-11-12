@@ -171,6 +171,7 @@ Depuis tout chemin de D307, le daemon signe un résultat et le publie sur le rel
 - `src/relais/index.ts` : les routes `PUT /resultats/:id` et `GET /resultats`, le préflight, les bornes et la purge.
 - `src/daemon/pda/` : la file de publication, alimentée depuis `executerConfirmee`, le numéro faux et `annuler()`.
 - **Tests :** le relais hostile, les contextes croisés, les bornes (dans la boucle de lecture), la purge, les retentatives, et la construction depuis la ligne relue pour chaque chemin de D307.
+- 45.2, livré : 58 tests ajoutés. Le gate est vert, 3 541 tests réussis. Chemins couverts : tous les `terminer()` d'`executerConfirmee`, le numéro faux et `annuler()`. Les raisons signées sont `perime`, `delai`, `script` et `numero`, les seules que le code écrit. Le code de 45.2 est à relire par le lab, ainsi que la route de 45.1.
 
 ### 45.3 Le téléphone montre le résultat (D308)
 

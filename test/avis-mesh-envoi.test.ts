@@ -535,6 +535,7 @@ test('porte : confirmation signée consommée, altération refusée et salle ouv
     ...pda,
     relais: {
       publierAutorises: async () => true,
+      publierResultat: async () => true,
       deposer: async () => true,
       retirer: async () => {},
       tirer: async () => [],
@@ -771,6 +772,7 @@ async function confirmationSignee() {
     ...pda,
     relais: {
       publierAutorises: async () => true,
+      publierResultat: async () => true,
       deposer: async () => true,
       retirer: async () => {},
       tirer: async () => [],

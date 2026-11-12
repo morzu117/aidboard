@@ -1,3 +1,4 @@
+import type { ResultatEnvoi } from './ecritures.js';
 import {
   CLASSE_ACTION,
   resumeAction,
@@ -18,6 +19,7 @@ export const TAILLE_MAX_DEMANDE = 16 * 1024;
 
 export const CONTEXTE_DEMANDE = 'aid-pda-demande-v1\n';
 export const CONTEXTE_RELAIS = 'aid-pda-relais-v1\n';
+export const CONTEXTE_RESULTAT = 'aid-pda-resultat-v1\n';
 
 export const ORDRE_P256 = 0xffffffff00000000ffffffffffffffffbce6faada7179e84f3b9cac2fc632551n;
 
@@ -251,4 +253,103 @@ function lireCorpsDemandeV2(c: Record<string, unknown>): CorpsDemandeV2 {
   const corps = c as unknown as CorpsDemandeV2;
   if (corps.resume !== resumeAction(corps.action, corps.params)) throw new Error('Résumé invalide');
   return corps;
+}
+
+export const RESULTATS_PDA = ['executee', 'echouee', 'perimee', 'annulee'] as const;
+export const RAISONS_RESULTAT = ['perime', 'delai', 'script', 'numero'] as const;
+export const CODES_RESULTAT = [
+  'succes',
+  'verb_not_allowed',
+  'bad_args',
+  'peer_not_allowed',
+  'proxy_unavailable',
+  'upstream_unreachable',
+  'upstream_ambiguous',
+  'upstream_error',
+  'delai',
+  'interrompu',
+  'connexion',
+  'format',
+  'obligation-close',
+] as const satisfies readonly ResultatEnvoi['code'][];
+// Une évolution de l'énumération d'envoi doit aussi fermer la liste du résultat signé.
+const codesComplets: Exclude<ResultatEnvoi['code'], (typeof CODES_RESULTAT)[number]> extends never
+  ? true
+  : never = true;
+
+export interface CorpsResultatV1 {
+  v: 1;
+  id: string;
+  action: ActionConfirmee;
+  resultat: (typeof RESULTATS_PDA)[number];
+  raison: (typeof RAISONS_RESULTAT)[number] | null;
+  code: ResultatEnvoi['code'] | null;
+  emis: number;
+}
+
+function lireCorpsResultat(octets: Uint8Array): CorpsResultatV1 {
+  const c = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(octets));
+  if (
+    !c ||
+    typeof c !== 'object' ||
+    Array.isArray(c) ||
+    Object.keys(c).sort().join(',') !== 'action,code,emis,id,raison,resultat,v' ||
+    c.v !== 1 ||
+    typeof c.id !== 'string' ||
+    !/^[A-Za-z0-9_-]{22}$/.test(c.id) ||
+    decoderBase64url(c.id).length !== 16 ||
+    typeof c.action !== 'string' ||
+    !Object.hasOwn(CLASSE_ACTION, c.action) ||
+    !RESULTATS_PDA.includes(c.resultat) ||
+    (c.raison !== null && !RAISONS_RESULTAT.includes(c.raison)) ||
+    (c.code !== null && !CODES_RESULTAT.includes(c.code)) ||
+    !codesComplets ||
+    !Number.isSafeInteger(c.emis) ||
+    jsonCanonique(c) !== new TextDecoder().decode(octets)
+  )
+    throw new Error('Résultat invalide');
+  return c;
+}
+
+/** La signature est injectée par le daemon : aucune clé privée dans le code du téléphone. */
+export function signerResultat(
+  entree: unknown,
+  signer: (octets: Uint8Array) => Uint8Array,
+): Enveloppe | null {
+  try {
+    const corps = new TextEncoder().encode(jsonCanonique(entree));
+    lireCorpsResultat(corps);
+    const sig = signer(new Uint8Array([...new TextEncoder().encode(CONTEXTE_RESULTAT), ...corps]));
+    return { corps: encoderBase64url(corps), sig: encoderBase64url(sig) };
+  } catch {
+    return null;
+  }
+}
+
+export async function verifierResultat(
+  enveloppe: Enveloppe,
+  cleRaw: string,
+): Promise<CorpsResultatV1 | null> {
+  try {
+    if (enveloppe.corps.length > 1024 || enveloppe.sig.length !== 86) return null;
+    const corps = decoderBase64url(enveloppe.corps);
+    const resultat = lireCorpsResultat(corps);
+    const cle = await globalThis.crypto.subtle.importKey(
+      'raw',
+      decoderBase64url(cleRaw),
+      { name: 'ECDSA', namedCurve: 'P-256' },
+      false,
+      ['verify'],
+    );
+    return (await globalThis.crypto.subtle.verify(
+      { name: 'ECDSA', hash: 'SHA-256' },
+      cle,
+      decoderBase64url(enveloppe.sig),
+      new Uint8Array([...new TextEncoder().encode(CONTEXTE_RESULTAT), ...corps]),
+    ))
+      ? resultat
+      : null;
+  } catch {
+    return null;
+  }
 }

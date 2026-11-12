@@ -1,4 +1,11 @@
-import { decoderBase64url, jsonCanonique, type ParamsAction } from '../../shared/pda.js';
+import { sign } from 'node:crypto';
+import {
+  decoderBase64url,
+  jsonCanonique,
+  signerResultat,
+  type Enveloppe,
+  type ParamsAction,
+} from '../../shared/pda.js';
 import type { Db } from '../db.js';
 import type { creerFournisseurClePda } from './cle.js';
 import { signerDemande } from './demande.js';
@@ -25,6 +32,7 @@ export class RelaisInjoignable extends Error {
 }
 
 export class FilePda {
+  private readonly resultats = new Map<string, { enveloppe: Enveloppe; debut: number }>();
   private arrete = false;
   private minuterie: ReturnType<typeof setTimeout> | undefined;
   private suite: Promise<unknown> = Promise.resolve();
@@ -82,7 +90,12 @@ export class FilePda {
       .all() as Array<{ id: string; echeance: number }>;
   }
   private programmer() {
-    if (!this.actif() || this.minuterie !== undefined || !this.ouvertes().length) return;
+    if (
+      !this.actif() ||
+      this.minuterie !== undefined ||
+      (!this.ouvertes().length && !this.resultats.size)
+    )
+      return;
     this.minuterie = setTimeout(() => {
       this.minuterie = undefined;
       void (async () => {
@@ -154,6 +167,64 @@ export class FilePda {
       return { id: d.corps.id };
     });
   }
+  // D310 : relire la ligne terminée, jamais les valeurs de l'exécuteur.
+  mettreResultatEnFile(id: string) {
+    if (!this.actif()) return;
+    try {
+      const ligne = this.deps.db
+        .prepare('SELECT id, action, resultat, raison, envoi FROM pda_demandes WHERE id = ?')
+        .get(id) as
+        | {
+            id: string;
+            action: string;
+            resultat: string | null;
+            raison: string | null;
+            envoi: string | null;
+          }
+        | undefined;
+      if (!ligne?.resultat) return;
+      const enveloppe = signerResultat(
+        {
+          v: 1,
+          id: ligne.id,
+          action: ligne.action,
+          resultat: ligne.resultat,
+          raison: ligne.raison,
+          code: ligne.envoi === null ? null : JSON.parse(ligne.envoi).code,
+          emis: this.maintenant(),
+        },
+        (octets) =>
+          sign('sha256', octets, {
+            key: this.deps.fournisseur.obtenir(),
+            dsaEncoding: 'ieee-p1363',
+          }),
+      );
+      if (!enveloppe) throw new Error();
+      this.resultats.set(id, { enveloppe, debut: this.maintenant() });
+      this.programmer();
+    } catch {
+      this.deps.journal('pda.resultat.invalide', { id });
+    }
+  }
+  private async publierResultats() {
+    for (const [id, resultat] of this.resultats) {
+      if (!this.actif()) return;
+      if (this.maintenant() - resultat.debut >= 60 * 60_000) {
+        this.resultats.delete(id);
+        this.deps.journal('pda.resultat.abandon', { id });
+        continue;
+      }
+      try {
+        if (await this.deps.relais.publierResultat(id, resultat.enveloppe)) {
+          this.resultats.delete(id);
+          continue;
+        }
+      } catch {
+        /* Le prochain tour retente la même enveloppe. */
+      }
+      this.deps.journal('pda.resultat.echec', { id });
+    }
+  }
   annuler(id: string) {
     return this.enFile(async () => {
       const modifie = this.deps.db
@@ -162,6 +233,7 @@ export class FilePda {
         )
         .run(new Date(this.maintenant()).toISOString(), id);
       if (!modifie.changes) return false;
+      this.mettreResultatEnFile(id);
       this.deps.signaler();
       await this.deps.relais.retirer(id);
       return true;
@@ -229,6 +301,7 @@ export class FilePda {
         this.deps.journal('pda.tardive', { id: demande.id });
         return;
       }
+      this.mettreResultatEnFile(demande.id);
       this.deps.journal('pda.numero_faux', { id: demande.id, appareil });
       this.deps.signaler();
       try {
@@ -280,6 +353,8 @@ export class FilePda {
   }
   tour() {
     return this.enFile(async () => {
+      if (!this.actif()) return;
+      await this.publierResultats();
       if (!this.actif() || !this.ouvertes().length) return;
       if (
         this.dernierePublication === null ||

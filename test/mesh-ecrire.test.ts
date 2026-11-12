@@ -80,6 +80,7 @@ async function preparer(scenario: ScenarioProxy = succes) {
     preparerConsommation: (ligne) => porte.preparerConsommation(ligne),
     relais: {
       publierAutorises: async () => true,
+      publierResultat: async () => true,
       deposer,
       retirer: async () => {},
       tirer: async () => reponses,

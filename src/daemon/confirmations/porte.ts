@@ -72,6 +72,7 @@ export function creerPorte(deps: {
     deps.db
       .prepare('UPDATE pda_demandes SET resultat = ?, raison = ? WHERE id = ?')
       .run(resultat, raison, id);
+    deps.file()?.mettreResultatEnFile(id);
     deps.signaler?.();
   };
   const reconstruire = (action: ActionPorte, p: ParametresActions[ActionPorte]): EntreeAction => {
