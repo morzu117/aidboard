@@ -68,3 +68,30 @@ export function useDiscussionsServeur(serverId: string): {
   }, [client, serverId]);
   return { discussions, erreur, recharger };
 }
+
+/** Les sessions existantes ne sont lues qu'à l'ouverture du choix de reprise. */
+export function useSessionsClaudeServeur(serverId: string) {
+  const client = useAidClient();
+  const [sessions, setSessions] = useState<
+    import('../../../src/shared/model.js').RemoteClaudeSession[] | null
+  >(null);
+  const [erreur, setErreur] = useState<string | null>(null);
+  useEffect(() => {
+    let actif = true;
+    client
+      .request<import('../../../src/shared/model.js').RemoteClaudeSession[]>(
+        'GET',
+        `/api/servers/${serverId}/claude-sessions`,
+      )
+      .then((result) => {
+        if (actif) setSessions(result);
+      })
+      .catch((err: unknown) => {
+        if (actif) setErreur(err instanceof Error ? err.message : String(err));
+      });
+    return () => {
+      actif = false;
+    };
+  }, [client, serverId]);
+  return { sessions, erreur };
+}
