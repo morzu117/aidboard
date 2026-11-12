@@ -19,7 +19,7 @@ export interface AvisMesh {
     etat: 'ok' | 'invalide' | 'abstention' | 'secret_suspecte' | 'scelle' | 'attendu' | 'absent';
     reponses: Reponse[];
     brut: string | null;
-    vote: 'avis' | 'objection' | 'scelle' | 'invalide' | null;
+    vote: 'avis' | 'objection' | 'abstention' | 'scelle' | 'invalide' | null;
   }[];
   accord: AccordAsk[];
   rebuttals: { cell: string; texte: string | null }[];
@@ -115,9 +115,11 @@ export function lireAvis({
         ? null
         : vote.corps === null
           ? 'scelle'
-          : vote.corps === 'avis' || vote.corps === 'objection'
-            ? vote.corps
-            : 'invalide',
+          : vote.outcome === 'cannot_evaluate'
+            ? 'abstention'
+            : vote.corps === 'avis' || vote.corps === 'objection'
+              ? vote.corps
+              : 'invalide',
     };
     if (!bulletin) {
       return { ...base, etat: phase === 'positions' ? 'attendu' : 'absent' };

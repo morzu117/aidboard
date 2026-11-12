@@ -256,8 +256,18 @@ export class AvisMeshService {
         throw new AidHttpError(ouverte.status ?? 503, ouverte.message ?? ouverte.kind);
       if (ouverte.data) {
         this.deps.db
-          .prepare("UPDATE avis_mesh SET motion = ?, etat = 'ouverte', erreur = NULL WHERE id = ?")
-          .run(ouverte.data.id, p.id);
+          .prepare(
+            "UPDATE avis_mesh SET motion = ?, echeances = ?, etat = 'ouverte', erreur = NULL WHERE id = ?",
+          )
+          .run(
+            ouverte.data.id,
+            JSON.stringify({
+              positions: ouverte.data.positions_deadline,
+              rebuttal: ouverte.data.rebuttal_deadline,
+              vote: ouverte.data.vote_deadline,
+            }),
+            p.id,
+          );
         return;
       }
     } catch (e) {

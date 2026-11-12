@@ -79,3 +79,13 @@ it('révision 3 : sens des tours rebuttal et vote, baseline sans vote', () => {
   expect(charter).toContain('Le baseline ne vote pas.');
   expect(charter).toContain('Les trois tours sont obligatoires');
 });
+
+it('abstention : option nue au vote et secret signalé aux positions', () => {
+  const charter = charterAvis({ jeton: 'abcdef12', carte: 42, nbSousQuestions: 1 });
+  expect(charter).toContain(
+    "Au tour vote, pour t'abstenir, garde une option nue dans le corps (printf 'avis' > vote.txt) et ajoute --outcome cannot_evaluate à la commande post.",
+  );
+  expect(charter).toContain('Aux tours positions et rebuttal');
+  expect(charter).toContain('un corps qui dit seulement « secret suspecté », sans le recopier');
+  expect(charter).toContain('Signale le secret suspecté au tour positions, pas au vote.');
+});

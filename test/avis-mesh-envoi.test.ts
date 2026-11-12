@@ -1027,6 +1027,12 @@ test('reprise récupère une motion déjà ouverte sans écriture', async () => 
     .prepare("UPDATE avis_mesh SET etat = 'salle-sans-motion', motion = NULL WHERE id = ?")
     .run(t.p.id);
   const p = t.avis.preparerMotion(t.p.id, echeances());
+  const echeancesGateway = {
+    positions: '2026-11-13T10:00:00Z',
+    rebuttal: '2026-11-13T11:00:00Z',
+    vote: '2026-11-13T12:00:00Z',
+  };
+  expect(echeancesGateway).not.toEqual(p.echeances);
   const espion = vi.spyOn(t.lecteur, 'motionOuverte').mockResolvedValue({
     ok: true,
     readAt: new Date().toISOString(),
@@ -1035,13 +1041,14 @@ test('reprise récupère une motion déjà ouverte sans écriture', async () => 
       text: 'Question',
       options: ['avis', 'objection'],
       phase: 'positions',
-      positions_deadline: p.echeances.positions,
-      rebuttal_deadline: p.echeances.rebuttal,
-      vote_deadline: p.echeances.vote,
+      positions_deadline: echeancesGateway.positions,
+      rebuttal_deadline: echeancesGateway.rebuttal,
+      vote_deadline: echeancesGateway.vote,
     },
   });
   const avant = t.appels.length;
   await t.avis.reprendreMotion(p);
+  expect(JSON.parse(t.avis.ligne(t.p.id)!.echeances)).toEqual(echeancesGateway);
   expect(espion).toHaveBeenCalledWith('avis-test');
   expect(t.appels).toHaveLength(avant);
   expect(t.avis.ligne(t.p.id)).toMatchObject({ etat: 'ouverte', motion: 43 });

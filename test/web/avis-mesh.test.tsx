@@ -478,6 +478,7 @@ test('les deux reprises portent aussi X-AID-Confirm: avis et un id encodé', asy
 
 test.each([
   ['avis', 'maintient'],
+  ['abstention', 'abstention au vote'],
   ['objection', 'objection'],
   ['scelle', 'scellé par le gateway'],
   ['invalide', 'vote invalide'],

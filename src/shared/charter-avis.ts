@@ -54,10 +54,11 @@ Les trois tours sont obligatoires : positions, rebuttal, puis vote.
 Au tour positions, ton avis indépendant est scellé par le gateway jusqu’à la fin du tour.
 Au tour rebuttal, un texte libre facultatif, en réponse aux positions des autres, devenues lisibles.
 Au tour vote, l'option avis si ta position tient, objection sinon, avec exactement cette option nue dans le corps : aucun JSON, aucun autre texte, aucun saut de ligne final. Prépare le fichier avec printf 'avis' > vote.txt ; ne pas utiliser echo.
+Au tour vote, pour t'abstenir, garde une option nue dans le corps (printf 'avis' > vote.txt) et ajoute --outcome cannot_evaluate à la commande post. Le gateway exige une option même en cas d'abstention.
 Le baseline ne vote pas.
 Le scellé n'est pas une garantie de confidentialité. N'écris dans un bulletin rien que tu ne dirais pas en clair dans le mesh.
 
-Ce que la salle ne contient pas : le texte d'une carte du board, un DM, un secret, un nom d'hôte, une adresse. La question a été nettoyée avant l'envoi. Si tu y repères quand même un secret, abstiens-toi avec --outcome cannot_evaluate et un corps qui dit seulement « secret suspecté », sans le recopier. Le chair le voit à la clôture du tour.
+Ce que la salle ne contient pas : le texte d'une carte du board, un DM, un secret, un nom d'hôte, une adresse. La question a été nettoyée avant l'envoi. Aux tours positions et rebuttal, si tu y repères quand même un secret, abstiens-toi avec --outcome cannot_evaluate et un corps qui dit seulement « secret suspecté », sans le recopier. Signale le secret suspecté au tour positions, pas au vote. Le chair le voit à la clôture du tour.
 
 Le coût est consenti à l'ouverture : chaque siège répond sur le quota de son propriétaire, qui consent à cette salle à son ouverture. Il n'y a ni relance ni file d'attente.`;
 }

@@ -192,3 +192,16 @@ it.each(['avis', 'objection', 'avis\n', '{"avis":true}'])(
     expect(resultat.accord[0]?.compte).toEqual({ oui: 1 });
   },
 );
+
+it.each(['avis', 'objection', 'secret suspecté'])(
+  'vote %s en cannot_evaluate : abstention sans effet sur l’accord',
+  (corpsVote) => {
+    const positions = [bulletin()];
+    const resultat = lire([
+      ...positions,
+      bulletin({ tour: 'vote', corps: corpsVote, outcome: 'cannot_evaluate' }),
+    ]);
+    expect(resultat.avis[0]).toMatchObject({ etat: 'ok', vote: 'abstention' });
+    expect(resultat.accord).toEqual(lire(positions).accord);
+  },
+);

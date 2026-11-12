@@ -51,6 +51,7 @@ export function TableauAvisMesh({ resultat }: { resultat: ResultatAvisMesh }) {
                     {
                       {
                         avis: 'maintient',
+                        abstention: 'abstention au vote',
                         objection: 'objection',
                         scelle: 'scellé par le gateway',
                         invalide: 'vote invalide',
