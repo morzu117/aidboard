@@ -1,5 +1,6 @@
 import { accessSync, constants, statSync } from 'node:fs';
 import { delimiter, isAbsolute, resolve } from 'node:path';
+import { envSwarph } from './env.js';
 import { meshExec } from './exec.js';
 import type { AidConfig, MeshConfig } from '../config.js';
 import type { Db } from '../db.js';
@@ -34,7 +35,7 @@ interface EntreeMesh {
 /** Une identité et un jeu de transports par mesh ; aucune activation implicite d'un rebranchement. */
 export class MeshRegistry {
   readonly binaire: string | null;
-  private initialisation: Promise<void> = Promise.resolve();
+  private initialisation: Promise<void> | null = null;
   private readonly entrees = new Map<string, EntreeMesh>();
   constructor(
     private readonly deps: {
@@ -60,7 +61,6 @@ export class MeshRegistry {
         services: null,
       };
       this.entrees.set(nom, entree);
-      if (config.cell) this.activer(entree);
     }
   }
 
@@ -128,8 +128,10 @@ export class MeshRegistry {
   }
 
   init(): Promise<void> {
-    this.initialisation = Promise.all(
+    this.initialisation ??= Promise.all(
       [...this.entrees.values()].map(async (e) => {
+        if (!e.config.cell) return;
+        await this.activer(e);
         if (!e.services) return;
         try {
           await e.services.mesh.init();
@@ -152,8 +154,8 @@ export class MeshRegistry {
     if (entree.erreur !== 'rebranche') throw new AidHttpError(409, 'mesh non rebranche');
     this.deps.db.transaction(() => {
       archiverMesh(this.deps.db, nom, new Date().toISOString());
-      this.activer(entree);
     })();
+    await this.activer(entree);
     await entree.services?.mesh.init();
   }
 
@@ -161,12 +163,29 @@ export class MeshRegistry {
     for (const e of this.entrees.values()) e.services?.mesh.dispose();
   }
 
-  private activer(e: EntreeMesh): void {
+  private async activer(e: EntreeMesh): Promise<void> {
     try {
       e.empreinte = empreinteMesh(e.config.cell, e.config.gateway);
       if (activerMesh(this.deps.db, e.nom, e.empreinte) === 'rebranche') {
         e.erreur = 'rebranche';
         return;
+      }
+      if (this.binaire) {
+        try {
+          const resultat = await (this.deps.exec ?? meshExec)(this.binaire, ['--version'], {
+            env: envSwarph(e.config),
+            timeoutMs: 10_000,
+          });
+          if (!resultat.ok || resultat.timedOut) {
+            throw new Error(resultat.stderr || resultat.spawnErrorCode || 'échec de --version');
+          }
+        } catch (erreur) {
+          e.erreur = 'binaire';
+          this.deps.log(
+            `mesh ${e.nom} : binaire : ${String((erreur as Error).message).slice(0, 200)}`,
+          );
+          return;
+        }
       }
       const mesh = new MeshService({
         ...this.deps,

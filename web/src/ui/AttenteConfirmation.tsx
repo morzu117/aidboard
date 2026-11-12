@@ -13,6 +13,7 @@ export interface Confirmation {
   raison?: string | null;
   action?: string;
   params?: unknown;
+  mesh?: { nom: string; cell: string } | null;
 }
 export interface FileConfirmations {
   ouvertes: Confirmation[];

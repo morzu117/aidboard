@@ -38,7 +38,7 @@ afterEach(async () => {
   for (const nettoyer of nettoyages.splice(0).reverse()) await nettoyer();
 });
 
-function contexte(rebranche = false) {
+async function contexte(rebranche = false, initialiser = true) {
   const home = mkdtempSync(join(tmpdir(), 'aid-46-lectures-'));
   const db = openDb(join(home, 'state.db'));
   const store = new EventStore(db);
@@ -80,6 +80,7 @@ function contexte(rebranche = false) {
     db.close();
     rmSync(home, { recursive: true, force: true });
   });
+  if (initialiser) await registre.init();
   return { home, db, store, config, registre, appels };
 }
 
@@ -111,7 +112,7 @@ function environnement(env: NodeJS.ProcessEnv, home: string, gateway: string) {
 
 test('deux identités de même cell : environnement reçu par service, deux boards, comité et lectures', async () => {
   for (const nom of [...hostiles, 'AUTRE_SECRET']) vi.stubEnv(nom, 'hostile');
-  const c = contexte();
+  const c = await contexte();
   await c.registre.init();
   for (const nom of ['principal', 'perso']) {
     const s = c.registre.obtenir(nom);
@@ -130,8 +131,8 @@ test('deux identités de même cell : environnement reçu par service, deux boar
   }
 });
 
-test('liste blanche et ajouts du terminal : seuls terminal et hooks AID sont ajoutés', () => {
-  const c = contexte();
+test('liste blanche et ajouts du terminal : seuls terminal et hooks AID sont ajoutés', async () => {
+  const c = await contexte();
   for (const nom of [...hostiles, 'AUTRE_SECRET']) vi.stubEnv(nom, 'hostile');
   vi.stubEnv('LC_ALL', 'C');
   vi.stubEnv('TMPDIR', '/tmp');
@@ -148,7 +149,7 @@ test('liste blanche et ajouts du terminal : seuls terminal et hooks AID sont ajo
 });
 
 test('boîtes, marques et instantané séparés ; alias principal', async () => {
-  const c = contexte();
+  const c = await contexte();
   dm(c.store, 'principal');
   dm(c.store, 'perso');
   const principal = c.registre.obtenir().mesh;
@@ -172,7 +173,7 @@ test('boîtes, marques et instantané séparés ; alias principal', async () => 
 });
 
 test('rebranchement inactif, archivage puis activation sans ancienne donnée', async () => {
-  const c = contexte(true);
+  const c = await contexte(true);
   dm(c.store, 'perso');
   expect(c.registre.liste().find((m) => m.nom === 'perso')).toMatchObject({
     actif: false,
@@ -189,8 +190,8 @@ test('rebranchement inactif, archivage puis activation sans ancienne donnée', a
 
 test.each([null, 12, {}, '', '../perso', 'Perso', 'perso@archive-invalide'])(
   'projecteurs : mesh invalide %j ignoré',
-  (mesh) => {
-    const c = contexte();
+  async (mesh) => {
+    const c = await contexte(false, false);
     dm(c.store, mesh);
     c.store.append({ source: 'swarph', type: 'mesh.state', data: { mesh, connected: true } });
     expect((c.db.prepare('SELECT count(*) AS n FROM mesh_inbox').get() as { n: number }).n).toBe(0);
@@ -198,15 +199,15 @@ test.each([null, 12, {}, '', '../perso', 'Perso', 'perso@archive-invalide'])(
   },
 );
 
-test('projecteurs : événements anciens et archives acceptés', () => {
-  const c = contexte();
+test('projecteurs : événements anciens et archives acceptés', async () => {
+  const c = await contexte();
   dm(c.store, undefined);
   dm(c.store, 'perso@archive-2026-11-12');
   expect(c.registre.principal?.mesh.inbox()).toHaveLength(1);
   expect((c.db.prepare('SELECT count(*) AS n FROM mesh_inbox').get() as { n: number }).n).toBe(2);
 });
 
-async function serveur(c: ReturnType<typeof contexte>) {
+async function serveur(c: Awaited<ReturnType<typeof contexte>>) {
   const app = Fastify();
   app.setErrorHandler((e, _req, reply) => {
     if (e instanceof AidHttpError) return reply.code(e.status).send({ error: e.message });
@@ -221,7 +222,7 @@ async function serveur(c: ReturnType<typeof contexte>) {
 }
 
 test('routes : sélection, 404, 409 et liste JSON sans gateway, home ni chemin', async () => {
-  const c = contexte(true);
+  const c = await contexte(true);
   const app = await serveur(c);
   for (const chemin of [
     '/api/mesh',
@@ -253,7 +254,7 @@ test('routes : sélection, 404, 409 et liste JSON sans gateway, home ni chemin',
 });
 
 test('routes DM et connexion : mesh du chemin, anciennes formes sur principal', async () => {
-  const c = contexte();
+  const c = await contexte();
   dm(c.store, 'principal');
   dm(c.store, 'perso');
   const app = await serveur(c);
@@ -274,15 +275,15 @@ test('routes DM et connexion : mesh du chemin, anciennes formes sur principal', 
 });
 
 test('une erreur de lecture reste locale à son mesh', async () => {
-  const c = contexte();
+  const c = await contexte();
   vi.spyOn(c.registre.obtenir('perso').mesh, 'read').mockRejectedValue(new Error('indisponible'));
   const app = await serveur(c);
   expect((await app.inject('/api/board/projects?mesh=perso')).json()).toMatchObject({ ok: false });
   expect((await app.inject('/api/board/projects?mesh=principal')).statusCode).toBe(200);
 });
 
-test('un échec de construction ne bloque pas les autres meshes', () => {
-  const c = contexte();
+test('un échec de construction ne bloque pas les autres meshes', async () => {
+  const c = await contexte();
   const configuration = structuredClone(c.config);
   configuration.meshes.perso!.gateway = 'gateway invalide';
   const registre = new MeshRegistry({
@@ -292,6 +293,7 @@ test('un échec de construction ne bloque pas les autres meshes', () => {
     log: () => undefined,
   });
   nettoyages.push(() => registre.dispose());
+  await registre.init();
   expect(registre.principal).not.toBeNull();
   expect(() => registre.obtenir('perso')).toThrow(
     expect.objectContaining({ status: 409, message: 'demarrage' }),
@@ -302,8 +304,8 @@ test('un échec de construction ne bloque pas les autres meshes', () => {
   });
 });
 
-test('sans gateway : aucune valeur hostile et aucun gateway implicite', () => {
-  const c = contexte();
+test('sans gateway : aucune valeur hostile et aucun gateway implicite', async () => {
+  const c = await contexte();
   for (const nom of hostiles) vi.stubEnv(nom, 'hostile');
   const env = envSwarph({ ...c.registre.configuration(), gateway: '' });
   for (const nom of hostiles) expect(env).not.toHaveProperty(nom);
@@ -365,7 +367,7 @@ test('archivage local authentifié : activation et alias visibles sans redémarr
 });
 
 test('avis lus par mesh : listes et détails restent cloisonnés', async () => {
-  const c = contexte();
+  const c = await contexte();
   const id = '20261112T120000Z-abcd';
   for (const [mesh, carte] of [
     ['principal', 1],
@@ -385,7 +387,7 @@ test('avis lus par mesh : listes et détails restent cloisonnés', async () => {
 });
 
 test('mesh sans cell : 404 mesh désactivé ; nom inconnu : 404 mesh inconnu', async () => {
-  const c = contexte();
+  const c = await contexte();
   const config = structuredClone(c.config);
   config.meshes.principal!.cell = '';
   const registre = new MeshRegistry({ config, db: c.db, store: c.store, log: () => undefined });

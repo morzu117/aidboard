@@ -290,6 +290,7 @@ Elle va bouger : on ajoute le moins possible.
   - La liste blanche **ne s'élargit pas** aux variables des gestionnaires de versions (`NVM_DIR`, `MISE_*`, `ASDF_*`, `PYENV_ROOT`…) : certaines, comme la config de mise, peuvent poser des variables d'environnement, donc une cible.
   - À vérifier à la recette sur le Mac, avec les vraies installations.
 - **Ce code est relu par le lab.**
+46.4 commité. Gate vert (3 720 tests). Le bandeau du mesh sur le téléphone, le mesh dans le panneau du Mac, et le test du binaire sous le home de chaque mesh (DM 96882, 96884). Une attente de confirmations-porte gagne la clé mesh. À relire par le lab.
 
 ### 46.5 Le web (D316)
 

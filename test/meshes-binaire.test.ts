@@ -79,6 +79,7 @@ test('chemin absolu configuré : aucun choix par PATH', async () => {
   vi.stubEnv('PATH', dossier());
   const meshes = registre(chemin);
   expect(meshes.binaire).toBe(chemin);
+  await meshes.init();
   expect((await meshes.obtenir().mesh.read(['exemple'])).stdout.trim()).toBe('principal');
 });
 

@@ -250,6 +250,8 @@ export async function startDaemon(
     });
     // 12.3 : le service mesh existe seulement si une cell est configurée (D39) ; jamais de connexion automatique
     const meshes = new MeshRegistry({ config, db: opened, store, log });
+    // 12.3 : relit l'état d'un monitor détaché qui aurait survécu, sans le relancer
+    await meshes.init();
     const mesh = meshes.principal?.mesh ?? null;
     const board = meshes.principal?.board ?? null;
     const swarph = meshes.principal?.swarph ?? null;
@@ -424,8 +426,6 @@ export async function startDaemon(
     void resumeFromManifest(agents, paths);
     // 08.8 : même esprit — le moteur rattrape chaque sujet en tâche de fond, un à la fois
     void rattraperIndex({ db: opened, store, engine: structural, indexer, log });
-    // 12.3 : relit l'état d'un monitor détaché qui aurait survécu, sans le relancer
-    void meshes.init();
     const declencheurPush = creerDeclencheur({
       compterPda: () =>
         config.modeHost.actif && config.modeHost.pda

@@ -85,6 +85,8 @@ async function contexte(cli = false) {
     },
   });
   nettoyages.push(() => registre.dispose());
+  await registre.init();
+  appelsCli.length = 0;
   for (const nom of ['principal', 'perso']) {
     vi.spyOn(registre.obtenir(nom).swarph, 'peers').mockResolvedValue({
       ok: true,
