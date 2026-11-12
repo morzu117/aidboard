@@ -1908,10 +1908,14 @@ test(
         .get(agentId),
     );
     expect(ligne(m, agentId)?.session_id).toBe('aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee');
+    expect(t.db.prepare('SELECT fork_from FROM server_agents WHERE id = ?').get(agentId)).toEqual({
+      fork_from: null,
+    });
     await req('POST', `/api/server-agents/${agentId}/relancer`);
     expect(starts).toHaveLength(3);
     const secondArgs = starts[2]!;
     expect(secondArgs).not.toContain('--fork-session');
+    expect(secondArgs).not.toContain(id);
     expect(secondArgs[secondArgs.indexOf('--resume') + 1]).toBe(
       'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee',
     );

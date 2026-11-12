@@ -823,12 +823,12 @@ export class RemoteAgentManager {
   }
 
   /** Une session n'existe chez l'agent qu'après un tour : avant, `--resume` échouerait en boucle (revue R.4). */
-  private hasTurn(agentId: string): boolean {
+  private hasTurn(agentId: string, successfulOnly = false): boolean {
     return !!this.deps.db
       .prepare(
-        "SELECT 1 FROM server_agent_messages WHERE agent_id = ? AND kind = 'turn_end' LIMIT 1",
+        "SELECT 1 FROM server_agent_messages WHERE agent_id = ? AND kind = 'turn_end' AND (? = 0 OR json_extract(payload, '$.ok') = 1) LIMIT 1",
       )
-      .get(agentId);
+      .get(agentId, Number(successfulOnly));
   }
 
   private agentRowOf(r: AgentRow): AgentRow {
@@ -896,11 +896,10 @@ export class RemoteAgentManager {
       create: (c): ConversationDriver => {
         // `cwd` est celui du serveur ; l'environnement du daemon n'y part pas (D76)
         const opts = { bin, cwd: discussion.cwd, env: {}, ...c, ...confirmOpts };
-        if (row.kind === 'claude' && row.fork_from) {
+        if (row.kind === 'claude' && row.fork_from && !this.hasTurn(row.id, true)) {
+          // Un turn_end échoué avant init ne ferme pas le droit au premier fork.
           // Une reconnexion interne après init reprend le fork, jamais la source en place.
-          const fork =
-            c.sessionId === row.fork_from ||
-            (!this.hasTurn(row.id) && c.sessionId === row.session_id);
+          const fork = c.sessionId === row.fork_from || c.sessionId === row.session_id;
           if (fork) {
             opts.sessionId = row.fork_from;
             opts.resume = true;
@@ -1015,6 +1014,10 @@ export class RemoteAgentManager {
         this.deps.db
           .prepare('UPDATE server_agents SET session_id = ?, updated_at = ? WHERE id = ?')
           .run(ev.sessionId, new Date().toISOString(), live.id);
+        // L'id propre reçu à init rend la source inutile, avant même la fin du tour.
+        this.deps.db
+          .prepare('UPDATE server_agents SET fork_from = NULL WHERE id = ? AND fork_from <> ?')
+          .run(live.id, ev.sessionId);
         break;
       case 'request':
         if (live.pending) live.queued.push(ev.request);
