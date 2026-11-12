@@ -97,11 +97,11 @@ A-I-D ne poste jamais pour eux.
       et l’accord est calculé immédiatement, sans attendre la clôture. Une
       position valide seule, avec abstention ou absence de l’autre siège,
       donne `insuffisant`. Le texte rebuttal ne compte pas dans l’accord.
+- [ ] Au vote, préparer `printf 'avis' > vote.txt` (pas de JSON ni de saut de ligne final, ne pas utiliser `echo`), puis déposer par `swarph committee post avis-test --round vote --body-file vote.txt --as peer-a`. Le baseline ne vote pas.
 - [ ] Laisser passer le vote puis la clôture ; le gateway peut créer les lignes
       « vote » sur le board. Fermer et rouvrir la demande, puis « Relire ».
       Attendu : phase `closed`, résultats retrouvés par l’id de motion gardé,
-      même si elle n’est plus listée parmi les motions ouvertes. Les votes
-      valides remplacent les positions et le tableau le signale.
+      même si elle n’est plus listée parmi les motions ouvertes. Le vote s’affiche à côté de la position : « maintient », « objection », « scellé par le gateway » ou « vote invalide ». L’accord porte sur les positions seules.
 
 Constats : __________
 

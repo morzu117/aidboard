@@ -45,8 +45,19 @@ export function TableauAvisMesh({ resultat }: { resultat: ResultatAvisMesh }) {
             {resultat.avis.map((avis) => (
               <th scope="col" key={avis.i}>
                 {avis.cell} <span className="pastille pastille--discret">{etats[avis.etat]}</span>
-                {avis.vote_scelle && <p>Vote : scellé par le gateway</p>}
-                {avis.vote_pris_en_compte && <p>Vote pris en compte à la place de la position</p>}
+                {avis.vote && (
+                  <p>
+                    Vote :{' '}
+                    {
+                      {
+                        avis: 'maintient',
+                        objection: 'objection',
+                        scelle: 'scellé par le gateway',
+                        invalide: 'vote invalide',
+                      }[avis.vote]
+                    }
+                  </p>
+                )}
                 {avis.etat === 'invalide' && avis.brut !== null && (
                   <details>
                     <summary>Réponse brute</summary>

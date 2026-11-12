@@ -74,7 +74,7 @@ it('révision 3 : sens des tours rebuttal et vote, baseline sans vote', () => {
     'Au tour rebuttal, un texte libre facultatif, en réponse aux positions des autres, devenues lisibles.',
   );
   expect(charter).toContain(
-    "Au tour vote, l'option avis si ta position tient, objection sinon, avec dans le corps le même JSON qu'au tour positions, mis à jour.",
+    "Au tour vote, l'option avis si ta position tient, objection sinon, avec exactement cette option nue dans le corps : aucun JSON, aucun autre texte, aucun saut de ligne final. Prépare le fichier avec printf 'avis' > vote.txt ; ne pas utiliser echo.",
   );
   expect(charter).toContain('Le baseline ne vote pas.');
   expect(charter).toContain('Les trois tours sont obligatoires');

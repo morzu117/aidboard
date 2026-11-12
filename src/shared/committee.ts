@@ -3,7 +3,7 @@ import type { BulletinAvis } from './avis-mesh.js';
  * committee.py transmet le JSON du gateway sans le modifier.
  * Le lab a confirmé baseline_absent {reason, by, at} et positions_absent (DM 96753).
  * positions_absent manque sur les anciens gateways : liste vide dans ce cas.
- * Recette : vérifier encore l'enveloppe motion/seats/ballots et l'id entier positif.
+ * results rend la motion à plat ; motion --json conserve la liste motions.
  * Ne jamais reconstituer un corps absent : il reste « scellé par le gateway » (D300).
  */
 export type TourCommittee = 'positions' | 'rebuttal' | 'vote';
@@ -21,16 +21,24 @@ export interface AbsenceBaselineCommittee {
   by: string;
   at: string;
 }
-export interface ResultatsCommittee {
+export interface ResultatsCommittee extends MotionCommittee {
+  channel: string;
+  card_id: number;
   baseline_absent: AbsenceBaselineCommittee | null;
   positions_absent: string[];
-  motion: MotionCommittee;
-  seats: { peer: string; role: string; family: string }[];
+  seats: {
+    peer: string;
+    role: string;
+    family: string;
+    voided: boolean;
+    recast_from: string | null;
+  }[];
   ballots: {
     peer: string;
     round: TourCommittee;
     created_at: string;
-    cancelled: boolean;
+    voided: boolean;
+    placeholder: string;
     message_id: number;
     body: string | null;
     outcome: BulletinAvis['outcome'];
@@ -100,27 +108,35 @@ export function lireResultats(v: unknown): ResultatsCommittee {
       r.positions_absent === undefined
         ? []
         : liste(r.positions_absent, 'positions_absent').map((v) => texte(v, 'positions_absent')),
-    motion: motion(r.motion),
-    seats: liste(r.seats, 'seats').map((v) => {
-      const s = objet(v, 'seat');
-      return {
-        peer: texte(s.peer, 'seat.peer'),
-        role: texte(s.role, 'seat.role'),
-        family: texte(s.family, 'seat.family'),
-      };
-    }),
+    ...motion(r),
+    channel: texte(r.channel, 'channel'),
+    card_id: entier(r.card_id, 'card_id'),
+    seats: liste(r.seats, 'seats')
+      .map((v) => {
+        const s = objet(v, 'seat');
+        if (typeof s.voided !== 'boolean') throw new ErreurFormatCommittee('seat.voided');
+        return {
+          voided: s.voided,
+          recast_from: s.recast_from === null ? null : texte(s.recast_from, 'seat.recast_from'),
+          peer: texte(s.peer, 'seat.peer'),
+          role: texte(s.role, 'seat.role'),
+          family: texte(s.family, 'seat.family'),
+        };
+      })
+      .filter((s) => !s.voided),
     ballots: liste(r.ballots, 'ballots').map((v) => {
       const b = objet(v, 'ballot');
       if (!['positions', 'rebuttal', 'vote'].includes(texte(b.round, 'ballot.round')))
         throw new ErreurFormatCommittee('ballot.round');
-      if (typeof b.cancelled !== 'boolean') throw new ErreurFormatCommittee('ballot.cancelled');
+      if (typeof b.voided !== 'boolean') throw new ErreurFormatCommittee('ballot.voided');
       if (b.outcome != null && b.outcome !== 'pass' && b.outcome !== 'cannot_evaluate')
         throw new ErreurFormatCommittee('ballot.outcome');
       return {
         peer: texte(b.peer, 'ballot.peer'),
         round: b.round as TourCommittee,
         created_at: date(b.created_at, 'ballot.created_at'),
-        cancelled: b.cancelled,
+        voided: b.voided,
+        placeholder: texte(b.placeholder, 'ballot.placeholder'),
         message_id: entier(b.message_id, 'ballot.message_id'),
         body: b.body == null ? null : texte(b.body, 'ballot.body'),
         outcome: (b.outcome ?? null) as BulletinAvis['outcome'],
@@ -134,6 +150,6 @@ export function versBulletinsAvis(resultats: ResultatsCommittee): BulletinAvis[]
     tour: b.round,
     outcome: b.outcome,
     corps: b.body,
-    annule: b.cancelled,
+    annule: b.voided,
   }));
 }

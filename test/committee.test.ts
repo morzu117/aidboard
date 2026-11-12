@@ -18,28 +18,34 @@ const motion = {
   options: ['repondu', 'sans_avis'],
   phase: 'positions',
   positions_deadline: '2026-11-12T12:00:00Z',
-  rebuttal_deadline: null,
-  vote_deadline: null,
+  rebuttal_deadline: '2026-11-13T13:00:00Z',
+  vote_deadline: '2026-11-13T14:00:00Z',
 };
 const bulletin = {
   peer: 'cell-a',
   round: 'positions',
   created_at: '2026-11-11T12:00:00Z',
-  cancelled: false,
+  voided: false,
+  placeholder: 'exemple',
   message_id: 10,
 };
 const scelles = {
   baseline_absent: null,
-  motion,
-  seats: [{ peer: 'cell-a', role: 'seat', family: 'test' }],
+  ...motion,
+  channel: 'avis-test',
+  card_id: 1,
+  seats: [{ peer: 'cell-a', role: 'seat', family: 'test', voided: false, recast_from: null }],
   ballots: [bulletin],
 };
 const ouverts = {
   ...scelles,
-  seats: [...scelles.seats, { peer: 'cell-b', role: 'seat', family: 'test' }],
+  seats: [
+    ...scelles.seats,
+    { peer: 'cell-b', role: 'seat', family: 'test', voided: false, recast_from: null },
+  ],
   ballots: [
     { ...bulletin, body: 'secret suspecté', outcome: 'cannot_evaluate' },
-    { ...bulletin, round: 'vote', cancelled: true, body: 'illisible', outcome: 'pass' },
+    { ...bulletin, round: 'vote', voided: true, body: 'illisible', outcome: 'pass' },
   ],
 };
 const dossiers: string[] = [];
@@ -130,7 +136,7 @@ test('proxy : verbes déclarés, non relayés, aucun lancement', async () => {
 });
 test('canal et motion invalides refusés avant lancement', () => {
   const t = faux();
-  for (const canal of ['--help', '../test', 'test;id', 'test\n'])
+  for (const canal of ['MAJUSCULE', 'a.b', 'a'.repeat(65), '', '../test', 'test;id', 'test\n'])
     expect(() => t.lecteur.motionOuverte(canal)).toThrow(RangeError);
   for (const id of [0, -1, 1.5, '--help', '42;id'])
     expect(() => t.lecteur.resultats('avis-test', id)).toThrow(RangeError);
@@ -235,3 +241,38 @@ test.each([null, 'cell-a', {}, [42], ['cell-a', null]])(
     expect(() => lireResultats({ ...scelles, positions_absent })).toThrow('positions_absent');
   },
 );
+
+test('results à plat : siège annulé avec recast et vote nu', () => {
+  const r = lireResultats({
+    ...scelles,
+    seats: [
+      ...scelles.seats,
+      { peer: 'ancien', role: 'seat', family: 'test', voided: true, recast_from: 'cell-a' },
+    ],
+    ballots: [{ ...bulletin, round: 'vote', body: 'avis', outcome: 'pass' }],
+  });
+  expect(r.id).toBe(42);
+  expect(r.seats.map((s) => s.peer)).toEqual(['cell-a']);
+  expect(versBulletinsAvis(r)[0]?.corps).toBe('avis');
+  expect(() => lireResultats({ ...scelles, id: undefined, motion })).toThrow(ErreurFormatCommittee);
+});
+
+test('refus gateway sur sortie 2', async () => {
+  const lecteur = new CommitteeReader({
+    cell: 'cell-test',
+    mesh: {
+      read: async () => ({
+        ok: false,
+        stdout: '',
+        stderr: 'swarph committee: gateway 409: exemple',
+        exitCode: 2,
+        timedOut: false,
+      }),
+    },
+  });
+  expect(await lecteur.resultats('avis-test', 42)).toMatchObject({
+    ok: false,
+    status: 409,
+    message: 'exemple',
+  });
+});

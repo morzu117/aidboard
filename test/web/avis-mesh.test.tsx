@@ -47,8 +47,7 @@ const resultat: ResultatAvisMesh = {
     etat,
     brut: etat === 'invalide' ? hostile : null,
     reponses: etat === 'ok' ? [{ n: 1, verdict: 'oui', justification: hostile }] : [],
-    vote_pris_en_compte: false,
-    vote_scelle: etat === 'ok',
+    vote: etat === 'ok' ? 'scelle' : null,
   })),
   accord: [{ n: 1, accord: 'insuffisant', verdict: null, compte: {} }],
   rebuttals: [{ cell: 'pair-1', texte: hostile }],
@@ -475,4 +474,15 @@ test('les deux reprises portent aussi X-AID-Confirm: avis et un id encodé', asy
     await agirAvisMesh('demande/1', action, client, resultat.echeances);
   for (const [, init] of fetchImpl.mock.calls as unknown as [string, RequestInit][])
     expect(init.headers).toMatchObject({ 'X-AID-Confirm': 'avis' });
+});
+
+test.each([
+  ['avis', 'maintient'],
+  ['objection', 'objection'],
+  ['scelle', 'scellé par le gateway'],
+  ['invalide', 'vote invalide'],
+] as const)('vote %s affiché à côté de la position', (vote, libelle) => {
+  render(<TableauAvisMesh resultat={{ ...resultat, avis: [{ ...resultat.avis[0]!, vote }] }} />);
+  expect(screen.getByRole('columnheader', { name: new RegExp(`Vote : ${libelle}`) })).toBeTruthy();
+  expect(screen.getByText('oui')).toBeTruthy();
 });

@@ -19,8 +19,7 @@ export interface AvisMesh {
     etat: 'ok' | 'invalide' | 'abstention' | 'secret_suspecte' | 'scelle' | 'attendu' | 'absent';
     reponses: Reponse[];
     brut: string | null;
-    vote_pris_en_compte: boolean;
-    vote_scelle: boolean;
+    vote: 'avis' | 'objection' | 'scelle' | 'invalide' | null;
   }[];
   accord: AccordAsk[];
   rebuttals: { cell: string; texte: string | null }[];
@@ -106,15 +105,19 @@ export function lireAvis({
       phase === 'vote' || phase === 'clos'
         ? actifs.filter((b) => b.cell === cell && b.tour === 'vote').at(-1)
         : undefined;
-    const voteVisible = vote !== undefined && vote.corps !== null;
-    const bulletin = (voteVisible ? vote : positions.at(-1)) ?? vote;
-    const base = {
+    const bulletin = positions.at(-1);
+    const base: Pick<AvisMesh['avis'][number], 'i' | 'cell' | 'reponses' | 'brut' | 'vote'> = {
       i: i + 1,
       cell,
       reponses: [],
       brut: null,
-      vote_pris_en_compte: voteVisible,
-      vote_scelle: vote?.corps === null,
+      vote: !vote
+        ? null
+        : vote.corps === null
+          ? 'scelle'
+          : vote.corps === 'avis' || vote.corps === 'objection'
+            ? vote.corps
+            : 'invalide',
     };
     if (!bulletin) {
       return { ...base, etat: phase === 'positions' ? 'attendu' : 'absent' };

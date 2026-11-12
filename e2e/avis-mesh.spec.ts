@@ -104,28 +104,29 @@ else process.exit(8);
   writeFileSync(
     join(faux, 'resultats.json'),
     JSON.stringify({
+      channel: 'avis-test',
+      card_id: 1,
       baseline_absent: null,
       positions_absent: [],
-      motion: {
-        id: 42,
-        text: 'Question',
-        options: ['avis', 'objection'],
-        phase: 'positions',
-        positions_deadline: new Date(Date.now() + 86400000).toISOString(),
-        rebuttal_deadline: new Date(Date.now() + 90000000).toISOString(),
-        vote_deadline: new Date(Date.now() + 93600000).toISOString(),
-      },
+      id: 42,
+      text: 'Question',
+      options: ['avis', 'objection'],
+      phase: 'positions',
+      positions_deadline: new Date(Date.now() + 86400000).toISOString(),
+      rebuttal_deadline: new Date(Date.now() + 90000000).toISOString(),
+      vote_deadline: new Date(Date.now() + 93600000).toISOString(),
       seats: [
-        { peer: 'peer-c', role: 'chair', family: 'orchestrator' },
-        { peer: 'peer-d', role: 'baseline', family: 'claude' },
-        { peer: 'peer-a', role: 'seat', family: 'gemini' },
-        { peer: 'peer-b', role: 'seat', family: 'gpt' },
+        { peer: 'peer-c', role: 'chair', family: 'orchestrator', voided: false, recast_from: null },
+        { peer: 'peer-d', role: 'baseline', family: 'claude', voided: false, recast_from: null },
+        { peer: 'peer-a', role: 'seat', family: 'gemini', voided: false, recast_from: null },
+        { peer: 'peer-b', role: 'seat', family: 'gpt', voided: false, recast_from: null },
       ],
       ballots: ['peer-a', 'peer-b'].map((peer, i) => ({
         peer,
         round: 'positions',
         created_at: new Date().toISOString(),
-        cancelled: false,
+        voided: false,
+        placeholder: 'exemple',
         message_id: i + 1,
       })),
     }),
@@ -321,7 +322,7 @@ swairm:
       0,
     );
     const resultats = JSON.parse(readFileSync(join(faux, 'resultats.json'), 'utf8'));
-    resultats.motion.phase = 'rebuttal';
+    resultats.phase = 'rebuttal';
     resultats.baseline_absent = {
       reason: 'échéance passée',
       by: 'peer-c',
@@ -347,6 +348,43 @@ swairm:
     resultats.positions_absent = ['peer-b'];
     writeFileSync(join(faux, 'resultats.json'), JSON.stringify(resultats));
     await tableau.getByRole('button', { name: 'Relire', exact: true }).click();
+    await expect(tableau.locator('tbody td')).toHaveText([
+      'ouiJustificationTests utiles.',
+      'absent',
+      '',
+      'insuffisant',
+    ]);
+    resultats.phase = 'closed';
+    resultats.ballots.push({
+      peer: 'peer-a',
+      round: 'vote',
+      created_at: new Date().toISOString(),
+      voided: false,
+      placeholder: 'exemple',
+      message_id: 3,
+      body: 'avis',
+      outcome: 'pass',
+    });
+    resultats.ballots.push({
+      peer: 'peer-a',
+      round: 'positions',
+      created_at: new Date().toISOString(),
+      voided: true,
+      placeholder: 'exemple',
+      message_id: 4,
+      body: 'exemple annulé',
+      outcome: 'pass',
+    });
+    resultats.seats.push({
+      peer: 'ancien',
+      role: 'seat',
+      family: 'meta',
+      voided: true,
+      recast_from: 'peer-a',
+    });
+    writeFileSync(join(faux, 'resultats.json'), JSON.stringify(resultats));
+    await tableau.getByRole('button', { name: 'Relire', exact: true }).click();
+    await expect(tableau).toContainText('Vote : maintient');
     await expect(tableau.locator('tbody td')).toHaveText([
       'ouiJustificationTests utiles.',
       'absent',

@@ -43,7 +43,7 @@ export class CommitteeReader {
   }
 
   private validerCanal(canal: string) {
-    if (!/^[A-Za-z0-9][A-Za-z0-9_.-]{0,199}$/.test(canal))
+    if (!/^[a-z0-9_-]{1,64}$/.test(canal) || /[^a-z0-9_-]/.test(canal))
       throw new RangeError('committee : canal invalide');
   }
 
@@ -183,15 +183,15 @@ export class CommitteeWriter {
 }
 
 function validerCanalEcriture(canal: string) {
-  if (!/^[A-Za-z0-9][A-Za-z0-9_.-]{0,199}$/.test(canal))
+  if (!/^[a-z0-9_-]{1,64}$/.test(canal) || /[^a-z0-9_-]/.test(canal))
     throw new RangeError('committee : canal invalide');
 }
 
 /** Le nettoyeur du 35 refuse un texte suspect : il ne sait pas en masquer les fragments. */
 function refusGateway(r: MeshExecResult): RefusCommittee | null {
-  // committee.py _fail écrit statut HTTP et détail sur stderr, puis sort avec 1.
+  // committee.py _fail écrit statut HTTP et détail sur stderr, puis sort avec 1 ou 2.
   const refus =
-    !r.timedOut && !r.spawnErrorCode && r.exitCode === 1
+    !r.timedOut && !r.spawnErrorCode && (r.exitCode === 1 || r.exitCode === 2)
       ? r.stderr.match(/gateway (4[0-9]{2}): ([\s\S]*)/)
       : null;
   if (!refus) return null;

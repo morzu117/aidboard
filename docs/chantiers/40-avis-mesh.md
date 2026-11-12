@@ -194,6 +194,7 @@ Le lab a relu `bee41a2` contre le gateway et une vraie réponse `results`. Les f
 - **Le charter** : les commandes de lecture `results` et `rooms show`, D297.
 - **La reprise d'une motion** : avant `motion --open`, `mesh.avis.motion` lit `motion <canal> --json`. Si une motion est déjà ouverte (le CLI a expiré après que le gateway l'a ouverte), elle la reprend au lieu de recevoir un 409.
 - **Les refus du gateway** : le CLI sort avec 1 ou avec 2 (`swarph committee: gateway 4xx: …`). Les deux sont lus.
+- 40.6 : 13 fichiers du 40, 13 cas de test ajoutés. `motion --json` garde la forme `{motions: [...]}` (vérifié dans le CLI installé) ; seul `results` est à plat. 165 tests ciblés ; l'e2e passe après un build.
 
 ## 6. Pièges
 

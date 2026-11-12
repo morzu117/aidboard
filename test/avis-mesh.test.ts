@@ -100,8 +100,7 @@ describe('lecture des bulletins mesh', () => {
     );
     expect(resultat.avis[0]).toMatchObject({
       etat: 'ok',
-      vote_pris_en_compte: false,
-      vote_scelle: true,
+      vote: 'scelle',
       reponses: [
         { n: 1, verdict: 'oui' },
         { n: 2, verdict: 'manquant' },
@@ -111,9 +110,8 @@ describe('lecture des bulletins mesh', () => {
   });
   it('distingue un vote scellé sans position d’un siège absent', () => {
     expect(lire([bulletin({ tour: 'vote', corps: null })], 'vote').avis[0]).toMatchObject({
-      etat: 'scelle',
-      vote_pris_en_compte: false,
-      vote_scelle: true,
+      etat: 'absent',
+      vote: 'scelle',
     });
   });
   it.each(['positions', 'rebuttal', 'vote', 'clos'] as const)(
@@ -124,24 +122,23 @@ describe('lecture des bulletins mesh', () => {
       );
     },
   );
-  it('remplace les positions par le vote et ignore les annulés', () => {
+  it('garde les positions et le vote séparés et ignore les annulés', () => {
     const bulletins = [
       bulletin(),
-      bulletin({ tour: 'vote', corps: corps('non') }),
+      bulletin({ tour: 'vote', corps: 'avis' }),
       bulletin({ tour: 'vote', annule: true }),
     ];
     expect(lire(bulletins).avis[0]!).toMatchObject({
-      vote_pris_en_compte: true,
-      vote_scelle: false,
+      vote: 'avis',
       reponses: [
-        { n: 1, verdict: 'non' },
+        { n: 1, verdict: 'oui' },
         { n: 2, verdict: 'manquant' },
       ],
     });
-    expect(lire(bulletins, 'rebuttal').avis[0]!.vote_pris_en_compte).toBe(false);
+    expect(lire(bulletins, 'rebuttal').avis[0]!.vote).toBeNull();
     expect(
       lire([bulletin(), bulletin({ tour: 'vote', corps: 'invalide' })]).accord[0]!.compte,
-    ).toEqual({});
+    ).toEqual({ oui: 1 });
   });
   it('sépare les rebuttals sans les compter et ignore les cells hors sièges', () => {
     const resultat = lire([
@@ -169,3 +166,29 @@ describe('lecture des bulletins mesh', () => {
     expect(resultat.accord[0]).toEqual({ n: 1, accord, verdict, compte });
   });
 });
+
+it.each(['avis', 'objection', 'avis\n', '{"avis":true}'])(
+  'vote nu %j sans effet sur la position ni l’accord',
+  (corpsVote) => {
+    const resultat = lireAvis({
+      sousQuestions: [{ n: 1, texte: 'Question' }],
+      sieges: ['exemple'],
+      phase: 'clos',
+      bulletins: [
+        {
+          cell: 'exemple',
+          tour: 'positions',
+          corps: '{"reponses":[{"n":1,"verdict":"oui","justification":"Exemple"}]}',
+          outcome: 'pass',
+          annule: false,
+        },
+        { cell: 'exemple', tour: 'vote', corps: corpsVote, outcome: 'pass', annule: false },
+      ],
+    });
+    expect(resultat.avis[0]).toMatchObject({
+      etat: 'ok',
+      vote: ['avis', 'objection'].includes(corpsVote) ? corpsVote : 'invalide',
+    });
+    expect(resultat.accord[0]?.compte).toEqual({ oui: 1 });
+  },
+);

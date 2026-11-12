@@ -95,7 +95,7 @@ export class AvisMeshService {
       const jeton = jetonCitation();
       return {
         id,
-        nom: `avis-${id}`,
+        nom: `avis-${id.toLowerCase()}`,
         question: d.question,
         carte: d.carte,
         sieges,
@@ -191,7 +191,7 @@ export class AvisMeshService {
     const jeton = l.jeton;
     return {
       id: l.id,
-      nom: `avis-${l.id}`,
+      nom: `avis-${l.id.toLowerCase()}`,
       question: l.question,
       carte: l.carte,
       sieges,
@@ -250,6 +250,23 @@ export class AvisMeshService {
       )
       .run(JSON.stringify(p.echeances), p.id, p.canal);
     if (prise.changes !== 1) throw new AidHttpError(409, 'motion déjà exécutée');
+    try {
+      const ouverte = await this.deps.lecteur.motionOuverte(p.canal);
+      if (!ouverte.ok)
+        throw new AidHttpError(ouverte.status ?? 503, ouverte.message ?? ouverte.kind);
+      if (ouverte.data) {
+        this.deps.db
+          .prepare("UPDATE avis_mesh SET motion = ?, etat = 'ouverte', erreur = NULL WHERE id = ?")
+          .run(ouverte.data.id, p.id);
+        return;
+      }
+    } catch (e) {
+      this.deps.db
+        .prepare("UPDATE avis_mesh SET etat = 'salle-sans-motion' WHERE id = ?")
+        .run(p.id);
+      this.garderErreur(p.id, e);
+      throw e;
+    }
     await this.ouvrirMotionPrise(p.id, p.canal, p.texte, p.echeances);
   }
   private garderErreur(id: string, erreur: unknown) {
@@ -292,15 +309,17 @@ export class AvisMeshService {
       if (r.status && r.message) throw new AidHttpError(r.status, r.message);
       throw new AidHttpError(503, r.kind === 'non-relaye' ? 'non relayé par le proxy' : r.kind);
     }
-    if (r.data.motion.id !== l.motion) throw new AidHttpError(502, 'motion inattendue');
+    if (r.data.id !== l.motion) throw new AidHttpError(502, 'motion inattendue');
     return { l, donnees: r.data };
   }
   async lire(id: string): Promise<ResultatAvisMesh> {
     const { l, donnees } = await this.resultats(id);
-    const phase = donnees.motion.phase === 'closed' ? 'clos' : donnees.motion.phase;
+    const phase = donnees.phase === 'closed' ? 'clos' : donnees.phase;
     if (!['positions', 'rebuttal', 'vote', 'clos'].includes(phase))
       throw new AidHttpError(502, 'phase inconnue');
-    const sieges = JSON.parse(l.sieges) as SiegeAvis[];
+    const sieges = (JSON.parse(l.sieges) as SiegeAvis[]).filter((s) =>
+      donnees.seats.some((siege) => siege.peer === s.peer),
+    );
     const lecture = {
       sousQuestions: decouperSousQuestions(l.question),
       bulletins: versBulletinsAvis(donnees),
@@ -322,7 +341,7 @@ export class AvisMeshService {
     );
     const avis = lireAvis({
       ...lecture,
-      bulletins: lecture.bulletins.filter((b) => !absents.has(b.cell) || b.tour === 'rebuttal'),
+      bulletins: lecture.bulletins.filter((b) => !absents.has(b.cell) || b.tour !== 'positions'),
       sieges: sieges.filter((s) => s.role === 'seat').map((s) => s.peer),
     });
     for (const siege of avis.avis) if (absents.has(siege.cell)) siege.etat = 'absent';
@@ -330,11 +349,10 @@ export class AvisMeshService {
       ...avis,
       phase: lecture.phase,
       echeances: {
-        positions: donnees.motion.positions_deadline,
+        positions: donnees.positions_deadline,
         rebuttal:
-          donnees.motion.rebuttal_deadline ??
-          (JSON.parse(l.echeances) as EcheancesAvisMesh).rebuttal,
-        vote: donnees.motion.vote_deadline ?? (JSON.parse(l.echeances) as EcheancesAvisMesh).vote,
+          donnees.rebuttal_deadline ?? (JSON.parse(l.echeances) as EcheancesAvisMesh).rebuttal,
+        vote: donnees.vote_deadline ?? (JSON.parse(l.echeances) as EcheancesAvisMesh).vote,
       },
       baseline:
         avisBaseline && donnees.baseline_absent
@@ -350,15 +368,14 @@ export class AvisMeshService {
   }
   async verifierAbsence(id: string) {
     const { l, donnees } = await this.resultats(id);
-    if (
-      donnees.motion.phase !== 'positions' ||
-      Date.now() <= Date.parse(donnees.motion.positions_deadline)
-    )
+    if (donnees.phase !== 'positions' || Date.now() <= Date.parse(donnees.positions_deadline))
       throw new AidHttpError(409, 'baseline absent : positions après échéance seulement');
     if (donnees.baseline_absent !== null)
       throw new AidHttpError(409, 'baseline déjà déclaré absent');
     const baseline = (JSON.parse(l.sieges) as SiegeAvis[]).find((s) => s.role === 'baseline');
-    if (donnees.ballots.some((b) => b.peer === baseline?.peer && b.round === 'positions'))
+    if (
+      donnees.ballots.some((b) => !b.voided && b.peer === baseline?.peer && b.round === 'positions')
+    )
       throw new AidHttpError(409, 'le baseline a déjà posté');
     return { id, canal: l.canal!, motion: l.motion!, raison: RAISON_BASELINE_ABSENT };
   }

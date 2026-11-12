@@ -91,6 +91,7 @@ if (args[0] !== 'committee' || !args.includes('--as')) process.exit(8);
 if (process.env.ECHEC && args.includes(process.env.ECHEC)) { console.error(process.env.DETAIL_ECHEC); process.exit(1); }
 if (args[1] === 'rooms') console.log(JSON.stringify({channel:'avis-test'}));
 else if (args.includes('--open')) console.log(JSON.stringify({id:42}));
+else if (args[1] === 'motion') console.log(JSON.stringify({motions: []}));
 else if (args[1] === 'results') console.log(process.env.RESULTATS);
 `,
     { mode: 0o755 },
@@ -98,18 +99,23 @@ else if (args[1] === 'results') console.log(process.env.RESULTATS);
   let echec = '';
   let detailEchec = 'échec simulé';
   let resultats = {
+    channel: 'avis-test',
+    card_id: 1,
     baseline_absent: null as { reason: string; by: string; at: string } | null,
     positions_absent: [] as string[],
-    motion: {
-      id: 42,
-      text: 'Question',
-      options: ['avis', 'objection'],
-      phase: 'positions',
-      positions_deadline: new Date(Date.now() - 10000).toISOString(),
-      rebuttal_deadline: null,
-      vote_deadline: null,
-    },
-    seats: [],
+    id: 42,
+    text: 'Question',
+    options: ['avis', 'objection'],
+    phase: 'positions',
+    positions_deadline: new Date(Date.now() - 10000).toISOString(),
+    rebuttal_deadline: '2026-11-13T13:00:00Z',
+    vote_deadline: '2026-11-13T14:00:00Z',
+    seats: [
+      { peer: 'aid', role: 'chair', family: 'orchestrator' },
+      { peer: 'lab', role: 'baseline', family: 'claude' },
+      { peer: 'alpha', role: 'seat', family: 'gemini' },
+      { peer: 'beta', role: 'seat', family: 'gpt' },
+    ].map((s) => ({ ...s, voided: false, recast_from: null as string | null })),
     ballots: [] as unknown[],
   };
   const appels: string[][] = [];
@@ -292,9 +298,9 @@ test.each(['rebuttal', 'vote', 'closed', 'positions-avant'])(
   async (phase) => {
     const t = await ouverte();
     const r = t.resultats();
-    r.motion.phase = phase === 'positions-avant' ? 'positions' : phase;
+    r.phase = phase === 'positions-avant' ? 'positions' : phase;
     if (phase === 'positions-avant')
-      r.motion.positions_deadline = new Date(Date.now() + 60000).toISOString();
+      r.positions_deadline = new Date(Date.now() + 60000).toISOString();
     const actions = creerActionsAvis(t.avis);
     await expect(
       actions['mesh.avis.baseline-absent'].preparer(
@@ -309,7 +315,7 @@ test.each(['rebuttal', 'vote', 'closed', 'positions-avant'])(
 test('baseline hors accord, bulletins jamais stockés ; revalidation avant déclaration', async () => {
   const t = await ouverte();
   const r = t.resultats();
-  r.motion.phase = 'closed';
+  r.phase = 'closed';
   const body = JSON.stringify({
     reponses: [{ n: 1, verdict: 'oui', justification: 'CORPS_UNIQUEMENT_GATEWAY' }],
   });
@@ -317,7 +323,8 @@ test('baseline hors accord, bulletins jamais stockés ; revalidation avant décl
     peer,
     round: 'positions',
     created_at: new Date().toISOString(),
-    cancelled: false,
+    voided: false,
+    placeholder: 'exemple',
     message_id: i + 1,
     body,
     outcome: 'pass',
@@ -332,18 +339,18 @@ test('baseline hors accord, bulletins jamais stockés ; revalidation avant décl
   expect(
     (t.db.prepare('PRAGMA table_info(avis_mesh)').all() as { name: string }[]).map((c) => c.name),
   ).not.toContain('bulletins');
-  r.motion.phase = 'positions';
+  r.phase = 'positions';
   r.ballots = r.ballots.filter((b) => (b as { peer: string }).peer !== 'lab');
   const actions = creerActionsAvis(t.avis);
   const p = await actions['mesh.avis.baseline-absent'].preparer(
     { params: { id: t.p.id } },
     { confirmation: true },
   );
-  r.motion.phase = 'closed';
+  r.phase = 'closed';
   await expect(
     actions['mesh.avis.baseline-absent'].executer(p, { confirmation: true }),
   ).rejects.toThrow();
-  r.motion.phase = 'positions';
+  r.phase = 'positions';
   await actions['mesh.avis.baseline-absent'].executer(p, { confirmation: true });
   expect(t.appels.at(-1)).toContain(RAISON_BASELINE_ABSENT);
 });
@@ -438,7 +445,7 @@ test('six routes : contrat, aperçu exact, config limitée, liste et baseline-ab
   });
   expect(absent.statusCode).toBe(202);
   expect(absent.json()).toEqual({ confirmation: 'confirmation-test' });
-  t.resultats().motion.phase = 'closed';
+  t.resultats().phase = 'closed';
   expect(
     (
       await t.app.inject({
@@ -619,12 +626,13 @@ test('familles normalisées, chair orchestrator sans config, Claude et claude en
 test('baseline : vote visible ignoré, absence non inventée', async () => {
   const t = await ouverte();
   const r = t.resultats();
-  r.motion.phase = 'closed';
+  r.phase = 'closed';
   const bulletin = (round: string, verdict: string, message_id: number) => ({
     peer: 'lab',
     round,
     created_at: new Date().toISOString(),
-    cancelled: false,
+    voided: false,
+    placeholder: 'exemple',
     message_id,
     outcome: 'pass',
     body: JSON.stringify({ reponses: [{ n: 1, verdict, justification: 'Exemple' }] }),
@@ -633,8 +641,7 @@ test('baseline : vote visible ignoré, absence non inventée', async () => {
   const lu = await t.avis.lire(t.p.id);
   expect(lu.baseline).toMatchObject({
     etat: 'ok',
-    vote_pris_en_compte: false,
-    vote_scelle: false,
+    vote: null,
     reponses: [{ n: 1, verdict: 'oui', justification: 'Exemple' }],
   });
   r.ballots = [bulletin('vote', 'non', 2)];
@@ -662,8 +669,9 @@ test('reprise de motion : état requis, nouvelle confirmation, aucune réouvertu
     actions['mesh.avis.motion'].executer(reprise, { confirmation: true }),
   ]);
   expect(executions.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
-  expect(t.appels.slice(avant)).toHaveLength(1);
-  expect(t.appels[avant]).toEqual([
+  expect(t.appels.slice(avant)).toHaveLength(2);
+  expect(t.appels[avant]).toEqual(['committee', 'motion', 'avis-test', '--json', '--as', 'aid']);
+  expect(t.appels[avant + 1]).toEqual([
     'committee',
     'motion',
     'avis-test',
@@ -866,8 +874,8 @@ test('refus gateway 4xx en lecture : HTTP et détail nettoyé conservés', async
 test('baseline : attendu après échéance sans position, déclaré absent seulement sur parole du gateway', async () => {
   const t = await ouverte();
   const r = t.resultats();
-  expect(r.motion.phase).toBe('positions');
-  expect(Date.parse(r.motion.positions_deadline)).toBeLessThan(Date.now());
+  expect(r.phase).toBe('positions');
+  expect(Date.parse(r.positions_deadline)).toBeLessThan(Date.now());
   const attendu = (await t.avis.lire(t.p.id)).baseline;
   expect(attendu).toMatchObject({ cell: 'lab', etat: 'attendu' });
   expect(attendu).not.toHaveProperty('reason');
@@ -884,7 +892,7 @@ test('baseline : attendu après échéance sans position, déclaré absent seule
     ...declaration,
     reponses: [],
     brut: null,
-    vote_pris_en_compte: false,
+    vote: null,
   });
   r.baseline_absent = null;
   expect((await t.avis.lire(t.p.id)).baseline).toMatchObject({ etat: 'attendu' });
@@ -894,12 +902,13 @@ test.each(['positions', 'closed'])(
   async (phase) => {
     const t = await ouverte();
     const r = t.resultats();
-    r.motion.phase = phase;
+    r.phase = phase;
     r.ballots = ['alpha', 'beta'].map((peer, i) => ({
       peer,
       round: 'positions',
       created_at: '2026-11-12T12:00:00Z',
-      cancelled: false,
+      voided: false,
+      placeholder: 'exemple',
       message_id: i + 1,
       outcome: 'pass',
       body: JSON.stringify({ reponses: [{ n: 1, verdict: 'oui', justification: 'Exemple' }] }),
@@ -909,10 +918,21 @@ test.each(['positions', 'closed'])(
       compte: { oui: 2 },
     });
     r.positions_absent = ['alpha'];
+    r.ballots.push({
+      peer: 'alpha',
+      round: 'vote',
+      created_at: '2026-11-12T12:00:00Z',
+      voided: false,
+      placeholder: 'exemple',
+      message_id: 3,
+      body: 'avis',
+      outcome: 'pass',
+    });
     const resultat = await t.avis.lire(t.p.id);
     expect(resultat.avis[0]).toMatchObject({
       cell: 'alpha',
       etat: 'absent',
+      vote: phase === 'closed' ? 'avis' : null,
       reponses: [],
       brut: null,
     });
@@ -950,7 +970,8 @@ test('position du baseline scellée ou visible : refus local 409 sans écriture 
         peer: 'lab',
         round: 'positions',
         created_at: '2026-11-12T12:00:00Z',
-        cancelled: false,
+        voided: false,
+        placeholder: 'exemple',
         message_id: 1,
         body,
         outcome: 'pass',
@@ -971,4 +992,57 @@ test('position du baseline scellée ou visible : refus local 409 sans écriture 
   expect(ecrire).not.toHaveBeenCalled();
   expect(t.demander).not.toHaveBeenCalled();
   expect(t.appels.some((a) => a[1] === 'baseline-absent')).toBe(false);
+});
+
+test('salle en minuscules, id de demande conservé', () => {
+  const t = faux();
+  const p = t.avis.preparer(demande());
+  expect(p.nom).toBe(`avis-${p.id.toLowerCase()}`);
+  expect(p.nom).toMatch(/^[a-z0-9_-]{1,64}$/);
+  expect(p.id).toMatch(/T.*Z/);
+});
+
+test('position annulée du baseline ignorée et siège annulé écarté', async () => {
+  const t = await ouverte();
+  const r = t.resultats();
+  r.ballots = [
+    {
+      peer: 'lab',
+      round: 'positions',
+      created_at: new Date().toISOString(),
+      voided: true,
+      placeholder: 'exemple',
+      message_id: 1,
+    },
+  ];
+  await expect(t.avis.verifierAbsence(t.p.id)).resolves.toMatchObject({ motion: 42 });
+  r.seats[2]!.voided = true;
+  r.seats[2]!.recast_from = 'ancien';
+  expect((await t.avis.lire(t.p.id)).avis.map((a) => a.cell)).toEqual(['beta']);
+});
+
+test('reprise récupère une motion déjà ouverte sans écriture', async () => {
+  const t = await ouverte();
+  t.db
+    .prepare("UPDATE avis_mesh SET etat = 'salle-sans-motion', motion = NULL WHERE id = ?")
+    .run(t.p.id);
+  const p = t.avis.preparerMotion(t.p.id, echeances());
+  const espion = vi.spyOn(t.lecteur, 'motionOuverte').mockResolvedValue({
+    ok: true,
+    readAt: new Date().toISOString(),
+    data: {
+      id: 43,
+      text: 'Question',
+      options: ['avis', 'objection'],
+      phase: 'positions',
+      positions_deadline: p.echeances.positions,
+      rebuttal_deadline: p.echeances.rebuttal,
+      vote_deadline: p.echeances.vote,
+    },
+  });
+  const avant = t.appels.length;
+  await t.avis.reprendreMotion(p);
+  expect(espion).toHaveBeenCalledWith('avis-test');
+  expect(t.appels).toHaveLength(avant);
+  expect(t.avis.ligne(t.p.id)).toMatchObject({ etat: 'ouverte', motion: 43 });
 });
