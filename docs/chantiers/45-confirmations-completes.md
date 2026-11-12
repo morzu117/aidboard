@@ -172,6 +172,7 @@ Depuis tout chemin de D307, le daemon signe un résultat et le publie sur le rel
 - `src/daemon/pda/` : la file de publication, alimentée depuis `executerConfirmee`, le numéro faux et `annuler()`.
 - **Tests :** le relais hostile, les contextes croisés, les bornes (dans la boucle de lecture), la purge, les retentatives, et la construction depuis la ligne relue pour chaque chemin de D307.
 - 45.2, livré : 58 tests ajoutés. Le gate est vert, 3 541 tests réussis. Chemins couverts : tous les `terminer()` d'`executerConfirmee`, le numéro faux et `annuler()`. Les raisons signées sont `perime`, `delai`, `script` et `numero`, les seules que le code écrit. Le code de 45.2 est à relire par le lab, ainsi que la route de 45.1.
+- 45.2, après le PASS du lab (DM 96822) : la publication s'arrête au premier échec du tour, le journal ne garde que le premier échec et l'abandon, et une panne de clé a son propre libellé (`pda.resultat.erreur`).
 
 ### 45.3 Le téléphone montre le résultat (D308)
 

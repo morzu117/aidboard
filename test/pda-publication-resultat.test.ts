@@ -246,6 +246,48 @@ test('retente pendant une heure puis abandonne à la borne sans nouvel envoi', a
   await t.file.tour();
   expect(t.relais.publierResultat).toHaveBeenCalledTimes(239);
   expect(t.journal).toHaveBeenCalledWith('pda.resultat.abandon', { id: t.id });
+  expect(t.journal.mock.calls.filter(([type]) => type === 'pda.resultat.echec')).toEqual([
+    ['pda.resultat.echec', { id: t.id }],
+  ]);
+});
+
+test('un seul essai par tour et abandon même des résultats jamais essayés', async () => {
+  const t = await preparer();
+  const ids = [t.id];
+  for (let i = 0; i < 2; i++) {
+    const { id } = await t.file.creerDemande({ action: 'essai', sujet: 'exemple' });
+    ids.push(id);
+  }
+  for (const id of ids) await t.file.annuler(id);
+  t.relais.publierResultat.mockResolvedValue(false);
+  await t.file.tour();
+  expect(t.relais.publierResultat).toHaveBeenCalledTimes(1);
+  await t.file.tour();
+  expect(t.relais.publierResultat).toHaveBeenCalledTimes(2);
+  expect(t.relais.publierResultat.mock.calls.map(([id]) => id)).toEqual([t.id, t.id]);
+  // Une entrée récente en tête échoue avant les deux entrées arrivées à échéance.
+  t.heure(1_800_000_015_000);
+  t.file.mettreResultatEnFile(t.id);
+  t.heure(1_800_003_600_000);
+  await t.file.tour();
+  expect(t.relais.publierResultat).toHaveBeenCalledTimes(3);
+  for (const id of ids.slice(1)) {
+    expect(t.journal).toHaveBeenCalledWith('pda.resultat.abandon', { id });
+    expect(t.journal).not.toHaveBeenCalledWith('pda.resultat.echec', { id });
+  }
+});
+
+test('une panne de clé journalise une erreur avec seulement l’identifiant', async () => {
+  const t = await preparer();
+  vi.spyOn(t.fournisseur, 'obtenir').mockImplementationOnce(() => {
+    throw new Error('CONTENU_PRIVE');
+  });
+  await t.file.annuler(t.id);
+  await t.file.tour();
+  expect(t.relais.publierResultat).not.toHaveBeenCalled();
+  expect(t.journal).toHaveBeenCalledWith('pda.resultat.erreur', { id: t.id });
+  expect(t.journal).not.toHaveBeenCalledWith('pda.resultat.invalide', { id: t.id });
+  expect(JSON.stringify(t.journal.mock.calls)).not.toContain('CONTENU_PRIVE');
 });
 
 test('la minuterie poursuit les résultats même sans demande ouverte', async () => {
@@ -278,6 +320,7 @@ test('une valeur illégale relue ne quitte pas le daemon et ne paraît pas au jo
   await t.file.tour();
   expect(t.relais.publierResultat).not.toHaveBeenCalled();
   expect(t.journal).toHaveBeenCalledWith('pda.resultat.invalide', { id: t.id });
+  expect(t.journal).not.toHaveBeenCalledWith('pda.resultat.erreur', { id: t.id });
   expect(JSON.stringify(t.journal.mock.calls)).not.toContain('CONTENU_PRIVE');
 });
 

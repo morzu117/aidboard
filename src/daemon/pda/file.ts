@@ -32,7 +32,10 @@ export class RelaisInjoignable extends Error {
 }
 
 export class FilePda {
-  private readonly resultats = new Map<string, { enveloppe: Enveloppe; debut: number }>();
+  private readonly resultats = new Map<
+    string,
+    { enveloppe: Enveloppe; debut: number; echec?: boolean }
+  >();
   private arrete = false;
   private minuterie: ReturnType<typeof setTimeout> | undefined;
   private suite: Promise<unknown> = Promise.resolve();
@@ -183,6 +186,7 @@ export class FilePda {
           }
         | undefined;
       if (!ligne?.resultat) return;
+      const cle = this.deps.fournisseur.obtenir();
       const enveloppe = signerResultat(
         {
           v: 1,
@@ -195,18 +199,22 @@ export class FilePda {
         },
         (octets) =>
           sign('sha256', octets, {
-            key: this.deps.fournisseur.obtenir(),
+            key: cle,
             dsaEncoding: 'ieee-p1363',
           }),
       );
-      if (!enveloppe) throw new Error();
+      if (!enveloppe) {
+        this.deps.journal('pda.resultat.invalide', { id });
+        return;
+      }
       this.resultats.set(id, { enveloppe, debut: this.maintenant() });
       this.programmer();
     } catch {
-      this.deps.journal('pda.resultat.invalide', { id });
+      this.deps.journal('pda.resultat.erreur', { id });
     }
   }
   private async publierResultats() {
+    let echecDuTour = false;
     for (const [id, resultat] of this.resultats) {
       if (!this.actif()) return;
       if (this.maintenant() - resultat.debut >= 60 * 60_000) {
@@ -214,6 +222,7 @@ export class FilePda {
         this.deps.journal('pda.resultat.abandon', { id });
         continue;
       }
+      if (echecDuTour) continue;
       try {
         if (await this.deps.relais.publierResultat(id, resultat.enveloppe)) {
           this.resultats.delete(id);
@@ -222,7 +231,11 @@ export class FilePda {
       } catch {
         /* Le prochain tour retente la même enveloppe. */
       }
-      this.deps.journal('pda.resultat.echec', { id });
+      echecDuTour = true;
+      if (!resultat.echec) {
+        resultat.echec = true;
+        this.deps.journal('pda.resultat.echec', { id });
+      }
     }
   }
   annuler(id: string) {
