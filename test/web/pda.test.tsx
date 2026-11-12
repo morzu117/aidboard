@@ -104,6 +104,7 @@ test('signature fausse : aucun contenu affiché', async () => {
 test('sujet en texte et numéro retapé exactement, démarrage sans API', async () => {
   render(<AppPda />);
   expect(await screen.findByText(demande.sujet)).toBeTruthy();
+  expect(document.querySelector('.avatar-cell')).toBeNull();
   expect(document.querySelector('img')).toBeNull();
   const bouton = screen.getByRole('button', { name: 'Confirmer' }) as HTMLButtonElement;
   expect(bouton.disabled).toBe(true);

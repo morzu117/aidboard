@@ -1,3 +1,4 @@
+import { AvatarCell } from '../ui/AvatarCell.js';
 import { useState } from 'react';
 import type { ResultatAvisMesh } from '../data/avis-mesh.js';
 
@@ -11,7 +12,13 @@ const etats = {
   invalide: 'invalide',
 };
 const priorite = { partage: 0, insuffisant: 1, majorite: 2, unanime: 3 };
-export function TableauAvisMesh({ resultat }: { resultat: ResultatAvisMesh }) {
+export function TableauAvisMesh({
+  resultat,
+  cellLocale,
+}: {
+  resultat: ResultatAvisMesh;
+  cellLocale?: string;
+}) {
   const [tri, setTri] = useState('accord');
   const accord = (n: number) => resultat.accord.find((a) => a.n === n)?.accord ?? 'insuffisant';
   const lignes = [...resultat.sous_questions].sort((a, b) =>
@@ -44,6 +51,7 @@ export function TableauAvisMesh({ resultat }: { resultat: ResultatAvisMesh }) {
             <th scope="col">Sous-question</th>
             {resultat.avis.map((avis) => (
               <th scope="col" key={avis.i}>
+                <AvatarCell nom={avis.cell} cellLocale={cellLocale} />
                 {avis.cell} <span className="pastille pastille--discret">{etats[avis.etat]}</span>
                 {avis.vote && (
                   <p>
@@ -69,6 +77,7 @@ export function TableauAvisMesh({ resultat }: { resultat: ResultatAvisMesh }) {
             ))}
             {resultat.baseline && (
               <th scope="col">
+                <AvatarCell nom={resultat.baseline.cell} cellLocale={cellLocale} />
                 {resultat.baseline.cell} — baseline{' '}
                 <p>
                   {resultat.baseline.etat === 'declare_absent' ? (
@@ -123,6 +132,7 @@ export function TableauAvisMesh({ resultat }: { resultat: ResultatAvisMesh }) {
       </table>
       {resultat.rebuttals.map((r, i) => (
         <p key={i} style={{ whiteSpace: 'pre-wrap' }}>
+          <AvatarCell nom={r.cell} cellLocale={cellLocale} />
           {r.cell} : {r.texte ?? 'scellé par le gateway'}
         </p>
       ))}

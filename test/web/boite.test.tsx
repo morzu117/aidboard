@@ -446,3 +446,19 @@ test('32.5 : relu sort de la boîte ; à reprendre garde la mention et le bouton
     }),
   );
 });
+
+test('avatar du DM : anneau selon son propre mesh et nom accessible conservé', async () => {
+  const h = setup(
+    <Boite />,
+    snapshot({
+      meshes: {
+        principal: { ...meshEtat({ cell: 'peer-b' }), inbox: [] },
+        perso: { ...meshEtat({ cell: 'peer-a' }), inbox: [dm({ from: 'peer-a', to: 'peer-b' })] },
+      },
+    }),
+  );
+  const article = await screen.findByRole('article', { name: 'peer-a · Info' });
+  expect(article.textContent).toContain('peer-a');
+  expect(article.querySelector('.avatar-cell--locale')?.getAttribute('aria-hidden')).toBe('true');
+  expect(h.calls.filter((c) => c.url === '/api/avatars')).toHaveLength(1);
+});

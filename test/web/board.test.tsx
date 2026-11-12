@@ -350,3 +350,13 @@ test('D110 : après une lecture réussie, le bandeau en donne l’heure ; un ref
   await waitFor(() => expect(node('board.message')).not.toBeNull());
   expect(node('board.bandeau')).toBeNull();
 });
+
+test('avatar du responsable et absence de disque sans responsable', async () => {
+  await ouvrir(ok([projet]), ok([carte({ id: 101, assignee: 'peer-a' }), carte({ id: 102 })]));
+  await waitFor(() => expect(node('board.carte-101')).not.toBeNull());
+  expect(
+    node('board.carte-101')!.querySelector('.avatar-cell')?.getAttribute('data-initiales'),
+  ).toBe('PA');
+  expect(node('board.carte-101')!.textContent).toContain('peer-a');
+  expect(node('board.carte-102')!.querySelector('.avatar-cell')).toBeNull();
+});

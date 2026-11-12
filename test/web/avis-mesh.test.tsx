@@ -490,3 +490,36 @@ test.each([
   expect(screen.getByRole('columnheader', { name: new RegExp(`Vote : ${libelle}`) })).toBeTruthy();
   expect(screen.getByText('oui')).toBeTruthy();
 });
+
+test('avatars des avis, baseline et rebuttal sans changer le texte des noms', () => {
+  const avis = { ...resultat.avis[0]!, cell: 'peer-a' };
+  render(
+    <TableauAvisMesh
+      cellLocale="peer-a"
+      resultat={{
+        ...resultat,
+        avis: [avis],
+        baseline: { ...avis, cell: 'peer-b' },
+        rebuttals: [{ cell: 'peer-a', texte: 'Réponse' }],
+      }}
+    />,
+  );
+  const colonnes = screen.getAllByRole('columnheader');
+  expect(colonnes[1]!.querySelector('.avatar-cell--locale')).not.toBeNull();
+  expect(colonnes[1]!.textContent).toContain('peer-a');
+  expect(colonnes[2]!.querySelector('.avatar-cell')).not.toBeNull();
+  expect(colonnes[2]!.textContent).toContain('peer-b — baseline');
+  expect(screen.getByText('peer-a : Réponse').querySelector('.avatar-cell--locale')).not.toBeNull();
+});
+
+test('chaque choix de cell garde sa case nommée et reçoit un avatar décoratif', async () => {
+  await boite();
+  const cases = screen.getAllByRole('checkbox');
+  expect(cases.length).toBeGreaterThan(0);
+  for (const caseCell of cases) {
+    expect(caseCell.getAttribute('aria-label')).toBeTruthy();
+    expect(caseCell.parentElement!.querySelector('.avatar-cell')?.getAttribute('aria-hidden')).toBe(
+      'true',
+    );
+  }
+});

@@ -378,3 +378,55 @@ test('D283 : lecture seule annoncée même si les obligations ne sont pas lues',
   );
   expect(await screen.findByText('Le proxy de ta cellule est en lecture seule.')).toBeTruthy();
 });
+
+test('avatars du responsable, du graphe et des obligations, selon le mesh de la fiche', async () => {
+  const s = fiche(101);
+  if (!s.card.ok || !s.graph.ok || !s.obligations.ok) throw new Error('fixture invalide');
+  s.card.data.assignee = 'peer-a';
+  s.graph.data.steps[0]!.holder = 'peer-a';
+  s.obligations.data.obligations[0]!.holder = 'peer-b';
+  setup(
+    <Routes>
+      <Route path="/board/cartes/:cardId" element={<CarteBoard />} />
+    </Routes>,
+    snapshot({
+      meshes: {
+        principal: { state: { ...meshEtat, cell: 'peer-b' }, inbox: [], tailscaleManage: false },
+        perso: { state: { ...meshEtat, cell: 'peer-a' }, inbox: [], tailscaleManage: false },
+      },
+    }),
+    '/board/cartes/101?mesh=perso',
+    {
+      ...NAV,
+      'GET /api/meshes': json(200, [
+        { nom: 'principal', actif: true },
+        { nom: 'perso', actif: true },
+      ]),
+      'GET /api/board/cards/101': json(200, s),
+      'GET /api/board/cards/101?mesh=perso': json(200, s),
+    },
+  );
+  await waitFor(() => expect(FakeSocket.all.length).toBeGreaterThan(0));
+  act(() => FakeSocket.all[0]!.open());
+  await waitFor(() =>
+    expect(
+      screen.getByLabelText('Mesh').getAttribute('value') ??
+        (screen.getByLabelText('Mesh') as HTMLSelectElement).value,
+    ).toBe('perso'),
+  );
+  await waitFor(() => expect(node('carte-board.meta')).not.toBeNull());
+  expect(node('carte-board.meta')!.querySelector('.avatar-cell')?.getAttribute('title')).toBe(
+    'cette cell',
+  );
+  expect(ligne('carte-board.graphe.etape-0').cells[3]!.textContent).toBe('peer-a');
+  expect(
+    ligne('carte-board.graphe.etape-0').cells[3]!.querySelector('.avatar-cell--locale'),
+  ).not.toBeNull();
+  expect(ligne('carte-board.obligation-9101').cells[2]!.textContent).toBe('peer-b');
+  expect(
+    ligne('carte-board.obligation-9101').cells[2]!.querySelector('.avatar-cell'),
+  ).not.toBeNull();
+  expect(
+    ligne('carte-board.obligation-9101').cells[2]!.querySelector('.avatar-cell--locale'),
+  ).toBeNull();
+});

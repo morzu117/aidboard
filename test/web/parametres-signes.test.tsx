@@ -173,3 +173,21 @@ test('retrait : chemin entier sur Mac, dernier segment sur téléphone', () => {
   expect(screen.getByText('Racine : projet')).toBeTruthy();
   expect(vue.container.textContent).not.toContain('/exemple');
 });
+
+test.each(['mac', 'telephone'] as const)(
+  'les paramètres signés restent sans avatar sur %s',
+  (surface) => {
+    const { container } = render(
+      <ParametresSignes
+        action="mesh.ecrire"
+        params={{
+          action: 'dm.envoyer',
+          params: { pair: 'peer-a', texte: 'Exemple', kind: 'fyi', fil: null },
+        }}
+        surface={surface}
+      />,
+    );
+    expect(container.querySelector('.avatar-cell')).toBeNull();
+    expect(container.textContent).toContain('peer-a');
+  },
+);

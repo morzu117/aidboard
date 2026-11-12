@@ -1,3 +1,4 @@
+import { AvatarCell } from '../ui/AvatarCell.js';
 import { useMeshes } from '../data/meshes.js';
 import { instantaneMesh } from '../data/meshLecture.js';
 import { PropositionAidVue, usePropositionsAid } from '../ui/PropositionsAid.js';
@@ -391,6 +392,7 @@ function ArticleMesh({ n, dm, state }: { n: number; dm: DmMesh; state: StateSnap
           {multiple ? dm.mesh : 'mesh'}
         </span>
         <span className="identifiant" data-node={id('emetteur')} data-bind="mesh.emetteur">
+          <AvatarCell nom={dm.from} cellLocale={objetMesh?.state.cell} />
           {dm.from}
         </span>
         {dm.threadId && (

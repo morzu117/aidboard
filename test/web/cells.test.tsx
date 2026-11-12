@@ -104,3 +104,22 @@ test('contenu des pairs en texte React', async () => {
   expect(tableau.textContent).toContain('<b>peer-a</b>');
   expect(tableau.querySelector('b, a')).toBeNull();
 });
+
+test('avatars décoratifs devant les noms, anneau réservé à la cell locale', async () => {
+  await ouvrir(
+    ok([
+      { nom: 'peer-a', version: '1' },
+      { nom: 'peer-b', version: '1' },
+    ]),
+    { ...monitor, cell: 'peer-a' },
+  );
+  const lignes = within(screen.getByRole('table')).getAllByRole('row').slice(1);
+  expect(lignes[0]!.textContent).toContain('peer-a · toi');
+  expect(lignes[0]!.querySelector('.avatar-cell')?.getAttribute('title')).toBe('cette cell');
+  expect(lignes[1]!.querySelector('.avatar-cell')?.getAttribute('title')).toBeNull();
+  expect(
+    lignes.every(
+      (ligne) => ligne.querySelector('.avatar-cell')?.getAttribute('aria-hidden') === 'true',
+    ),
+  ).toBe(true);
+});

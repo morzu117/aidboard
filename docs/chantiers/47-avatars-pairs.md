@@ -99,6 +99,7 @@ Le programme (§5, phase 5, « Plus tard ») prévoit des avatars de pairs. Depu
   - le repli sur l'avatar calculé quand la route échoue ;
   - aucun avatar sur le téléphone, les confirmations et l'appareil ;
   - des initiales de surcharge rendues comme du texte.
+47.2 commité en local. Gate vert (3 799 tests). AvatarCell et ses placements, useAvatars, la fiche de recette.
 
 ## 6. Pièges
 
