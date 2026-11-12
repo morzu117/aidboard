@@ -54,7 +54,7 @@ const resultat: ResultatAvisMesh = {
 };
 async function boite(connected = true) {
   const h = setup(
-    <DemanderAvis etat={etat} onClose={() => {}} />,
+    <DemanderAvis mesh="principal" etat={etat} onClose={() => {}} />,
     snapshot({
       mesh: { state: { ...monitor, connected }, inbox: [], tailscaleManage: false },
     }),
@@ -180,6 +180,7 @@ test('client : confirmation, corps exact, id encodé et 404 rejetée normalement
   );
   const client = new AidClient({ fetchImpl: fetchImpl as typeof fetch });
   const corps = {
+    mesh: 'principal',
     question: 'Question',
     cells: demande.cells,
     carte: 24,
@@ -221,7 +222,7 @@ test('sept états, vote scellé conservant la position et bulletins hostiles en 
   expect(document.querySelector('img, a, script')).toBeNull();
 });
 test('liste : date, cells, carte, état, ouverture et Relire sans POST', async () => {
-  const h = setup(<DemandesAvisMesh />, snapshot(), '/', {
+  const h = setup(<DemandesAvisMesh mesh="principal" />, snapshot(), '/', {
     'GET /api/avis-mesh': json(200, { demandes: [demande] }),
     'GET /api/avis-mesh/demande%2F1': json(200, resultat),
   });
@@ -329,7 +330,7 @@ test('famille manquante désactivée et familles comparées sans casse, baseline
 
 test('les sept états des demandes restent visibles en français, erreur exacte en texte', async () => {
   const { ETATS_AVIS } = await import('../../web/src/data/avis-mesh.js');
-  setup(<DemandesAvisMesh />, snapshot(), '/', {
+  setup(<DemandesAvisMesh mesh="principal" />, snapshot(), '/', {
     'GET /api/avis-mesh': json(200, {
       demandes: Object.keys(ETATS_AVIS).map((etat, i) => ({
         ...demande,
@@ -406,7 +407,7 @@ for (const [phase, etatBaseline, passe, visible] of [
       by: 'peer-local',
       at: date,
     };
-    const h = setup(<DemandesAvisMesh />, snapshot(), '/', {
+    const h = setup(<DemandesAvisMesh mesh="principal" />, snapshot(), '/', {
       'GET /api/avis-mesh': json(200, { demandes: [demande] }),
       'GET /api/avis-mesh/demande%2F1': json(200, { ...resultat, phase, baseline }),
       'POST /api/avis-mesh/demande%2F1/baseline-absent': json(409, {
@@ -425,7 +426,7 @@ for (const [phase, etatBaseline, passe, visible] of [
   });
 
 test('reprise : trois nouvelles durées, POST motion confirmé et aucun nouvel rooms open', async () => {
-  const h = setup(<DemandesAvisMesh />, snapshot(), '/', {
+  const h = setup(<DemandesAvisMesh mesh="principal" />, snapshot(), '/', {
     'GET /api/avis-mesh': json(200, { demandes: [{ ...demande, etat: 'salle-sans-motion' }] }),
     'POST /api/avis-mesh/demande%2F1/motion': json(202, { confirmation: 'confirmation-motion' }),
     'GET /api/confirmations': json(200, { ouvertes: [], recentes: [] }),
@@ -473,7 +474,7 @@ test('les deux reprises portent aussi X-AID-Confirm: avis et un id encodé', asy
   );
   const client = new AidClient({ fetchImpl: fetchImpl as typeof fetch });
   for (const action of ['motion', 'baseline-absent'] as const)
-    await agirAvisMesh('demande/1', action, client, resultat.echeances);
+    await agirAvisMesh('demande/1', action, client, resultat.echeances, 'principal');
   for (const [, init] of fetchImpl.mock.calls as unknown as [string, RequestInit][])
     expect(init.headers).toMatchObject({ 'X-AID-Confirm': 'avis' });
 });

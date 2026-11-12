@@ -1,3 +1,4 @@
+import { cheminMesh, useMeshLecture } from './meshLecture.js';
 import { useEffect, useSyncExternalStore } from 'react';
 import type {
   BoardCardSheet,
@@ -68,7 +69,10 @@ export class BoardStore<T> {
     this.enVol++;
     this.publier({ enLecture: true });
     return this.client
-      .request<T>('GET', fresh ? `${this.path}?fresh=1` : this.path)
+      .request<T>(
+        'GET',
+        fresh ? `${this.path}${this.path.includes('?') ? '&' : '?'}fresh=1` : this.path,
+      )
       .then((result) => {
         if (n < this.appliquee) return;
         this.appliquee = n;
@@ -183,26 +187,44 @@ export function boardStore<T>(
 function useBoardLecture<T>(
   path: string,
   lu: (t: T) => string | null,
-): BoardLecture<T> & { relire: () => Promise<void> } {
-  const store = boardStore(useAidClient(), path, lu);
+  nom?: string,
+): BoardLecture<T> & { mesh: string; relire: () => Promise<void> } {
+  const courant = useMeshLecture();
+  const mesh = nom ?? courant;
+  const store = boardStore(useAidClient(), cheminMesh(path, mesh), lu);
   const etat = useSyncExternalStore(store.subscribe, store.getSnapshot);
   // un écran remonté garde le résultat précédent et relit quand même
   useEffect(() => {
     if (store.getSnapshot().result !== null) void store.lire();
   }, [store]);
-  return { ...etat, relire: store.relire };
+  return { ...etat, mesh, relire: store.relire };
 }
 
 const luResultat = <D>(r: BoardResult<D>) => r?.readAt ?? null;
 
-export const useBoardProjects = () =>
-  useBoardLecture<BoardResult<BoardProject[]>>('/api/board/projects', luResultat);
+export const useBoardProjects = (mesh?: string) =>
+  useBoardLecture<BoardResult<BoardProject[]>>('/api/board/projects', luResultat, mesh);
 
-export const useBoardCards = (projectId: number) =>
+export const useBoardCards = (projectId: number, mesh?: string) =>
   useBoardLecture<BoardResult<BoardCardSummary[]>>(
     `/api/board/projects/${projectId}/cards`,
     luResultat,
+    mesh,
   );
 
-export const useBoardCard = (cardId: number) =>
-  useBoardLecture<BoardCardSheet>(`/api/board/cards/${cardId}`, (s) => s?.card?.readAt ?? null);
+export function useBoardCard(cardId: number, mesh?: string) {
+  const lecture = useBoardLecture<BoardCardSheet>(
+    `/api/board/cards/${cardId}`,
+    (s) => s?.card?.readAt ?? null,
+    mesh,
+  );
+  return { ...lecture, result: lecture.result ? { ...lecture.result, mesh: lecture.mesh } : null };
+}
+
+/** Un nom réactivé après archivage désigne une nouvelle identité : aucun résultat ne se réutilise. */
+export function oublierLecturesBoard(client: AidClient): void {
+  const chemins = magasins.get(client);
+  for (const chemin of chemins?.keys() ?? []) {
+    if (chemin !== '/api/meshes') chemins?.delete(chemin);
+  }
+}

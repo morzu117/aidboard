@@ -5,6 +5,7 @@ import { Boite } from '../../web/src/ecrans/Boite.js';
 import { FakeSocket, json, setup, snapshot } from './helpers.js';
 
 const proposition = {
+  mesh: 'principal',
   id: 1,
   projet: 'exemple/depot',
   sujet: '41',

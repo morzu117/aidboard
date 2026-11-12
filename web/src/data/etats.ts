@@ -34,10 +34,11 @@ export function envoyerEtat<A extends ActionEtat>(
   action: A,
   params: ParametresEtat[A],
   client: AidClient,
+  mesh: string,
 ): Promise<{ confirmation: string } | ResultatEtat> {
   return client
     .request<{ confirmation: string } | ResultatEtat>('POST', '/api/swarph/etat/envoyer', {
-      mesh: 'principal',
+      mesh,
       action,
       params,
     })

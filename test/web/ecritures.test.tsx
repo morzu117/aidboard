@@ -60,6 +60,7 @@ function ouvrir(
   const relire = vi.fn();
   const h = setup(
     <EcrireAuMesh
+      mesh="principal"
       action={action}
       valeurs={{ texte, carte: 101, pair: 'pair-test', canal: 'canal-test' }}
       onClose={fermer}

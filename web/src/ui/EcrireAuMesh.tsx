@@ -1,3 +1,5 @@
+import { EnteteMesh } from './SelecteurMesh.js';
+import { instantaneMesh } from '../data/meshLecture.js';
 import { AidApiError } from '../data/api.js';
 import { AttenteConfirmation } from './AttenteConfirmation.js';
 import { useEffect, useId, useRef, useState } from 'react';
@@ -17,15 +19,22 @@ import {
 import { useAid, useAidClient } from '../data/useAidState.js';
 import { Dialogue } from '../dialogues/Dialogue.js';
 
-export function EcrireAuMesh({
-  action: depart,
-  valeurs = {},
-  choix = false,
-  onClose,
-  onRelire,
-  propositionSwairm,
-  onEnvoye,
-}: {
+export function EcrireAuMesh(props: ParametresFormulaire) {
+  const mesh = props.mesh;
+  const [origine, setOrigine] = useState({ mesh, efface: false });
+  if (origine.mesh !== mesh) setOrigine({ mesh, efface: true });
+  return (
+    <FormulaireEcriture
+      key={mesh}
+      {...props}
+      mesh={mesh}
+      valeurs={origine.mesh === mesh && !origine.efface ? props.valeurs : {}}
+    />
+  );
+}
+
+type ParametresFormulaire = {
+  mesh: string;
   propositionSwairm?: number;
   onEnvoye?: () => void;
   action: ActionEcriture;
@@ -41,10 +50,22 @@ export function EcrireAuMesh({
   choix?: boolean;
   onClose: () => void;
   onRelire?: () => void;
-}) {
+};
+
+function FormulaireEcriture({
+  mesh,
+  action: depart,
+  valeurs = {},
+  choix = false,
+  onClose,
+  onRelire,
+  propositionSwairm,
+  onEnvoye,
+}: ParametresFormulaire & { mesh: string }) {
   const client = useAidClient();
   const { state } = useAid();
-  const lectureSeule = state?.mesh?.state.proxyConfigure && !state.mesh.state.ecritures;
+  const objetMesh = instantaneMesh(state, mesh);
+  const lectureSeule = objetMesh?.state.proxyConfigure && !objetMesh.state.ecritures;
   const [proxyAbsent, setProxyAbsent] = useState(false);
   const [envoye, setEnvoye] = useState(false);
   const verrou = useRef(false);
@@ -92,10 +113,10 @@ export function EcrireAuMesh({
     try {
       setApercu(
         await (action === 'carte.note'
-          ? apercuEcriture(action, { ...commun, carte: Number(carte), a: a || null }, client)
+          ? apercuEcriture(action, { ...commun, carte: Number(carte), a: a || null }, client, mesh)
           : action === 'dm.envoyer'
-            ? apercuEcriture(action, { ...commun, pair, fil: valeurs.fil ?? null }, client)
-            : apercuEcriture(action, { ...commun, canal }, client)),
+            ? apercuEcriture(action, { ...commun, pair, fil: valeurs.fil ?? null }, client, mesh)
+            : apercuEcriture(action, { ...commun, canal }, client, mesh)),
       );
     } catch {
       setErreur('Impossible de lire l’aperçu. Réessaie.');
@@ -119,10 +140,17 @@ export function EcrireAuMesh({
             { ...commun, carte: Number(carte), a: a || null },
             client,
             propositionSwairm,
+            mesh,
           )
         : action === 'dm.envoyer'
-          ? envoyerEcriture(action, { ...commun, pair, fil: valeurs.fil ?? null }, client)
-          : envoyerEcriture(action, { ...commun, canal }, client));
+          ? envoyerEcriture(
+              action,
+              { ...commun, pair, fil: valeurs.fil ?? null },
+              client,
+              undefined,
+              mesh,
+            )
+          : envoyerEcriture(action, { ...commun, canal }, client, undefined, mesh));
       if ('confirmation' in r) setConfirmation(r.confirmation);
       else {
         setResultat(r);
@@ -248,6 +276,7 @@ export function EcrireAuMesh({
         {apercu &&
           (apercu.ok ? (
             <section aria-label="Aperçu">
+              <EnteteMesh mesh={mesh} />
               <p>{apercu.resume}</p>
               <pre>{commande}</pre>
               <pre>{apercu.texte}</pre>

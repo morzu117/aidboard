@@ -77,7 +77,13 @@ test('lecture tolérante des nouveaux champs', () => {
 function ouvrir(champs = {}, mesh = true) {
   const relire = vi.fn();
   const h = setup(
-    <ChangerEtat obligation={obligation(champs)} etape={etape()} carte={1457} relire={relire} />,
+    <ChangerEtat
+      mesh="principal"
+      obligation={obligation(champs)}
+      etape={etape()}
+      carte={1457}
+      relire={relire}
+    />,
     snapshot(
       mesh
         ? {
@@ -256,6 +262,7 @@ test('envoyerEtat conserve les erreurs HTTP du client', async () => {
       'obligation.prendre',
       { carte: 1, obligation: 81, attendu: { status: 'open' } },
       client,
+      'principal',
     ),
   ).rejects.toBeInstanceOf(AidApiError);
 });
@@ -287,6 +294,7 @@ test('D283 : envoyerEtat reconnaît le 409 lecture seule', async () => {
       'obligation.prendre',
       { carte: 42, obligation: 81, attendu: { status: 'open' } },
       client,
+      'principal',
     ),
   ).toEqual({ code: 'proxy_lecture_seule' });
 });
@@ -308,6 +316,7 @@ test('envoyerEtat reconnaît la confirmation requise sans relancer', async () =>
     'obligation.prendre',
     { carte: 1, obligation: 81, attendu: { status: 'open' } },
     client,
+    'principal',
   ).catch((e: unknown) => e);
   expect(confirmationEtatRequise(erreur)).toBe(true);
   expect(confirmationEtatRequise(new AidApiError(409, 'perime', { error: 'perime' }))).toBe(false);

@@ -3,6 +3,7 @@ import type { lireBoardSwairm } from './board.js';
 
 export interface PropositionSwairm {
   id: number;
+  mesh: string;
   projet: string;
   sujet: string;
   etat: string;
@@ -51,7 +52,7 @@ export function propositionsSwairm(db: Db): PropositionSwairm[] {
   ).run(new Date().toISOString());
   return db
     .prepare(
-      `SELECT id, projet, sujet, etat, titre, carte FROM swairm_propositions
+      `SELECT mesh, id, projet, sujet, etat, titre, carte FROM swairm_propositions
        WHERE mesh = 'principal' AND fermee_a IS NULL ORDER BY id`,
     )
     .all() as PropositionSwairm[];

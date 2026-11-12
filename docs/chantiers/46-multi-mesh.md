@@ -323,6 +323,7 @@ Elle va bouger : on ajoute le moins possible.
   - le bouton d'archivage ;
   - l'aperçu d'un formulaire avec le mesh en tête, et la cible vidée au changement de mesh ;
   - la barre, avec un, trois et quatre meshes.
+46.5 commité. Gate vert (3 741 tests). La boîte fusionnée, le sélecteur par écran, les formulaires avec le mesh de l'objet, la barre, et le mesh rendu par les propositions. Hors de la liste de relecture du lab.
 
 ### 46.6 La fin
 

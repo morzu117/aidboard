@@ -5,6 +5,7 @@ import { ETAPES_DEPLACEMENT } from '../../shared/etats.js';
 
 export interface PropositionAid {
   id: number;
+  mesh: string;
   sujet: string;
   carte: number;
   etape: 'review' | 'ready';
@@ -69,7 +70,7 @@ export function propositionsAid(db: Db): PropositionAid[] {
   ).run(new Date().toISOString());
   return db
     .prepare(
-      "SELECT id, sujet, carte, etape FROM aid_propositions WHERE mesh = 'principal' AND fermee_a IS NULL ORDER BY id",
+      "SELECT mesh, id, sujet, carte, etape FROM aid_propositions WHERE mesh = 'principal' AND fermee_a IS NULL ORDER BY id",
     )
     .all() as PropositionAid[];
 }

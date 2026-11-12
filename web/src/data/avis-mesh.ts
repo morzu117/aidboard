@@ -1,4 +1,5 @@
 /** Contrat D301 : 40.3 doit implémenter ces réponses telles quelles. */
+import { cheminMesh, useMeshLecture } from './meshLecture.js';
 import { useCallback, useEffect, useState } from 'react';
 import type { AidClient } from './client.js';
 import { useAidClient } from './useAidState.js';
@@ -14,47 +15,65 @@ import type {
   ResultatAvisMesh,
 } from '../../../src/shared/avis-mesh-api.js';
 export function demanderAvisMesh(
-  demande: { question: string; cells: string[]; carte: number; echeances: EcheancesAvisMesh },
+  demande: {
+    mesh: string;
+    question: string;
+    cells: string[];
+    carte: number;
+    echeances: EcheancesAvisMesh;
+  },
   client: AidClient,
 ): Promise<DemandeAvisMesh> {
-  return client.request(
-    'POST',
-    '/api/avis-mesh',
-    { ...demande, mesh: 'principal' },
-    { 'X-AID-Confirm': 'avis' },
-  );
+  return client.request('POST', '/api/avis-mesh', demande, { 'X-AID-Confirm': 'avis' });
 }
-export function lireAvisMesh(id: string, client: AidClient): Promise<ResultatAvisMesh> {
-  return client.request('GET', `/api/avis-mesh/${encodeURIComponent(id)}`);
+export function lireAvisMesh(
+  id: string,
+  client: AidClient,
+  mesh = 'principal',
+): Promise<ResultatAvisMesh> {
+  return client.request('GET', cheminMesh(`/api/avis-mesh/${encodeURIComponent(id)}`, mesh));
 }
-export function useDemandesAvisMesh() {
+export function useDemandesAvisMesh(nom?: string) {
+  const courant = useMeshLecture();
+  const mesh = nom ?? courant;
   const client = useAidClient();
-  const [result, setResult] = useState<{ demandes: DemandeAvisMesh[] } | null>(null);
+  const [result, setResult] = useState<{ mesh: string; demandes: DemandeAvisMesh[] } | null>(null);
   const [erreur, setErreur] = useState<string | null>(null);
   const relire = useCallback(async () => {
     try {
-      setResult(await client.request('GET', '/api/avis-mesh'));
+      const lecture = await client.request<{ demandes: DemandeAvisMesh[] }>(
+        'GET',
+        cheminMesh('/api/avis-mesh', mesh),
+      );
+      setResult({ ...lecture, mesh });
       setErreur(null);
     } catch (e) {
       setErreur((e as Error).message);
     }
-  }, [client]);
+  }, [client, mesh]);
   useEffect(() => {
     void Promise.resolve().then(relire);
   }, [relire]);
-  return { result, erreur, relire };
+  return {
+    result:
+      result?.mesh === mesh ? { demandes: result.demandes?.map((d) => ({ ...d, mesh })) } : null,
+    mesh,
+    erreur,
+    relire,
+  };
 }
 
 export function agirAvisMesh(
   id: string,
   action: 'motion' | 'baseline-absent',
   client: AidClient,
-  echeances?: EcheancesAvisMesh,
+  echeances: EcheancesAvisMesh | undefined,
+  mesh: string,
 ): Promise<{ confirmation: string }> {
   return client.request(
     'POST',
     `/api/avis-mesh/${encodeURIComponent(id)}/${action}`,
-    { mesh: 'principal', ...(action === 'motion' && { echeances }) },
+    { mesh, ...(action === 'motion' && { echeances }) },
     { 'X-AID-Confirm': 'avis' },
   );
 }

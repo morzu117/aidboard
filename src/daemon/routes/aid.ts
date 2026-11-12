@@ -29,7 +29,10 @@ export function registerAidRoutes(
       cell,
       Number((req.params as { id: string }).id),
     );
-    return { params, resume: resumeEtat('carte.deplacer', params) };
+    const { mesh } = db
+      .prepare('SELECT mesh FROM aid_propositions WHERE id = ?')
+      .get(Number((req.params as { id: string }).id)) as { mesh: string };
+    return { mesh, params, resume: resumeEtat('carte.deplacer', params) };
   });
   app.delete('/api/aid/propositions/:id', async (req) => {
     const id = Number((req.params as { id: string }).id);

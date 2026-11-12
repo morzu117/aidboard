@@ -22,8 +22,13 @@ export function EtatMonitor37_5({ etat }: { etat: MeshMonitor }) {
 
 export function CadreSwarph37_5({ children }: { children: ReactNode }) {
   const { state } = useAid();
-  if (state && !state.mesh) return <Navigate to="/swarph" replace />;
-  return <Layout screen="board">{state?.mesh ? children : null}</Layout>;
+  if (state && !state.mesh && !Object.keys(state.meshes ?? {}).length)
+    return <Navigate to="/swarph" replace />;
+  return (
+    <Layout screen="board">
+      {state?.mesh || Object.keys(state?.meshes ?? {}).length ? children : null}
+    </Layout>
+  );
 }
 
 export function LectureSwarph37_5({

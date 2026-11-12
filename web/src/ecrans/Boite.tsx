@@ -1,3 +1,5 @@
+import { useMeshes } from '../data/meshes.js';
+import { instantaneMesh } from '../data/meshLecture.js';
 import { PropositionAidVue, usePropositionsAid } from '../ui/PropositionsAid.js';
 import { PropositionSwairmVue, usePropositionsSwairm } from '../ui/PropositionsSwairm.js';
 import { EcrireAuMesh } from '../ui/EcrireAuMesh.js';
@@ -7,6 +9,9 @@ import type { Agent, MeshDm, Topic, Workspace } from '../../../src/shared/model.
 import type { StateSnapshot } from '../../../src/shared/state.js';
 import { useAid } from '../data/useAidState.js';
 import {
+  cleDm,
+  dmsFusionnes,
+  type DmMesh,
   agentsDeLaBoite,
   compterNatures,
   NATURES,
@@ -344,7 +349,9 @@ function OuvrirCell({ n, state }: { n: number; state: StateSnapshot }) {
  * jamais interprété (même raison que D30). « Vu » le retire de la Boîte (12.4). Chantier 28 (D137) : il garde
  * son origine ; une demande rappelle que rien n'a été lancé, et « En faire une décision » la passe en Décisions.
  */
-function ArticleMesh({ n, dm, state }: { n: number; dm: MeshDm; state: StateSnapshot }) {
+function ArticleMesh({ n, dm, state }: { n: number; dm: DmMesh; state: StateSnapshot }) {
+  const { multiple } = useMeshes();
+  const objetMesh = instantaneMesh(state, dm.mesh);
   const { call, refresh } = useAid();
   const [busy, setBusy] = useState(false);
   const [erreur, setErreur] = useState<string | null>(null);
@@ -356,7 +363,8 @@ function ArticleMesh({ n, dm, state }: { n: number; dm: MeshDm; state: StateSnap
     setBusy(true);
     setErreur(null);
     try {
-      await call('POST', `/api/mesh/dm/${dm.id}/${marque}`);
+      const prefixe = state.meshes ? `/api/mesh/${encodeURIComponent(dm.mesh)}` : '/api/mesh';
+      await call('POST', `${prefixe}/dm/${dm.id}/${marque}`);
       // les marques sont locales (12.4, D137) : aucun événement ne les porte, l'instantané se relit ici
       await refresh();
     } catch (err) {
@@ -379,8 +387,8 @@ function ArticleMesh({ n, dm, state }: { n: number; dm: MeshDm; state: StateSnap
         >
           {KIND_LABEL[dm.kind]}
         </span>
-        <span className="texte-faible" data-node={id('source')}>
-          mesh
+        <span className={multiple ? 'badge' : 'texte-faible'} data-node={id('source')}>
+          {multiple ? dm.mesh : 'mesh'}
         </span>
         <span className="identifiant" data-node={id('emetteur')} data-bind="mesh.emetteur">
           {dm.from}
@@ -430,9 +438,10 @@ function ArticleMesh({ n, dm, state }: { n: number; dm: MeshDm; state: StateSnap
         >
           Vu
         </button>
-        {state.mesh && <button onClick={() => setEcriture(true)}>Répondre (à blanc)</button>}
-        {state.mesh && ecriture && (
+        {objetMesh && <button onClick={() => setEcriture(true)}>Répondre (à blanc)</button>}
+        {objetMesh && ecriture && (
           <EcrireAuMesh
+            mesh={dm.mesh}
             action="dm.envoyer"
             valeurs={{
               pair: dm.from,
@@ -445,7 +454,7 @@ function ArticleMesh({ n, dm, state }: { n: number; dm: MeshDm; state: StateSnap
             onClose={() => setEcriture(false)}
           />
         )}
-        <OuvrirCell n={n} state={state} />
+        {dm.mesh === 'principal' && <OuvrirCell n={n} state={state} />}
       </div>
       {erreur && (
         <p className="message-erreur" role="alert" data-node={id('erreur')}>
@@ -458,16 +467,17 @@ function ArticleMesh({ n, dm, state }: { n: number; dm: MeshDm; state: StateSnap
 
 /** L'état du mesh, en tête des Informations : la cell, les DM non vus, la connexion. */
 function EtatMesh({ state }: { state: StateSnapshot }) {
-  const mesh = state.mesh!;
-  const nonVus = mesh.inbox.filter((d) => !d.seenAt).length;
+  const { multiple } = useMeshes();
+  const mesh = state.mesh ?? Object.values(state.meshes ?? {})[0]!;
+  const nonVus = dmsFusionnes(state).filter((d) => !d.seenAt).length;
   return (
     <div
       className="groupe-entete boite-mesh"
       data-node="1-2.mesh"
-      aria-label={`Mesh · ${mesh.state.cell}`}
+      aria-label={multiple ? 'Meshes' : `Mesh · ${mesh.state.cell}`}
     >
       <span className="titre-zone" data-node="1-2.mesh.titre">
-        Mesh · {mesh.state.cell}
+        {multiple ? 'Meshes' : `Mesh · ${mesh.state.cell}`}
       </span>
       <span className="texte-faible" data-node="1-2.mesh.compte">
         {nonVus}
@@ -520,6 +530,8 @@ const plusAncien = (x: Element, y: Element) => x.at.localeCompare(y.at);
 const plusRecent = (x: Element, y: Element) => y.at.localeCompare(x.at);
 
 function Contenu() {
+  const { meshes, multiple } = useMeshes();
+  const [filtreMesh, setFiltreMesh] = useState('');
   const [resultatDeplacement, setResultatDeplacement] = useState('');
   const propositionsAid = usePropositionsAid();
   const propositionsSwairm = usePropositionsSwairm();
@@ -619,7 +631,9 @@ function Contenu() {
     at: (a.pausedAt && isAlive(a) ? a.pausedAt : a.statusAt) ?? a.updatedAt,
   }));
   // les DM ne sont rattachés à aucun projet : le filtre de projet ne les touche pas
-  const dms = (state.mesh?.inbox ?? []).filter((d) => natureDm(d) !== null);
+  const dms = dmsFusionnes(state).filter(
+    (d) => natureDm(d) !== null && (!multiple || !filtreMesh || d.mesh === filtreMesh),
+  );
   const deNature = (n: Nature) => elements.filter((e) => e.nature === n);
   // D136 : l'attente la plus ancienne d'abord ; à relire, les erreurs puis les tours les plus récents ;
   // en information, le travail en cours puis les pauses
@@ -642,10 +656,14 @@ function Contenu() {
         .sort(plusRecent),
     ],
   };
-  const dmsPar: Record<Nature, MeshDm[]> = {
-    decision: dms.filter((d) => natureDm(d) === 'decision').sort((x, y) => x.id - y.id),
+  const dmsPar: Record<Nature, DmMesh[]> = {
+    decision: dms
+      .filter((d) => natureDm(d) === 'decision')
+      .sort((x, y) => x.createdAt.localeCompare(y.createdAt) || x.id - y.id),
     relire: [],
-    information: dms.filter((d) => natureDm(d) === 'information').sort((x, y) => y.id - x.id),
+    information: dms
+      .filter((d) => natureDm(d) === 'information')
+      .sort((x, y) => y.createdAt.localeCompare(x.createdAt) || y.id - x.id),
   };
   const comptes = compterNatures([
     ...propositionsAid.propositions.map(() => 'decision' as const),
@@ -656,11 +674,31 @@ function Contenu() {
   // numérotation continue d'une section à l'autre, comme dans la maquette
   const ordre: Nature[] = ['decision', 'relire', 'information'];
   const numero = new Map(ordre.flatMap((n) => agentsPar[n]).map((e, i) => [e.agent.id, i + 1]));
-  const numeroDm = new Map(ordre.flatMap((n) => dmsPar[n]).map((d, i) => [d.id, i + 1]));
+  const numeroDm = new Map(ordre.flatMap((n) => dmsPar[n]).map((d, i) => [cleDm(d), i + 1]));
   const visible = (n: Nature) => nature === 'tout' || nature === n;
 
   const filtres = (
     <div className="filtres" data-node="1-2.filtres">
+      {multiple && (
+        <details>
+          <summary>Filtrer par mesh</summary>
+          <label>
+            Mesh{' '}
+            <select
+              aria-label="Filtrer par mesh"
+              value={filtreMesh}
+              onChange={(e) => setFiltreMesh(e.target.value)}
+            >
+              <option value="">Tous les meshes</option>
+              {meshes.map((m) => (
+                <option key={m.nom} value={m.nom}>
+                  {m.nom}
+                </option>
+              ))}
+            </select>
+          </label>
+        </details>
+      )}
       <div className="groupe-filtres" role="group" aria-label="Filtrer par nature">
         {[{ id: 'tout' as const, titre: 'Tout' }, ...NATURES].map((x) => (
           <button
@@ -710,7 +748,10 @@ function Contenu() {
       )}
     </div>
   );
-  const sousTitre = state.mesh ? 'Agents de ce Mac et messages du mesh' : 'Agents de ce Mac';
+  const sousTitre =
+    state.mesh || Object.keys(state.meshes ?? {}).length > 0
+      ? 'Agents de ce Mac et messages du mesh'
+      : 'Agents de ce Mac';
 
   if (comptes.tout === 0) {
     return (
@@ -735,7 +776,7 @@ function Contenu() {
             </Link>
           </div>
         </section>
-        {state.mesh && <EtatMesh state={state} />}
+        {(state.mesh || Object.keys(state.meshes ?? {}).length > 0) && <EtatMesh state={state} />}
       </main>
     );
   }
@@ -743,7 +784,9 @@ function Contenu() {
   const section = (n: Nature) =>
     visible(n) && (
       <Section key={n} nature={n} compte={comptes[n]}>
-        {n === 'information' && state.mesh && <EtatMesh state={state} />}
+        {n === 'information' && (state.mesh || Object.keys(state.meshes ?? {}).length > 0) && (
+          <EtatMesh state={state} />
+        )}
         {comptes[n] === 0 && (
           <p className="texte-discret" data-node={`1-2.liste.groupe-${n}.vide`}>
             Rien ici pour le moment.
@@ -767,7 +810,7 @@ function Contenu() {
             />
           ))}
         {dmsPar[n].map((d) => (
-          <ArticleMesh key={`dm-${d.id}`} n={numeroDm.get(d.id)!} dm={d} state={state} />
+          <ArticleMesh key={cleDm(d)} n={numeroDm.get(cleDm(d))!} dm={d} state={state} />
         ))}
         {agentsPar[n].map((e) => (
           <Article key={e.agent.id} n={numero.get(e.agent.id)!} e={e} />

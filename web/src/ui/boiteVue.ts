@@ -4,6 +4,17 @@ import { agentView } from './Statut.js';
 
 // Chantier 28 : les règles de la Boîte de réception, sans rendu (D136, D139, D140).
 
+export type DmMesh = MeshDm & { mesh: string };
+export const cleDm = (dm: DmMesh) => JSON.stringify([dm.mesh, dm.id]);
+
+/** L'alias historique ne doit jamais dupliquer principal dans la boîte fusionnée. */
+export function dmsFusionnes(state: StateSnapshot): DmMesh[] {
+  const meshes = state.meshes ?? (state.mesh ? { principal: state.mesh } : {});
+  return Object.entries(meshes)
+    .flatMap(([mesh, valeur]) => valeur.inbox.map((dm) => ({ ...dm, mesh })))
+    .sort((a, b) => a.createdAt.localeCompare(b.createdAt) || cleDm(a).localeCompare(cleDm(b)));
+}
+
 export type Nature = 'decision' | 'relire' | 'information';
 
 export const NATURES: { id: Nature; titre: string }[] = [
@@ -66,6 +77,6 @@ export function compterNatures(natures: Nature[]): Record<Nature | 'tout', numbe
 /** D140 : le compteur ambre de la barre, la même définition que la section Décisions, tous projets. */
 export function decisionsEnAttente(state: StateSnapshot): number {
   const agents = agentsDeLaBoite(state).filter((e) => e.nature === 'decision').length;
-  const dms = (state.mesh?.inbox ?? []).filter((d) => natureDm(d) === 'decision').length;
+  const dms = dmsFusionnes(state).filter((d) => natureDm(d) === 'decision').length;
   return agents + dms;
 }

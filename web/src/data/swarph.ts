@@ -1,3 +1,4 @@
+import { cheminMesh, useMeshLecture } from './meshLecture.js';
 import { useEffect, useSyncExternalStore } from 'react';
 import type { BoardResult } from '../../../src/shared/board.js';
 import type { MeshState } from '../../../src/shared/model.js';
@@ -133,7 +134,10 @@ const vide: BoardLecture<never> = { result: null, enLecture: false, luA: null, e
 const abonnerVide = () => () => {};
 const lireVide = () => Promise.resolve();
 
-function useLecture<T>(path: string | null, lu: (r: T) => string | null) {
+function useLecture<T>(chemin: string | null, lu: (r: T) => string | null, nom?: string) {
+  const courant = useMeshLecture();
+  const mesh = nom ?? courant;
+  const path = chemin === null ? null : cheminMesh(chemin, mesh);
   const client = useAidClient();
   let chemins = magasins.get(client);
   if (!chemins) {
@@ -152,7 +156,7 @@ function useLecture<T>(path: string | null, lu: (r: T) => string | null) {
   useEffect(() => {
     if (magasin && magasin.getSnapshot().result !== null) void magasin.lire();
   }, [magasin]);
-  return { ...etat, relire: magasin?.relire ?? lireVide };
+  return { ...etat, mesh, relire: magasin?.relire ?? lireVide };
 }
 
 export interface LectureCells {
@@ -168,23 +172,32 @@ export interface LecturePageMemoire {
   links: BoardResult<LienMemoire[]>;
 }
 const luResultat = <T>(r: BoardResult<T>) => r.readAt;
-export const useCells = () => useLecture<LectureCells>('/api/swarph/cells', (r) => r.peers.readAt);
-export const useReglages = () =>
-  useLecture<LectureReglages>('/api/swarph/reglages', (r) => r.rights.readAt);
-export const useFederation = (q: string) =>
+export const useCells = (mesh?: string) =>
+  useLecture<LectureCells>('/api/swarph/cells', (r) => r.peers.readAt, mesh);
+export const useReglages = (mesh?: string) =>
+  useLecture<LectureReglages>('/api/swarph/reglages', (r) => r.rights.readAt, mesh);
+export const useFederation = (q: string, mesh?: string) =>
   useLecture<BoardResult<{ lignes: LigneCodegraph[]; perime: boolean }>>(
     requeteCodegraphValide(q) ? `/api/swarph/federation?q=${encodeURIComponent(q)}` : null,
     luResultat,
+    mesh,
   );
-export const useMemoire = (tag: string | null, type = '') =>
+export const useMemoire = (tag: string | null, type = '', mesh?: string) =>
   useLecture<BoardResult<ResumeMemoire[]>>(
     tag === null || (tag && !tagValide(tag)) || (type && !typeValide(type)) || (tag && type)
       ? null
       : `/api/swarph/memory${tag ? `?tag=${encodeURIComponent(tag)}` : type ? `?type=${encodeURIComponent(type)}` : ''}`,
     luResultat,
+    mesh,
   );
-export const usePageMemoire = (slug: string) =>
+export const usePageMemoire = (slug: string, mesh?: string) =>
   useLecture<LecturePageMemoire>(
     slugValide(slug) ? `/api/swarph/memory/page?slug=${encodeURIComponent(slug)}` : null,
     (r) => r.page.readAt,
+    mesh,
   );
+
+/** L'archivage invalide aussi les lectures de pairs, de fédération et de mémoire. */
+export function oublierLecturesSwarph(client: AidClient): void {
+  magasins.delete(client);
+}

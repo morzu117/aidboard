@@ -1,3 +1,5 @@
+import { EnteteMesh } from './SelecteurMesh.js';
+import { cheminMesh, instantaneMesh } from '../data/meshLecture.js';
 import {
   siegesAvis,
   FAMILLES_AVIS,
@@ -54,8 +56,16 @@ export function DureesAvis({
   );
 }
 
-function TitreCarte({ numero, onCarte }: { numero: number; onCarte: (numero: number) => void }) {
-  const lecture = useBoardCard(numero);
+function TitreCarte({
+  numero,
+  mesh,
+  onCarte,
+}: {
+  numero: number;
+  mesh: string;
+  onCarte: (numero: number) => void;
+}) {
+  const lecture = useBoardCard(numero, mesh);
   const carte = lecture.result?.card;
   // Le titre et l'autorisation d'envoi proviennent de la même réponse, pour ce numéro.
   return (
@@ -72,12 +82,16 @@ function TitreCarte({ numero, onCarte }: { numero: number; onCarte: (numero: num
     </>
   );
 }
-export function FormulaireAvisMesh({ onResultat }: { onResultat?: () => void }) {
+export function FormulaireAvisMesh(props: { mesh: string; onResultat?: () => void }) {
+  const mesh = props.mesh;
+  return <FormulaireAvis key={mesh} {...props} mesh={mesh} />;
+}
+function FormulaireAvis({ mesh, onResultat }: { mesh: string; onResultat?: () => void }) {
   const client = useAidClient();
   const confirmation = useConfirmation(onResultat, true);
   const [config, setConfig] = useState<ConfigAvisMesh | null>(null);
   const { state } = useAid();
-  const lecture = useCells();
+  const lecture = useCells(mesh);
   const [question, setQuestion] = useState('');
   const [cells, setCells] = useState<string[]>([]);
   const [numero, setNumero] = useState('');
@@ -88,10 +102,10 @@ export function FormulaireAvisMesh({ onResultat }: { onResultat?: () => void }) 
   const [resultat, setResultat] = useState<DemandeAvisMesh | null>(null);
   useEffect(() => {
     void client
-      .request<ConfigAvisMesh>('GET', '/api/avis-mesh/config')
+      .request<ConfigAvisMesh>('GET', cheminMesh('/api/avis-mesh/config', mesh))
       .then(setConfig, (e) => setErreur(String(e.message)));
-  }, [client]);
-  const connectee = state?.mesh?.state.connected === true;
+  }, [client, mesh]);
+  const connectee = instantaneMesh(state, mesh)?.state.connected === true;
   const pairs = lecture.result?.peers;
   const noms = pairs?.ok
     ? [...new Set(pairs.data.map((p) => p.nom))].filter(
@@ -131,7 +145,10 @@ export function FormulaireAvisMesh({ onResultat }: { onResultat?: () => void }) 
     setErreur('');
     const echeances = daterEcheances(heures);
     try {
-      const r = await demanderAvisMesh({ question, cells: choisies, carte, echeances }, client);
+      const r = await demanderAvisMesh(
+        { mesh, question, cells: choisies, carte, echeances },
+        client,
+      );
       setResultat(r);
       confirmation.recevoir(r);
       onResultat?.();
@@ -150,6 +167,7 @@ export function FormulaireAvisMesh({ onResultat }: { onResultat?: () => void }) 
           </p>
           {resultat.apercu && (
             <section aria-label="Aperçu exact">
+              <EnteteMesh mesh={mesh} />
               <p>{resultat.apercu.nom}</p>
               {resultat.apercu.sieges.map((s) => (
                 <p key={s.peer}>
@@ -216,7 +234,7 @@ export function FormulaireAvisMesh({ onResultat }: { onResultat?: () => void }) 
               />
             </label>
             {Number.isSafeInteger(Number(numero)) && Number(numero) > 0 && (
-              <TitreCarte key={numero} numero={Number(numero)} onCarte={setCarte} />
+              <TitreCarte mesh={mesh} key={numero} numero={Number(numero)} onCarte={setCarte} />
             )}
             <DureesAvis heures={heures} onChange={setHeures} />
           </fieldset>
