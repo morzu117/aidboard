@@ -253,6 +253,7 @@ Elle va bouger : on ajoute le moins possible.
   - Le web existant envoie `mesh: 'principal'`. Le choix du mesh dans l'interface vient en 46.5.
 - **Le cloisonnement (D317).**
   - La cible (carte, pair, canal, salle) est relue avec les services du mesh signé. Une cible inconnue sur ce mesh rend la demande impossible à créer, ou périmée à l'exécution.
+  - **Les canaux ne sont pas relus avant l'écriture.** Le proxy n'a aucun verbe de lecture de canal, seulement `channel.post`, et ce chantier n'étend pas son protocole. Le cloisonnement tient par le transport : le post part par le proxy du mesh signé, vers son gateway, et ne peut donc viser qu'un canal de ce mesh. Un canal inconnu échoue au gateway, et la demande finit en `echouee`.
   - Une salle d'avis n'écrit que sur son mesh (`avis_mesh.mesh`), et la citation par jeton du 40 ne résout qu'une carte de ce mesh.
 - **Le résultat signé du 45 ne change pas.**
 - **Tests :**
