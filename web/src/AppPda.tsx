@@ -1,10 +1,11 @@
 import { ParametresSignes } from './ui/ParametresSignes.js';
-import { useCallback, useEffect, useState } from 'react';
-import { empreintePda, encoderBase64url } from '../../src/shared/pda.js';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { empreintePda, encoderBase64url, type CorpsResultatV1 } from '../../src/shared/pda.js';
 import {
   chargerCodePda,
   fabriquerReponse,
   lireDemandes,
+  lireResultats,
   requeteRelais,
   stockagePda,
   type CodePda,
@@ -13,12 +14,52 @@ import {
 } from './data/pda.js';
 import { HorsAcces, type FinAcces } from './ui/HorsAcces.js';
 
+export function libelleResultat(
+  corps: CorpsResultatV1 | null,
+  repondueA: number,
+  maintenant: number,
+): string {
+  if (!corps)
+    return maintenant - repondueA > 24 * 60 * 60_000
+      ? 'Résultat non reçu, à lire sur le Mac'
+      : 'En attente du résultat';
+  const incertain =
+    corps.raison === 'delai' ||
+    ['upstream_ambiguous', 'delai', 'interrompu'].includes(corps.code ?? '');
+  let libelle = incertain
+    ? 'Issue incertaine, à vérifier sur le Mac'
+    : corps.raison === 'numero'
+      ? 'Annulée : numéro faux'
+      : { executee: 'Exécutée', echouee: 'Échouée', perimee: 'Périmée', annulee: 'Annulée' }[
+          corps.resultat
+        ];
+  const raison =
+    !incertain && corps.raison !== 'numero' && corps.resultat === 'echouee' ? corps.raison : null;
+  const details = [raison, corps.code !== 'succes' ? corps.code : null].filter(
+    (detail, index, liste) => detail && liste.indexOf(detail) === index,
+  );
+  if (details.length) libelle += ` (${details.join(', ')})`;
+  return libelle;
+}
+
+interface ReponseRecente {
+  id: string;
+  action: CorpsResultatV1['action'];
+  resume: string;
+  repondueA: number;
+}
+
 export function AppPda() {
   const [code, setCode] = useState<CodePda | null>(null);
   const [appareil, setAppareil] = useState<PdaLocal | null>(null);
   const [pret, setPret] = useState(false);
   const [message, setMessage] = useState('');
   const [demandes, setDemandes] = useState<DemandePda[]>([]);
+  const [recentes, setRecentes] = useState<ReponseRecente[]>([]);
+  const [resultats, setResultats] = useState<CorpsResultatV1[]>([]);
+  const minuteries = useRef<ReturnType<typeof setTimeout>[]>([]);
+  const [maintenant, setMaintenant] = useState(() => Date.now());
+  useEffect(() => () => minuteries.current.forEach(clearTimeout), []);
   const [illisibles, setIllisibles] = useState(0);
   const [occupe, setOccupe] = useState(false);
   const [nom, setNom] = useState('');
@@ -42,8 +83,15 @@ export function AppPda() {
       })
       .catch(() => setMessage('PDA indisponible. Repasse par le tailnet.'));
   }, []);
+  const releverResultats = useCallback(async () => {
+    if (!appareil || !code?.RELAIS || enregistrement) return;
+    const liste = await lireResultats(code.RELAIS, appareil, code.CLE_DAEMON);
+    setResultats(liste);
+    setMaintenant(Date.now());
+  }, [appareil, code, enregistrement]);
   const rafraichir = useCallback(async () => {
     if (!appareil || !code?.RELAIS || enregistrement) return;
+    void releverResultats();
     setOccupe(true);
     try {
       const resultat = await lireDemandes(
@@ -59,7 +107,7 @@ export function AppPda() {
     } finally {
       setOccupe(false);
     }
-  }, [appareil, code, enregistrement]);
+  }, [appareil, code, enregistrement, releverResultats]);
   useEffect(() => {
     let actif = true;
     void Promise.resolve().then(() => {
@@ -144,6 +192,21 @@ export function AppPda() {
       const corps = await fabriquerReponse(entree, appareil, valeur, numero);
       await requeteRelais(code.RELAIS, appareil, `/reponses/${entree.demande.id}`, corps);
       setDemandes((liste) => liste.filter((d) => d.demande.id !== entree.demande.id));
+      if (valeur === 'oui') {
+        const demande = entree.demande;
+        setRecentes((liste) => [
+          ...liste.filter((r) => r.id !== demande.id),
+          {
+            id: demande.id,
+            action: demande.action,
+            resume: demande.v === 2 ? demande.resume : 'Demande d’essai',
+            repondueA: Date.now(),
+          },
+        ]);
+        for (const delai of [20_000, 45_000]) {
+          minuteries.current.push(setTimeout(() => void releverResultats(), delai));
+        }
+      }
       setMessage('Réponse envoyée');
     } catch (e) {
       erreur(e);
@@ -193,6 +256,38 @@ export function AppPda() {
                 {illisibles}{' '}
                 {illisibles === 1 ? 'demande illisible ignorée' : 'demandes illisibles ignorées'}
               </p>
+            )}
+            {(recentes.length > 0 || resultats.length > 0) && (
+              <section>
+                <h2>Réponses récentes</h2>
+                {recentes.map((r) => (
+                  <article key={r.id}>
+                    <h3>{r.action}</h3>
+                    <p>{r.resume}</p>
+                    <time dateTime={new Date(r.repondueA).toISOString()}>
+                      {new Date(r.repondueA).toLocaleString('fr-FR')}
+                    </time>
+                    <p>
+                      {libelleResultat(
+                        resultats.find((c) => c.id === r.id && c.action === r.action) ?? null,
+                        r.repondueA,
+                        maintenant,
+                      )}
+                    </p>
+                  </article>
+                ))}
+                {resultats
+                  .filter((c) => !recentes.some((r) => r.id === c.id))
+                  .map((c) => (
+                    <article key={c.id}>
+                      <h3>{c.action}</h3>
+                      <time dateTime={new Date(c.emis).toISOString()}>
+                        {new Date(c.emis).toLocaleString('fr-FR')}
+                      </time>
+                      <p>{libelleResultat(c, c.emis, maintenant)}</p>
+                    </article>
+                  ))}
+              </section>
             )}
             {demandes.map((d) => (
               <Demande key={d.demande.id} entree={d} occupe={occupe} repondre={repondre} />

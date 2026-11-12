@@ -6,6 +6,8 @@ import {
   octetsRequeteRelais,
   signatureBasse,
   verifierEnveloppe,
+  verifierResultat,
+  type CorpsResultatV1,
   type CorpsDemande,
 } from '../../../src/shared/pda.js';
 
@@ -170,4 +172,54 @@ export async function fabriquerReponse(
     valeur,
     numero: valeur === 'non' ? null : numero,
   };
+}
+
+export async function lireResultats(
+  relais: string,
+  appareil: PdaLocal,
+  cle: string,
+): Promise<CorpsResultatV1[]> {
+  try {
+    const reponse = await requeteRelais(relais, appareil, '/resultats');
+    const lecteur = reponse.body?.getReader();
+    if (!lecteur) return [];
+    const morceaux: Uint8Array[] = [];
+    let taille = 0;
+    try {
+      for (;;) {
+        const { done, value } = await lecteur.read();
+        if (done) break;
+        taille += value.length;
+        if (taille > 64 * 1024) return [];
+        morceaux.push(value);
+      }
+    } finally {
+      await lecteur.cancel();
+      lecteur.releaseLock();
+    }
+    const octets = new Uint8Array(taille);
+    let position = 0;
+    for (const morceau of morceaux) {
+      octets.set(morceau, position);
+      position += morceau.length;
+    }
+    const liste = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(octets));
+    if (
+      !liste ||
+      typeof liste !== 'object' ||
+      Array.isArray(liste) ||
+      Object.keys(liste).join() !== 'resultats' ||
+      !Array.isArray(liste.resultats) ||
+      liste.resultats.length > 50
+    )
+      return [];
+    const resultats: CorpsResultatV1[] = [];
+    for (const enveloppe of liste.resultats) {
+      const corps = await verifierResultat(enveloppe, cle);
+      if (corps) resultats.push(corps);
+    }
+    return resultats;
+  } catch {
+    return [];
+  }
 }
