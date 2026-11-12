@@ -2,6 +2,7 @@
 import type { ConversationEvent } from '../../shared/conversation.js';
 import type { RemoteClaudeSession, Server } from '../../shared/model.js';
 import { AidHttpError } from '../errors.js';
+import { maskSecrets } from '../secrets.js';
 import { remoteExec, type TransportOptions } from './transport.js';
 
 export const CLAUDE_SESSION_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -79,7 +80,7 @@ export async function listClaudeSessions(
     sessions.push({
       id,
       cwd: parsed.cwd,
-      title: first?.type === 'message' ? first.text.slice(0, 200) : 'Session Claude',
+      title: first?.type === 'message' ? maskSecrets(first.text).slice(0, 200) : 'Session Claude',
       updatedAt: new Date(Number(mtime) * 1000).toISOString(),
     });
   }

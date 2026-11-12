@@ -1792,6 +1792,19 @@ test('sessions Claude distantes : listage borné, tri par mtime et détection re
   expect(r.json()).toEqual([
     { id, cwd: '/srv/projet', title: 'Continuer le chantier', updatedAt: expect.any(String) },
   ]);
+  const secret = 'sk-ant-' + 'a'.repeat(30);
+  writeFileSync(
+    join(dir, `${id}.jsonl`),
+    JSON.stringify({
+      type: 'user',
+      cwd: '/srv/projet',
+      message: { content: `Continuer ${secret}` },
+    }),
+  );
+  const masked = await m.req('GET', `/api/servers/${s.id}/claude-sessions`);
+  expect(masked.statusCode).toBe(200);
+  expect(masked.json<{ title: string }[]>()[0]!.title).toBe('Continuer sk-ant-[secret masqué]');
+  expect(JSON.stringify(masked.json())).not.toContain(secret);
   m.t.db.prepare('UPDATE servers SET detected_agents = ? WHERE id = ?').run('["codex"]', s.id);
   expect((await m.req('GET', `/api/servers/${s.id}/claude-sessions`)).statusCode).toBe(409);
   expect((await m.req('GET', '/api/servers/inconnu/claude-sessions')).statusCode).toBe(404);
