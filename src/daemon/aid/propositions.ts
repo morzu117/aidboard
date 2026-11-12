@@ -16,16 +16,18 @@ export function creerReleveAid(db: Db, cell: string) {
   return (lecture: Awaited<ReturnType<typeof lireBoardAid>>) => {
     if (!lecture.board.ok || lecture.erreurs.length) return;
     db.transaction(() => {
-      if (!amorce) db.prepare('DELETE FROM aid_etats').run();
+      if (!amorce) db.prepare("DELETE FROM aid_etats WHERE mesh = 'principal'").run();
       const presents = new Set<string>();
       for (const s of lecture.sujets) {
         const carte = lecture.cartes.find((c) => c.id === s.carte);
         if (!cell || !carte || s.conflit.length || raisonDeplacement(carte, cell)) {
-          db.prepare('DELETE FROM aid_etats WHERE sujet = ?').run(s.sujetId);
+          db.prepare("DELETE FROM aid_etats WHERE mesh = 'principal' AND sujet = ?").run(s.sujetId);
           continue;
         }
         presents.add(s.sujetId);
-        const avant = db.prepare('SELECT * FROM aid_etats WHERE sujet = ?').get(s.sujetId) as
+        const avant = db
+          .prepare("SELECT * FROM aid_etats WHERE mesh = 'principal' AND sujet = ?")
+          .get(s.sujetId) as
           { carte: number; phase: string | null; etat: string; pr: number | null } | undefined;
         const etape =
           avant && avant.carte === carte.id
@@ -42,16 +44,18 @@ export function creerReleveAid(db: Db, cell: string) {
             ETAPES_DEPLACEMENT.indexOf(carte.stage as (typeof ETAPES_DEPLACEMENT)[number])
         )
           db.prepare(
-            `INSERT OR IGNORE INTO aid_propositions (sujet, carte, etape, cree_a) VALUES (?, ?, ?, ?)`,
+            `INSERT OR IGNORE INTO aid_propositions (mesh, sujet, carte, etape, cree_a) VALUES ('principal', ?, ?, ?, ?)`,
           ).run(s.sujetId, carte.id, etape, new Date().toISOString());
         db.prepare(
-          `INSERT INTO aid_etats (sujet, carte, phase, etat, pr) VALUES (?, ?, ?, ?, ?)
-          ON CONFLICT(sujet) DO UPDATE SET carte=excluded.carte, phase=excluded.phase, etat=excluded.etat, pr=excluded.pr`,
+          `INSERT INTO aid_etats (mesh, sujet, carte, phase, etat, pr) VALUES ('principal', ?, ?, ?, ?, ?)
+          ON CONFLICT(mesh, sujet) DO UPDATE SET carte=excluded.carte, phase=excluded.phase, etat=excluded.etat, pr=excluded.pr`,
         ).run(s.sujetId, carte.id, s.phase, s.state, s.prNumber);
       }
-      for (const s of db.prepare('SELECT sujet FROM aid_etats').all() as { sujet: string }[])
+      for (const s of db.prepare("SELECT sujet FROM aid_etats WHERE mesh = 'principal'").all() as {
+        sujet: string;
+      }[])
         if (!presents.has(s.sujet))
-          db.prepare('DELETE FROM aid_etats WHERE sujet = ?').run(s.sujet);
+          db.prepare("DELETE FROM aid_etats WHERE mesh = 'principal' AND sujet = ?").run(s.sujet);
     })();
     amorce = true;
   };
@@ -59,13 +63,13 @@ export function creerReleveAid(db: Db, cell: string) {
 
 export function propositionsAid(db: Db): PropositionAid[] {
   db.prepare(
-    `UPDATE aid_propositions SET fermee_a = ? WHERE fermee_a IS NULL
+    `UPDATE aid_propositions SET fermee_a = ? WHERE mesh = 'principal' AND fermee_a IS NULL
     AND confirmation IN (SELECT id FROM pda_demandes WHERE action = 'mesh.etat'
     AND resultat = 'executee' AND json_extract(envoi, '$.code') = 'succes')`,
   ).run(new Date().toISOString());
   return db
     .prepare(
-      'SELECT id, sujet, carte, etape FROM aid_propositions WHERE fermee_a IS NULL ORDER BY id',
+      "SELECT id, sujet, carte, etape FROM aid_propositions WHERE mesh = 'principal' AND fermee_a IS NULL ORDER BY id",
     )
     .all() as PropositionAid[];
 }

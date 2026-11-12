@@ -185,6 +185,7 @@ Elle va bouger : on ajoute le moins possible.
   - la migration sur une base peuplée : les lignes passent en `principal`, et un même id peut exister dans deux meshes ;
   - `activerMesh` et `archiverMesh` ;
   - aucun test existant ne change de comportement, à part les attentes de version de migration.
+46.1 commité. Gate vert (3 629 tests). 66 lignes existantes remplacées : les écrivains et lecteurs passent mesh = 'principal', les fixtures SQL des tests ajoutent le mesh, cinq attentes de version passent de 29 à 30, et une attente de mesh-schema gagne mesh. Les contraintes d'origine (CHECK, index uniques) sont gardées, avec le mesh dans les index. À reprendre en 46.2 : valider le type de d.mesh dans les projecteurs, et brancher activerMesh au démarrage.
 
 ### 46.2 Les lectures par mesh (D314, D315)
 

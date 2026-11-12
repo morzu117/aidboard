@@ -51,7 +51,9 @@ export function registerEcrituresRoutes(
     );
     if ('confirmation' in demande && corps.propositionAid !== undefined)
       deps
-        .db!.prepare('UPDATE aid_propositions SET confirmation = ? WHERE id = ?')
+        .db!.prepare(
+          "UPDATE aid_propositions SET confirmation = ? WHERE mesh = 'principal' AND id = ?",
+        )
         .run(demande.confirmation, corps.propositionAid);
     if ('confirmation' in demande)
       return reply.code(202).send({ confirmation: demande.confirmation });
@@ -78,7 +80,9 @@ export function registerEcrituresRoutes(
       const ouverte =
         typeof proposition === 'number' &&
         (deps.db
-          ?.prepare('SELECT carte FROM swairm_propositions WHERE id = ? AND fermee_a IS NULL')
+          ?.prepare(
+            "SELECT carte FROM swairm_propositions WHERE mesh = 'principal' AND id = ? AND fermee_a IS NULL",
+          )
           .get(proposition) as { carte: number } | undefined);
       if (
         !ouverte ||
@@ -94,7 +98,9 @@ export function registerEcrituresRoutes(
     );
     if ('confirmation' in demande && proposition !== undefined)
       deps
-        .db!.prepare('UPDATE swairm_propositions SET confirmation = ? WHERE id = ?')
+        .db!.prepare(
+          "UPDATE swairm_propositions SET confirmation = ? WHERE mesh = 'principal' AND id = ?",
+        )
         .run(demande.confirmation, proposition);
     if ('confirmation' in demande)
       return reply.code(202).send({ confirmation: demande.confirmation });

@@ -31,7 +31,7 @@ export function releverEtatsSwairm(db: Db, lecture: Awaited<ReturnType<typeof li
       )
         db.prepare(
           `INSERT OR IGNORE INTO swairm_propositions
-           (projet, sujet, etat, titre, carte, cree_a) VALUES (?, ?, ?, ?, ?, ?)`,
+           (mesh, projet, sujet, etat, titre, carte, cree_a) VALUES ('principal', ?, ?, ?, ?, ?, ?)`,
         ).run(s.projet, s.id, s.etat, s.titre, s.carte, maintenant);
       db.prepare(
         `INSERT INTO swairm_etats (projet, sujet, etat, vu_a) VALUES (?, ?, ?, ?)
@@ -44,7 +44,7 @@ export function releverEtatsSwairm(db: Db, lecture: Awaited<ReturnType<typeof li
 export function propositionsSwairm(db: Db): PropositionSwairm[] {
   // Le succès est persistant : fermer aussi après une navigation ou un redémarrage.
   db.prepare(
-    `UPDATE swairm_propositions SET fermee_a = ? WHERE fermee_a IS NULL
+    `UPDATE swairm_propositions SET fermee_a = ? WHERE mesh = 'principal' AND fermee_a IS NULL
      AND confirmation IN (SELECT id FROM pda_demandes
        WHERE action = 'mesh.ecrire' AND resultat = 'executee'
        AND json_extract(envoi, '$.code') = 'succes')`,
@@ -52,7 +52,7 @@ export function propositionsSwairm(db: Db): PropositionSwairm[] {
   return db
     .prepare(
       `SELECT id, projet, sujet, etat, titre, carte FROM swairm_propositions
-       WHERE fermee_a IS NULL ORDER BY id`,
+       WHERE mesh = 'principal' AND fermee_a IS NULL ORDER BY id`,
     )
     .all() as PropositionSwairm[];
 }

@@ -38,7 +38,7 @@ test('migration additive : anciennes demandes, valeurs initiales et contraintes'
     VALUES ('ancienne', 'essai', 'test', 'hash', '1234', 100, 'ouverte', 'date')`,
   ).run();
   migrate(db);
-  expect(db.pragma('user_version', { simple: true })).toBe(29);
+  expect(db.pragma('user_version', { simple: true })).toBe(30);
   const reglage = creerReglage(db);
   expect(reglage.lire()).toEqual(
     ['merge', 'push', 'nettoyage', 'projet.retirer', 'mesh.ecrire', 'mesh.etat'].map((action) => ({

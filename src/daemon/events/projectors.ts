@@ -60,8 +60,9 @@ function projectStatus(tx: Db, e: AidEvent, d: Record<string, unknown>): void {
 function projectMeshDm(tx: Db, e: AidEvent, d: Record<string, unknown>): void {
   if (!Number.isInteger(d.id) || !MESH_DM_KINDS.includes(d.kind as never)) return;
   tx.prepare(
-    'INSERT OR IGNORE INTO mesh_inbox (id, thread_id, from_node, to_node, kind, content, created_at, reply_to, obligation_id, seen_at, event_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?)',
+    'INSERT OR IGNORE INTO mesh_inbox (mesh, id, thread_id, from_node, to_node, kind, content, created_at, reply_to, obligation_id, seen_at, event_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?)',
   ).run(
+    d.mesh ?? 'principal',
     d.id,
     clip(d.threadId, 200),
     clip(d.from, 200) ?? '',
@@ -79,9 +80,10 @@ function projectMeshDm(tx: Db, e: AidEvent, d: Record<string, unknown>): void {
 const MESH_STATE_KEYS = ['connected', 'tailscale', 'monitor', 'pending', 'since', 'cell'] as const;
 function projectMeshState(tx: Db, d: Record<string, unknown>): void {
   const upsert = tx.prepare(
-    'INSERT INTO mesh_state (k, v) VALUES (?, ?) ON CONFLICT(k) DO UPDATE SET v = excluded.v',
+    'INSERT INTO mesh_state (mesh, k, v) VALUES (?, ?, ?) ON CONFLICT(mesh, k) DO UPDATE SET v = excluded.v',
   );
-  for (const k of MESH_STATE_KEYS) if (d[k] !== undefined) upsert.run(k, JSON.stringify(d[k]));
+  for (const k of MESH_STATE_KEYS)
+    if (d[k] !== undefined) upsert.run(d.mesh ?? 'principal', k, JSON.stringify(d[k]));
 }
 
 export function project(tx: Db, e: AidEvent): void {

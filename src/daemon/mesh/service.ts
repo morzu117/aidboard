@@ -123,7 +123,9 @@ export class MeshService {
   /** La boîte projetée (12.4) : les plus récents d'abord, bornée. */
   inbox(limit = 200): MeshDm[] {
     const rows = this.deps.db
-      .prepare('SELECT * FROM mesh_inbox ORDER BY created_at DESC, id DESC LIMIT ?')
+      .prepare(
+        "SELECT * FROM mesh_inbox WHERE mesh = 'principal' ORDER BY created_at DESC, id DESC LIMIT ?",
+      )
       .all(limit) as Record<string, unknown>[];
     return rows.map((r) => ({
       id: r.id as number,
@@ -146,12 +148,15 @@ export class MeshService {
    * un signet d'affichage, pas un fait du mesh — il ne survit pas à une reconstruction depuis le journal.
    */
   markSeen(id: number): { id: number; seenAt: string } | null {
-    const row = this.deps.db.prepare('SELECT seen_at FROM mesh_inbox WHERE id = ?').get(id) as
-      { seen_at: string | null } | undefined;
+    const row = this.deps.db
+      .prepare("SELECT seen_at FROM mesh_inbox WHERE mesh = 'principal' AND id = ?")
+      .get(id) as { seen_at: string | null } | undefined;
     if (!row) return null;
     if (row.seen_at) return { id, seenAt: row.seen_at };
     const seenAt = this.now();
-    this.deps.db.prepare('UPDATE mesh_inbox SET seen_at = ? WHERE id = ?').run(seenAt, id);
+    this.deps.db
+      .prepare("UPDATE mesh_inbox SET seen_at = ? WHERE mesh = 'principal' AND id = ?")
+      .run(seenAt, id);
     return { id, seenAt };
   }
 
@@ -160,12 +165,15 @@ export class MeshService {
    * journal ; le DM reste une donnée du pair. Rend null si le DM est inconnu.
    */
   markDecision(id: number): { id: number; decidedAt: string } | null {
-    const row = this.deps.db.prepare('SELECT decided_at FROM mesh_inbox WHERE id = ?').get(id) as
-      { decided_at: string | null } | undefined;
+    const row = this.deps.db
+      .prepare("SELECT decided_at FROM mesh_inbox WHERE mesh = 'principal' AND id = ?")
+      .get(id) as { decided_at: string | null } | undefined;
     if (!row) return null;
     if (row.decided_at) return { id, decidedAt: row.decided_at };
     const decidedAt = this.now();
-    this.deps.db.prepare('UPDATE mesh_inbox SET decided_at = ? WHERE id = ?').run(decidedAt, id);
+    this.deps.db
+      .prepare("UPDATE mesh_inbox SET decided_at = ? WHERE mesh = 'principal' AND id = ?")
+      .run(decidedAt, id);
     return { id, decidedAt };
   }
 
@@ -422,7 +430,9 @@ export class MeshService {
   }
 
   private readPersisted(): Partial<MeshState> | null {
-    const rows = this.deps.db.prepare('SELECT k, v FROM mesh_state').all() as {
+    const rows = this.deps.db
+      .prepare("SELECT k, v FROM mesh_state WHERE mesh = 'principal'")
+      .all() as {
       k: string;
       v: string;
     }[];
@@ -439,7 +449,9 @@ export class MeshService {
   }
 
   private cursorFromDb(): number {
-    const row = this.deps.db.prepare('SELECT MAX(id) AS m FROM mesh_inbox').get() as {
+    const row = this.deps.db
+      .prepare("SELECT MAX(id) AS m FROM mesh_inbox WHERE mesh = 'principal'")
+      .get() as {
       m: number | null;
     };
     return row.m ?? 0;
@@ -456,7 +468,7 @@ export class MeshService {
         this.deps.store.append({
           source: 'swarph',
           type: 'mesh.dm',
-          data: { ...dm, createdAt: dm.createdAt ?? undefined },
+          data: { ...dm, mesh: 'principal', createdAt: dm.createdAt ?? undefined },
         }),
     });
     this.follower.start();
@@ -483,6 +495,10 @@ export class MeshService {
     const next: MeshState = { ...this.state, ...patch };
     if (JSON.stringify(next) === JSON.stringify(this.state)) return;
     this.state = next;
-    this.deps.store.append({ source: 'swarph', type: 'mesh.state', data: { ...next } });
+    this.deps.store.append({
+      source: 'swarph',
+      type: 'mesh.state',
+      data: { ...next, mesh: 'principal' },
+    });
   }
 }

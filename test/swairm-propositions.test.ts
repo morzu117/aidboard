@@ -69,7 +69,7 @@ test('027 : montée depuis 026, réglages préservés et migration idempotente',
     db.pragma('user_version = 26');
     const avant = db.prepare('SELECT * FROM confirmations_reglage').all();
     migrate(db);
-    expect(db.pragma('user_version', { simple: true })).toBe(29);
+    expect(db.pragma('user_version', { simple: true })).toBe(30);
     expect(db.prepare('SELECT * FROM confirmations_reglage').all()).toEqual(avant);
     releverEtatsSwairm(db, lecture());
     migrate(db);

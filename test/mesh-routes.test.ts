@@ -112,7 +112,7 @@ test('« vu » : idempotent, local (seen_at), 404 sur un DM inconnu, 400 sur un 
   await bootWithMesh();
   t.db
     .prepare(
-      "INSERT INTO mesh_inbox (id, thread_id, from_node, to_node, kind, content, created_at, event_id) VALUES (7, NULL, 'a', 'b', 'fyi', 'x', 't1', 'ev')",
+      "INSERT INTO mesh_inbox (mesh, id, thread_id, from_node, to_node, kind, content, created_at, event_id) VALUES ('principal', 7, NULL, 'a', 'b', 'fyi', 'x', 't1', 'ev')",
     )
     .run();
   const a = await post('/api/mesh/dm/7/seen');
@@ -132,7 +132,7 @@ test('« en faire une décision » (D137) : idempotent, local (decided_at), 404,
   await bootWithMesh();
   t.db
     .prepare(
-      "INSERT INTO mesh_inbox (id, thread_id, from_node, to_node, kind, content, created_at, event_id) VALUES (7, NULL, 'a', 'b', 'question', 'x', 't1', 'ev')",
+      "INSERT INTO mesh_inbox (mesh, id, thread_id, from_node, to_node, kind, content, created_at, event_id) VALUES ('principal', 7, NULL, 'a', 'b', 'question', 'x', 't1', 'ev')",
     )
     .run();
   const a = await post('/api/mesh/dm/7/decision');
@@ -153,7 +153,7 @@ test('« en faire une décision » (D137) : idempotent, local (decided_at), 404,
 test('la boîte est bornée à 200 entrées', async () => {
   await bootWithMesh();
   const ins = t.db.prepare(
-    "INSERT INTO mesh_inbox (id, from_node, to_node, kind, content, created_at, event_id) VALUES (?, 'a', 'b', 'fyi', '', ?, 'ev')",
+    "INSERT INTO mesh_inbox (mesh, id, from_node, to_node, kind, content, created_at, event_id) VALUES ('principal', ?, 'a', 'b', 'fyi', '', ?, 'ev')",
   );
   for (let i = 1; i <= 205; i++)
     ins.run(

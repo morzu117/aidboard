@@ -355,7 +355,7 @@ test('migration 025 préserve les réglages 024, ajoute mesh.ecrire actif et env
     db.exec("UPDATE confirmations_reglage SET actif = 0, modifie_a = 123 WHERE action = 'push'");
     const avant = creerReglage(db).lire();
     migrate(db);
-    expect(db.pragma('user_version', { simple: true })).toBe(29);
+    expect(db.pragma('user_version', { simple: true })).toBe(30);
     expect(creerReglage(db).lire()).toEqual([
       ...avant,
       { action: 'mesh.ecrire', actif: true, modifieA: null },
@@ -510,8 +510,8 @@ test('D288 : proposition liée à la confirmation, fermeture persistante uniquem
   const t = await preparer();
   t.db
     .prepare(
-      `INSERT INTO swairm_propositions (projet, sujet, etat, titre, carte, cree_a)
-    VALUES ('exemple/depot', '41', 'merged', 'Un sujet', 42, '2026-11-10')`,
+      `INSERT INTO swairm_propositions (mesh, projet, sujet, etat, titre, carte, cree_a)
+    VALUES ('principal', 'exemple/depot', '41', 'merged', 'Un sujet', 42, '2026-11-10')`,
     )
     .run();
   const p = propositionsSwairm(t.db)[0]!;
