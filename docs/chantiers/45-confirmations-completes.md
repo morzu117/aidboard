@@ -182,6 +182,7 @@ Depuis tout chemin de D307, le daemon signe un résultat et le publie sur le rel
 ### 45.4 La fin
 
 Un e2e sur le relais local, la fiche `docs/recette-chantier-45-confirmations-completes.md`, et le renvoi depuis les notes 34, 40 et 43.
+- 45.4, livré : l'e2e et les deux e2e voisins (`pda` et `confirmations`) passent, 3 en 4,1 min. Le gate passe : 3 577 tests réussis. Un seul test a échoué, `livraison.test.tsx`, un test flaky sans rapport avec le 45 : il passe, 19 sur 19, quand on le relance.
 
 ## 6. Pièges
 
