@@ -270,8 +270,19 @@ Elle va bouger : on ajoute le moins possible.
 
 ### 46.4 Le téléphone (D313)
 
-- La vérification de la v3, et le refus d'une v3 hors forme.
-- Le mesh en tête de l'invite.
+- **La vérification.** Le téléphone lit les demandes avec le `lireCorpsDemande` partagé, qui connaît la v3 depuis 46.3. Une v3 hors forme, ou dont la signature est fausse, n'est **jamais affichée**, comme une v2 invalide aujourd'hui. Un test le prouve sur le vrai chemin de lecture du téléphone.
+- **Le mesh en tête de l'invite.**
+  - Pour une v3, la première ligne de l'invite, avant le résumé, est un bandeau « Mesh : `<nom>` » suivi de la cell (« cell `<cell>` »), dans un style à part. Il est lu par les lecteurs d'écran avant le reste.
+  - Pour une action mesh en v2, pendant la transition, le bandeau dit « Mesh : principal (demande d'avant le multi-mesh) ».
+  - Les actions hors mesh n'ont pas de bandeau.
+- **Le résumé.** Les conditions `v === 2` d'`AppPda.tsx` (le titre de l'invite, les réponses récentes) deviennent `v !== 1`. Sans cela, une v3 s'afficherait comme « Demande d'essai ».
+- **Le Mac.** `GET /api/confirmations` rend aussi `mesh: { nom, cell } | null`, lu depuis `pda_demandes.mesh`, sans les empreintes. `PanneauConfirmations` affiche le nom du mesh en tête de chaque demande v3.
+- **Tests :**
+  - le bandeau pour une v3 et pour une action mesh en v2, et aucun bandeau hors mesh ;
+  - l'ordre : le bandeau vient avant le résumé, dans le DOM ;
+  - une v3 hors forme ou mal signée, non affichée ;
+  - les réponses récentes avec le résumé d'une v3 ;
+  - la route et le panneau du Mac.
 - **Ce code est relu par le lab.**
 
 ### 46.5 Le web (D316)
