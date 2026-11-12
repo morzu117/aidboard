@@ -13,6 +13,7 @@ const CreateBody = Type.Object(
   {
     name: Type.String({ minLength: 1, maxLength: 200 }),
     kind: Type.String({ minLength: 1, maxLength: 32 }),
+    resumeSessionId: Type.Optional(Type.String({ format: 'uuid' })),
     cwd: Type.Optional(Type.String({ minLength: 1, maxLength: 1024 })),
   },
   { additionalProperties: false },
@@ -90,6 +91,11 @@ export function registerServerDiscussionRoutes(
   app.post('/api/servers/:id/discussions', { schema: { body: CreateBody } }, async (req, reply) => {
     const server = found((req.params as { id: string }).id);
     const body = req.body as { name: string; kind: string; cwd?: string };
+    const resumeSessionId = (req.body as { resumeSessionId?: string }).resumeSessionId;
+    if (resumeSessionId !== undefined)
+      return reply
+        .code(201)
+        .send(await manager.createResumedDiscussion(server, { ...body, resumeSessionId }));
     return reply.code(201).send(manager.createDiscussion(server, body));
   });
 

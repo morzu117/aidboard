@@ -48,12 +48,15 @@ export class RemoteDriver implements ConversationDriver {
   private resuming = false;
   private resumes = 0;
   private detached = false;
+  /** --fork-session annonce son UUID réel après le lancement. */
+  private sessionFromInit: string | null = null;
 
   constructor(private readonly opts: RemoteDriverOptions) {
     this.settings = opts.settings;
   }
 
   get sessionId(): string {
+    if (this.sessionFromInit) return this.sessionFromInit;
     return this.inner?.sessionId ?? this.opts.sessionId;
   }
 
@@ -93,6 +96,7 @@ export class RemoteDriver implements ConversationDriver {
     replaceLost: boolean,
     lostAt: number | undefined,
   ): void {
+    if (replaceLost && this.sessionFromInit) sessionId = this.sessionFromInit;
     const spawnChild = remoteSpawnChild(
       {
         ...this.opts,
@@ -113,6 +117,7 @@ export class RemoteDriver implements ConversationDriver {
   private fromInner(inner: ConversationDriver, ev: ConversationEvent): void {
     // pilote remplacé par une reprise : l'ancien ne parle plus
     if (inner !== this.inner) return;
+    if (ev.type === 'session') this.sessionFromInit = ev.sessionId;
     if (ev.type === 'turn_end') {
       this.busy = false;
       if (ev.ok) this.resumes = 0;

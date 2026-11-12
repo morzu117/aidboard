@@ -85,3 +85,37 @@ export async function listClaudeSessions(
   }
   return sessions;
 }
+
+export const SESSION_HISTORY_BYTES = 1024 * 1024;
+
+/** L'en-tête fournit le cwd même quand seule la fin de la transcription tient dans la borne. */
+export async function readClaudeSession(server: Server, id: string, transport: TransportOptions) {
+  requireClaude(server);
+  if (!CLAUDE_SESSION_ID.test(id))
+    throw new AidHttpError(422, 'identifiant de session Claude invalide');
+  const command = `if [ -d "$HOME/.claude/projects" ]; then find "$HOME/.claude/projects" -mindepth 2 -maxdepth 2 -type f -name '${id}.jsonl' -exec sh -c 'for f do printf "%s\\t" "$(wc -c < "$f")"; head -c ${SESSION_HEADER_BYTES} -- "$f" | base64 -w 0; printf "\\t"; tail -c ${SESSION_HISTORY_BYTES} -- "$f" | base64 -w 0; printf "\\n"; done' sh {} +; fi`;
+  const result = await remoteExec(server, command, { ...transport, maxBytes: 2 * 1024 * 1024 });
+  if (result.code !== 0 || result.timedOut || result.truncated)
+    throw new AidHttpError(502, 'lecture de la session Claude impossible');
+  const lines = result.stdout.trim().split('\n').filter(Boolean);
+  if (!lines.length) throw new AidHttpError(404, 'session Claude introuvable');
+  if (lines.length !== 1)
+    throw new AidHttpError(409, 'identifiant de session Claude présent dans plusieurs projets');
+  const [size, header, tail] = lines[0]!.split('\t');
+  if (!header || !tail || !/^\s*\d+$/.test(size ?? ''))
+    throw new AidHttpError(502, 'transcription Claude illisible');
+  const cwd = parseClaudeTranscript(Buffer.from(header, 'base64').toString('utf8')).cwd;
+  if (!cwd) throw new AidHttpError(422, 'répertoire de la session Claude introuvable');
+  const truncated = Number(size) > SESSION_HISTORY_BYTES;
+  let text = Buffer.from(tail, 'base64').toString('utf8');
+  // La première ligne de tail peut commencer au milieu d'une entrée, même si son suffixe est du JSON valide.
+  if (truncated) text = text.slice(text.indexOf('\n') + 1);
+  const messages = parseClaudeTranscript(text).messages;
+  if (truncated)
+    messages.unshift({
+      type: 'message',
+      role: 'assistant',
+      text: 'Historique importé partiellement : seule la fin de la transcription (1 Mio maximum) est affichée.',
+    });
+  return { cwd, messages };
+}

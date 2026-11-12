@@ -26,6 +26,7 @@ import { getServer } from './servers.js';
 import { SERVER_PERMISSION_MODES } from './servers.js';
 import { remoteExec, type TransportOptions } from './transport.js';
 
+import { readClaudeSession } from './claudeSessions.js';
 import { listClaudeSessions } from './claudeSessions.js';
 
 const ulid = monotonicFactory();
@@ -51,6 +52,7 @@ interface AgentRow {
   discussion_id: string;
   kind: RemoteKind;
   session_id: string | null;
+  fork_from: string | null;
   status: AgentStatus;
   tmux_session: string | null;
   out_offset: number;
@@ -275,12 +277,27 @@ export class RemoteAgentManager {
     return listClaudeSessions(server, this.deps.transport);
   }
 
+  async createResumedDiscussion(
+    server: Server,
+    body: { name: string; kind: string; resumeSessionId: string },
+  ) {
+    if (body.kind !== 'claude')
+      throw new AidHttpError(422, 'seul claude peut reprendre une session distante');
+    const history = await readClaudeSession(server, body.resumeSessionId, this.deps.transport);
+    return this.createDiscussion(
+      server,
+      { ...body, cwd: history.cwd },
+      { source: body.resumeSessionId, messages: history.messages },
+    );
+  }
+
   // ---- discussions
 
   /** Une discussion et son agent, lancé tout de suite. Seuls les agents détectés au dernier test sont proposés. */
   createDiscussion(
     server: Server,
     body: { name: string; kind: string; cwd?: string },
+    imported?: { source: string; messages: ConversationEvent[] },
   ): ServerDiscussionView {
     const name = body.name.trim();
     if (!name || name.length > NAME_MAX)
@@ -323,6 +340,17 @@ export class RemoteAgentManager {
           now,
           now,
         );
+      if (imported) {
+        this.deps.db
+          .prepare('UPDATE server_agents SET fork_from = ?, session_id = ? WHERE id = ?')
+          .run(imported.source, imported.source, agentId);
+        const insert = this.deps.db.prepare(
+          'INSERT INTO server_agent_messages (agent_id, seq, kind, payload, at) VALUES (?, ?, ?, ?, ?)',
+        );
+        imported.messages.forEach((ev, i) =>
+          insert.run(agentId, i + 1, ev.type, JSON.stringify(maskDeep(ev)), now),
+        );
+      }
     })();
     this.mount(this.agentRow(agentId), { resume: false });
     return this.discussion(server.id, discussionId);
@@ -774,6 +802,7 @@ export class RemoteAgentManager {
     const live = this.mount(this.agentRow(row.id), { resume: resume ?? guess });
     if (resume === undefined && row.kind === 'claude' && fresh.session_id)
       live.retry = { resume: guess, texts: [] };
+    if (fresh.fork_from && !this.hasTurn(row.id)) live.retry = undefined;
     return live;
   }
 
@@ -867,6 +896,20 @@ export class RemoteAgentManager {
       create: (c): ConversationDriver => {
         // `cwd` est celui du serveur ; l'environnement du daemon n'y part pas (D76)
         const opts = { bin, cwd: discussion.cwd, env: {}, ...c, ...confirmOpts };
+        if (row.kind === 'claude' && row.fork_from) {
+          // Une reconnexion interne après init reprend le fork, jamais la source en place.
+          const fork =
+            c.sessionId === row.fork_from ||
+            (!this.hasTurn(row.id) && c.sessionId === row.session_id);
+          if (fork) {
+            opts.sessionId = row.fork_from;
+            opts.resume = true;
+            opts.extraArgs = [
+              ...('extraArgs' in opts ? (opts.extraArgs ?? []) : []),
+              '--fork-session',
+            ];
+          }
+        }
         return row.kind === 'claude' ? new ClaudeDriver(opts) : new CodexDriver(opts);
       },
     });

@@ -1796,3 +1796,175 @@ test('sessions Claude distantes : listage borné, tri par mtime et détection re
   expect((await m.req('GET', `/api/servers/${s.id}/claude-sessions`)).statusCode).toBe(409);
   expect((await m.req('GET', '/api/servers/inconnu/claude-sessions')).statusCode).toBe(404);
 });
+
+test(
+  'reprise externe : cwd source, historique masqué, premier fork et relance sur le nouvel UUID',
+  { timeout: 30_000 },
+  async () => {
+    const { ClaudeDriver, buildClaudeArgs } = await import('../src/daemon/conversation/claude.js');
+    const { ensureRelay } = await import('../src/daemon/remote/relay.js');
+    const starts: string[][] = [];
+    // Contrat du pilote simulé : le transport de lecture reste le vrai faux ssh.
+    const start = vi.spyOn(ClaudeDriver.prototype, 'start').mockImplementation(function (
+      this: InstanceType<typeof ClaudeDriver>,
+    ) {
+      starts.push(
+        buildClaudeArgs((this as unknown as { opts: Parameters<typeof buildClaudeArgs>[0] }).opts),
+      );
+    });
+    const send = vi.spyOn(ClaudeDriver.prototype, 'send').mockImplementation(function (
+      this: InstanceType<typeof ClaudeDriver>,
+      text: string,
+    ) {
+      const emit = (
+        this as unknown as {
+          emit(event: import('../src/shared/conversation.js').ConversationEvent): void;
+        }
+      ).emit.bind(this);
+      if (text === 'perte avant init') {
+        emit({ type: 'turn_end', ok: false, error: 'relais perdu' });
+        return;
+      }
+      emit({ type: 'session', sessionId: 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee' });
+      emit({ type: 'turn_end', ok: true });
+    });
+    nettoyages.push(() => {
+      start.mockRestore();
+      send.mockRestore();
+    });
+    const remote = serveur();
+    const t = await startTestDaemon(undefined, {
+      remote: remote.transport,
+      remoteBins: BINS,
+    });
+    nettoyages.push(() => t.d.stop());
+    const req: Monte['req'] = (method, url, payload) =>
+      t.d.app.inject({
+        method: method as never,
+        url,
+        headers: t.headers,
+        payload: payload as never,
+      });
+    const m: Monte = { t, req, ...remote };
+    const s = await creerServeur(m);
+    await ensureRelay(s, remote.transport);
+    const id = '12345678-1234-1234-1234-123456789abc';
+    const dir = join(remote.home, '.claude/projects/-projet');
+    mkdirSync(dir, { recursive: true });
+    const file = join(dir, `${id}.jsonl`);
+    const original = [
+      JSON.stringify({ type: 'user', cwd: remote.home, message: { content: 'Ancienne question' } }),
+      JSON.stringify({
+        type: 'assistant',
+        message: { content: [{ type: 'text', text: 'Ancienne réponse' }] },
+      }),
+    ].join('\n');
+    writeFileSync(file, original);
+    const r = await req('POST', `/api/servers/${s.id}/discussions`, {
+      name: 'Reprise',
+      kind: 'claude',
+      cwd: '/ignoré',
+      resumeSessionId: id,
+    });
+    expect(r.statusCode).toBe(201);
+    const d = r.json<ServerDiscussionView>();
+    expect(d.cwd).toBe(remote.home);
+    const agentId = d.agents[0]!.id;
+    const history = t.db
+      .prepare(
+        "SELECT payload FROM server_agent_messages WHERE agent_id = ? AND kind = 'message' ORDER BY seq",
+      )
+      .all(agentId) as { payload: string }[];
+    expect(history.map((r) => JSON.parse(r.payload).text)).toEqual([
+      'Ancienne question',
+      'Ancienne réponse',
+    ]);
+    expect(starts).toHaveLength(1);
+    const firstArgs = starts[0]!;
+    expect(firstArgs).toContain('--fork-session');
+    expect(firstArgs[firstArgs.indexOf('--resume') + 1]).toBe(id);
+    expect(firstArgs).not.toContain('--session-id');
+    await envoyer(m, agentId, 'perte avant init');
+    expect((await req('POST', `/api/server-agents/${agentId}/relancer`)).statusCode).toBe(202);
+    expect(starts[1]).toContain('--fork-session');
+    expect(starts[1]![starts[1]!.indexOf('--resume') + 1]).toBe(id);
+    await envoyer(m, agentId, 'bonjour');
+    await waitFor(() =>
+      t.db
+        .prepare("SELECT 1 FROM server_agent_messages WHERE agent_id = ? AND kind = 'turn_end'")
+        .get(agentId),
+    );
+    expect(ligne(m, agentId)?.session_id).toBe('aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee');
+    await req('POST', `/api/server-agents/${agentId}/relancer`);
+    expect(starts).toHaveLength(3);
+    const secondArgs = starts[2]!;
+    expect(secondArgs).not.toContain('--fork-session');
+    expect(secondArgs[secondArgs.indexOf('--resume') + 1]).toBe(
+      'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee',
+    );
+    expect(readFileSync(file, 'utf8')).toBe(original);
+    expect(
+      (
+        await req('POST', `/api/servers/${s.id}/discussions`, {
+          name: 'x',
+          kind: 'codex',
+          resumeSessionId: id,
+        })
+      ).statusCode,
+    ).toBe(422);
+    expect(
+      (
+        await req('POST', `/api/servers/${s.id}/discussions`, {
+          name: 'x',
+          kind: 'claude',
+          resumeSessionId: '../../x',
+        })
+      ).statusCode,
+    ).toBe(400);
+    expect(
+      (
+        await req('POST', `/api/servers/${s.id}/discussions`, {
+          name: 'x',
+          kind: 'claude',
+          resumeSessionId: 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb',
+        })
+      ).statusCode,
+    ).toBe(404);
+  },
+);
+
+test('historique externe borné : le cwd vient de l’en-tête, les outils sont ignorés et la troncature est annoncée', async () => {
+  const { readClaudeSession, SESSION_HISTORY_BYTES } =
+    await import('../src/daemon/remote/claudeSessions.js');
+  const remote = serveur();
+  const m = await daemon(remote);
+  const s = await creerServeur(m);
+  const dir = join(remote.home, '.claude/projects/-projet');
+  mkdirSync(dir, { recursive: true });
+  const id = '12345678-1234-1234-1234-123456789abc';
+  writeFileSync(
+    join(dir, `${id}.jsonl`),
+    [
+      JSON.stringify({ type: 'user', cwd: '/srv/original', message: { content: 'Début' } }),
+      JSON.stringify({
+        type: 'user',
+        message: { content: [{ type: 'tool_result', content: 'x'.repeat(SESSION_HISTORY_BYTES) }] },
+      }),
+      JSON.stringify({ type: 'assistant', message: { content: 'Fin conservée' } }),
+    ].join('\n'),
+  );
+  const history = await readClaudeSession(
+    { ...s, detectedAgents: ['claude'] },
+    id,
+    remote.transport,
+  );
+  expect(history.cwd).toBe('/srv/original');
+  expect(history.messages).toEqual([
+    {
+      type: 'message',
+      role: 'assistant',
+      text: expect.stringContaining('Historique importé partiellement'),
+    },
+    { type: 'message', role: 'assistant', text: 'Fin conservée' },
+  ]);
+});
