@@ -161,7 +161,7 @@ test.each(['reseau', 'json', 'liste', 'taille'] as const)(
       reseau.mockResolvedValue(
         new Response(cas === 'json' ? '{' : cas === 'liste' ? '{}' : ' '.repeat(65537)),
       );
-    expect(await pda.lireResultats('https://example.com', appareil, cle)).toEqual([]);
+    expect(await pda.lireResultats('https://example.com', appareil, cle)).toBeNull();
   },
 );
 
@@ -176,7 +176,7 @@ test.each([
   reseau.mockResolvedValue(
     new Response(JSON.stringify(fabriquer(signerResultat(resultat, signer)!))),
   );
-  expect(await pda.lireResultats('https://example.com', appareil, cle)).toEqual([]);
+  expect(await pda.lireResultats('https://example.com', appareil, cle)).toBeNull();
 });
 
 test('vrai relais : publication signée puis lecture par le téléphone', async () => {
@@ -340,6 +340,10 @@ test('action différente rejetée, id signé utilisé malgré id externe et ordr
   fireEvent(document, new Event('visibilitychange'));
   await waitFor(() => expect(lire).toHaveBeenCalledTimes(2));
   expect(screen.queryByText('Exécutée')).toBeNull();
+  cleanup();
+  lire.mockResolvedValue([]);
+  render(<AppPda />);
+  await confirmer();
   lire.mockResolvedValue([
     { ...resultat, id: autreId, resultat: 'perimee' },
     { ...resultat, idExterne: autreId } as CorpsResultatV1,
@@ -351,4 +355,65 @@ test('action différente rejetée, id signé utilisé malgré id externe et ordr
     within(screen.getByText('Périmée').closest('article')!).queryByText('Demande d’essai'),
   ).toBeNull();
   expect(document.querySelector('img')).toBeNull();
+});
+
+test('liste vide légitime', async () => {
+  reseau.mockResolvedValue(new Response(JSON.stringify({ resultats: [] })));
+  expect(await pda.lireResultats('https://example.com', appareil, cle)).toEqual([]);
+});
+
+test('résultat affiché conservé après échec puis liste vide et après 24 h', async () => {
+  const lire = preparer();
+  render(<AppPda />);
+  await confirmer();
+  lire.mockResolvedValue([resultat]);
+  await act(async () => {
+    fireEvent.click(screen.getByRole('button', { name: 'Actualiser' }));
+  });
+  expect(screen.getByText('Exécutée')).toBeTruthy();
+  const apresDeuxJours = Date.now() + 2 * 24 * 60 * 60_000;
+  for (const liste of [null, []]) {
+    lire.mockResolvedValue(liste);
+    vi.spyOn(Date, 'now').mockReturnValue(apresDeuxJours);
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Actualiser' }));
+    });
+    expect(screen.getByText('Exécutée')).toBeTruthy();
+    expect(screen.queryByText('En attente du résultat')).toBeNull();
+    expect(screen.queryByText('Résultat non reçu, à lire sur le Mac')).toBeNull();
+  }
+});
+
+test('fusion par id : premier résultat conservé, plus ancien emis évincé à 50', async () => {
+  const lire = preparer();
+  const lot = Array.from({ length: 50 }, (_, indice) => ({
+    ...resultat,
+    id: encoderBase64url(new Uint8Array(16).fill(indice)),
+    emis: 1000 + indice,
+  }));
+  // Le plus ancien est au milieu du lot : la borne suit emis, pas la réception.
+  lot[25] = { ...lot[25]!, emis: 0 };
+  lire.mockResolvedValue(lot);
+  vi.mocked(pda.lireDemandes).mockResolvedValue({ demandes: [], illisibles: 0 });
+  render(<AppPda />);
+  await waitFor(() => expect(screen.getAllByRole('article')).toHaveLength(50));
+  lire.mockResolvedValue([
+    { ...lot[0]!, resultat: 'echouee', emis: 9999 },
+    {
+      ...resultat,
+      id: encoderBase64url(new Uint8Array(16).fill(50)),
+      emis: 2000,
+    },
+  ]);
+  await act(async () => {
+    fireEvent.click(screen.getByRole('button', { name: 'Actualiser' }));
+  });
+  const articleA = (emis: number) =>
+    document.querySelector(`time[datetime="${new Date(emis).toISOString()}"]`)?.closest('article');
+  expect(articleA(2000)).toBeTruthy();
+  expect(articleA(0)).toBeUndefined();
+  const premier = articleA(1000)!;
+  expect(within(premier).getByText('Exécutée')).toBeTruthy();
+  expect(premier.querySelector('time')?.dateTime).toBe(new Date(1000).toISOString());
+  expect(screen.getAllByRole('article')).toHaveLength(50);
 });

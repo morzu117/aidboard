@@ -178,6 +178,7 @@ Depuis tout chemin de D307, le daemon signe un résultat et le publie sur le rel
 
 « Réponses récentes », la relecture à +20 s et +45 s, et le tableau des libellés. **Tests :** chaque ligne du tableau et la priorité de D310, une enveloppe forgée jetée, une action différente jetée, et un relais qui sert le résultat X sous l'id Y (rattaché à X par le `corps.id` signé, ou jeté).
 - 45.3, livré : 35 tests ajoutés. Le gate est vert, 3 578 tests réussis. La relecture a trouvé un défaut : le téléphone lisait un tableau nu, alors que le relais rend `{ resultats: [...] }`. Il a été corrigé en reprise, et il est désormais couvert par un test de bout en bout sur le vrai relais. Le code de 45.3 est à relire par le lab.
+- 45.3, après le PASS du lab (DM 96830) : les résultats vérifiés sont fusionnés par id et gardés quand une relecture échoue. Le gate passe, à deux tests web flaky près (`appareil` et `livraison`), qui échouent seulement sous charge et passent, 68 sur 68, quand on les relance. L'e2e est vert.
 
 ### 45.4 La fin
 

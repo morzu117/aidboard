@@ -86,7 +86,16 @@ export function AppPda() {
   const releverResultats = useCallback(async () => {
     if (!appareil || !code?.RELAIS || enregistrement) return;
     const liste = await lireResultats(code.RELAIS, appareil, code.CLE_DAEMON);
-    setResultats(liste);
+    if (liste !== null) {
+      setResultats((gardes) => {
+        const fusion = new Map(gardes.map((corps) => [corps.id, corps]));
+        for (const corps of liste) {
+          // Le premier résultat vérifié reçu pour cet id fait foi.
+          if (!fusion.has(corps.id)) fusion.set(corps.id, corps);
+        }
+        return [...fusion.values()].sort((a, b) => b.emis - a.emis).slice(0, 50);
+      });
+    }
     setMaintenant(Date.now());
   }, [appareil, code, enregistrement]);
   const rafraichir = useCallback(async () => {

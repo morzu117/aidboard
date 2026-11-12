@@ -178,11 +178,11 @@ export async function lireResultats(
   relais: string,
   appareil: PdaLocal,
   cle: string,
-): Promise<CorpsResultatV1[]> {
+): Promise<CorpsResultatV1[] | null> {
   try {
     const reponse = await requeteRelais(relais, appareil, '/resultats');
     const lecteur = reponse.body?.getReader();
-    if (!lecteur) return [];
+    if (!lecteur) return null;
     const morceaux: Uint8Array[] = [];
     let taille = 0;
     try {
@@ -190,7 +190,7 @@ export async function lireResultats(
         const { done, value } = await lecteur.read();
         if (done) break;
         taille += value.length;
-        if (taille > 64 * 1024) return [];
+        if (taille > 64 * 1024) return null;
         morceaux.push(value);
       }
     } finally {
@@ -212,7 +212,7 @@ export async function lireResultats(
       !Array.isArray(liste.resultats) ||
       liste.resultats.length > 50
     )
-      return [];
+      return null;
     const resultats: CorpsResultatV1[] = [];
     for (const enveloppe of liste.resultats) {
       const corps = await verifierResultat(enveloppe, cle);
@@ -220,6 +220,6 @@ export async function lireResultats(
     }
     return resultats;
   } catch {
-    return [];
+    return null;
   }
 }
