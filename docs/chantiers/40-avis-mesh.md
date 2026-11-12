@@ -2,7 +2,7 @@
 
 | Champ | Valeur |
 |---|---|
-| État | **Spec et plan, révision 3, 12 novembre 2026. Spec validée par Julien ; C1 tranché, validé par Julien.** Écrite contre `swarph committee` de swarph-cli 0.75.0, comme le lab l'a demandé (DM 93080, point 6). Reprend la spec révision 0 (9 novembre), les réponses du lab C2, C3 et C5 (DM 93087 et 93255), et le PASS du lab sur le charter, sous quatre corrections, intégrées en D297 (DM 93110). Révision 1 : réponses du lab à C6, C7 et C8 (DM 96738). Révision 2 : la réponse du commander à C1, relayée par le lab (DM 96740) et validée par Julien : la cell d'A-I-D préside, la cell du lab siège en baseline. La variante B est retirée. Révision 3 : la relecture du lab (DM 96750), avec un point bloquant (les trois tours sont obligatoires), cinq corrections et la réponse à C9. Julien a choisi de garder les trois tours et de déclarer la cell d'A-I-D « orchestrator ». Le lab relit la spec : le 40 touche au contrat swarph. |
+| État | **Spec et plan, révision 4, 12 novembre 2026. Spec validée par Julien ; C1 tranché, validé par Julien.** Écrite contre `swarph committee` de swarph-cli 0.75.0, comme le lab l'a demandé (DM 93080, point 6). Reprend la spec révision 0 (9 novembre), les réponses du lab C2, C3 et C5 (DM 93087 et 93255), et le PASS du lab sur le charter, sous quatre corrections, intégrées en D297 (DM 93110). Révision 1 : réponses du lab à C6, C7 et C8 (DM 96738). Révision 2 : la réponse du commander à C1, relayée par le lab (DM 96740) et validée par Julien : la cell d'A-I-D préside, la cell du lab siège en baseline. La variante B est retirée. Révision 3 : la relecture du lab (DM 96750), avec un point bloquant (les trois tours sont obligatoires), cinq corrections et la réponse à C9. Julien a choisi de garder les trois tours et de déclarer la cell d'A-I-D « orchestrator ». Révision 4 : la relecture du code par le lab (DM 96788, « à reprendre »), lue contre le gateway et une vraie réponse `results`. Julien a choisi le vote par option nue. Le lab relit la spec : le 40 touche au contrat swarph. |
 | Emplacement final | `docs/chantiers/40-avis-mesh.md` sur `main` |
 | Base | `main` (c6d3332, v0.7.2) |
 | Organisation | Comme au 42. morzu-vps gère le chantier. Codex CLI écrit le code et les tests de chaque point. morzu-vps relit, lance le gate, commite et ouvre la PR. |
@@ -45,7 +45,7 @@ Le 39 donne un deuxième avis : la même question part à N agents Claude indép
 
 ### D294. Une salle « avis » par demande, une motion par question
 
-- **La salle.** Une demande au mesh ouvre une salle, liée à une carte (`--card-id`). Son nom est `avis-<id>`, où `<id>` est l'id de la demande, au format du 39 (`ID_ASK`).
+- **La salle.** Une demande au mesh ouvre une salle, liée à une carte (`--card-id`). Son nom est `avis-<id>`, où `<id>` est l'id de la demande, au format du 39 (`ID_ASK`), **mis en minuscules**. Le gateway n'accepte qu'un nom en `[a-z0-9_-]`, de 1 à 64 caractères (DM 96788, point 1) ; la validation des canaux, en lecture comme en écriture, suit cette règle.
 - **Les sièges**, une liste fermée, chacun avec sa famille de modèle (D303) :
   - la cell d'A-I-D, `role: "chair"`, famille `orchestrator` : le gateway veut que le chair soit la cell qui ouvre la salle, sinon il répond 403. Le chair ne dépose ni position ni vote, et les salles existantes le déclarent ainsi (C9) ;
   - la cell du lab, `role: "baseline"` (D295) ;
@@ -84,13 +84,13 @@ Le 39 donne un deuxième avis : la même question part à N agents Claude indép
 Le charter est un texte fixe, versionné dans `src/shared/charter-avis.ts`. Seuls le jeton de citation, la carte et le nombre de sous-questions y sont remplacés. Il reprend le brouillon 0 relu par le lab, avec ses quatre corrections :
 
 1. **La citation par jeton.** La question est citée entre `<<<QUESTION-<jeton>` et `QUESTION-<jeton>>>>`, où `<jeton>` est tiré au hasard à chaque salle (8 caractères hexadécimaux) et écrit dans le charter. A-I-D refuse aussi, avant l'envoi, une question qui contient `<<<QUESTION` ou `QUESTION>>>`. Les deux défenses sont nécessaires.
-2. **Les seules commandes permises** : `swarph committee motion <canal>`, pour lire, et `swarph committee post`, pour déposer, dans cette salle. Rien d'autre : ni board, ni DM, ni canal, ni fichier, ni autre commande.
+2. **Les seules commandes permises**, dans cette salle : `swarph committee motion <canal>`, `swarph committee results <canal> --json` et `swarph committee rooms show <canal>`, pour lire (le rebuttal demande de lire les positions des autres, point 5 de la DM 96788) ; et `swarph committee post`, pour déposer. Rien d'autre : ni board, ni DM, ni canal, ni fichier, ni autre commande.
 3. **Le canal.** « Ne publie ta position nulle part ailleurs que par `post`, ni dans un canal ni dans un DM, avant la clôture du tour. »
 4. **Le secret repéré.** « Abstiens-toi avec `--outcome cannot_evaluate` et un corps qui dit seulement "secret suspecté", sans le recopier. »
 
 5. **Les tours `rebuttal` et `vote`** (B1). Le charter dit ce qu'ils veulent dire :
    - au tour `rebuttal`, un texte libre facultatif, en réponse aux positions des autres, devenues lisibles ;
-   - au tour `vote`, l'option `avis` si ta position tient, `objection` sinon, avec dans le corps le même JSON qu'au tour `positions`, mis à jour ;
+   - au tour `vote`, **l'option seule** : `avis` si ta position tient, `objection` sinon. Le gateway exige que le corps soit exactement l'une des options : aucun JSON, aucun autre texte, et pas de saut de ligne final (`printf 'avis' > vote.txt`, pas `echo`). Julien a choisi ce vote par option nue (DM 96788, point 4) ;
    - le baseline ne vote pas.
 
 Le reste du brouillon tient : l'objet de la salle, le format JSON du bulletin, la phrase sur le scellé, l'abstention visible et le coût consenti à l'ouverture.
@@ -111,7 +111,7 @@ Le reste du brouillon tient : l'objet de la salle, le format JSON du bulletin, l
   - la justification est coupée à 600 caractères ;
   - `cannot_evaluate` donne une abstention visible ; « secret suspecté » s'affiche comme tel ;
   - un siège sans bulletin à l'échéance est `absent`.
-- **L'accord** se calcule comme au 39 (`unanime`, `majorite`, `partage`, `insuffisant`), sur les seuls verdicts valides du tour `positions`. Si le tour `vote` est ouvert, il remplace les verdicts de `positions` des sièges qui ont voté, et le tableau le dit.
+- **L'accord** se calcule comme au 39 (`unanime`, `majorite`, `partage`, `insuffisant`), sur les seuls verdicts valides du tour `positions`. **Le vote ne change jamais l'accord** : le tableau montre, à côté de la position de chaque cell, son vote (« maintient » pour `avis`, « objection »), ou « scellé par le gateway » tant qu'il n'est pas visible, ou rien si la cell n'a pas voté.
 - **Le découpage en sous-questions** est porté aussi : lignes `N.` ou `N)`, 12 au plus, le texte entier sinon.
 - Le résultat garde la forme de `swairm-ask/1`, avec une colonne par cell (`avis[].cell`), pour réutiliser `TableauAvis`. Son champ `format` vaut `aid-avis-mesh/1`, pour ne pas le confondre avec une sortie de swairm.
 
@@ -183,6 +183,18 @@ La bascule, le choix des cells, de la carte et des échéances, le tableau par c
 Un e2e avec un faux `swarph`. La fiche `docs/recette-chantier-40-avis-mesh.md` : une vraie salle avec deux cells et le baseline, le scellé, une abstention, un absent, le baseline déclaré absent, l'accord, puis la relecture après la clôture.
 - 40.5 : `e2e/avis-mesh.spec.ts` (1 e2e, 29 s) et la fiche `docs/recette-chantier-40-avis-mesh.md`. Avec deux sièges, l'abstention et l'absence se vérifient dans deux relectures successives. La recette réelle, le fan-out et la validation du lab restent à faire.
 
+### 40.6 La reprise de la relecture du lab (DM 96788)
+
+Le lab a relu `bee41a2` contre le gateway et une vraie réponse `results`. Les fixtures imbriquaient une clé `motion` et utilisaient `cancelled` : la CI et l'e2e prouvaient l'accord avec la fixture, pas avec le gateway.
+
+- **La forme réelle de `results --json`**, à plat, sans clé `motion` : `id`, `channel`, `card_id`, `text`, `options`, `phase`, les trois `*_deadline`, `baseline_absent`, `positions_absent`, `seats` (`peer`, `role`, `family`, `voided`, `recast_from`) et `ballots` (`peer`, `round`, `created_at`, `voided`, `placeholder`, `message_id`, et `body` et `outcome` seulement quand le tour n'est plus scellé). Le parseur, le service et toutes les fixtures (tests unitaires et e2e) suivent cette forme.
+- **Les annulations** : `voided`, pas `cancelled`. Un siège annulé est écarté ; un bulletin annulé ne compte pas, y compris une position annulée du baseline dans `verifierAbsence`.
+- **Le nom de la salle et les canaux** : D294.
+- **Le vote** : l'option nue, D297 et D299.
+- **Le charter** : les commandes de lecture `results` et `rooms show`, D297.
+- **La reprise d'une motion** : avant `motion --open`, `mesh.avis.motion` lit `motion <canal> --json`. Si une motion est déjà ouverte (le CLI a expiré après que le gateway l'a ouverte), elle la reprend au lieu de recevoir un 409.
+- **Les refus du gateway** : le CLI sort avec 1 ou avec 2 (`swarph committee: gateway 4xx: …`). Les deux sont lus.
+
 ## 6. Pièges
 
 - **La question est une donnée.** Les sièges ont des outils, contrairement aux avis du 39. Le charter et la citation par jeton sont la défense ; un test vérifie que le charter envoyé contient bien le jeton de la salle.
@@ -193,6 +205,7 @@ Un e2e avec un faux `swarph`. La fiche `docs/recette-chantier-40-avis-mesh.md` :
 - **Le fan-out pendant le scellé n'est pas vérifié** (DM 96738) : un membre non-siège reçoit-il le texte d'un bulletin pendant que le tour est scellé (la fuite de #1326) ? La recette le teste avant d'y compter.
 - **Le baseline bloque le tour.** Sans son bulletin, le tour `positions` ne se ferme pas, même après l'échéance : seul le chair le débloque, par `baseline-absent`.
 - **Les familles sont déclarées, pas vérifiées.** Une famille fausse trompe le gateway ; A-I-D ne la devine jamais.
+- **Une fixture n'est pas le gateway.** Les fixtures suivent la forme réelle de `results` (40.6), relue sur une vraie réponse, sans aucun corps de bulletin réel.
 - **Le vote écrit sur le board.** Le gateway crée lui-même une ligne « vote » par siège au passage en `vote` : ce n'est pas une écriture d'A-I-D, mais elle se voit sur le board.
 - **Le coût est chez les autres.** Chaque siège dépense le quota de son propriétaire, qui consent à l'ouverture de la salle. Rien ne relance un siège.
 
@@ -206,6 +219,8 @@ Un e2e avec un faux `swarph`. La fiche `docs/recette-chantier-40-avis-mesh.md` :
 ## 8. Questions ouvertes
 
 - **C4, pour Julien** : les sièges et les échéances de la première recette. Il faut deux cells non servies par Claude (D303), qui appartiennent à d'autres propriétaires et consomment leur quota.
+
+**Relecture du code par le lab (DM 96788), intégrée :** « à reprendre », six corrections et trois recommandations, toutes en 40.6. Julien a choisi le vote par option nue.
 
 **Relecture du lab (DM 96750), intégrée :**
 - **B1** : les trois tours sont obligatoires ; Julien garde les trois tours : D294 et D297.
