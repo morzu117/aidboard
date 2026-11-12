@@ -8,7 +8,7 @@ import { killGroup, remoteSpawn, shQuote, type TransportOptions } from './transp
  *
  * Le script est embarqué ici plutôt que dans un fichier d'assets : il part avec le bundle, sans toucher à la
  * liste `files` du manifeste. Écrit sans accent grave ni `${` littéral (le gabarit `String.raw` les interpréterait),
- * en sh POSIX plus `head -c`, `tail -c` et `sleep` fractionnaire (GNU et BSD).
+ * en sh POSIX plus `head -c`, `tail -c`, `dd` et `sleep` fractionnaire (GNU, BSD et uutils).
  */
 export const RELAY_VERSION = 1;
 
@@ -164,7 +164,7 @@ attach)
   printf 'aid-relay: attaché\n' >&2
   # redirection explicite : sans elle, une commande en arrière-plan lit /dev/null
   exec 3<&0
-  cat <&3 >"$d/in" &
+  dd bs=65536 2>/dev/null <&3 >"$d/in" &
   fwd=$!
   fin_attach() {
     kill $fwd 2>/dev/null
