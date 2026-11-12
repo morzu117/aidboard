@@ -1,3 +1,7 @@
+import type { AidConfig } from '../config.js';
+import type { MeshRegistry } from '../mesh/registre.js';
+import { nomMeshEcriture, signatureMesh } from '../mesh/ecriture.js';
+import { lireCorpsDemande, type MeshSigne } from '../../shared/pda.js';
 import { createHash } from 'node:crypto';
 import type { ResultatEnvoi } from '../../shared/ecritures.js';
 import { ACTIONS_MESH, validerParamsAction } from '../../shared/confirmations.js';
@@ -25,6 +29,7 @@ export type ActionPorte =
   | 'host.option'
   | 'desarmement';
 export interface EntreeAction {
+  mesh?: string;
   params?: unknown;
   topicId?: string;
   workspaceId?: string;
@@ -48,6 +53,7 @@ export interface EntreeAction {
   option?: 'code' | 'push';
 }
 export interface ContexteAction {
+  mesh?: string;
   envoi?: ResultatEnvoi | Pick<ResultatEnvoi, 'code' | 'status'>;
   confirmation: boolean;
   amorcage?: boolean;
@@ -63,6 +69,8 @@ export type ActionsPorte = { [A in ActionPorte]: Action<A> };
 
 export function creerPorte(deps: {
   db: Db;
+  config?: AidConfig;
+  meshes?: MeshRegistry;
   actions: ActionsPorte;
   file: () => FilePda | null;
   signaler?: () => void;
@@ -129,12 +137,19 @@ export function creerPorte(deps: {
     },
     async demander<A extends ActionPorte>(action: A, entree: EntreeAction, req: FastifyRequest) {
       if (req.principal?.kind !== 'admin') throw new AidHttpError(403, 'admin seulement');
+      const mesh = ACTIONS_MESH.has(action)
+        ? signatureMesh(deps, nomMeshEcriture(entree))
+        : undefined;
       const arme = reglage.arme();
       if (ACTIONS_MESH.has(action) && !arme) throw new AidHttpError(409, 'confirmation_requise');
       const confirmation = arme && reglage.exige(action);
       if (ACTIONS_MESH.has(action) && !confirmation)
         throw new AidHttpError(409, 'confirmation_requise');
-      const params = await deps.actions[action].preparer(entree, { confirmation, entree });
+      const params = await deps.actions[action].preparer(entree, {
+        confirmation,
+        entree,
+        mesh: mesh?.nom,
+      });
       if (!confirmation) return { direct: params };
       const file = deps.file();
       if (
@@ -144,10 +159,14 @@ export function creerPorte(deps: {
         throw new AidHttpError(409, 'confirmation_impossible', {
           message: 'Allume le PDA et active un téléphone pour cette action',
         });
-      const { id } = await file.creerDemande({ action, params } as ParamsAction).catch((e) => {
-        if (e instanceof DemandeTropGrande) throw new AidHttpError(413, 'demande_trop_grande');
-        throw e;
-      });
+      const { id } = await file
+        .creerDemande({ action, params, ...(mesh && { mesh }) } as ParamsAction & {
+          mesh?: MeshSigne;
+        })
+        .catch((e) => {
+          if (e instanceof DemandeTropGrande) throw new AidHttpError(413, 'demande_trop_grande');
+          throw e;
+        });
       return { confirmation: id };
     },
     async executer<A extends ActionPorte>(
@@ -155,6 +174,7 @@ export function creerPorte(deps: {
       params: ParametresActions[A],
       entree: EntreeAction,
     ) {
+      if (ACTIONS_MESH.has(action)) throw new AidHttpError(409, 'confirmation_requise');
       const ctx: ContexteAction = { confirmation: false, entree };
       await deps.actions[action].executer(params, ctx);
       return ctx.actionId;
@@ -167,14 +187,16 @@ export function creerPorte(deps: {
       const action = ligne.action as ActionPorte;
       const definition = deps.actions[action] as Action<ActionPorte>;
       let params: ParametresActions[ActionPorte];
+      let nom: string | undefined;
       try {
         params = JSON.parse(ligne.params);
         if (ACTIONS_MESH.has(action)) {
           const stockee = deps.db
-            .prepare('SELECT resume, cree_a FROM pda_demandes WHERE id = ?')
-            .get(ligne.id) as { resume: string; cree_a: string };
+            .prepare('SELECT resume, cree_a, mesh FROM pda_demandes WHERE id = ?')
+            .get(ligne.id) as { resume: string; cree_a: string; mesh: string | null };
           const corps = {
-            v: 2,
+            v: stockee.mesh === null ? 2 : 3,
+            ...(stockee.mesh !== null && { mesh: JSON.parse(stockee.mesh) }),
             id: ligne.id,
             action,
             classe: ligne.classe,
@@ -188,11 +210,19 @@ export function creerPorte(deps: {
             createHash('sha256').update(jsonCanonique(corps)).digest('base64url') !== ligne.hDemande
           )
             throw new Error('perime');
+          const lu = lireCorpsDemande(Buffer.from(jsonCanonique(corps)));
+          if (lu.v === 1) throw new Error('perime');
+          nom = lu.v === 3 ? lu.mesh.nom : 'principal';
+          const actuelle = signatureMesh(deps, nom);
+          if (lu.v === 3 && jsonCanonique(actuelle) !== jsonCanonique(lu.mesh))
+            throw new Error('perime');
+          if (ligne.echeance <= Date.now()) throw new Error('perime');
         }
         if (!validerParamsAction(action, params)) throw new Error('schema');
         const relus = await definition.preparer(reconstruire(action, params), {
           confirmation: true,
           etatAvantNettoyage: ligne.etatAvantNettoyage,
+          mesh: nom,
         });
         if (jsonCanonique(relus) !== jsonCanonique(params)) throw new Error('perime');
       } catch {
@@ -200,7 +230,7 @@ export function creerPorte(deps: {
         return;
       }
       try {
-        const ctx: ContexteAction = { confirmation: true };
+        const ctx: ContexteAction = { confirmation: true, mesh: nom };
         await definition.executer(params, ctx);
         if (ctx.envoi) {
           deps.db

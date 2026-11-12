@@ -17,7 +17,12 @@ export function demanderAvisMesh(
   demande: { question: string; cells: string[]; carte: number; echeances: EcheancesAvisMesh },
   client: AidClient,
 ): Promise<DemandeAvisMesh> {
-  return client.request('POST', '/api/avis-mesh', demande, { 'X-AID-Confirm': 'avis' });
+  return client.request(
+    'POST',
+    '/api/avis-mesh',
+    { ...demande, mesh: 'principal' },
+    { 'X-AID-Confirm': 'avis' },
+  );
 }
 export function lireAvisMesh(id: string, client: AidClient): Promise<ResultatAvisMesh> {
   return client.request('GET', `/api/avis-mesh/${encodeURIComponent(id)}`);
@@ -49,7 +54,7 @@ export function agirAvisMesh(
   return client.request(
     'POST',
     `/api/avis-mesh/${encodeURIComponent(id)}/${action}`,
-    action === 'motion' ? { echeances } : {},
+    { mesh: 'principal', ...(action === 'motion' && { echeances }) },
     { 'X-AID-Confirm': 'avis' },
   );
 }

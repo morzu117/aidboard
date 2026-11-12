@@ -21,6 +21,7 @@ async function preparer(proxy: boolean, lectureSeule: boolean) {
       mesh: {
         ...DEFAULT_CONFIG.mesh,
         cell: 'peer-a',
+        gateway: 'http://gateway.example.com',
         bin: join(import.meta.dirname, 'fixtures/fake-swarph.sh'),
         proxySocket: proxy ? join(home, 'proxy.sock') : '',
         inboxLog: proxy ? join(home, 'inbox.log') : '',
@@ -66,7 +67,7 @@ test('D283 : les deux routes refusent avant la porte, aucune demande, aperçu di
       method: 'POST',
       url: `/api/swarph/${route}/envoyer`,
       headers: t.headers,
-      payload: { action, params },
+      payload: { action, params, mesh: 'principal' },
     });
     expect(r.statusCode).toBe(409);
     expect(r.json()).toEqual({ error: 'proxy_lecture_seule' });
@@ -77,6 +78,7 @@ test('D283 : les deux routes refusent avant la porte, aucune demande, aperçu di
     url: '/api/swarph/ecrire/apercu',
     headers: t.headers,
     payload: {
+      mesh: 'principal',
       action: 'dm.envoyer',
       params: { pair: 'peer-b', fil: null, kind: 'fyi', texte: 'Bonjour' },
     },
@@ -96,7 +98,7 @@ test('D283 : sans proxy, lecture seule est sans effet sur le refus D262', async 
       method: 'POST',
       url: `/api/swarph/${route}/envoyer`,
       headers: t.headers,
-      payload: { action, params },
+      payload: { action, params, mesh: 'principal' },
     });
     expect(r.statusCode).toBe(409);
     // Porte désarmée : le refus de 35b.6 vient avant la préparation (D262) ; jamais la lecture seule.

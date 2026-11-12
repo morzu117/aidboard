@@ -10,13 +10,14 @@ export async function preparerPropositionAid(
   board: BoardReader | null,
   cell: string,
   id: number,
+  mesh = 'principal',
 ): Promise<ParametresEtat['carte.deplacer']> {
   if (!Number.isSafeInteger(id) || id < 1) throw new AidHttpError(400, 'proposition invalide');
   const p = db
     .prepare(
-      "SELECT carte, etape FROM aid_propositions WHERE mesh = 'principal' AND id = ? AND fermee_a IS NULL",
+      'SELECT carte, etape FROM aid_propositions WHERE mesh = ? AND id = ? AND fermee_a IS NULL',
     )
-    .get(id) as { carte: number; etape: string } | undefined;
+    .get(mesh, id) as { carte: number; etape: string } | undefined;
   if (!p) throw new AidHttpError(404, 'proposition absente');
   const fiche = await board?.card(p.carte, { fresh: true, sansCache: true });
   if (!fiche?.card.ok || raisonDeplacement(fiche.card.data, cell))

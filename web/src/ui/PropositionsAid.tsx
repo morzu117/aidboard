@@ -71,6 +71,7 @@ export function PropositionAidVue({
     setEnvoye(true);
     try {
       const r = await client.request<{ confirmation: string }>('POST', '/api/swarph/etat/envoyer', {
+        mesh: 'principal',
         action: 'carte.deplacer',
         params: apercu.params,
         propositionAid: p.id,

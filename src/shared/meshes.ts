@@ -15,7 +15,7 @@ export function normaliserGateway(url: string): string {
 
 export function empreinteChemin(chemin: string): string {
   return createHash('sha256')
-    .update(jsonCanonique([resolve(chemin)]))
+    .update(jsonCanonique([chemin === '' ? '' : resolve(chemin)]))
     .digest('base64url');
 }
 
@@ -23,5 +23,11 @@ export function empreinteMesh(cell: string, gateway = ''): string {
   // Une cell sans gateway configuré est identifiée par la chaîne vide, sans URL implicite.
   return createHash('sha256')
     .update(jsonCanonique([cell, gateway === '' ? '' : normaliserGateway(gateway)]))
+    .digest('base64url');
+}
+
+export function empreinteGateway(url: string): string {
+  return createHash('sha256')
+    .update(jsonCanonique([normaliserGateway(url)]))
     .digest('base64url');
 }

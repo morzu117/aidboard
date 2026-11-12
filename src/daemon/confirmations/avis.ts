@@ -11,6 +11,7 @@ export function creerActionsAvis(avis?: AvisMeshService): {
 } {
   const service = () => {
     if (!avis) throw new AidHttpError(404, 'mesh désactivé');
+    avis.verifierTransport();
     return avis;
   };
   return {

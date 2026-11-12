@@ -39,6 +39,7 @@ async function preparer(scenario: ScenarioProxy = succes) {
   const config = structuredClone(DEFAULT_CONFIG);
   config.mesh.cell = 'peer-a';
   config.mesh.proxySocket = proxy.socket;
+  config.mesh.gateway = 'http://gateway.example.com';
   const board = new BoardReader({ mesh: { read: vi.fn() }, cell: config.mesh.cell, log: vi.fn() });
   const obligations = vi.spyOn(board, 'obligations').mockResolvedValue({
     ok: true,
@@ -55,7 +56,7 @@ async function preparer(scenario: ScenarioProxy = succes) {
   reglage.armer();
   const appareil = await t.appareil();
   let reponses: { id: string; appareil: string; corps: string; curseur: number }[] = [];
-  const porte = creerPorte({ db: t.db, actions, file: () => file });
+  const porte = creerPorte({ db: t.db, config, actions, file: () => file });
   const file = new FilePda({
     ...t,
     actif: () => true,
@@ -85,7 +86,11 @@ async function preparer(scenario: ScenarioProxy = succes) {
   registerEcrituresRoutes(app, { cell: config.mesh.cell, board, porte });
   registerConfirmationRoutes(app, t.db, porte, () => file);
   const demander = (payload: unknown = exemples[0]) =>
-    app.inject({ method: 'POST', url: '/api/swarph/etat/envoyer', payload: payload as object });
+    app.inject({
+      method: 'POST',
+      url: '/api/swarph/etat/envoyer',
+      payload: { ...(payload as object), mesh: 'principal' },
+    });
   const resultat = async (id: string) => {
     const r = await app.inject('/api/confirmations');
     return [...r.json().ouvertes, ...r.json().recentes].find((d) => d.id === id);
@@ -300,7 +305,7 @@ test('mesh désactivé : 404 ; mode host : aucune route d’envoi', async () => 
         method: 'POST',
         url: '/api/swarph/etat/envoyer',
         headers: t.headers,
-        payload: exemples[0],
+        payload: { ...exemples[0], mesh: 'principal' },
       })
     ).statusCode,
   ).toBe(404);
@@ -314,7 +319,7 @@ test('mesh désactivé : 404 ; mode host : aucune route d’envoi', async () => 
   const r = await t.d.modeHost.instance()!.inject({
     method: 'POST',
     url: '/api/swarph/etat/envoyer',
-    payload: exemples[0],
+    payload: { ...exemples[0], mesh: 'principal' },
     headers: {
       host: 'aid-e2e.ts.net',
       origin: 'https://aid-e2e.ts.net',

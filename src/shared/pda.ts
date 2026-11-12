@@ -1,5 +1,6 @@
 import type { ResultatEnvoi } from './ecritures.js';
 import {
+  ACTIONS_MESH,
   CLASSE_ACTION,
   resumeAction,
   validerParamsAction,
@@ -87,7 +88,26 @@ export function jsonCanonique(valeur: unknown): string {
   return encoder(valeur);
 }
 
-export type CorpsDemande = CorpsDemandeV1 | CorpsDemandeV2;
+export interface MeshSigne {
+  nom: string;
+  cell: string;
+  gateway: string;
+  proxy: string;
+}
+type ActionMesh = Extract<ActionConfirmee, `mesh.${string}`>;
+export type CorpsDemandeV3 = {
+  [A in ActionMesh]: Omit<Extract<CorpsDemandeV2, { action: A }>, 'v'> & { v: 3; mesh: MeshSigne };
+}[ActionMesh];
+export function resumeActionMesh(
+  mesh: MeshSigne,
+  action: ActionConfirmee,
+  params: Parameters<typeof resumeAction>[1],
+): string {
+  return Array.from(`[${mesh.nom}] ${resumeAction(action, params)}`)
+    .slice(0, 200)
+    .join('');
+}
+export type CorpsDemande = CorpsDemandeV1 | CorpsDemandeV2 | CorpsDemandeV3;
 export interface CorpsDemandeV1 {
   v: 1;
   id: string;
@@ -123,6 +143,7 @@ export function lireCorpsDemande(octets: Uint8Array): CorpsDemande {
   const o: unknown = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(octets));
   if (!o || typeof o !== 'object' || Array.isArray(o)) throw new Error('Demande invalide');
   const c = o as Record<string, unknown>;
+  if (c.v === 3) return lireCorpsDemandeV3(c);
   if (c.v === 2) return lireCorpsDemandeV2(c);
   const cles = ['v', 'id', 'action', 'sujet', 'numero', 'echeance', 'emise'];
   if (
@@ -226,6 +247,58 @@ export async function empreintePda({ credId, passkey, relais }: ClesPda): Promis
     }
   }
   return `${texte.slice(0, 4)}-${texte.slice(4)}`;
+}
+
+export function lireCorpsDemandeV3(c: Record<string, unknown>): CorpsDemandeV3 {
+  const cles = [
+    'v',
+    'id',
+    'action',
+    'classe',
+    'params',
+    'resume',
+    'numero',
+    'echeance',
+    'emise',
+    'mesh',
+  ];
+  const m = c.mesh as Record<string, unknown> | null;
+  const empreinte = (v: unknown) =>
+    typeof v === 'string' && /^[A-Za-z0-9_-]{43}$/.test(v) && decoderBase64url(v).length === 32;
+  if (
+    c.v !== 3 ||
+    Object.keys(c).length !== cles.length ||
+    !cles.every((cle) => Object.hasOwn(c, cle)) ||
+    typeof c.action !== 'string' ||
+    !ACTIONS_MESH.has(c.action) ||
+    !m ||
+    typeof m !== 'object' ||
+    Array.isArray(m) ||
+    Object.keys(m).length !== 4 ||
+    !['nom', 'cell', 'gateway', 'proxy'].every((cle) => Object.hasOwn(m, cle)) ||
+    typeof m.nom !== 'string' ||
+    /^[a-z][a-z0-9-]{0,31}$/.exec(m.nom)?.[0] !== m.nom ||
+    typeof m.cell !== 'string' ||
+    /^[^\s\p{Cc}]{1,64}$/u.exec(m.cell)?.[0] !== m.cell ||
+    !empreinte(m.gateway) ||
+    !empreinte(m.proxy)
+  )
+    throw new Error('Demande invalide');
+  // La v2 valide les champs communs avec son propre résumé, sans accepter de clé mesh.
+  const commun = { ...c };
+  delete commun.mesh;
+  lireCorpsDemandeV2({
+    ...commun,
+    v: 2,
+    resume: resumeAction(
+      c.action as ActionConfirmee,
+      c.params as Parameters<typeof resumeAction>[1],
+    ),
+  });
+  const corps = c as unknown as CorpsDemandeV3;
+  if (corps.resume !== resumeActionMesh(corps.mesh, corps.action, corps.params))
+    throw new Error('Résumé invalide');
+  return corps;
 }
 
 function lireCorpsDemandeV2(c: Record<string, unknown>): CorpsDemandeV2 {

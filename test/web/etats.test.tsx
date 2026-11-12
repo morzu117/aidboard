@@ -123,6 +123,7 @@ test.each(['Prendre', 'Refuser'])('confirmation locale : %s', async (nom) => {
   await screen.findByText('Parti.');
   expect(envois(h)).toHaveLength(1);
   expect(envois(h)[0]!.body).toEqual({
+    mesh: 'principal',
     action: `obligation.${nom === 'Prendre' ? 'prendre' : 'refuser'}`,
     params: {
       carte: 1457,
@@ -153,6 +154,7 @@ test.each(['<img src=x onerror=alert(1)> https://example.com', 'Accept fixé '])
     const resultat = await screen.findByText('Parti.');
     expect(resultat.textContent).not.toContain('preuve confidentielle');
     expect(envois(h)[0]!.body).toEqual({
+      mesh: 'principal',
       action: 'obligation.clore',
       params: {
         carte: 1457,

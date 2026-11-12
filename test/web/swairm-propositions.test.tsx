@@ -85,6 +85,7 @@ test.each(['succes', 'connexion'])(
     fireEvent.click(await screen.findByRole('button', { name: 'Envoyer' }));
     await waitFor(() => expect(h.calls.some((c) => c.url === '/api/confirmations')).toBe(true));
     expect(h.calls.find((c) => c.url === '/api/swarph/ecrire/envoyer')?.body).toEqual({
+      mesh: 'principal',
       action: 'carte.note',
       params: { carte: 42, a: null, kind: 'fyi', texte: 'Swairm : <b>Un sujet</b> — plan validé.' },
       propositionSwairm: 1,

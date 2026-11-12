@@ -244,6 +244,7 @@ test.each([null, 'fil-inexploitable', '12345678-1234-1234-1234-123456789abc'])(
     await voir();
     await waitFor(() =>
       expect(h.calls.find((c) => c.method === 'POST')?.body).toEqual({
+        mesh: 'principal',
         action: 'dm.envoyer',
         params: {
           pair: 'pair-test',

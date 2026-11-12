@@ -159,6 +159,7 @@ test('échéances par défaut et bornes, trois tours obligatoires puis corps exa
   await userEvent.click(envoyer());
   await screen.findByText('Demande demande/1 — Ouverte');
   expect(h.calls.find((c) => c.method === 'POST')?.body).toEqual({
+    mesh: 'principal',
     question: 'Question',
     cells: ['pair-1', 'pair-2'],
     carte: 24,
@@ -189,7 +190,7 @@ test('client : confirmation, corps exact, id encodé et 404 rejetée normalement
   expect(url).toBe('/api/avis-mesh');
   expect(init.method).toBe('POST');
   expect(init.headers).toMatchObject({ 'X-AID-Confirm': 'avis' });
-  expect(JSON.parse(String(init.body))).toEqual(corps);
+  expect(JSON.parse(String(init.body))).toEqual({ ...corps, mesh: 'principal' });
   await lireAvisMesh('demande/1 ?', client);
   expect(fetchImpl.mock.calls[1]?.[0]).toBe('/api/avis-mesh/demande%2F1%20%3F');
   fetchImpl.mockImplementation(
@@ -252,6 +253,7 @@ test('envoi par défaut : positions à 24 h, rebuttal et vote à 1 h', async () 
   await userEvent.click(envoyer());
   await screen.findByText('Demande demande/1 — Ouverte');
   expect(h.calls.find((c) => c.method === 'POST')?.body).toEqual({
+    mesh: 'principal',
     question: 'Question',
     cells: ['pair-1', 'pair-2'],
     carte: 24,
@@ -418,7 +420,7 @@ for (const [phase, etatBaseline, passe, visible] of [
     if (bouton) {
       await userEvent.click(bouton);
       await screen.findByText('le baseline a déjà posté');
-      expect(h.calls.find((c) => c.method === 'POST')?.body).toEqual({});
+      expect(h.calls.find((c) => c.method === 'POST')?.body).toEqual({ mesh: 'principal' });
     }
   });
 

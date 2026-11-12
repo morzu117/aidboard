@@ -50,7 +50,7 @@ const apercu = (action: string, params: unknown) =>
     method: 'POST',
     url: '/api/swarph/ecrire/apercu',
     headers: t!.headers,
-    payload: { action, params },
+    payload: { mesh: 'principal', action, params },
   });
 test('trois aperçus exacts : seule la lecture des obligations part', async () => {
   const journal = await boot();

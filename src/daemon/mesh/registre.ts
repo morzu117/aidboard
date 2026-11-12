@@ -4,7 +4,7 @@ import { meshExec } from './exec.js';
 import type { AidConfig, MeshConfig } from '../config.js';
 import type { Db } from '../db.js';
 import type { EventStore } from '../events/store.js';
-import { empreinteMesh } from '../../shared/meshes.js';
+import { empreinteChemin, empreinteGateway, empreinteMesh } from '../../shared/meshes.js';
 import { AidHttpError } from '../errors.js';
 import { activerMesh, archiverMesh } from './identite.js';
 import { MeshService, type MeshServiceDeps } from './service.js';
@@ -79,6 +79,21 @@ export class MeshRegistry {
   configuration(nom = 'principal'): MeshConfig {
     this.obtenir(nom);
     return this.entrees.get(nom)!.config;
+  }
+
+  signature(nom: string) {
+    const entree = this.entrees.get(nom);
+    if (!entree) throw new AidHttpError(404, 'mesh inconnu');
+    if (entree.config.cell && !entree.services)
+      throw new AidHttpError(409, entree.erreur ?? 'mesh inactif');
+    const config = this.configuration(nom);
+    if (!config.gateway) throw new AidHttpError(409, 'gateway_requis');
+    return {
+      nom,
+      cell: config.cell,
+      gateway: empreinteGateway(config.gateway),
+      proxy: empreinteChemin(config.proxySocket ?? ''),
+    };
   }
 
   liste() {

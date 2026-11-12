@@ -266,6 +266,7 @@ Elle va bouger : on ajoute le moins possible.
   - une cible d'un autre mesh refusée ;
   - la citation d'une salle limitée à son mesh.
 - **Ce code est relu par le lab.**
+46.3 commité. Gate vert (3 705 tests). Trois arrêts de Codex, tous fondés et tranchés : les fixtures qui créent une demande mesh directement ; le transport des avis (CLI committee du mesh signé, refusé si proxy — PASS du lab, DM 96877) ; les canaux, sans verbe de lecture au proxy (tiennent par le transport). Recommandations du lab intégrées : gateway exigé, règle des noms de pair pour la cell. À relire par le lab.
 
 ### 46.4 Le téléphone (D313)
 

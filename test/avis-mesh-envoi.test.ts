@@ -1,3 +1,4 @@
+import { signatureMesh } from '../src/daemon/mesh/ecriture.js';
 import { mkdtempSync, writeFileSync, readFileSync, existsSync, rmSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -32,7 +33,12 @@ afterEach(() => {
   for (const f of nettoyage.splice(0).reverse()) f();
 });
 const familles = { aid: 'grok', lab: 'claude', alpha: 'gemini', beta: 'gpt' };
-const config = { ...DEFAULT_CONFIG.mesh, cell: 'aid', avis: { baseline: 'lab', familles } };
+const config = {
+  ...DEFAULT_CONFIG.mesh,
+  cell: 'aid',
+  gateway: 'http://gateway.example.com',
+  avis: { baseline: 'lab', familles },
+};
 const entree = { cellAid: 'aid', baseline: 'lab', cells: ['alpha', 'beta'], familles };
 const echeances = () => echeancesAvisParDefaut();
 const demande = () => ({
@@ -378,7 +384,7 @@ test('routes : deux en-têtes obligatoires, question refusée, famille en double
       method: 'POST',
       url: '/api/avis-mesh',
       headers: { 'x-aid-confirm': 'avis' },
-      payload,
+      payload: { ...payload, mesh: 'principal' },
     });
   expect((await envoyer({ ...demande(), question: '<<<QUESTION mauvais' })).statusCode).toBe(422);
   expect((await envoyer({ ...demande(), cells: ['alpha', 'alpha'] })).statusCode).toBe(400);
@@ -401,7 +407,7 @@ test('routes : deux en-têtes obligatoires, question refusée, famille en double
     method: 'POST',
     url: '/api/avis-mesh',
     headers: { 'x-aid-confirm': 'avis' },
-    payload: demande(),
+    payload: { ...demande(), mesh: 'principal' },
   });
   expect(r.statusCode).toBe(400);
   expect(r.json().error).toMatch(/lab, beta/);
@@ -414,7 +420,7 @@ test('six routes : contrat, aperçu exact, config limitée, liste et baseline-ab
     method: 'POST',
     url: '/api/avis-mesh',
     headers: { 'x-aid-confirm': 'avis' },
-    payload: demande(),
+    payload: { ...demande(), mesh: 'principal' },
   });
   expect(r.statusCode).toBe(202);
   expect(r.json()).toMatchObject({
@@ -439,6 +445,7 @@ test('six routes : contrat, aperçu exact, config limitée, liste et baseline-ab
     baseline: { cell: 'lab', etat: 'attendu' },
   });
   const absent = await t.app.inject({
+    payload: { mesh: 'principal' },
     method: 'POST',
     url: `/api/avis-mesh/${t.p.id}/baseline-absent`,
     headers: { 'x-aid-confirm': 'avis' },
@@ -449,6 +456,7 @@ test('six routes : contrat, aperçu exact, config limitée, liste et baseline-ab
   expect(
     (
       await t.app.inject({
+        payload: { mesh: 'principal' },
         method: 'POST',
         url: `/api/avis-mesh/${t.p.id}/baseline-absent`,
         headers: { 'x-aid-confirm': 'avis' },
@@ -472,7 +480,12 @@ test('porte réelle : toujours confirmée, aperçu signé, aucune exécution dir
     config: { ...DEFAULT_CONFIG, mesh: config },
     avis,
   });
-  const porte = creerPorte({ db: pda.db, actions, file: () => null });
+  const porte = creerPorte({
+    db: pda.db,
+    config: { ...DEFAULT_CONFIG, mesh: config },
+    actions,
+    file: () => null,
+  });
   const p = avis.preparer(demande());
   avis.enregistrer(p);
   const app = Fastify();
@@ -485,7 +498,9 @@ test('porte réelle : toujours confirmée, aperçu signé, aucune exécution dir
   app.setErrorHandler((e, _req, reply) =>
     reply.code(e instanceof AidHttpError ? e.status : 500).send({ error: (e as Error).message }),
   );
-  app.post('/demander', (req) => porte.demander('mesh.avis', { params: p }, req));
+  app.post('/demander', (req) =>
+    porte.demander('mesh.avis', { params: p, mesh: 'principal' }, req),
+  );
   expect((await app.inject({ method: 'POST', url: '/demander' })).json().error).toBe(
     'confirmation_requise',
   );
@@ -545,11 +560,20 @@ test('porte : confirmation signée consommée, altération refusée et salle ouv
     signaler: () => {},
   });
   nettoyage.push(() => file.arreter());
-  const porte = creerPorte({ db: pda.db, actions, file: () => file });
+  const porte = creerPorte({
+    db: pda.db,
+    config: { ...DEFAULT_CONFIG, mesh: config },
+    actions,
+    file: () => file,
+  });
   const p = avis.preparer(demande());
   avis.enregistrer(p);
   const signes = await actions['mesh.avis'].preparer({ params: p }, { confirmation: true });
-  const { id } = await file.creerDemande({ action: 'mesh.avis', params: signes });
+  const { id } = await file.creerDemande({
+    action: 'mesh.avis',
+    params: signes,
+    mesh: signatureMesh({ config: { ...DEFAULT_CONFIG, mesh: config } }, 'principal'),
+  });
   const ligne = pda.db
     .prepare(
       "SELECT id, h_demande AS hDemande, CASE WHEN classe = 'toujours' THEN NULL ELSE numero END AS numero, numero_mac, action, params, classe, echeance FROM pda_demandes WHERE id = ?",
@@ -702,7 +726,12 @@ test('route motion : en-tête, état et trois échéances exigés', async () => 
     (await t.app.inject({ method: 'POST', url, payload: { echeances: echeances() } })).statusCode,
   ).toBe(403);
   const poster = (payload: object) =>
-    t.app.inject({ method: 'POST', url, headers: { 'x-aid-confirm': 'avis' }, payload });
+    t.app.inject({
+      method: 'POST',
+      url,
+      headers: { 'x-aid-confirm': 'avis' },
+      payload: { ...payload, mesh: 'principal' },
+    });
   expect((await poster({ echeances: echeances() })).statusCode).toBe(409);
   t.db
     .prepare("UPDATE avis_mesh SET etat = 'salle-sans-motion', motion = NULL WHERE id = ?")
@@ -712,6 +741,7 @@ test('route motion : en-tête, état et trois échéances exigés', async () => 
   expect(t.demander).toHaveBeenLastCalledWith(
     'mesh.avis.motion',
     {
+      mesh: 'principal',
       params: expect.objectContaining({
         id: t.p.id,
         canal: 'avis-test',
@@ -782,11 +812,20 @@ async function confirmationSignee() {
     signaler: () => {},
   });
   nettoyage.push(() => file.arreter());
-  const porte = creerPorte({ db: pda.db, actions, file: () => file });
+  const porte = creerPorte({
+    db: pda.db,
+    config: { ...DEFAULT_CONFIG, mesh: config },
+    actions,
+    file: () => file,
+  });
   const p = avis.preparer(demande());
   avis.enregistrer(p);
   const signes = await actions['mesh.avis'].preparer({ params: p }, { confirmation: true });
-  const { id } = await file.creerDemande({ action: 'mesh.avis', params: signes });
+  const { id } = await file.creerDemande({
+    action: 'mesh.avis',
+    params: signes,
+    mesh: signatureMesh({ config: { ...DEFAULT_CONFIG, mesh: config } }, 'principal'),
+  });
   avis.lierConfirmation(p.id, id);
   return { ...t, pda, avis, actions, file, porte, p, id };
 }
@@ -948,6 +987,7 @@ test('baseline déjà déclaré absent : refus local 409 sans écriture gateway'
   t.resultats().baseline_absent = { reason: 'Exemple', by: 'aid', at: '2026-11-12T12:00:00Z' };
   const ecrire = vi.spyOn(t.ecrivain, 'baselineAbsent');
   const reponse = await t.app.inject({
+    payload: { mesh: 'principal' },
     method: 'POST',
     url: `/api/avis-mesh/${t.p.id}/baseline-absent`,
     headers: { 'x-aid-confirm': 'avis' },
@@ -980,6 +1020,7 @@ test('position du baseline scellée ou visible : refus local 409 sans écriture 
       },
     ];
     const reponse = await t.app.inject({
+      payload: { mesh: 'principal' },
       method: 'POST',
       url: `/api/avis-mesh/${t.p.id}/baseline-absent`,
       headers: { 'x-aid-confirm': 'avis' },

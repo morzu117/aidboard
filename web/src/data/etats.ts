@@ -37,6 +37,7 @@ export function envoyerEtat<A extends ActionEtat>(
 ): Promise<{ confirmation: string } | ResultatEtat> {
   return client
     .request<{ confirmation: string } | ResultatEtat>('POST', '/api/swarph/etat/envoyer', {
+      mesh: 'principal',
       action,
       params,
     })

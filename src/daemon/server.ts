@@ -246,6 +246,8 @@ export async function buildServer(deps: ServerDeps): Promise<FastifyInstance> {
       : undefined);
   const porte = creerPorte({
     db: deps.db,
+    config: deps.config,
+    meshes: deps.meshes,
     actions: creerActionsConfirmation({
       ...deps,
       avis,
@@ -258,6 +260,7 @@ export async function buildServer(deps: ServerDeps): Promise<FastifyInstance> {
   });
   registerAvisMeshRoutes(app, { avis: avis ?? null, porte, meshes: deps.meshes });
   registerEcrituresRoutes(app, {
+    meshes: deps.meshes,
     db: deps.db,
     board: deps.board ?? null,
     cell: deps.config.mesh.cell,
