@@ -225,12 +225,14 @@ Elle va bouger : on ajoute le moins possible.
 
 - **Le corps v3** (`src/shared/pda.ts`).
   - `CorpsDemandeV3` reprend les clés de la v2, plus `mesh: { nom, cell, gateway, proxy }`.
-  - `gateway` vaut `empreinteGateway(url)` = `sha256(jsonCanonique([normaliserGateway(url)]))`, ou la même chose sur la chaîne vide quand il n'y a pas de gateway. `proxy` vaut `empreinteChemin(proxySocket)`. Les deux sont en base64url.
+  - `gateway` vaut `empreinteGateway(url)` = `sha256(jsonCanonique([normaliserGateway(url)]))`. **Une action mesh exige un gateway explicite** dans la config du mesh (recommandation du lab, DM 96874) : sans gateway, l'empreinte porterait sur la chaîne vide, et deux meshes sans gateway auraient la même. Une demande sur un mesh sans gateway est refusée à la création (409 `gateway_requis`), et elle est périmée à l'exécution.
+  - `proxy` vaut `empreinteChemin(proxySocket)` quand le mesh a un proxy. Sinon, il vaut `empreinteChemin('')`, c'est-à-dire `sha256(jsonCanonique(['']))`, et le transport est le CLI du mesh. Les deux champs sont en base64url.
+  - `cell` suit la règle des noms de pair du gateway : 1 à 64 caractères, sans espace ni caractère de contrôle (`/^[^\s\p{Cc}]{1,64}$/u`).
   - Le résumé vaut `[<nom>] ` suivi de `resumeAction(action, params)`, au plus 200 caractères.
   - `lireCorpsDemandeV3` est strict :
     - le jeu de clés est exact, au premier niveau comme dans `mesh` ;
     - l'action est dans `ACTIONS_MESH` ;
-    - `nom` suit la forme de D311, et `cell` est une chaîne de 1 à 64 caractères ;
+    - `nom` suit la forme de D311, et `cell` la règle des noms de pair ;
     - `gateway` et `proxy` sont des empreintes sha256 en base64url ;
     - le résumé est recalculé.
   - La v2 refuse déjà toute clé en trop : un test le prouve pour `mesh`.
@@ -240,7 +242,12 @@ Elle va bouger : on ajoute le moins possible.
   - Elle reconstruit le corps (en v3 si `mesh` n'est pas NULL, en v2 sinon) et vérifie `hDemande` comme aujourd'hui. Le hachage couvre donc le mesh, et une colonne `mesh` modifiée en base rend la demande **périmée**.
   - Pour une v3, elle recalcule `{ nom, cell, gateway, proxy }` depuis la config courante du mesh `nom`. Si ce mesh n'existe plus, est inactif ou diffère sur l'un des quatre champs, la demande est **périmée**.
   - Pour une v2 encore ouverte (transition), elle exécute sur `principal`, jusqu'à l'échéance de la demande.
-  - Elle exécute avec les services **du mesh signé**, jamais avec ceux de l'écran ni du mesh par défaut. Cela vaut pour la relecture (`preparer`), les lecteurs de board et le socket du proxy.
+  - Elle exécute avec les services **du mesh signé**, jamais avec ceux de l'écran ni du mesh par défaut. Cela vaut pour la relecture (`preparer`), les lecteurs de board et le transport.
+  - **Le transport ne change pas, action par action**, mais il devient celui du mesh signé :
+    - `mesh.ecrire` et `mesh.etat` passent par le proxy de ce mesh. Sans proxy, ou avec un proxy en lecture seule, elles sont refusées avant la demande, comme aujourd'hui (`proxy_absent`) ;
+    - les trois actions d'avis passent par le CLI `swarph committee` de ce mesh, avec `envSwarph(mesh)`. Si ce mesh a un proxy, elles sont refusées comme aujourd'hui (« non relayé par le proxy »).
+
+    Étendre le protocole du proxy aux verbes du comité est hors de ce chantier : c'est un travail côté swarph.
 - **Les routes d'écriture.**
   - Chaque route qui crée une demande d'action mesh prend `mesh` dans le corps de la requête. Elle répond 400 `mesh_requis` sans ce champ, 404 pour un mesh inconnu et 409 pour un mesh inactif. Elle garde son 409 `proxy_absent` et son refus en lecture seule.
   - Le web existant envoie `mesh: 'principal'`. Le choix du mesh dans l'interface vient en 46.5.
