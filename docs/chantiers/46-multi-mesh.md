@@ -294,10 +294,35 @@ Elle va bouger : on ajoute le moins possible.
 
 ### 46.5 Le web (D316)
 
-- La boîte fusionnée, avec la pastille et le filtre par mesh.
-- Le sélecteur par écran.
-- Les formulaires, avec le mesh en tête de l'aperçu.
-- La barre.
+- **Le principe.** Avec un seul mesh actif, l'interface ne change pas : ni pastille, ni sélecteur, ni filtre. Tout ce qui suit n'apparaît qu'à partir de **deux meshes actifs**, d'après `GET /api/meshes`.
+- **Les données** (`web/src/data/`).
+  - Un `useMeshes()` lit `GET /api/meshes`.
+  - Les lecteurs (`board.ts`, `swarph.ts`, `avis-mesh.ts`…) prennent un nom de mesh et passent `?mesh=`.
+  - Les écritures (`ecritures.ts`, `etats.ts`, `avis-mesh.ts`) envoient le mesh **de l'objet** sur lequel elles agissent, à la place du `'principal'` fixe de 46.3.
+  - Les marques « vu » et « décidé » d'un DM passent par `/api/mesh/:mesh/dm/:id/…`.
+- **La boîte fusionnée** (`Boite.tsx`, `boiteVue.ts`).
+  - Elle réunit les boîtes de l'instantané `meshes`, triées par heure, tous meshes confondus. La clé d'un DM devient `(mesh, id)`, puisque deux meshes ont des ids communs.
+  - Chaque DM porte une pastille avec le nom de son mesh.
+  - Un filtre par mesh est replié par défaut.
+  - Répondre à un DM ouvre l'écriture **sur le mesh de ce DM**, et sur aucun autre.
+- **Le sélecteur.**
+  - Il est posé sur le board, les cartes, les cells, la fédération, la mémoire, les onglets swarph et les salles d'avis.
+  - Il est gardé par écran dans le stockage local, entre `try` et `catch`. Une valeur inconnue revient à `principal`.
+  - Un mesh inactif y apparaît grisé, avec son erreur (`rebranche`, `binaire`), et n'est pas sélectionnable. Un mesh `rebranche` montre le bouton « Archiver les anciennes données », qui appelle `POST /api/meshes/:nom/archiver` après une confirmation à l'écran.
+- **Les formulaires** (`EcrireAuMesh`, `ChangerEtat`, `FormulaireAvisMesh`, `DemanderAvis`, `PropositionsAid`).
+  - Le mesh vient de l'objet : la carte du board d'un mesh, le DM, la salle. Il s'affiche en tête de l'aperçu (« Mesh : `<nom>` »).
+  - Changer de mesh dans un formulaire vide la cible.
+  - Rien ne pré-remplit une écriture sur un mesh à partir d'un objet d'un autre mesh.
+- **La barre** (`Nav`, `NavEtat`) montre une pastille d'état par mesh actif, jusqu'à trois, puis « +N ».
+- **Le mode host et l'appareil** (`AppAppareil`, `AccueilAppareil`, `ParcoursAppareil`) ne changent pas : ils lisent `principal`, par l'alias `mesh` de l'instantané.
+- **Tests :**
+  - un seul mesh : aucun élément nouveau à l'écran ;
+  - deux meshes : la fusion et le tri, la clé `(mesh, id)` avec deux DM de même id, la pastille et le filtre ;
+  - la réponse à un DM part sur son mesh ;
+  - le sélecteur, son stockage, et un mesh inactif ;
+  - le bouton d'archivage ;
+  - l'aperçu d'un formulaire avec le mesh en tête, et la cible vidée au changement de mesh ;
+  - la barre, avec un, trois et quatre meshes.
 
 ### 46.6 La fin
 
