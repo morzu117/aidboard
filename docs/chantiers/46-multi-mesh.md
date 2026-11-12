@@ -189,10 +189,36 @@ Elle va bouger : on ajoute le moins possible.
 
 ### 46.2 Les lectures par mesh (D314, D315)
 
-- `MeshRegistry` : un jeu de services par mesh actif, et `activerMesh` au démarrage. Un nom rebranché reste inactif, et s'affiche en erreur.
-- L'environnement de chaque appel à `swarph`, et de l'agent PTY, est construit par liste blanche, avec le test des variables héritées.
-- `GET /api/meshes`, `?mesh=` sur les lectures, `/api/mesh/:mesh/dm/:id/…`, la connexion par mesh, et l'instantané `meshes` avec l'alias `mesh`.
-- Une panne sur un mesh n'arrête pas les autres.
+- **`MeshRegistry`** (`src/daemon/mesh/registre.ts`) est construit au démarrage depuis `config.meshes`.
+  - Pour chaque mesh avec une `cell`, il calcule l'empreinte et appelle `activerMesh`.
+  - Un mesh `nouveau` ou `connu` devient actif, avec son jeu de services : `MeshService`, les deux `BoardReader`, `SwarphReader`, `CommitteeReader`, `CommitteeWriter` et le chemin de son proxy.
+  - Un mesh `rebranche` reste **inactif**, sans aucun service, avec l'erreur `rebranche`.
+  - Les appelants actuels de `config.mesh` passent par le registre pour `principal`.
+- **`POST /api/meshes/:nom/archiver`** est une route locale, sous la même garde que les autres réglages locaux. Elle n'agit que sur un mesh `rebranche` : elle appelle `archiverMesh`, puis active le mesh avec son empreinte nouvelle. Ce n'est pas une écriture sur un mesh : aucune confirmation par téléphone.
+- **`envSwarph(mesh)`** (`src/daemon/mesh/env.ts`) est la liste blanche de D314.
+  - Elle part de rien et prend dans l'environnement du daemon les seules variables `PATH`, `LANG`, `LC_*`, `TMPDIR`, `USER`, `LOGNAME` et `SHELL`, qui ne choisissent ni une cible ni une identité.
+  - Elle pose ensuite `HOME` (le `home` du mesh), `SWARPH_STATE`, `SWARPH_SELF`, `MESH_GATEWAY_URL` si le mesh a un gateway, et `SWARPH_BRAIN_GATEWAY` pour la lecture de la mémoire, comme aujourd'hui.
+  - Elle sert à **tout** appel à `swarph` : le service, les boards, le comité, les lectures et l'agent PTY `swarph-cell`. Pour ce dernier s'ajoutent `TERM`, `COLORTERM` et les `AID_*` des hooks.
+  - Les autres appels (tailscale, swairm, les PTY Claude et Codex hors `swarph-cell`) ne changent pas.
+- **La connexion de l'agent dans un `home` neuf** (recommandation du lab, DM 96864).
+  - A-I-D ne copie, ne lie ni ne déplace **aucun** identifiant d'agent d'un `home` à un autre. Il ne refait jamais pointer le `home` d'un mesh vers le `HOME` du daemon, ce qui remettrait le jeton de l'autre mesh à portée.
+  - Pour un mesh dont le `home` n'est pas celui du daemon, l'agent `swarph-cell` peut donc démarrer déconnecté. Julien le connecte une fois, sous ce `home`, et la fiche de recette (46.6) le décrit.
+  - Sur macOS, Claude Code garde sa connexion dans le trousseau de l'utilisateur, pas sous `HOME`. Le point est à vérifier à la recette.
+- **Les routes de lecture.**
+  - `GET /api/meshes` rend `{ nom, cell, actif, erreur, etat, ecriture }`, sans gateway, chemin ni `home`.
+  - `?mesh=<nom>` est accepté sur `/api/mesh/*`, `/api/board/*`, `/api/swarph/*` et `/api/avis-mesh`. Sans paramètre, c'est `principal`. Un nom inconnu donne 404, et un mesh inactif donne 409 avec son erreur.
+  - `/api/mesh/:mesh/dm/:id/…` et `/api/mesh/:mesh/connect|disconnect` sont ajoutées. Les anciennes formes valent pour `principal`.
+- **L'instantané** gagne `meshes: { [nom]: { state, inbox, checkedAt } }`, et `mesh` reste un alias de `meshes.principal`.
+- **Les événements.** Le projecteur n'accepte comme `mesh` qu'un nom de la forme de D311, ou la forme `<nom>@archive-<date>`. Un événement avec un autre `mesh` est ignoré, et un événement sans `mesh` se lit comme `principal`.
+- **Une panne sur un mesh n'arrête pas les autres.** Une erreur au démarrage ou à la lecture reste locale à son mesh.
+- **Les écritures restent sur `principal`** jusqu'à 46.3, et le web ne change pas avant 46.5.
+- **Tests :**
+  - le registre, avec deux meshes, un mesh rebranché, puis son archivage ;
+  - la liste blanche : un daemon lancé avec `MESH_GATEWAY_TOKEN`, `SWARPH_GATEWAY`, `SWARPH_STATE_ROOT`, `SWARPH_SERVICE_TOKEN`, `SWARPH_BRAIN_GATEWAY`, `MESH_DB_PATH`, `SWARPH_CHANNEL_CELL`, `SWARPH_MEMORY_DIR`, `GBRAIN_TOKEN` et `SWARPH_BRAIN_TOKEN` ne les passe à **aucun** appel à `swarph`, sauf les valeurs posées depuis la config du mesh ;
+  - deux meshes avec le même nom de cell : chaque appel reçoit le `HOME` de son mesh ;
+  - les routes, `?mesh=`, les 404 et 409, et l'instantané avec son alias ;
+  - un mesh en panne, et l'autre qui répond ;
+  - le projecteur, avec un `mesh` invalide.
 
 ### 46.3 Les écritures par mesh (D313, D317)
 
