@@ -181,6 +181,7 @@ La bascule, le choix des cells, de la carte et des échéances, le tableau par c
 ### 40.5 L'e2e et la fiche de recette
 
 Un e2e avec un faux `swarph`. La fiche `docs/recette-chantier-40-avis-mesh.md` : une vraie salle avec deux cells et le baseline, le scellé, une abstention, un absent, le baseline déclaré absent, l'accord, puis la relecture après la clôture.
+- 40.5 : `e2e/avis-mesh.spec.ts` (1 e2e, 29 s) et la fiche `docs/recette-chantier-40-avis-mesh.md`. Avec deux sièges, l'abstention et l'absence se vérifient dans deux relectures successives. La recette réelle, le fan-out et la validation du lab restent à faire.
 
 ## 6. Pièges
 
