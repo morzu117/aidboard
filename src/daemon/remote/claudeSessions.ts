@@ -96,7 +96,7 @@ export async function readClaudeSession(server: Server, id: string, transport: T
   if (!CLAUDE_SESSION_ID.test(id))
     throw new AidHttpError(422, 'identifiant de session Claude invalide');
   const command = `if [ -d "$HOME/.claude/projects" ]; then find "$HOME/.claude/projects" -mindepth 2 -maxdepth 2 -type f -name '${id}.jsonl' -exec sh -c 'for f do printf "%s\\t" "$(wc -c < "$f")"; head -c ${SESSION_HEADER_BYTES} -- "$f" | base64 -w 0; printf "\\t"; tail -c ${SESSION_HISTORY_BYTES} -- "$f" | base64 -w 0; printf "\\n"; done' sh {} +; fi`;
-  // SESSION_HEADER_BYTES × 20 en base64 ≈ 1,67 Mio : garder maxBytes au-dessus avec marge.
+  // Un seul fichier : en-tête (SESSION_HEADER_BYTES) + fin d'historique (SESSION_HISTORY_BYTES), en base64 (×4/3) ≈ 1,42 Mio : garder maxBytes au-dessus avec marge.
   const result = await remoteExec(server, command, { ...transport, maxBytes: 2 * 1024 * 1024 });
   if (result.code !== 0 || result.timedOut || result.truncated)
     throw new AidHttpError(502, 'lecture de la session Claude impossible');
