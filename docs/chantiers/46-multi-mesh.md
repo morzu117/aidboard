@@ -283,6 +283,12 @@ Elle va bouger : on ajoute le moins possible.
   - une v3 hors forme ou mal signée, non affichée ;
   - les réponses récentes avec le résumé d'une v3 ;
   - la route et le panneau du Mac.
+- **Le rattrapage de 46.2 : le binaire sous le `home` du mesh** (recommandation du lab, DM 96882).
+  - Un `HOME` par mesh casse tout binaire ou interpréteur qui se retrouve par `HOME` : les shims nvm, asdf ou pyenv. C'est le cas d'un script en `#!/usr/bin/env node` quand `node` est un shim nvm. `realpath` sur le binaire ne suffit pas, car c'est l'interpréteur du shebang qui casse.
+  - À l'activation d'un mesh, le registre lance `<bin> --version` sous `envSwarph(mesh)`, avec un délai court. S'il échoue, le mesh reste **inactif**, avec l'erreur `binaire` et la sortie d'erreur tronquée dans le journal.
+  - Pour l'agent PTY `swarph-cell`, un échec de lancement sous le `home` du mesh s'affiche comme une erreur de la session, sans repli sur le `HOME` du daemon.
+  - La liste blanche **ne s'élargit pas** aux variables des gestionnaires de versions (`NVM_DIR`, `MISE_*`, `ASDF_*`, `PYENV_ROOT`…) : certaines, comme la config de mise, peuvent poser des variables d'environnement, donc une cible.
+  - À vérifier à la recette sur le Mac, avec les vraies installations.
 - **Ce code est relu par le lab.**
 
 ### 46.5 Le web (D316)
