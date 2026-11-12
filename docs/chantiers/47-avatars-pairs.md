@@ -86,6 +86,7 @@ Le programme (§5, phase 5, « Plus tard ») prévoit des avatars de pairs. Depu
   - chaque refus de la config : clé, initiales, couleur, clé inconnue et plus de 200 entrées ;
   - la route, sa garde et son absence en mode host ;
   - le rail inchangé.
+47.1 commité en local. Gate vert (3 784 tests). Le calcul, la config avatars et GET /api/avatars ; absent du serveur host (host-liste).
 
 ### 47.2 Le web et la recette (D320)
 
