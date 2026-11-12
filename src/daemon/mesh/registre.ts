@@ -36,6 +36,7 @@ interface EntreeMesh {
 export class MeshRegistry {
   readonly binaire: string | null;
   private initialisation: Promise<void> | null = null;
+  private readonly servicesEnCours: Promise<void>[] = [];
   private readonly entrees = new Map<string, EntreeMesh>();
   constructor(
     private readonly deps: {
@@ -133,11 +134,12 @@ export class MeshRegistry {
         if (!e.config.cell) return;
         await this.activer(e);
         if (!e.services) return;
-        try {
-          await e.services.mesh.init();
-        } catch {
-          e.erreur = 'demarrage';
-        }
+        this.servicesEnCours.push(
+          e.services.mesh.init().catch((erreur: unknown) => {
+            e.erreur = 'demarrage';
+            this.deps.log(`mesh ${e.nom} : démarrage : ${String(erreur)}`);
+          }),
+        );
       }),
     ).then(() => undefined);
     return this.initialisation;
@@ -145,6 +147,7 @@ export class MeshRegistry {
 
   async arreter(): Promise<void> {
     await this.initialisation;
+    await Promise.all(this.servicesEnCours);
     this.dispose();
   }
 

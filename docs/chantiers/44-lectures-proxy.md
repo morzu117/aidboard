@@ -51,6 +51,8 @@ Sur le Mac (DM 94859) : swarph-cli 0.72.40, le daemon lancé par l'app de bureau
 - `BoardReader` et `SwarphReader` gardent leur interface, leur cache de 5 s et leur fusion des demandes. Seul le transport change : un petit port `Lecteur` (CLI ou proxy) derrière `load`.
 - `codegraph` reste local dans les deux modes.
 
+Multi-mesh : voir le chantier 46 (D314, D315), qui applique le choix unique du transport à chaque mesh, avec son proxy et ses lecteurs propres.
+
 ### D278. Les verbes de lecture
 
 - Une liste fermée `VERBES_LECTURE`, **séparée** de celle des écritures (D263) : `board.projects.list`, `board.cards.list`, `board.card.get`, `board.cards.graph`, `board.cards.thread`, `board.obligations.list`, `mesh.peers`, `rights`, `memory.list`, `memory.get`. Un verbe hors liste est refusé avant toute connexion.

@@ -332,6 +332,7 @@ Elle va bouger : on ajoute le moins possible.
 - Un e2e avec deux faux meshes.
 - La fiche `docs/recette-chantier-46-multi-mesh.md`, avec la limite des agents (Q-J1, (a)).
 - Les renvois depuis les plans 12, 24, 25, 42 et 44.
+46.6 commité. Gate : 3 740 tests passent ; pda-v2 et livraison, lents sous charge, passent 3 fois sur 3 isolés. Démarrage non bloquant, e2e à deux faux meshes, fiche de recette, renvois.
 
 ## 6. Pièges
 

@@ -33,6 +33,8 @@ Le programme (§5, phase 5, bloc 21) veut un seul board, piloté dans A-I-D, sur
 - Le 41 b.
 - Plusieurs cells dans A-I-D (bloc 11).
 
+Multi-mesh : voir le chantier 46 (D312, D313, D317), qui distingue les cartes et propositions par mesh et lie chaque déplacement au mesh du corps signé.
+
 ## 4. Décisions
 
 ### D290. Le lien est une ligne exacte sur la carte (Q1)

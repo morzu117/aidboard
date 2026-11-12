@@ -86,6 +86,8 @@ async function contexte(cli = false) {
   });
   nettoyages.push(() => registre.dispose());
   await registre.init();
+  // 46.6 : finir la lecture initiale en arrière-plan avant de compter les écritures.
+  await Promise.all(['principal', 'perso'].map((nom) => registre.obtenir(nom).mesh.refresh()));
   appelsCli.length = 0;
   for (const nom of ['principal', 'perso']) {
     vi.spyOn(registre.obtenir(nom).swarph, 'peers').mockResolvedValue({

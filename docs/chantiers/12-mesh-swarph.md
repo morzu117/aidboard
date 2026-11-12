@@ -145,6 +145,8 @@ Côté swarph (lu dans `~/Projects/swarph-cli`, version 0.72.25 ; le VPS est en 
 | Un agent `swarph-cell` : `swarph spawn <cell.yaml> --no-starter --no-banner` dans le PTY d'un sujet, pour **répondre** depuis la session Claude de la cell | Board et obligations (`swarph board … --json`) comme colonne « à démarrer » : même geste que grokbot v0.5, chantier à part — c'est la réponse à donner à `mesh-gw` |
 | | `brain-ask`, `memory`, `dreaming` (gbrain, décommissionné au chantier 10), `swarph codegraph` (son propre index), `swarph hooks`, lanes, `service serve`, plugin channel : hors du rôle cockpit |
 
+Multi-mesh : voir le chantier 46 (D311, D312, D314, D316), qui remplace le mesh unique par un registre nommé, des identités de données par mesh et une Boîte fusionnée.
+
 ## Décisions à valider par Julien
 
 La numérotation continue celle de `docs/chantiers/README.md` §1.

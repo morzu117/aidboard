@@ -250,7 +250,7 @@ export async function startDaemon(
     });
     // 12.3 : le service mesh existe seulement si une cell est configurée (D39) ; jamais de connexion automatique
     const meshes = new MeshRegistry({ config, db: opened, store, log });
-    // 12.3 : relit l'état d'un monitor détaché qui aurait survécu, sans le relancer
+    // 46.6 : attend les identités et --version ; les monitors sont relus en arrière-plan
     await meshes.init();
     const mesh = meshes.principal?.mesh ?? null;
     const board = meshes.principal?.board ?? null;
