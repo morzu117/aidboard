@@ -79,6 +79,10 @@ export function registerServerDiscussionRoutes(
     return server;
   };
 
+  app.get('/api/servers/:id/claude-sessions', async (req) =>
+    manager.listClaudeSessions(found((req.params as { id: string }).id)),
+  );
+
   app.get('/api/servers/:id/discussions', async (req) =>
     manager.listDiscussions(found((req.params as { id: string }).id).id),
   );

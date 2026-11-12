@@ -1763,3 +1763,36 @@ test('D148 : rattacher un claude fini faute de lien qui tourne encore, sans le r
   expect(ligne(m2, a.id)).toMatchObject({ status: 'idle', tmux_session: `aid-${a.id}` });
   expect(readFileSync(apid(m2, a.id), 'utf8')).toBe(pid);
 }, 30_000);
+
+test('sessions Claude distantes : listage borné, tri par mtime et détection requise, via faux ssh', async () => {
+  const remote = serveur();
+  const m = await daemon(remote);
+  const s = await creerServeur(m);
+  const dir = join(remote.home, '.claude/projects/-srv-projet');
+  mkdirSync(dir, { recursive: true });
+  const id = '12345678-1234-1234-1234-123456789abc';
+  writeFileSync(
+    join(dir, `${id}.jsonl`),
+    [
+      JSON.stringify({
+        type: 'user',
+        cwd: '/srv/projet',
+        isMeta: true,
+        message: { content: 'ignoré' },
+      }),
+      JSON.stringify({
+        type: 'user',
+        cwd: '/srv/projet',
+        message: { content: 'Continuer le chantier' },
+      }),
+    ].join('\n'),
+  );
+  const r = await m.req('GET', `/api/servers/${s.id}/claude-sessions`);
+  expect(r.statusCode).toBe(200);
+  expect(r.json()).toEqual([
+    { id, cwd: '/srv/projet', title: 'Continuer le chantier', updatedAt: expect.any(String) },
+  ]);
+  m.t.db.prepare('UPDATE servers SET detected_agents = ? WHERE id = ?').run('["codex"]', s.id);
+  expect((await m.req('GET', `/api/servers/${s.id}/claude-sessions`)).statusCode).toBe(409);
+  expect((await m.req('GET', '/api/servers/inconnu/claude-sessions')).statusCode).toBe(404);
+});

@@ -509,3 +509,11 @@ export interface Fournisseurs {
   fournisseurs: Fournisseur[];
   alertes: AlerteSecret[];
 }
+
+/** Session Claude déjà présente sur un serveur, proposée pour une discussion forkée. */
+export interface RemoteClaudeSession {
+  id: string;
+  title: string;
+  cwd: string;
+  updatedAt: string;
+}

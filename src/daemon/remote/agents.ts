@@ -26,6 +26,8 @@ import { getServer } from './servers.js';
 import { SERVER_PERMISSION_MODES } from './servers.js';
 import { remoteExec, type TransportOptions } from './transport.js';
 
+import { listClaudeSessions } from './claudeSessions.js';
+
 const ulid = monotonicFactory();
 
 export type RemoteKind = ServerAgent['kind'];
@@ -267,6 +269,10 @@ export class RemoteAgentManager {
     } catch {
       return false;
     }
+  }
+
+  listClaudeSessions(server: Server) {
+    return listClaudeSessions(server, this.deps.transport);
   }
 
   // ---- discussions
