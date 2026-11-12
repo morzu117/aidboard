@@ -4,6 +4,7 @@ import type { Server } from '../../../src/shared/model.js';
 import type { ServerDiscussionView } from '../data/discussionsServeur.js';
 import { useAid } from '../data/useAidState.js';
 import { Dialogue } from './Dialogue.js';
+import { RepriseSessionServeur } from './RepriseSessionServeur.js';
 
 /** Les agents qu'une discussion sait piloter (R.4) ; seuls ceux détectés au dernier test sont proposés. */
 const PILOTABLES = ['claude', 'codex'];
@@ -16,6 +17,7 @@ export function NouvelleDiscussion({ server, onClose }: { server: Server; onClos
   const { call } = useAid();
   const navigate = useNavigate();
   const agents = (server.detectedAgents ?? []).filter((a) => PILOTABLES.includes(a));
+  const [reprendre, setReprendre] = useState(false);
   const [name, setName] = useState('Discussion');
   const [kind, setKind] = useState(agents[0] ?? '');
   const [enCours, setEnCours] = useState(false);
@@ -38,6 +40,15 @@ export function NouvelleDiscussion({ server, onClose }: { server: Server; onClos
     }
   };
 
+  if (reprendre)
+    return (
+      <RepriseSessionServeur
+        server={server}
+        onClose={onClose}
+        onNouvelle={() => setReprendre(false)}
+      />
+    );
+
   return (
     <Dialogue titre={`Nouvelle discussion sur ${server.name}`} onClose={onClose}>
       <form
@@ -46,6 +57,16 @@ export function NouvelleDiscussion({ server, onClose }: { server: Server; onClos
         aria-label="Créer une discussion"
         data-node="nouvelle-discussion"
       >
+        {agents.includes('claude') && (
+          <button
+            className="bouton bouton--fantome"
+            type="button"
+            disabled={enCours}
+            onClick={() => setReprendre(true)}
+          >
+            Reprendre une session existante
+          </button>
+        )}
         <label>
           Nom
           <input
