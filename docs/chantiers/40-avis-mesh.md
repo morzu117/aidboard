@@ -139,6 +139,7 @@ L'action `mesh.avis` dans la porte des confirmations, avec son aperçu (variante
 ### 40.4 La boîte et le tableau (D302)
 
 La bascule, le choix des cells, de la carte et des échéances, le tableau par cell, et la liste des demandes. Les tests web de chaque état.
+- 40.4 : client `web/src/data/avis-mesh.ts` (contrat de D301, à implémenter tel quel par le 40.3), `FormulaireAvisMesh`, `TableauAvisMesh` et la liste sœur `DemandesAvisMesh`. 3 lignes de la boîte et de la liste du 39 remplacées pour y brancher la bascule. 9 tests web ; les 1 105 tests web passent.
 
 ### 40.5 L'e2e et la fiche de recette
 
