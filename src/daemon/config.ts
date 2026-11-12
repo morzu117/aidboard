@@ -1,3 +1,4 @@
+import { FAMILLES_AVIS } from '../shared/avis-mesh-api.js';
 import { isAbsolute } from 'node:path';
 import { isIP } from 'node:net';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
@@ -65,6 +66,7 @@ export interface StructuralConfig {
 
 /** Mesh swarph (chantier 12, D39). `cell` vide = mesh désactivé, rien n'apparaît dans l'UI. Le token n'y figure jamais. */
 export interface MeshConfig {
+  avis?: { baseline?: string; familles: Record<string, string> };
   /** nom ou chemin du binaire swarph */
   bin: string;
   cell: string;
@@ -345,9 +347,34 @@ function parseMesh(raw: unknown, cfg: MeshConfig): void {
       'proxySocket',
       'inboxLog',
       'proxyLectureSeule',
+      'avis',
     ],
     'mesh.',
   );
+  if (raw.avis !== undefined) {
+    if (!isRecord(raw.avis)) throw new ConfigError('config.yaml : mesh.avis doit être un objet');
+    rejectUnknown(raw.avis, ['baseline', 'familles'], 'mesh.avis.');
+    const avis: NonNullable<MeshConfig['avis']> = { familles: {} };
+    if (raw.avis.baseline !== undefined)
+      avis.baseline = str(raw.avis.baseline, 'mesh.avis.baseline');
+    if (raw.avis.familles !== undefined) {
+      if (!isRecord(raw.avis.familles))
+        throw new ConfigError('config.yaml : mesh.avis.familles doit être une table');
+      for (const [cell, famille] of Object.entries(raw.avis.familles)) {
+        if (
+          !/^[A-Za-z0-9][A-Za-z0-9_.-]{0,199}$/.test(cell) ||
+          typeof famille !== 'string' ||
+          !FAMILLES_AVIS.includes(famille.toLowerCase() as (typeof FAMILLES_AVIS)[number])
+        )
+          throw new ConfigError(`config.yaml : famille invalide pour ${cell}`);
+        Object.defineProperty(avis.familles, cell, {
+          value: famille.toLowerCase(),
+          enumerable: true,
+        });
+      }
+    }
+    cfg.avis = avis;
+  }
   if (raw.proxyLectureSeule !== undefined)
     cfg.proxyLectureSeule = bool(raw.proxyLectureSeule, 'mesh.proxyLectureSeule');
   if (raw.proxySocket !== undefined)

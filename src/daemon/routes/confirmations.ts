@@ -79,7 +79,7 @@ export function registerConfirmationRoutes(
     const avecEnvoi = (lignes: unknown[]) =>
       lignes.map((ligne) => {
         const l = ligne as Record<string, unknown>;
-        if (l.action !== 'mesh.ecrire' && l.action !== 'mesh.etat') {
+        if (!ACTIONS_MESH.has(String(l.action))) {
           delete l.envoi;
           return l;
         }

@@ -10,6 +10,9 @@ import type { FilePda, LigneDemande } from '../pda/file.js';
 import { creerReglage } from './reglage.js';
 
 export type ActionPorte =
+  | 'mesh.avis.motion'
+  | 'mesh.avis'
+  | 'mesh.avis.baseline-absent'
   | 'mesh.etat'
   | 'mesh.ecrire'
   | 'merge'
@@ -165,7 +168,7 @@ export function creerPorte(deps: {
       let params: ParametresActions[ActionPorte];
       try {
         params = JSON.parse(ligne.params);
-        if (action === 'mesh.ecrire' || action === 'mesh.etat') {
+        if (ACTIONS_MESH.has(action)) {
           const stockee = deps.db
             .prepare('SELECT resume, cree_a FROM pda_demandes WHERE id = ?')
             .get(ligne.id) as { resume: string; cree_a: string };

@@ -1,3 +1,5 @@
+import { creerActionsAvis } from './avis.js';
+import type { AvisMeshService } from '../mesh/avis.js';
 import { creerActionEtat } from './etats.js';
 import { creerActionEcriture } from './ecritures.js';
 import type { BoardReader } from '../mesh/board.js';
@@ -36,6 +38,7 @@ const LIVE = ['starting', 'working', 'needs_input', 'idle'];
 
 export function creerActionsConfirmation(
   deps: DependancesHost & {
+    avis?: AvisMeshService;
     board?: BoardReader | null;
     db: Db;
     config?: AidConfig;
@@ -124,6 +127,7 @@ export function creerActionsConfirmation(
   };
   return {
     ...creerActionsHost(deps),
+    ...creerActionsAvis(deps.avis),
     'mesh.ecrire': creerActionEcriture(deps),
     'mesh.etat': creerActionEtat(deps),
     push: {

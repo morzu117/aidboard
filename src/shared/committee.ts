@@ -1,18 +1,12 @@
+import type { BulletinAvis } from './avis-mesh.js';
 /**
- * committee.py transmet le JSON du gateway sans schéma des résultats.
- * L’id de motion est validé comme entier positif ; ce format reste à vérifier à la recette.
- * Recette : vérifier l'enveloppe motion/seats/ballots, les noms peer/round/created_at/
- * cancelled/message_id/body/outcome et les échéances nullables. Ne jamais reconstituer
- * un corps absent : il reste « scellé par le gateway » (D300).
+ * committee.py transmet le JSON du gateway sans le modifier.
+ * Le lab a confirmé baseline_absent {reason, by, at} et positions_absent (DM 96753).
+ * positions_absent manque sur les anciens gateways : liste vide dans ce cas.
+ * Recette : vérifier encore l'enveloppe motion/seats/ballots et l'id entier positif.
+ * Ne jamais reconstituer un corps absent : il reste « scellé par le gateway » (D300).
  */
 export type TourCommittee = 'positions' | 'rebuttal' | 'vote';
-export interface BulletinAvis {
-  cell: string;
-  tour: TourCommittee;
-  outcome: 'pass' | 'cannot_evaluate' | null;
-  corps: string | null;
-  annule: boolean;
-}
 export interface MotionCommittee {
   id: number;
   text: string;
@@ -22,7 +16,14 @@ export interface MotionCommittee {
   rebuttal_deadline: string | null;
   vote_deadline: string | null;
 }
+export interface AbsenceBaselineCommittee {
+  reason: string;
+  by: string;
+  at: string;
+}
 export interface ResultatsCommittee {
+  baseline_absent: AbsenceBaselineCommittee | null;
+  positions_absent: string[];
   motion: MotionCommittee;
   seats: { peer: string; role: string; family: string }[];
   ballots: {
@@ -82,9 +83,23 @@ export function lireMotion(v: unknown): MotionCommittee | null {
   if (motions.length > 1) throw new ErreurFormatCommittee('motions');
   return motions.length === 0 ? null : motion(motions[0]);
 }
+function lireAbsenceBaseline(v: unknown): AbsenceBaselineCommittee | null {
+  if (v === null) return null;
+  const absence = objet(v, 'baseline_absent');
+  return {
+    reason: Array.from(texte(absence.reason, 'baseline_absent.reason')).slice(0, 300).join(''),
+    by: texte(absence.by, 'baseline_absent.by'),
+    at: texte(absence.at, 'baseline_absent.at'),
+  };
+}
 export function lireResultats(v: unknown): ResultatsCommittee {
   const r = objet(v, 'resultats');
   return {
+    baseline_absent: lireAbsenceBaseline(r.baseline_absent),
+    positions_absent:
+      r.positions_absent === undefined
+        ? []
+        : liste(r.positions_absent, 'positions_absent').map((v) => texte(v, 'positions_absent')),
     motion: motion(r.motion),
     seats: liste(r.seats, 'seats').map((v) => {
       const s = objet(v, 'seat');

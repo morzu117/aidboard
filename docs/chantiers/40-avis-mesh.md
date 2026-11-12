@@ -168,6 +168,7 @@ Le lecteur `committee.motion` et `committee.results` par le CLI (`--json`, argv 
 L'action `mesh.avis` (`rooms open` puis `motion --open`) dans la porte des confirmations, avec son aperçu, et l'action `mesh.avis.baseline-absent`. Les configs `mesh.avis.baseline` et `mesh.avis.familles`, et leur contrôle. La table `avis_mesh` et les six routes, au contrat déjà écrit par le client du 40.4. La fusion des deux définitions de `BulletinAvis`. Par le CLI ; par le proxy, « non relayé » tant que #1581 n'existe pas.
 
 **Reprise de la révision 3.** Les trois échéances obligatoires et croissantes. La famille `orchestrator` du chair et la liste fermée des familles, comparées en minuscules. Le charter gagne le point 5 de D297. Le baseline sans vote, et « déclaré absent ». L'action `mesh.avis.motion`, l'état `abandonnee` et les refus du gateway affichés tels quels.
+- 40.3 : `src/daemon/mesh/avis.ts` (service), `CommitteeWriter`, `src/daemon/confirmations/avis.ts` (trois actions), `src/daemon/routes/avis-mesh.ts` (six routes), `src/shared/avis-mesh-api.ts` (contrats et familles), migration 029. Trois reprises : révision 3, les champs `baseline_absent` et `positions_absent` du gateway (DM 96753), et les deux refus locaux avant `baseline-absent`. 221 tests ciblés ; gate vert sous Node 22 et 24, hors `update-check.test.ts:13`.
 
 ### 40.4 La boîte et le tableau (D302)
 

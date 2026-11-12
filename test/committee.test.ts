@@ -29,6 +29,7 @@ const bulletin = {
   message_id: 10,
 };
 const scelles = {
+  baseline_absent: null,
   motion,
   seats: [{ peer: 'cell-a', role: 'seat', family: 'test' }],
   ballots: [bulletin],
@@ -177,3 +178,60 @@ test('lecture défensive : inconnus ignorés, champs attendus contrôlés sans v
   }
   expect(lireResultats({ ...scelles, inconnu: 'ignoré' }).ballots[0]?.body).toBeNull();
 });
+
+test('faux swarph : déclaration du baseline et positions absentes, raison bornée', async () => {
+  const t = faux();
+  const declaration = { reason: '😀'.repeat(301), by: 'cell-chair', at: '2026-11-12T12:00:00Z' };
+  vi.stubEnv(
+    'FAUX_RESULTATS',
+    JSON.stringify({ ...scelles, baseline_absent: declaration, positions_absent: ['cell-a'] }),
+  );
+  const r = await t.lecteur.resultats('avis-test', 42);
+  expect(r).toMatchObject({
+    ok: true,
+    data: {
+      baseline_absent: { ...declaration, reason: '😀'.repeat(300) },
+      positions_absent: ['cell-a'],
+    },
+  });
+  expect(lireResultats(scelles)).toMatchObject({ baseline_absent: null, positions_absent: [] });
+});
+test.each([
+  undefined,
+  42,
+  'absent',
+  [],
+  {},
+  { reason: 1, by: 'cell-chair', at: '2026-11-12T12:00:00Z' },
+  { reason: 'Exemple', by: null, at: '2026-11-12T12:00:00Z' },
+  { reason: 'Exemple', by: 'cell-chair', at: false },
+])('déclaration mal formée refusée avec erreur nommée : %#', async (baseline_absent) => {
+  expect(() => lireResultats({ ...scelles, baseline_absent })).toThrow(/baseline_absent/);
+  const t = faux();
+  vi.stubEnv('FAUX_RESULTATS', JSON.stringify({ ...scelles, baseline_absent }));
+  expect(await t.lecteur.resultats('avis-test', 42)).toMatchObject({ ok: false, kind: 'format' });
+});
+test.each([
+  ['reason', { reason: null, by: 'cell-chair', at: '2026-11-12T12:00:00Z' }],
+  ['by', { reason: 'Exemple', by: 3, at: '2026-11-12T12:00:00Z' }],
+  ['at', { reason: 'Exemple', by: 'cell-chair', at: [] }],
+] as const)('erreur du champ baseline_absent.%s nommée', (champ, baseline_absent) => {
+  expect(() => lireResultats({ ...scelles, baseline_absent })).toThrow(`baseline_absent.${champ}`);
+});
+test.each([undefined, [], ['cell-a', 'cell-b']])(
+  'faux swarph : positions_absent absent, vide ou rempli : %#',
+  async (positions_absent) => {
+    const t = faux();
+    vi.stubEnv('FAUX_RESULTATS', JSON.stringify({ ...scelles, positions_absent }));
+    expect(await t.lecteur.resultats('avis-test', 42)).toMatchObject({
+      ok: true,
+      data: { positions_absent: positions_absent ?? [] },
+    });
+  },
+);
+test.each([null, 'cell-a', {}, [42], ['cell-a', null]])(
+  'positions_absent mal formé refusé : %#',
+  (positions_absent) => {
+    expect(() => lireResultats({ ...scelles, positions_absent })).toThrow('positions_absent');
+  },
+);

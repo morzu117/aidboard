@@ -50,7 +50,11 @@ n est le numéro de la sous-question, et il y a une entrée par sous-question. U
 verdict vaut exactement oui, non, nuance ou ne_sait_pas.
 justification fait 600 caractères au plus, en texte simple.
 
-Les tours : positions est ton avis indépendant, scellé par le gateway jusqu'à la fin du tour. rebuttal est facultatif, en texte, affiché sans être compté. vote est facultatif, au même format JSON que positions, si ton avis a changé après le débat.
+Les trois tours sont obligatoires : positions, rebuttal, puis vote.
+Au tour positions, ton avis indépendant est scellé par le gateway jusqu’à la fin du tour.
+Au tour rebuttal, un texte libre facultatif, en réponse aux positions des autres, devenues lisibles.
+Au tour vote, l'option avis si ta position tient, objection sinon, avec dans le corps le même JSON qu'au tour positions, mis à jour.
+Le baseline ne vote pas.
 Le scellé n'est pas une garantie de confidentialité. N'écris dans un bulletin rien que tu ne dirais pas en clair dans le mesh.
 
 Ce que la salle ne contient pas : le texte d'une carte du board, un DM, un secret, un nom d'hôte, une adresse. La question a été nettoyée avant l'envoi. Si tu y repères quand même un secret, abstiens-toi avec --outcome cannot_evaluate et un corps qui dit seulement « secret suspecté », sans le recopier. Le chair le voit à la clôture du tour.

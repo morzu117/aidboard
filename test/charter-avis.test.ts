@@ -67,3 +67,15 @@ describe('charter avis', () => {
     expect(charter.toLowerCase()).not.toContain('invisible');
   });
 });
+
+it('révision 3 : sens des tours rebuttal et vote, baseline sans vote', () => {
+  const charter = charterAvis({ jeton: 'abcdef12', carte: 42, nbSousQuestions: 1 });
+  expect(charter).toContain(
+    'Au tour rebuttal, un texte libre facultatif, en réponse aux positions des autres, devenues lisibles.',
+  );
+  expect(charter).toContain(
+    "Au tour vote, l'option avis si ta position tient, objection sinon, avec dans le corps le même JSON qu'au tour positions, mis à jour.",
+  );
+  expect(charter).toContain('Le baseline ne vote pas.');
+  expect(charter).toContain('Les trois tours sont obligatoires');
+});
