@@ -69,7 +69,7 @@ La migration 030 ajoute une colonne `mesh` partout où un identifiant swarph est
 - **L'identité stable d'un mesh.** Les ids de DM et de carte sont en AUTOINCREMENT par base de gateway, et un second gateway repart de 1 (L5) : les collisions entre meshes sont certaines. Le nom n'est qu'une étiquette locale, qui peut être rebranchée.
   - Une table `meshes_connus(nom, empreinte, vu_a)` garde, pour chaque nom, l'empreinte de son couple : `sha256(jsonCanonique([cell, gateway normalisé]))`, un encodage canonique, pour que deux couples différents ne donnent jamais la même chaîne, en base64url.
   - Au démarrage, si l'empreinte d'un nom a changé, A-I-D **refuse d'activer ce mesh** et l'affiche en erreur. Il n'écrit rien sous ce nom tant que Julien n'a pas choisi « archiver » : les lignes de l'ancien couple passent alors sous `<nom>@archive-<date>`, en lecture seule, et le nom repart à vide.
-  - À la migration, `principal` reçoit l'empreinte de la config courante.
+  - La migration laisse `meshes_connus` vide : SQL n'a pas accès à la config. Au premier démarrage après la migration (46.2), `activerMesh` trouve `principal` nouveau et enregistre l'empreinte de la config courante. Les lignes reprises en `principal` sont donc liées au couple configuré à ce démarrage.
 
 - **`mesh_inbox`** : la clé devient `(mesh, id)`. La table est reconstruite, en gardant les données.
 - **`mesh_state`** : la clé devient `(mesh, k)`.
