@@ -326,6 +326,8 @@ Elle va bouger : on ajoute le moins possible.
 
 ### 46.6 La fin
 
+- **Le démarrage ne doit pas attendre les meshes** (recommandation du lab, DM 96887). Depuis 46.4, `main.ts` attend `meshes.init()` avant `listen` : chaque test du binaire (10 s), puis `MeshService.init`, qui appelle tailscale (5 s) et l'état du monitor (30 s). Le daemon n'attend plus que l'activation, bornée par le test du binaire, et `MeshService.init` repart en arrière-plan, comme avant 46.4. Un test fait démarrer le daemon avec un mesh dont le monitor ne répond pas, et vérifie que le daemon écoute en moins de 15 s.
+
 - Un e2e avec deux faux meshes.
 - La fiche `docs/recette-chantier-46-multi-mesh.md`, avec la limite des agents (Q-J1, (a)).
 - Les renvois depuis les plans 12, 24, 25, 42 et 44.
