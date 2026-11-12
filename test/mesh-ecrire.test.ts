@@ -182,7 +182,8 @@ test.each([0, 1, 2])('demande, oui, proxy et résultat sans texte : action %s', 
     resultat: 'executee',
     envoi: { code: 'succes', id: 72, open_obligations: [81], status: 201 },
   });
-  expect(JSON.stringify(resultat)).not.toContain(texte);
+  expect(resultat.params).toEqual(exemples[i]);
+  expect(JSON.stringify({ ...resultat, params: undefined })).not.toContain(texte);
   const requete = JSON.parse(t.proxy.lignes[0]!);
   expect(requete).toEqual({ ...attendus[i], request_id: expect.any(String) });
   expect(t.journal).toHaveBeenCalledWith(
@@ -217,7 +218,8 @@ test.each([
     resultat: 'echouee',
     envoi: { code, status: 503, open_obligations: [] },
   });
-  expect(JSON.stringify(r)).not.toContain(texte);
+  expect(r.params).toEqual(exemples[0]);
+  expect(JSON.stringify({ ...r, params: undefined })).not.toContain(texte);
   expect(JSON.stringify(t.journal.mock.calls)).not.toContain(texte);
   expect(t.proxy.lignes).toHaveLength(1);
 });
@@ -431,7 +433,8 @@ test('body incomplet : format, sans conserver le contenu brut du gateway', async
   const { confirmation } = (await t.demander()).json();
   const r = await t.oui(confirmation);
   expect(r).toMatchObject({ resultat: 'echouee', envoi: { code: 'format', open_obligations: [] } });
-  expect(JSON.stringify(r)).not.toContain(texte);
+  expect(r.params).toEqual(exemples[0]);
+  expect(JSON.stringify({ ...r, params: undefined })).not.toContain(texte);
 });
 
 test('proxy retiré au oui : perime sans connexion ; obligations indisponibles non bloquantes', async () => {

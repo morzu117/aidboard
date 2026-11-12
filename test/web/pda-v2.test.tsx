@@ -177,7 +177,7 @@ const cas: [ParamsAction, string[]][] = [
       action: 'projet.retirer',
       params: { workspaceId: 'interne_workspace', racine: '/exemple/projet' },
     },
-    ['Racine : /exemple/projet'],
+    ['Racine : projet'],
   ],
   ...[true, false].map((sansIdentite): [ParamsAction, string[]] => [
     {

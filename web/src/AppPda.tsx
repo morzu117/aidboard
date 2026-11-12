@@ -1,5 +1,6 @@
+import { ParametresSignes } from './ui/ParametresSignes.js';
 import { useCallback, useEffect, useState } from 'react';
-import { type CorpsDemandeV2, empreintePda, encoderBase64url } from '../../src/shared/pda.js';
+import { empreintePda, encoderBase64url } from '../../src/shared/pda.js';
 import {
   chargerCodePda,
   fabriquerReponse,
@@ -216,7 +217,11 @@ function Demande({
   return (
     <section>
       <h2>{demande.v === 2 ? demande.resume : 'Demande d’essai'}</h2>
-      {demande.v === 1 ? <p>{demande.sujet}</p> : <Parametres demande={demande} />}
+      {demande.v === 1 ? (
+        <p>{demande.sujet}</p>
+      ) : (
+        <ParametresSignes action={demande.action} params={demande.params} surface="telephone" />
+      )}
       <strong className="pda-numero">{entree.demande.numero}</strong>
       <label>
         {demande.numero === null ? 'Retape le numéro affiché sur le Mac' : 'Retape le numéro'}
@@ -247,93 +252,4 @@ export function LienPda() {
       .catch(() => undefined);
   }, []);
   return present ? <a href="/pda">Confirmations</a> : null;
-}
-
-function Parametres({ demande: d }: { demande: CorpsDemandeV2 }) {
-  let lignes: string[] = [];
-  let texteMotion: string | undefined;
-  switch (d.action) {
-    case 'mesh.avis':
-    case 'mesh.avis.motion': {
-      const p = d.params.params;
-      const roles = { chair: 'président', baseline: 'baseline', seat: 'siège' };
-      lignes =
-        d.action === 'mesh.avis'
-          ? [
-              `Salle : ${d.params.params.nom}`,
-              `Carte : ${d.params.params.carte}`,
-              ...d.params.params.sieges.map((s) => `${s.peer} — ${roles[s.role]} — ${s.family}`),
-            ]
-          : [`Canal : ${d.params.params.canal}`];
-      lignes.push(
-        ...(['positions', 'rebuttal', 'vote'] as const).map(
-          (tour) => `Échéance ${tour} : ${new Date(p.echeances[tour]).toLocaleString('fr-FR')}`,
-        ),
-      );
-      texteMotion = p.texte;
-      break;
-    }
-    case 'mesh.avis.baseline-absent':
-      lignes = [
-        `Canal : ${d.params.params.canal}`,
-        `Motion : ${d.params.params.motion}`,
-        `Raison : ${d.params.params.raison}`,
-      ];
-      break;
-    case 'merge':
-      lignes = [
-        `Dépôt : ${d.params.depot}`,
-        `PR : ${d.params.pr}`,
-        `Tête : ${d.params.tete.slice(0, 7)}`,
-        `Stratégie : ${d.params.strategie}`,
-        `Branche supprimée : ${d.params.supprimerBranche ? 'oui' : 'non'}`,
-        `Nettoyage ensuite : ${d.params.nettoyer ? 'oui' : 'non'}`,
-      ];
-      break;
-    case 'push':
-      lignes = [
-        `Branche : ${d.params.branche}`,
-        `Tête : ${d.params.tete.slice(0, 7)}`,
-        `Distante : ${d.params.distante?.slice(0, 7) ?? 'nouvelle branche'}`,
-      ];
-      break;
-    case 'nettoyage':
-      lignes = [
-        `Branche : ${d.params.branche}`,
-        `Tête : ${d.params.tete?.slice(0, 7) ?? 'sans branche'}`,
-        ...(d.params.nonFusionnes
-          ? [`Commits non fusionnés perdus : ${d.params.nonFusionnes}`]
-          : []),
-        `Modifications locales : ${d.params.sale === 'stash' ? 'mises de côté' : d.params.sale === 'force' ? 'perdues' : 'refusées'}`,
-      ];
-      break;
-    case 'projet.retirer':
-      lignes = [`Racine : ${d.params.racine}`];
-      break;
-    case 'appairage':
-      lignes = [
-        `Nom : ${d.params.nom}`,
-        ...(d.params.sansIdentite ? ['Sans identité Tailscale'] : []),
-      ];
-      break;
-    case 'pda.activer':
-      lignes = [`Nom : ${d.params.nom}`, `Empreinte : ${d.params.empreinte}`];
-      break;
-    case 'desarmement':
-      lignes = ['Les actions ne demanderont plus de confirmation'];
-      break;
-  }
-  return (
-    <>
-      {lignes.map((ligne) => (
-        <p key={ligne}>{ligne}</p>
-      ))}
-      {texteMotion !== undefined && (
-        <>
-          <p>Texte de la motion :</p>
-          <div style={{ whiteSpace: 'pre-wrap' }}>{texteMotion}</div>
-        </>
-      )}
-    </>
-  );
 }

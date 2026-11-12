@@ -141,9 +141,7 @@ Depuis tout chemin de D307, le daemon signe un résultat et le publie sur le rel
 
 ## 5. Points
 
-### 45.1
-
-**Le Mac voit les paramètres signés (D304).**
+### 45.1 Le Mac voit les paramètres signés (D304)
 
 - `src/daemon/routes/confirmations.ts` :
   - `GET /api/confirmations` ajoute `params`, l'objet relu de la colonne, à chaque ligne, ouverte ou récente. Si la colonne est NULL ou illisible, `params` vaut `null`.
@@ -165,23 +163,22 @@ Depuis tout chemin de D307, le daemon signe un résultat et le publie sur le rel
   - la racine entière ou réduite ;
   - le panneau replié puis déplié ;
   - les tests existants du téléphone restent verts.
+- 45.1, livré : 44 tests ajoutés. Le gate est vert, 3 483 tests réussis. 99 lignes existantes ont été remplacées, dont 89 ont seulement été déplacées avec le composant. Les tests mesh vérifient toujours que le texte n'apparaît nulle part hors de `params`.
 
-### 45.2
-
-**Le résultat signé (D305, D306, D307).**
+### 45.2 Le résultat signé (D305, D306, D307)
 
 - `src/shared/pda.ts` : le contexte `aid-pda-resultat-v1`, le type `CorpsResultatV1`, ainsi que `signerResultat` et `verifierResultat`, avec les listes fermées.
 - `src/relais/index.ts` : les routes `PUT /resultats/:id` et `GET /resultats`, le préflight, les bornes et la purge.
 - `src/daemon/pda/` : la file de publication, alimentée depuis `executerConfirmee`, le numéro faux et `annuler()`.
 - **Tests :** le relais hostile, les contextes croisés, les bornes (dans la boucle de lecture), la purge, les retentatives, et la construction depuis la ligne relue pour chaque chemin de D307.
 
-### 45.3
+### 45.3 Le téléphone montre le résultat (D308)
 
-**Le téléphone montre le résultat (D308).** « Réponses récentes », la relecture à +20 s et +45 s, et le tableau des libellés. **Tests :** chaque ligne du tableau et la priorité de D310, une enveloppe forgée jetée, une action différente jetée, et un relais qui sert le résultat X sous l'id Y (rattaché à X par le `corps.id` signé, ou jeté).
+« Réponses récentes », la relecture à +20 s et +45 s, et le tableau des libellés. **Tests :** chaque ligne du tableau et la priorité de D310, une enveloppe forgée jetée, une action différente jetée, et un relais qui sert le résultat X sous l'id Y (rattaché à X par le `corps.id` signé, ou jeté).
 
-### 45.4
+### 45.4 La fin
 
-**La fin.** Un e2e sur le relais local, la fiche `docs/recette-chantier-45-confirmations-completes.md`, et le renvoi depuis les notes 34, 40 et 43.
+Un e2e sur le relais local, la fiche `docs/recette-chantier-45-confirmations-completes.md`, et le renvoi depuis les notes 34, 40 et 43.
 
 ## 6. Pièges
 

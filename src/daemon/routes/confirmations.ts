@@ -75,10 +75,19 @@ export function registerConfirmationRoutes(
   });
   app.get('/api/confirmations', async (req, reply) => {
     if (req.principal?.kind !== 'admin') return reply.code(403).send({ error: 'admin seulement' });
-    const champs = 'id, action, classe, resume, etat, resultat, raison, cree_a, echeance, envoi';
+    reply.header('Cache-Control', 'no-store');
+    const champs =
+      'id, action, classe, resume, etat, resultat, raison, cree_a, echeance, envoi, params';
     const avecEnvoi = (lignes: unknown[]) =>
       lignes.map((ligne) => {
         const l = ligne as Record<string, unknown>;
+        try {
+          const params: unknown = typeof l.params === 'string' ? JSON.parse(l.params) : null;
+          l.params =
+            params !== null && typeof params === 'object' && !Array.isArray(params) ? params : null;
+        } catch {
+          l.params = null;
+        }
         if (!ACTIONS_MESH.has(String(l.action))) {
           delete l.envoi;
           return l;
