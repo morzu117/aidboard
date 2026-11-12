@@ -128,6 +128,8 @@ Les noms (sujet, projet, appareil) passent par le relais, comme au 43 (Q4 du 43)
 
 ### D230. La file, l'attente et le résultat
 
+Le [chantier 45](45-confirmations-completes.md) ajoute les paramètres signés sur le Mac et le résultat signé sur le téléphone.
+
 - `pda_demandes` gagne `classe`, `params` (JSON), `resume`, `resultat` (`executee`, `echouee`, `perimee`, `annulee` ou `NULL`) et `raison` (code court, sans contenu). Migration 024.
 - `GET /api/confirmations` liste les demandes ouvertes, et les 20 dernières terminées.
 - `DELETE /api/confirmations/:id` annule une demande ouverte : son `etat` passe à `expiree` (le `CHECK` de la 023 n'admet pas d'autre état, et la table n'est pas recréée) et son `resultat` à `annulee`. Elle est fermée et ne reçoit plus de réponse. Le daemon la retire du relais.

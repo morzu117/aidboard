@@ -45,6 +45,7 @@ export async function assertionPda(
   id: string,
   appareil: { id: string; cle: KeyObject },
   valeur: 'oui' | 'non' = 'oui',
+  numeroSaisi?: string,
 ) {
   const demande = db
     .prepare('SELECT id, h_demande AS hDemande, numero, echeance FROM pda_demandes WHERE id = ?')
@@ -53,7 +54,7 @@ export async function assertionPda(
     ...demande,
     appareil: appareil.id,
     valeur,
-    numero: valeur === 'non' ? '' : demande.numero,
+    numero: valeur === 'non' ? '' : (numeroSaisi ?? demande.numero),
   });
   const client = Buffer.from(
     JSON.stringify({
@@ -84,6 +85,6 @@ export async function assertionPda(
     clientDataJSON: client.toString('base64url'),
     signature: signature.toString('base64url'),
     valeur,
-    numero: valeur === 'oui' ? demande.numero : null,
+    numero: valeur === 'oui' ? (numeroSaisi ?? demande.numero) : null,
   };
 }

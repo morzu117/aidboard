@@ -144,6 +144,7 @@ async function preparer(
     preparerConsommation: (ligne) => porte.preparerConsommation(ligne),
     relais: {
       publierAutorises: async () => true,
+      publierResultat: async () => true,
       deposer: async () => true,
       retirer: async () => {},
       tirer: async () => reponses,

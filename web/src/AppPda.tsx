@@ -1,9 +1,11 @@
-import { useCallback, useEffect, useState } from 'react';
-import { type CorpsDemandeV2, empreintePda, encoderBase64url } from '../../src/shared/pda.js';
+import { ParametresSignes } from './ui/ParametresSignes.js';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { empreintePda, encoderBase64url, type CorpsResultatV1 } from '../../src/shared/pda.js';
 import {
   chargerCodePda,
   fabriquerReponse,
   lireDemandes,
+  lireResultats,
   requeteRelais,
   stockagePda,
   type CodePda,
@@ -12,12 +14,52 @@ import {
 } from './data/pda.js';
 import { HorsAcces, type FinAcces } from './ui/HorsAcces.js';
 
+export function libelleResultat(
+  corps: CorpsResultatV1 | null,
+  repondueA: number,
+  maintenant: number,
+): string {
+  if (!corps)
+    return maintenant - repondueA > 24 * 60 * 60_000
+      ? 'Résultat non reçu, à lire sur le Mac'
+      : 'En attente du résultat';
+  const incertain =
+    corps.raison === 'delai' ||
+    ['upstream_ambiguous', 'delai', 'interrompu'].includes(corps.code ?? '');
+  let libelle = incertain
+    ? 'Issue incertaine, à vérifier sur le Mac'
+    : corps.raison === 'numero'
+      ? 'Annulée : numéro faux'
+      : { executee: 'Exécutée', echouee: 'Échouée', perimee: 'Périmée', annulee: 'Annulée' }[
+          corps.resultat
+        ];
+  const raison =
+    !incertain && corps.raison !== 'numero' && corps.resultat === 'echouee' ? corps.raison : null;
+  const details = [raison, corps.code !== 'succes' ? corps.code : null].filter(
+    (detail, index, liste) => detail && liste.indexOf(detail) === index,
+  );
+  if (details.length) libelle += ` (${details.join(', ')})`;
+  return libelle;
+}
+
+interface ReponseRecente {
+  id: string;
+  action: CorpsResultatV1['action'];
+  resume: string;
+  repondueA: number;
+}
+
 export function AppPda() {
   const [code, setCode] = useState<CodePda | null>(null);
   const [appareil, setAppareil] = useState<PdaLocal | null>(null);
   const [pret, setPret] = useState(false);
   const [message, setMessage] = useState('');
   const [demandes, setDemandes] = useState<DemandePda[]>([]);
+  const [recentes, setRecentes] = useState<ReponseRecente[]>([]);
+  const [resultats, setResultats] = useState<CorpsResultatV1[]>([]);
+  const minuteries = useRef<ReturnType<typeof setTimeout>[]>([]);
+  const [maintenant, setMaintenant] = useState(() => Date.now());
+  useEffect(() => () => minuteries.current.forEach(clearTimeout), []);
   const [illisibles, setIllisibles] = useState(0);
   const [occupe, setOccupe] = useState(false);
   const [nom, setNom] = useState('');
@@ -41,8 +83,24 @@ export function AppPda() {
       })
       .catch(() => setMessage('PDA indisponible. Repasse par le tailnet.'));
   }, []);
+  const releverResultats = useCallback(async () => {
+    if (!appareil || !code?.RELAIS || enregistrement) return;
+    const liste = await lireResultats(code.RELAIS, appareil, code.CLE_DAEMON);
+    if (liste !== null) {
+      setResultats((gardes) => {
+        const fusion = new Map(gardes.map((corps) => [corps.id, corps]));
+        for (const corps of liste) {
+          // Le premier résultat vérifié reçu pour cet id fait foi.
+          if (!fusion.has(corps.id)) fusion.set(corps.id, corps);
+        }
+        return [...fusion.values()].sort((a, b) => b.emis - a.emis).slice(0, 50);
+      });
+    }
+    setMaintenant(Date.now());
+  }, [appareil, code, enregistrement]);
   const rafraichir = useCallback(async () => {
     if (!appareil || !code?.RELAIS || enregistrement) return;
+    void releverResultats();
     setOccupe(true);
     try {
       const resultat = await lireDemandes(
@@ -58,7 +116,7 @@ export function AppPda() {
     } finally {
       setOccupe(false);
     }
-  }, [appareil, code, enregistrement]);
+  }, [appareil, code, enregistrement, releverResultats]);
   useEffect(() => {
     let actif = true;
     void Promise.resolve().then(() => {
@@ -143,6 +201,21 @@ export function AppPda() {
       const corps = await fabriquerReponse(entree, appareil, valeur, numero);
       await requeteRelais(code.RELAIS, appareil, `/reponses/${entree.demande.id}`, corps);
       setDemandes((liste) => liste.filter((d) => d.demande.id !== entree.demande.id));
+      if (valeur === 'oui') {
+        const demande = entree.demande;
+        setRecentes((liste) => [
+          ...liste.filter((r) => r.id !== demande.id),
+          {
+            id: demande.id,
+            action: demande.action,
+            resume: demande.v === 2 ? demande.resume : 'Demande d’essai',
+            repondueA: Date.now(),
+          },
+        ]);
+        for (const delai of [20_000, 45_000]) {
+          minuteries.current.push(setTimeout(() => void releverResultats(), delai));
+        }
+      }
       setMessage('Réponse envoyée');
     } catch (e) {
       erreur(e);
@@ -193,6 +266,38 @@ export function AppPda() {
                 {illisibles === 1 ? 'demande illisible ignorée' : 'demandes illisibles ignorées'}
               </p>
             )}
+            {(recentes.length > 0 || resultats.length > 0) && (
+              <section>
+                <h2>Réponses récentes</h2>
+                {recentes.map((r) => (
+                  <article key={r.id}>
+                    <h3>{r.action}</h3>
+                    <p>{r.resume}</p>
+                    <time dateTime={new Date(r.repondueA).toISOString()}>
+                      {new Date(r.repondueA).toLocaleString('fr-FR')}
+                    </time>
+                    <p>
+                      {libelleResultat(
+                        resultats.find((c) => c.id === r.id && c.action === r.action) ?? null,
+                        r.repondueA,
+                        maintenant,
+                      )}
+                    </p>
+                  </article>
+                ))}
+                {resultats
+                  .filter((c) => !recentes.some((r) => r.id === c.id))
+                  .map((c) => (
+                    <article key={c.id}>
+                      <h3>{c.action}</h3>
+                      <time dateTime={new Date(c.emis).toISOString()}>
+                        {new Date(c.emis).toLocaleString('fr-FR')}
+                      </time>
+                      <p>{libelleResultat(c, c.emis, maintenant)}</p>
+                    </article>
+                  ))}
+              </section>
+            )}
             {demandes.map((d) => (
               <Demande key={d.demande.id} entree={d} occupe={occupe} repondre={repondre} />
             ))}
@@ -216,7 +321,11 @@ function Demande({
   return (
     <section>
       <h2>{demande.v === 2 ? demande.resume : 'Demande d’essai'}</h2>
-      {demande.v === 1 ? <p>{demande.sujet}</p> : <Parametres demande={demande} />}
+      {demande.v === 1 ? (
+        <p>{demande.sujet}</p>
+      ) : (
+        <ParametresSignes action={demande.action} params={demande.params} surface="telephone" />
+      )}
       <strong className="pda-numero">{entree.demande.numero}</strong>
       <label>
         {demande.numero === null ? 'Retape le numéro affiché sur le Mac' : 'Retape le numéro'}
@@ -247,93 +356,4 @@ export function LienPda() {
       .catch(() => undefined);
   }, []);
   return present ? <a href="/pda">Confirmations</a> : null;
-}
-
-function Parametres({ demande: d }: { demande: CorpsDemandeV2 }) {
-  let lignes: string[] = [];
-  let texteMotion: string | undefined;
-  switch (d.action) {
-    case 'mesh.avis':
-    case 'mesh.avis.motion': {
-      const p = d.params.params;
-      const roles = { chair: 'président', baseline: 'baseline', seat: 'siège' };
-      lignes =
-        d.action === 'mesh.avis'
-          ? [
-              `Salle : ${d.params.params.nom}`,
-              `Carte : ${d.params.params.carte}`,
-              ...d.params.params.sieges.map((s) => `${s.peer} — ${roles[s.role]} — ${s.family}`),
-            ]
-          : [`Canal : ${d.params.params.canal}`];
-      lignes.push(
-        ...(['positions', 'rebuttal', 'vote'] as const).map(
-          (tour) => `Échéance ${tour} : ${new Date(p.echeances[tour]).toLocaleString('fr-FR')}`,
-        ),
-      );
-      texteMotion = p.texte;
-      break;
-    }
-    case 'mesh.avis.baseline-absent':
-      lignes = [
-        `Canal : ${d.params.params.canal}`,
-        `Motion : ${d.params.params.motion}`,
-        `Raison : ${d.params.params.raison}`,
-      ];
-      break;
-    case 'merge':
-      lignes = [
-        `Dépôt : ${d.params.depot}`,
-        `PR : ${d.params.pr}`,
-        `Tête : ${d.params.tete.slice(0, 7)}`,
-        `Stratégie : ${d.params.strategie}`,
-        `Branche supprimée : ${d.params.supprimerBranche ? 'oui' : 'non'}`,
-        `Nettoyage ensuite : ${d.params.nettoyer ? 'oui' : 'non'}`,
-      ];
-      break;
-    case 'push':
-      lignes = [
-        `Branche : ${d.params.branche}`,
-        `Tête : ${d.params.tete.slice(0, 7)}`,
-        `Distante : ${d.params.distante?.slice(0, 7) ?? 'nouvelle branche'}`,
-      ];
-      break;
-    case 'nettoyage':
-      lignes = [
-        `Branche : ${d.params.branche}`,
-        `Tête : ${d.params.tete?.slice(0, 7) ?? 'sans branche'}`,
-        ...(d.params.nonFusionnes
-          ? [`Commits non fusionnés perdus : ${d.params.nonFusionnes}`]
-          : []),
-        `Modifications locales : ${d.params.sale === 'stash' ? 'mises de côté' : d.params.sale === 'force' ? 'perdues' : 'refusées'}`,
-      ];
-      break;
-    case 'projet.retirer':
-      lignes = [`Racine : ${d.params.racine}`];
-      break;
-    case 'appairage':
-      lignes = [
-        `Nom : ${d.params.nom}`,
-        ...(d.params.sansIdentite ? ['Sans identité Tailscale'] : []),
-      ];
-      break;
-    case 'pda.activer':
-      lignes = [`Nom : ${d.params.nom}`, `Empreinte : ${d.params.empreinte}`];
-      break;
-    case 'desarmement':
-      lignes = ['Les actions ne demanderont plus de confirmation'];
-      break;
-  }
-  return (
-    <>
-      {lignes.map((ligne) => (
-        <p key={ligne}>{ligne}</p>
-      ))}
-      {texteMotion !== undefined && (
-        <>
-          <p>Texte de la motion :</p>
-          <div style={{ whiteSpace: 'pre-wrap' }}>{texteMotion}</div>
-        </>
-      )}
-    </>
-  );
 }

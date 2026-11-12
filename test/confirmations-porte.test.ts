@@ -98,6 +98,7 @@ async function preparer(action: ActionGit = 'push', arme = true) {
   let actif = true;
   const relais = {
     publierAutorises: vi.fn<RelaisPda['publierAutorises']>(async () => true),
+    publierResultat: vi.fn<RelaisPda['publierResultat']>(async () => true),
     deposer: vi.fn<RelaisPda['deposer']>(async () => true),
     retirer: vi.fn<RelaisPda['retirer']>(async () => {}),
     tirer: vi.fn<RelaisPda['tirer']>(async () => reponses),
@@ -365,8 +366,27 @@ test('numéro toujours : corps signé, journaux, événements et liste sans num�
   const liste = await t.app.inject({ url: '/api/confirmations', headers: t.headers });
   expect(liste.json().ouvertes).toHaveLength(1);
   expect(Object.keys(liste.json().ouvertes[0]).sort()).toEqual(
-    ['id', 'action', 'classe', 'resume', 'etat', 'resultat', 'raison', 'cree_a', 'echeance'].sort(),
+    [
+      'id',
+      'action',
+      'classe',
+      'resume',
+      'etat',
+      'resultat',
+      'raison',
+      'cree_a',
+      'echeance',
+      'params',
+    ].sort(),
   );
+  for (const headers of [t.headers, t.cookies]) {
+    const reponse = await t.app.inject({ url: '/api/confirmations', headers });
+    expect(reponse.headers['cache-control']).toBe('no-store');
+    const demande = reponse.json().ouvertes[0];
+    expect(demande).not.toHaveProperty('numero');
+    expect(demande).not.toHaveProperty('numero_mac');
+    expect(demande.params).toEqual(JSON.parse(t.ligne(id).params as string));
+  }
   await t.repondre(id, 'oui', true, true);
   expect(t.ligne(id)).toMatchObject({ etat: 'expiree', resultat: 'annulee', raison: 'numero' });
   expect(t.reglage.exige('merge')).toBe(true);
@@ -614,3 +634,20 @@ for (const cas of ['signature', 'revoque', 'echeance', 'defaut'] as const) {
     expect(runScript).not.toHaveBeenCalled();
   });
 }
+
+test('liste : paramètres NULL ou illisibles, ouverts et récents', async () => {
+  const t = await preparer('reglage');
+  const { confirmation: id } = (await t.demander()).json<{ confirmation: string }>();
+  for (const params of [null, '{', '42', '[]']) {
+    t.db.prepare('UPDATE pda_demandes SET params = ? WHERE id = ?').run(params, id);
+    const r = await t.app.inject({ url: '/api/confirmations', headers: t.headers });
+    expect(r.json().ouvertes[0].params).toBeNull();
+  }
+  t.db
+    .prepare("UPDATE pda_demandes SET etat = 'expiree', params = ? WHERE id = ?")
+    .run('{"action":"merge","actif":false}', id);
+  const r = await t.app.inject({ url: '/api/confirmations', headers: t.cookies });
+  expect(r.json().recentes[0].params).toEqual({ action: 'merge', actif: false });
+  expect(r.json().recentes[0]).not.toHaveProperty('numero');
+  expect(r.json().recentes[0]).not.toHaveProperty('numero_mac');
+});

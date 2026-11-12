@@ -1,3 +1,4 @@
+import { ParametresSignes } from './ParametresSignes.js';
 import { ACTIONS_MESH } from '../../../src/shared/confirmations.js';
 import { useCallback, useEffect, useState } from 'react';
 import { useAidClient } from '../data/useAidState.js';
@@ -119,6 +120,10 @@ export function PanneauConfirmations() {
               {d.action?.startsWith('mesh.avis') && noms[d.action]} {d.resume} — Échéance :{' '}
               {date(d.echeance)}
             </span>
+            <details>
+              <summary>Paramètres signés</summary>
+              <ParametresSignes action={d.action ?? ''} params={d.params} surface="mac" />
+            </details>
             <button className="bouton" disabled={occupe} onClick={() => void annuler(d.id)}>
               Annuler
             </button>
@@ -130,6 +135,10 @@ export function PanneauConfirmations() {
           <li key={d.id}>
             {d.action?.startsWith('mesh.avis') && noms[d.action]} {d.resume} —{' '}
             {resultatConfirmation(d)}
+            <details>
+              <summary>Paramètres signés</summary>
+              <ParametresSignes action={d.action ?? ''} params={d.params} surface="mac" />
+            </details>
           </li>
         ))}
       </ul>

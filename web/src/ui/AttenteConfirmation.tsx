@@ -12,6 +12,7 @@ export interface Confirmation {
   envoi?: ResultatEnvoi | null;
   raison?: string | null;
   action?: string;
+  params?: unknown;
 }
 export interface FileConfirmations {
   ouvertes: Confirmation[];

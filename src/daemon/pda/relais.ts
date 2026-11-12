@@ -12,6 +12,7 @@ export interface ReponseRelais {
 export interface RelaisPda {
   publierAutorises(liste: Array<{ id: string; cle: unknown }>): Promise<boolean>;
   deposer(id: string, enveloppe: { corps: string; sig: string }): Promise<boolean>;
+  publierResultat(id: string, enveloppe: { corps: string; sig: string }): Promise<boolean>;
   retirer(id: string): Promise<unknown>;
   tirer(apres: number): Promise<ReponseRelais[]>;
 }
@@ -112,6 +113,9 @@ export class ClientRelais implements RelaisPda {
   }
   async deposer(id: string, enveloppe: { corps: string; sig: string }) {
     return (await this.requete('PUT', `/demandes/${encodeURIComponent(id)}`, enveloppe)) !== null;
+  }
+  async publierResultat(id: string, enveloppe: { corps: string; sig: string }) {
+    return (await this.requete('PUT', `/resultats/${encodeURIComponent(id)}`, enveloppe)) !== null;
   }
   retirer(id: string) {
     return this.requete('DELETE', `/demandes/${encodeURIComponent(id)}`);

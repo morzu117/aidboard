@@ -492,3 +492,27 @@ test('mesh.ecrire : le résultat conserve son libellé sans status ni detail', a
     }),
   ).toBe('Échouée');
 });
+
+test('paramètres signés : volets ouverts et récents repliés puis dépliés', async () => {
+  const demande = {
+    ...ouverte,
+    action: 'projet.retirer',
+    params: { workspaceId: 'projet', racine: '/exemple/parent/projet' },
+  };
+  setup(<PanneauConfirmations />, snapshot(), '/', {
+    ...routes,
+    'GET /api/confirmations': json(200, {
+      ouvertes: [demande],
+      recentes: [{ ...demande, id: 'recente', etat: 'consommee', resultat: 'executee' }],
+    }),
+  });
+  const resumes = await screen.findAllByText('Paramètres signés');
+  expect(resumes).toHaveLength(2);
+  for (const resume of resumes) {
+    const volet = resume.closest('details')!;
+    expect(volet.open).toBe(false);
+    fireEvent.click(resume);
+    expect(volet.open).toBe(true);
+    expect(volet.textContent).toContain('Racine : /exemple/parent/projet');
+  }
+});

@@ -150,6 +150,8 @@ Tout échec est refusé et journalisé (`pda.refus { appareil?, raison }`), sans
 
 ### D220
 
+Le [chantier 45](45-confirmations-completes.md) précise le chemin affiché (racine entière sur le Mac, dernier segment sur le téléphone) et ajoute les résultats signés, conservés 24 h par le relais.
+
 **L'invite du PDA**, un écran « Confirmer » de l'app : l'action en une ligne, le nom du sujet, le numéro à retaper, et deux boutons, « Confirmer » et « Refuser ». Elle n'affiche rien d'autre : ni code, ni chemin, ni texte d'agent. Hors du tailnet, l'app s'ouvre depuis le cache et ne montre que cet écran et l'état « hors du tailnet ».
 
 *Source : Spec Q4 ; lab P4.*

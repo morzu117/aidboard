@@ -65,6 +65,7 @@ async function preparer(scenario: ScenarioProxy = succes) {
     preparerConsommation: (ligne) => porte.preparerConsommation(ligne),
     relais: {
       publierAutorises: async () => true,
+      publierResultat: async () => true,
       deposer: async () => true,
       retirer: async () => {},
       tirer: async () => reponses,
@@ -170,7 +171,8 @@ test('proxy-protocol.md « Argument types » et table des verbes : chaque args e
       ...attendus[i],
       request_id: expect.any(String),
     });
-    expect(JSON.stringify(r)).not.toContain(texte);
+    expect(r.params).toEqual(exemple);
+    expect(JSON.stringify({ ...r, params: undefined })).not.toContain(texte);
     expect(JSON.stringify(t.journal.mock.calls)).not.toContain(texte);
     expect(t.journal).toHaveBeenCalledWith('mesh.etat', {
       action: exemple.action,
@@ -216,7 +218,8 @@ test('409 gateway gardé sans retry et sans détail', async () => {
   const { confirmation } = (await t.demander(exemples[1])).json();
   const r = await t.oui(confirmation);
   expect(r).toMatchObject({ resultat: 'echouee', envoi: { code: 'upstream_error', status: 409 } });
-  expect(JSON.stringify(r)).not.toContain(texte);
+  expect(r.params).toEqual(exemples[1]);
+  expect(JSON.stringify({ ...r, params: undefined })).not.toContain(texte);
   expect(JSON.stringify(t.journal.mock.calls)).not.toContain(texte);
   expect(t.proxy.lignes).toHaveLength(1);
 });
