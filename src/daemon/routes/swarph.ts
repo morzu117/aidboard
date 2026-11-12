@@ -1,12 +1,16 @@
+import type { MeshRegistry } from '../mesh/registre.js';
 import type { FastifyInstance } from 'fastify';
 import { AidHttpError } from '../errors.js';
 import type { SwarphReader } from '../mesh/lectures.js';
 
 export function registerSwarphRoutes(
   app: FastifyInstance,
-  deps: { swarph: SwarphReader | null },
+  deps: { swarph: SwarphReader | null; meshes?: MeshRegistry },
 ): void {
-  const lecteur = () => {
+  const lecteur = (query: unknown) => {
+    const nom = (query as { mesh?: string }).mesh ?? 'principal';
+    if (deps.meshes) return deps.meshes.obtenir(nom).swarph;
+    if (nom !== 'principal') throw new AidHttpError(404, 'mesh inconnu');
     if (!deps.swarph)
       throw new AidHttpError(404, 'mesh désactivé : `mesh.cell` vide dans config.yaml');
     return deps.swarph;
@@ -14,7 +18,7 @@ export function registerSwarphRoutes(
   const routes = ['cells', 'federation', 'memory', 'memory/page', 'reglages'] as const;
   for (const route of routes) {
     app.get(`/api/swarph/${route}`, async (req) => {
-      const s = lecteur();
+      const s = lecteur(req.query);
       const query = req.query as {
         fresh?: string;
         q?: string;

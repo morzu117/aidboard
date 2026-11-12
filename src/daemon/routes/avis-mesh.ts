@@ -1,3 +1,4 @@
+import type { MeshRegistry } from '../mesh/registre.js';
 import type { FastifyInstance } from 'fastify';
 import type { AvisMeshService } from '../mesh/avis.js';
 import type { Porte } from '../confirmations/porte.js';
@@ -7,11 +8,17 @@ import { ID_ASK } from '../../shared/swairm-ask.js';
 /** Uniquement enregistrées sur le serveur local ; jamais sur le serveur host. */
 export function registerAvisMeshRoutes(
   app: FastifyInstance,
-  deps: { avis: AvisMeshService | null; porte: Porte },
+  deps: { avis: AvisMeshService | null; porte: Porte; meshes?: MeshRegistry },
 ) {
   const service = () => {
     if (!deps.avis) throw new AidHttpError(404, 'mesh désactivé');
     return deps.avis;
+  };
+  const lecture = (query: unknown) => {
+    const nom = (query as { mesh?: string }).mesh ?? 'principal';
+    if (deps.meshes) return deps.meshes.obtenir(nom).avis;
+    if (nom !== 'principal') throw new AidHttpError(404, 'mesh inconnu');
+    return service();
   };
   const identifiant = (params: unknown) => {
     const { id } = params as { id: string };
@@ -45,9 +52,9 @@ export function registerAvisMeshRoutes(
       throw e;
     }
   });
-  app.get('/api/avis-mesh', async () => service().liste());
-  app.get('/api/avis-mesh/config', async () => service().config());
-  app.get('/api/avis-mesh/:id', async (req) => service().lire(identifiant(req.params)));
+  app.get('/api/avis-mesh', async (req) => lecture(req.query).liste());
+  app.get('/api/avis-mesh/config', async (req) => lecture(req.query).config());
+  app.get('/api/avis-mesh/:id', async (req) => lecture(req.query).lire(identifiant(req.params)));
   app.post('/api/avis-mesh/:id/motion', async (req, reply) => {
     if (req.headers['x-aid-confirm'] !== 'avis')
       throw new AidHttpError(403, 'confirmation absente');

@@ -1,3 +1,5 @@
+import { envSwarph } from './env.js';
+import type { MeshConfig } from '../config.js';
 import {
   creerLecteurCli,
   creerLecteurProxy,
@@ -31,6 +33,7 @@ interface Entree {
 }
 
 export interface SwarphReaderDeps {
+  config?: MeshConfig;
   mesh: Pick<MeshService, 'read' | 'current'>;
   cell: string;
   proxySocket?: string;
@@ -163,13 +166,17 @@ export class SwarphReader {
     if (hit && (hit.at === -1 || (!fresh && at - hit.at < 5000))) return hit.result;
     for (const [k, e] of this.cache) if (e.at !== -1 && at - e.at >= 5000) this.cache.delete(k);
     const entree = { at: -1 } as Entree;
-    const options: { env: Record<string, string>; unset?: string[] } =
-      args[0] === 'memory'
-        ? {
-            env: { SWARPH_BRAIN_GATEWAY: this.deps.gateway!, SWARPH_SELF: this.deps.cell },
-          }
-        : { env: { SWARPH_SELF: this.deps.cell } };
-    options.unset = ['GBRAIN_TOKEN', 'SWARPH_BRAIN_TOKEN'];
+    const options = {
+      env: envSwarph(
+        this.deps.config ?? {
+          cell: this.deps.cell,
+          gateway: this.deps.gateway ?? '',
+          stateRoot: '',
+          cellFile: '',
+          inboxLog: '',
+        },
+      ),
+    };
     entree.result = (args[0] === 'codegraph' ? creerLecteurCli(this.deps.mesh) : this.lecteur)
       .lire(args, options)
       .catch((err: unknown): MeshExecResult => ({

@@ -279,8 +279,8 @@ test('swarph-cell : une session par cell (409), MESH_GATEWAY_URL et SWARPH_STATE
   );
   expect(text).toContain('MESH_GATEWAY_URL=http://mesh-gw.example:8788');
   expect(text).toContain(`SWARPH_STATE=${join(home, 'swarph_state')}`);
-  // SWARPH_SELF est posé par spawn lui-même, pas par A-I-D
-  expect(text).toMatch(/SWARPH_SELF=\r?\n/);
+  // D314 : SWARPH_SELF vient de la config de ce mesh.
+  expect(text).toContain(`SWARPH_SELF=${c.t.d.mesh!.current().cell}`);
   // une seconde cell : refusée tant que la première vit
   expect(() => c.t.d.agents.spawn({ topicId: topic.topicId, kind: 'swarph-cell' })).toThrow(
     expect.objectContaining({ status: 409, message: expect.stringContaining('déjà ouverte') }),

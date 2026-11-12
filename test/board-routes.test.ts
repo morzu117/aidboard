@@ -1,3 +1,4 @@
+import { injecterEnvFauxSwarph } from './helpers/env-faux-swarph.js';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -14,6 +15,8 @@ const FAKE_SWARPH = join(import.meta.dirname, 'fixtures', 'fake-swarph.sh');
 const FAKE_TAILSCALE = join(import.meta.dirname, 'fixtures', 'fake-tailscale.sh');
 const BOARD = join(import.meta.dirname, 'fixtures', 'board');
 const FAKE_VARS = ['FAKE_SWARPH_LOG', 'FAKE_SWARPH_BOARD', 'FAKE_SWARPH_BOARD_ERROR'] as const;
+
+injecterEnvFauxSwarph();
 
 let t: TestDaemon;
 const saved = Object.fromEntries(FAKE_VARS.map((k) => [k, process.env[k]]));

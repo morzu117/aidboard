@@ -219,6 +219,7 @@ Elle va bouger : on ajoute le moins possible.
   - les routes, `?mesh=`, les 404 et 409, et l'instantané avec son alias ;
   - un mesh en panne, et l'autre qui répond ;
   - le projecteur, avec un `mesh` invalide.
+46.2 commité. Gate vert (3 656 tests). Reprise r1 : 404 « mesh désactivé » restauré pour un mesh sans cell (tests d'origine remis à l'identique), 409 réservé au mesh rebranché ou en erreur ; binaire swarph résolu en chemin absolu au démarrage (réserve du lab, DM 96871). 149 lignes existantes remplacées, surtout main.ts, service.ts, pty/manager.ts et routes/mesh.ts, pour brancher le registre.
 
 ### 46.3 Les écritures par mesh (D313, D317)
 

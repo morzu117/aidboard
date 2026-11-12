@@ -41,6 +41,7 @@ export class AvisMeshService {
   constructor(
     private readonly deps: {
       db: Db;
+      nom?: string;
       config: MeshConfig;
       lecteur: CommitteeReader;
       ecrivain: CommitteeWriter;
@@ -133,8 +134,8 @@ export class AvisMeshService {
   }
   ligne(id: string): LigneAvis {
     const ligne = this.deps.db
-      .prepare("SELECT * FROM avis_mesh WHERE mesh = 'principal' AND id = ?")
-      .get(id) as LigneAvis | undefined;
+      .prepare('SELECT * FROM avis_mesh WHERE mesh = ? AND id = ?')
+      .get(this.deps.nom ?? 'principal', id) as LigneAvis | undefined;
     if (!ligne) throw new AidHttpError(404, 'demande inconnue');
     return this.etatConfirmation(ligne);
   }
@@ -173,10 +174,8 @@ export class AvisMeshService {
     return {
       demandes: (
         this.deps.db
-          .prepare(
-            "SELECT * FROM avis_mesh WHERE mesh = 'principal' ORDER BY date DESC, id DESC LIMIT 20",
-          )
-          .all() as LigneAvis[]
+          .prepare('SELECT * FROM avis_mesh WHERE mesh = ? ORDER BY date DESC, id DESC LIMIT 20')
+          .all(this.deps.nom ?? 'principal') as LigneAvis[]
       ).map((l) => this.demande(l)),
     };
   }

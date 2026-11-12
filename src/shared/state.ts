@@ -12,6 +12,7 @@ export interface StateSnapshot {
   /** présent seulement quand `swairm.bin` est configuré (D43) */
   swairm?: { enabled: true };
   /** présent seulement quand `mesh.cell` est configuré (chantier 12) */
+  meshes?: Record<string, NonNullable<StateSnapshot['mesh']>>;
   mesh?: {
     state: MeshState;
     inbox: MeshDm[];
