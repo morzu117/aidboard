@@ -223,12 +223,40 @@ Elle va bouger : on ajoute le moins possible.
 
 ### 46.3 Les écritures par mesh (D313, D317)
 
-- Le corps v3, avec `mesh = { nom, cell, gateway, proxy }` et son jeu de clés exact. La v2 refuse toute clé `mesh`.
-- La porte prend le mesh du corps signé, et rend la demande périmée si l'un des quatre champs a changé.
-- Le proxy du mesh signé.
-- La transition depuis la v2.
-- Le mesh obligatoire dans les routes d'écriture.
-- Le cloisonnement côté A-I-D : les cibles du même mesh, la citation par jeton du 40 limitée au mesh, et aucun pré-remplissage d'un mesh vers un autre.
+- **Le corps v3** (`src/shared/pda.ts`).
+  - `CorpsDemandeV3` reprend les clés de la v2, plus `mesh: { nom, cell, gateway, proxy }`.
+  - `gateway` vaut `empreinteGateway(url)` = `sha256(jsonCanonique([normaliserGateway(url)]))`, ou la même chose sur la chaîne vide quand il n'y a pas de gateway. `proxy` vaut `empreinteChemin(proxySocket)`. Les deux sont en base64url.
+  - Le résumé vaut `[<nom>] ` suivi de `resumeAction(action, params)`, au plus 200 caractères.
+  - `lireCorpsDemandeV3` est strict :
+    - le jeu de clés est exact, au premier niveau comme dans `mesh` ;
+    - l'action est dans `ACTIONS_MESH` ;
+    - `nom` suit la forme de D311, et `cell` est une chaîne de 1 à 64 caractères ;
+    - `gateway` et `proxy` sont des empreintes sha256 en base64url ;
+    - le résumé est recalculé.
+  - La v2 refuse déjà toute clé en trop : un test le prouve pour `mesh`.
+- **L'émission.** `signerDemande` émet une v3 pour toute action de `ACTIONS_MESH`, et refuse une action mesh sans mesh. Les autres actions restent en v1 ou en v2.
+- **Le stockage.** La migration 031 ajoute `pda_demandes.mesh TEXT`. C'est le JSON canonique du champ `mesh` signé, et il vaut NULL pour une v1 ou une v2. Cette colonne n'est pas une clé d'identité : NULL veut dire « pas une v3 ».
+- **La porte, à l'exécution d'une action mesh.**
+  - Elle reconstruit le corps (en v3 si `mesh` n'est pas NULL, en v2 sinon) et vérifie `hDemande` comme aujourd'hui. Le hachage couvre donc le mesh, et une colonne `mesh` modifiée en base rend la demande **périmée**.
+  - Pour une v3, elle recalcule `{ nom, cell, gateway, proxy }` depuis la config courante du mesh `nom`. Si ce mesh n'existe plus, est inactif ou diffère sur l'un des quatre champs, la demande est **périmée**.
+  - Pour une v2 encore ouverte (transition), elle exécute sur `principal`, jusqu'à l'échéance de la demande.
+  - Elle exécute avec les services **du mesh signé**, jamais avec ceux de l'écran ni du mesh par défaut. Cela vaut pour la relecture (`preparer`), les lecteurs de board et le socket du proxy.
+- **Les routes d'écriture.**
+  - Chaque route qui crée une demande d'action mesh prend `mesh` dans le corps de la requête. Elle répond 400 `mesh_requis` sans ce champ, 404 pour un mesh inconnu et 409 pour un mesh inactif. Elle garde son 409 `proxy_absent` et son refus en lecture seule.
+  - Le web existant envoie `mesh: 'principal'`. Le choix du mesh dans l'interface vient en 46.5.
+- **Le cloisonnement (D317).**
+  - La cible (carte, pair, canal, salle) est relue avec les services du mesh signé. Une cible inconnue sur ce mesh rend la demande impossible à créer, ou périmée à l'exécution.
+  - Une salle d'avis n'écrit que sur son mesh (`avis_mesh.mesh`), et la citation par jeton du 40 ne résout qu'une carte de ce mesh.
+- **Le résultat signé du 45 ne change pas.**
+- **Tests :**
+  - le lecteur v3 : une clé en trop ou manquante, au premier niveau et dans `mesh`, un nom hors forme, une action hors mesh, un résumé faux, et une v2 portant `mesh` ;
+  - l'émission en v3 pour chaque action mesh ;
+  - la porte : un mesh retiré, une cell, un gateway ou un socket changé, et la colonne `mesh` modifiée en base donnent chacun **périmé** ;
+  - deux meshes avec deux faux proxies : l'écriture part sur le mesh signé, et l'autre proxy ne reçoit rien ;
+  - une v2 ouverte s'exécute sur `principal` ;
+  - les routes, avec le 400, le 404 et le 409 ;
+  - une cible d'un autre mesh refusée ;
+  - la citation d'une salle limitée à son mesh.
 - **Ce code est relu par le lab.**
 
 ### 46.4 Le téléphone (D313)
