@@ -115,6 +115,7 @@ Le reste du brouillon tient : l'objet de la salle, le format JSON du bulletin, l
 - **Les routes**, locales et jamais réexposées en mode host :
   - `POST /api/avis-mesh` `{question, cells, carte, echeances}` : nettoyage, contrôle des familles (D303), puis demande de confirmation de l'action `mesh.avis`. Il exige `X-AID-Confirm: avis`, comme au 39 ;
   - `GET /api/avis-mesh` : les 20 dernières demandes ;
+  - `GET /api/avis-mesh/config` : la cell d'A-I-D, celle du baseline et la table des familles (D303), et rien d'autre ;
   - `GET /api/avis-mesh/:id` : relit les résultats de la motion et rend `aid-avis-mesh/1`, avec la phase, les échéances et la colonne du baseline ;
   - `POST /api/avis-mesh/:id/baseline-absent` : demande de confirmation de l'action `mesh.avis.baseline-absent`. Il exige `X-AID-Confirm: avis`.
 - **La base** : une table `avis_mesh` (migration à numéroter au moment du point), avec `id`, `question`, les sièges (cell, rôle, famille), la carte, le canal, l'id de la motion, le jeton de citation, la date et l'état. Elle ne garde aucun corps de bulletin : ils sont relus au gateway à chaque ouverture.
@@ -150,7 +151,7 @@ Le lecteur `committee.motion` et `committee.results` par le CLI (`--json`, argv 
 
 ### 40.3 L'envoi, la salle et le baseline (D294, D295, D296, D301, D303)
 
-L'action `mesh.avis` (`rooms open` puis `motion --open`) dans la porte des confirmations, avec son aperçu, et l'action `mesh.avis.baseline-absent`. Les configs `mesh.avis.baseline` et `mesh.avis.familles`, et leur contrôle. La table `avis_mesh` et les quatre routes, au contrat déjà écrit par le client du 40.4. La fusion des deux définitions de `BulletinAvis`. Par le CLI ; par le proxy, « non relayé » tant que #1581 n'existe pas.
+L'action `mesh.avis` (`rooms open` puis `motion --open`) dans la porte des confirmations, avec son aperçu, et l'action `mesh.avis.baseline-absent`. Les configs `mesh.avis.baseline` et `mesh.avis.familles`, et leur contrôle. La table `avis_mesh` et les cinq routes, au contrat déjà écrit par le client du 40.4. La fusion des deux définitions de `BulletinAvis`. Par le CLI ; par le proxy, « non relayé » tant que #1581 n'existe pas.
 
 ### 40.4 La boîte et le tableau (D302)
 
