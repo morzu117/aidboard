@@ -2,7 +2,7 @@
 
 | Champ | Valeur |
 |---|---|
-| État | **Révision 0, 12 novembre 2026.** Julien a validé la spec et tranché Q-J1. PASS du lab sur la spec, révision 1 (DM 96814). |
+| État | **Révision 1, 12 novembre 2026.** Julien a validé la spec et tranché Q-J1. PASS du lab sur la spec, révision 1 (DM 96814), puis sur le plan, révision 0 (DM 96818). La révision 1 corrige D305 et ajoute D310. |
 | Emplacement final | `docs/chantiers/45-confirmations-completes.md` sur `main` |
 | Base | `feat/40-avis-mesh` (PR #152), parce que le 45 couvre les trois actions du 40. La PR du 45 se rebase sur `main` après le merge de #152. |
 | Spec | `specs/confirmations-completes-45.md`, révision 1 (dossier de travail, hors dépôt). |
@@ -58,7 +58,7 @@ Ces deux écarts valent pour toutes les actions confirmées : merge, push, netto
 
 ### D305. Le résultat signé
 
-Après l'exécution d'une demande confirmée, le daemon signe un résultat et le publie sur le relais.
+Depuis tout chemin de D307, le daemon signe un résultat et le publie sur le relais.
 
 - **Le corps.** C'est un JSON canonique `{ v: 1, id, action, resultat, raison, code, emis }`.
   - `resultat` vaut `executee`, `echouee`, `perimee` ou `annulee`.
@@ -69,7 +69,7 @@ Après l'exécution d'une demande confirmée, le daemon signe un résultat et le
 - **Les valeurs sont fermées.** Chaque champ est vérifié par une liste fermée avant la signature. Une valeur hors de la liste ne part pas, et elle est journalisée sans contenu.
 - **La signature** est en ES256 avec la clé du daemon, sur `"aid-pda-resultat-v1\n" ‖ corps`. Ce contexte est distinct de celui des demandes (`aid-pda-demande-v1`), pour qu'une enveloppe de demande ne puisse pas servir de résultat, et inversement.
 - **La forme** est l'enveloppe actuelle `{ corps: base64url, sig }`. Elle est signée mais pas chiffrée : le relais peut lire ces codes.
-- **Les demandes qui ne donnent aucun résultat :** une demande refusée, expirée ou annulée avant la réponse. Le téléphone sait déjà qu'il l'a refusée.
+- **Les demandes qui ne donnent aucun résultat :** une demande refusée, ou expirée. Le téléphone sait déjà qu'il l'a refusée.
 
 ### D306. Le relais garde les résultats
 
@@ -128,6 +128,17 @@ Après l'exécution d'une demande confirmée, le daemon signe un résultat et le
 | Rejouer un vieux résultat | Les id sont uniques, donc le résultat ne s'attache qu'à sa propre demande. | — |
 | Lire les codes en clair | Il apprend : telle demande, telle action, exécutée ou échouée. | C'est déjà le cas aujourd'hui, puisque le relais voit passer la demande et la réponse. Le résultat n'ajoute que des codes, aucun texte. |
 
+### D310. Les règles de construction (relecture du plan, DM 96818)
+
+- **Le résultat publié est construit depuis la ligne relue après l'écriture** (`resultat`, `raison`, `envoi.code`), jamais depuis des valeurs en mémoire. Le téléphone montre ainsi exactement ce que montre le Mac. Tous les `terminer()` d'`executerConfirmee` sont couverts, chemins « perime » compris.
+- **Le téléphone rattache un résultat par le `corps.id` signé seulement**, jamais par la position dans la liste ni par l'id du chemin.
+- **La borne de 1 Kio de `PUT /resultats` s'applique dans la boucle de lecture**, avant l'authentification, comme les bornes actuelles. Jamais après le décodage.
+- **La priorité des libellés de D308 :**
+  1. l'issue incertaine l'emporte, que ce soit par le code `upstream_ambiguous`, `delai` ou `interrompu`, ou par la raison `delai`. La raison `delai` rend l'issue incertaine pour toute action, mesh comprise ;
+  2. puis la raison `numero` ;
+  3. puis le `resultat` de base.
+- **Le dernier segment d'un chemin** ignore une barre finale : `/a/b/` donne `b`.
+
 ## 5. Points
 
 ### 45.1
@@ -146,6 +157,7 @@ Après l'exécution d'une demande confirmée, le daemon signe un résultat et le
 - `web/src/AppPda.tsx` utilise `ParametresSignes` avec `surface="telephone"`.
 - `web/src/ui/PanneauConfirmations.tsx` : chaque demande, ouverte ou récente, montre ses paramètres sous un `<details>` « Paramètres signés », replié par défaut, avec `surface="mac"`. Le type client de la liste gagne `params`.
 - **Tests :**
+  - le dernier segment avec une barre finale (`/a/b/` donne `b`) ;
   - le test de la liste exacte des clés (`test/confirmations-porte.test.ts`) est gardé, avec `params` ajouté, plus une assertion négative : ni `numero` ni `numero_mac`, pour le cookie admin comme pour le bearer admin ;
   - `no-store` sur la liste ;
   - `params` NULL donne `null` ;
@@ -161,11 +173,11 @@ Après l'exécution d'une demande confirmée, le daemon signe un résultat et le
 - `src/shared/pda.ts` : le contexte `aid-pda-resultat-v1`, le type `CorpsResultatV1`, ainsi que `signerResultat` et `verifierResultat`, avec les listes fermées.
 - `src/relais/index.ts` : les routes `PUT /resultats/:id` et `GET /resultats`, le préflight, les bornes et la purge.
 - `src/daemon/pda/` : la file de publication, alimentée depuis `executerConfirmee`, le numéro faux et `annuler()`.
-- **Tests :** le relais hostile, les contextes croisés, les bornes, la purge et les retentatives.
+- **Tests :** le relais hostile, les contextes croisés, les bornes (dans la boucle de lecture), la purge, les retentatives, et la construction depuis la ligne relue pour chaque chemin de D307.
 
 ### 45.3
 
-**Le téléphone montre le résultat (D308).** « Réponses récentes », la relecture à +20 s et +45 s, et le tableau des libellés. **Tests :** chaque ligne du tableau, une enveloppe forgée jetée, une action différente jetée.
+**Le téléphone montre le résultat (D308).** « Réponses récentes », la relecture à +20 s et +45 s, et le tableau des libellés. **Tests :** chaque ligne du tableau et la priorité de D310, une enveloppe forgée jetée, une action différente jetée, et un relais qui sert le résultat X sous l'id Y (rattaché à X par le `corps.id` signé, ou jeté).
 
 ### 45.4
 
