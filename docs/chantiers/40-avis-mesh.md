@@ -2,12 +2,12 @@
 
 | Champ | Valeur |
 |---|---|
-| État | **Spec et plan, révision 1, 11 novembre 2026. Spec validée par Julien.** Écrite contre `swarph committee` de swarph-cli 0.75.0, comme le lab l'a demandé (DM 93080, point 6). Reprend la spec révision 0 (9 novembre), les réponses du lab C2, C3 et C5 (DM 93087 et 93255), et le PASS du lab sur le charter, sous quatre corrections, intégrées en D297 (DM 93110). Révision 1 : réponses du lab à C6, C7 et C8 (DM 96738). Le lab relit la spec : le 40 touche au contrat swarph. |
+| État | **Spec et plan, révision 2, 12 novembre 2026. Spec validée par Julien ; C1 tranché, validé par Julien.** Écrite contre `swarph committee` de swarph-cli 0.75.0, comme le lab l'a demandé (DM 93080, point 6). Reprend la spec révision 0 (9 novembre), les réponses du lab C2, C3 et C5 (DM 93087 et 93255), et le PASS du lab sur le charter, sous quatre corrections, intégrées en D297 (DM 93110). Révision 1 : réponses du lab à C6, C7 et C8 (DM 96738). Révision 2 : la réponse du commander à C1, relayée par le lab (DM 96740) et validée par Julien : la cell d'A-I-D préside, la cell du lab siège en baseline. La variante B est retirée. Le lab relit la spec : le 40 touche au contrat swarph. |
 | Emplacement final | `docs/chantiers/40-avis-mesh.md` sur `main` |
 | Base | `main` (c6d3332, v0.7.2) |
 | Organisation | Comme au 42. morzu-vps gère le chantier. Codex CLI écrit le code et les tests de chaque point. morzu-vps relit, lance le gate, commite et ouvre la PR. |
 | Validation | Le lab valide le chantier, comme pair distinct du constructeur, parce qu'il touche au mesh. Julien fait la recette. Merge : CI verte, validation du lab, puis oui de Julien. |
-| Bloqué par | **C1** (le commander), voir §8. 40.1 et 40.2 se construisent sans lui, par le CLI. 40.3 l'attend. Le passage par le proxy attend la carte #1581, après la phase proxy de #20. |
+| Bloqué par | Plus rien pour le CLI : A-I-D préside en direct avec swarph-cli 0.73.0 ou plus. Le passage par le proxy, lectures et écritures, attend la carte #1581, après la phase proxy de #20. C9 (les familles, §8) est à confirmer par le lab avant la recette. |
 
 ## 1. Pourquoi
 
@@ -30,13 +30,13 @@ Le 39 donne un deuxième avis : la même question part à N agents Claude indép
 
 **Cible.**
 - Dans la boîte du 39, un choix « au Mac » (le 39) ou « au mesh » (le 40). Au mesh, on choisit les cells, la carte liée et les échéances.
-- A-I-D ouvre une salle et une motion par question (variante A de C1), ou les prépare pour le lab qui préside (variante B).
+- A-I-D ouvre une salle et une motion par question, comme chair. La cell du lab y siège en baseline (C1).
 - A-I-D lit les résultats, calcule l'accord comme au 39, et les montre dans le même tableau, avec une colonne par cell.
 - Les demandes au mesh se rouvrent en lecture, comme celles du 39.
 
 **Hors-périmètre.**
 - Le tour `rebuttal` compté : il s'affiche en texte seul.
-- `recast` et `baseline-absent` : ils restent au chair, à la main.
+- `recast` : il reste au chair, à la main. `baseline-absent` entre dans le périmètre (D295).
 - Une réponse de Codex dans une cell : chaque cell répond avec l'agent de son propriétaire, A-I-D n'en choisit aucun.
 - Plusieurs motions ouvertes à la fois dans une salle (C3 : une motion par question).
 - Toute écriture sur un board en dehors de la salle.
@@ -45,26 +45,34 @@ Le 39 donne un deuxième avis : la même question part à N agents Claude indép
 
 ### D294. Une salle « avis » par demande, une motion par question
 
-- **La salle.** Une demande au mesh ouvre une salle, liée à une carte (`--card-id`), avec la liste fermée des sièges : les cells choisies, `role: "seat"`. Son nom est `avis-<id>`, où `<id>` est l'id de la demande, au format du 39 (`ID_ASK`).
+- **La salle.** Une demande au mesh ouvre une salle, liée à une carte (`--card-id`). Son nom est `avis-<id>`, où `<id>` est l'id de la demande, au format du 39 (`ID_ASK`).
+- **Les sièges**, une liste fermée, chacun avec sa famille de modèle (D303) :
+  - la cell d'A-I-D, `role: "chair"` : le gateway veut que le chair soit la cell qui ouvre la salle, sinon il répond 403 ;
+  - la cell du lab, `role: "baseline"` (D295) ;
+  - les cells choisies, `role: "seat"`, de 2 à 8.
+  Le gateway exige exactement un chair, un baseline et au moins un siège qui vote (DM 96740).
 - **La motion.** Une seule motion par demande (C3), quel que soit le nombre de sous-questions. Le texte de la motion est la question citée (D297). Les `--options` valent `avis,objection` (C7, DM 96738) : le gateway en exige deux distinctes, et le vrai verdict est dans le corps du bulletin. **L'abstention passe uniquement par `--outcome cannot_evaluate`**, jamais par une option : le charter le dit.
 - **Les échéances.** Le tour `positions` est obligatoire : 24 h par défaut, entre 1 h et 7 jours. Les tours `rebuttal` et `vote` sont facultatifs, désactivés par défaut.
 - **L'id de la motion** rendu par `motion --open --json` est gardé dans la base d'A-I-D, car le gateway ne liste plus une motion close (DM 93255).
 
-### D295. Qui préside (C1, ouvert)
+### D295. A-I-D préside, le lab siège en baseline (C1, tranché)
 
-- **Variante A, A-I-D préside.** La cell d'A-I-D reçoit le rôle de chair. A-I-D lance `rooms open` puis `motion --open`, et lit les résultats.
-- **Variante B, le lab préside.** A-I-D prépare le paquet : le charter, la question citée, les sièges, la carte et les échéances. Il l'envoie au chair du lab par `mesh.send`, sous confirmation. Le chair ouvre la salle, y ajoute la cell d'A-I-D comme **membre du canal, sans siège** (C8 : lire une motion demande d'être membre, `_require_member`), et répond avec le canal et l'id de la motion, qu'A-I-D enregistre à la main ou à partir de la réponse. A-I-D ne fait ensuite que lire.
-- **Le plan construit les deux.** Une option de configuration, `mesh.avis.chair` (`aid` ou `lab`), choisit la variante. Sa valeur par défaut est `lab`, tant que le commander n'a pas tranché. La boîte est la même dans les deux cas ; seul l'envoi change.
+- **C1.** Le commander a répondu (DM 96740, relayé par le lab) : la cell d'A-I-D peut présider une salle, avec la cell du lab en baseline. Julien a validé. La variante B (le lab préside) est retirée, avec l'option `mesh.avis.chair` et la route d'enregistrement de la motion.
+- **Les écritures.** A-I-D lance `rooms open`, puis `motion --open`, et lit les résultats. Les deux écritures forment une seule action confirmée (D296).
+- **La cell du baseline** se règle par `mesh.avis.baseline`, sans valeur par défaut dans le dépôt. Sans elle, la boîte au mesh dit « baseline non configuré » et n'envoie rien.
+- **Le baseline bloque le tour positions.** Le gateway garde le tour `positions` ouvert tant que le baseline n'a pas posté, sauf si le chair le déclare absent. A-I-D ajoute donc l'action « Déclarer le baseline absent » (`swarph committee baseline-absent`), toujours confirmée, disponible seulement pendant le tour `positions` et après son échéance.
+- **Le bulletin du baseline** s'affiche dans sa propre colonne, marquée « baseline », avec les mêmes états. **Il ne compte pas dans l'accord**, qui porte sur les seules cells choisies.
 
 ### D296. Les verbes et leur passage
 
 - **Lectures** : la motion ouverte d'un canal (`swarph committee motion --json`, verbe proxy `committee.motions.list`) et une motion par son id (`swarph committee results --motion ID --json`, verbe proxy `committee.motion.get`). Elles ne consomment rien (invariant 4).
-- **Écritures, variante A seulement** : `committee.rooms.open` et `committee.motion.open`. Le lab ne les ajoutera au proxy que si le commander répond oui à C1. Elles passent par la porte des confirmations, comme une nouvelle action `mesh.avis`, toujours confirmée, avec un aperçu qui montre la salle, les sièges, la carte, les échéances et le texte exact de la motion.
+- **Écritures** : `committee.rooms.open` et `committee.motion.open` forment l'action `mesh.avis`, et `committee.baseline-absent` l'action `mesh.avis.baseline-absent`. Les deux passent par la porte des confirmations et sont toujours confirmées.
+  - L'aperçu de `mesh.avis` montre la salle, les sièges avec leur rôle et leur famille, la carte, les échéances et le texte exact de la motion.
+  - Si `rooms open` réussit et que `motion --open` échoue, la demande passe à l'état `salle-sans-motion`, avec le canal gardé. Rien n'est relancé tout seul.
 - **Le transport.** Les deux formes du 44 :
-  - par le proxy, quand la carte #1581 y aura ajouté les verbes `committee` (C6) ; #1581 dépend de la phase proxy de #20, sans date ;
-  - par le CLI, si la cell a encore son jeton (avant la bascule du 44).
-  Tant que C6 n'a pas de réponse, le transport proxy rend « non relayé par le proxy » et ne tente rien d'autre. Il n'y a jamais de repli automatique du proxy vers le CLI.
-- **Variante B** : un seul `mesh.send`, l'écriture déjà connue du 35 bis, vers le chair du lab.
+  - par le CLI, si la cell a encore son jeton (avant la bascule du 44) : swarph-cli 0.73.0 ou plus suffit (DM 96740) ;
+  - par le proxy, quand la carte #1581 y aura ajouté les verbes `committee`. #1581 couvre les lectures, `rooms.open` et `motion.open` ; elle dépend de la phase proxy de #20, sans date. `baseline-absent` n'y figure pas encore.
+  Tant qu'un verbe n'est pas relayé, le transport proxy rend « non relayé par le proxy » et ne tente rien d'autre. Il n'y a jamais de repli automatique du proxy vers le CLI.
 
 ### D297. Le charter « avis » et la question citée (lab, DM 93110)
 
@@ -105,20 +113,28 @@ Le reste du brouillon tient : l'objet de la salle, le format JSON du bulletin, l
 ### D301. Les routes et la base
 
 - **Les routes**, locales et jamais réexposées en mode host :
-  - `POST /api/avis-mesh` `{question, cells, carte, echeances}` : nettoyage, puis demande de confirmation (variante A) ou préparation de l'envoi au chair (variante B). Il exige `X-AID-Confirm: avis`, comme au 39 ;
+  - `POST /api/avis-mesh` `{question, cells, carte, echeances}` : nettoyage, contrôle des familles (D303), puis demande de confirmation de l'action `mesh.avis`. Il exige `X-AID-Confirm: avis`, comme au 39 ;
   - `GET /api/avis-mesh` : les 20 dernières demandes ;
-  - `GET /api/avis-mesh/:id` : relit les résultats de la motion et rend `aid-avis-mesh/1` ;
-  - `POST /api/avis-mesh/:id/motion` `{canal, motion}` : variante B, enregistre le canal et l'id que le chair a rendus.
-- **La base** : une table `avis_mesh` (migration à numéroter au moment du point), avec `id`, `question`, les cells, la carte, le canal, l'id de la motion, le jeton de citation, la variante, la date et l'état. Elle ne garde aucun corps de bulletin : ils sont relus au gateway à chaque ouverture.
+  - `GET /api/avis-mesh/:id` : relit les résultats de la motion et rend `aid-avis-mesh/1`, avec la phase, les échéances et la colonne du baseline ;
+  - `POST /api/avis-mesh/:id/baseline-absent` : demande de confirmation de l'action `mesh.avis.baseline-absent`. Il exige `X-AID-Confirm: avis`.
+- **La base** : une table `avis_mesh` (migration à numéroter au moment du point), avec `id`, `question`, les sièges (cell, rôle, famille), la carte, le canal, l'id de la motion, le jeton de citation, la date et l'état. Elle ne garde aucun corps de bulletin : ils sont relus au gateway à chaque ouverture.
 
 ### D302. La boîte et le tableau
 
 - La boîte du 39 gagne une bascule « Au Mac » / « Au mesh », visible seulement si la cell est connectée.
 - Au mesh :
-  - les cells se cochent dans la liste de `mesh.peers` (2 au moins, 8 au plus), sans la cell d'A-I-D ;
+  - les cells se cochent dans la liste de `mesh.peers` (2 au moins, 8 au plus), sans la cell d'A-I-D ni celle du baseline ;
+  - chaque cell affiche sa famille (D303). Une cell sans famille ne se coche pas, et la boîte dit pourquoi ; deux familles identiques bloquent l'envoi ;
   - la carte liée se choisit par son numéro, et la boîte affiche son titre pour vérifier ;
   - l'échéance du tour `positions`, et les tours facultatifs.
 - Le tableau est celui du 39, avec le nom de la cell en tête de colonne, la phase et les échéances en tête, les pastilles « scellé », « absent », « abstention » et « invalide », et tout en texte React.
+- La colonne du baseline, marquée « baseline », vient après celles des cells, hors de l'accord. Pendant le tour `positions`, après son échéance, un bouton « Déclarer le baseline absent » lance l'action confirmée.
+
+### D303. Les familles de modèle
+
+- Le gateway exige que chaque siège, observateurs compris, déclare une famille de modèle différente. La famille est déclarée dans le fichier des sièges et n'est pas vérifiée : elle doit être honnête (DM 96740).
+- A-I-D lit les familles dans la config, `mesh.avis.familles`, une table de la cell vers sa famille, remplie une fois par Julien. Elle couvre la cell d'A-I-D, celle du baseline et les cells qui peuvent siéger. A-I-D ne devine jamais une famille.
+- Avant l'envoi, A-I-D refuse une demande où un siège n'a pas de famille, ou où deux sièges, chair et baseline compris, déclarent la même. Le refus nomme les cells en cause.
 
 ## 5. Points
 
@@ -132,18 +148,20 @@ Le reste du brouillon tient : l'objet de la salle, le format JSON du bulletin, l
 Le lecteur `committee.motion` et `committee.results` par le CLI (`--json`, argv en tableau, jamais de shell), avec la lecture défensive de la réponse du gateway. Côté proxy, les deux verbes sont déclarés mais rendent « non relayé par le proxy » tant que C6 n'est pas tranché. Tests avec un faux `swarph` qui rend des résultats scellés, ouverts, avec abstention, absent et invalide.
 - 40.2 : lecteur `CommitteeReader` (`src/daemon/mesh/committee.ts`), parseur `src/shared/committee.ts`, 9 tests. La forme exacte de la réponse du gateway et le type de l'id de motion restent à vérifier à la recette.
 
-### 40.3 L'envoi, variantes A et B (D294, D295, D296, D301)
+### 40.3 L'envoi, la salle et le baseline (D294, D295, D296, D301, D303)
 
-L'action `mesh.avis` dans la porte des confirmations, avec son aperçu (variante A), et la préparation du `mesh.send` vers le chair (variante B). La table `avis_mesh` et les routes. **Attend C1, et C6 pour le transport proxy.**
+L'action `mesh.avis` (`rooms open` puis `motion --open`) dans la porte des confirmations, avec son aperçu, et l'action `mesh.avis.baseline-absent`. Les configs `mesh.avis.baseline` et `mesh.avis.familles`, et leur contrôle. La table `avis_mesh` et les quatre routes, au contrat déjà écrit par le client du 40.4. La fusion des deux définitions de `BulletinAvis`. Par le CLI ; par le proxy, « non relayé » tant que #1581 n'existe pas.
 
 ### 40.4 La boîte et le tableau (D302)
 
 La bascule, le choix des cells, de la carte et des échéances, le tableau par cell, et la liste des demandes. Les tests web de chaque état.
 - 40.4 : client `web/src/data/avis-mesh.ts` (contrat de D301, à implémenter tel quel par le 40.3), `FormulaireAvisMesh`, `TableauAvisMesh` et la liste sœur `DemandesAvisMesh`. 3 lignes de la boîte et de la liste du 39 remplacées pour y brancher la bascule. 9 tests web ; les 1 105 tests web passent.
 
+**Reprise de la révision 2.** La famille de chaque cell dans la boîte, et ses deux refus. La cell du baseline retirée de la liste. La colonne « baseline » hors de l'accord, et le bouton « Déclarer le baseline absent ». Le client gagne la route `baseline-absent`.
+
 ### 40.5 L'e2e et la fiche de recette
 
-Un e2e avec un faux `swarph`. La fiche `docs/recette-chantier-40-avis-mesh.md` : une vraie salle avec deux cells, le scellé, une abstention, un absent, l'accord, puis la relecture après la clôture.
+Un e2e avec un faux `swarph`. La fiche `docs/recette-chantier-40-avis-mesh.md` : une vraie salle avec deux cells et le baseline, le scellé, une abstention, un absent, le baseline déclaré absent, l'accord, puis la relecture après la clôture.
 
 ## 6. Pièges
 
@@ -153,19 +171,24 @@ Un e2e avec un faux `swarph`. La fiche `docs/recette-chantier-40-avis-mesh.md` :
 - **`--as` explicite** à chaque appel de `swarph committee` : sinon le CLI retombe sur `$SWARPH_SELF`.
 - **Aucun repli du proxy vers le CLI** : un verbe non relayé est une réponse, pas une panne à contourner.
 - **Le fan-out pendant le scellé n'est pas vérifié** (DM 96738) : un membre non-siège reçoit-il le texte d'un bulletin pendant que le tour est scellé (la fuite de #1326) ? La recette le teste avant d'y compter.
+- **Le baseline bloque le tour.** Sans son bulletin, le tour `positions` ne se ferme pas, même après l'échéance : seul le chair le débloque, par `baseline-absent`.
+- **Les familles sont déclarées, pas vérifiées.** Une famille fausse trompe le gateway ; A-I-D ne la devine jamais.
 - **Le coût est chez les autres.** Chaque siège dépense le quota de son propriétaire, qui consent à l'ouverture de la salle. Rien ne relance un siège.
 
 ## 7. Fini quand
 
-- Une demande au mesh ouvre une salle et une motion (A) ou part au chair (B), sous confirmation.
+- Une demande au mesh ouvre une salle et une motion, sous confirmation, avec le baseline.
 - Le tableau montre l'accord par cell, avec le scellé, l'abstention, l'absent et l'invalide.
 - La recette réelle passe avec deux cells, et le lab valide le chantier.
 - Le gate est vert, sous Node 22 et 24.
 
 ## 8. Questions ouvertes
 
-- **C1, pour le commander, par le lab** : la cell d'A-I-D peut-elle être chair ? Sinon, variante B : le lab préside, et A-I-D lit (D295). Le lab relance le commander (DM 96737).
+- **C9, pour le lab** : les familles. Le gateway attend-il des valeurs dans une liste fermée, et à quelle finesse (un fournisseur, ou un modèle) ? Deux cells servies par le même fournisseur peuvent-elles siéger ensemble ? Le baseline suit-il le même charter et le même format de bulletin ?
 - **C4, pour Julien** : les sièges et les échéances de la première recette.
+
+**Réponse du commander (DM 96740), intégrée :**
+- **C1** : la cell d'A-I-D préside, la cell du lab siège en baseline. Julien a validé : D295.
 
 **Réponses du lab (DM 96738), intégrées :**
 - **C6** : le proxy ne relaie aucun verbe `committee`. La carte #1581 ajoutera `committee.motion.get` et `committee.motions.list` en lecture, et les écritures seulement si C1 est oui. Elle dépend de la phase proxy de #20 : D296.
