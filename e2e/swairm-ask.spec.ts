@@ -9,6 +9,20 @@ const cli = join(import.meta.dirname, '../dist/cli/aid.js');
 const fixtures = join(import.meta.dirname, '../test/fixtures');
 const question = '1. Faut-il vérifier les tests ?\n2. Faut-il livrer maintenant ?';
 
+let daemon: { dossier: string; env: NodeJS.ProcessEnv } | null = null;
+
+// Le hook dispose de son propre délai, même après expiration du test ou fermeture du contexte.
+test.afterEach(() => {
+  if (!daemon) return;
+  const { dossier, env } = daemon;
+  try {
+    execFileSync(process.execPath, [cli, 'stop', '--force'], { env, timeout: 30_000 });
+  } finally {
+    rmSync(dossier, { recursive: true, force: true });
+    daemon = null;
+  }
+});
+
 // Un daemon par mode : le faux CLI lit son mode dans son environnement au lancement.
 for (const [indice, mode] of ['ok', 'refus', 'aucun'].entries()) {
   test(`demande d’avis sur le faux swairm : ${mode}`, async ({ browser }) => {
@@ -63,6 +77,7 @@ for (const [indice, mode] of ['ok', 'refus', 'aucun'].entries()) {
       FAKE_SWAIRM_ASK_MODE: mode,
       FAKE_SWAIRM_ASK_COPY: join(dossier, 'question'),
     };
+    daemon = { dossier, env };
     const contexte = await browser.newContext();
     try {
       execFileSync(process.execPath, [cli], { env, timeout: 40_000 });
@@ -106,11 +121,6 @@ for (const [indice, mode] of ['ok', 'refus', 'aucun'].entries()) {
       }
     } finally {
       await contexte.close();
-      try {
-        execFileSync(process.execPath, [cli, 'stop', '--force'], { env, timeout: 30_000 });
-      } finally {
-        rmSync(dossier, { recursive: true, force: true });
-      }
     }
   });
 }

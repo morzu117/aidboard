@@ -48,6 +48,7 @@ L'e2e du 46 et celui du 48 (`e2e/helpers-multi-mesh.ts`) n'ont pas ce problème 
   - le test web du plantage, rouge avant la correction et vert après ;
   - l'e2e entier sur le VPS, un worker : aucun échec, et aucun daemon de test en vie à la fin ;
   - le gate entier.
+50.2 commité. Gate vert (3 889 tests). E2e entier vert (132 tests), aucun daemon résiduel.
 
 ## 5. Fini quand
 

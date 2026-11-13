@@ -38,7 +38,8 @@ export function EcranMesh({
       : actifs.some((m) => m.nom === garde)
         ? garde!
         : 'principal';
-  const disponible = meshes.length === 0 || actifs.some((m) => m.nom === mesh);
+  const disponible =
+    meshes.every((m) => !m.cell) || meshes.length === 0 || actifs.some((m) => m.nom === mesh);
   if (
     meshes.length > 0 &&
     garde !== null &&
