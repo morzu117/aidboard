@@ -63,6 +63,7 @@ La CI lance le gate (typecheck, lint, build, tests) sous Node 22 et 24, et le la
   - `npm run gate:e2e` en entier sous Node 22 (`mise exec node@22 --`), avec `CI=1` ;
   - le gate entier ;
   - la CI de la PR, job `e2e` compris.
+51.3 commité. Gate vert (3 889 tests). `gate:e2e` entier vert sous Node 22 avec `CI=1` : le paquet, l'archive serveur (démarrage et `aid doctor` sans Node) et 132 tests Playwright ; aucun daemon résiduel.
 
 ## 4. Fini quand
 
