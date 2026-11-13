@@ -11,7 +11,7 @@ import { join } from 'node:path';
 // `Host`, pose l'identité et l'adresse, et remplace celles que le client aurait mises.
 
 export const NOM_E2E = 'aid-e2e.ts.net';
-export const LOGIN_E2E = 'julien@exemple';
+export const LOGIN_E2E = 'utilisateur@exemple';
 
 export function certificat(dir: string): { key: Buffer; cert: Buffer } {
   const key = join(dir, 'serve.key');
@@ -47,7 +47,7 @@ function entetes(h: NodeJS.Dict<string | string[]>): Record<string, string | str
     out[k] = v;
   }
   out['tailscale-user-login'] = LOGIN_E2E;
-  out['tailscale-user-name'] = 'Julien';
+  out['tailscale-user-name'] = 'Utilisateur';
   // une adresse de documentation (RFC 5737), jamais une adresse du tailnet
   out['x-forwarded-for'] = '192.0.2.10';
   return out;

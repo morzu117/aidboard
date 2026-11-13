@@ -507,7 +507,7 @@ test('chantier 30 (D162) : port des artefacts ouvert, libre, ou indisponible (âš
 const hostOk: EtatModeHost = {
   actif: true,
   port: 4890,
-  tailnet: { etat: 'running', nom: 'mac.exemple.ts.net', compte: 'julien@exemple' },
+  tailnet: { etat: 'running', nom: 'mac.exemple.ts.net', compte: 'utilisateur@exemple' },
   serve: { etat: 'ok', funnel: false, interdits: [] },
   commande: 'tailscale serve --bg --https=443 http://127.0.0.1:4890',
 };

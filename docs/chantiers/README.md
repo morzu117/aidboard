@@ -220,3 +220,4 @@ Indépendants de la pile v0.1 ; chacun porte son propre jalon.
 | 51 | [L'e2e dans la CI : un job qui lance `gate:e2e` sur chaque PR et sur `main`](51-e2e-ci.md) | `ci/51-e2e-ci` | `main` | 50 : l'e2e vert | — |
 | 52 | [La release sans push sur `main` : la version passe par une PR, Release ne fait plus que le tag et la publication](52-release-par-pr.md) | `ci/52-release-par-pr` | `main` | 13 : DR1, DR2, DR16 ; 51 : la protection de `main` | — |
 | 53 | [Le champ « Aller au dossier » : une saisie commencée n'est jamais complétée par le premier chargement](53-e2e-dossier.md) | `fix/53-e2e-dossier` | `main` | 51 : l'e2e dans la CI | — |
+| 54 | [Un identifiant neutre dans les tests et le code : le prénom remplacé, avec une garde sur les dossiers de code](54-prenom-tests.md) | `fix/54-prenom-tests` | `main` | 49 : la garde des noms neutres | — |

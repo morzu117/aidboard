@@ -23,7 +23,7 @@ test('31.3 : éteint par défaut ; le port des appareils et la commande, Tailsca
         stdout: JSON.stringify({
           BackendState: 'Running',
           Self: { DNSName: `${NOM}.`, UserID: 1 },
-          User: { '1': { LoginName: 'julien@exemple' } },
+          User: { '1': { LoginName: 'utilisateur@exemple' } },
         }),
         code: null,
       };
@@ -37,7 +37,7 @@ test('31.3 : éteint par défaut ; le port des appareils et la commande, Tailsca
   expect(r.headers['cache-control']).toBe('no-store');
   const e = r.json<EtatModeHost>();
   expect(e.actif).toBe(false);
-  expect(e.tailnet).toEqual({ etat: 'running', nom: NOM, compte: 'julien@exemple' });
+  expect(e.tailnet).toEqual({ etat: 'running', nom: NOM, compte: 'utilisateur@exemple' });
   expect(e.serve).toEqual({ etat: 'absent', funnel: false, interdits: [] });
   expect(e.commande).toBe(`tailscale serve --bg --https=443 http://127.0.0.1:${e.port}`);
   expect(appels.map((a) => a.join(' ')).sort()).toEqual(['serve status --json', 'status --json']);

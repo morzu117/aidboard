@@ -28,7 +28,7 @@ function snapshot(): StateSnapshot {
         id: 'tp_1',
         workspaceId: 'ws_1',
         slug: 'sujet',
-        title: 'Titre de Julien',
+        title: 'Titre privé',
         type: 'feat',
         branch: 'feat/sujet',
         base: M('base'),
@@ -208,7 +208,7 @@ test('31.7 (D175) : attend remplace pending ; les valeurs gardées sont celles d
   const e = etatPourAppareil(snapshot());
   expect(e.agents[0]).toMatchObject({ status: 'needs_input', attend: true, statusReason: 'autre' });
   expect(e.topics[0]).toMatchObject({
-    title: 'Titre de Julien',
+    title: 'Titre privé',
     branch: 'feat/sujet',
     prNumber: 12,
   });

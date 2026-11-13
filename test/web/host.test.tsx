@@ -8,7 +8,7 @@ import { cheminQr } from '../../web/src/ui/Qr.js';
 import { json, setup, snapshot } from './helpers.js';
 
 // Chantier 31 (D172, D176, D177, D181) : Machines › Ton cockpit, le mode host sur le Mac.
-// Données synthétiques seulement : `mac.exemple.ts.net`, `julien@exemple`.
+// Données synthétiques seulement : `mac.exemple.ts.net`, `utilisateur@exemple`.
 
 afterEach(() => {
   cleanup();
@@ -24,7 +24,7 @@ const etat = (over: Partial<EtatModeHostDaemon> = {}): EtatModeHostDaemon => ({
   code: false,
   abonnements: 0,
   port: 4890,
-  tailnet: { etat: 'running', nom: NOM, compte: 'julien@exemple' },
+  tailnet: { etat: 'running', nom: NOM, compte: 'utilisateur@exemple' },
   serve: { etat: 'ok', funnel: false, interdits: [] },
   commande: COMMANDE,
   disponible: true,
@@ -36,7 +36,7 @@ const FUTUR = new Date(Date.now() + 5 * 60_000).toISOString();
 const appareil = (over: Partial<Appareil> = {}): Appareil => ({
   id: 'ap_1',
   nom: 'iPhone',
-  identite: 'julien@exemple',
+  identite: 'utilisateur@exemple',
   creeA: new Date().toISOString(),
   dernierContact: null,
   expireA: new Date(Date.now() + 8 * 3600_000).toISOString(),
@@ -181,7 +181,12 @@ test('D176 : la réclamation arrive par relecture, avec code court, nom, identit
   await waitFor(() => expect(node('host.ajouter')).not.toBeNull());
   fireEvent.click(node('host.ajouter')!);
   await waitFor(() => expect(node('host.qr')).not.toBeNull());
-  vue = demande({ etat: 'reclamee', codeCourt: '4821', nom: 'iPhone', identite: 'julien@exemple' });
+  vue = demande({
+    etat: 'reclamee',
+    codeCourt: '4821',
+    nom: 'iPhone',
+    identite: 'utilisateur@exemple',
+  });
   await act(async () => {
     vi.advanceTimersByTime(RELECTURE_DEMANDE_MS);
   });
@@ -190,7 +195,7 @@ test('D176 : la réclamation arrive par relecture, avec code court, nom, identit
     'Si tu n’as pas lancé cette connexion, refuse.',
   );
   expect(node('host.demande.nom')?.textContent).toBe('iPhone');
-  expect(node('host.demande.identite')?.textContent).toBe('julien@exemple (non vérifiable)');
+  expect(node('host.demande.identite')?.textContent).toBe('utilisateur@exemple (non vérifiable)');
   expect(node('host.demande.sans-identite')).toBeNull();
   fireEvent.click(node('host.demande.approuver')!);
   await waitFor(() =>
@@ -223,7 +228,12 @@ test('D179 : sans identité, Approuver attend la case « Appareil taggé », env
 });
 
 test('D176 : Refuser, puis la fin de la demande, et deux réclamations annulent', async () => {
-  let vue = demande({ etat: 'reclamee', codeCourt: '4821', nom: 'x', identite: 'julien@exemple' });
+  let vue = demande({
+    etat: 'reclamee',
+    codeCourt: '4821',
+    nom: 'x',
+    identite: 'utilisateur@exemple',
+  });
   const h = ouvrir({
     'POST /api/host/appairages': json(200, CODE),
     'GET /api/host/appairage': () => json(200, { demande: vue, identiteVerifiable: false })(),
@@ -312,7 +322,7 @@ test('D177 : la liste, Révoquer un appareil, Couper tous les accès', async () 
     },
   });
   await waitFor(() => expect(node('host.appareil.ap_1')).not.toBeNull());
-  expect(node('host.appareil.ap_1')?.textContent).toContain('julien@exemple');
+  expect(node('host.appareil.ap_1')?.textContent).toContain('utilisateur@exemple');
   expect(node('host.appareil.ap_1')?.textContent).toContain('jamais vu');
   expect(node('host.appareil.ap_2')?.textContent).toContain('sans identité Tailscale');
   expect(node('host.appareil.ap_2')?.textContent).toContain("vu à l'instant");

@@ -13,12 +13,22 @@ const empreintesInterdites = new Set([
   '83da5acf41ea62e81dd1f92d9e306cdd72a0009b5dad0d1d3dcfed2c5014ad38',
 ]);
 
+const empreintesInterditesCode = new Set([
+  'e23c3d7ff76f6e6235ce091f2fcd5fd35748677799d1637acf5ba2bca350e258',
+]);
+
 function verifierNomsNeutres(texte: string, fichier: string, empreintes: ReadonlySet<string>) {
   for (const mot of texte.match(/[A-Za-z0-9_-]+/g) ?? []) {
     const empreinte = createHash('sha256').update(mot.toLowerCase()).digest('hex');
     if (empreintes.has(empreinte)) {
       throw new Error(`Nom non neutre dans ${fichier}`);
     }
+  }
+}
+
+function verifierNomsNeutresCode(texte: string, fichier: string, empreintes: ReadonlySet<string>) {
+  if (/^(e2e|test|src|web|scripts|app)\//.test(fichier)) {
+    verifierNomsNeutres(texte, fichier, empreintes);
   }
 }
 
@@ -29,6 +39,7 @@ test('les fichiers texte suivis utilisent des noms neutres', () => {
     const contenu = readFileSync(resolve(racine, fichier));
     if (contenu.includes(0) || !isUtf8(contenu)) continue;
     verifierNomsNeutres(contenu.toString('utf8'), fichier, empreintesInterdites);
+    verifierNomsNeutresCode(contenu.toString('utf8'), fichier, empreintesInterditesCode);
   }
 });
 
@@ -47,4 +58,16 @@ test('la garde rejette un nom interdit, même en majuscules', () => {
       empreintesInterdites,
     ),
   ).not.toThrow();
+});
+
+test('la garde du code rejette un nom interdit seulement dans les dossiers ciblés', () => {
+  const nom = 'nom-interdit';
+  const empreintes = new Set([createHash('sha256').update(nom).digest('hex')]);
+  for (const dossier of ['e2e', 'test', 'src', 'web', 'scripts', 'app']) {
+    const fichier = `${dossier}/exemple.ts`;
+    expect(() => verifierNomsNeutresCode(nom, fichier, empreintes)).toThrow(
+      `Nom non neutre dans ${fichier}`,
+    );
+  }
+  expect(() => verifierNomsNeutresCode(nom, 'docs/exemple.md', empreintes)).not.toThrow();
 });
