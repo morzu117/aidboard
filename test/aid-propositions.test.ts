@@ -66,7 +66,7 @@ function lecture(
 test('028 : migration idempotente', () => {
   const { db } = base();
   migrate(db);
-  expect(db.pragma('user_version', { simple: true })).toBe(31);
+  expect(db.pragma('user_version', { simple: true })).toBe(32);
 });
 test.each([{ phase: 'review' }, { prNumber: 7 }, { state: 'merged' as const }])(
   'D293 : premier relevé silencieux puis transition %j, unicité, D268',

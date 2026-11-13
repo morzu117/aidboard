@@ -52,6 +52,7 @@ export interface BoardStageEntry {
 }
 
 export interface BoardCard extends BoardCardSummary {
+  threadUuid?: string | null;
   stageVersion?: number | null;
   body: string | null;
   author: string;
@@ -368,6 +369,7 @@ export const parseCard = (json: unknown): Parsed<BoardCard> | null => {
   if (id === null) return null;
   return parsed(json, {
     ...parseSummary(json, id),
+    threadUuid: str(json.thread_uuid),
     stageVersion:
       typeof json.stage_version === 'number' &&
       Number.isSafeInteger(json.stage_version) &&

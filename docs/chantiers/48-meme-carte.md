@@ -118,6 +118,7 @@ Julien relie à la main des cartes qui suivent le même travail sur plusieurs me
   - la garde admin ;
   - aucune route `/api/cartes-reliees` sur le serveur host ;
   - aucune écriture mesh pendant toute la suite.
+48.1 commité. Gate vert (3 851 tests). Migration 032, identité par thread_uuid lu sur le mesh, statuts, pagination, 4 lectures à la fois, cache par (mesh, empreinte, carte). À relire par le lab.
 
 ### 48.2 Le web (D324)
 
