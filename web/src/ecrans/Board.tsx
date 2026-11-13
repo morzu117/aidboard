@@ -1,3 +1,4 @@
+import { AvatarCell } from '../ui/AvatarCell.js';
 import { AidCarte, ErreursAid } from '../ui/AidBoard.js';
 import { SansCarteSwairm, SwairmCarte } from '../ui/SwairmBoard.js';
 import { instantaneMesh, useMeshLecture } from '../data/meshLecture.js';
@@ -178,6 +179,7 @@ export function colonnes(cards: BoardCardSummary[]): Array<[string, BoardCardSum
 
 function CarteResume({ c, slug }: { c: BoardCardSummary; slug: string }) {
   const mesh = useMeshLecture();
+  const { state } = useAid();
   return (
     <li>
       <Link
@@ -193,7 +195,12 @@ function CarteResume({ c, slug }: { c: BoardCardSummary; slug: string }) {
         <SwairmCarte carte={c.id} />
         <AidCarte carte={c.id} />
         <span className="board-carte-meta">
-          <span>{c.assignee ?? 'sans responsable'}</span>
+          <span>
+            {c.assignee && (
+              <AvatarCell nom={c.assignee} cellLocale={instantaneMesh(state, mesh)?.state.cell} />
+            )}
+            {c.assignee ?? 'sans responsable'}
+          </span>
           <span>{c.dueAt ? `échéance ${c.dueAt.slice(0, 10)}` : 'sans échéance'}</span>
           {c.openObligations > 0 && (
             <span>

@@ -2976,3 +2976,27 @@ a.composer-menu-ligne {
   white-space: normal;
   overflow-wrap: break-word;
 }
+
+/* Le texte décoratif ne modifie ni le nom accessible ni le texte de la cell. */
+.avatar-cell {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.25em;
+  height: 1.25em;
+  margin-inline-end: 0.3em;
+  border-radius: 50%;
+  vertical-align: middle;
+  flex-shrink: 0;
+}
+.avatar-cell::before {
+  content: attr(data-initiales);
+  font-size: 0.55em;
+  font-weight: 700;
+  line-height: 1;
+}
+.avatar-cell--locale {
+  outline: 1px solid var(--text);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 2px var(--surface-1);
+}

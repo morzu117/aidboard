@@ -1,3 +1,5 @@
+import { instantaneMesh } from '../data/meshLecture.js';
+import { useAid } from '../data/useAidState.js';
 import { EnteteMesh } from './SelecteurMesh.js';
 import { DureesAvis, daterEcheances } from './FormulaireAvisMesh.js';
 import { useConfirmation } from './AttenteConfirmation.js';
@@ -21,6 +23,7 @@ export function DemandesAvisMesh({ mesh }: { mesh: string }) {
 type SalleMesh = { id: string; mesh: string };
 
 function ListeDemandesMesh({ mesh }: { mesh: string }) {
+  const { state } = useAid();
   const client = useAidClient();
   const liste = useDemandesAvisMesh(mesh);
   const [id, setId] = useState<string | null>(null);
@@ -139,7 +142,10 @@ function ListeDemandesMesh({ mesh }: { mesh: string }) {
                 Déclarer le baseline absent
               </button>
             )}
-          <TableauAvisMesh resultat={resultat} />
+          <TableauAvisMesh
+            resultat={resultat}
+            cellLocale={instantaneMesh(state, resultat.mesh)?.state.cell}
+          />
           <button
             autoFocus
             onClick={() => {

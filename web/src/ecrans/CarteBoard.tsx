@@ -1,3 +1,4 @@
+import { AvatarCell } from '../ui/AvatarCell.js';
 import { AidCarte, ErreursAid, NouveauSujetCarte } from '../ui/AidBoard.js';
 import { liensSwairm } from '../../../src/shared/swairm-board.js';
 import type { LecturePrSwairm } from '../../../src/shared/swairm-trailers.js';
@@ -78,7 +79,7 @@ function Corps({ card }: { card: BoardCard }) {
   );
 }
 
-function Graphe({ g }: { g: BoardGraph }) {
+function Graphe({ g, cellLocale }: { g: BoardGraph; cellLocale?: string }) {
   return (
     <>
       {g.steps.length === 0 ? (
@@ -101,7 +102,10 @@ function Graphe({ g }: { g: BoardGraph }) {
                 <td>{s.mandatory === null ? TIRET : s.mandatory ? 'oui' : 'non'}</td>
                 {/* en entier, jamais abrégé : ce texte explique le blocage */}
                 <td className="carte-board-etat">{s.state ?? TIRET}</td>
-                <td>{s.holder ?? TIRET}</td>
+                <td>
+                  {s.holder && <AvatarCell nom={s.holder} cellLocale={cellLocale} />}
+                  {s.holder ?? TIRET}
+                </td>
                 <td>{date(s.due)}</td>
               </tr>
             ))}
@@ -133,6 +137,7 @@ function Obligations({
   s: BoardCardSheet & { mesh: string };
   relire: () => void;
 }) {
+  const { state } = useAid();
   return (
     <>
       {o.truncated && (
@@ -161,7 +166,15 @@ function Obligations({
               <tr key={x.id} data-node={`carte-board.obligation-${x.id}`}>
                 <td>{x.id}</td>
                 <td>{x.step ?? TIRET}</td>
-                <td>{x.holder ?? TIRET}</td>
+                <td>
+                  {x.holder && (
+                    <AvatarCell
+                      nom={x.holder}
+                      cellLocale={instantaneMesh(state, s.mesh)?.state.cell}
+                    />
+                  )}
+                  {x.holder ?? TIRET}
+                </td>
                 {/* status fait foi ; state n'est qu'une indication (#1456) */}
                 <td>{x.status ?? TIRET}</td>
                 <td className="texte-discret">{x.state ?? TIRET}</td>
@@ -375,7 +388,10 @@ function Fiche({
       {c && (
         <p className="carte-board-meta" data-node="carte-board.meta">
           <span>{c.stage ?? '(sans étape)'}</span>
-          <span>{c.assignee ?? 'sans responsable'}</span>
+          <span>
+            {c.assignee && <AvatarCell nom={c.assignee} cellLocale={objetMesh?.state.cell} />}
+            {c.assignee ?? 'sans responsable'}
+          </span>
           <span>{c.dueAt ? `échéance ${c.dueAt.slice(0, 10)}` : 'sans échéance'}</span>
           <span>créée par {c.author}</span>
         </p>
@@ -384,7 +400,7 @@ function Fiche({
         {c && <Corps card={c} />}
       </Bloc>
       <Bloc id="graphe" titre="Graphe d’étapes" result={s.graph} onRelire={relire}>
-        {s.graph.ok && <Graphe g={s.graph.data} />}
+        {s.graph.ok && <Graphe g={s.graph.data} cellLocale={objetMesh?.state.cell} />}
       </Bloc>
       {objetMesh?.state.proxyConfigure && !objetMesh.state.ecritures && (
         <p>Le proxy de ta cellule est en lecture seule.</p>

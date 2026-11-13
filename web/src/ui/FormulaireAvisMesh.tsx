@@ -1,3 +1,4 @@
+import { AvatarCell } from './AvatarCell.js';
 import { EnteteMesh } from './SelecteurMesh.js';
 import { cheminMesh, instantaneMesh } from '../data/meshLecture.js';
 import {
@@ -212,7 +213,10 @@ function FormulaireAvis({ mesh, onResultat }: { mesh: string; onResultat?: () =>
                       )
                     }
                   />
-                  {nom}
+                  <span>
+                    <AvatarCell nom={nom} cellLocale={instantaneMesh(state, mesh)?.state.cell} />
+                    {nom}
+                  </span>
                   <span>
                     {' '}
                     — {config?.familles[nom] ?? 'Famille manquante : cette cell ne peut pas siéger'}

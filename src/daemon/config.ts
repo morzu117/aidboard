@@ -1,3 +1,4 @@
+import { PALETTE_AVATARS, type SurchargesAvatars } from '../shared/avatars.js';
 import { FAMILLES_AVIS } from '../shared/avis-mesh-api.js';
 import { isAbsolute, resolve, join } from 'node:path';
 import { homedir } from 'node:os';
@@ -9,6 +10,7 @@ import { parse, parseDocument } from 'yaml';
 import type { AidPaths } from './paths.js';
 
 export interface AidConfig {
+  avatars: SurchargesAvatars;
   host: '127.0.0.1';
   port: number;
   editor: string[];
@@ -99,6 +101,7 @@ export const DEFAULT_TAILSCALE_BIN =
     : 'tailscale';
 
 export const DEFAULT_CONFIG: AidConfig = {
+  avatars: {},
   meshes: {},
   swairm: { bin: '' },
   github: { bin: '' },
@@ -167,6 +170,7 @@ export function parseConfig(text: string): AidConfig {
   rejectUnknown(
     doc,
     [
+      'avatars',
       'host',
       'port',
       'editor',
@@ -186,6 +190,7 @@ export function parseConfig(text: string): AidConfig {
   );
 
   const cfg = structuredClone(DEFAULT_CONFIG);
+  if (doc.avatars !== undefined) cfg.avatars = parseAvatars(doc.avatars);
   if (doc.host !== undefined && doc.host !== '127.0.0.1') {
     throw new ConfigError("A-I-D n'écoute que sur 127.0.0.1 : `host` ne peut pas changer");
   }
@@ -673,4 +678,42 @@ export function validerRelais(valeur: unknown): string | null {
       'modeHost.relais : origine HTTPS (port 443), sans chemin, IP ni identifiants requise',
     );
   }
+}
+
+function parseAvatars(raw: unknown): SurchargesAvatars {
+  if (!isRecord(raw)) throw new ConfigError('config.yaml : avatars doit être une table');
+  if (Object.keys(raw).length > 200)
+    throw new ConfigError('config.yaml : avatars accepte au plus 200 entrées');
+  const avatars: SurchargesAvatars = {};
+  for (const [nom, valeur] of Object.entries(raw)) {
+    if (!/^[^\s\p{Cc}]{1,64}$/u.test(nom))
+      throw new ConfigError(
+        'config.yaml : avatars : clé invalide (1 à 64 caractères sans espace ni contrôle)',
+      );
+    if (!isRecord(valeur)) throw new ConfigError(`config.yaml : avatars.${nom} doit être un objet`);
+    rejectUnknown(valeur, ['initiales', 'couleur'], `avatars.${nom}.`);
+    const avatar: SurchargesAvatars[string] = {};
+    if (valeur.initiales !== undefined) {
+      if (typeof valeur.initiales !== 'string' || !/^[\p{L}\p{N}]{1,2}$/u.test(valeur.initiales))
+        throw new ConfigError(
+          `config.yaml : avatars.${nom}.initiales attend une ou deux lettres ou chiffres`,
+        );
+      avatar.initiales = valeur.initiales;
+    }
+    if (valeur.couleur !== undefined) {
+      const couleur = PALETTE_AVATARS.find((couleur) => couleur.id === valeur.couleur);
+      if (!couleur)
+        throw new ConfigError(
+          `config.yaml : avatars.${nom}.couleur doit être un identifiant de la palette`,
+        );
+      avatar.couleur = couleur.id;
+    }
+    Object.defineProperty(avatars, nom, {
+      value: avatar,
+      enumerable: true,
+      configurable: true,
+      writable: true,
+    });
+  }
+  return avatars;
 }

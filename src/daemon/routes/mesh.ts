@@ -1,3 +1,4 @@
+import type { SurchargesAvatars } from '../../shared/avatars.js';
 import type { FastifyRequest } from 'fastify';
 import type { MeshRegistry } from '../mesh/registre.js';
 import type { FastifyInstance } from 'fastify';
@@ -5,6 +6,7 @@ import { AidHttpError } from '../errors.js';
 import type { MeshService } from '../mesh/service.js';
 
 export interface MeshRouteDeps {
+  avatars?: SurchargesAvatars;
   mesh: MeshService | null;
   meshes?: MeshRegistry;
 }
@@ -31,6 +33,8 @@ export function registerMeshRoutes(app: FastifyInstance, deps: MeshRouteDeps): v
     const m = mesh(req);
     return { state: m.current(), inbox: m.inbox(), tailscaleManage: m.tailscaleManage };
   });
+
+  app.get('/api/avatars', async () => ({ avatars: deps.avatars ?? {} }));
 
   app.get('/api/meshes', async () => deps.meshes?.liste() ?? []);
   app.post('/api/meshes/:nom/archiver', async (req, reply) => {

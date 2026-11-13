@@ -47,3 +47,8 @@ export function useAid(): ClientSnapshot & AidApi {
     call: (m, p, b) => c.request(m, p, b),
   };
 }
+
+/** Les décors restent utilisables sans client, notamment dans une vue isolée. */
+export function useAidClientFacultatif(): AidClient | null {
+  return useContext(Ctx);
+}
