@@ -102,7 +102,7 @@ test('migration 029 peuplée : préserve toutes les colonnes et sépare les iden
   expect(db.pragma('user_version', { simple: true })).toBe(29);
   for (const table of tables) inserer(db, table, lignes[table]);
   migrate(db);
-  expect(db.pragma('user_version', { simple: true })).toBe(31);
+  expect(db.pragma('user_version', { simple: true })).toBe(32);
   for (const table of tables)
     expect(db.prepare(`SELECT * FROM ${table}`).all()).toEqual([
       { ...lignes[table], mesh: 'principal' },

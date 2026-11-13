@@ -1,3 +1,4 @@
+import { registerCartesRelieesRoutes } from './routes/cartes-reliees.js';
 import type { MeshRegistry } from './mesh/registre.js';
 import { AvisMeshService } from './mesh/avis.js';
 import { CommitteeReader, CommitteeWriter } from './mesh/committee.js';
@@ -209,6 +210,7 @@ export async function buildServer(deps: ServerDeps): Promise<FastifyInstance> {
     meshes: deps.meshes,
     avatars: deps.config.avatars,
   });
+  registerCartesRelieesRoutes(app, { db: deps.db, meshes: deps.meshes });
   registerBoardRoutes(app, { board: deps.board ?? null, meshes: deps.meshes });
   registerAidRoutes(app, deps.db, deps.board ?? null, deps.config.mesh.cell);
   registerSwarphRoutes(app, { swarph: deps.swarph ?? null, meshes: deps.meshes });

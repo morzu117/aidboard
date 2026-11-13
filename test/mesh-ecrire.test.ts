@@ -360,7 +360,7 @@ test('migration 025 préserve les réglages 024, ajoute mesh.ecrire actif et env
     db.exec("UPDATE confirmations_reglage SET actif = 0, modifie_a = 123 WHERE action = 'push'");
     const avant = creerReglage(db).lire();
     migrate(db);
-    expect(db.pragma('user_version', { simple: true })).toBe(31);
+    expect(db.pragma('user_version', { simple: true })).toBe(32);
     expect(creerReglage(db).lire()).toEqual([
       ...avant,
       { action: 'mesh.ecrire', actif: true, modifieA: null },
