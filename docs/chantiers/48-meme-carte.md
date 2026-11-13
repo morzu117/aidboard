@@ -153,6 +153,7 @@ Julien relie à la main des cartes qui suivent le même travail sur plusieurs me
 - Un e2e avec deux faux meshes : relier deux cartes, voir les deux états, voir l'écart, puis changer le `thread_uuid` d'une carte sous le même numéro et voir « carte remplacée ».
 - La fiche `docs/recette-chantier-48-meme-carte.md`.
 - La ligne du README.
+48.3 commité. Gate vert (3 882 tests). Date sans fuseau en UTC, e2e à deux faux meshes, fiche de recette.
 
 ## 6. Pièges
 

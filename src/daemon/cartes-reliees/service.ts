@@ -28,8 +28,12 @@ interface EntreeCache {
 
 const memeInstant = (gauche: string | null, droite: string | null): boolean => {
   if (gauche === null || droite === null) return gauche === droite;
-  const a = Date.parse(gauche);
-  const b = Date.parse(droite);
+  const enUtc = (date: string) =>
+    /^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?$/.test(date)
+      ? `${date.replace(' ', 'T')}Z`
+      : date;
+  const a = Date.parse(enUtc(gauche));
+  const b = Date.parse(enUtc(droite));
   return Number.isNaN(a) || Number.isNaN(b) ? gauche === droite : a === b;
 };
 

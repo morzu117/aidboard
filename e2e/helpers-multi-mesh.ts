@@ -8,6 +8,7 @@ interface MeshFaux {
   home: string;
   requetes: Array<{ verb: string; args: Record<string, unknown> }>;
   config: string;
+  carte: Record<string, unknown>;
   fermer(): Promise<void>;
 }
 
@@ -40,6 +41,11 @@ export async function preparerMeshes(noms = ['principal', 'perso']) {
         priority: 'normal',
       }) + '\n',
     );
+    const carte = JSON.parse(
+      readFileSync(join(fixtures, 'board/cards-show-101.json'), 'utf8'),
+    ) as Record<string, unknown>;
+    carte.title = `Carte ${nom}`;
+    carte.stage = nom === 'principal' ? 'idea' : 'build';
     const socket = join(home, 'proxy.sock');
     const requetes: Array<{ verb: string; args: Record<string, unknown> }> = [];
     const connexions = new Set<Socket>();
@@ -66,6 +72,16 @@ export async function preparerMeshes(noms = ['principal', 'perso']) {
           ) as { cards: Array<{ title: string }> };
           for (const carte of cartes.cards) carte.title = `Carte ${nom}`;
           body = cartes;
+        } else if (requete.verb === 'board.card.get') {
+          body = carte;
+        } else if (requete.verb === 'board.cards.graph') {
+          body = JSON.parse(readFileSync(join(fixtures, 'board/cards-graph-101.json'), 'utf8'));
+        } else if (requete.verb === 'board.cards.thread') {
+          body = JSON.parse(readFileSync(join(fixtures, 'board/cards-thread-101.json'), 'utf8'));
+        } else if (requete.verb === 'board.obligations.list') {
+          body = JSON.parse(
+            readFileSync(join(fixtures, 'board/obligations-list-101.json'), 'utf8'),
+          );
         } else if (requete.verb === 'mesh.peers') {
           body = { peers: [{ name: 'peer-a' }, { name: 'peer-b' }] };
         } else if (requete.verb === 'mesh.send') {
@@ -84,6 +100,7 @@ export async function preparerMeshes(noms = ['principal', 'perso']) {
       nom,
       home,
       requetes,
+      carte,
       config: `  ${nom}:\n    cell: peer-a\n    home: ${home}\n    gateway: https://${nom === 'principal' ? 'aid-e2e.ts.net' : 'example.com'}\n    proxySocket: ${socket}\n    inboxLog: ${inboxLog}`,
       async fermer() {
         for (const connexion of connexions) connexion.destroy();

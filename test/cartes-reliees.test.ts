@@ -49,7 +49,7 @@ const reponse = (mesh: string, id = 1): BoardResult<BoardCard> => ({
 });
 
 async function contexte(reel = false, rebranche = false) {
-  const racine = '/var/tmp/aid-codex-48.1c';
+  const racine = '/var/tmp/aid-codex-48.3';
   mkdirSync(racine, { recursive: true });
   const home = mkdtempSync(join(racine, 'cartes-'));
   const db = new Database(join(home, 'etat.db'));
@@ -655,4 +655,40 @@ test('48.1c : la vraie garde refuse GET cartes reliées au jeton de run', async 
   expect(reponse.statusCode).toBe(403);
   expect(reponse.json()).toEqual({ error: 'token de run : POST /api/events uniquement' });
   expect(c.appels).toEqual([]);
+});
+
+test('48.3 : date ISO sans fuseau lue en UTC, dans les deux sens', async () => {
+  const ancienFuseau = process.env.TZ;
+  process.env.TZ = 'Europe/Paris';
+  try {
+    expect(new Date('2026-07-09T05:21:39').getTimezoneOffset()).toBe(-120);
+    for (const [initiale, lue] of [
+      ['2026-11-13T12:34:56.123', '2026-11-13T12:34:56.123Z'],
+      ['2026-11-13T12:34:56.123Z', '2026-11-13T12:34:56.123'],
+      ['2026-07-09 05:21:39', '2026-07-09T05:21:39'],
+      ['2026-07-09T05:21:39', '2026-07-09 05:21:39'],
+      ['2026-07-09 05:21:39', '2026-07-09T05:21:39Z'],
+      ['2026-07-09T05:21:39Z', '2026-07-09 05:21:39'],
+      ['2026-07-09T05:21:39', '2026-07-09T05:21:39Z'],
+      ['2026-07-09T05:21:39Z', '2026-07-09T05:21:39'],
+      ['2026-07-09 05:21', '2026-07-09T05:21:00Z'],
+      ['2026-07-09 05:21:39.123', '2026-07-09T05:21:39.123Z'],
+      ['2026-07-09 07:21:39+02:00', '2026-07-09T05:21:39Z'],
+    ]) {
+      const c = await contexte();
+      const membres = await Promise.all(cibles.map((cible) => c.service.preparer(cible)));
+      membres[1]!.carte_creee_a = initiale!;
+      c.depot.creer(membres, null);
+      const resultat = reponse('perso');
+      if (!resultat.ok) throw new Error('réponse attendue');
+      resultat.data.createdAt = lue!;
+      vi.spyOn(c.meshes.obtenir('perso').board, 'carte').mockResolvedValue(resultat);
+      expect(await c.service.liste()).toMatchObject([
+        { membres: [{ statut: 'ok' }, { statut: 'ok' }] },
+      ]);
+    }
+  } finally {
+    if (ancienFuseau === undefined) delete process.env.TZ;
+    else process.env.TZ = ancienFuseau;
+  }
 });
