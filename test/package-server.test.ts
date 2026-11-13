@@ -46,10 +46,14 @@ describe.skipIf(process.env.AID_PACK_TEST !== '1')('archive AID Server', () => {
     ]) {
       expect(list, p).toContain(p);
     }
-    // les natifs de cette plateforme (prebuilds N-API, livrés par les deux paquets)
+    // Les natifs de cette plateforme : node-pty compile sous Linux, sans prebuild publié.
     const cible = `${process.platform}-${process.arch}`;
     expect(list).toContain(`node_modules/better-sqlite3/prebuilds/${cible}.node`);
-    expect(list).toContain(`node_modules/node-pty/prebuilds/${cible}/pty.node`);
+    expect(list).toContain(
+      process.platform === 'linux'
+        ? 'node_modules/node-pty/build/Release/pty.node'
+        : `node_modules/node-pty/prebuilds/${cible}/pty.node`,
+    );
     for (const p of list) {
       expect(p, p).not.toMatch(/^(src|test|e2e|design|docs|\.codegraph|release)\//);
       expect(p, p).not.toMatch(/^node_modules\/(\.bin\/tsup|typescript|vitest|tsup|vite)\//);
