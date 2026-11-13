@@ -53,9 +53,20 @@ La CI lance le gate (typecheck, lint, build, tests) sous Node 22 et 24, et le la
   - la CI de la PR, job `e2e` compris.
 51.2 commité. Gate vert (3 889 tests). E2e entier vert avec `CI=1` (132 tests), aucun daemon résiduel. Aucun autre e2e ne compare deux lectures d'un libellé d'horloge.
 
+### 51.3 L'archive serveur sous Linux
+
+- **Le constat.** Sur la première CI de la PR, le job `e2e` échoue avant Playwright, dans `test/package-server.test.ts`, que `gate:e2e` lance. Le test attend `node_modules/node-pty/prebuilds/linux-x64/pty.node` dans l'archive. node-pty 1.1.0 ne livre de binaires précompilés que pour macOS et Windows : sous Linux, `npm ci` le compile dans `node_modules/node-pty/build/Release/pty.node`. Le 51.1 et le 51.2 n'avaient lancé que Playwright en local, et non `gate:e2e` en entier ; le VPS tourne sous Node 24, alors que `package-server.sh` demande Node 22.
+- **La correction.**
+  - Le test attend le natif de node-pty là où la plateforme le met : le binaire précompilé sous macOS, le binaire compilé sous Linux. Le reste du test ne change pas, et il doit passer en entier : l'archive démarre et `aid doctor` passe sans Node sur la machine.
+  - Si l'archive Linux n'embarque pas le natif compilé, ou si `aid doctor` y échoue, c'est un défaut de l'archive et non du test : le rapport le dit, et la correction va dans `scripts/package-server.sh`.
+- **Tests :**
+  - `npm run gate:e2e` en entier sous Node 22 (`mise exec node@22 --`), avec `CI=1` ;
+  - le gate entier ;
+  - la CI de la PR, job `e2e` compris.
+
 ## 4. Fini quand
 
-- Les points 51.1 et 51.2 sont commités, le gate est vert, l'e2e est vert sur le VPS, et la CI de la PR est verte, job `e2e` compris.
+- Les points 51.1, 51.2 et 51.3 sont commités, le gate est vert, l'e2e est vert sur le VPS, et la CI de la PR est verte, job `e2e` compris.
 - Julien a donné son oui pour le merge.
 
 ## 5. Hors périmètre
