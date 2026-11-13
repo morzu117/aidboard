@@ -1,6 +1,6 @@
 // Chantier 31 (mode host par le tailnet) : ce que le daemon lit de Tailscale et ce que le Mac
 // voit du mode host. Aucun jeton, aucun secret : le nom `.ts.net` et le login sont des données de
-// Julien, montrées sur son Mac seulement.
+// l’utilisateur, montrées sur son Mac seulement.
 
 /** D173 : `tailscale status --json`, la part qui sert au mode host. */
 export interface LectureTailnet {

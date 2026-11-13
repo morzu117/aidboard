@@ -49,7 +49,7 @@ test('identifiants d’URL : mot de passe ou jeton masqué, nom simple gardé', 
     'ssh://git@github.com/o/r.git',
     'git@github.com:o/r.git',
     'https://github.com/o/r',
-    'écrire à julien@exemple.fr',
+    'écrire à utilisateur@exemple.fr',
   ])
     expect(maskSecrets(ordinaire), ordinaire).toBe(ordinaire);
 });

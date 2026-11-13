@@ -35,6 +35,7 @@ Le prénom de Julien sert d'identité synthétique dans les tests : le login Tai
 - **Tests :**
   - `git grep -i` du prénom sous les six dossiers de D332 ne trouve plus rien ;
   - le gate entier, et `gate:e2e` entier sous Node 22 avec `CI=1`.
+54.1 commité. Gate vert (3 893 tests). `gate:e2e` entier vert sous Node 22 avec `CI=1` (paquet, archive serveur, 132 tests Playwright), aucun daemon résiduel. Le prénom ne figure plus sous les six dossiers de D332.
 
 ## 4. Fini quand
 

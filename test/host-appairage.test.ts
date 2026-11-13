@@ -17,7 +17,7 @@ function appairages() {
 const appareil = (code: unknown, source = '100.64.0.2') => ({
   code,
   nom: 'Téléphone',
-  identite: 'julien@exemple' as string | null,
+  identite: 'utilisateur@exemple' as string | null,
   source,
 });
 
@@ -34,14 +34,14 @@ test('31.4 : le parcours, de la création à la consommation, une seule fois', (
     etat: 'reclamee',
     codeCourt: r.codeCourt,
     nom: 'Téléphone',
-    identite: 'julien@exemple',
+    identite: 'utilisateur@exemple',
   });
   expect(a.lirePourAppareil(d.id, r.jetonDemande)).toEqual({ etat: 'attente' });
   expect(a.approuver(d.id)).toEqual({ ok: true });
   expect(a.lirePourAppareil(d.id, r.jetonDemande)).toEqual({
     etat: 'approuvee',
     nom: 'Téléphone',
-    identite: 'julien@exemple',
+    identite: 'utilisateur@exemple',
   });
   // consommée : la lecture suivante ne rend plus l'accès
   expect(a.lirePourAppareil(d.id, r.jetonDemande)).toEqual({ etat: 'consommee' });
