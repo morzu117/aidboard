@@ -88,6 +88,7 @@ Julien relie à la main des cartes qui suivent le même travail sur plusieurs me
   - le mesh et le numéro ;
   - les champs de D323, ou le statut en clair (« mesh changé », « carte remplacée », « lecture impossible ») ;
   - un lien vers la fiche de l'autre carte, sur son mesh.
+  - un bouton « Retirer du groupe », pour chaque membre, y compris la carte affichée. Il demande une confirmation à l'écran, puis appelle `DELETE /api/cartes-reliees/:id/membres/:membre`. C'est le seul moyen de sortir un membre « mesh changé » ou « carte remplacée » (D321).
 - **Le bouton « Relier à une carte d'un autre mesh »** ouvre un dialogue :
   - le choix du mesh, parmi les meshes actifs autres que celui de la carte ;
   - le numéro de la carte ;
@@ -138,6 +139,7 @@ Julien relie à la main des cartes qui suivent le même travail sur plusieurs me
 - `web/src/data/cartes-reliees.ts`, la section de `CarteBoard`, le dialogue et la liste du board.
 - **Tests :**
   - la section, avec chaque statut ;
+  - le retrait d'un membre, avec la confirmation et l'annulation ;
   - le dialogue : le choix des meshes, l'aperçu et l'appel ;
   - la liste, avec la pastille « écart » ;
   - un seul mesh actif : ni bouton ni liste, mais un groupe existant reste visible sur la fiche ;
