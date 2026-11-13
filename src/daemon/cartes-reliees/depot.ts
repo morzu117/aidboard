@@ -82,8 +82,10 @@ export class DepotCartesReliees {
       if (!groupe.membres.some((m) => m.id === membre))
         throw new AidHttpError(404, 'membre introuvable');
       this.db.prepare('DELETE FROM membres_groupe WHERE id = ? AND groupe = ?').run(membre, id);
-      if (groupe.membres.length <= 2)
+      if (groupe.membres.length <= 2) {
+        this.db.prepare('DELETE FROM membres_groupe WHERE groupe = ?').run(id);
         this.db.prepare('DELETE FROM groupes_cartes WHERE id = ?').run(id);
+      }
     })();
   }
 

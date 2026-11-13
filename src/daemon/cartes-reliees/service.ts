@@ -26,6 +26,13 @@ interface EntreeCache {
   resultat: Promise<BoardResult<BoardCard>>;
 }
 
+const memeInstant = (gauche: string | null, droite: string | null): boolean => {
+  if (gauche === null || droite === null) return gauche === droite;
+  const a = Date.parse(gauche);
+  const b = Date.parse(droite);
+  return Number.isNaN(a) || Number.isNaN(b) ? gauche === droite : a === b;
+};
+
 export class CartesReliees {
   private readonly cache = new Map<string, EntreeCache>();
   private lectures = 0;
@@ -74,8 +81,8 @@ export class CartesReliees {
         }
       }),
     };
-    void entree.resultat.then(() => {
-      entree.expire = this.maintenant() + 60_000;
+    void entree.resultat.then((resultat) => {
+      entree.expire = this.maintenant() + (resultat.ok ? 60_000 : 5_000);
     });
     if (!frais) this.cache.set(cle, entree);
     return entree.resultat;
@@ -128,7 +135,10 @@ export class CartesReliees {
         statut: resultat.kind === 'not-found' ? 'carte_remplacee' : 'lecture_impossible',
       };
     const carte = resultat.data;
-    if (carte.threadUuid !== membre.thread_uuid || carte.createdAt !== membre.carte_creee_a)
+    if (
+      carte.threadUuid !== membre.thread_uuid ||
+      !memeInstant(carte.createdAt, membre.carte_creee_a)
+    )
       return { ...base, statut: 'carte_remplacee' };
     return {
       ...base,

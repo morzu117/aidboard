@@ -1,8 +1,10 @@
+import cookie from '@fastify/cookie';
 import Database from 'better-sqlite3';
 import Fastify from 'fastify';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterEach, expect, test, vi } from 'vitest';
+import { createAuthState, registerSecurity } from '../src/daemon/security.js';
 import { migrate } from '../src/daemon/db.js';
 import { DEFAULT_CONFIG } from '../src/daemon/config.js';
 import { EventStore } from '../src/daemon/events/store.js';
@@ -47,7 +49,9 @@ const reponse = (mesh: string, id = 1): BoardResult<BoardCard> => ({
 });
 
 async function contexte(reel = false, rebranche = false) {
-  const home = mkdtempSync('/var/tmp/aid-codex-48.1/cartes-');
+  const racine = '/var/tmp/aid-codex-48.1c';
+  mkdirSync(racine, { recursive: true });
+  const home = mkdtempSync(join(racine, 'cartes-'));
   const db = new Database(join(home, 'etat.db'));
   db.pragma('foreign_keys = ON');
   migrate(db);
@@ -581,5 +585,74 @@ test.each([
 ])('pagination : refus 400 sans lecture pour %s', async (query) => {
   const c = await contextePagination(1);
   expect((await c.app.inject(`/api/cartes-reliees?${query}`)).statusCode).toBe(400);
+  expect(c.appels).toEqual([]);
+});
+
+test('48.1c : retrait sans cascade, aucune ligne orpheline et carte réutilisable', async () => {
+  const c = await contexte();
+  c.db.pragma('foreign_keys = OFF');
+  const id = await c.service.creer(cibles, null);
+  c.depot.retirer(id, c.depot.obtenir(id).membres[0]!.id);
+  expect(c.db.prepare('SELECT * FROM membres_groupe').all()).toEqual([]);
+  expect(c.depot.liste()).toEqual([]);
+  const nouveau = await c.service.creer(cibles, null);
+  expect(c.depot.obtenir(nouveau).membres).toHaveLength(2);
+});
+
+test.each([
+  ['2026-11-13T00:00:00.000Z', '2026-11-13T01:00:00+01:00', 'ok'],
+  [null, null, 'ok'],
+  [null, '2026-11-13', 'carte_remplacee'],
+  ['illisible', 'illisible', 'ok'],
+  ['illisible', 'autre', 'carte_remplacee'],
+  ['2026-11-13', '2026-11-14', 'carte_remplacee'],
+] as const)('48.1c : dates %s et %s : %s', async (initiale, lue, statut) => {
+  const c = await contexte();
+  const membres = await Promise.all(cibles.map((cible) => c.service.preparer(cible)));
+  membres[1]!.carte_creee_a = initiale;
+  c.depot.creer(membres, null);
+  const resultat = reponse('perso');
+  if (!resultat.ok) throw new Error('réponse attendue');
+  resultat.data.createdAt = lue;
+  vi.spyOn(c.meshes.obtenir('perso').board, 'carte').mockResolvedValue(resultat);
+  expect(await c.service.liste()).toMatchObject([{ membres: [{ statut: 'ok' }, { statut }] }]);
+});
+
+test.each(['réponse', 'exception'] as const)('48.1c : cache négatif de 5 s (%s)', async (cas) => {
+  const c = await contexte();
+  await c.service.creer(cibles, null);
+  const lecteur = vi.spyOn(c.meshes.obtenir('perso').board, 'carte');
+  if (cas === 'exception') lecteur.mockRejectedValueOnce(new Error('lecture impossible'));
+  else lecteur.mockResolvedValueOnce({ ok: false, kind: 'unreachable', readAt: '' });
+  lecteur.mockResolvedValue(reponse('perso'));
+  expect(await c.service.liste()).toMatchObject([
+    { membres: [{ statut: 'ok' }, { statut: 'lecture_impossible' }] },
+  ]);
+  c.tick(4_999);
+  await c.service.liste();
+  expect(lecteur).toHaveBeenCalledTimes(1);
+  c.tick(1);
+  expect(await c.service.liste()).toMatchObject([
+    { membres: [{ statut: 'ok' }, { statut: 'ok' }] },
+  ]);
+  expect(lecteur).toHaveBeenCalledTimes(2);
+});
+
+test('48.1c : la vraie garde refuse GET cartes reliées au jeton de run', async () => {
+  const c = await contexte();
+  const app = Fastify();
+  nettoyages.push(() => app.close());
+  await app.register(cookie);
+  const auth = createAuthState();
+  auth.runTokens.set('jeton-factice', 'run-factice');
+  registerSecurity(app, auth, { getPort: () => 4321 });
+  registerCartesRelieesRoutes(app, { db: c.db, meshes: c.meshes });
+  const reponse = await app.inject({
+    method: 'GET',
+    url: '/api/cartes-reliees',
+    headers: { host: 'localhost:4321', authorization: 'Bearer jeton-factice' },
+  });
+  expect(reponse.statusCode).toBe(403);
+  expect(reponse.json()).toEqual({ error: 'token de run : POST /api/events uniquement' });
   expect(c.appels).toEqual([]);
 });

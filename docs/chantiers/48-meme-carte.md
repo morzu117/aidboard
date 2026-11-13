@@ -131,6 +131,7 @@ Julien relie à la main des cartes qui suivent le même travail sur plusieurs me
   - deux écritures du même instant ne rendent pas « carte remplacée » ;
   - un échec de lecture se relit après 5 s ;
   - un jeton de run reçoit 403 sur `GET /api/cartes-reliees`.
+48.1c commité. Gate vert (3 861 tests). Corrections du lab : membres orphelins, date comparée comme un instant, cache d'échec de 5 s, garde de lecture testée.
 
 ### 48.2 Le web (D324)
 
