@@ -36,6 +36,7 @@ La CI lance le gate (typecheck, lint, build, tests) sous Node 22 et 24, et le la
   - l'e2e entier en local, avec `CI=1` dans l'environnement, comme sur le runner ;
   - le gate entier ;
   - la CI de la PR : les jobs `gate (node 22)`, `gate (node 24)`, `labo serveur` et `e2e` passent.
+51.1 commité. Gate vert (3 889 tests). E2e local avec `CI=1` : 131 tests passent, 1 échoue par le temps (`e2e/coque.spec.ts:78`, une minute passe entre deux lectures du libellé « hors mesh depuis N min ») ; corrigé au 51.2.
 
 ## 4. Fini quand
 
