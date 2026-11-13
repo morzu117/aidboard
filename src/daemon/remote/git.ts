@@ -41,7 +41,8 @@ unset GIT_TRACE GIT_TRACE2 GIT_TRACE2_EVENT GIT_TRACE2_PERF GIT_TRACE_CURL GIT_T
 export GIT_OPTIONAL_LOCKS=0 GIT_TERMINAL_PROMPT=0 GIT_PAGER=cat PAGER=cat GIT_EDITOR=true
 [ -z "$b" ] || { GIT_CEILING_DIRECTORIES=$(dirname "$b"); export GIT_CEILING_DIRECTORIES; }
 to=; tn=; command -v timeout >/dev/null 2>&1 && { to="timeout ${GIT_TIMEOUT_S}"; tn="timeout ${NET_TIMEOUT_S}"; }
-g() { $to git --no-optional-locks -c core.fsmonitor=false -c core.untrackedCache=false -c color.ui=false -c log.showSignature=false "$@"; }
+# timeout uutils coûte ~100 ms par appel local ; remoteExec borne déjà l’aller-retour.
+g() { git --no-optional-locks -c core.fsmonitor=false -c core.untrackedCache=false -c color.ui=false -c log.showSignature=false "$@"; }
 gn() { $tn git -c core.fsmonitor=false -c color.ui=false -c gc.auto=0 -c maintenance.auto=false -c push.followTags=false "$@"; }
 if ! top=$(g rev-parse --show-toplevel 2>/dev/null) || [ -z "$top" ]; then
   case "$(g rev-parse --show-toplevel 2>&1 >/dev/null)" in *dubious*) printf 'proprio\\000'; exit 0 ;; esac
