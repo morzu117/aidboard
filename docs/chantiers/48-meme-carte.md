@@ -144,6 +144,7 @@ Julien relie à la main des cartes qui suivent le même travail sur plusieurs me
   - la liste, avec la pastille « écart » ;
   - un seul mesh actif : ni bouton ni liste, mais un groupe existant reste visible sur la fiche ;
   - un titre de carte contenant du HTML, rendu en texte.
+48.2 commité. Gate vert (3 881 tests). La section de la fiche, le dialogue, le retrait d'un membre et la liste paginée du board.
 
 ### 48.3 La fin
 

@@ -1,3 +1,4 @@
+import { CartesReliees } from '../ui/CartesReliees.js';
 import { AvatarCell } from '../ui/AvatarCell.js';
 import { AidCarte, ErreursAid } from '../ui/AidBoard.js';
 import { SansCarteSwairm, SwairmCarte } from '../ui/SwairmBoard.js';
@@ -410,6 +411,7 @@ export function Contenu({ cell }: { cell: string }) {
         </p>
       )}
       <SansCarteSwairm />
+      <CartesReliees />
       <ErreursAid />
       {projet && <Cartes key={projet.id} projet={projet} onLecture={setCartes} />}
     </main>

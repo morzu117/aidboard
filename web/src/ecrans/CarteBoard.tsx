@@ -1,3 +1,4 @@
+import { CartesReliees } from '../ui/CartesReliees.js';
 import { AvatarCell } from '../ui/AvatarCell.js';
 import { AidCarte, ErreursAid, NouveauSujetCarte } from '../ui/AidBoard.js';
 import { liensSwairm } from '../../../src/shared/swairm-board.js';
@@ -500,6 +501,7 @@ export function Contenu({ cardId }: { cardId: number }) {
         />
       )}
       {result && <Fiche s={result} relire={() => void relire()} commits={commits} />}
+      {result?.card.ok && <CartesReliees key={`${mesh}:${cardId}`} carte={cardId} />}
     </main>
   );
 }
