@@ -38,9 +38,23 @@ La CI lance le gate (typecheck, lint, build, tests) sous Node 22 et 24, et le la
   - la CI de la PR : les jobs `gate (node 22)`, `gate (node 24)`, `labo serveur` et `e2e` passent.
 51.1 commité. Gate vert (3 889 tests). E2e local avec `CI=1` : 131 tests passent, 1 échoue par le temps (`e2e/coque.spec.ts:78`, une minute passe entre deux lectures du libellé « hors mesh depuis N min ») ; corrigé au 51.2.
 
+### 51.2 Les e2e qui dépendent de l'horloge, et la marge du job
+
+- **Le constat.** Sans relance, un e2e qui dépend du passage d'une minute fait échouer la CI au hasard. `e2e/coque.spec.ts:78` lit le libellé « hors mesh depuis N min » dans la barre, puis attend exactement le même texte dans les Réglages : quand une minute passe entre les deux, il échoue (« 2 min » attendu, « 3 min » reçu).
+- **La correction.**
+  - Ce test compare la partie stable du libellé : le même état, avec une durée de la forme attendue, sans exiger le même nombre de minutes. Ce qu'il prouve ne change pas : la pastille mène aux Réglages, section Mesh, sans rien basculer.
+  - Les autres e2e qui comparent un libellé d'horloge (durée relative, heure, date) entre deux lectures, ou à une valeur calculée avant l'action, sont listés dans le rapport et corrigés de la même façon.
+  - `eslint.config.js` ignore `test-results/`, comme `.gitignore` et `.prettierignore` : un gate lancé après un e2e local ne lit plus les traces de Playwright.
+  - Le job `e2e` passe de 30 à 45 minutes de délai : un runner est plus lent que le VPS, où l'e2e prend 12 minutes.
+- **Tests :**
+  - le test de `coque.spec.ts` passe quand la minute change entre les deux lectures (par exemple en avançant l'horloge de la page avec `page.clock`, ou en le relançant à cheval sur une minute) ;
+  - l'e2e entier en local, avec `CI=1` : aucun échec ;
+  - le gate entier, lancé après l'e2e, dans le même worktree ;
+  - la CI de la PR, job `e2e` compris.
+
 ## 4. Fini quand
 
-- Le point 51.1 est commité, le gate est vert, l'e2e est vert sur le VPS, et la CI de la PR est verte, job `e2e` compris.
+- Les points 51.1 et 51.2 sont commités, le gate est vert, l'e2e est vert sur le VPS, et la CI de la PR est verte, job `e2e` compris.
 - Julien a donné son oui pour le merge.
 
 ## 5. Hors périmètre
