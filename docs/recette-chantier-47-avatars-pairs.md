@@ -2,7 +2,7 @@
 
 Cocher après observation sur une instance de recette. Ne recopier aucune
 identité ni erreur réelle dans le compte rendu. Les noms ci-dessous sont
-uniquement des exemples. Q-J1 à Q-J3 restent à confirmer par Julien avant le merge.
+uniquement des exemples. Q-J1 à Q-J3 sont validés par Julien (13 novembre).
 
 ## Préparer
 

@@ -2,7 +2,7 @@
 
 | Champ | Valeur |
 |---|---|
-| État | **Révision 0, 12 novembre 2026.** Julien a choisi ce chantier dans la ligne « Plus tard » du programme. Il a demandé d'avancer seul pendant la nuit : les questions Q-J1 à Q-J3 sont tranchées par morzu-vps, à confirmer par Julien avant le merge. |
+| État | **Révision 0, 12 novembre 2026.** Julien a choisi ce chantier dans la ligne « Plus tard » du programme. Il a demandé d'avancer seul pendant la nuit : morzu-vps a tranché les questions Q-J1 à Q-J3, et Julien a validé ces choix le 13 novembre. |
 | Emplacement final | `docs/chantiers/47-avatars-pairs.md` sur `main` |
 | Base | `main`, après le merge du 46 (#158). |
 | Organisation | morzu-vps gère le chantier. Un agent Codex CLI écrit le code et les tests de chaque point, sur un brief tiré de ce plan. morzu-vps relit chaque diff, lance le gate, commite et ouvre la PR. |
@@ -67,9 +67,9 @@ Le programme (§5, phase 5, « Plus tard ») prévoit des avatars de pairs. Depu
 
 ### Les questions tranchées pour Julien
 
-- **Q-J1, la surcharge** : dans la config seulement, sans édition à l'écran (choix de morzu-vps, à confirmer). L'interface va bouger ; un réglage à l'écran viendra avec elle.
-- **Q-J2, les écrans en texte seul** : le téléphone, les confirmations, l'appareil et le mode host (choix de morzu-vps, à confirmer).
-- **Q-J3, la même cell dans deux meshes** : le même avatar (choix de morzu-vps, à confirmer).
+- **Q-J1, la surcharge** : dans la config seulement, sans édition à l'écran (choix de morzu-vps, validé par Julien). L'interface va bouger ; un réglage à l'écran viendra avec elle.
+- **Q-J2, les écrans en texte seul** : le téléphone, les confirmations, l'appareil et le mode host (choix de morzu-vps, validé par Julien).
+- **Q-J3, la même cell dans deux meshes** : le même avatar (choix de morzu-vps, validé par Julien).
 
 ## 5. Points
 
@@ -112,4 +112,4 @@ Le programme (§5, phase 5, « Plus tard ») prévoit des avatars de pairs. Depu
 
 - Les points 47.1 et 47.2 sont commités.
 - Le gate est vert, et la CI de la PR est verte.
-- Julien a confirmé Q-J1 à Q-J3, a fait la recette et a donné son oui pour le merge.
+- Julien a fait la recette et a donné son oui pour le merge. Q-J1 à Q-J3 sont validés (13 novembre).
