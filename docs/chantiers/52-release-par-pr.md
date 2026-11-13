@@ -38,6 +38,7 @@ Depuis le 13 novembre 2026, une règle GitHub protège `main` : les jobs `gate (
   - un test du script, dans un dossier temporaire qui contient une copie de `package.json`, de `package-lock.json` et de `app/src-tauri/tauri.conf.json` : la version passe dans les trois fichiers, un semver invalide est refusé sans rien changer, et aucun fichier hors de ces trois n'est touché ;
   - un test qui lit `release.yml` : aucun `git push` vers `main`, aucun `git commit`, et le contrôle de la version sur `main` est présent ;
   - le gate entier, et `gate:e2e` entier sous Node 22 avec `CI=1`.
+52.1 commité. Gate vert (3 891 tests). `gate:e2e` entier vert sous Node 22 avec `CI=1` (paquet, archive serveur, 132 tests Playwright), aucun daemon résiduel. Le script travaille toujours dans le dossier courant : `AID_RELEASE_DIR` reste la variable du dossier de sortie de `package-server.sh`.
 
 ## 4. Fini quand
 
