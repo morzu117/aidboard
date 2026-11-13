@@ -121,6 +121,7 @@ de PTY (les agents meurent au redémarrage, assumé).
   (`workflow_dispatch`, entrée `version`) fait le bump, le commit sur `main`, le tag et la
   publication. Aucun `git tag` à la main, aucun bump de version dans une PR ordinaire (règle
   d'exécution inchangée : ne bump aucune version).
+  Évolution D329 : le [chantier 52](52-release-par-pr.md) déplace le bump dans une PR préparée par script ; Release contrôle la version puis pose seul le tag et publie.
 - **DR3 — AID Server embarque son Node.** Archive = `node/` (binaire officiel de la version
   LTS 22 épinglée par `mise.toml`, lue au packaging), `dist/`, `node_modules/` des seules
   dépendances d'exécution (`npm ci --omit=dev` depuis le tarball `npm pack`, natifs compilés
