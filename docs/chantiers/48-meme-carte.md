@@ -147,6 +147,8 @@ Julien relie à la main des cartes qui suivent le même travail sur plusieurs me
 
 ### 48.3 La fin
 
+- **Une date sans fuseau** (note du lab, DM 97486) : `memeInstant` lit une date ISO sans fuseau comme de l'UTC avant de la comparer. Test : une même date, avec et sans `Z`, n'est pas « carte remplacée ».
+
 - Un e2e avec deux faux meshes : relier deux cartes, voir les deux états, voir l'écart, puis changer le `thread_uuid` d'une carte sous le même numéro et voir « carte remplacée ».
 - La fiche `docs/recette-chantier-48-meme-carte.md`.
 - La ligne du README.
