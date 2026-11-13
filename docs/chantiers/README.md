@@ -217,4 +217,5 @@ Indépendants de la pile v0.1 ; chacun porte son propre jalon.
 | 48 | [Même carte, deux états : des cartes reliées à la main entre meshes, leurs états côte à côte, en lecture seule](48-meme-carte.md) | `feat/48-meme-carte` | `main` | 46 : le registre et les empreintes ; 24 : le board | l'export masqué (bloc 12, côté lab) |
 | 49 | [Des noms neutres dans le dépôt : les anciens noms de cells et d'hôte remplacés par des noms d'exemple, avec un test de garde](49-noms-neutres.md) | `feat/49-noms-neutres` | `main` | — | la réécriture de l'historique, si Julien la veut |
 | 50 | [Les e2e après D314 : les réglages du faux swarph passent par un script, et non plus par l'environnement du daemon](50-e2e-env.md) | `fix/50-e2e-env` | `main` | 46 : D314 | — |
-| 51 | [L'e2e dans la CI : un job qui lance `gate:e2e` sur chaque PR et sur `main`](51-e2e-ci.md) | `ci/51-e2e-ci` | `main` | 50 : l'e2e vert | la protection de `main`, si Julien la veut |
+| 51 | [L'e2e dans la CI : un job qui lance `gate:e2e` sur chaque PR et sur `main`](51-e2e-ci.md) | `ci/51-e2e-ci` | `main` | 50 : l'e2e vert | — |
+| 52 | [La release sans push sur `main` : la version passe par une PR, Release ne fait plus que le tag et la publication](52-release-par-pr.md) | `ci/52-release-par-pr` | `main` | 13 : DR1, DR2, DR16 ; 51 : la protection de `main` | — |
