@@ -19,8 +19,8 @@ const record = (id: number, kind = 'question') =>
   JSON.stringify({
     id,
     thread_id: `th_${id}`,
-    from_node: 'mesh-gw',
-    to_node: 'morzu-mac',
+    from_node: 'gateway',
+    to_node: 'cell-aid',
     kind,
     content: `message ${id}`,
     created_at: `2026-10-20T10:00:${String(id % 60).padStart(2, '0')}+02:00`,
@@ -48,8 +48,8 @@ function setup(over: Partial<MeshConfig> = {}, fakeEnv: Record<string, string> =
   const config: MeshConfig = {
     ...DEFAULT_CONFIG.mesh,
     bin: FAKE_SWARPH,
-    cell: 'morzu-mac',
-    gateway: 'http://mesh-gw.example.ts.net:8788',
+    cell: 'cell-aid',
+    gateway: 'http://gateway.example.ts.net:8788',
     stateRoot: join(home, 'swarph_state'),
     tailscale: { manage: false, bin: FAKE_TAILSCALE },
     ...over,
@@ -88,7 +88,7 @@ function setup(over: Partial<MeshConfig> = {}, fakeEnv: Record<string, string> =
         .map((e) => e.data),
     dms: () => store.since(null).filter((e) => e.type === 'mesh.dm'),
     writeInbox,
-    marker: join(config.stateRoot, 'morzu-mac', 'monitor.pid'),
+    marker: join(config.stateRoot, 'cell-aid', 'monitor.pid'),
   };
 }
 
@@ -104,10 +104,10 @@ test('connect : monitor start une fois, suivi démarré, un seul mesh.state « c
     monitor: 'running',
     pending: 0,
     since: 'T',
-    cell: 'morzu-mac',
+    cell: 'cell-aid',
   });
   expect(t.swarph().filter((l) => l.startsWith('monitor start'))).toEqual([
-    'monitor start --as morzu-mac --deliver pull',
+    'monitor start --as cell-aid --deliver pull',
   ]);
   expect(existsSync(t.marker)).toBe(true);
   expect(t.states()).toHaveLength(1);
@@ -124,8 +124,8 @@ test('inbox.log : 3 DM ⇒ 3 mesh.dm, 0 au second passage, 2 de plus après ré�
   expect(t.dms().map((e) => e.data.id)).toEqual([1, 2, 3]);
   expect(t.dms()[0]!.data).toMatchObject({
     threadId: 'th_1',
-    from: 'mesh-gw',
-    to: 'morzu-mac',
+    from: 'gateway',
+    to: 'cell-aid',
     kind: 'fyi',
     content: 'message 1',
     createdAt: '2026-10-20T10:00:01+02:00',
@@ -158,10 +158,10 @@ test('manage: true : up à la connexion, down à la déconnexion — seulement s
   a.setTailscale('Stopped');
   expect((await a.svc.connect()).connected).toBe(true);
   expect(a.tailscale()).toContain('up');
-  expect(a.swarph()).toContain('monitor start --as morzu-mac --deliver pull');
+  expect(a.swarph()).toContain('monitor start --as cell-aid --deliver pull');
   const off = await a.svc.disconnect();
   expect(off).toMatchObject({ connected: false, monitor: 'stopped', tailscale: 'stopped' });
-  expect(a.swarph()).toContain('monitor stop --as morzu-mac');
+  expect(a.swarph()).toContain('monitor stop --as cell-aid');
   expect(a.tailscale()).toContain('down');
   expect(existsSync(a.marker)).toBe(false);
 
@@ -207,7 +207,7 @@ test('init : un monitor détaché déjà vivant est suivi sans être relancé, e
 test('refresh : le monitor disparu ⇒ déconnecté, suivi arrêté ; dispose ne touche ni au monitor ni à Tailscale', async () => {
   const t = setup();
   await t.svc.connect();
-  writeFileSync(join(t.config.stateRoot, 'morzu-mac', 'monitor.pid'), '');
+  writeFileSync(join(t.config.stateRoot, 'cell-aid', 'monitor.pid'), '');
   const { rmSync } = await import('node:fs');
   rmSync(t.marker);
   const state = await t.svc.refresh();
@@ -285,7 +285,7 @@ test('daemon : le service existe seulement avec une cell, relit l’état au dé
       mesh: {
         ...DEFAULT_CONFIG.mesh,
         bin: FAKE_SWARPH,
-        cell: 'morzu-mac',
+        cell: 'cell-aid',
         stateRoot: join(home, 'swarph_state'),
         tailscale: { manage: false, bin: FAKE_TAILSCALE },
       },
@@ -297,7 +297,7 @@ test('daemon : le service existe seulement avec une cell, relit l’état au dé
     5000,
     'mesh.state au démarrage',
   );
-  expect(state).toMatchObject({ connected: false, monitor: 'stopped', cell: 'morzu-mac' });
+  expect(state).toMatchObject({ connected: false, monitor: 'stopped', cell: 'cell-aid' });
   await avec.d.stop();
 });
 

@@ -245,8 +245,8 @@ lecteurs sous le même token se volent l'état de lecture) :
 
 ```yaml
 mesh:
-  cell: morzu-mac # vide = désactivé
-  gateway: http://mesh-gw.example.ts.net:8788 # MESH_GATEWAY_URL, pas un secret
+  cell: cell-aid # vide = désactivé
+  gateway: http://gateway.example.ts.net:8788 # MESH_GATEWAY_URL, pas un secret
   # bin: swarph, cellFile: ~/.config/swarph/cells/<cell>.yaml, stateRoot: ~/swarph_state (dérivés)
   # tailscale: { manage: false }
 ```

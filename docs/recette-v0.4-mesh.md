@@ -8,7 +8,7 @@ Grille du point 12.7 du plan `docs/chantiers/12-mesh-swarph.md`. Deux niveaux :
   réseau, jamais un token.
 - **recette manuelle** — le vrai mesh de peer-a, à dérouler par Julien sur le Mac. Aucune
   case de cette partie ne peut être cochée depuis une session automatisée : elle exige la
-  cell `morzu-mac` enrôlée auprès du gateway `mesh-gw` et un pair qui lui écrit.
+  cell `cell-aid` enrôlée auprès du gateway `gateway` et un pair qui lui écrit.
 
 ## Prérequis humains (12.0) — tous à faire avant la recette manuelle
 
@@ -16,18 +16,18 @@ Grille du point 12.7 du plan `docs/chantiers/12-mesh-swarph.md`. Deux niveaux :
 aucune cell ni token.
 
 - [ ] `uv tool install --python 3.12 swarph-cli` ; `swarph --version` répond (≥ 0.72)
-- [ ] Tailscale démarré et connecté au tailnet `example.ts.net` (`mesh-gw` dans les pairs)
-- [ ] Onboarding de la cell `morzu-mac` auprès de peer-a : token déposé par swarph dans
-  `~/.config/swarph/morzu-mac.peer_token` (A-I-D ne le lit jamais), `swarph init morzu-mac`
-  a produit `~/.config/swarph/cells/morzu-mac.yaml`
-- [ ] Monitor du VPS relancé (`swarph monitor start --as morzu-vps --deliver pull`, sur le
-  VPS) : sans lui, `morzu-vps` reste sourd et ne peut pas répondre à `morzu-mac`
+- [ ] Tailscale démarré et connecté au tailnet `example.ts.net` (`gateway` dans les pairs)
+- [ ] Onboarding de la cell `cell-aid` auprès de peer-a : token déposé par swarph dans
+  `~/.config/swarph/cell-aid.peer_token` (A-I-D ne le lit jamais), `swarph init cell-aid`
+  a produit `~/.config/swarph/cells/cell-aid.yaml`
+- [ ] Monitor du VPS relancé (`swarph monitor start --as cell-gestion --deliver pull`, sur le
+  VPS) : sans lui, `cell-gestion` reste sourd et ne peut pas répondre à `cell-aid`
 - [ ] `~/.aid/config.yaml` :
 
   ```yaml
   mesh:
-    cell: morzu-mac
-    gateway: http://mesh-gw.example.ts.net:8788
+    cell: cell-aid
+    gateway: http://gateway.example.ts.net:8788
   ```
 
   (`bin`, `cellFile`, `stateRoot` restent dérivés ; `tailscale.manage` reste `false` — D37 :
@@ -44,18 +44,18 @@ aucune cell ni token.
   l'infobulle — couverture automatique : `test/web/boite.test.tsx`
 - [ ] 12.b Connexion : un clic sur la pastille ⇒ « mesh · connexion… » puis « mesh · 0 à
   traiter » ; `swarph monitor status --json` dans un terminal dit `running: true` pour
-  `morzu-mac` ; `~/swarph_state/morzu-mac/mesh-sidecar/inbox.log` existe — couverture
+  `cell-aid` ; `~/swarph_state/cell-aid/mesh-sidecar/inbox.log` existe — couverture
   automatique : `test/mesh-service.test.ts`, `test/mesh-routes.test.ts`, `e2e/mesh.spec.ts`
-- [ ] 12.c Un DM arrive : depuis le VPS, `swarph mesh send morzu-mac --kind question --content "…" --as morzu-vps`
-  (ou peer-a depuis `mesh-gw`) ; en moins d'une minute, la pastille passe à « 1 à traiter »,
-  la Boîte montre la section « Mesh · morzu-mac » avec le DM dans « À traiter » (émetteur,
+- [ ] 12.c Un DM arrive : depuis le VPS, `swarph mesh send cell-aid --kind question --content "…" --as cell-gestion`
+  (ou peer-a depuis `gateway`) ; en moins d'une minute, la pastille passe à « 1 à traiter »,
+  la Boîte montre la section « Mesh · cell-aid » avec le DM dans « À traiter » (émetteur,
   kind, horodatage, fil, contenu **en texte brut** dans le bloc « donnée d'un pair du
   mesh ») — couverture automatique : `e2e/mesh.spec.ts`, `test/web/boite.test.tsx`
 - [ ] 12.d Notification : onglet caché, un DM `question` ou `unblock` déclenche une
   notification du navigateur ; un `fyi` n'en déclenche pas ; le clic mène à la Boîte —
   couverture automatique : `test/web/notifications.test.tsx`
 - [ ] 12.e « Vu » retire le DM de la Boîte et décrémente la pastille ; il ne touche pas au
-  ledger de swarph (le DM reste `unread` côté cell : `swarph mesh inbox --peek --as morzu-mac` le montre
+  ledger de swarph (le DM reste `unread` côté cell : `swarph mesh inbox --peek --as cell-aid` le montre
   encore) — couverture automatique : `e2e/mesh.spec.ts`, `test/mesh-routes.test.ts`
 - [ ] 12.f « Ouvrir la cell » : choix d'un sujet actif ⇒ un agent `swarph-cell` s'ouvre dans
   le terminal du sujet, c'est la session Claude de la cell (`swarph spawn … --no-starter
@@ -68,7 +68,7 @@ aucune cell ni token.
 - [ ] 12.h Déconnexion : clic sur la pastille ⇒ « hors mesh depuis … » ; `monitor status`
   dit `running: false` ; Tailscale est toujours connecté (`manage: false`) ; `ssh vps`
   passe toujours — couverture automatique : `e2e/mesh.spec.ts`
-- [ ] 12.i Reconnexion une heure plus tard : les DM envoyés entre-temps à `morzu-mac`
+- [ ] 12.i Reconnexion une heure plus tard : les DM envoyés entre-temps à `cell-aid`
   arrivent (le monitor en mode `pull` les rattrape), sans doublon dans la Boîte
   (curseur par `id`) — couverture automatique : `test/mesh-service.test.ts` (ids déjà
   vus ignorés)

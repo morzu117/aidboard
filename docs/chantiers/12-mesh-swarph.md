@@ -46,15 +46,15 @@ Ce que la relecture du 2026-10-20 change à l'« État actuel » (le reste est i
   `AID_*`, comme un agent lancé depuis A-I-D — relancer avec `env -u AID_HOME -u
   AID_NO_BROWSER`, le code n'est pas en cause).
 - Prérequis 12.0 sur le Mac au 2026-10-20 : `swarph` absent (`uv` et `python3.12`
-  présents), Tailscale installé mais **arrêté** (`mesh-gw` bien dans la liste des pairs),
+  présents), Tailscale installé mais **arrêté** (`gateway` bien dans la liste des pairs),
   gateway injoignable tant que Tailscale est arrêté, aucune cell ni token
   (`~/.config/swarph` absent). Rien n'a bougé depuis le constat du 19 : 12.1 à 12.6 se
   développent avec les faux binaires (D40) ; 12.7 attend 12.0.
 
 ## Pourquoi
 
-Julien a une cell swarph (`morzu-vps`) sur son VPS, reliée au mesh de peer-a (gateway
-`mesh-gw` sur le tailnet `example.ts.net`). Il veut pouvoir, **de temps à autre**,
+Julien a une cell swarph (`cell-gestion`) sur son VPS, reliée au mesh de peer-a (gateway
+`gateway` sur le tailnet `example.ts.net`). Il veut pouvoir, **de temps à autre**,
 brancher ce Mac au même mesh — recevoir les DM qui lui sont adressés, voir ce qui attend,
 y répondre — et que ce geste se fasse dans A-I-D, pas dans un terminal à côté.
 
@@ -70,11 +70,11 @@ le Mac) :
 
 | Constat | Effet |
 | --- | --- |
-| Le Mac (`my-mac`) est déjà sur le tailnet où `mesh-gw` est partagé ; Tailscale est installé mais **arrêté** | « Se connecter au mesh » commence par Tailscale, puis le gateway répond en `http://mesh-gw.example.ts.net:8788` |
+| Le Mac (`my-mac`) est déjà sur le tailnet où `gateway` est partagé ; Tailscale est installé mais **arrêté** | « Se connecter au mesh » commence par Tailscale, puis le gateway répond en `http://gateway.example.ts.net:8788` |
 | `swarph` n'est pas installé sur le Mac ; Python système 3.9, swarph exige ≥ 3.10 ; `uv` et `python3.12` sont présents | `uv tool install --python 3.12 swarph-cli` (prérequis humain, 12.0) |
-| Le mesh exige **une identité par acteur** (règle 1 de son `architecture-overview.md`) ; lire une inbox la **consomme** (`swarph mesh inbox` marque lu, sauf `--peek`) | Le Mac ne peut pas réutiliser le token de `morzu-vps` : deux lecteurs se voleraient l'état de lecture. Il lui faut sa propre cell (D34) |
-| Le monitor du VPS est **mort** (`monitor status --json` : `running: false`, pidfile périmé, 16 DM de `mesh-gw` non livrés, dernier DM reçu le 2026-10-16 21:17) ; seul `swarph channel-serve` tourne, et il ne fait que suivre `inbox.log` | La cell `morzu-vps` est sourde depuis le 16/10. Hors périmètre du code A-I-D, mais c'est l'incident que ce chantier doit rendre visible côté Mac (D36 : état du monitor affiché) |
-| Un DM de `mesh-gw` (id 73544, 2026-10-16) demande à `morzu-vps` si A-I-D lira le board swarph « comme il lit `swairm inbox` » et si un JSON versionné lui conviendrait | Le contrat retenu ici (D35) est la réponse : A-I-D lit `inbox.log` localement ; le board viendra plus tard (hors périmètre) |
+| Le mesh exige **une identité par acteur** (règle 1 de son `architecture-overview.md`) ; lire une inbox la **consomme** (`swarph mesh inbox` marque lu, sauf `--peek`) | Le Mac ne peut pas réutiliser le token de `cell-gestion` : deux lecteurs se voleraient l'état de lecture. Il lui faut sa propre cell (D34) |
+| Le monitor du VPS est **mort** (`monitor status --json` : `running: false`, pidfile périmé, 16 DM de `gateway` non livrés, dernier DM reçu le 2026-10-16 21:17) ; seul `swarph channel-serve` tourne, et il ne fait que suivre `inbox.log` | La cell `cell-gestion` est sourde depuis le 16/10. Hors périmètre du code A-I-D, mais c'est l'incident que ce chantier doit rendre visible côté Mac (D36 : état du monitor affiché) |
+| Un DM de `gateway` (id 73544, 2026-10-16) demande à `cell-gestion` si A-I-D lira le board swarph « comme il lit `swairm inbox` » et si un JSON versionné lui conviendrait | Le contrat retenu ici (D35) est la réponse : A-I-D lit `inbox.log` localement ; le board viendra plus tard (hors périmètre) |
 
 ## État actuel
 
@@ -142,7 +142,7 @@ Côté swarph (lu dans `~/Projects/swarph-cli`, version 0.72.25 ; le VPS est en 
 | Une section `mesh` dans `~/.aid/config.yaml` ; `aid doctor` vérifie swarph, la cell, Tailscale | Installer swarph ou créer la cell depuis A-I-D : prérequis humain (12.0), l'onboarding passe par un tiers |
 | Deux actions machine `mesh.connect` / `mesh.disconnect` : Tailscale (lecture, et `up`/`down` seulement sur option), `swarph monitor start/stop`, suivi d'`inbox.log` | Piloter le monitor du VPS : autre machine, hors d'A-I-D |
 | Chaque DM reçu devient un événement `mesh.dm` (source `swarph`) ; l'état du monitor devient `mesh.state` ; projection `mesh_inbox` ; Boîte : « à traiter » (question, unblock) et « informations » (fyi, status, answer) ; pastille d'état dans la barre ; notification sur `question`/`unblock` | Répondre depuis l'UI (`swarph mesh reply`) : l'identité qui répond est la cell, pas Julien (D38) ; reporté, comme l'écriture Swairm |
-| Un agent `swarph-cell` : `swarph spawn <cell.yaml> --no-starter --no-banner` dans le PTY d'un sujet, pour **répondre** depuis la session Claude de la cell | Board et obligations (`swarph board … --json`) comme colonne « à démarrer » : même geste que grokbot v0.5, chantier à part — c'est la réponse à donner à `mesh-gw` |
+| Un agent `swarph-cell` : `swarph spawn <cell.yaml> --no-starter --no-banner` dans le PTY d'un sujet, pour **répondre** depuis la session Claude de la cell | Board et obligations (`swarph board … --json`) comme colonne « à démarrer » : même geste que grokbot v0.5, chantier à part — c'est la réponse à donner à `gateway` |
 | | `brain-ask`, `memory`, `dreaming` (gbrain, décommissionné au chantier 10), `swarph codegraph` (son propre index), `swarph hooks`, lanes, `service serve`, plugin channel : hors du rôle cockpit |
 
 Multi-mesh : voir le chantier 46 (D311, D312, D314, D316), qui remplace le mesh unique par un registre nommé, des identités de données par mesh et une Boîte fusionnée.
@@ -151,15 +151,15 @@ Multi-mesh : voir le chantier 46 (D311, D312, D314, D316), qui remplace le mesh 
 
 La numérotation continue celle de `docs/chantiers/README.md` §1.
 
-- **D34 — Le Mac a sa propre cell, `morzu-mac`.** Jamais le token de `morzu-vps` : lire
+- **D34 — Le Mac a sa propre cell, `cell-aid`.** Jamais le token de `cell-gestion` : lire
   une inbox la consomme, et deux lecteurs sous la même identité se volent l'état de lecture
   (c'est le défaut contre lequel `--consume`/`--peek` ont été ajoutés). Coût : un onboarding
-  côté peer-a (token partagé pour `swarph onboard morzu-mac`, ou enregistrement du peer par
-  lui, puis `swarph ratify`). Alternative écartée : suivre `morzu-vps` par SSH depuis le Mac
+  côté peer-a (token partagé pour `swarph onboard cell-aid`, ou enregistrement du peer par
+  lui, puis `swarph ratify`). Alternative écartée : suivre `cell-gestion` par SSH depuis le Mac
   — ce n'est pas « connecter le Mac au mesh », et ça n'enlève pas la surdité actuelle du VPS.
-- **D35 — A-I-D ne parle jamais au gateway.** Il lance `swarph monitor start --as morzu-mac
+- **D35 — A-I-D ne parle jamais au gateway.** Il lance `swarph monitor start --as cell-aid
   --deliver pull` (détaché, idempotent), lit `monitor status --json` et suit
-  `<state>/morzu-mac/mesh-sidecar/inbox.log`. Il n'appelle jamais `swarph mesh inbox`
+  `<state>/cell-aid/mesh-sidecar/inbox.log`. Il n'appelle jamais `swarph mesh inbox`
   (consomme), ne lit jamais `~/.config/swarph/*.peer_token`, n'envoie rien. Même contrat
   que §7 du brief pour Swairm, avec un fichier JSONL local à la place d'un `events --follow`.
 - **D36 — Pas de faux agent : deux nouveaux types d'événement.** `mesh.dm` (un par
@@ -181,8 +181,8 @@ La numérotation continue celle de `docs/chantiers/README.md` §1.
   l'environnement de ce seul agent `MESH_GATEWAY_URL` (une URL, pas un secret) ; `SWARPH_SELF`
   est posé par spawn lui-même. Un seul `swarph-cell` vivant par cell (session-id persistant).
 - **D39 — Configuration dans `~/.aid/config.yaml`, section `mesh`.**
-  `bin: swarph`, `cell: morzu-mac`, `cellFile: ~/.config/swarph/cells/morzu-mac.yaml`,
-  `gateway: http://mesh-gw.example.ts.net:8788`, `stateRoot: ~/swarph_state`,
+  `bin: swarph`, `cell: cell-aid`, `cellFile: ~/.config/swarph/cells/cell-aid.yaml`,
+  `gateway: http://gateway.example.ts.net:8788`, `stateRoot: ~/swarph_state`,
   `tailscale: { manage: false, bin: /Applications/Tailscale.app/Contents/MacOS/Tailscale }`.
   `cell` vide ⇒ le mesh est désactivé et rien n'apparaît dans l'UI. Le token n'y figure
   jamais.
@@ -192,7 +192,7 @@ La numérotation continue celle de `docs/chantiers/README.md` §1.
   `AID_HOME` temporaire comme partout. Jamais le vrai `swarph`, jamais `claude`.
 - **D41 — Pas d'annonce de présence au mesh en v1.** Se connecter ne fait aucun `mesh
   register --capability`. Les DM reçus pendant une absence attendent au gateway et le monitor
-  les rattrape depuis son curseur : rien n'est perdu, mais un pair qui écrit à `morzu-mac`
+  les rattrape depuis son curseur : rien n'est perdu, mais un pair qui écrit à `cell-aid`
   hors connexion n'a aucun signal. La Boîte affiche « hors mesh depuis <durée> » pour que
   Julien, lui, le sache. À revoir avec peer-a si le mesh veut une capacité `presence`.
 
@@ -203,16 +203,16 @@ La numérotation continue celle de `docs/chantiers/README.md` §1.
 À faire par Julien avant 12.3 ; `aid doctor` (12.2) les vérifie ensuite.
 
 - Mac : `uv tool install --python 3.12 swarph-cli` ; `swarph --version`.
-- Mac : Tailscale démarré, puis `curl -s -m 5 http://mesh-gw.example.ts.net:8788/health`
+- Mac : Tailscale démarré, puis `curl -s -m 5 http://gateway.example.ts.net:8788/health`
   → `200`.
-- Identité : obtenir auprès de peer-a l'enregistrement de `morzu-mac` (token partagé pour
-  `swarph onboard morzu-mac`, ou peer créé par lui) et sa ratification ; vérifier que
-  `~/.config/swarph/morzu-mac.peer_token` existe.
-- Cell : `swarph init morzu-mac --provider claude --role morzu-mac` (cwd : un dossier de
-  travail, pas un worktree A-I-D) ; `swarph spawn morzu-mac --dry-run` affiche la commande
+- Identité : obtenir auprès de peer-a l'enregistrement de `cell-aid` (token partagé pour
+  `swarph onboard cell-aid`, ou peer créé par lui) et sa ratification ; vérifier que
+  `~/.config/swarph/cell-aid.peer_token` existe.
+- Cell : `swarph init cell-aid --provider claude --role cell-aid` (cwd : un dossier de
+  travail, pas un worktree A-I-D) ; `swarph spawn cell-aid --dry-run` affiche la commande
   `claude` attendue.
-- VPS, hors A-I-D : relancer le monitor de `morzu-vps`
-  (`MESH_GATEWAY_URL=… SWARPH_SELF=morzu-vps ~/.local/bin/swarph monitor start`), puis
+- VPS, hors A-I-D : relancer le monitor de `cell-gestion`
+  (`MESH_GATEWAY_URL=… SWARPH_SELF=cell-gestion ~/.local/bin/swarph monitor start`), puis
   `monitor status --brief` ; 16 DM attendent.
 
 ### 12.1 — Schéma : source, types, modèle, migration
@@ -307,7 +307,7 @@ Fichiers : `web/src/ui/Barre.tsx`, `web/src/ecrans/Boite.tsx`, `web/src/ui/Notif
 - Barre : pastille « Mesh » à trois états — hors mesh (gris, « depuis <durée> »),
   connexion en cours, connecté (« N à traiter »). Clic ⇒ connect/disconnect ; si Tailscale
   est arrêté et `manage: false`, le bouton est désactivé avec l'explication.
-- Boîte : section « Mesh · morzu-mac » sous les agents. **À traiter** : `question`,
+- Boîte : section « Mesh · cell-aid » sous les agents. **À traiter** : `question`,
   `unblock`. **Informations** : `fyi`, `status`, `answer`. Chaque DM : émetteur, kind,
   horodatage, fil (`thread_id` tronqué), contenu rendu **en texte brut** dans un bloc
   encadré « donnée d'un pair du mesh » (jamais Markdown, jamais HTML — même raison que D30 :
@@ -348,7 +348,7 @@ faux binaires).
 - e2e : daemon avec `fake-swarph.sh`/`fake-tailscale.sh`, connect depuis la barre, 3 DM de
   fixture apparaissent, « Vu » sur l'un, disconnect ⇒ pastille « hors mesh ».
 - Recette manuelle (vrai swarph, vrai mesh, à faire par Julien) : Tailscale up, connect
-  dans A-I-D, peer-a ou `morzu-vps` envoie un DM à `morzu-mac`, il apparaît en moins d'une
+  dans A-I-D, peer-a ou `cell-gestion` envoie un DM à `cell-aid`, il apparaît en moins d'une
   minute ; ouvrir la cell, répondre depuis la session, le fil se complète ; disconnect ;
   reconnect une heure plus tard, les DM envoyés entre-temps arrivent.
 
@@ -387,10 +387,10 @@ Vérification : `npm run gate` et `npm run gate:e2e`.
 ## Fini quand
 
 - Depuis la barre d'A-I-D, « Mesh » se connecte et se déconnecte ; un DM envoyé à
-  `morzu-mac` par un pair apparaît dans la Boîte sans ouvrir de terminal.
+  `cell-aid` par un pair apparaît dans la Boîte sans ouvrir de terminal.
 - Un DM de kind `question`/`unblock` déclenche une notification ; les autres non.
 - « Ouvrir la cell » lance `swarph spawn` dans un PTY et la session répond sous l'identité
-  `morzu-mac`, visible côté pair.
+  `cell-aid`, visible côté pair.
 - Redémarrer le daemon pendant une connexion ne relance ni ne tue le monitor ; l'état
   affiché est relu depuis `monitor status --json`.
 - `aid doctor` nomme chaque prérequis manquant (swarph, cell, token, Tailscale) sans jamais

@@ -6,7 +6,7 @@
 | Emplacement final | `docs/chantiers/46-multi-mesh.md` sur `main` |
 | Base | `feat/45-confirmations-completes` (#153), parce que le 46 touche les mêmes confirmations et les mêmes actions d'avis. Se rebase sur `main` après les merges de #152 et #153. |
 | Spec | `specs/multi-mesh-46.md`, révision 2 (dossier de travail, hors dépôt). |
-| Organisation | morzu-vps gère le chantier. Un agent Codex CLI écrit le code et les tests de chaque point, sur un brief tiré de ce plan. morzu-vps relit chaque diff, lance le gate, commite et ouvre la PR. |
+| Organisation | cell-gestion gère le chantier. Un agent Codex CLI écrit le code et les tests de chaque point, sur un brief tiré de ce plan. cell-gestion relit chaque diff, lance le gate, commite et ouvre la PR. |
 | Validation | Le lab relit le plan, puis le code de 46.3 et 46.4. Ensuite viennent la recette de Julien et son oui pour le merge, CI verte. |
 
 ## 0. La condition du commander

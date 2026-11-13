@@ -25,8 +25,8 @@ const record = (
   JSON.stringify({
     id,
     thread_id: `th_${id}`,
-    from_node: 'mesh-gw',
-    to_node: 'morzu-mac',
+    from_node: 'gateway',
+    to_node: 'cell-aid',
     kind,
     content: `m${id}`,
     created_at: at,
@@ -43,8 +43,8 @@ async function bootWithMesh() {
       mesh: {
         ...DEFAULT_CONFIG.mesh,
         bin: FAKE_SWARPH,
-        cell: 'morzu-mac',
-        gateway: 'http://mesh-gw.example.ts.net:8788',
+        cell: 'cell-aid',
+        gateway: 'http://gateway.example.ts.net:8788',
         stateRoot: join(home, 'swarph_state'),
         tailscale: { manage: false, bin: FAKE_TAILSCALE },
       },
@@ -72,7 +72,7 @@ test('connect (202) ⇒ mesh.state connecté ; les DM suivis arrivent dans /api/
   expect((await meshApi()).state).toMatchObject({
     connected: false,
     monitor: 'stopped',
-    cell: 'morzu-mac',
+    cell: 'cell-aid',
   });
   const r = await post('/api/mesh/connect');
   expect(r.statusCode).toBe(202);
@@ -89,8 +89,8 @@ test('connect (202) ⇒ mesh.state connecté ; les DM suivis arrivent dans /api/
   expect(inbox[0]).toEqual({
     id: 2,
     threadId: 'th_2',
-    from: 'mesh-gw',
-    to: 'morzu-mac',
+    from: 'gateway',
+    to: 'cell-aid',
     kind: 'question',
     content: 'm2',
     createdAt: '2026-10-20T10:00:02+02:00',

@@ -2,10 +2,10 @@
 
 | Champ | Valeur |
 |---|---|
-| État | **Révision 0, 10 novembre 2026.** Spec rév. 1 (morzu-vps). Choix de Julien : oui aux recos Q1 à Q4. Réponses du lab à L1–L3 (DM 95591). |
+| État | **Révision 0, 10 novembre 2026.** Spec rév. 1 (cell-gestion). Choix de Julien : oui aux recos Q1 à Q4. Réponses du lab à L1–L3 (DM 95591). |
 | Emplacement final | `docs/chantiers/41-board-unifie.md` sur `main` |
 | Base | `main` (07b2fc1, v0.5.0) |
-| Organisation | Comme au 44. morzu-vps gère le chantier ; Codex CLI écrit le code et les tests de chaque point ; morzu-vps relit, lance le gate, commite et ouvre la PR. |
+| Organisation | Comme au 44. cell-gestion gère le chantier ; Codex CLI écrit le code et les tests de chaque point ; cell-gestion relit, lance le gate, commite et ouvre la PR. |
 | Validation | Le 41 a n'ouvre aucune écriture nouvelle : il lit le board et Swairm, et ses notes passent par l'envoi du 35 bis, sous confirmation. Merge : CI verte, puis oui de Julien. Le lab est informé, mais il ne valide pas ce chantier. |
 | Bloqué par | Rien pour le 41 a. Le 41 b attend l'isolation des drones (#20) et un verbe de création de carte (L1). |
 

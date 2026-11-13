@@ -5,7 +5,7 @@
 | État | **Révision 1, 7 novembre 2026.** Relecture du plan par le lab (DM 91366) : validé, sous deux conditions reprises ici, le cookie de demande (D176) et `statusReason` (D175), plus trois ajouts (D175, D180, D183, 31.2). Validation finale du lab après le build et l'e2e. *Révision 0 :* Spec : recommandations validées par Julien le 7 novembre. Relecture de la spec par le lab faite le 7 novembre (DM 91348) : elle tient, avec quatre conditions obligatoires (M1 à M4) et un second port par défaut, retenu par Julien. Le lab relit ce plan, puis valide le chantier (programme §5 bis, DM 89702). |
 | Emplacement final | `docs/chantiers/31-mode-host.md` sur `main`, dans le premier commit du chantier |
 | Base | **13e128a** (`origin/main`, PR #124). Les `fichier:ligne` ont été lus sur cette base. |
-| Spec | `specs/mode-host-v1.md`, révision 1 (dossier de travail, hors dépôt ; copie sur morzu-vps dans `~/work/aid-specs/`). |
+| Spec | `specs/mode-host-v1.md`, révision 1 (dossier de travail, hors dépôt ; copie sur cell-gestion dans `~/work/aid-specs/`). |
 | Programme | `programme.md`, ligne 31 ; §3 invariants 6 à 9 ; §5 bis ; §7 |
 | Prérequis | **Question 0 de la spec, encore ouverte** : HTTPS activé dans la console Tailscale de Julien (MagicDNS et certificats). Les points 31.2 à 31.11 n'en dépendent pas ; la recette, si. |
 | Validation | Le lab (pair distinct du constructeur), plus la recette de Julien sur son Mac et un téléphone, sous Node 22 et 24. |

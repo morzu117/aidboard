@@ -10,7 +10,7 @@
 | Spec | maquettes V4, dans le dossier de travail `docs/fusion-aid-swarph/` (hors dépôt, non commité) : `docs/fusion-aid-swarph/spec-driven-plan/specs/board.md`, `docs/fusion-aid-swarph/spec-driven-plan/specs/etats.md`, `docs/fusion-aid-swarph/spec-driven-plan/specs/regles-globales.md` ; écrans `BoardV1`, `CarteV1` et `BoardEtats` |
 | Brief | `docs/fusion-aid-swarph/brief-chantier-vue-board.md` |
 | Programme | `docs/fusion-aid-swarph/spec-driven-plan/programme.md`, phase 1 |
-| Construit par | côté Julien (morzu-mac), une fois le droit d'exécution sur le projet 18 accordé |
+| Construit par | côté Julien (cell-aid), une fois le droit d'exécution sur le projet 18 accordé |
 | Validé par | le lab, comme pair distinct, par lecture du code. Le code ne tourne que dans son bac à sable, contre le vrai mesh. Plus la recette de Julien. |
 
 ## 1. Pourquoi
@@ -38,7 +38,7 @@ Les références sont prises sur `main`.
   - le contenu d'un pair est affiché en texte brut dans `ArticleMesh` (`web/src/ecrans/Boite.tsx:269`) ;
   - la petite largeur se détecte par `useViewport` (`web/src/ui/useViewport.ts:13`).
 - **Modèle de magasin côté web** : `ServeursStore` (`web/src/data/serveurs.ts`). Il lit au premier abonné, relit périodiquement tant qu'il reste un abonné, et gère les courses entre réponses.
-- **E2E mesh** : `e2e/mesh.spec.ts`, sur les faux binaires (`mesh.cell` morzu-mac).
+- **E2E mesh** : `e2e/mesh.spec.ts`, sur les faux binaires (`mesh.cell` cell-aid).
 - **Décisions** : la dernière prise sur `main` est **D79** (chantier 17). Ce plan propose D92 à D98. Revérifier le numéro au premier commit.
 
 ### Ce que swarph-cli 0.72.40 permet (vérifié le 4 novembre)
@@ -50,7 +50,7 @@ Les références sont prises sur `main`.
 | carte | `swarph board cards show <id> --json --as <cell>` | la carte, avec `stage_history` et `open_obligations` |
 | graphe | `swarph board cards graph <id> --json --as <cell>` | `{steps, missing, flow, gate, stage_implied}` |
 | fil | `swarph board cards thread <id> --limit 1000 --json --as <cell>` | `{card_id, thread_uuid, messages}`. Sans `--limit`, le gateway applique sa valeur par défaut : d'après une note du lab, ce sont les 200 messages **les plus anciens**, sans indicateur de troncature. |
-| obligations | `swarph board obligations list --card <id> --json --as <cell>` | `{obligations, as_of, truncated}`. Avec `--card`, la réponse fait environ 5 Ko (0,25 s). La liste entière fait 20 Mo pour lab-ovh, et la nôtre grandira avec nos droits. |
+| obligations | `swarph board obligations list --card <id> --json --as <cell>` | `{obligations, as_of, truncated}`. Avec `--card`, la réponse fait environ 5 Ko (0,25 s). La liste entière fait 20 Mo pour la cell du lab, et la nôtre grandira avec nos droits. |
 
 - `cards history` renvoie aujourd'hui le même objet que `show`. Ce chantier ne l'utilise pas.
 - **Erreurs** :
@@ -143,7 +143,7 @@ Chaque point est un commit. Le gate complet (`npm run gate`) doit être vert ava
   - `board <verbe…> --json` affiche `$FAKE_SWARPH_BOARD/<nom>.json`, avec par exemple `cards-show-1432.json`, `obligations-list.json` ;
   - `FAKE_SWARPH_BOARD_ERROR=forbidden` écrit la ligne 403 réelle sur stderr et sort en code 1 ;
   - `FAKE_SWARPH_BOARD_ERROR=unreachable` écrit `gateway unreachable` et sort en code 1 ;
-  - `FAKE_SWARPH_BOARD_ERROR=credential` écrit `cannot resolve a mesh credential for 'morzu-mac'` et sort en code 1 ;
+  - `FAKE_SWARPH_BOARD_ERROR=credential` écrit `cannot resolve a mesh credential for 'cell-aid'` et sort en code 1 ;
   - `FAKE_SWARPH_BOARD_ERROR=other` écrit un texte quelconque et sort en code 1 ;
   - un argument inconnu sort en code 2 ;
   - `FAKE_SWARPH_BOARD_SLEEP` simule la lenteur.
@@ -190,7 +190,7 @@ Chaque point est un commit. Le gate complet (`npm run gate`) doit être vert ava
   - 400 si l'identifiant est invalide ;
   - les cas `ok` et chaque `kind` ;
   - un jeton de run est refusé sur ces routes (`registerSecurity`) ;
-  - `FAKE_SWARPH_LOG` ne contient que des commandes `board … --json --as morzu-mac` ;
+  - `FAKE_SWARPH_LOG` ne contient que des commandes `board … --json --as cell-aid` ;
   - `inbox.log` n'est pas modifié.
 - **Vérification** : `npx vitest run test/board-routes.test.ts test/mesh-routes.test.ts`
 
@@ -281,7 +281,7 @@ Chaque point est un commit. Le gate complet (`npm run gate`) doit être vert ava
 
 - **Les `AID_*` de la session** : relancer le gate avec `env -u AID_HOME -u AID_NO_BROWSER` si la session les exporte (chantier 12).
 - **Code de sortie 1 ambigu** : seul le texte de stderr distingue le 403 du gateway injoignable. Le comparer à des sous-chaînes connues. S'il ne correspond à aucune, classer en `unknown` et journaliser. Ces textes ne sont pas un contrat stable.
-- **Taille** : toujours `obligations list --card <id>`, jamais la liste entière (20 Mo pour lab-ovh, au-delà du tampon de 4 Mo de `exec.ts:18`). Garder le refus au-delà de 4 Mo : le signaler, ne pas agrandir le tampon en silence.
+- **Taille** : toujours `obligations list --card <id>`, jamais la liste entière (20 Mo pour la cell du lab, au-delà du tampon de 4 Mo de `exec.ts:18`). Garder le refus au-delà de 4 Mo : le signaler, ne pas agrandir le tampon en silence.
 - **Fil** : toujours `--limit 1000`. Sans lui, un fil long cacherait ses messages les plus récents sans le dire.
 - **`cards history`** : c'est le même objet que `show`, donc on ne l'appelle pas.
 - **#1456** : `state` peut contredire `status`. On affiche `status`. Le test de 24.1 fige ce cas.
@@ -303,12 +303,12 @@ Chaque point est un commit. Le gate complet (`npm run gate`) doit être vert ava
 
 1. Julien valide ce plan, en particulier D92 à D98 et le lien provisoire dans la barre du haut.
 2. Le lab relit la spec et le plan (relecture voulue pour le 24).
-3. Le commander accorde à morzu-mac le droit d'exécution sur le projet 18, pour qu'il puisse prendre la ligne `build` de #1457.
+3. Le commander accorde à cell-aid le droit d'exécution sur le projet 18, pour qu'il puisse prendre la ligne `build` de #1457.
 4. Le plan est copié dans `docs/chantiers/24-board-lecture-seule.md` sur une branche `feat/24-board-lecture-seule` partie de `main`, et ajouté au tableau du §9 du README des chantiers.
 
 ## 9. Relecture du lab (4 novembre, 22 h 04, message 89726)
 
-Verdict : **REVISE, small**. La forme convient au lab : liste fermée de commandes, aucun jeton dans A-I-D, aucun stockage, texte brut, lecture seulement quand l'écran est ouvert. Le lab a lancé les commandes en tant que lab-ovh (swarph-cli 0.72.41) et lu le code du gateway. Il n'a pas lu le code d'A-I-D.
+Verdict : **REVISE, small**. La forme convient au lab : liste fermée de commandes, aucun jeton dans A-I-D, aucun stockage, texte brut, lecture seulement quand l'écran est ouvert. Le lab a lancé les commandes avec la cell du lab (swarph-cli 0.72.41) et lu le code du gateway. Il n'a pas lu le code d'A-I-D.
 
 | Demande du lab | Intégrée dans |
 |---|---|
@@ -329,4 +329,4 @@ Réponses du lab aux trois questions :
 
 **PASS** le 4 novembre à 22 h 06 (89733). Le lab a lu la révision 1 en entier et la liste des changements de la révision 2, mais pas le texte de la révision 2. Au moment du build, le validateur comparera le plan commité dans `docs/chantiers/24` à cette relecture. La ligne `plan-review` de #1457 n'a pas pu être fermée : le gateway répond « Eligible: NOBODY », car le projet 18 n'a aucun droit d'exécution. Les lignes s'ouvriront quand le commander aura décidé des droits. Cette relecture n'approuve ni le programme, ni le build, ni le droit.
 
-Toujours en attente : le droit d'exécution de morzu-mac sur le projet 18, et la décision du commander sur qui mène la revue de sécurité (0.b).
+Toujours en attente : le droit d'exécution de cell-aid sur le projet 18, et la décision du commander sur qui mène la revue de sécurité (0.b).

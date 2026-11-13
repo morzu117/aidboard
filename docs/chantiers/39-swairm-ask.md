@@ -6,7 +6,7 @@
 | Emplacement final | `docs/chantiers/39-swairm-ask.md` sur `main` d'aidboard. La partie Swairm est reprise dans `docs/chantiers/08-swairm-ask.md` de `morzu117/swairm`. |
 | Dépôts | `morzu117/swairm`, pour 39.1 à 39.3, puis `morzu117/aidboard`, pour 39.4 à 39.6. |
 | Spec | `specs/ask-39.md`, révision 1, avec la décision Q8 (dossier de travail, hors dépôt). |
-| Organisation | Comme au 38. morzu-vps gère le chantier. Codex CLI écrit le code et les tests de chaque point. morzu-vps relit, lance les vérifications, commite et ouvre les PR. |
+| Organisation | Comme au 38. cell-gestion gère le chantier. Codex CLI écrit le code et les tests de chaque point. cell-gestion relit, lance les vérifications, commite et ouvre les PR. |
 | Validation | Julien valide le 39, après sa recette sur le Mac. Le lab relit le nettoyage (39.1). Le merge suit la règle de Julien : la CI verte. |
 
 ## 1. Pourquoi

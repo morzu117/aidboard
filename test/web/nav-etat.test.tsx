@@ -156,7 +156,7 @@ test('liens discrets, serveurs, et « Connecter à swarph » sans mesh ; l’ét
           monitor: 'running',
           pending: 0,
           since: null,
-          cell: 'morzu-mac',
+          cell: 'cell-aid',
         },
         inbox: [],
         tailscaleManage: false,
@@ -164,7 +164,7 @@ test('liens discrets, serveurs, et « Connecter à swarph » sans mesh ; l’ét
     }),
   );
   await waitFor(() => expect(n('etat.meshes.mesh')).not.toBeNull());
-  expect(n('etat.meshes.mesh')!.textContent).toContain('Mesh · cell morzu-mac');
+  expect(n('etat.meshes.mesh')!.textContent).toContain('Mesh · cell cell-aid');
   expect(n('etat.meshes.mesh')!.querySelector('[data-bind="mesh.etat"]')!.textContent).toBe(
     'monitor actif · 0 à traiter',
   );

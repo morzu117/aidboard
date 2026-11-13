@@ -2,6 +2,7 @@ import cookie from '@fastify/cookie';
 import Database from 'better-sqlite3';
 import Fastify from 'fastify';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, expect, test, vi } from 'vitest';
 import { createAuthState, registerSecurity } from '../src/daemon/security.js';
@@ -49,9 +50,7 @@ const reponse = (mesh: string, id = 1): BoardResult<BoardCard> => ({
 });
 
 async function contexte(reel = false, rebranche = false) {
-  const racine = '/var/tmp/aid-codex-48.3';
-  mkdirSync(racine, { recursive: true });
-  const home = mkdtempSync(join(racine, 'cartes-'));
+  const home = mkdtempSync(join(tmpdir(), 'aid-cartes-'));
   const db = new Database(join(home, 'etat.db'));
   db.pragma('foreign_keys = ON');
   migrate(db);

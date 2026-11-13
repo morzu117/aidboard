@@ -18,8 +18,8 @@ function setup() {
 const dm = (id: number, kind = 'question', extra: Record<string, unknown> = {}) => ({
   id,
   threadId: `th_${id}`,
-  from: 'mesh-gw',
-  to: 'morzu-mac',
+  from: 'gateway',
+  to: 'cell-aid',
   kind,
   content: `message ${id}`,
   createdAt: `2026-10-20T10:00:${String(id % 60).padStart(2, '0')}+02:00`,
@@ -34,7 +34,7 @@ const etat = (over: Record<string, unknown> = {}) => ({
   monitor: 'running',
   pending: 0,
   since: '2026-10-20T10:00:00+02:00',
-  cell: 'morzu-mac',
+  cell: 'cell-aid',
   ...over,
 });
 
@@ -62,8 +62,8 @@ test('un mesh.dm rejoué deux fois (deux ULID, même id swarph) ne fait qu’une
   expect(rows[0]).toMatchObject({
     id: 73544,
     thread_id: 'th_73544',
-    from_node: 'mesh-gw',
-    to_node: 'morzu-mac',
+    from_node: 'gateway',
+    to_node: 'cell-aid',
     kind: 'question',
     content: 'message 73544',
     created_at: '2026-10-20T10:00:44+02:00',

@@ -33,13 +33,13 @@ Rappels qui valent pour toute la recette :
 ## Prérequis sur le Mac
 
 État constaté le 2026-11-05 : `swarph --version` répond `swarph-cli 0.72.40`, monitor
-`morzu-mac` lancé en `--deliver pull`, Tailscale connecté.
+`cell-aid` lancé en `--deliver pull`, Tailscale connecté.
 
 - [ ] 24.10.1 `swarph --version` donne au moins 0.72.40 ; `aid doctor` n'affiche pas
   « la vue board demande 0.72.40 »
-- [ ] Le monitor `morzu-mac` tourne (`swarph monitor start --as morzu-mac --deliver pull`)
-- [ ] Tailscale est connecté, `lab-ovh` est dans les pairs
-- [ ] `~/.aid/config.yaml` a `mesh.cell: morzu-mac` et le gateway ; `tailscale.manage` reste `false`
+- [ ] Le monitor `cell-aid` tourne (`swarph monitor start --as cell-aid --deliver pull`)
+- [ ] Tailscale est connecté, `cell-lab` est dans les pairs
+- [ ] `~/.aid/config.yaml` a `mesh.cell: cell-aid` et le gateway ; `tailscale.manage` reste `false`
 - [ ] A-I-D tourne sur la branche `feat/24-board-lecture-seule` (head : _à noter_)
 
 ## Recette réelle
@@ -56,7 +56,7 @@ Rappels qui valent pour toute la recette :
   tout revient, par Relire ou à la relecture suivante (60 s).
   - Constat : _à remplir_
 - [ ] 24.10.5 Sur une carte qui a un vrai DM : relever `wc -l
-  ~/swarph_state/morzu-mac/mesh-sidecar/inbox.log` et l'état lu des DM, ouvrir la fiche (lecture
+  ~/swarph_state/cell-aid/mesh-sidecar/inbox.log` et l'état lu des DM, ouvrir la fiche (lecture
   de `cards thread`), relever à nouveau. Les deux relevés doivent être identiques.
   - Avant : _à remplir_
   - Après : _à remplir_

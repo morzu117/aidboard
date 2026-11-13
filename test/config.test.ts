@@ -184,12 +184,12 @@ test('mesh (12.2) : les défauts — désactivé, Tailscale lu mais jamais pilot
 
 test('mesh (12.2) : fusion partielle, le reste vient des défauts', () => {
   const cfg = parseConfig(
-    'mesh:\n  cell: morzu-mac\n  gateway: http://mesh-gw.example.ts.net:8788\n  tailscale:\n    manage: true\n',
+    'mesh:\n  cell: cell-aid\n  gateway: http://gateway.example.ts.net:8788\n  tailscale:\n    manage: true\n',
   );
   expect(cfg.mesh).toEqual({
     ...DEFAULT_CONFIG.mesh,
-    cell: 'morzu-mac',
-    gateway: 'http://mesh-gw.example.ts.net:8788',
+    cell: 'cell-aid',
+    gateway: 'http://gateway.example.ts.net:8788',
     tailscale: { manage: true, bin: DEFAULT_TAILSCALE_BIN },
   });
 });
@@ -211,7 +211,7 @@ test('mesh (12.2) : clé inconnue et champs invalides sont refusés et nommés',
   expect(() => parseConfig('mesh:\n  token: abc\n')).toThrow('mesh.token');
   expect(() => parseConfig('mesh:\n  cell: 1\n')).toThrow('mesh.cell');
   expect(() => parseConfig('mesh:\n  cell: "a b"\n')).toThrow('mesh.cell');
-  expect(() => parseConfig('mesh:\n  gateway: mesh-gw:8788\n')).toThrow('mesh.gateway');
+  expect(() => parseConfig('mesh:\n  gateway: gateway:8788\n')).toThrow('mesh.gateway');
   expect(() => parseConfig('mesh:\n  bin: ""\n')).toThrow('mesh.bin');
   expect(() => parseConfig('mesh:\n  tailscale: 1\n')).toThrow('mesh.tailscale');
   expect(() => parseConfig('mesh:\n  tailscale:\n    up: true\n')).toThrow('mesh.tailscale.up');

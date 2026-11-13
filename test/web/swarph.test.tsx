@@ -47,7 +47,7 @@ test('D102 : mesh déjà configuré, la page renvoie à Réglages au lieu de ré
           monitor: 'stopped',
           pending: 0,
           since: null,
-          cell: 'morzu-mac',
+          cell: 'cell-aid',
         },
         inbox: [],
         tailscaleManage: false,
@@ -56,7 +56,7 @@ test('D102 : mesh déjà configuré, la page renvoie à Réglages au lieu de ré
     '/swarph',
   );
   await waitFor(() => expect(node('swarph.configure')).not.toBeNull());
-  expect(node('swarph.configure')!.textContent).toContain('morzu-mac');
+  expect(node('swarph.configure')!.textContent).toContain('cell-aid');
   expect(node('swarph.configure.reglages')!.getAttribute('href')).toBe('/reglages#mesh');
   expect(node('swarph.etapes')).toBeNull();
 });

@@ -41,18 +41,18 @@ async function bootWithMesh() {
       mesh: {
         ...DEFAULT_CONFIG.mesh,
         bin: FAKE_SWARPH,
-        cell: 'morzu-mac',
-        gateway: 'http://mesh-gw.example.ts.net:8788',
+        cell: 'cell-aid',
+        gateway: 'http://gateway.example.ts.net:8788',
         stateRoot,
         tailscale: { manage: false, bin: FAKE_TAILSCALE },
       },
     },
   });
-  const inboxLog = join(stateRoot, 'morzu-mac', 'mesh-sidecar', 'inbox.log');
+  const inboxLog = join(stateRoot, 'cell-aid', 'mesh-sidecar', 'inbox.log');
   mkdirSync(dirname(inboxLog), { recursive: true });
   writeFileSync(
     inboxLog,
-    '{"id": 1, "from_node": "peer-a", "to_node": "morzu-mac", "content": "x"}\n',
+    '{"id": 1, "from_node": "peer-a", "to_node": "cell-aid", "content": "x"}\n',
   );
   const swarph = () =>
     existsSync(swarphLog) ? readFileSync(swarphLog, 'utf8').trim().split('\n').filter(Boolean) : [];
@@ -72,7 +72,7 @@ test('mesh désactivé : les routes /api/board répondent 404', async () => {
   }
 });
 
-test('lectures ok : projets, cartes, fiche ; journal limité à board … --json --as morzu-mac ; inbox.log intact', async () => {
+test('lectures ok : projets, cartes, fiche ; journal limité à board … --json --as cell-aid ; inbox.log intact', async () => {
   const { swarph, inboxLog } = await bootWithMesh();
   const before = readFileSync(inboxLog, 'utf8');
   const projects = (await get('/api/board/projects')).json<BoardResult<BoardProject[]>>();
@@ -85,7 +85,7 @@ test('lectures ok : projets, cartes, fiche ; journal limité à board … --json
   expect(sheet.graph.ok && sheet.thread.ok && sheet.obligations.ok).toBe(true);
   const board = swarph().filter((l) => l.startsWith('board '));
   expect(board).toHaveLength(6);
-  for (const l of board) expect(l).toMatch(/ --json --as morzu-mac$/);
+  for (const l of board) expect(l).toMatch(/ --json --as cell-aid$/);
   for (const l of swarph()) {
     expect(l).not.toMatch(/\binbox\b|--consume|--no-redact|--token-file/);
   }

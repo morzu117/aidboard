@@ -2,7 +2,7 @@
 
 | Champ | Valeur |
 |---|---|
-| État | **Révision 1, 9 novembre 2026** : réponses du lab à L5–L7 (DM 93986), lues dans le gateway déployé (657e7e9) et la PR proxy 702. Révision 0 : Spec rév. 2 (E5 et E6, morzu-vps), d'après le contrat du proxy de #20, draft 2 avec le §10, et les réponses du lab (DM 93681). Julien a retenu : confirmation du téléphone, le 35 bis avant le 36. |
+| État | **Révision 1, 9 novembre 2026** : réponses du lab à L5–L7 (DM 93986), lues dans le gateway déployé (657e7e9) et la PR proxy 702. Révision 0 : Spec rév. 2 (E5 et E6, cell-gestion), d'après le contrat du proxy de #20, draft 2 avec le §10, et les réponses du lab (DM 93681). Julien a retenu : confirmation du téléphone, le 35 bis avant le 36. |
 | Emplacement final | `docs/chantiers/36-ecritures-etat.md` sur `main`, dans le premier commit du chantier |
 | Base | **`feat/35bis-envoi-reel`** (cd07f1b) : le 36 réutilise `ProxyClient` (D263) et l'écran d'envoi (D267). Il se rebase sur `main` quand le 35 bis est mergé. |
 | Organisation | Comme au 35 bis. |

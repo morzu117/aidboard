@@ -9,12 +9,12 @@ import {
 // 24.5 : la vue board demande swarph 0.72.40 ; en dessous, un ⚠ nommé, jamais un ✗.
 
 const meshOk: MeshProbe = {
-  cell: 'morzu-mac',
+  cell: 'cell-aid',
   bin: 'swarph',
-  cellFile: '/home/j/.config/swarph/cells/morzu-mac.yaml',
+  cellFile: '/home/j/.config/swarph/cells/cell-aid.yaml',
   cellFileReadable: true,
   tokenExists: true,
-  gateway: 'http://mesh-gw.example.ts.net:8788',
+  gateway: 'http://gateway.example.ts.net:8788',
   tailscale: 'running',
 };
 

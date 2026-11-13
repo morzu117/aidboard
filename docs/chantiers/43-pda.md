@@ -5,8 +5,8 @@
 | État | **Révision 1, 8 novembre 2026.** Le lab a relu le plan (DM 92443), et ses trois points obligatoires sont écrits en D211 et D218. Julien a validé la spec et tranché Q1 à Q5. Le lab a relu la frontière à trois reprises (DM 92254, 92437, 92440), et son PASS est donné sous trois conditions, reprises ici en D213, D217 et D211. |
 | Emplacement final | `docs/chantiers/43-pda.md` sur `main`, dans le premier commit du chantier |
 | Base | **6d9d67e** (`origin/main`, PR #127). |
-| Spec | `specs/pda-43.md`, révision 4 (dossier de travail, hors dépôt ; copie sur morzu-vps dans `~/work/aid-specs/`). |
-| Organisation | Comme au 32 bis. morzu-vps gère le chantier. Un agent Codex CLI écrit le code et les tests de chaque point, sur un brief tiré de ce plan. morzu-vps relit chaque diff, lance le gate, commite et ouvre la PR. |
+| Spec | `specs/pda-43.md`, révision 4 (dossier de travail, hors dépôt ; copie sur cell-gestion dans `~/work/aid-specs/`). |
+| Organisation | Comme au 32 bis. cell-gestion gère le chantier. Un agent Codex CLI écrit le code et les tests de chaque point, sur un brief tiré de ce plan. cell-gestion relit chaque diff, lance le gate, commite et ouvre la PR. |
 | Validation | La recette de Julien : le relais déployé sur un de ses VPS, puis une confirmation donnée depuis un téléphone **hors du tailnet**, et un second appareil. Le lab revoit la frontière à la fin. Le merge suit la règle de Julien : la CI verte et la validation du lab. |
 
 ## 1. Pourquoi

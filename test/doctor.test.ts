@@ -299,12 +299,12 @@ test('installation (13.2) : repo et release sont ✓ avec leur mode, inconnu est
 });
 
 const meshOk: MeshProbe = {
-  cell: 'morzu-mac',
+  cell: 'cell-aid',
   bin: 'swarph',
-  cellFile: '/home/j/.config/swarph/cells/morzu-mac.yaml',
+  cellFile: '/home/j/.config/swarph/cells/cell-aid.yaml',
   cellFileReadable: true,
   tokenExists: true,
-  gateway: 'http://mesh-gw.example.ts.net:8788',
+  gateway: 'http://gateway.example.ts.net:8788',
   tailscale: 'running',
 };
 
@@ -322,9 +322,9 @@ test('mesh (12.2) : désactivé = une ligne ✓ et rien d’autre ; configuré e
   expect(on.map((c) => c.label)).toEqual(
     expect.arrayContaining([
       'swarph 0.72.40',
-      'cell morzu-mac (/home/j/.config/swarph/cells/morzu-mac.yaml)',
-      'token de morzu-mac présent',
-      'gateway http://mesh-gw.example.ts.net:8788',
+      'cell cell-aid (/home/j/.config/swarph/cells/cell-aid.yaml)',
+      'token de cell-aid présent',
+      'gateway http://gateway.example.ts.net:8788',
       'Tailscale : connecté',
     ]),
   );
@@ -348,13 +348,13 @@ test('mesh (12.2) : chaque prérequis manquant est un ⚠ nommé, le token n’e
   expect(illisible.find((c) => c.label === 'swarph : version illisible')!.level).toBe('warn');
 
   expect(await levels({ ...mesh({ cellFileReadable: false }) })).toContain(
-    'warn:cell morzu-mac : fichier illisible',
+    'warn:cell cell-aid : fichier illisible',
   );
   const token = (await runChecks(mesh({ tokenExists: false }))).find(
-    (c) => c.label === 'token de morzu-mac absent',
+    (c) => c.label === 'token de cell-aid absent',
   )!;
   expect(token.level).toBe('warn');
-  expect(token.detail).toContain('swarph onboard morzu-mac');
+  expect(token.detail).toContain('swarph onboard cell-aid');
   expect(await levels(mesh({ gateway: '' }))).toContain('warn:mesh.gateway vide');
   const stopped = (await runChecks(mesh({ tailscale: 'stopped' }))).find(
     (c) => c.label === 'Tailscale arrêté',

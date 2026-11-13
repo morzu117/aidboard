@@ -13,7 +13,7 @@ Rappels qui valent pour toute la recette :
 - le daemon de travail (port 4870) fait tourner des agents : la recette se fait sur une instance à
   part, lancée depuis le worktree de la branche ; rien n'est redémarré ni réinstallé sur le daemon de
   travail sans l'accord de Julien ;
-- **Déconnecter arrête le monitor de la cell** : toutes les sessions de `morzu-mac`, Claude compris,
+- **Déconnecter arrête le monitor de la cell** : toutes les sessions de `cell-aid`, Claude compris,
   ne sont plus réveillées par les DM jusqu'à la reconnexion. L'étape 25.11.4 ne se fait que si Julien
   l'accepte sur le moment ; sinon elle reste couverte par `e2e/mesh.spec.ts` ;
 - ne jamais lancer `swarph mesh inbox` : il consomme la boîte ; `tailscale.manage` reste `false`.
@@ -41,7 +41,7 @@ unitaires de la barre, de l'accueil et de `/swarph`.
 
 - [ ] L'instance de recette tourne sur la branche `feat/25-coque-navigation` (head : _à noter_),
   sous Node 22 (`node --version` : _à noter_)
-- [ ] Le monitor `morzu-mac` tourne, Tailscale est connecté
+- [ ] Le monitor `cell-aid` tourne, Tailscale est connecté
 - [ ] Au moins un serveur est configuré (le VPS), avec une discussion
 
 ## Recette réelle
@@ -57,7 +57,7 @@ unitaires de la barre, de l'accueil et de `/swarph`.
   section Mesh, sans rien basculer. Sur `/board`, « board lu il y a N s » ; ailleurs, pas d'âge.
   - Constat : _à remplir_
 - [ ] 25.11.4 (seulement avec l'accord de Julien sur le moment) Réglages, Déconnecter : la
-  confirmation dit « Le monitor de la cell morzu-mac s'arrête… » avant d'agir ; Confirmer, puis
+  confirmation dit « Le monitor de la cell cell-aid s'arrête… » avant d'agir ; Confirmer, puis
   Connecter, et la pastille revient à « monitor actif ».
   - Constat : _à remplir, ou « non fait »_
 - [ ] 25.11.5 Bloc VPS : la carte du VPS dit Connecté, la latence, le nombre d'agents actifs et

@@ -48,7 +48,7 @@ const meshEtat: MeshState = {
   monitor: 'running',
   pending: 0,
   since: null,
-  cell: 'morzu-mac',
+  cell: 'cell-aid',
 };
 const avecMesh = snapshot({ mesh: { state: meshEtat, inbox: [], tailscaleManage: false } });
 const NAV = { 'GET /api/nav': json(200, { groups: [], placements: [], prefs: { reduit: false } }) };

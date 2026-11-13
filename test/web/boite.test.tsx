@@ -239,8 +239,8 @@ test('« Ouvrir le terminal → » ouvre le sujet sur l’onglet de cet agent', 
 const dm = (over: Partial<MeshDm>): MeshDm => ({
   id: 1,
   threadId: null,
-  from: 'mesh-gw',
-  to: 'morzu-mac',
+  from: 'gateway',
+  to: 'cell-aid',
   kind: 'fyi',
   content: 'x',
   createdAt: at(1),
@@ -260,7 +260,7 @@ const meshEtat = (over: Partial<MeshState> = {}, tailscaleManage = false) => ({
     monitor: 'running' as const,
     pending: 0,
     since: at(30),
-    cell: 'morzu-mac',
+    cell: 'cell-aid',
     ...over,
   },
   inbox: [
@@ -279,7 +279,7 @@ test('mesh (D136, D137) : les DM en Informations, en Décisions une fois choisis
   const h = setup(<Boite />, { ...etat(), mesh });
   await screen.findByText('Autoriser Bash(npm test) ?');
   expect(text('1-2.entete.resume')).toBe('Agents de ce Mac et messages du mesh');
-  expect(node('1-2.mesh')?.getAttribute('aria-label')).toBe('Mesh · morzu-mac');
+  expect(node('1-2.mesh')?.getAttribute('aria-label')).toBe('Mesh · cell-aid');
   expect(text('1-2.mesh.compte')).toBe('5');
   expect(text('1-2.mesh.etat')).toBe('connecté');
   expect(
@@ -305,7 +305,7 @@ test('mesh (D136, D137) : les DM en Informations, en Décisions une fois choisis
   expect(node('1-2.mesh.dm-3.rappel')).not.toBeNull();
   expect(node('1-2.mesh.dm-2.rappel')).toBeNull();
   expect(text('1-2.mesh.dm-2.emetteur')).toBe('peer-a');
-  expect(text('1-2.mesh.dm-5.emetteur')).toBe('mesh-gw');
+  expect(text('1-2.mesh.dm-5.emetteur')).toBe('gateway');
   expect(text('1-2.mesh.dm-5.fil')).toBe('fil thr_abcd');
   // le DM vu n'est plus là
   expect(document.body.textContent).not.toContain('déjà lu');

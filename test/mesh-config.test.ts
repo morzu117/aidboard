@@ -6,19 +6,19 @@ import { parseTailscaleStatus, tailscaleState } from '../src/daemon/mesh/tailsca
 // 12.2 : chemins swarph dérivés de la config, et lecture de l'état Tailscale sans jamais le piloter.
 
 test('meshPaths : dérivés de HOME et de la cell, ou repris de la config', () => {
-  const cfg = { ...DEFAULT_CONFIG.mesh, cell: 'morzu-mac' };
+  const cfg = { ...DEFAULT_CONFIG.mesh, cell: 'cell-aid' };
   expect(meshPaths(cfg, '/home/j')).toEqual({
-    cellFile: '/home/j/.config/swarph/cells/morzu-mac.yaml',
-    tokenFile: '/home/j/.config/swarph/morzu-mac.peer_token',
+    cellFile: '/home/j/.config/swarph/cells/cell-aid.yaml',
+    tokenFile: '/home/j/.config/swarph/cell-aid.peer_token',
     stateRoot: '/home/j/swarph_state',
-    inboxLog: '/home/j/swarph_state/morzu-mac/mesh-sidecar/inbox.log',
+    inboxLog: '/home/j/swarph_state/cell-aid/mesh-sidecar/inbox.log',
   });
   expect(
     meshPaths({ ...cfg, cellFile: '/etc/cell.yaml', stateRoot: '/var/swarph' }, '/home/j'),
   ).toMatchObject({
     cellFile: '/etc/cell.yaml',
-    tokenFile: '/home/j/.config/swarph/morzu-mac.peer_token',
-    inboxLog: '/var/swarph/morzu-mac/mesh-sidecar/inbox.log',
+    tokenFile: '/home/j/.config/swarph/cell-aid.peer_token',
+    inboxLog: '/var/swarph/cell-aid/mesh-sidecar/inbox.log',
   });
 });
 
