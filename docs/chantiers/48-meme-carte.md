@@ -65,7 +65,7 @@ Julien relie à la main des cartes qui suivent le même travail sur plusieurs me
 ### D323. La lecture et les routes
 
 - **`BoardReader.carte(id)`** ne lit que `cards show`, avec le cache existant du lecteur. `parseCard` garde `threadUuid`.
-- **`GET /api/cartes-reliees`** rend les groupes, avec, pour chaque membre :
+- **`GET /api/cartes-reliees?limite=&apres=`** rend `{ groupes, suivant }` : au plus `limite` groupes (20 par défaut, 50 au plus), d'id supérieur à `apres`, dans l'ordre des ids, et `suivant`, l'id du dernier, ou `null` s'il n'y en a plus. Le daemon ne lit que les membres de ces groupes. Pour chaque membre :
   - `{ id, mesh, carte, statut }` ;
   - si le statut est `ok` : `titre`, `etape`, `responsable`, `obligations`, `echeance` et `maj`.
   - Le groupe porte en plus `ecart: true` quand les étapes de ses membres `ok` diffèrent, par égalité de texte.
