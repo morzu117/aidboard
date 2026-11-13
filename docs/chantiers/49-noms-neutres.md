@@ -43,6 +43,11 @@ Le dépôt est public. Depuis le chantier 12, des plans, des fiches de recette, 
   - le gate entier, sans attente modifiée autrement que par le remplacement ;
   - le test de garde, et un cas qui montre qu'il échoue sur un ancien nom.
 
+### 49.2 Un correctif du 48
+
+- `test/cartes-reliees.test.ts` crée ses dossiers sous un chemin fixe, laissé par le 48.3, au lieu du dossier temporaire du système. Chaque lancement y laisse des dossiers. Le test passe à `mkdtempSync(join(tmpdir(), 'aid-cartes-'))` et supprime son dossier à la fin, comme les autres tests.
+- **Tests :** le fichier passe, et un lancement ne laisse aucun dossier.
+
 ## 4. Pièges
 
 - Un remplacement aveugle peut toucher un nom plus long qui contient l'ancien : remplacer des mots entiers.
