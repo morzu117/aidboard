@@ -37,7 +37,19 @@ L'e2e du 46 et celui du 48 (`e2e/helpers-multi-mesh.ts`) n'ont pas ce problème 
   - le gate entier.
 50.1 commité. Gate vert (3 884 tests). E2e : 121 tests passent, 14 échecs D314 résolus ; restent 6 échecs, causés par la page /swarph (50.2).
 
+### 50.2 La page swarph sans mesh, et les daemons laissés par un e2e
+
+- **Le constat.** Les trois e2e de `e2e/swairm-ask.spec.ts` (Swairm configuré, aucun mesh) attendent 90 s le bouton `swarph.ask`, sans le trouver. Sur la page `/swarph`, toute la zone principale manque, titre compris : la page semble planter. Piste à confirmer : `DemandesAvis` affiche aussi `DemandesAvisMesh` (40), qui supposerait un mesh.
+- **La cascade.** Ces tests dépassent leur délai avant le `finally` qui arrête leur daemon. Les daemons restent en vie sur leurs ports. Les e2e suivants du mode host (`avis-mesh`, `confirmations-completes`, `mode-host`) trouvent alors ces ports pris (« Port des appareils indisponible », `EADDRINUSE`).
+- **La correction.**
+  - Trouver la cause du plantage, avec un test web qui la reproduit (Swairm configuré, aucun mesh), puis la corriger dans le web : la page `/swarph` et le bouton « Demander N avis » s'affichent sans mesh, et les salles d'avis mesh n'apparaissent qu'avec un mesh.
+  - Dans `e2e/swairm-ask.spec.ts`, le daemon est arrêté même quand le test dépasse son délai (par exemple dans un `test.afterEach` ou par un délai de test plus court que celui de Playwright). Aucune assertion ne change.
+- **Tests :**
+  - le test web du plantage, rouge avant la correction et vert après ;
+  - l'e2e entier sur le VPS, un worker : aucun échec, et aucun daemon de test en vie à la fin ;
+  - le gate entier.
+
 ## 5. Fini quand
 
-- Le point 50.1 est commité, le gate est vert, l'e2e est vert sur le VPS, et la CI de la PR est verte.
+- Les points 50.1 et 50.2 sont commités, le gate est vert, l'e2e est vert sur le VPS, et la CI de la PR est verte.
 - Julien a donné son oui pour le merge.
