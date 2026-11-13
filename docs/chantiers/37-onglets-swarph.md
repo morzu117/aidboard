@@ -6,7 +6,7 @@
 | Emplacement final | `docs/chantiers/37-onglets-swarph.md` sur `main`, dans le premier commit du chantier |
 | Base | **dc6c162** (`origin/main`, PR #132). |
 | Spec | `specs/onglets-37.md`, révision 1 (dossier de travail, hors dépôt). |
-| Organisation | Comme au 38. morzu-vps gère le chantier. Un agent Codex CLI écrit le code et les tests de chaque point, sur un brief tiré de ce plan. morzu-vps relit chaque diff, lance le gate, commite et ouvre la PR. |
+| Organisation | Comme au 38. cell-gestion gère le chantier. Un agent Codex CLI écrit le code et les tests de chaque point, sur un brief tiré de ce plan. cell-gestion relit chaque diff, lance le gate, commite et ouvre la PR. |
 | Validation | Le lab valide le 37 (programme §5 bis). Le merge suit la règle de Julien : CI verte et validation du lab. |
 
 ## 1. Pourquoi

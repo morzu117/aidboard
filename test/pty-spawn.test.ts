@@ -227,7 +227,7 @@ test('agent.spawned porte kind, role, cwd, pid et commande (schéma d’événem
 const FAKE_SWARPH = join(import.meta.dirname, 'fixtures/fake-swarph.sh');
 
 test('agentCommand et meshEnv pour swarph-cell : la commande spawn, l’environnement du mesh pour cette cell seulement', () => {
-  const mesh = { bin: '/opt/swarph', cellFile: '/home/moi/.config/swarph/cells/morzu-mac.yaml' };
+  const mesh = { bin: '/opt/swarph', cellFile: '/home/moi/.config/swarph/cells/cell-aid.yaml' };
   expect(agentCommand('swarph-cell', {}, mesh)).toEqual([
     '/opt/swarph',
     'spawn',
@@ -254,9 +254,9 @@ test('swarph-cell : une session par cell (409), MESH_GATEWAY_URL et SWARPH_STATE
       mesh: {
         ...DEFAULT_CONFIG.mesh,
         bin: FAKE_SWARPH,
-        cell: 'morzu-mac',
-        cellFile: join(home, 'morzu-mac.yaml'),
-        gateway: 'http://mesh-gw.example:8788',
+        cell: 'cell-aid',
+        cellFile: join(home, 'cell-aid.yaml'),
+        gateway: 'http://gateway.example:8788',
         stateRoot: join(home, 'swarph_state'),
       },
     },
@@ -267,7 +267,7 @@ test('swarph-cell : une session par cell (409), MESH_GATEWAY_URL et SWARPH_STATE
   expect(agent.command).toEqual([
     FAKE_SWARPH,
     'spawn',
-    join(home, 'morzu-mac.yaml'),
+    join(home, 'cell-aid.yaml'),
     '--no-starter',
     '--no-banner',
   ]);
@@ -275,9 +275,9 @@ test('swarph-cell : une session par cell (409), MESH_GATEWAY_URL et SWARPH_STATE
   c.t.d.agents.get(agent.id)!.subscribe((chunk) => (text += chunk));
   await waitFor(() => text.includes('SWARPH_SELF='), 5000, 'sortie de la cell');
   expect(text).toContain(
-    `FAKE_CELL cell=${join(home, 'morzu-mac.yaml')} args=--no-starter --no-banner`,
+    `FAKE_CELL cell=${join(home, 'cell-aid.yaml')} args=--no-starter --no-banner`,
   );
-  expect(text).toContain('MESH_GATEWAY_URL=http://mesh-gw.example:8788');
+  expect(text).toContain('MESH_GATEWAY_URL=http://gateway.example:8788');
   expect(text).toContain(`SWARPH_STATE=${join(home, 'swarph_state')}`);
   // D314 : SWARPH_SELF vient de la config de ce mesh.
   expect(text).toContain(`SWARPH_SELF=${c.t.d.mesh!.current().cell}`);

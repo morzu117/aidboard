@@ -2,10 +2,10 @@
 
 | Champ | Valeur |
 |---|---|
-| État | **Révision 0, 10 novembre 2026.** Spec rév. 1 (morzu-vps), d'après le document de schéma publié du proxy (swarph-cli `docs/proxy-protocol.md`, PR 702), les réponses du lab à L8–L11 (DM 94174), la décision de Julien sur #1539 (b) et le relevé du Mac (DM 94859). Réponses du lab à L12–L14 (DM 94888) ; L15 retirée. |
+| État | **Révision 0, 10 novembre 2026.** Spec rév. 1 (cell-gestion), d'après le document de schéma publié du proxy (swarph-cli `docs/proxy-protocol.md`, PR 702), les réponses du lab à L8–L11 (DM 94174), la décision de Julien sur #1539 (b) et le relevé du Mac (DM 94859). Réponses du lab à L12–L14 (DM 94888) ; L15 retirée. |
 | Emplacement final | `docs/chantiers/44-lectures-proxy.md` sur `main` |
 | Base | `feat/35bis-envoi-reel` (eca9903) : le 44 réutilise le client du proxy du 35b.2 (D263). |
-| Organisation | Comme au 35 bis. morzu-vps gère le chantier ; Codex CLI écrit le code et les tests de chaque point ; morzu-vps relit, lance le gate, commite et ouvre la PR. |
+| Organisation | Comme au 35 bis. cell-gestion gère le chantier ; Codex CLI écrit le code et les tests de chaque point ; cell-gestion relit, lance le gate, commite et ouvre la PR. |
 | Validation | Le lab valide le 44, qui conditionne la bascule du Mac. Merge : CI verte, validation du lab, oui de Julien. |
 | Bloqué par | 44.6 attend le proxy du Mac installé en lecture seule (#1539 (b)). |
 
@@ -104,7 +104,7 @@ Le proxy du Mac est en lecture seule par défaut (#1539 (b) ; swarph-cli PR 712,
 
 ### D284. Un monitor supervisé n'est ni démarré ni arrêté par A-I-D
 
-Depuis le 10 novembre, le monitor du Mac tourne sous un LaunchAgent (`--supervisor launchd:<label>`, KeepAlive), comme celui de morzu-vps sous systemd. Aujourd'hui, A-I-D lance `swarph monitor start` à la connexion et `swarph monitor stop` à la déconnexion. Or un `stop` pose une « supervision hold » : le superviseur ne relance plus le monitor, et le `start` suivant d'A-I-D, lancé sans superviseur, lève le hold puis démarre un monitor détaché, hors de toute supervision.
+Depuis le 10 novembre, le monitor du Mac tourne sous un LaunchAgent (`--supervisor launchd:<label>`, KeepAlive), comme celui de cell-gestion sous systemd. Aujourd'hui, A-I-D lance `swarph monitor start` à la connexion et `swarph monitor stop` à la déconnexion. Or un `stop` pose une « supervision hold » : le superviseur ne relance plus le monitor, et le `start` suivant d'A-I-D, lancé sans superviseur, lève le hold puis démarre un monitor détaché, hors de toute supervision.
 - `parseMonitorStatus` lit le champ `supervisor` de `swarph monitor status --json` : une chaîne non vide, ou rien.
 - **Monitor vivant et supervisé :** à la connexion, A-I-D n'appelle pas `monitor start` ; à la déconnexion, il n'appelle pas `monitor stop`, et il arrête seulement son propre suivi (follower et rafraîchissement). Le monitor continue de recevoir les DM.
 - **Monitor arrêté, ou vivant sans superviseur :** rien ne change.
@@ -140,7 +140,7 @@ Le message des liens de Memory, et l'état du monitor dans Réglages.
 ### 44.7 Le proxy en lecture seule (D283)
 
 `mesh.proxyLectureSeule`, le 409 avant la porte, `ecritures` dans l'état du mesh, l'UI sans boutons d'écriture, et un test contre le vrai proxy réglé `read_only: true`.
-- *Révision 44.7.* `proxyLectureSeule` dans `MeshConfig` ; l'état du mesh gagne `ecritures` et `proxyConfigure`, ce qui distingue « pas de proxy » de « lecture seule ». Les fixtures d'état du web et `host-masque.test.ts` gagnent ces deux booléens, sans aucun changement de masquage (autorisé par morzu-vps). Vrai proxy 24/24, e2e board 8/8. 14 lignes existantes modifiées. Gate 2964.
+- *Révision 44.7.* `proxyLectureSeule` dans `MeshConfig` ; l'état du mesh gagne `ecritures` et `proxyConfigure`, ce qui distingue « pas de proxy » de « lecture seule ». Les fixtures d'état du web et `host-masque.test.ts` gagnent ces deux booléens, sans aucun changement de masquage (autorisé par cell-gestion). Vrai proxy 24/24, e2e board 8/8. 14 lignes existantes modifiées. Gate 2964.
 
 ### 44.6 Le vrai proxy et la recette
 

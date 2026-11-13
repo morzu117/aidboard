@@ -126,8 +126,8 @@ test('le titre de l’onglet compte les agents qui attendent', async () => {
 const dm = (id: number, kind: MeshDm['kind'], over: Partial<MeshDm> = {}): MeshDm => ({
   id,
   threadId: null,
-  from: 'mesh-gw',
-  to: 'morzu-mac',
+  from: 'gateway',
+  to: 'cell-aid',
   kind,
   content: `DM ${id}\nseconde ligne`,
   createdAt: 't',
@@ -147,7 +147,7 @@ const mesh = (inbox: MeshDm[]) => ({
     monitor: 'running' as const,
     pending: 0,
     since: 't',
-    cell: 'morzu-mac',
+    cell: 'cell-aid',
   },
   inbox,
   tailscaleManage: false,
@@ -179,7 +179,7 @@ test('mesh : question et unblock notifient, fyi/status/answer et les DM vus non 
   };
   await act(() => h.client.refresh());
   expect(FakeNotification.all.map((n) => [n.title, n.options.body, n.options.tag])).toEqual([
-    ['mesh-gw te sollicite sur le mesh', 'DM 3', 'mesh:3'],
+    ['gateway te sollicite sur le mesh', 'DM 3', 'mesh:3'],
   ]);
   await act(() => h.client.refresh());
   expect(FakeNotification.all).toHaveLength(1);

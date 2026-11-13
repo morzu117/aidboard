@@ -2,10 +2,10 @@
 
 | Champ | Valeur |
 |---|---|
-| État | **Révision 0, 12 novembre 2026.** Julien a choisi ce chantier dans la ligne « Plus tard » du programme. Il a demandé d'avancer seul pendant la nuit : morzu-vps a tranché les questions Q-J1 à Q-J3, et Julien a validé ces choix le 13 novembre. |
+| État | **Révision 0, 12 novembre 2026.** Julien a choisi ce chantier dans la ligne « Plus tard » du programme. Il a demandé d'avancer seul pendant la nuit : cell-gestion a tranché les questions Q-J1 à Q-J3, et Julien a validé ces choix le 13 novembre. |
 | Emplacement final | `docs/chantiers/47-avatars-pairs.md` sur `main` |
 | Base | `main`, après le merge du 46 (#158). |
-| Organisation | morzu-vps gère le chantier. Un agent Codex CLI écrit le code et les tests de chaque point, sur un brief tiré de ce plan. morzu-vps relit chaque diff, lance le gate, commite et ouvre la PR. |
+| Organisation | cell-gestion gère le chantier. Un agent Codex CLI écrit le code et les tests de chaque point, sur un brief tiré de ce plan. cell-gestion relit chaque diff, lance le gate, commite et ouvre la PR. |
 | Validation | Le chantier ne touche ni au mesh, ni aux écritures, ni au corps signé : le lab ne le relit pas. Viennent ensuite la recette de Julien et son oui pour le merge, CI verte. |
 
 ## 1. Pourquoi
@@ -67,9 +67,9 @@ Le programme (§5, phase 5, « Plus tard ») prévoit des avatars de pairs. Depu
 
 ### Les questions tranchées pour Julien
 
-- **Q-J1, la surcharge** : dans la config seulement, sans édition à l'écran (choix de morzu-vps, validé par Julien). L'interface va bouger ; un réglage à l'écran viendra avec elle.
-- **Q-J2, les écrans en texte seul** : le téléphone, les confirmations, l'appareil et le mode host (choix de morzu-vps, validé par Julien).
-- **Q-J3, la même cell dans deux meshes** : le même avatar (choix de morzu-vps, validé par Julien).
+- **Q-J1, la surcharge** : dans la config seulement, sans édition à l'écran (choix de cell-gestion, validé par Julien). L'interface va bouger ; un réglage à l'écran viendra avec elle.
+- **Q-J2, les écrans en texte seul** : le téléphone, les confirmations, l'appareil et le mode host (choix de cell-gestion, validé par Julien).
+- **Q-J3, la même cell dans deux meshes** : le même avatar (choix de cell-gestion, validé par Julien).
 
 ## 5. Points
 

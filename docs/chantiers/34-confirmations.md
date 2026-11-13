@@ -5,8 +5,8 @@
 | État | **Révision 1, 8 novembre 2026.** Julien a tranché Q1 à Q4 de la spec, puis l'armement (D233). Le lab a relu la spec (DM 92515), et ses deux points obligatoires sont écrits en D224 et D226. PASS de lab sur la spec (DM 92518), dont les deux précisions sont écrites en D224 et D226. **Révision 1 :** le lab a relu le plan (DM 92521) ; son point obligatoire sur le désarmement est écrit en D233, et ses recommandations en D223, D224, D227 et D228. |
 | Emplacement final | `docs/chantiers/34-confirmations.md` sur `main`, dans le premier commit du chantier |
 | Base | **9ec6a45** (`origin/main`, PR #129). |
-| Spec | `specs/confirmations-34.md`, révision 3 (dossier de travail, hors dépôt ; copie sur morzu-vps dans `~/work/aid-specs/`). |
-| Organisation | Comme au 43. morzu-vps gère le chantier. Un agent Codex CLI écrit le code et les tests de chaque point, sur un brief tiré de ce plan. morzu-vps relit chaque diff, lance le gate, commite et ouvre la PR. |
+| Spec | `specs/confirmations-34.md`, révision 3 (dossier de travail, hors dépôt ; copie sur cell-gestion dans `~/work/aid-specs/`). |
+| Organisation | Comme au 43. cell-gestion gère le chantier. Un agent Codex CLI écrit le code et les tests de chaque point, sur un brief tiré de ce plan. cell-gestion relit chaque diff, lance le gate, commite et ouvre la PR. |
 | Validation | Le lab valide le 34 (DM 89702) : le plan, puis la frontière sur les diffs. La recette de Julien suit, sur ses appareils. Le merge suit la règle de Julien : la CI verte et la validation du lab. |
 
 ## 1. Pourquoi
@@ -165,7 +165,7 @@ Le refus fermé de D225 bloquerait tout merge sur une installation qui n'a jamai
 
 ### D234. Un faux numéro annule la demande (décidé par Julien, d'après la V4)
 
-Les fiches V4 (`specs/meta-edge.md`, DM 92552 de morzu-mac) disent : « Une erreur annule et signale la demande. » Julien garde la saisie des 4 chiffres, et y ajoute cette règle.
+Les fiches V4 (`specs/meta-edge.md`, DM 92552 de cell-aid) disent : « Une erreur annule et signale la demande. » Julien garde la saisie des 4 chiffres, et y ajoute cette règle.
 - Seule une réponse **signée** par une passkey active, valide en tout sauf le numéro, annule la demande. Le daemon vérifie le défi et la signature **avec le numéro saisi**, puis le compare au numéro attendu. Un relais ne peut donc pas annuler une demande en forgeant une réponse fausse.
 - La demande passe à `etat = 'expiree'`, `resultat = 'annulee'`, `raison = 'numero'`. Elle est retirée du relais, et l'événement `pda.numero_faux` est journalisé (`{ id, appareil }`, sans le numéro).
 - Le Mac affiche « Annulée : mauvais numéro saisi sur le téléphone ».

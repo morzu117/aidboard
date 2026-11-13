@@ -19,7 +19,7 @@ import { fermerContextes } from './helpers.js';
 const CLI = join(import.meta.dirname, '../dist/cli/aid.js');
 const home = () => process.env.AID_E2E_HOME!;
 const swarphLog = () => join(home(), 'swarph.log');
-const inboxLog = () => join(home(), 'swarph_state', 'morzu-mac', 'mesh-sidecar', 'inbox.log');
+const inboxLog = () => join(home(), 'swarph_state', 'cell-aid', 'mesh-sidecar', 'inbox.log');
 const erreur = (kind: string | null) => {
   const f = join(home(), 'board-error');
   if (kind) writeFileSync(f, `${kind}\n`);
@@ -44,7 +44,7 @@ test('le board du projet de test : lien dans la barre, colonnes dans l’ordre r
   const page = await openApp(await browser.newContext());
   await node(page, '1-1.barre.nav-board').click();
   await expect(page).toHaveURL(/\/board$/);
-  await expect(node(page, 'board.identite')).toContainText('morzu-mac');
+  await expect(node(page, 'board.identite')).toContainText('cell-aid');
   await expect(node(page, 'board.projet')).toContainText('projet-test');
   await expect(page.locator('.board-colonne-titre')).toHaveText(['idea 1', 'build 1']);
   await expect(node(page, 'board.carte-101')).toContainText('projet-test · #101');
@@ -149,7 +149,7 @@ test('aucune lecture ne consomme : inbox.log identique, journal limité au board
   const nouvelles = lignes().slice(avant.log);
   const board = nouvelles.filter((l) => l.startsWith('board '));
   expect(board.length).toBeGreaterThan(0);
-  for (const l of board) expect(l).toMatch(/ --json --as morzu-mac$/);
+  for (const l of board) expect(l).toMatch(/ --json --as cell-aid$/);
   for (const l of nouvelles) expect(l).not.toMatch(/\binbox\b|--consume|--no-redact|--token-file/);
 });
 

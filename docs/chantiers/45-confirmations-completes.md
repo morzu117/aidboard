@@ -6,7 +6,7 @@
 | Emplacement final | `docs/chantiers/45-confirmations-completes.md` sur `main` |
 | Base | `feat/40-avis-mesh` (PR #152), parce que le 45 couvre les trois actions du 40. La PR du 45 se rebase sur `main` après le merge de #152. |
 | Spec | `specs/confirmations-completes-45.md`, révision 1 (dossier de travail, hors dépôt). |
-| Organisation | morzu-vps gère le chantier. Un agent Codex CLI écrit le code et les tests de chaque point, sur un brief tiré de ce plan. morzu-vps relit chaque diff, lance le gate, commite et ouvre la PR. |
+| Organisation | cell-gestion gère le chantier. Un agent Codex CLI écrit le code et les tests de chaque point, sur un brief tiré de ce plan. cell-gestion relit chaque diff, lance le gate, commite et ouvre la PR. |
 | Validation | Le lab relit le plan, puis le code des points 45.2 et 45.3. Ensuite viennent la recette de Julien et son oui pour le merge, CI verte. |
 
 ## 1. Pourquoi

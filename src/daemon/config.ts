@@ -602,9 +602,9 @@ const DEFAULT_FILE = `# Configuration d'A-I-D. Tout est facultatif : ce sont les
 #   exclude: []            # dossiers à exclure des résultats (dist, …) — ex. ["dist"]
 # mesh:                    # mesh swarph (chantier 12) ; cell vide = désactivé
 #   bin: swarph
-#   cell: ""               # ex. morzu-mac — sa propre identité, jamais celle d'une autre machine
+#   cell: ""               # ex. cell-aid — sa propre identité, jamais celle d'une autre machine
 #   cellFile: ""           # vide = ~/.config/swarph/cells/<cell>.yaml
-#   gateway: ""            # ex. http://mesh-gw.example.ts.net:8788 (MESH_GATEWAY_URL, pas un secret)
+#   gateway: ""            # ex. http://gateway.example.ts.net:8788 (MESH_GATEWAY_URL, pas un secret)
 #   stateRoot: ""          # vide = ~/swarph_state
 #   tailscale:
 #     manage: false        # true : A-I-D lance tailscale up/down à la connexion ; false : il le lit seulement

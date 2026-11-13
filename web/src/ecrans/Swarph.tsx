@@ -11,7 +11,7 @@ import { Layout } from '../ui/Layout.js';
 
 const EXEMPLE_CONFIG = `mesh:
   cell: ma-cell        # le nom de cette machine dans le mesh, jamais celui d'une autre
-  gateway: http://mesh-gw.example.ts.net:8788`;
+  gateway: http://gateway.example.ts.net:8788`;
 
 function Contenu() {
   const { state } = useAid();

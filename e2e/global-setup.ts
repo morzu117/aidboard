@@ -16,9 +16,9 @@ export default async function globalSetup() {
   const mesh = [
     'mesh:',
     `  bin: ${join(fixtures, 'fake-swarph.sh')}`,
-    '  cell: morzu-mac',
-    `  cellFile: ${join(home, 'morzu-mac.yaml')}`,
-    '  gateway: http://mesh-gw.example:8788',
+    '  cell: cell-aid',
+    `  cellFile: ${join(home, 'cell-aid.yaml')}`,
+    '  gateway: http://gateway.example:8788',
     `  stateRoot: ${join(home, 'swarph_state')}`,
     '  tailscale:',
     '    manage: false',

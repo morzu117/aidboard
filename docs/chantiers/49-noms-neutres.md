@@ -42,6 +42,7 @@ Le dépôt est public. Depuis le chantier 12, des plans, des fiches de recette, 
 - **Tests :**
   - le gate entier, sans attente modifiée autrement que par le remplacement ;
   - le test de garde, et un cas qui montre qu'il échoue sur un ancien nom.
+49.1 commité. Gate vert (3 884 tests). Remplacements mécaniques et test de garde par empreintes.
 
 ### 49.2 Un correctif du 48
 
