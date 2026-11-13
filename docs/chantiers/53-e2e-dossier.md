@@ -36,6 +36,7 @@ Le chemin du premier chargement de l'explorateur s'est retrouvé devant la saisi
   - les tests web existants du sélecteur ;
   - `e2e/reconnexion.spec.ts` lancé 20 fois de suite (`--repeat-each=20`), sans échec ;
   - le gate entier, et `gate:e2e` entier sous Node 22 avec `CI=1`.
+53.1 commité. Gate vert (3 890 tests). Le test web de l'ordre fautif est rouge avant la correction et vert après. `reconnexion.spec.ts` passe 20 fois sur 20. `gate:e2e` entier vert sous Node 22 avec `CI=1` (paquet, archive serveur, 132 tests Playwright), aucun daemon résiduel.
 
 ## 4. Fini quand
 
