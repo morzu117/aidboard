@@ -51,6 +51,7 @@ La CI lance le gate (typecheck, lint, build, tests) sous Node 22 et 24, et le la
   - l'e2e entier en local, avec `CI=1` : aucun échec ;
   - le gate entier, lancé après l'e2e, dans le même worktree ;
   - la CI de la PR, job `e2e` compris.
+51.2 commité. Gate vert (3 889 tests). E2e entier vert avec `CI=1` (132 tests), aucun daemon résiduel. Aucun autre e2e ne compare deux lectures d'un libellé d'horloge.
 
 ## 4. Fini quand
 
