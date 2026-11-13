@@ -218,3 +218,4 @@ Indépendants de la pile v0.1 ; chacun porte son propre jalon.
 | 49 | [Des noms neutres dans le dépôt : les anciens noms de cells et d'hôte remplacés par des noms d'exemple, avec un test de garde](49-noms-neutres.md) | `feat/49-noms-neutres` | `main` | — | la réécriture de l'historique, si Julien la veut |
 | 50 | [Les e2e après D314 : les réglages du faux swarph passent par un script, et non plus par l'environnement du daemon](50-e2e-env.md) | `fix/50-e2e-env` | `main` | 46 : D314 | — |
 | 51 | [L'e2e dans la CI : un job qui lance `gate:e2e` sur chaque PR et sur `main`](51-e2e-ci.md) | `ci/51-e2e-ci` | `main` | 50 : l'e2e vert | la protection de `main`, si Julien la veut |
+| 53 | [Le champ « Aller au dossier » : une saisie commencée n'est jamais complétée par le premier chargement](53-e2e-dossier.md) | `fix/53-e2e-dossier` | `main` | 51 : l'e2e dans la CI | — |
