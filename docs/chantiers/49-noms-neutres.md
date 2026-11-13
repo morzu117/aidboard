@@ -48,6 +48,7 @@ Le dépôt est public. Depuis le chantier 12, des plans, des fiches de recette, 
 
 - `test/cartes-reliees.test.ts` crée ses dossiers sous un chemin fixe, laissé par le 48.3, au lieu du dossier temporaire du système. Chaque lancement y laisse des dossiers. Le test passe à `mkdtempSync(join(tmpdir(), 'aid-cartes-'))` et supprime son dossier à la fin, comme les autres tests.
 - **Tests :** le fichier passe, et un lancement ne laisse aucun dossier.
+49.2 commité. Gate vert (3 884 tests). Le test des cartes reliées utilise le dossier temporaire du système.
 
 ## 4. Pièges
 
