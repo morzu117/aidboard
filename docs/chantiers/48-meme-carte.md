@@ -6,7 +6,7 @@
 | Emplacement final | `docs/chantiers/48-meme-carte.md` sur `main` |
 | Base | `main`, après le merge du 47 (#159). |
 | Spec | `specs/meme-carte-48.md`, révision 1 (dossier de travail, hors dépôt). |
-| Organisation | morzu-vps gère le chantier. Un agent Codex CLI écrit le code et les tests de chaque point, sur un brief tiré de ce plan. morzu-vps relit chaque diff, lance le gate, commite et ouvre la PR. |
+| Organisation | La cell de gestion de Julien gère le chantier. Un agent Codex CLI écrit le code et les tests de chaque point, sur un brief tiré de ce plan. La cell de gestion relit chaque diff, lance le gate, commite et ouvre la PR. |
 | Validation | Le lab relit le code de 48.1. Ensuite viennent la recette de Julien et son oui pour le merge, CI verte. |
 
 ## 1. Pourquoi
