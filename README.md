@@ -273,6 +273,8 @@ npm run dev:daemon      # daemon au premier plan sur le build
 npm run dev:web         # Vite sur 127.0.0.1:5173, proxy vers le daemon
 ```
 
+La CI lance aussi `npm run gate:e2e` sur chaque PR et sur chaque push sur `main`.
+
 En dev, lancer le daemon avec `AID_DEV_ORIGIN=http://127.0.0.1:5173` : sans cela, toute écriture depuis Vite répond 403.
 Les plans de développement sont dans `docs/chantiers/`, les maquettes de référence dans `design/maquettes/`.
 

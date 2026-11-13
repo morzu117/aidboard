@@ -80,10 +80,14 @@ test('la pastille mène à Réglages, section Mesh, sans rien basculer ; /swarph
 }) => {
   const page = await openApp(await browser.newContext());
   const avant = await node(page, '1-1.barre.mesh.texte').textContent();
+  const etatAttendu = avant?.startsWith('hors mesh depuis ')
+    ? /^hors mesh depuis (moins d'une minute|[1-9]\d* (min|h|j))$/
+    : avant!;
+  expect(avant).toEqual(expect.stringMatching(etatAttendu));
   await node(page, '1-1.barre.mesh').click();
   await expect(page).toHaveURL(/\/reglages#mesh$/);
   await expect(node(page, 'reglages.mesh')).toBeInViewport();
-  await expect(node(page, 'reglages.barre.mesh.texte')).toHaveText(avant!);
+  await expect(node(page, 'reglages.barre.mesh.texte')).toHaveText(etatAttendu);
   // Connecter et Déconnecter avec confirmation : e2e/mesh.spec.ts, qui lit le journal du faux swarph depuis
   // un monitor jamais arrêté ; les refaire ici y laisserait un « monitor stop » avant son tour
 
