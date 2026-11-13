@@ -35,6 +35,7 @@ L'e2e du 46 et celui du 48 (`e2e/helpers-multi-mesh.ts`) n'ont pas ce problème 
 - **Tests :**
   - l'e2e entier, avant et après : chaque test qui échouait à cause de D314 passe, et aucun test qui passait n'échoue ;
   - le gate entier.
+50.1 commité. Gate vert (3 884 tests). E2e : 121 tests passent, 14 échecs D314 résolus ; restent 6 échecs, causés par la page /swarph (50.2).
 
 ## 5. Fini quand
 
