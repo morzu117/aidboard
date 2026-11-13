@@ -120,6 +120,18 @@ Julien relie à la main des cartes qui suivent le même travail sur plusieurs me
   - aucune écriture mesh pendant toute la suite.
 48.1 commité. Gate vert (3 851 tests). Migration 032, identité par thread_uuid lu sur le mesh, statuts, pagination, 4 lectures à la fois, cache par (mesh, empreinte, carte). À relire par le lab.
 
+### 48.1c Les corrections du lab (DM 97474)
+
+- **Les membres orphelins.** Quand un groupe tombe sous deux membres, `retirer` supprime d'abord ses membres (`DELETE FROM membres_groupe WHERE groupe = ?`), puis le groupe, dans la même transaction. On ne compte pas sur la cascade, même si `db.ts` active `foreign_keys`.
+- **La date de création** se compare comme un instant (`Date.parse` des deux côtés, null égal à null, une date illisible comparée comme du texte). Le `thread_uuid` reste comparé en égalité stricte.
+- **Un échec de lecture** n'est gardé en cache que 5 s. Une lecture réussie l'est toujours 60 s.
+- **La garde de lecture.** Sur le daemon local, un jeton de run ne peut faire que `POST /api/events` : toute lecture, du board comme des cartes reliées, est réservée à l'admin. Le téléphone passe par le serveur host, qui n'expose pas ces routes. Un test le montre pour `GET /api/cartes-reliees`.
+- **Tests :**
+  - retirer un membre d'un groupe de deux ne laisse aucune ligne, et la carte restante peut être reliée à nouveau ;
+  - deux écritures du même instant ne rendent pas « carte remplacée » ;
+  - un échec de lecture se relit après 5 s ;
+  - un jeton de run reçoit 403 sur `GET /api/cartes-reliees`.
+
 ### 48.2 Le web (D324)
 
 - `web/src/data/cartes-reliees.ts`, la section de `CarteBoard`, le dialogue et la liste du board.
