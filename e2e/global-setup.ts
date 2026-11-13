@@ -13,9 +13,16 @@ export default async function globalSetup() {
   const home = realpathSync(mkdtempSync(join(tmpdir(), 'aid-e2e-')));
   // 12.7 : le mesh swarph sur les faux binaires (D40) — jamais le vrai swarph ni Tailscale, aucun réseau
   const fixtures = join(import.meta.dirname, '../test/fixtures');
+  const swarph = join(home, 'swarph');
+  // D327 : le script porte les réglages du faux CLI malgré l'environnement filtré.
+  writeFileSync(
+    swarph,
+    `#!/bin/sh\nexport FAKE_SWARPH_LOG='${join(home, 'swarph.log')}'\nexport FAKE_SWARPH_BOARD='${join(fixtures, 'board')}'\nexport FAKE_SWARPH_BOARD_ERROR_FILE='${join(home, 'board-error')}'\nexec '${join(fixtures, 'fake-swarph.sh')}' "$@"\n`,
+    { mode: 0o700 },
+  );
   const mesh = [
     'mesh:',
-    `  bin: ${join(fixtures, 'fake-swarph.sh')}`,
+    `  bin: ${swarph}`,
     '  cell: cell-aid',
     `  cellFile: ${join(home, 'cell-aid.yaml')}`,
     '  gateway: http://gateway.example:8788',
@@ -38,10 +45,6 @@ export default async function globalSetup() {
     AID_NO_BROWSER: '1',
     SHELL: '/bin/sh',
     PATH,
-    FAKE_SWARPH_LOG: join(home, 'swarph.log'),
-    // 24.9 : le board sur les fixtures synthétiques ; l'erreur simulée se change par ce fichier en cours de test
-    FAKE_SWARPH_BOARD: join(fixtures, 'board'),
-    FAKE_SWARPH_BOARD_ERROR_FILE: join(home, 'board-error'),
     FAKE_TAILSCALE_STATEFILE: join(home, 'tailscale.state'),
     FAKE_TAILSCALE_LOG: join(home, 'tailscale.log'),
     FAKE_SWAIRM_LOG: join(home, 'swairm.log'),

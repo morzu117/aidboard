@@ -72,6 +72,9 @@ process.stdout.write(readFileSync(${JSON.stringify(etat)}));
     `#!${process.execPath}
 import { appendFileSync, readFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
+// D327 : les réglages du faux CLI sont posés dans son script.
+process.env.FAKE_SWARPH_BOARD = ${JSON.stringify(board)};
+process.env.FAKE_SWARPH_LOG = ${JSON.stringify(join(dossier, 'swarph.log'))};
 const args = process.argv.slice(2);
 appendFileSync(${JSON.stringify(join(dossier, 'appels-swarph.jsonl'))}, JSON.stringify(args) + '\\n');
 if (args.includes('--search')) {
@@ -109,8 +112,6 @@ mesh:
     AID_NO_BROWSER: '1',
     SHELL: '/bin/sh',
     PATH: `${join(fixtures, 'bin')}${delimiter}${process.env.PATH}`,
-    FAKE_SWARPH_BOARD: board,
-    FAKE_SWARPH_LOG: join(dossier, 'swarph.log'),
     FAKE_TAILSCALE_STATEFILE: join(dossier, 'tailscale.state'),
   };
   const contexte = await browser.newContext({ permissions: ['clipboard-read', 'clipboard-write'] });

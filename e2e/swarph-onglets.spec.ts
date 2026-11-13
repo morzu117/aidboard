@@ -89,9 +89,16 @@ test('Federation sans index local sur un daemon isolé', async ({ browser }) => 
   const dossier = realpathSync(mkdtempSync(join(tmpdir(), 'aid-e2e-sans-index-')));
   const fixtures = join(import.meta.dirname, '../test/fixtures');
   const cli = join(import.meta.dirname, '../dist/cli/aid.js');
+  const swarph = join(dossier, 'swarph');
+  // D327 : les réglages du faux CLI sont exportés après le filtrage du daemon.
+  writeFileSync(
+    swarph,
+    `#!/bin/sh\nexport FAKE_SWARPH_BOARD='${join(fixtures, 'board')}'\nexport FAKE_SWARPH_LOG='${join(dossier, 'swarph.log')}'\nexport FAKE_SWARPH_CODEGRAPH_MODE='no-index'\nexec '${join(fixtures, 'fake-swarph.sh')}' "$@"\n`,
+    { mode: 0o700 },
+  );
   writeFileSync(
     join(dossier, 'config.yaml'),
-    `port: ${port}\nagents:\n  transport: pty\nmesh:\n  bin: ${join(fixtures, 'fake-swarph.sh')}\n  cell: peer-a\n  gateway: https://example.com\n  stateRoot: ${join(dossier, 'swarph_state')}\n  tailscale:\n    manage: false\n    bin: ${join(fixtures, 'fake-tailscale.sh')}\n`,
+    `port: ${port}\nagents:\n  transport: pty\nmesh:\n  bin: ${swarph}\n  cell: peer-a\n  gateway: https://example.com\n  stateRoot: ${join(dossier, 'swarph_state')}\n  tailscale:\n    manage: false\n    bin: ${join(fixtures, 'fake-tailscale.sh')}\n`,
     { mode: 0o600 },
   );
   const env = {
@@ -100,9 +107,6 @@ test('Federation sans index local sur un daemon isolé', async ({ browser }) => 
     AID_NO_BROWSER: '1',
     SHELL: '/bin/sh',
     PATH: `${join(fixtures, 'bin')}${delimiter}${process.env.PATH}`,
-    FAKE_SWARPH_BOARD: join(fixtures, 'board'),
-    FAKE_SWARPH_CODEGRAPH_MODE: 'no-index',
-    FAKE_SWARPH_LOG: join(dossier, 'swarph.log'),
     FAKE_TAILSCALE_STATEFILE: join(dossier, 'tailscale.state'),
   };
   execFileSync(process.execPath, [cli], { env, timeout: 40_000 });
