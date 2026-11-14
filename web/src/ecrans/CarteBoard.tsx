@@ -426,7 +426,10 @@ function Fiche({
       <Bloc id="fil" titre="Fil" result={s.thread} onRelire={relire}>
         {s.thread.ok && <Fil t={s.thread.data} />}
       </Bloc>
-      <p>Déplacer : bientôt, quand le gateway donnera la version de la carte.</p>
+      <p>
+        Déplacer : A-I-D le propose dans la Boîte quand le sujet lié change de phase, entre build,
+        review et ready, jamais vers done.
+      </p>
       <Chronologie s={s} commits={commits} />
       <Bloc id="github" titre="GitHub" result={s.card} onRelire={relire}>
         {c && <GitHub card={c} />}
