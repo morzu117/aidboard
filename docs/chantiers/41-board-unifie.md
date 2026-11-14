@@ -58,7 +58,7 @@ Le programme (§5, phase 5) veut **un seul board**. Les sujets de la ruche Swair
   - Un état inconnu s'affiche tel quel.
 - **« Sujets Swairm sans carte »** : une section de l'onglet Board, repliée par défaut, avec leur nombre. Chaque sujet a deux boutons « Copier » :
   - « Copier la ligne » copie `Swairm: <owner>/<dépôt>#<id>` ;
-  - « Copier la commande » copie un modèle `swarph board cards create --project <PROJET> --title "<titre>" --body "Swairm: <owner>/<dépôt>#<id>"`, où `<PROJET>` reste à remplir. A-I-D n'exécute jamais cette commande.
+  - « Copier la commande » copie un modèle `swarph board cards add --project <PROJET> --title "<titre>" --body "Swairm: <owner>/<dépôt>#<id>"`, où `<PROJET>` reste à remplir. A-I-D n'exécute jamais cette commande.
 - Les sujets `merged` et `abandoned` sans carte ne sont pas listés : la règle « rien sans carte » vaut pour le travail vivant. Un compteur dit combien il y en a.
 - Tout ce qui vient de Swairm ou des cartes s'affiche en texte brut (invariant 9).
 
@@ -116,6 +116,10 @@ Un e2e Board avec un faux `swairm` et un faux `swarph`, et la fiche `docs/recett
 
 Côté Swairm, une PR sur `morzu117/swairm` : le trailer `Swairm-Drone`, facultatif à la lecture, et son contrat dans `docs/cli-swairm.md`. Côté A-I-D : le lecteur de PR par `gh`, le parseur des trailers, la source « Commits » de la chronologie, et leurs tests.
 - *Révision 41.6.* La PR est cherchée par `gh pr list --head <sujet> --state all`. Reprise r1 : la première version ne cherchait que les PR ouvertes, donc aucune trace pour un sujet mergé. À 50 PR, la lecture rend « non-lu » plutôt que de choisir en silence. Forme du JSON de `gh` vérifiée sur une vraie PR (`state` MERGED, `mergedAt`, `commits[].oid`, `committedDate`, `messageHeadline`, `messageBody`). 10 lignes existantes modifiées, 36 tests ajoutés. E2e Board 9/9, gate 3101 (échecs connus hors CI).
+
+### 41.7 Correctif : la commande copiée est `add`, pas `create`
+
+Le CLI swarph n'a pas de sous-commande `board cards create` : `swarph board cards create --help` répond « invalid choice: 'create' ». La commande qui crée une carte est `swarph board cards add --project … --title … --body …` (swarph-cli 0.75.0, options mesurées par `--help`). Le modèle de « Copier la commande » (D287, 41.3) devient `swarph board cards add --project <PROJET> --title <titre cité> --body <ligne Swairm citée>`. La citation POSIX de 41.3 ne change pas. Le test de la vue, l'e2e Board et la fiche de recette suivent.
 
 ## 6. Pièges
 
