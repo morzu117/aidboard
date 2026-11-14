@@ -2,7 +2,7 @@
 
 | Champ | Valeur |
 |---|---|
-| État | **Révision 0, 14 novembre 2026. Brouillon, à valider.** Choix de Julien du 14 novembre : le jeton de cell de `swarph join` (#1582) suffit, le chantier n'attend plus le flux SSO de l'émetteur. Julien a tranché Q1 à Q3 le 14 novembre (les recos). L1 à L4 attendent le lab (DM 98221). |
+| État | **Révision 1, 14 novembre 2026.** Relu par le lab (DM 98234) : le plan tient, avec quatre changements dans D334, faits ici. Choix de Julien du 14 novembre : le jeton de cell de `swarph join` (#1582) suffit, le chantier n'attend plus le flux SSO de l'émetteur. Julien a tranché Q1 à Q3 le 14 novembre (les recos). Le lab a répondu à L1 à L4 (DM 98234). |
 | Emplacement final | `docs/chantiers/33-rejoindre-mesh.md` sur `main` |
 | Base | `main` (6346fee) |
 | Organisation | Comme au 41. cell-gestion gère le chantier ; Codex CLI écrit le code et les tests de chaque point ; cell-gestion relit, lance le gate, commite et ouvre la PR. |
@@ -23,7 +23,10 @@ Aujourd'hui, pour brancher un mesh dans A-I-D, il faut créer la cell et son jet
 - La commande interroge le gateway jusqu'à 15 minutes. À l'approbation, elle écrit le jeton dans `~/.config/swarph/<cell>.peer_token` (0600, dossier 0700) et un fichier `<cell>.join.json` (nom, gateway, chemin du jeton). Un fichier déjà présent est refusé avant toute demande.
 - Elle vérifie l'identité par `/whoami`, puis affiche quatre questions de ratification. Sans terminal interactif, elle n'envoie aucune réponse : la cell est inscrite, **non ratifiée**, jusqu'au processus du témoin.
 - En HTTP clair, seuls `*.ts.net` et `100.64.0.0/10` passent sans `--allow-unsafe-http`.
-- En cas d'échec, elle écrit `swarph join: <raison>` sur la sortie d'erreur et sort en 1. Les raisons connues : `access_denied`, `expired_token`, `already_redeemed`, `name_unavailable`, `pickup_failed`, `join request expired`, `invalid peer name`, `invalid gateway URL`.
+- En cas d'échec, elle écrit `swarph join: <raison>` sur la sortie d'erreur et sort en 1. Les raisons connues (relevées par le lab, DM 98234) : `access_denied`, `expired_token`, `already_redeemed`, `name_unavailable` (au retrait du jeton seulement), `pickup_failed`, `join request expired`, `invalid peer name`, `invalid gateway URL`, `join request refused (HTTP <n>)` (409 : nom déjà pris à la demande ; 429 : trop de demandes), `non-tailnet HTTP requires --allow-unsafe-http…`, `native Windows credential storage is unsupported; use Linux or WSL`, `gateway request failed…`, `local storage failure or cancellation…`.
+- Deux raisons disent que le jeton a pu être retiré : `authenticated identity check failed; the private credential file is retained` et `invalid token pickup response; operator recovery may be needed`.
+- Au succès sans terminal, la commande écrit `No interactive answers were supplied; no handshake was sent. Send your own answers to <témoin>.` C'est le seul endroit où elle donne le nom du témoin.
+- Ce texte n'est pas un contrat : pas de `--json`, aucune promesse de stabilité (L1). Les défauts du client sont notés sur #1582, sans date de correction.
 
 Ce que ça change par rapport au programme :
 - **Le jeton n'est pas court.** C'est un jeton de cell, qui vit jusqu'à sa révocation.
@@ -55,14 +58,18 @@ Le 33 s'appuie sur `swarph join`. Le jeton reste dans le fichier qu'écrit swarp
 
 - Le daemon lance `<mesh.bin> join <gateway> --name <cell>` comme processus enfant :
   - sans shell, arguments en tableau ;
-  - entrée standard fermée, donc sans réponses de ratification ;
+  - **entrée standard sur `/dev/null`** (en Node, `stdio: ['ignore', 'pipe', 'pipe']`), jamais un descripteur fermé. Un descripteur fermé fait planter swarph **après** l'écriture du jeton : la cell serait inscrite, et A-I-D afficherait « échec » (L2) ;
   - `HOME` est le `home` du mesh (D311), par défaut celui du daemon ;
-  - l'environnement est nettoyé : ni `SWARPH_SELF`, ni `MESH_GATEWAY_URL`, ni `MESH_GATEWAY_TOKEN`, ni jeton GitHub.
+  - l'environnement est nettoyé : ni `SWARPH_SELF`, ni `MESH_GATEWAY_URL`, ni `MESH_GATEWAY_TOKEN`, ni jeton GitHub ;
+  - **`PYTHONUNBUFFERED=1`** : sans lui, la ligne `Code:` reste en tampon jusqu'à la fin du processus (L1).
 - **Jamais `--allow-unsafe-http`.** A-I-D refuse d'avance une adresse HTTP qui n'est ni en `*.ts.net` ni en `100.64.0.0/10`, avec le même message que swarph.
 - Le nom de cell suit `^[a-z][a-z0-9-]{0,62}[a-z0-9]$`, comme le gateway. Le nom local du mesh suit D311. A-I-D refuse d'avance un nom de mesh déjà dans la config, et un fichier de jeton déjà présent pour cette cell.
-- La sortie est lue ligne par ligne. Seule la ligne `Code: …` est interprétée, par une expression ancrée. Le reste n'est ni affiché ni gardé, sauf la raison d'échec `swarph join: <raison>`, ramenée à une liste fermée de libellés (§2), et « échec » pour tout le reste.
-- Une seule demande à la fois. Délai total : 16 minutes, puis le processus est arrêté.
-- Les états servis : `demande`, `en-attente` (avec le code et l'expiration), `approuve`, `refuse`, `expire`, `echec` (avec le libellé).
+- La sortie est lue ligne par ligne. Seules deux lignes sont interprétées, par des expressions ancrées : `Code: …` et `… Send your own answers to <témoin>.` (le nom du témoin suit la forme des noms de cell). Le reste n'est ni affiché ni gardé, sauf la raison d'échec `swarph join: <raison>`, ramenée à la liste fermée du §2, et « échec » pour tout le reste.
+- **Deux échecs ne sont pas de simples échecs** : `authenticated identity check failed…` et `invalid token pickup response…`. Le jeton a pu être retiré. L'état devient `a-voir`, avec « Le jeton a peut-être été retiré : vois avec l'opérateur du gateway. » A-I-D ne relance jamais.
+- Une seule demande à la fois. swarph s'arrête seul à 15 minutes ; le délai de 16 minutes d'A-I-D n'est qu'un filet.
+- **Annuler, ou atteindre le délai : SIGINT, puis attendre la fin** (L3). SIGINT retire les deux fichiers réservés ; SIGTERM laisse deux fichiers vides qui bloquent la tentative suivante. Si le processus ne finit pas en 10 secondes : SIGKILL, puis A-I-D retire `<cell>.peer_token` et `<cell>.join.json` **seulement s'ils font 0 octet**. Un fichier de jeton non vide est un vrai jeton : A-I-D ne le supprime jamais.
+- **Après une annulation**, l'écran dit « Demande annulée : demande à l'opérateur de refuser le code XXXX-XXXX », avec la commande `swarph mesh approve XXXX-XXXX --gateway <gateway> --refuse --token-file <JETON-OPÉRATEUR>` à copier. Sans ce refus, une approbation tardive réserve le nom jusqu'à l'expiration (L3).
+- Les états servis : `demande`, `en-attente` (avec le code et l'expiration), `approuve` (avec le témoin s'il est lu), `refuse`, `expire`, `annule` (avec le code), `a-voir`, `echec` (avec le libellé).
 
 ### D335. La route et la config
 
@@ -77,7 +84,7 @@ Le 33 s'appuie sur `swarph join`. Le jeton reste dans le fichier qu'écrit swarp
 - Dans Machines, une section « Meshes » : la liste de la config (nom, cell, gateway, jeton présent ou non), et le bouton « Rejoindre un mesh ».
 - Le formulaire a trois champs. Le gateway est affiché tel que Julien l'a tapé, en texte brut.
 - Pendant l'attente : le code en grand, son expiration en compte à rebours, et un « Copier » de la commande d'approbation, avec `<TÉMOIN>` et `<JETON-OPÉRATEUR>` à remplir. A-I-D ne l'exécute jamais.
-- Au succès : « Cell inscrite, pas encore ratifiée. » Puis les quatre questions de ratification, en texte, avec la commande d'envoi à copier (`swarph mesh send <témoin> --content-file <réponses> --as <cell> --gateway <gateway> --token-file <chemin>`), et « Redémarre le daemon pour activer ce mesh. »
+- Au succès : « Cell inscrite, pas encore ratifiée : la boîte marche, le board reste vide jusqu'à la ratification » (L4). Puis les quatre questions de ratification, en texte, avec la commande d'envoi à copier (le témoin lu dans la sortie, ou `<TÉMOIN>` à remplir : `swarph mesh send <témoin> --content-file <réponses> --as <cell> --gateway <gateway> --token-file <chemin>`), et « Redémarre le daemon pour activer ce mesh. »
 - Tout ce qui vient de swarph s'affiche en texte brut (invariant 9).
 
 ## 5. Questions
@@ -88,12 +95,16 @@ Le 33 s'appuie sur `swarph join`. Le jeton reste dans le fichier qu'écrit swarp
 - **Q2. Une confirmation du téléphone pour rejoindre ?** Reco : **non (choisi)**. L'approbation de l'opérateur au gateway est déjà le geste humain, et rien n'est écrit sur le mesh avant elle. Une confirmation en plus doublerait le geste quand l'opérateur est Julien.
 - **Q3. La place.** Reco **(choisie)** : la section « Meshes » de l'écran Machines, plutôt qu'un écran nouveau.
 
-### Pour le lab
+### Pour le lab (réponses du 14 novembre 2026, DM 98234)
 
 - **L1.** La ligne `Code: …` sur la sortie standard et la forme `swarph join: <raison>` sont-elles assez stables pour être lues par A-I-D ? Sinon, une sortie `--json` est-elle prévue ?
+  → Lisible, pas un contrat ; pas de `--json`. Il faut `PYTHONUNBUFFERED=1`. Liste des raisons complétée au §2.
 - **L2.** Une entrée standard fermée est-elle bien le chemin « non interactif » prévu, sans effet de bord ?
+  → Oui avec `/dev/null`, non avec un descripteur fermé (plantage après l'écriture du jeton).
 - **L3.** Arrêter le processus pendant l'attente (annulation, délai) laisse-t-il une demande en cours au gateway ? Le doc dit qu'une demande expire à 15 minutes ; A-I-D doit-il prévenir l'opérateur ?
+  → Rien d'orphelin au gateway : une demande en attente ne réserve pas le nom, et la cell n'est inscrite qu'au retrait du jeton. Mais une approbation tardive réserve le nom jusqu'à l'expiration : prévenir l'opérateur de refuser. Arrêter par SIGINT, pas SIGTERM.
 - **L4.** Une cell rejointe par A-I-D reste non ratifiée. Peut-elle lire le board et la boîte avant ratification, ou A-I-D doit-il attendre ?
+  → La boîte oui (lu dans le code, pas essayé en réel). Le board non : la ligne « * » ne s'applique pas à une cell non ratifiée, qui ne voit aucune carte, ni les envois au groupe ALL. A-I-D n'attend pas, mais l'écran le dit.
 
 ## 6. Points
 
@@ -103,7 +114,7 @@ Ce document, et une ligne dans `README.md`.
 
 ### 33.2 Le lanceur (D334)
 
-Le lanceur, la lecture de la sortie, la liste fermée des raisons, les délais, l'annulation, l'environnement nettoyé. Les tests utilisent un faux `swarph` qui rejoue chaque issue : approuvé, refusé, expiré, nom pris, adresse refusée, sortie inattendue, processus qui ne finit pas.
+Le lanceur, la lecture de la sortie, la liste fermée des raisons, les délais, l'annulation, l'environnement nettoyé. Les tests utilisent un faux `swarph` qui rejoue chaque issue : approuvé (avec et sans ligne du témoin), refusé, expiré, nom pris (HTTP 409), adresse refusée, jeton peut-être retiré, sortie inattendue, processus qui ne finit pas. Ils vérifient l'entrée sur `/dev/null`, `PYTHONUNBUFFERED=1`, l'arrêt par SIGINT, et qu'après SIGKILL seuls des fichiers vides sont retirés.
 
 ### 33.3 Les routes, la config et le plancher (D335)
 
@@ -115,7 +126,7 @@ La section « Meshes », le formulaire, l'attente, le succès et les échecs.
 
 ### 33.5 L'e2e et la fiche de recette
 
-Un e2e Machines avec le faux `swarph`, et la fiche `docs/recette-chantier-33-rejoindre-mesh.md`. La recette réelle demande un gateway et un opérateur : elle se fait avec le lab, ou sur le mesh de Julien.
+Un e2e Machines avec le faux `swarph`, et la fiche `docs/recette-chantier-33-rejoindre-mesh.md`. La fiche écrit le risque de Q1 : tout agent lancé sous le même utilisateur peut lire le jeton de cell. La recette réelle demande un gateway et un opérateur : elle se fait avec le lab, ou sur le mesh de Julien.
 
 ## 7. Pièges
 
