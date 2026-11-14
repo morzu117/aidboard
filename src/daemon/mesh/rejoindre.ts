@@ -9,7 +9,7 @@ export type EtatRejoindre =
   | { etat: 'aucune' }
   | { etat: 'demande' }
   | { etat: 'en-attente'; code: string; expiration: number }
-  | { etat: 'approuve'; temoin?: string }
+  | { etat: 'approuve'; temoin?: string; redemarrage?: boolean; libelle?: string }
   | { etat: 'refuse' | 'expire' }
   | { etat: 'annule'; code?: string }
   | { etat: 'a-voir' }
@@ -83,7 +83,13 @@ export class LanceurRejoindre {
   private arreter?: () => Promise<void>;
   private actif = false;
 
-  constructor(private readonly config: Pick<AidConfig, 'mesh' | 'meshes'>) {}
+  constructor(
+    private readonly config: Pick<AidConfig, 'mesh' | 'meshes'>,
+    private readonly enregistrer?: (demande: DemandeRejoindre) => {
+      redemarrage: boolean;
+      libelle?: string;
+    },
+  ) {}
 
   etat(): EtatRejoindre {
     return { ...this.courant };
@@ -158,6 +164,9 @@ export class LanceurRejoindre {
             this.courant = { etat: 'a-voir' };
           }
         } else this.courant = issue;
+        if (this.courant.etat === 'approuve' && this.enregistrer) {
+          this.courant = { ...this.courant, ...this.enregistrer(demande) };
+        }
         this.actif = false;
         this.arreter = undefined;
         resolve();

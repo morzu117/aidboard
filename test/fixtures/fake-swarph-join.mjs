@@ -9,6 +9,10 @@ import { fileURLToPath } from 'node:url';
 // Le scénario vient d'un fichier voisin du binaire, jamais de variables du daemon.
 const dossier = dirname(fileURLToPath(import.meta.url));
 const scenario = JSON.parse(readFileSync(join(dossier, 'scenario.json'), 'utf8'));
+if (process.argv[2] === '--version') {
+  console.log(scenario.version ?? 'swarph-cli 0.80.0');
+  process.exit(0);
+}
 const repertoire = join(process.env.HOME, '.config', 'swarph');
 mkdirSync(repertoire, { recursive: true, mode: 0o700 });
 const jeton = join(repertoire, 'peer-a.peer_token');

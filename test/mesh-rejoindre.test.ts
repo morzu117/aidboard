@@ -25,8 +25,8 @@ const jeton = () => join(dossier, 'home/.config/swarph/peer-a.peer_token');
 const inscription = () => join(dossier, 'home/.config/swarph/peer-a.join.json');
 
 beforeEach(async () => {
-  await mkdir('/var/tmp/aid-tmp-33.2', { recursive: true });
-  dossier = await mkdtemp('/var/tmp/aid-tmp-33.2/rejoindre-');
+  await mkdir('/var/tmp/aid-tmp-33.3', { recursive: true });
+  dossier = await mkdtemp('/var/tmp/aid-tmp-33.3/rejoindre-');
   const bin = join(dossier, 'swarph');
   await copyFile(resolve('test/fixtures/fake-swarph-join.mjs'), bin);
   await chmod(bin, 0o700);

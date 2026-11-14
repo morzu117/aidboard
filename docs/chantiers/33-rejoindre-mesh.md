@@ -120,6 +120,7 @@ Le lanceur, la lecture de la sortie, la liste fermée des raisons, les délais, 
 ### 33.3 Les routes, la config et le plancher (D335)
 
 Les trois routes, l'écrivain de config, « Oublier », le plancher de version et la ligne de `doctor`. Les tests vérifient que les routes refusent hors admin et en mode host, et qu'aucun contenu de jeton ne sort par une route ni un journal.
+- _Révision 33.3._ `src/daemon/routes/rejoindre.ts`, `src/daemon/mesh/config-rejoindre.ts`, et le lecteur de version mis en commun (`src/shared/swarph-version.ts`, `version-commande.ts`) pour `doctor` et la route. 31 lignes existantes modifiées, dont 23 déplacées vers `shared`. Le port des appareils ne sert aucune de ces routes (testé). Au succès, `home` est écrit dans `meshes.<mesh>` quand le mesh principal en a un, pour garder le même chemin de jeton au redémarrage. L'ancienne forme `mesh:` devient `meshes.principal` sans perte, commentaires compris ; `bin` et `tailscale` restent dans `mesh`. Reprise r1 : la route d'oubli est `DELETE /api/meshes/config/:mesh` (et non `/api/meshes/:mesh`, qui entrait en collision avec l'annulation pour un mesh nommé `rejoindre`) ; un mesh absent répond 404. 31 tests ajoutés. Gate 3949, gate:e2e 132 sous Node 22, 3/3 passages des tests du point.
 
 ### 33.4 La vue (D336)
 

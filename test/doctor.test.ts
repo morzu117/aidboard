@@ -316,12 +316,12 @@ test('mesh (12.2) : désactivé = une ligne ✓ et rien d’autre ; configuré e
   const on = await runChecks({
     ...good,
     mesh: async () => meshOk,
-    version: async (bin) => (bin === 'swarph' ? '0.72.40' : 'git version 2.54.0'),
+    version: async (bin) => (bin === 'swarph' ? '0.80.0' : 'git version 2.54.0'),
   });
   expect(on.filter((c) => c.level !== 'ok')).toEqual([]);
   expect(on.map((c) => c.label)).toEqual(
     expect.arrayContaining([
-      'swarph 0.72.40',
+      'swarph 0.80.0',
       'cell cell-aid (/home/j/.config/swarph/cells/cell-aid.yaml)',
       'token de cell-aid présent',
       'gateway http://gateway.example.ts.net:8788',
