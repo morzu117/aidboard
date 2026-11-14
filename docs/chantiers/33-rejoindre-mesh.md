@@ -120,9 +120,10 @@ Ce document, et une ligne dans `README.md`.
 Le lanceur, la lecture de la sortie, la liste fermée des raisons, les délais, l'annulation, l'environnement nettoyé. Les tests utilisent un faux `swarph` qui rejoue chaque issue : approuvé (avec et sans ligne du témoin), refusé, expiré, nom pris (HTTP 409), adresse refusée, jeton peut-être retiré, sortie inattendue, processus qui ne finit pas. Ils vérifient l'entrée sur `/dev/null`, `PYTHONUNBUFFERED=1`, l'arrêt par SIGINT, et qu'après SIGKILL seuls des fichiers vides sont retirés.
 - _Révision 33.2._ `src/daemon/mesh/rejoindre.ts` (`LanceurRejoindre`), un faux `swarph join` et 25 tests. Le validateur des noms de mesh (D311) est extrait de `config.ts` (`nomMeshValide`) : 2 lignes existantes modifiées. Reprise r1 après relecture : un binaire introuvable donne `echec` « swarph introuvable » et libère le lanceur, avec une seule fin même si Node émet `error` sans `close` (vérifié sous Node 22 et 24) ; l'état de départ est `aucune`, ajouté aux états de D334. Après une sortie 0, un jeton absent, vide ou pas en 0600 donne `a-voir`. Gate 3918, gate:e2e 132 sous Node 22, 5/5 passages des tests du point.
 
-### 33.2 bis Le lanceur après la relecture du lab (D334)
+### 33.2bis Le lanceur après la relecture du lab (D334)
 
 Le bloquant de DM 98327 : l'état final suit le fichier de jeton, et plus seulement la raison (D334). Les cinq points facultatifs : la liste des raisons complétée, le test du tailnet seulement sur une IPv4 littérale, l'environnement par liste blanche, le refus d'un `join.json` déjà présent, et un faux `swarph` qui ne lit plus `/proc/self/fd/0` (absent sous macOS).
+- _Révision 33.2 bis._ Les six corrections de DM 98327 sur le lanceur, son faux et ses tests ; 30 lignes existantes du chantier remplacées, 9 tests ajoutés. Reprise r1 après relecture : une sortie 0 sans fichier de jeton donne `a-voir` (swarph affirme avoir réussi, la cell est peut-être inscrite), comme avant ce point. Gate 3958, gate:e2e 132 sous Node 22, 3/3 passages des tests du lanceur et des routes.
 
 ### 33.3 Les routes, la config et le plancher (D335)
 

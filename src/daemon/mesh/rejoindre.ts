@@ -1,5 +1,6 @@
 import { spawn } from 'node:child_process';
 import { lstatSync, unlinkSync } from 'node:fs';
+import { isIPv4 } from 'node:net';
 import { homedir } from 'node:os';
 import { normaliserGateway } from '../../shared/meshes.js';
 import { nomMeshValide, type AidConfig } from '../config.js';
@@ -35,6 +36,12 @@ function resultat(raison: string): EtatRejoindre {
   )
     return { etat: 'a-voir' };
   const raisons = [
+    'symlinked credential directory refused',
+    'credential directory must belong to this user',
+    'invalid join response',
+    'gateway redirect refused',
+    'gateway response too large',
+    'invalid gateway response',
     'already_redeemed',
     'name_unavailable',
     'pickup_failed',
@@ -71,7 +78,7 @@ export function validerGatewayRejoindre(gateway: string): string {
   const octets = url.hostname.split('.').map(Number);
   const tailnet =
     url.hostname.endsWith('.ts.net') ||
-    (octets.length === 4 && octets[0] === 100 && octets[1]! >= 64 && octets[1]! <= 127);
+    (isIPv4(url.hostname) && octets[0] === 100 && octets[1]! >= 64 && octets[1]! <= 127);
   if (url.protocol === 'http:' && !tailnet)
     throw new Error('non-tailnet HTTP requires --allow-unsafe-http');
   return adresse;
@@ -107,15 +114,13 @@ export class LanceurRejoindre {
       home,
     );
     if (existe(chemins.tokenFile)) throw new Error('Fichier de jeton déjà présent');
-    const env = { ...process.env, HOME: home, PYTHONUNBUFFERED: '1' };
-    for (const cle of [
-      'SWARPH_SELF',
-      'MESH_GATEWAY_URL',
-      'MESH_GATEWAY_TOKEN',
-      'GH_TOKEN',
-      'GITHUB_TOKEN',
-    ])
-      delete (env as NodeJS.ProcessEnv)[cle];
+    if (existe(chemins.tokenFile.replace(/\.peer_token$/, '.join.json')))
+      throw new Error('Fichier join.json déjà présent');
+    const env: NodeJS.ProcessEnv = { HOME: home, PYTHONUNBUFFERED: '1' };
+    for (const cle of Object.keys(process.env)) {
+      if (['PATH', 'LANG', 'SSL_CERT_FILE', 'SSL_CERT_DIR'].includes(cle) || cle.startsWith('LC_'))
+        env[cle] = process.env[cle];
+    }
     this.actif = true;
     this.courant = { etat: 'demande' };
     const enfant = spawn(this.config.mesh.bin, ['join', gateway, '--name', demande.cell], {
@@ -127,7 +132,6 @@ export class LanceurRejoindre {
     let issue: EtatRejoindre = { etat: 'echec', libelle: 'échec' };
     let interruption: 'annule' | 'expire' | undefined;
     let tue = false;
-    let echec = false;
     let minuterieArret: ReturnType<typeof setTimeout> | undefined;
     let termine = false;
     const fin = new Promise<void>((resolve) => {
@@ -149,21 +153,19 @@ export class LanceurRejoindre {
             }
           }
         }
-        if (echec && enfant.pid === undefined) this.courant = issue;
+        let jeton;
+        try {
+          jeton = lstatSync(chemins.tokenFile);
+        } catch {
+          // Aucun contenu n'est lu, même si le chemin est un lien symbolique.
+        }
+        if (statut === 0 && jeton?.isFile() && jeton.size > 0 && (jeton.mode & 0o777) === 0o600)
+          this.courant = { etat: 'approuve', ...(temoin ? { temoin } : {}) };
+        else if (jeton || statut === 0) this.courant = { etat: 'a-voir' };
         else if (interruption === 'annule')
           this.courant = { etat: 'annule', ...(code ? { code } : {}) };
         else if (interruption === 'expire') this.courant = { etat: 'expire' };
-        else if (statut === 0 && !echec) {
-          try {
-            const jeton = lstatSync(chemins.tokenFile);
-            this.courant =
-              jeton.isFile() && jeton.size > 0 && (jeton.mode & 0o777) === 0o600
-                ? { etat: 'approuve', ...(temoin ? { temoin } : {}) }
-                : { etat: 'a-voir' };
-          } catch {
-            this.courant = { etat: 'a-voir' };
-          }
-        } else this.courant = issue;
+        else this.courant = issue;
         if (this.courant.etat === 'approuve' && this.enregistrer) {
           this.courant = { ...this.courant, ...this.enregistrer(demande) };
         }
@@ -172,7 +174,6 @@ export class LanceurRejoindre {
         resolve();
       };
       enfant.once('error', () => {
-        echec = true;
         if (enfant.pid === undefined) {
           issue = { etat: 'echec', libelle: 'swarph introuvable' };
           terminer(null);

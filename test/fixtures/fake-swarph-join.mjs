@@ -2,7 +2,7 @@
 import process from 'node:process';
 import console from 'node:console';
 import { setTimeout, setInterval } from 'node:timers';
-import { readFileSync, writeFileSync, mkdirSync, readlinkSync, unlinkSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync, fstatSync, statSync, unlinkSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -17,13 +17,17 @@ const repertoire = join(process.env.HOME, '.config', 'swarph');
 mkdirSync(repertoire, { recursive: true, mode: 0o700 });
 const jeton = join(repertoire, 'peer-a.peer_token');
 const inscription = join(repertoire, 'peer-a.join.json');
+const entree = fstatSync(0);
+const nul = statSync('/dev/null');
 writeFileSync(
   join(dossier, 'constat.json'),
   JSON.stringify({
-    entree: readlinkSync('/proc/self/fd/0'),
+    entree: entree.isCharacterDevice() && entree.rdev === nul.rdev ? '/dev/null' : 'autre',
     python: process.env.PYTHONUNBUFFERED,
     variables: Object.keys(process.env).filter((cle) =>
       [
+        'AID_SECRET_TEST',
+        'PYTHONPATH',
         'SWARPH_SELF',
         'MESH_GATEWAY_URL',
         'MESH_GATEWAY_TOKEN',
@@ -42,7 +46,7 @@ if (scenario.reserve) {
 process.on('SIGINT', () => {
   writeFileSync(join(dossier, 'signal'), 'SIGINT');
   if (scenario.ignore) return;
-  if (scenario.reserve) {
+  if (scenario.reserve && !scenario.conserve) {
     unlinkSync(jeton);
     unlinkSync(inscription);
   }
@@ -57,10 +61,12 @@ setTimeout(() => {
     for (const ligne of scenario.erreurs) console.error(ligne);
     process.exit(1);
   }
+  if (scenario.jetonAvantErreur) writeFileSync(jeton, fauxJeton, { mode: 0o600 });
   if (scenario.raison) {
     console.error(`swarph join: ${scenario.raison}`);
     process.exit(1);
   }
+  if (scenario.sansJeton) process.exit(0);
   writeFileSync(jeton, fauxJeton, { mode: 0o600 });
   console.log(fauxJeton);
   if (scenario.temoin)

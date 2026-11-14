@@ -103,6 +103,8 @@ describe('lanceur rejoindre — D333 et D334', () => {
 
   test.each([true, false])('approuvé, témoin %s, entrée et environnement', async (temoin) => {
     for (const cle of [
+      'AID_SECRET_TEST',
+      'PYTHONPATH',
       'SWARPH_SELF',
       'MESH_GATEWAY_URL',
       'MESH_GATEWAY_TOKEN',
@@ -130,6 +132,18 @@ describe('lanceur rejoindre — D333 et D334', () => {
   });
 
   test.each([
+    [
+      'symlinked credential directory refused',
+      { etat: 'echec', libelle: 'symlinked credential directory refused' },
+    ],
+    [
+      'credential directory must belong to this user',
+      { etat: 'echec', libelle: 'credential directory must belong to this user' },
+    ],
+    ['invalid join response', { etat: 'echec', libelle: 'invalid join response' }],
+    ['gateway redirect refused', { etat: 'echec', libelle: 'gateway redirect refused' }],
+    ['gateway response too large', { etat: 'echec', libelle: 'gateway response too large' }],
+    ['invalid gateway response', { etat: 'echec', libelle: 'invalid gateway response' }],
     ['access_denied', { etat: 'refuse' }],
     ['expired_token', { etat: 'expire' }],
     ['join request expired', { etat: 'expire' }],
@@ -155,11 +169,37 @@ describe('lanceur rejoindre — D333 et D334', () => {
     expect(lanceur.etat()).toEqual(etat);
   });
 
-  test('sortie inattendue sans raison', async () => {
+  test('sortie 0 sans jeton : à voir', async () => {
+    await lancer({ sansJeton: true });
+    await attendreCode();
+    await attendreFin();
+    expect(lanceur.etat()).toEqual({ etat: 'a-voir' });
+    await expect(lstat(jeton())).rejects.toMatchObject({ code: 'ENOENT' });
+  });
+
+  test('jeton conservé après une erreur réseau : à voir', async () => {
+    await lancer({ jetonAvantErreur: true, raison: 'gateway request failed; exemple' });
+    await attendreCode();
+    await attendreFin();
+    expect(lanceur.etat()).toEqual({ etat: 'a-voir' });
+    expect((await lstat(jeton())).size).toBeGreaterThan(0);
+  });
+
+  test('jeton conservé après SIGINT : à voir', async () => {
+    await lancer({ attente: true, reserve: true, nonVide: true, conserve: true });
+    await attendreCode();
+    await lanceur.annuler();
+    expect(await readFile(join(dossier, 'signal'), 'utf8')).toBe('SIGINT');
+    expect(lanceur.etat()).toEqual({ etat: 'a-voir' });
+    expect((await lstat(jeton())).size).toBeGreaterThan(0);
+    expect((await lstat(inscription())).isFile()).toBe(true);
+  });
+
+  test('sortie inattendue sans raison après écriture du jeton', async () => {
     await lancer({ inattendu: true });
     await attendreCode();
     await attendreFin();
-    expect(lanceur.etat()).toEqual({ etat: 'echec', libelle: 'échec' });
+    expect(lanceur.etat()).toEqual({ etat: 'a-voir' });
   });
 
   test('annulation par SIGINT, attend la fin et garde le code', async () => {
@@ -182,7 +222,9 @@ describe('lanceur rejoindre — D333 et D334', () => {
       if (nonVide) expect((await lstat(jeton())).size).toBeGreaterThan(0);
       else await expect(lstat(jeton())).rejects.toMatchObject({ code: 'ENOENT' });
       await expect(lstat(inscription())).rejects.toMatchObject({ code: 'ENOENT' });
-      expect(lanceur.etat()).toEqual({ etat: 'annule', code: 'ABCD-EFGH' });
+      expect(lanceur.etat()).toEqual(
+        nonVide ? { etat: 'a-voir' } : { etat: 'annule', code: 'ABCD-EFGH' },
+      );
     },
     15_000,
   );
@@ -245,6 +287,9 @@ describe('lanceur rejoindre — D333 et D334', () => {
       'non-tailnet',
     );
     await mkdir(join(dossier, 'home/.config/swarph'), { recursive: true });
+    await writeFile(inscription(), '');
+    expect(() => lanceur.lancer(demande)).toThrow('join.json déjà présent');
+    await rm(inscription());
     await writeFile(jeton(), 'FAUX-JETON-NE-JAMAIS-SERVIR');
     expect(() => lanceur.lancer(demande)).toThrow('jeton déjà présent');
     await expect(lstat(join(dossier, 'constat.json'))).rejects.toMatchObject({ code: 'ENOENT' });
@@ -257,6 +302,7 @@ describe('lanceur rejoindre — D333 et D334', () => {
       'https://example.com#x',
       'https://peer-a@example.com',
       'file:///example.com',
+      'http://100.64.evil.example',
       'http://ts.net',
       'http://aid-e2e.ts.net.example.com',
     ])
