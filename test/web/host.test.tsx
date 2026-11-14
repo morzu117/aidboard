@@ -280,6 +280,8 @@ test('D176 : consommée, l’appareil apparaît dans la liste, et Fermer retire 
   await waitFor(() => expect(node('host.ajouter')).not.toBeNull());
   fireEvent.click(node('host.ajouter')!);
   await waitFor(() => expect(node('host.demande.fin')?.textContent).toContain('Approuvé'));
+  // Le rendu « Approuvé » peut précéder l'effet qui installe l'intervalle de relecture.
+  await act(async () => {});
   vue = demande({ etat: 'consommee' });
   liste = [appareil()];
   await act(async () => {

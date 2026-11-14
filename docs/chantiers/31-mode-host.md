@@ -210,6 +210,7 @@ Chaque point est un commit, avec le gate vert. Le message de commit compte les l
 ### 31.12 Correctif : le test « consommée » de D176 est instable
 
 `test/web/host.test.tsx`, test « D176 : consommée, l'appareil apparaît dans la liste, et Fermer retire le QR », échoue parfois sur le VPS : 1 fois sur 3 lancé seul, et une fois dans le gate complet (« expected null not to be null », 1 040 ms), le 14 novembre, sur main ee070eb, hors de tout diff. Le correctif trouve la cause et rend le test déterministe. Aucune assertion n'est relâchée et aucun délai n'est simplement allongé. Si la cause est dans l'écran et pas dans le test, le correctif le dit et corrige l'écran.
+- _Révision 31.12._ Cause prouvée sous charge (6 copies parallèles et 6 charges CPU : 2 échecs sur 30, deux fois) : l'horloge simulée avançait avant l'effet React qui installe l'intervalle de relecture, que les traces temporaires montrent absent au moment de l'avance. L'écran relit bien la liste ; le défaut est dans le test. Correction : un `act` vide après l'attente « Approuvé ». 2 lignes ajoutées, 0 ligne existante modifiée. 20/20 isolés, 10/10 fichier, 12/12 sous charge. Gate 3893, gate:e2e 132 sous Node 22.
 
 ## 6. Pièges
 
