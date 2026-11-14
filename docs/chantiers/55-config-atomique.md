@@ -39,6 +39,7 @@ Une coupure pendant l'écriture (courant, plantage, disque plein) laisse un fich
   - les quatre écrivains et `writeDefaultConfigIfAbsent` passent par `ecrireConfig` (par leur effet : contenu, droits et absence de temporaire) ;
   - un texte refusé par `parseConfig` n'écrit toujours rien.
 - Le gate entier, et `gate:e2e` entier sous Node 22 avec `CI=1`.
+55.1 commité. 7 lignes existantes remplacées dans `src/daemon/config.ts` (les cinq appels et deux imports), 21 tests dans `test/config-atomique.test.ts`. Aucun autre écrivain de `config.yaml` dans `src/`. Gate vert (3 914 tests), `gate:e2e` entier vert sous Node 22 avec `CI=1` (132 tests Playwright), 3/3 passages des tests ciblés, aucun daemon résiduel.
 
 ## 4. Après le merge
 
