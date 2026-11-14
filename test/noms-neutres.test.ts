@@ -17,10 +17,16 @@ const empreintesInterditesCode = new Set([
   'e23c3d7ff76f6e6235ce091f2fcd5fd35748677799d1637acf5ba2bca350e258',
 ]);
 
-function verifierNomsNeutres(texte: string, fichier: string, empreintes: ReadonlySet<string>) {
+function verifierNomsNeutres(
+  texte: string,
+  fichier: string,
+  empreintes: ReadonlySet<string>,
+  empreintesCode?: ReadonlySet<string>,
+) {
+  const estCode = /^(e2e|test|src|web|scripts|app)\//.test(fichier);
   for (const mot of texte.match(/[A-Za-z0-9_-]+/g) ?? []) {
     const empreinte = createHash('sha256').update(mot.toLowerCase()).digest('hex');
-    if (empreintes.has(empreinte)) {
+    if (empreintes.has(empreinte) || (estCode && empreintesCode?.has(empreinte))) {
       throw new Error(`Nom non neutre dans ${fichier}`);
     }
   }
@@ -38,10 +44,14 @@ test('les fichiers texte suivis utilisent des noms neutres', () => {
     if (fichier === 'package-lock.json') continue;
     const contenu = readFileSync(resolve(racine, fichier));
     if (contenu.includes(0) || !isUtf8(contenu)) continue;
-    verifierNomsNeutres(contenu.toString('utf8'), fichier, empreintesInterdites);
-    verifierNomsNeutresCode(contenu.toString('utf8'), fichier, empreintesInterditesCode);
+    verifierNomsNeutres(
+      contenu.toString('utf8'),
+      fichier,
+      empreintesInterdites,
+      empreintesInterditesCode,
+    );
   }
-});
+}, 30_000);
 
 test('la garde rejette un nom interdit, même en majuscules', () => {
   const nom = 'nom-interdit';

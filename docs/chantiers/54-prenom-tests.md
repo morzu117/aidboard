@@ -37,6 +37,16 @@ Le prénom de Julien sert d'identité synthétique dans les tests : le login Tai
   - le gate entier, et `gate:e2e` entier sous Node 22 avec `CI=1`.
 54.1 commité. Gate vert (3 893 tests). `gate:e2e` entier vert sous Node 22 avec `CI=1` (paquet, archive serveur, 132 tests Playwright), aucun daemon résiduel. Le prénom ne figure plus sous les six dossiers de D332.
 
+### 54.2 Correctif : une garde qui tient dans le délai de la CI
+
+Sur la CI de la PR #167, le test « les fichiers texte suivis utilisent des noms neutres » a dépassé le délai par défaut de 5 s (5 044 ms sous Node 22, 5 160 ms sous Node 24). Depuis le 54.1, chaque mot d'un fichier sous les six dossiers de D332 est haché deux fois, une fois par liste d'empreintes.
+
+- Chaque mot est haché une seule fois. L'empreinte est comparée à la liste générale, puis, pour un fichier sous les six dossiers, à la liste du code. Les messages d'erreur ne changent pas.
+- Le test du parcours reçoit un délai explicite de 30 s, pour ne pas dépendre de la vitesse de la machine.
+- Les deux autres tests de la garde ne changent pas de sens.
+- **Tests :** le gate entier ; le temps du test du parcours, avant et après, relevé dans le rapport.
+54.2 commité. 5 lignes existantes remplacées dans `test/noms-neutres.test.ts`. Parcours mesuré sur le VPS : 3 750 ms avant, 2 905 ms après. Gate vert (3 893 tests). `gate:e2e` entier vert sous Node 22 avec `CI=1` (132 tests Playwright), aucun daemon résiduel.
+
 ## 4. Fini quand
 
 - Le point 54.1 est commité, le gate et `gate:e2e` sont verts sur le VPS, et la CI de la PR est verte.
