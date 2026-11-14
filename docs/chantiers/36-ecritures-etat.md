@@ -152,6 +152,7 @@ D276 abaissé pour tenir dans les 16 Kio de la demande signée du téléphone ; 
 ### 36.8 Correctif : le libellé du déplacement, livré par le 42
 
 L'écran Carte annonce encore « Déplacer : bientôt, quand le gateway donnera la version de la carte. ». Ce n'est plus vrai : le gateway rend `stage_version` (lab, DM 97974), et le 42 a livré le déplacement proposé (D293). La ligne devient « Déplacer : A-I-D le propose dans la Boîte quand le sujet lié change de phase, entre build, review et ready, jamais vers done. », toujours sans bouton sur la carte. Le test `36.3` de `test/web/carte-board.test.tsx` suit le nouveau texte. Aucun autre changement.
+36.8 commité. 2 lignes existantes remplacées (le paragraphe de `CarteBoard` et l'assertion du test 36.3). Gate vert (3 893 tests). `gate:e2e` entier vert sous Node 22 avec `CI=1` (132 tests Playwright), aucun daemon résiduel.
 
 ## 6. Questions au lab
 

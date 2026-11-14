@@ -318,7 +318,9 @@ test('36.3 : actions près des obligations, déplacement annoncé et carte relue
   const h = await ouvrir('/board/cartes/101', { 101: s });
   await screen.findByRole('button', { name: 'Prendre' });
   expect(
-    screen.getByText('Déplacer : bientôt, quand le gateway donnera la version de la carte.'),
+    screen.getByText(
+      'Déplacer : A-I-D le propose dans la Boîte quand le sujet lié change de phase, entre build, review et ready, jamais vers done.',
+    ),
   ).toBeTruthy();
   expect(screen.queryByRole('button', { name: /Déplacer/ })).toBeNull();
   h.respond.set(
