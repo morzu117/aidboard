@@ -196,7 +196,7 @@ test('sans carte : replié, nombre vivant, terminés masqués, deux copies exact
   await waitFor(() =>
     expect(copier).toHaveBeenNthCalledWith(
       2,
-      "swarph board cards create --project <PROJET> --title 'Titre \"double\" et '\"'\"'simple'\"'\"' $(id) `id`\n<b>brut</b>' --body 'Swairm: exemple/depot#41'",
+      "swarph board cards add --project <PROJET> --title 'Titre \"double\" et '\"'\"'simple'\"'\"' $(id) `id`\n<b>brut</b>' --body 'Swairm: exemple/depot#41'",
     ),
   );
   copier.mockRejectedValueOnce(new Error('refus'));

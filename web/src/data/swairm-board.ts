@@ -48,4 +48,4 @@ export const libelleSwairm = (etat: string) =>
 const citer = (texte: string) => "'" + texte.replaceAll("'", "'\"'\"'") + "'";
 export const ligneSwairm = (s: SujetBoardSwairm) => `Swairm: ${s.projet}#${s.id}`;
 export const commandeSwairm = (s: SujetBoardSwairm) =>
-  `swarph board cards create --project <PROJET> --title ${citer(s.titre)} --body ${citer(ligneSwairm(s))}`;
+  `swarph board cards add --project <PROJET> --title ${citer(s.titre)} --body ${citer(ligneSwairm(s))}`;

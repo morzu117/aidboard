@@ -155,7 +155,7 @@ mesh:
     await expect
       .poll(() => page.evaluate(() => navigator.clipboard.readText()))
       .toBe(
-        "swarph board cards create --project <PROJET> --title 'Sujet sans carte' --body 'Swairm: exemple/depot#sans'",
+        "swarph board cards add --project <PROJET> --title 'Sujet sans carte' --body 'Swairm: exemple/depot#sans'",
       );
     await node(page, 'board.carte-101').click();
     const bloc = page
