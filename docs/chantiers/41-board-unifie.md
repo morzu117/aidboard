@@ -120,6 +120,7 @@ Côté Swairm, une PR sur `morzu117/swairm` : le trailer `Swairm-Drone`, faculta
 ### 41.7 Correctif : la commande copiée est `add`, pas `create`
 
 Le CLI swarph n'a pas de sous-commande `board cards create` : `swarph board cards create --help` répond « invalid choice: 'create' ». La commande qui crée une carte est `swarph board cards add --project … --title … --body …` (swarph-cli 0.75.0, options mesurées par `--help`). Le modèle de « Copier la commande » (D287, 41.3) devient `swarph board cards add --project <PROJET> --title <titre cité> --body <ligne Swairm citée>`. La citation POSIX de 41.3 ne change pas. Le test de la vue, l'e2e Board et la fiche de recette suivent.
+- _Révision 41.7._ 3 lignes existantes modifiées (le modèle, le test de la vue, l'e2e Board), aucune assertion relâchée. Gate 3893, gate:e2e 132 sous Node 22. `test/web/host.test.tsx` (D176) a échoué 1 fois sur 3 lancé seul, sans lien avec le diff.
 
 ## 6. Pièges
 
