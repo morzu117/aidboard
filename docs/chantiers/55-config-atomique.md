@@ -2,7 +2,7 @@
 
 | Champ | Valeur |
 |---|---|
-| État | **Révision 0, 15 novembre 2026.** Proposé par le lab en relisant le 33.3 (DM 98355, point h). Julien a dit oui le 15 novembre. |
+| État | **Révision 0, 15 novembre 2026.** Proposé par le lab en relisant le 33.3 (DM 98355, point h). Julien a dit oui le 15 novembre. Code de 55.1 relu par le lab (DM 98404) : bon, avec une correction, l'export pour le 33 et un changement visible écrit dans D337, repris en 55.2. |
 | Emplacement final | `docs/chantiers/55-config-atomique.md` sur `main` |
 | Base | `main`. |
 | Organisation | La cell de gestion de Julien gère le chantier. Un agent Codex CLI code sur un brief tiré de ce plan. La cell de gestion relit le diff, lance le gate et `gate:e2e`, commite et ouvre la PR. |
@@ -23,7 +23,11 @@ Une coupure pendant l'écriture (courant, plantage, disque plein) laisse un fich
 - **Le fichier temporaire** est créé dans le dossier de la cible, sous un nom qui commence par `.config.yaml.` et finit par `.tmp`, en création exclusive (`wx`). Ses droits sont ceux du fichier existant ; pour un fichier neuf, 0600.
 - **L'ordre** : écrire tout le texte, `fsync` du fichier, le fermer, `renameSync` vers la cible, puis `fsync` du dossier. Le `fsync` du dossier est fait au mieux : un échec (Windows) est ignoré.
 - **En cas d'erreur** avant le renommage, le fichier temporaire est supprimé et l'erreur remonte. L'ancien `config.yaml` reste intact.
+- **Le nettoyage ne masque jamais l'erreur d'origine** (DM 98404) : la fermeture et la suppression du temporaire, après un échec, ignorent leurs propres erreurs. C'est l'erreur d'origine (ENOSPC, EIO…) qui remonte.
 - `writeDefaultConfigIfAbsent` garde son contrôle d'existence, puis passe par `ecrireConfig`.
+- **Changement visible : un `config.yaml` en lien cassé arrête le démarrage** (DM 98404). Avant, le daemon créait la cible à travers le lien et démarrait sur la config par défaut. Maintenant il refuse, avec « config.yaml : lien cassé, rien n'est écrit », plutôt que d'écrire à un endroit inattendu. Le message s'affiche tel quel au démarrage, comme les autres erreurs de config.
+- **Le renommage donne un nouveau fichier** : un lien physique vers l'ancien `config.yaml` est rompu, et le fichier appartient à l'utilisateur du daemon. Ce n'était pas le cas avec l'écriture sur place.
+- `ecrireConfig` est exportée, pour l'écrivain du chantier 33 (`modifierMesh`).
 - La validation par `parseConfig` avant l'écriture ne change pas.
 - Hors périmètre : le propriétaire du fichier (un daemon sans privilèges ne peut pas le changer, et le fichier est déjà à lui) ; le nettoyage d'un temporaire laissé par une coupure entre sa création et son renommage, qui ne gêne pas le démarrage.
 
@@ -40,6 +44,12 @@ Une coupure pendant l'écriture (courant, plantage, disque plein) laisse un fich
   - un texte refusé par `parseConfig` n'écrit toujours rien.
 - Le gate entier, et `gate:e2e` entier sous Node 22 avec `CI=1`.
 55.1 commité. 7 lignes existantes remplacées dans `src/daemon/config.ts` (les cinq appels et deux imports), 21 tests dans `test/config-atomique.test.ts`. Aucun autre écrivain de `config.yaml` dans `src/`. Gate vert (3 914 tests), `gate:e2e` entier vert sous Node 22 avec `CI=1` (132 tests Playwright), 3/3 passages des tests ciblés, aucun daemon résiduel.
+
+### 55.2 Correctif : la relecture du lab (DM 98404)
+
+- Le nettoyage d'après échec ignore ses propres erreurs, selon D337. Test : l'écriture échoue, puis la suppression du temporaire échoue aussi ; l'erreur qui remonte est celle de l'écriture.
+- `ecrireConfig` est exportée.
+- Le refus au démarrage d'un lien cassé : un test montre le message vu par l'utilisateur au démarrage du daemon (`src/daemon/main.ts`).
 
 ## 4. Après le merge
 
