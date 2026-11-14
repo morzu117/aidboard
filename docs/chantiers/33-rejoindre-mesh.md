@@ -2,7 +2,7 @@
 
 | Champ | Valeur |
 |---|---|
-| État | **Révision 0, 14 novembre 2026. Brouillon, à valider.** Choix de Julien du 14 novembre : le jeton de cell de `swarph join` (#1582) suffit, le chantier n'attend plus le flux SSO de l'émetteur. Q1 à Q3 attendent Julien ; L1 à L4 attendent le lab. |
+| État | **Révision 0, 14 novembre 2026. Brouillon, à valider.** Choix de Julien du 14 novembre : le jeton de cell de `swarph join` (#1582) suffit, le chantier n'attend plus le flux SSO de l'émetteur. Julien a tranché Q1 à Q3 le 14 novembre (les recos). L1 à L4 attendent le lab (DM 98221). |
 | Emplacement final | `docs/chantiers/33-rejoindre-mesh.md` sur `main` |
 | Base | `main` (6346fee) |
 | Organisation | Comme au 41. cell-gestion gère le chantier ; Codex CLI écrit le code et les tests de chaque point ; cell-gestion relit, lance le gate, commite et ouvre la PR. |
@@ -82,11 +82,11 @@ Le 33 s'appuie sur `swarph join`. Le jeton reste dans le fichier qu'écrit swarp
 
 ## 5. Questions
 
-### Pour Julien
+### Pour Julien (tranchées le 14 novembre 2026 : les trois recos)
 
-- **Q1. Le mode `auto` et le jeton.** Le programme interdit le mode `auto` (`bypassPermissions`) à une session qui détient le jeton SSO. Avec un jeton de cell dans `~/.config/swarph`, tout agent lancé sous le même utilisateur peut le lire, en `auto` ou non (`device-join.md` le dit : le flux ne remplace pas l'isolation des cells par l'OS). Reco : **(a)** garder les agents comme aujourd'hui, et écrire ce risque dans la fiche de recette ; (b) refuser le mode `auto` dès qu'un mesh rejoint par A-I-D est configuré ; (c) reporter la question à l'isolation des drones (#20).
-- **Q2. Une confirmation du téléphone pour rejoindre ?** Reco : **non**. L'approbation de l'opérateur au gateway est déjà le geste humain, et rien n'est écrit sur le mesh avant elle. Une confirmation en plus doublerait le geste quand l'opérateur est Julien.
-- **Q3. La place.** Reco : la section « Meshes » de l'écran Machines, plutôt qu'un écran nouveau.
+- **Q1. Le mode `auto` et le jeton.** Le programme interdit le mode `auto` (`bypassPermissions`) à une session qui détient le jeton SSO. Avec un jeton de cell dans `~/.config/swarph`, tout agent lancé sous le même utilisateur peut le lire, en `auto` ou non (`device-join.md` le dit : le flux ne remplace pas l'isolation des cells par l'OS). Reco : **(a)** garder les agents comme aujourd'hui, et écrire ce risque dans la fiche de recette **(choisi)** ; (b) refuser le mode `auto` dès qu'un mesh rejoint par A-I-D est configuré ; (c) reporter la question à l'isolation des drones (#20).
+- **Q2. Une confirmation du téléphone pour rejoindre ?** Reco : **non (choisi)**. L'approbation de l'opérateur au gateway est déjà le geste humain, et rien n'est écrit sur le mesh avant elle. Une confirmation en plus doublerait le geste quand l'opérateur est Julien.
+- **Q3. La place.** Reco **(choisie)** : la section « Meshes » de l'écran Machines, plutôt qu'un écran nouveau.
 
 ### Pour le lab
 
