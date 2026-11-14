@@ -2,7 +2,7 @@
 
 | Champ | Valeur |
 |---|---|
-| État | **Révision 1, 14 novembre 2026.** Relu par le lab (DM 98234) : le plan tient, avec quatre changements dans D334, faits ici. Choix de Julien du 14 novembre : le jeton de cell de `swarph join` (#1582) suffit, le chantier n'attend plus le flux SSO de l'émetteur. Julien a tranché Q1 à Q3 le 14 novembre (les recos). Le lab a répondu à L1 à L4 (DM 98234). |
+| État | **Révision 1, 14 novembre 2026.** Relu par le lab (DM 98234) : le plan tient, avec quatre changements dans D334, faits ici. Code de 33.2 relu par le lab (DM 98327) : un bloquant et cinq points facultatifs, repris en 33.2 bis. Choix de Julien du 14 novembre : le jeton de cell de `swarph join` (#1582) suffit, le chantier n'attend plus le flux SSO de l'émetteur. Julien a tranché Q1 à Q3 le 14 novembre (les recos). Le lab a répondu à L1 à L4 (DM 98234). |
 | Emplacement final | `docs/chantiers/33-rejoindre-mesh.md` sur `main` |
 | Base | `main` (6346fee) |
 | Organisation | Comme au 41. cell-gestion gère le chantier ; Codex CLI écrit le code et les tests de chaque point ; cell-gestion relit, lance le gate, commite et ouvre la PR. |
@@ -26,6 +26,8 @@ Aujourd'hui, pour brancher un mesh dans A-I-D, il faut créer la cell et son jet
 - En cas d'échec, elle écrit `swarph join: <raison>` sur la sortie d'erreur et sort en 1. Les raisons connues (relevées par le lab, DM 98234) : `access_denied`, `expired_token`, `already_redeemed`, `name_unavailable` (au retrait du jeton seulement), `pickup_failed`, `join request expired`, `invalid peer name`, `invalid gateway URL`, `join request refused (HTTP <n>)` (409 : nom déjà pris à la demande ; 429 : trop de demandes), `non-tailnet HTTP requires --allow-unsafe-http…`, `native Windows credential storage is unsupported; use Linux or WSL`, `gateway request failed…`, `local storage failure or cancellation…`.
 - Deux raisons disent que le jeton a pu être retiré : `authenticated identity check failed; the private credential file is retained` et `invalid token pickup response; operator recovery may be needed`.
 - Au succès sans terminal, la commande écrit `No interactive answers were supplied; no handshake was sent. Send your own answers to <témoin>.` C'est le seul endroit où elle donne le nom du témoin.
+- Les autres raisons fixes (DM 98327) : `symlinked credential directory refused`, `credential directory must belong to this user`, `invalid join response`, `gateway redirect refused`, `gateway response too large`, `invalid gateway response`.
+- **Une fois le jeton écrit, swarph peut encore sortir en 1 sans le dire** (DM 98327) : un échec réseau sur `/whoami`, une écriture ratée de `join.json`, un SIGINT pendant `/whoami`. Le message seul ne suffit donc pas à décider.
 - Ce texte n'est pas un contrat : pas de `--json`, aucune promesse de stabilité (L1). Les défauts du client sont notés sur #1582, sans date de correction.
 
 Ce que ça change par rapport au programme :
@@ -60,23 +62,24 @@ Le 33 s'appuie sur `swarph join`. Le jeton reste dans le fichier qu'écrit swarp
   - sans shell, arguments en tableau ;
   - **entrée standard sur `/dev/null`** (en Node, `stdio: ['ignore', 'pipe', 'pipe']`), jamais un descripteur fermé. Un descripteur fermé fait planter swarph **après** l'écriture du jeton : la cell serait inscrite, et A-I-D afficherait « échec » (L2) ;
   - `HOME` est le `home` du mesh (D311), par défaut celui du daemon ;
-  - l'environnement est nettoyé : ni `SWARPH_SELF`, ni `MESH_GATEWAY_URL`, ni `MESH_GATEWAY_TOKEN`, ni jeton GitHub ;
+  - **l'environnement est une liste blanche** (DM 98327) : `PATH`, `HOME`, `LANG`, les `LC_*`, `SSL_CERT_FILE`, `SSL_CERT_DIR`, et rien d'autre du daemon ;
   - **`PYTHONUNBUFFERED=1`** : sans lui, la ligne `Code:` reste en tampon jusqu'à la fin du processus (L1).
-- **Jamais `--allow-unsafe-http`.** A-I-D refuse d'avance une adresse HTTP qui n'est ni en `*.ts.net` ni en `100.64.0.0/10`, avec le même message que swarph.
-- Le nom de cell suit `^[a-z][a-z0-9-]{0,62}[a-z0-9]$`, comme le gateway. Le nom local du mesh suit D311. A-I-D refuse d'avance un nom de mesh déjà dans la config, et un fichier de jeton déjà présent pour cette cell.
+- **Jamais `--allow-unsafe-http`.** A-I-D refuse d'avance une adresse HTTP qui n'est ni en `*.ts.net` ni une adresse IPv4 littérale de `100.64.0.0/10`, avec le même message que swarph. `http://100.64.evil.example` est un nom DNS : il est refusé.
+- Le nom de cell suit `^[a-z][a-z0-9-]{0,62}[a-z0-9]$`, comme le gateway. Le nom local du mesh suit D311. A-I-D refuse d'avance un nom de mesh déjà dans la config, et un fichier de jeton ou un `<cell>.join.json` déjà présent pour cette cell.
 - La sortie est lue ligne par ligne. Seules deux lignes sont interprétées, par des expressions ancrées : `Code: …` et `… Send your own answers to <témoin>.` (le nom du témoin suit la forme des noms de cell). Le reste n'est ni affiché ni gardé, sauf la raison d'échec `swarph join: <raison>`, ramenée à la liste fermée du §2, et « échec » pour tout le reste.
 - **Deux échecs ne sont pas de simples échecs** : `authenticated identity check failed…` et `invalid token pickup response…`. Le jeton a pu être retiré. L'état devient `a-voir`, avec « Le jeton a peut-être été retiré : vois avec l'opérateur du gateway. » A-I-D ne relance jamais.
 - Une seule demande à la fois. swarph s'arrête seul à 15 minutes ; le délai de 16 minutes d'A-I-D n'est qu'un filet.
 - **Annuler, ou atteindre le délai : SIGINT, puis attendre la fin** (L3). SIGINT retire les deux fichiers réservés ; SIGTERM laisse deux fichiers vides qui bloquent la tentative suivante. Si le processus ne finit pas en 10 secondes : SIGKILL, puis A-I-D retire `<cell>.peer_token` et `<cell>.join.json` **seulement s'ils font 0 octet**. Un fichier de jeton non vide est un vrai jeton : A-I-D ne le supprime jamais.
 - **Après une annulation**, l'écran dit « Demande annulée : demande à l'opérateur de refuser le code XXXX-XXXX », avec la commande `swarph mesh approve XXXX-XXXX --gateway <gateway> --refuse --token-file <JETON-OPÉRATEUR>` à copier. Sans ce refus, une approbation tardive réserve le nom jusqu'à l'expiration (L3).
-- Les états servis : `demande`, `en-attente` (avec le code et l'expiration), `approuve` (avec le témoin s'il est lu), `refuse`, `expire`, `annule` (avec le code), `a-voir`, `echec` (avec le libellé).
+- **L'état final suit le fichier de jeton** (DM 98327), après le nettoyage SIGKILL, dans cet ordre : (1) sortie 0, et jeton régulier, non vide, en 0600 : `approuve` ; (2) sinon, s'il existe quoi que ce soit au chemin du jeton (`lstat`, sans lire) : `a-voir` ; (3) sinon, `annule`, `expire` ou la raison. Le contrôle d'avant lancement garantit que ce fichier n'existait pas avant.
+- Les états servis : `aucune` (avant tout lancement), `demande`, `en-attente` (avec le code et l'expiration), `approuve` (avec le témoin s'il est lu), `refuse`, `expire`, `annule` (avec le code), `a-voir`, `echec` (avec le libellé).
 
 ### D335. La route et la config
 
 - `POST /api/meshes/rejoindre` `{gateway, cell, mesh}` lance la demande. `GET /api/meshes/rejoindre` lit son état. `DELETE` l'annule et arrête le processus.
 - Ces routes sont **réservées à l'admin, et ne sont pas servies en mode host** (D178), comme toute route qui écrit la config.
 - Au succès, A-I-D ajoute `meshes.<mesh>` avec `cell` et `gateway`, par un écrivain de config du même modèle que `ecrireModeHost*`. Le fichier garde ses droits. Le mesh est pris en compte au prochain démarrage du daemon : A-I-D le dit, et ne redémarre rien lui-même.
-- « Oublier ce mesh » (`DELETE /api/meshes/<mesh>`) retire l'entrée. Il ne supprime ni le jeton ni `<cell>.join.json`, et l'écran dit : « Le jeton existe toujours. Pour le révoquer, demande à l'opérateur du gateway. » `principal` ne s'oublie pas d'ici.
+- « Oublier ce mesh » (`DELETE /api/meshes/config/<mesh>`) retire l'entrée. La route n'est pas `/api/meshes/<mesh>`, qui entrerait en collision avec l'annulation pour un mesh nommé `rejoindre`. Un mesh absent répond 404. Il ne supprime ni le jeton ni `<cell>.join.json`, et l'écran dit : « Le jeton existe toujours. Pour le révoquer, demande à l'opérateur du gateway. » `principal` ne s'oublie pas d'ici.
 - **Plancher de version** : swarph-cli 0.80.0. En dessous, la route répond « swarph trop ancien pour rejoindre un mesh (0.80.0 ou plus) », et `doctor` le signale.
 
 ### D336. La vue
@@ -116,6 +119,10 @@ Ce document, et une ligne dans `README.md`.
 
 Le lanceur, la lecture de la sortie, la liste fermée des raisons, les délais, l'annulation, l'environnement nettoyé. Les tests utilisent un faux `swarph` qui rejoue chaque issue : approuvé (avec et sans ligne du témoin), refusé, expiré, nom pris (HTTP 409), adresse refusée, jeton peut-être retiré, sortie inattendue, processus qui ne finit pas. Ils vérifient l'entrée sur `/dev/null`, `PYTHONUNBUFFERED=1`, l'arrêt par SIGINT, et qu'après SIGKILL seuls des fichiers vides sont retirés.
 - _Révision 33.2._ `src/daemon/mesh/rejoindre.ts` (`LanceurRejoindre`), un faux `swarph join` et 25 tests. Le validateur des noms de mesh (D311) est extrait de `config.ts` (`nomMeshValide`) : 2 lignes existantes modifiées. Reprise r1 après relecture : un binaire introuvable donne `echec` « swarph introuvable » et libère le lanceur, avec une seule fin même si Node émet `error` sans `close` (vérifié sous Node 22 et 24) ; l'état de départ est `aucune`, ajouté aux états de D334. Après une sortie 0, un jeton absent, vide ou pas en 0600 donne `a-voir`. Gate 3918, gate:e2e 132 sous Node 22, 5/5 passages des tests du point.
+
+### 33.2 bis Le lanceur après la relecture du lab (D334)
+
+Le bloquant de DM 98327 : l'état final suit le fichier de jeton, et plus seulement la raison (D334). Les cinq points facultatifs : la liste des raisons complétée, le test du tailnet seulement sur une IPv4 littérale, l'environnement par liste blanche, le refus d'un `join.json` déjà présent, et un faux `swarph` qui ne lit plus `/proc/self/fd/0` (absent sous macOS).
 
 ### 33.3 Les routes, la config et le plancher (D335)
 
