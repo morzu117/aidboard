@@ -45,6 +45,7 @@ Sur la CI de la PR #167, le test « les fichiers texte suivis utilisent des noms
 - Le test du parcours reçoit un délai explicite de 30 s, pour ne pas dépendre de la vitesse de la machine.
 - Les deux autres tests de la garde ne changent pas de sens.
 - **Tests :** le gate entier ; le temps du test du parcours, avant et après, relevé dans le rapport.
+54.2 commité. 5 lignes existantes remplacées dans `test/noms-neutres.test.ts`. Parcours mesuré sur le VPS : 3 750 ms avant, 2 905 ms après. Gate vert (3 893 tests). `gate:e2e` entier vert sous Node 22 avec `CI=1` (132 tests Playwright), aucun daemon résiduel.
 
 ## 4. Fini quand
 
