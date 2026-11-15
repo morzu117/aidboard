@@ -7,7 +7,7 @@ import { useAid, useAidClient } from './useAidState.js';
 export function useSwairmCommits(carte: number): LecturePrSwairm | null {
   const client = useAidClient();
   const { state, appareil } = useAid();
-  const admin = !!state && !appareil;
+  const admin = !!state && !appareil && carte > 0;
   const [resultat, setResultat] = useState<{ carte: number; lecture: LecturePrSwairm } | null>(
     null,
   );

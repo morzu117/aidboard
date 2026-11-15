@@ -180,7 +180,7 @@ const avecMesh = (checkedAt: string | null = null) =>
         monitor: 'running',
         pending: 0,
         since: null,
-        cell: 'morzu-mac',
+        cell: 'cell-aid',
       },
       inbox: [],
       tailscaleManage: false,

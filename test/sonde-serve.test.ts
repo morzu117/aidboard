@@ -2,7 +2,7 @@ import { type ChildProcess, spawn } from 'node:child_process';
 import { join } from 'node:path';
 import { afterEach, expect, test } from 'vitest';
 
-// Chantier 31, point 31.2 (lab M3) : la sonde de Tailscale Serve, lancée comme Julien la lancera.
+// Chantier 31, point 31.2 (lab M3) : la sonde de Tailscale Serve, lancée comme l’utilisateur la lancera.
 
 const SONDE = join(import.meta.dirname, '..', 'scripts', 'sonde-serve.mjs');
 let enfant: ChildProcess | null = null;

@@ -5,7 +5,7 @@
 | État | **Révision 0, 9 novembre 2026.** Julien a lancé le 35 « à blanc », avec le découpage par effet proposé par le lab (DM 93114) : le 35 couvre ce qui parle, le 36 ce qui change un état. Julien a retenu Q1 et Q2 (oui aux deux). Le lab a donné son PASS sur la révision 0 (DM 93207), avec la correction de D255, intégrée. #562 ne reviendra pas en arrière. |
 | Emplacement final | `docs/chantiers/35-ecritures-a-blanc.md` sur `main`, dans le premier commit du chantier |
 | Base | **d990186** (`origin/main`, PR #134). |
-| Organisation | Comme au 37. morzu-vps gère le chantier. Un agent Codex CLI écrit le code et les tests de chaque point, sur un brief tiré de ce plan. morzu-vps relit chaque diff, lance le gate, commite et ouvre la PR. |
+| Organisation | Comme au 37. cell-gestion gère le chantier. Un agent Codex CLI écrit le code et les tests de chaque point, sur un brief tiré de ce plan. cell-gestion relit chaque diff, lance le gate, commite et ouvre la PR. |
 | Validation | Le lab valide le 35, parce qu'il fige la forme des écritures swarph (programme §5 bis). Le merge suit la règle de Julien : CI verte, validation du lab et oui de Julien. |
 
 ## 1. Pourquoi

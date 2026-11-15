@@ -25,6 +25,7 @@ import {
   repriseServeur,
 } from '../ui/machinesVue.js';
 import { PastilleEtatServeur } from '../ui/Serveur.js';
+import { SectionMeshes } from '../ui/SectionMeshes.js';
 import { isAlive } from '../ui/Statut.js';
 
 // Chantier 29 : l'écran Machines (D151). Rien d'illustratif : chaque valeur vient d'une lecture ou d'un diagnostic.
@@ -455,6 +456,7 @@ function Contenu() {
 
       <Combinaisons m={m} servers={servers ?? []} />
       <SectionFournisseurs f={m.fournisseurs} />
+      <SectionMeshes />
     </main>
   );
 }

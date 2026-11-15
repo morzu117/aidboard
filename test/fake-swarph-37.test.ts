@@ -11,13 +11,13 @@ const codegraph = [
   '--limit',
   '50',
   '--caller-cell',
-  'morzu-mac',
+  'cell-aid',
   '--',
   'lecture test',
 ];
 const lectures: [string[], string][] = [
-  [['mesh', 'peers', '--as', 'morzu-mac'], 'mesh-peers.txt'],
-  [['rights', '--json', '--as', 'morzu-mac'], 'rights.json'],
+  [['mesh', 'peers', '--as', 'cell-aid'], 'mesh-peers.txt'],
+  [['rights', '--json', '--as', 'cell-aid'], 'rights.json'],
   [codegraph, 'codegraph-lecture_test.json'],
   [['memory', 'list', '-n', '100', '--json'], 'memory-list.json'],
   [['memory', 'list', '--type', 'note', '-n', '100', '--json'], 'memory-list-type-note.json'],
@@ -56,9 +56,9 @@ test.each(lectures)('lecture exacte %j depuis %s, refus des variantes et 404', (
 
 test('refus des options, valeurs et ordres hors contrat', () => {
   const refus = [
-    ['mesh', 'peers', '--json', '--as', 'morzu-mac'],
-    ['rights', 'peer-a', '--json', '--as', 'morzu-mac'],
-    ['rights', '--as', 'morzu-mac', '--json'],
+    ['mesh', 'peers', '--json', '--as', 'cell-aid'],
+    ['rights', 'peer-a', '--json', '--as', 'cell-aid'],
+    ['rights', '--as', 'cell-aid', '--json'],
     ['memory', 'links', 'page-test', '--direction', 'outgoing', '--json'],
     ['memory', 'get', '../page-test', '--json'],
     ['memory', 'list', '--tag', 'test', '-n', 'non-entier', '--json'],

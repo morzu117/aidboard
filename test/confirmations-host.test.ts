@@ -76,6 +76,7 @@ async function preparer(arme = true, avecAppareil = true) {
   let reponses: ReponseRelais[] = [];
   const relais = {
     publierAutorises: vi.fn<RelaisPda['publierAutorises']>(async () => true),
+    publierResultat: vi.fn<RelaisPda['publierResultat']>(async () => true),
     deposer: vi.fn<RelaisPda['deposer']>(async () => true),
     retirer: vi.fn<RelaisPda['retirer']>(async () => {}),
     tirer: vi.fn<RelaisPda['tirer']>(async () => reponses),

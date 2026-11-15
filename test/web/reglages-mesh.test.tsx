@@ -17,8 +17,8 @@ const ilYa = (min: number) => new Date(Date.now() - min * 60_000).toISOString();
 const dm = (id: number, kind: MeshDm['kind'], seenAt: string | null = null): MeshDm => ({
   id,
   threadId: null,
-  from: 'mesh-gw',
-  to: 'morzu-mac',
+  from: 'gateway',
+  to: 'cell-aid',
   kind,
   content: 'x',
   createdAt: ilYa(10),
@@ -36,7 +36,7 @@ const etat = (over: Partial<MeshState> = {}): MeshState => ({
   monitor: 'running',
   pending: 1,
   since: ilYa(30),
-  cell: 'morzu-mac',
+  cell: 'cell-aid',
   ...over,
 });
 const avecMesh = (over: Partial<MeshState> = {}, checkedAt: string | null = null, manage = false) =>
@@ -89,12 +89,12 @@ test('D100 : connecté, Déconnecter demande confirmation en nommant la cell, pu
   expect(node('reglages.mesh')?.id).toBe('mesh');
   expect(text('reglages.mesh.etat')).toBe('monitor actif · 2 à traiter');
   expect(text('reglages.mesh.detail')).toBe(
-    'Cell morzu-mac · Tailscale actif · 1 DM en attente côté monitor',
+    'Cell cell-aid · Tailscale actif · 1 DM en attente côté monitor',
   );
   expect(node('reglages.mesh.connecter')).toBeNull();
   await userEvent.click(node('reglages.mesh.deconnecter')!);
   expect(text('reglages.mesh.confirmation')).toBe(
-    'Le monitor de la cell morzu-mac s’arrête. Toutes les sessions de cette cell, Claude compris, ne seront plus réveillées par les DM jusqu’à la reconnexion.',
+    'Le monitor de la cell cell-aid s’arrête. Toutes les sessions de cette cell, Claude compris, ne seront plus réveillées par les DM jusqu’à la reconnexion.',
   );
   expect(h.calls.some((c) => c.url.startsWith('/api/mesh/'))).toBe(false);
   await userEvent.click(node('reglages.mesh.confirmer')!);

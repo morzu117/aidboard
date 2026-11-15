@@ -18,8 +18,8 @@ function setup() {
 const dm = (id: number, kind = 'question', extra: Record<string, unknown> = {}) => ({
   id,
   threadId: `th_${id}`,
-  from: 'mesh-gw',
-  to: 'morzu-mac',
+  from: 'gateway',
+  to: 'cell-aid',
   kind,
   content: `message ${id}`,
   createdAt: `2026-10-20T10:00:${String(id % 60).padStart(2, '0')}+02:00`,
@@ -34,7 +34,7 @@ const etat = (over: Record<string, unknown> = {}) => ({
   monitor: 'running',
   pending: 0,
   since: '2026-10-20T10:00:00+02:00',
-  cell: 'morzu-mac',
+  cell: 'cell-aid',
   ...over,
 });
 
@@ -43,7 +43,7 @@ test('le schéma connaît la source swarph et les deux types mesh', () => {
   expect(EVENT_TYPES).toContain('mesh.dm');
   expect(EVENT_TYPES).toContain('mesh.state');
   const { db } = setup();
-  expect(db.pragma('user_version', { simple: true })).toBe(28);
+  expect(db.pragma('user_version', { simple: true })).toBe(32);
   const tables = (
     db.prepare("SELECT name FROM sqlite_master WHERE type = 'table'").all() as {
       name: string;
@@ -62,8 +62,8 @@ test('un mesh.dm rejoué deux fois (deux ULID, même id swarph) ne fait qu’une
   expect(rows[0]).toMatchObject({
     id: 73544,
     thread_id: 'th_73544',
-    from_node: 'mesh-gw',
-    to_node: 'morzu-mac',
+    from_node: 'gateway',
+    to_node: 'cell-aid',
     kind: 'question',
     content: 'message 73544',
     created_at: '2026-10-20T10:00:44+02:00',
@@ -126,6 +126,7 @@ test('reconstruction : rejouer le journal redonne mesh_inbox et mesh_state', () 
   const before = dump();
   expect(before.inbox).toHaveLength(25);
   expect(before.state.find((r) => (r as { k: string }).k === 'pending')).toEqual({
+    mesh: 'principal',
     k: 'pending',
     v: '21',
   });

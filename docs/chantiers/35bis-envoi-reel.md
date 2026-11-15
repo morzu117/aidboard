@@ -2,10 +2,10 @@
 
 | Champ | Valeur |
 |---|---|
-| État | **Révision 0, 9 novembre 2026.** Spec rév. 2 (morzu-vps), d'après le contrat du proxy de #20, draft 2 avec le §10 (DM 93670 et 93673), et les réponses du lab à L1–L4 (DM 93681). Julien a retenu les trois recos : confirmation du téléphone, le 35 bis avant le 36, l'installation du proxy sur son Mac par lui-même. |
+| État | **Révision 0, 9 novembre 2026.** Spec rév. 2 (cell-gestion), d'après le contrat du proxy de #20, draft 2 avec le §10 (DM 93670 et 93673), et les réponses du lab à L1–L4 (DM 93681). Julien a retenu les trois recos : confirmation du téléphone, le 35 bis avant le 36, l'installation du proxy sur son Mac par lui-même. |
 | Emplacement final | `docs/chantiers/35bis-envoi-reel.md` sur `main`, dans le premier commit du chantier |
 | Base | **05ca283** (`origin/main`, PR #137). |
-| Organisation | Comme au 35. morzu-vps gère le chantier ; Codex CLI écrit le code et les tests de chaque point ; morzu-vps relit, lance le gate, commite et ouvre la PR. |
+| Organisation | Comme au 35. cell-gestion gère le chantier ; Codex CLI écrit le code et les tests de chaque point ; cell-gestion relit, lance le gate, commite et ouvre la PR. |
 | Validation | Le lab valide le 35 bis : il ouvre la première écriture d'A-I-D sur le mesh. Merge : CI verte, validation du lab, oui de Julien. |
 | Bloqué par | Le point 35b.5 attend une installation de `swarph proxy serve` pour le test réel (le build est mergé, PR 702). Le document de schéma est publié : 35b.3 n'attend plus rien. |
 

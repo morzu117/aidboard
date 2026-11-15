@@ -82,6 +82,11 @@ export class AidClient {
 
   getSnapshot = (): ClientSnapshot => this.snap;
 
+  /** Les vues partagées avec l’appareil gardent leurs décors locaux désactivés. */
+  get estAppareil(): boolean {
+    return this.o.flux === 'signal';
+  }
+
   start(): void {
     if (!this.stopped) return;
     this.stopped = false;

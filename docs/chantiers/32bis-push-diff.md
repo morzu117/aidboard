@@ -5,8 +5,8 @@
 | État | **Révision 0, 7 novembre 2026.** Julien a validé la spec, avec toutes ses recommandations, et a choisi l'URL du dépôt comme `sub` VAPID. Le lab a relu la frontière (DM 91947, carte #1449, post 91946) : ses quatre conditions obligatoires et ses recommandations sont reprises ici, en P1 à P4. |
 | Emplacement final | `docs/chantiers/32bis-push-diff.md` sur `main`, dans le premier commit du chantier |
 | Base | **e52e5b7** (`origin/main`, PR #126). |
-| Spec | `specs/mobile-32bis.md`, révision 2 (dossier de travail, hors dépôt ; copie sur morzu-vps dans `~/work/aid-specs/`). Spec du 32 : questions 5 et 6. |
-| Organisation | Comme au 32. morzu-vps gère le chantier. Un agent Codex CLI écrit le code et les tests de chaque point, sur un brief tiré de ce plan. morzu-vps relit chaque diff, lance le gate, commite et ouvre la PR. |
+| Spec | `specs/mobile-32bis.md`, révision 2 (dossier de travail, hors dépôt ; copie sur cell-gestion dans `~/work/aid-specs/`). Spec du 32 : questions 5 et 6. |
+| Organisation | Comme au 32. cell-gestion gère le chantier. Un agent Codex CLI écrit le code et les tests de chaque point, sur un brief tiré de ce plan. cell-gestion relit chaque diff, lance le gate, commite et ouvre la PR. |
 | Validation | La recette de Julien, sur un iPhone et un Android, avec **un vrai push vers Apple et vers Google**. Le lab revoit la frontière à la fin. Le merge suit la règle de Julien : la CI verte et la validation du lab. |
 
 ## 1. Pourquoi

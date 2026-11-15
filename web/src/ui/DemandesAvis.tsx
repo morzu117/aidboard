@@ -1,7 +1,9 @@
+import { useMeshLecture, instantaneMesh } from '../data/meshLecture.js';
 import { useState } from 'react';
 import type { Ask, AskResult } from '../../../src/shared/swairm-ask.js';
 import { relireAsk, useAsks, useEtatAsk } from '../data/swairm.js';
-import { useAidClient } from '../data/useAidState.js';
+import { DemandesAvisMesh } from './DemandesAvisMesh.js';
+import { useAid, useAidClient } from '../data/useAidState.js';
 import { Dialogue } from '../dialogues/Dialogue.js';
 import { TableauAvis } from '../ecrans/TableauAvis.js';
 import { DemanderAvis } from './DemanderAvis.js';
@@ -9,6 +11,8 @@ import { DemanderAvis } from './DemanderAvis.js';
 /** Les lectures vivent sur l'écran, jamais à l'ouverture de la boîte de saisie. */
 export function DemandesAvis() {
   const client = useAidClient();
+  const mesh = useMeshLecture();
+  const { state } = useAid();
   const etat = useEtatAsk();
   const liste = useAsks();
   const [ouverte, setOuverte] = useState(false);
@@ -50,6 +54,7 @@ export function DemandesAvis() {
       </ul>
       {ouverte && etat.result && (
         <DemanderAvis
+          mesh={mesh}
           etat={etat.result}
           onClose={() => setOuverte(false)}
           onResultat={() => {
@@ -58,6 +63,7 @@ export function DemandesAvis() {
           }}
         />
       )}
+      {instantaneMesh(state, mesh) && <DemandesAvisMesh mesh={mesh} />}
       {resultat && (
         <Dialogue titre="Avis archivés" onClose={() => setResultat(null)}>
           <TableauAvis resultat={resultat} />

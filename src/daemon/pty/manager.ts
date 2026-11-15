@@ -1,3 +1,5 @@
+import { envSwarph } from '../mesh/env.js';
+import type { MeshRegistry } from '../mesh/registre.js';
 import {
   closeSync,
   existsSync,
@@ -39,14 +41,7 @@ import { LogWriter } from './log.js';
 import { type Estimate, estimate } from './heuristic.js';
 import { TerminalMirror } from './mirror.js';
 import { getPty } from './native.js';
-import {
-  agentCommand,
-  agentEnv,
-  hookEnv,
-  meshEnv,
-  resolveOnPath,
-  type SpawnKind,
-} from './spawn.js';
+import { agentCommand, agentEnv, hookEnv, resolveOnPath, type SpawnKind } from './spawn.js';
 import { meshPaths } from '../mesh/paths.js';
 import { homedir } from 'node:os';
 import { poseUneQuestion } from '../../shared/question.js';
@@ -82,6 +77,7 @@ export interface LiveAgent {
   exit: { exitCode: number | null; signal: number | null; reason: string } | null;
   stopReason?: StopReason;
   kind: SpawnKind;
+  mesh?: string;
   /** dernière sortie du terminal (ms) : le silence fonde l'estimation */
   lastOutputAt: number;
   /** un hook a parlé pour cet agent : on n'estime plus rien */
@@ -118,6 +114,7 @@ export interface ManagerDeps {
   db: Db;
   paths: AidPaths;
   config: AidConfig;
+  meshes?: () => MeshRegistry;
   auth: AuthState;
   port: () => number;
 }
@@ -262,7 +259,7 @@ export class AgentManager {
     return [...this.live.values()].filter((a) => !a.exited);
   }
 
-  spawn(o: { topicId: string; kind: SpawnKind }): Agent {
+  spawn(o: { topicId: string; kind: SpawnKind; mesh?: string }): Agent {
     if (
       this.deps.config.agents.transport === 'stream' &&
       (o.kind === 'claude' || o.kind === 'codex')
@@ -282,18 +279,30 @@ export class AgentManager {
     if (!run) throw new AidHttpError(409, 'ce sujet n’a pas de run');
 
     // 12.6 : une session par cell (session-id persistant côté swarph) ; et pas de cell sans `mesh.cell`
+    const nomMesh = o.mesh ?? 'principal';
+    if (o.kind === 'swarph-cell' && config.meshes[nomMesh]?.cell === '')
+      throw new AidHttpError(409, 'mesh désactivé : `mesh.cell` vide dans config.yaml');
+    const configMesh =
+      o.kind === 'swarph-cell'
+        ? (this.deps.meshes?.().configuration(nomMesh) ??
+          (nomMesh === 'principal' ? config.mesh : undefined))
+        : undefined;
     let meshSpawn: { bin: string; cellFile: string } | undefined;
     if (o.kind === 'swarph-cell') {
-      if (!config.mesh.cell)
+      if (!configMesh?.cell)
         throw new AidHttpError(409, 'mesh désactivé : `mesh.cell` vide dans config.yaml');
-      const deja = this.liveAgents().find((a) => a.kind === 'swarph-cell');
+      if (this.deps.meshes?.().binaire === null)
+        throw new AidHttpError(422, 'swarph introuvable dans le PATH du daemon au démarrage');
+      const deja = this.liveAgents().find(
+        (a) => a.kind === 'swarph-cell' && (a.mesh ?? 'principal') === nomMesh,
+      );
       if (deja)
         throw new AidHttpError(
           409,
-          `la cell ${config.mesh.cell} est déjà ouverte (agent ${deja.id}) : une seule session par cell`,
+          `la cell ${configMesh.cell} est déjà ouverte (agent ${deja.id}) : une seule session par cell`,
         );
-      const p = meshPaths(config.mesh, process.env.HOME ?? homedir());
-      meshSpawn = { bin: config.mesh.bin, cellFile: p.cellFile };
+      const p = meshPaths(configMesh, process.env.HOME ?? homedir());
+      meshSpawn = { bin: configMesh.bin, cellFile: p.cellFile };
     }
     if (o.kind === 'swairm-cell') {
       if (!config.swairm.bin)
@@ -310,16 +319,19 @@ export class AgentManager {
     if (!file) throw new AidHttpError(422, `${bin} introuvable dans le PATH du daemon`);
 
     const agentId = `ag_${ulid()}`;
-    const env = agentEnv(process.env, config.env.strip, {
-      AID_URL: `http://127.0.0.1:${this.deps.port()}`,
-      AID_TOKEN: issueRunToken(auth, run.id),
-      AID_TOPIC: topic.id,
-      AID_RUN: run.id,
-      AID_AGENT: agentId,
-      AID_SPOOL: paths.spool,
-      ...hookEnv(),
-    });
-    Object.assign(env, meshEnv(o.kind, config.mesh));
+    const env = agentEnv(
+      configMesh ? envSwarph(configMesh) : process.env,
+      configMesh ? [] : config.env.strip,
+      {
+        AID_URL: `http://127.0.0.1:${this.deps.port()}`,
+        AID_TOKEN: issueRunToken(auth, run.id),
+        AID_TOPIC: topic.id,
+        AID_RUN: run.id,
+        AID_AGENT: agentId,
+        AID_SPOOL: paths.spool,
+        ...hookEnv(),
+      },
+    );
     let pty: IPty;
     try {
       pty = getPty().spawn(file, args, {
@@ -346,6 +358,7 @@ export class AgentManager {
       exited: false,
       exit: null,
       kind: o.kind,
+      ...(configMesh && { mesh: nomMesh }),
       lastOutputAt: Date.now(),
       hooked: false,
       estimated: null,

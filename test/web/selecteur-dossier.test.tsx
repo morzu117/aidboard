@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, expect, test } from 'vitest';
 import { Accueil } from '../../web/src/ecrans/Accueil.js';
@@ -220,4 +220,29 @@ test('premier chargement dépassé : la réponse à « Entrée » ne sélectionn
   await new Promise((r) => setTimeout(r, 30));
   await userEvent.keyboard('/sub');
   expect(champ.value).toBe('/srv/code/sub');
+});
+
+test('une réponse avant le focus mais affichée après la sélection ne préfixe pas la saisie', async () => {
+  const h = setup(<Accueil />, snapshot());
+  let release!: () => void;
+  const first = new Promise<void>((r) => (release = r));
+  h.respond.set(
+    'GET /api/fs/dirs',
+    () =>
+      first.then(
+        () => new Response(JSON.stringify(listing()), { status: 200 }),
+      ) as unknown as Response,
+  );
+  await userEvent.click(await boutonNouveauSujet());
+  const champ = (await screen.findByLabelText('Aller au dossier')) as HTMLInputElement;
+  await act(async () => {
+    release();
+    // La réponse programme le rendu ; le navigateur prend le focus et sélectionne encore le champ vide.
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    champ.focus();
+    champ.select();
+  });
+  await screen.findByText('mon-depot');
+  await userEvent.keyboard('/srv/code{Enter}');
+  expect(fsCalls(h).at(-1)).toBe('/api/fs/dirs?path=/srv/code');
 });

@@ -41,7 +41,7 @@ const KERNEL_RULE =
 
 // Le daemon résout seul le sujet d'un token de run (DS2) : rien à transmettre. Un token admin
 // n'a pas de sujet courant ; à défaut le daemon répond 400, et c'est alors le premier workspace
-// enregistré qui sert de racine (cas interactif : `aid mcp` lancé depuis le poste de Julien).
+// enregistré qui sert de racine (cas interactif : `aid mcp` lancé depuis le poste de l’utilisateur).
 async function scopeParams(call: McpCall): Promise<Record<string, string>> {
   const state = await call('GET', '/api/state');
   if (state.status !== 200) return {};

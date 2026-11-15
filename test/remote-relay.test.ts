@@ -380,3 +380,21 @@ test('stop sans relais déposé : rien n’a pu tourner, l’arrêt est acquis ;
   writeFileSync(join(home, '.aid-remote/aid-relay'), 'exit 3\n');
   expect((await exec(transport, relayStop('sa_1'))).code).toBe(3);
 });
+
+test('un cat qui garde tout jusqu’à la fin de son entrée (uutils) ne retient pas les messages d’un attach ouvert', async () => {
+  const { home, transport } = serveur();
+  // faux cat : sans argument, il lit jusqu'à EOF avant d'écrire ; avec des fichiers, il se comporte normalement
+  const fauxCat = join(home, 'faux-bin', 'cat');
+  writeFileSync(
+    fauxCat,
+    '#!/bin/sh\n[ $# -eq 0 ] || exec /bin/cat "$@"\nt=$(mktemp) || exit 1\n/bin/cat >"$t"\n/bin/cat "$t"\nrm -f "$t"\n',
+    { mode: 0o755 },
+  );
+  await ensureRelay(SERVER, transport);
+  await demarrer(transport, 'sa_10', '~', [AGENT]);
+  const a = attacher(transport, 'sa_10', 0);
+  a.ecrire('bonjour');
+  await a.attendre('{"echo":"bonjour"}');
+  a.ecrire('quit');
+  expect((await a.fin).code).toBe(0);
+});

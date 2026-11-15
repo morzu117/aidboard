@@ -11,6 +11,7 @@ export default tseslint.config(
       'design/',
       'coverage/',
       'playwright-report/',
+      'test-results/',
       'app/src-tauri/target/',
     ],
   },

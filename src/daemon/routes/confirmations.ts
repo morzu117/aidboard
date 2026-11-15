@@ -75,11 +75,31 @@ export function registerConfirmationRoutes(
   });
   app.get('/api/confirmations', async (req, reply) => {
     if (req.principal?.kind !== 'admin') return reply.code(403).send({ error: 'admin seulement' });
-    const champs = 'id, action, classe, resume, etat, resultat, raison, cree_a, echeance, envoi';
+    reply.header('Cache-Control', 'no-store');
+    const champs =
+      'id, action, classe, resume, etat, resultat, raison, cree_a, echeance, envoi, params, mesh';
     const avecEnvoi = (lignes: unknown[]) =>
       lignes.map((ligne) => {
         const l = ligne as Record<string, unknown>;
-        if (l.action !== 'mesh.ecrire' && l.action !== 'mesh.etat') {
+        const meshBrut = l.mesh;
+        l.mesh = null;
+        try {
+          const mesh: unknown = typeof meshBrut === 'string' ? JSON.parse(meshBrut) : null;
+          if (mesh && typeof mesh === 'object' && !Array.isArray(mesh)) {
+            const { nom, cell } = mesh as Record<string, unknown>;
+            if (typeof nom === 'string' && typeof cell === 'string') l.mesh = { nom, cell };
+          }
+        } catch {
+          // Une colonne illisible ne doit exposer aucune empreinte.
+        }
+        try {
+          const params: unknown = typeof l.params === 'string' ? JSON.parse(l.params) : null;
+          l.params =
+            params !== null && typeof params === 'object' && !Array.isArray(params) ? params : null;
+        } catch {
+          l.params = null;
+        }
+        if (!ACTIONS_MESH.has(String(l.action))) {
           delete l.envoi;
           return l;
         }

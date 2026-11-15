@@ -2,7 +2,7 @@
 
 | Champ | Valeur |
 |---|---|
-| État | **Révision 1, 9 novembre 2026** : réponses du lab à L5–L7 (DM 93986), lues dans le gateway déployé (657e7e9) et la PR proxy 702. Révision 0 : Spec rév. 2 (E5 et E6, morzu-vps), d'après le contrat du proxy de #20, draft 2 avec le §10, et les réponses du lab (DM 93681). Julien a retenu : confirmation du téléphone, le 35 bis avant le 36. |
+| État | **Révision 1, 9 novembre 2026** : réponses du lab à L5–L7 (DM 93986), lues dans le gateway déployé (657e7e9) et la PR proxy 702. Révision 0 : Spec rév. 2 (E5 et E6, cell-gestion), d'après le contrat du proxy de #20, draft 2 avec le §10, et les réponses du lab (DM 93681). Julien a retenu : confirmation du téléphone, le 35 bis avant le 36. |
 | Emplacement final | `docs/chantiers/36-ecritures-etat.md` sur `main`, dans le premier commit du chantier |
 | Base | **`feat/35bis-envoi-reel`** (cd07f1b) : le 36 réutilise `ProxyClient` (D263) et l'écran d'envoi (D267). Il se rebase sur `main` quand le 35 bis est mergé. |
 | Organisation | Comme au 35 bis. |
@@ -148,6 +148,11 @@ Après le build mergé. Un test contre le vrai `swarph proxy serve` avec une fau
 
 D276 abaissé pour tenir dans les 16 Kio de la demande signée du téléphone ; le reste dépassé donne le 413 de 35b.7.
 - *Révision 36.7.* **D276 révisée :** `preuves` est limité à 12 000 caractères sérialisés à la Python, et chaque texte à 12 000 ; la preuve simple passe à 3 900 caractères (4 000 caractères de 4 octets donnaient un corps signé de 16 484 octets). Le proxy accepte jusqu'à 64 000 : A-I-D est seulement plus strict. Un cumul qui dépasse encore les 16 Kio une fois signé donne 413 `demande_trop_grande` (35b.7). 19 lignes existantes modifiées. Vrai proxy 11/11. Gate 2892 (échecs connus hors CI : install, update-check).
+
+### 36.8 Correctif : le libellé du déplacement, livré par le 42
+
+L'écran Carte annonce encore « Déplacer : bientôt, quand le gateway donnera la version de la carte. ». Ce n'est plus vrai : le gateway rend `stage_version` (lab, DM 97974), et le 42 a livré le déplacement proposé (D293). La ligne devient « Déplacer : A-I-D le propose dans la Boîte quand le sujet lié change de phase, entre build, review et ready, jamais vers done. », toujours sans bouton sur la carte. Le test `36.3` de `test/web/carte-board.test.tsx` suit le nouveau texte. Aucun autre changement.
+36.8 commité. 2 lignes existantes remplacées (le paragraphe de `CarteBoard` et l'assertion du test 36.3). Gate vert (3 893 tests). `gate:e2e` entier vert sous Node 22 avec `CI=1` (132 tests Playwright), aucun daemon résiduel.
 
 ## 6. Questions au lab
 

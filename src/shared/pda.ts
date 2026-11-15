@@ -1,4 +1,6 @@
+import type { ResultatEnvoi } from './ecritures.js';
 import {
+  ACTIONS_MESH,
   CLASSE_ACTION,
   resumeAction,
   validerParamsAction,
@@ -18,6 +20,7 @@ export const TAILLE_MAX_DEMANDE = 16 * 1024;
 
 export const CONTEXTE_DEMANDE = 'aid-pda-demande-v1\n';
 export const CONTEXTE_RELAIS = 'aid-pda-relais-v1\n';
+export const CONTEXTE_RESULTAT = 'aid-pda-resultat-v1\n';
 
 export const ORDRE_P256 = 0xffffffff00000000ffffffffffffffffbce6faada7179e84f3b9cac2fc632551n;
 
@@ -85,7 +88,26 @@ export function jsonCanonique(valeur: unknown): string {
   return encoder(valeur);
 }
 
-export type CorpsDemande = CorpsDemandeV1 | CorpsDemandeV2;
+export interface MeshSigne {
+  nom: string;
+  cell: string;
+  gateway: string;
+  proxy: string;
+}
+type ActionMesh = Extract<ActionConfirmee, `mesh.${string}`>;
+export type CorpsDemandeV3 = {
+  [A in ActionMesh]: Omit<Extract<CorpsDemandeV2, { action: A }>, 'v'> & { v: 3; mesh: MeshSigne };
+}[ActionMesh];
+export function resumeActionMesh(
+  mesh: MeshSigne,
+  action: ActionConfirmee,
+  params: Parameters<typeof resumeAction>[1],
+): string {
+  return Array.from(`[${mesh.nom}] ${resumeAction(action, params)}`)
+    .slice(0, 200)
+    .join('');
+}
+export type CorpsDemande = CorpsDemandeV1 | CorpsDemandeV2 | CorpsDemandeV3;
 export interface CorpsDemandeV1 {
   v: 1;
   id: string;
@@ -121,6 +143,7 @@ export function lireCorpsDemande(octets: Uint8Array): CorpsDemande {
   const o: unknown = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(octets));
   if (!o || typeof o !== 'object' || Array.isArray(o)) throw new Error('Demande invalide');
   const c = o as Record<string, unknown>;
+  if (c.v === 3) return lireCorpsDemandeV3(c);
   if (c.v === 2) return lireCorpsDemandeV2(c);
   const cles = ['v', 'id', 'action', 'sujet', 'numero', 'echeance', 'emise'];
   if (
@@ -226,6 +249,58 @@ export async function empreintePda({ credId, passkey, relais }: ClesPda): Promis
   return `${texte.slice(0, 4)}-${texte.slice(4)}`;
 }
 
+export function lireCorpsDemandeV3(c: Record<string, unknown>): CorpsDemandeV3 {
+  const cles = [
+    'v',
+    'id',
+    'action',
+    'classe',
+    'params',
+    'resume',
+    'numero',
+    'echeance',
+    'emise',
+    'mesh',
+  ];
+  const m = c.mesh as Record<string, unknown> | null;
+  const empreinte = (v: unknown) =>
+    typeof v === 'string' && /^[A-Za-z0-9_-]{43}$/.test(v) && decoderBase64url(v).length === 32;
+  if (
+    c.v !== 3 ||
+    Object.keys(c).length !== cles.length ||
+    !cles.every((cle) => Object.hasOwn(c, cle)) ||
+    typeof c.action !== 'string' ||
+    !ACTIONS_MESH.has(c.action) ||
+    !m ||
+    typeof m !== 'object' ||
+    Array.isArray(m) ||
+    Object.keys(m).length !== 4 ||
+    !['nom', 'cell', 'gateway', 'proxy'].every((cle) => Object.hasOwn(m, cle)) ||
+    typeof m.nom !== 'string' ||
+    /^[a-z][a-z0-9-]{0,31}$/.exec(m.nom)?.[0] !== m.nom ||
+    typeof m.cell !== 'string' ||
+    /^[^\s\p{Cc}]{1,64}$/u.exec(m.cell)?.[0] !== m.cell ||
+    !empreinte(m.gateway) ||
+    !empreinte(m.proxy)
+  )
+    throw new Error('Demande invalide');
+  // La v2 valide les champs communs avec son propre résumé, sans accepter de clé mesh.
+  const commun = { ...c };
+  delete commun.mesh;
+  lireCorpsDemandeV2({
+    ...commun,
+    v: 2,
+    resume: resumeAction(
+      c.action as ActionConfirmee,
+      c.params as Parameters<typeof resumeAction>[1],
+    ),
+  });
+  const corps = c as unknown as CorpsDemandeV3;
+  if (corps.resume !== resumeActionMesh(corps.mesh, corps.action, corps.params))
+    throw new Error('Résumé invalide');
+  return corps;
+}
+
 function lireCorpsDemandeV2(c: Record<string, unknown>): CorpsDemandeV2 {
   const cles = ['v', 'id', 'action', 'classe', 'params', 'resume', 'numero', 'echeance', 'emise'];
   if (
@@ -251,4 +326,103 @@ function lireCorpsDemandeV2(c: Record<string, unknown>): CorpsDemandeV2 {
   const corps = c as unknown as CorpsDemandeV2;
   if (corps.resume !== resumeAction(corps.action, corps.params)) throw new Error('Résumé invalide');
   return corps;
+}
+
+export const RESULTATS_PDA = ['executee', 'echouee', 'perimee', 'annulee'] as const;
+export const RAISONS_RESULTAT = ['perime', 'delai', 'script', 'numero'] as const;
+export const CODES_RESULTAT = [
+  'succes',
+  'verb_not_allowed',
+  'bad_args',
+  'peer_not_allowed',
+  'proxy_unavailable',
+  'upstream_unreachable',
+  'upstream_ambiguous',
+  'upstream_error',
+  'delai',
+  'interrompu',
+  'connexion',
+  'format',
+  'obligation-close',
+] as const satisfies readonly ResultatEnvoi['code'][];
+// Une évolution de l'énumération d'envoi doit aussi fermer la liste du résultat signé.
+const codesComplets: Exclude<ResultatEnvoi['code'], (typeof CODES_RESULTAT)[number]> extends never
+  ? true
+  : never = true;
+
+export interface CorpsResultatV1 {
+  v: 1;
+  id: string;
+  action: ActionConfirmee;
+  resultat: (typeof RESULTATS_PDA)[number];
+  raison: (typeof RAISONS_RESULTAT)[number] | null;
+  code: ResultatEnvoi['code'] | null;
+  emis: number;
+}
+
+function lireCorpsResultat(octets: Uint8Array): CorpsResultatV1 {
+  const c = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(octets));
+  if (
+    !c ||
+    typeof c !== 'object' ||
+    Array.isArray(c) ||
+    Object.keys(c).sort().join(',') !== 'action,code,emis,id,raison,resultat,v' ||
+    c.v !== 1 ||
+    typeof c.id !== 'string' ||
+    !/^[A-Za-z0-9_-]{22}$/.test(c.id) ||
+    decoderBase64url(c.id).length !== 16 ||
+    typeof c.action !== 'string' ||
+    !Object.hasOwn(CLASSE_ACTION, c.action) ||
+    !RESULTATS_PDA.includes(c.resultat) ||
+    (c.raison !== null && !RAISONS_RESULTAT.includes(c.raison)) ||
+    (c.code !== null && !CODES_RESULTAT.includes(c.code)) ||
+    !codesComplets ||
+    !Number.isSafeInteger(c.emis) ||
+    jsonCanonique(c) !== new TextDecoder().decode(octets)
+  )
+    throw new Error('Résultat invalide');
+  return c;
+}
+
+/** La signature est injectée par le daemon : aucune clé privée dans le code du téléphone. */
+export function signerResultat(
+  entree: unknown,
+  signer: (octets: Uint8Array) => Uint8Array,
+): Enveloppe | null {
+  try {
+    const corps = new TextEncoder().encode(jsonCanonique(entree));
+    lireCorpsResultat(corps);
+    const sig = signer(new Uint8Array([...new TextEncoder().encode(CONTEXTE_RESULTAT), ...corps]));
+    return { corps: encoderBase64url(corps), sig: encoderBase64url(sig) };
+  } catch {
+    return null;
+  }
+}
+
+export async function verifierResultat(
+  enveloppe: Enveloppe,
+  cleRaw: string,
+): Promise<CorpsResultatV1 | null> {
+  try {
+    if (enveloppe.corps.length > 1024 || enveloppe.sig.length !== 86) return null;
+    const corps = decoderBase64url(enveloppe.corps);
+    const resultat = lireCorpsResultat(corps);
+    const cle = await globalThis.crypto.subtle.importKey(
+      'raw',
+      decoderBase64url(cleRaw),
+      { name: 'ECDSA', namedCurve: 'P-256' },
+      false,
+      ['verify'],
+    );
+    return (await globalThis.crypto.subtle.verify(
+      { name: 'ECDSA', hash: 'SHA-256' },
+      cle,
+      decoderBase64url(enveloppe.sig),
+      new Uint8Array([...new TextEncoder().encode(CONTEXTE_RESULTAT), ...corps]),
+    ))
+      ? resultat
+      : null;
+  } catch {
+    return null;
+  }
 }

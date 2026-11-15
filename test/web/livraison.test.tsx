@@ -376,13 +376,18 @@ test('D126, D131 : la page review en retard sur la tête rend la revue obsolète
 
 test('D126 : pendant la lecture, la tuile Revue ne conclut rien', async () => {
   let rendre: (r: Response) => void = () => {};
+  let requetePartie = false;
   ouvrir(topic(), {
     ...pageRevue('Avis.', { commit: BASE }),
     [`GET /api/topics/tp_1/git/livraison?revue=${BASE}`]: () =>
-      new Promise<Response>((r) => (rendre = r)) as unknown as Response,
+      new Promise<Response>((r) => {
+        rendre = r;
+        requetePartie = true;
+      }) as unknown as Response,
   });
   // la page est lue : seule la position de son commit manque
   await attendre('livraison.avis.texte');
+  await waitFor(() => expect(requetePartie).toBe(true));
   expect(node('livraison.tuile-revue.valeur')?.textContent).toBe('Lecture…');
   expect(node('livraison.avis.obsolete')).toBeNull();
   await act(async () =>

@@ -14,17 +14,17 @@ import { fermerContextes } from './helpers.js';
 
 test.afterAll(({ browser }) => fermerContextes(browser));
 
-// 12.7 : le mesh swarph de bout en bout sur les faux binaires (global-setup : `mesh.cell` morzu-mac,
+// 12.7 : le mesh swarph de bout en bout sur les faux binaires (global-setup : `mesh.cell` cell-aid,
 // fake-swarph.sh, fake-tailscale.sh). Aucun réseau, aucun token, aucun vrai swarph.
 
 const home = () => process.env.AID_E2E_HOME!;
-const inboxLog = () => join(home(), 'swarph_state', 'morzu-mac', 'mesh-sidecar', 'inbox.log');
+const inboxLog = () => join(home(), 'swarph_state', 'cell-aid', 'mesh-sidecar', 'inbox.log');
 const dm = (id: number, kind: string, content: string) =>
   JSON.stringify({
     id,
     thread_id: `th_${id}`,
-    from_node: 'mesh-gw',
-    to_node: 'morzu-mac',
+    from_node: 'gateway',
+    to_node: 'cell-aid',
     kind,
     content,
     created_at: `2026-10-20T10:00:${String(id).padStart(2, '0')}+02:00`,
@@ -51,7 +51,7 @@ test('connecter depuis Réglages, trois DM arrivent dans la Boîte, « Vu », d�
   await expect(node(page, 'reglages.mesh.etat')).toHaveText('monitor actif · 0 à traiter');
   // le monitor a bien été lancé pour cette cell, en mode pull, par le faux swarph
   expect(readFileSync(join(home(), 'swarph.log'), 'utf8')).toContain(
-    'monitor start --as morzu-mac --deliver pull',
+    'monitor start --as cell-aid --deliver pull',
   );
 
   appendFileSync(
@@ -64,7 +64,7 @@ test('connecter depuis Réglages, trois DM arrivent dans la Boîte, « Vu », d�
 
   await node(page, 'reglages.barre.nav-boite').click();
   await expect(page).toHaveURL(/\/boite$/);
-  await expect(node(page, '1-2.mesh')).toHaveAttribute('aria-label', 'Mesh · morzu-mac');
+  await expect(node(page, '1-2.mesh')).toHaveAttribute('aria-label', 'Mesh · cell-aid');
   await expect(node(page, '1-2.mesh.etat')).toHaveText('connecté');
   await expect(node(page, '1-2.mesh.compte')).toHaveText('3');
   // D136 : les DM informent, les plus récents d'abord ; une demande rappelle que rien n'a été lancé
@@ -75,7 +75,7 @@ test('connecter depuis Réglages, trois DM arrivent dans la Boîte, « Vu », d�
   await expect(node(page, '1-2.mesh.dm-1.contenu').locator('b')).toHaveCount(0);
   await expect(node(page, '1-2.mesh.dm-2.type')).toHaveText('Info');
   await expect(node(page, '1-2.mesh.dm-3.type')).toHaveText('Question');
-  await expect(node(page, '1-2.mesh.dm-3.emetteur')).toHaveText('mesh-gw');
+  await expect(node(page, '1-2.mesh.dm-3.emetteur')).toHaveText('gateway');
 
   // D137 : « En faire une décision » la passe dans les Décisions, en tête ; rien ne part vers le pair
   await node(page, '1-2.mesh.dm-3.decision').click();
@@ -94,7 +94,7 @@ test('connecter depuis Réglages, trois DM arrivent dans la Boîte, « Vu », d�
   await node(page, '1-2.barre.mesh').click();
   await node(page, 'reglages.mesh.deconnecter').click();
   await expect(node(page, 'reglages.mesh.confirmation')).toContainText(
-    'Le monitor de la cell morzu-mac s’arrête.',
+    'Le monitor de la cell cell-aid s’arrête.',
   );
   expect(readFileSync(join(home(), 'swarph.log'), 'utf8')).not.toContain('monitor stop');
   await node(page, 'reglages.mesh.confirmer').click();
@@ -127,7 +127,7 @@ test('« Ouvrir la cell » depuis un DM : choix du sujet, la cell s’ouvre dans
   await expect.poll(() => terminalText(page, agent.id)).toContain('FAKE_CELL cell=');
   await expect
     .poll(() => terminalText(page, agent.id))
-    .toContain('MESH_GATEWAY_URL=http://mesh-gw.example:8788');
+    .toContain('MESH_GATEWAY_URL=http://gateway.example:8788');
   // une seule cell : le bouton de la Boîte devient un lien vers ce terminal
   await page.goto(`${process.env.AID_E2E_URL}/boite`);
   await expect(node(page, '1-2.mesh.dm-1.cell')).toHaveAttribute(

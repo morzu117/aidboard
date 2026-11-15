@@ -1,3 +1,9 @@
+import { registerRejoindreRoutes } from './routes/rejoindre.js';
+import { registerCartesRelieesRoutes } from './routes/cartes-reliees.js';
+import type { MeshRegistry } from './mesh/registre.js';
+import { AvisMeshService } from './mesh/avis.js';
+import { CommitteeReader, CommitteeWriter } from './mesh/committee.js';
+import { registerAvisMeshRoutes } from './routes/avis-mesh.js';
 import { registerAidRoutes } from './routes/aid.js';
 import { SwairmPr } from './swairm/pr.js';
 import { SwairmStatut } from './swairm/statut.js';
@@ -87,6 +93,7 @@ export interface ServerDeps {
   install?: () => { mode: InstallMode; version: string };
   /** 12.4 : null ou absent = mesh désactivé, les routes /api/mesh répondent 404 */
   mesh?: MeshService | null;
+  meshes?: MeshRegistry;
   /** chantier 24 : null ou absent = mesh désactivé, les routes /api/board répondent 404 */
   board?: BoardReader | null;
   swarph?: SwarphReader | null;
@@ -197,11 +204,18 @@ export async function buildServer(deps: ServerDeps): Promise<FastifyInstance> {
     deps.mesh ?? null,
     !!deps.config.swairm.bin,
     deps.config.agents.transport,
+    deps.meshes,
   );
-  registerMeshRoutes(app, { mesh: deps.mesh ?? null });
-  registerBoardRoutes(app, { board: deps.board ?? null });
+  registerRejoindreRoutes(app, { config: deps.config, paths: deps.paths });
+  registerMeshRoutes(app, {
+    mesh: deps.mesh ?? null,
+    meshes: deps.meshes,
+    avatars: deps.config.avatars,
+  });
+  registerCartesRelieesRoutes(app, { db: deps.db, meshes: deps.meshes });
+  registerBoardRoutes(app, { board: deps.board ?? null, meshes: deps.meshes });
   registerAidRoutes(app, deps.db, deps.board ?? null, deps.config.mesh.cell);
-  registerSwarphRoutes(app, { swarph: deps.swarph ?? null });
+  registerSwarphRoutes(app, { swarph: deps.swarph ?? null, meshes: deps.meshes });
   registerSwairmRoutes(
     app,
     deps.swairmAsk ?? new SwairmAsk(deps.config.swairm.bin),
@@ -224,10 +238,27 @@ export async function buildServer(deps: ServerDeps): Promise<FastifyInstance> {
   });
   registerAgentRoutes(app, { db: deps.db, agents: deps.agents, store: deps.store });
   const actionsConfirmation = { store: deps.store, paths: deps.paths, queue: new WorkspaceQueue() };
+  const committee =
+    deps.mesh && deps.config.mesh.cell
+      ? { mesh: deps.mesh, cell: deps.config.mesh.cell, proxySocket: deps.config.mesh.proxySocket }
+      : null;
+  const avis =
+    deps.meshes?.principal?.avis ??
+    (committee
+      ? new AvisMeshService({
+          db: deps.db,
+          config: deps.config.mesh,
+          lecteur: new CommitteeReader(committee),
+          ecrivain: new CommitteeWriter(committee),
+        })
+      : undefined);
   const porte = creerPorte({
     db: deps.db,
+    config: deps.config,
+    meshes: deps.meshes,
     actions: creerActionsConfirmation({
       ...deps,
+      avis,
       journal: (type, donnees) => app.log.info(donnees, type),
       actions: actionsConfirmation,
       engine: structural,
@@ -235,7 +266,9 @@ export async function buildServer(deps: ServerDeps): Promise<FastifyInstance> {
     file: () => deps.pda?.obtenir() ?? null,
     signaler: () => deps.pda?.obtenir()?.signaler(),
   });
+  registerAvisMeshRoutes(app, { avis: avis ?? null, porte, meshes: deps.meshes });
   registerEcrituresRoutes(app, {
+    meshes: deps.meshes,
     db: deps.db,
     board: deps.board ?? null,
     cell: deps.config.mesh.cell,

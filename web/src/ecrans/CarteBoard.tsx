@@ -1,6 +1,9 @@
+import { CartesReliees } from '../ui/CartesReliees.js';
+import { AvatarCell } from '../ui/AvatarCell.js';
 import { AidCarte, ErreursAid, NouveauSujetCarte } from '../ui/AidBoard.js';
 import { liensSwairm } from '../../../src/shared/swairm-board.js';
 import type { LecturePrSwairm } from '../../../src/shared/swairm-trailers.js';
+import { cheminMesh, instantaneMesh, useMeshLecture } from '../data/meshLecture.js';
 import { useSwairmCommits } from '../data/swairm-commits.js';
 import { ErreursSwairm, SwairmCarte } from '../ui/SwairmBoard.js';
 import { ChangerEtat } from '../ui/ChangerEtat.js';
@@ -77,7 +80,7 @@ function Corps({ card }: { card: BoardCard }) {
   );
 }
 
-function Graphe({ g }: { g: BoardGraph }) {
+function Graphe({ g, cellLocale }: { g: BoardGraph; cellLocale?: string }) {
   return (
     <>
       {g.steps.length === 0 ? (
@@ -100,7 +103,10 @@ function Graphe({ g }: { g: BoardGraph }) {
                 <td>{s.mandatory === null ? TIRET : s.mandatory ? 'oui' : 'non'}</td>
                 {/* en entier, jamais abrégé : ce texte explique le blocage */}
                 <td className="carte-board-etat">{s.state ?? TIRET}</td>
-                <td>{s.holder ?? TIRET}</td>
+                <td>
+                  {s.holder && <AvatarCell nom={s.holder} cellLocale={cellLocale} />}
+                  {s.holder ?? TIRET}
+                </td>
                 <td>{date(s.due)}</td>
               </tr>
             ))}
@@ -129,9 +135,10 @@ function Obligations({
   relire,
 }: {
   o: BoardObligations;
-  s: BoardCardSheet;
+  s: BoardCardSheet & { mesh: string };
   relire: () => void;
 }) {
+  const { state } = useAid();
   return (
     <>
       {o.truncated && (
@@ -160,7 +167,15 @@ function Obligations({
               <tr key={x.id} data-node={`carte-board.obligation-${x.id}`}>
                 <td>{x.id}</td>
                 <td>{x.step ?? TIRET}</td>
-                <td>{x.holder ?? TIRET}</td>
+                <td>
+                  {x.holder && (
+                    <AvatarCell
+                      nom={x.holder}
+                      cellLocale={instantaneMesh(state, s.mesh)?.state.cell}
+                    />
+                  )}
+                  {x.holder ?? TIRET}
+                </td>
                 {/* status fait foi ; state n'est qu'une indication (#1456) */}
                 <td>{x.status ?? TIRET}</td>
                 <td className="texte-discret">{x.state ?? TIRET}</td>
@@ -173,6 +188,7 @@ function Obligations({
                 <td>
                   {s.card.ok && (
                     <ChangerEtat
+                      mesh={s.mesh}
                       obligation={x}
                       carte={s.card.data.id}
                       etape={
@@ -226,7 +242,7 @@ function Chronologie({
   s,
   commits: lecture,
 }: {
-  s: BoardCardSheet;
+  s: BoardCardSheet & { mesh: string };
   commits: LecturePrSwairm | null;
 }) {
   const commits = s.card.ok && liensSwairm(s.card.data.body ?? '').length > 0 ? lecture : null;
@@ -360,19 +376,23 @@ function Fiche({
   relire,
   commits,
 }: {
-  s: BoardCardSheet;
+  s: BoardCardSheet & { mesh: string };
   relire: () => void;
   commits: LecturePrSwairm | null;
 }) {
   const c = s.card.ok ? s.card.data : null;
   const { state } = useAid();
+  const objetMesh = instantaneMesh(state, s.mesh);
   const [ecriture, setEcriture] = useState(false);
   return (
     <>
       {c && (
         <p className="carte-board-meta" data-node="carte-board.meta">
           <span>{c.stage ?? '(sans étape)'}</span>
-          <span>{c.assignee ?? 'sans responsable'}</span>
+          <span>
+            {c.assignee && <AvatarCell nom={c.assignee} cellLocale={objetMesh?.state.cell} />}
+            {c.assignee ?? 'sans responsable'}
+          </span>
           <span>{c.dueAt ? `échéance ${c.dueAt.slice(0, 10)}` : 'sans échéance'}</span>
           <span>créée par {c.author}</span>
         </p>
@@ -381,19 +401,20 @@ function Fiche({
         {c && <Corps card={c} />}
       </Bloc>
       <Bloc id="graphe" titre="Graphe d’étapes" result={s.graph} onRelire={relire}>
-        {s.graph.ok && <Graphe g={s.graph.data} />}
+        {s.graph.ok && <Graphe g={s.graph.data} cellLocale={objetMesh?.state.cell} />}
       </Bloc>
-      {state?.mesh?.state.proxyConfigure && !state.mesh.state.ecritures && (
+      {objetMesh?.state.proxyConfigure && !objetMesh.state.ecritures && (
         <p>Le proxy de ta cellule est en lecture seule.</p>
       )}
       <Bloc id="obligations" titre="Obligations" result={s.obligations} onRelire={relire}>
         {s.obligations.ok && <Obligations o={s.obligations.data} s={s} relire={relire} />}
       </Bloc>
-      {state?.mesh && c && (
+      {objetMesh && c && (
         <>
           <button onClick={() => setEcriture(true)}>Écrire une note (à blanc)</button>
           {ecriture && (
             <EcrireAuMesh
+              mesh={s.mesh}
               onRelire={relire}
               action="carte.note"
               valeurs={{ carte: c.id }}
@@ -405,7 +426,10 @@ function Fiche({
       <Bloc id="fil" titre="Fil" result={s.thread} onRelire={relire}>
         {s.thread.ok && <Fil t={s.thread.data} />}
       </Bloc>
-      <p>Déplacer : bientôt, quand le gateway donnera la version de la carte.</p>
+      <p>
+        Déplacer : A-I-D le propose dans la Boîte quand le sujet lié change de phase, entre build,
+        review et ready, jamais vers done.
+      </p>
       <Chronologie s={s} commits={commits} />
       <Bloc id="github" titre="GitHub" result={s.card} onRelire={relire}>
         {c && <GitHub card={c} />}
@@ -416,7 +440,8 @@ function Fiche({
 
 /** Chantier 31 (D180) : aussi monté par l'interface d'un appareil, sans la coque du Mac. */
 export function Contenu({ cardId }: { cardId: number }) {
-  const commits = useSwairmCommits(cardId);
+  const mesh = useMeshLecture();
+  const commits = useSwairmCommits(mesh === 'principal' ? cardId : 0);
   const { result, enLecture, luA, erreur, relire, reussieA } = useBoardCard(cardId);
   const c = result?.card.ok ? result.card.data : null;
   return (
@@ -424,7 +449,7 @@ export function Contenu({ cardId }: { cardId: number }) {
       <nav className="carte-board-ariane" aria-label="Fil d’Ariane" data-node="carte-board.ariane">
         {/* retour au projet de la carte, pas au premier de la liste */}
         <Link
-          to={c?.projectId != null ? `/board?projet=${c.projectId}` : '/board'}
+          to={cheminMesh(c?.projectId != null ? `/board?projet=${c.projectId}` : '/board', mesh)}
           data-node="carte-board.retour"
         >
           Board
@@ -479,6 +504,7 @@ export function Contenu({ cardId }: { cardId: number }) {
         />
       )}
       {result && <Fiche s={result} relire={() => void relire()} commits={commits} />}
+      {result?.card.ok && <CartesReliees key={`${mesh}:${cardId}`} carte={cardId} />}
     </main>
   );
 }
@@ -487,7 +513,12 @@ export function CarteBoard() {
   const { state } = useAid();
   const { cardId } = useParams();
   const id = cardId && /^\d+$/.test(cardId) ? Number(cardId) : NaN;
-  if (state && !state.mesh) return <Navigate to="/" replace />;
+  if (state && !state.mesh && !Object.keys(state.meshes ?? {}).length)
+    return <Navigate to="/" replace />;
   if (!Number.isSafeInteger(id) || id <= 0) return <Navigate to="/board" replace />;
-  return <Layout screen="board">{state?.mesh ? <Contenu cardId={id} /> : null}</Layout>;
+  return (
+    <Layout screen="board">
+      {state?.mesh || Object.keys(state?.meshes ?? {}).length ? <Contenu cardId={id} /> : null}
+    </Layout>
+  );
 }

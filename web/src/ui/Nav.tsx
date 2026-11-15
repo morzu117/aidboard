@@ -1,3 +1,6 @@
+import { PALETTE_AVATARS as COULEURS_GROUPE } from '../../../src/shared/avatars.js';
+import { useMeshes } from '../data/meshes.js';
+import { PastillesMeshes } from './PastillesMeshes.js';
 import { type DragEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation, useSearchParams } from 'react-router';
 import type { Agent, NavGroup, NavPlacement, NavState, Topic } from '../../../src/shared/model.js';
@@ -22,19 +25,6 @@ function initialesGroupe(nom: string): string {
   if (mots.length >= 2) return (mots[0]![0]! + mots[1]![0]!).toUpperCase();
   return nom.trim().slice(0, 2).toUpperCase();
 }
-
-// Palette de couleurs de groupe (BRIEF §5.2.1, même ordre que src/daemon/routes/nav.ts).
-// `ink` : couleur de texte lisible sur `valeur`, reprise de la maquette Sidebar (carrés du rail).
-const COULEURS_GROUPE: readonly { nom: string; valeur: string; ink: string }[] = [
-  { nom: 'Menthe', valeur: '#5de0a1', ink: '#06251a' },
-  { nom: 'Violet', valeur: '#a78bfa', ink: '#1b1238' },
-  { nom: 'Orange', valeur: '#f59e6b', ink: '#3a1a06' },
-  { nom: 'Bleu', valeur: '#6ea8ff', ink: '#0b2347' },
-  { nom: 'Rose', valeur: '#f07ab0', ink: '#3d0f26' },
-  { nom: 'Ambre', valeur: '#f2b84b', ink: '#2a1d00' },
-  { nom: 'Turquoise', valeur: '#4fd1d9', ink: '#062f33' },
-  { nom: 'Gris', valeur: '#8d94a0', ink: '#14161a' },
-];
 
 type Renommage = { kind: 'groupe' | 'sujet'; id: string; valeur: string };
 type MenuOuvert = { kind: 'groupe' | 'sujet'; id: string };
@@ -98,6 +88,7 @@ export function annoncerPlacementNav(topicId: string, patch: Partial<NavPlacemen
 /** Groupe B (D55) : barre gauche, lecture (B.2) et mode édition (B.3) — glisser-déposer, menu, renommage. */
 export function Nav({ screen }: { screen: EcranId }) {
   const { state, daemon, call } = useAid();
+  const { multiple } = useMeshes();
   const { pathname } = useLocation();
   const [params] = useSearchParams();
   const { openNewTopic } = useLayout();
@@ -663,11 +654,12 @@ export function Nav({ screen }: { screen: EcranId }) {
   ];
 
   const mesh = state?.mesh;
-  const meshTexte = mesh
-    ? mesh.state.connected
-      ? `mesh · cell ${mesh.state.cell}`
-      : 'mesh hors ligne'
-    : null;
+  const meshTexte =
+    !multiple && mesh
+      ? mesh.state.connected
+        ? `mesh · cell ${mesh.state.cell}`
+        : 'mesh hors ligne'
+      : null;
 
   // Chantier 25 (D104) : la barre par état. Les groupes du 15 restent intacts en `rangement: 'groupes'`, en mode
   // réduit (la V4 n'en a pas) et avant la première lecture de /api/nav.
@@ -690,6 +682,7 @@ export function Nav({ screen }: { screen: EcranId }) {
       data-node={n('racine')}
       aria-label="Navigation des sujets"
     >
+      <PastillesMeshes />
       {rail ? (
         <div className="barre-gauche-rail" data-node={n('rail')}>
           <button

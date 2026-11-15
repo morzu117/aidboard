@@ -16,7 +16,7 @@ const statut = (over: Record<string, unknown> = {}) =>
   JSON.stringify({
     BackendState: 'Running',
     Self: { DNSName: `${NOM}.`, UserID: 42 },
-    User: { '42': { LoginName: 'julien@exemple' }, '7': { LoginName: 'autre@exemple' } },
+    User: { '42': { LoginName: 'utilisateur@exemple' }, '7': { LoginName: 'autre@exemple' } },
     ...over,
   });
 
@@ -24,7 +24,7 @@ test('31.3 (D173) : le nom sans point final et le login du compte du Mac', () =>
   expect(parseTailnet(statut())).toEqual({
     etat: 'running',
     nom: NOM,
-    compte: 'julien@exemple',
+    compte: 'utilisateur@exemple',
   });
 });
 

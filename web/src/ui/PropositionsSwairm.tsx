@@ -61,6 +61,7 @@ export function PropositionSwairmVue({
       {erreur && <p role="alert">{erreur}</p>}
       {ouverte && (
         <EcrireAuMesh
+          mesh={p.mesh}
           action="carte.note"
           propositionSwairm={p.id}
           valeurs={{

@@ -1,3 +1,4 @@
+import { injecterEnvFauxSwarph } from './helpers/env-faux-swarph.js';
 import { mkdtempSync, symlinkSync, readFileSync, existsSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -8,6 +9,8 @@ import { EventStore } from '../src/daemon/events/store.js';
 import { MeshService } from '../src/daemon/mesh/service.js';
 import { SwarphReader } from '../src/daemon/mesh/lectures.js';
 import { meshExec, type MeshExecResult } from '../src/daemon/mesh/exec.js';
+
+injecterEnvFauxSwarph();
 
 const nettoyages: (() => void)[] = [];
 afterEach(() => {

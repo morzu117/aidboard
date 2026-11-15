@@ -1,3 +1,5 @@
+import type { ConfirmationAvisMesh, ConfirmationMotionAvis } from './avis-mesh-api.js';
+import { RAISON_BASELINE_ABSENT } from './avis-mesh-api.js';
 import {
   lireParamsEcriture,
   resumeEcriture,
@@ -6,6 +8,11 @@ import {
 } from './ecritures.js';
 import { lireParamsEtat, resumeEtat, type ActionEtat, type Etat } from './etats.js';
 export interface ParametresActions {
+  'mesh.avis': { params: ConfirmationAvisMesh };
+  'mesh.avis.motion': { params: ConfirmationMotionAvis };
+  'mesh.avis.baseline-absent': {
+    params: { id: string; canal: string; motion: number; raison: string };
+  };
   'mesh.etat': Etat;
   'mesh.ecrire': Ecriture;
   merge: {
@@ -39,9 +46,18 @@ export interface ParametresActions {
   essai: Record<string, never>;
 }
 export type ActionConfirmee = keyof ParametresActions;
-export const ACTIONS_MESH: ReadonlySet<string> = new Set(['mesh.ecrire', 'mesh.etat']);
+export const ACTIONS_MESH: ReadonlySet<string> = new Set([
+  'mesh.ecrire',
+  'mesh.etat',
+  'mesh.avis',
+  'mesh.avis.baseline-absent',
+  'mesh.avis.motion',
+]);
 export type ClasseConfirmation = 'toujours' | 'defaut';
 export const CLASSE_ACTION = Object.freeze({
+  'mesh.avis': 'toujours',
+  'mesh.avis.motion': 'toujours',
+  'mesh.avis.baseline-absent': 'toujours',
   'mesh.etat': 'toujours',
   'mesh.ecrire': 'toujours',
   merge: 'defaut',
@@ -104,6 +120,53 @@ const branche: Validation = (v) =>
   !v.includes('..') &&
   !/^[-/]/.test(v);
 const schemas: Record<ActionConfirmee, Record<string, Validation>> = {
+  'mesh.avis': {
+    params: (v) => {
+      const p = v as ConfirmationAvisMesh | null;
+      return (
+        !!p &&
+        typeof p.id === 'string' &&
+        typeof p.nom === 'string' &&
+        p.nom.length <= 80 &&
+        Number.isSafeInteger(p.carte) &&
+        p.carte > 0 &&
+        typeof p.texte === 'string' &&
+        Array.from(p.texte).length <= 8100 &&
+        Array.isArray(p.sieges) &&
+        !!p.echeances &&
+        typeof p.echeances.positions === 'string' &&
+        typeof p.echeances.rebuttal === 'string' &&
+        typeof p.echeances.vote === 'string'
+      );
+    },
+  },
+  'mesh.avis.motion': {
+    params: (v) => {
+      const p = v as ConfirmationMotionAvis | null;
+      return (
+        !!p &&
+        typeof p.id === 'string' &&
+        typeof p.canal === 'string' &&
+        typeof p.texte === 'string' &&
+        !!p.echeances &&
+        ['positions', 'rebuttal', 'vote'].every(
+          (t) => typeof p.echeances[t as keyof typeof p.echeances] === 'string',
+        )
+      );
+    },
+  },
+  'mesh.avis.baseline-absent': {
+    params: (v) => {
+      const p = v as { id?: unknown; canal?: unknown; motion?: unknown; raison?: unknown } | null;
+      return (
+        !!p &&
+        typeof p.id === 'string' &&
+        typeof p.canal === 'string' &&
+        Number.isSafeInteger(p.motion) &&
+        p.raison === RAISON_BASELINE_ABSENT
+      );
+    },
+  },
   'mesh.etat': {
     action: choix('obligation.prendre', 'obligation.refuser', 'obligation.clore', 'carte.deplacer'),
     params: () => true,
@@ -181,6 +244,15 @@ export function resumeAction(
   const p = { action, params } as ParamsAction;
   let resume: string;
   switch (p.action) {
+    case 'mesh.avis':
+      resume = `Ouvrir ${p.params.params.nom}, carte ${p.params.params.carte}`;
+      break;
+    case 'mesh.avis.motion':
+      resume = `Ouvrir la motion : ${p.params.params.canal}`;
+      break;
+    case 'mesh.avis.baseline-absent':
+      resume = `Déclarer le baseline absent : ${p.params.params.canal}`;
+      break;
     case 'mesh.etat':
       resume = resumeEtat(p.params.action, p.params.params);
       break;

@@ -1,4 +1,9 @@
-import { execFile } from 'node:child_process';
+import { lireVersionCommande as run } from '../../shared/version-commande.js';
+import {
+  swarphAtLeast,
+  SWARPH_BOARD_MIN,
+  SWARPH_REJOINDRE_MIN,
+} from '../../shared/swarph-version.js';
 import { createRequire } from 'node:module';
 import { createServer } from 'node:net';
 import { homedir } from 'node:os';
@@ -87,21 +92,7 @@ export function gitAtLeast(output: string, major: number, minor: number): boolea
   return Number(m[1]) > major || (Number(m[1]) === major && Number(m[2]) >= minor);
 }
 
-/** Chantier 24 : la vue board lit `swarph board … --json`, disponible depuis cette version. */
-export const SWARPH_BOARD_MIN = '0.72.40';
-
-/** Comparaison numérique sur trois nombres ; une version illisible ne déclenche rien de plus. */
-export function swarphAtLeast(output: string, min = SWARPH_BOARD_MIN): boolean {
-  const m = /(\d+)\.(\d+)\.(\d+)/.exec(output);
-  const n = /(\d+)\.(\d+)\.(\d+)/.exec(min);
-  if (!m || !n) return true;
-  for (let i = 1; i <= 3; i++) {
-    const a = Number(m[i]);
-    const b = Number(n[i]);
-    if (a !== b) return a > b;
-  }
-  return true;
-}
+export { swarphAtLeast, SWARPH_BOARD_MIN } from '../../shared/swarph-version.js';
 
 // Pas une erreur (pièges du chantier 08 : builtWith peut dépasser la CLI), juste à afficher.
 export function versionDecalage(cliLine: string, builtWith: string | null): string | undefined {
@@ -343,6 +334,12 @@ export async function runChecks(p: Probes): Promise<Check[]> {
         detail:
           '`swarph --version` a échoué : réinstaller (uv tool install --python 3.12 swarph-cli)',
       });
+      if (v !== null && !swarphAtLeast(v, SWARPH_REJOINDRE_MIN))
+        add(
+          'warn',
+          `swarph ${v} : rejoindre un mesh demande ${SWARPH_REJOINDRE_MIN}`,
+          'uv tool upgrade swarph-cli',
+        );
       if (v !== null && !swarphAtLeast(v))
         add(
           'warn',
@@ -419,13 +416,6 @@ export async function runChecks(p: Probes): Promise<Check[]> {
   }
   return c;
 }
-
-const run = (bin: string, args: string[]) =>
-  new Promise<string | null>((resolve) => {
-    execFile(bin, args, { timeout: 5000 }, (err, stdout) =>
-      resolve(err ? null : (stdout.trim().split('\n')[0] ?? '')),
-    );
-  });
 
 export function realProbes(paths: AidPaths): Probes {
   const require = createRequire(import.meta.url);

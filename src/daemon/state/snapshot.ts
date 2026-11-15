@@ -1,3 +1,4 @@
+import type { MeshRegistry } from '../mesh/registre.js';
 import { lireMarqueTour } from '../tours.js';
 import { existsSync } from 'node:fs';
 import type { ActionRun, Agent, Run, Topic, TopicIndex, Workspace } from '../../shared/model.js';
@@ -30,7 +31,9 @@ export async function buildSnapshot(
   all = false,
   mesh: MeshService | null = null,
   swairmEnabled = false,
+  meshes?: MeshRegistry,
 ): Promise<StateSnapshot> {
+  if (meshes) mesh = meshes.principal?.mesh ?? null;
   const workspaces = (db.prepare('SELECT * FROM workspaces ORDER BY name').all() as Row[]).map(
     (r): Workspace => ({
       id: r.id as string,
@@ -132,6 +135,7 @@ export async function buildSnapshot(
     { id: string } | undefined;
   return {
     lastEventId: last?.id ?? null,
+    ...(meshes && { meshes: meshes.instantane() }),
     workspaces,
     topics,
     runs,

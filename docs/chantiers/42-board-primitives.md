@@ -2,10 +2,10 @@
 
 | Champ | Valeur |
 |---|---|
-| État | **Révision 0, 11 novembre 2026.** Spec rév. 0 (morzu-vps). Choix de Julien : oui aux recos Q1 à Q4. Réponses du lab à L4–L7 (DM 96345) écrites en D293. |
+| État | **Révision 0, 11 novembre 2026.** Spec rév. 0 (cell-gestion). Choix de Julien : oui aux recos Q1 à Q4. Réponses du lab à L4–L7 (DM 96345) écrites en D293. |
 | Emplacement final | `docs/chantiers/42-board-primitives.md` sur `main` |
 | Base | `main` (4fec800) |
-| Organisation | Comme au 41. morzu-vps gère le chantier ; Codex CLI écrit le code et les tests de chaque point ; morzu-vps relit, lance le gate, commite et ouvre la PR. |
+| Organisation | Comme au 41. cell-gestion gère le chantier ; Codex CLI écrit le code et les tests de chaque point ; cell-gestion relit, lance le gate, commite et ouvre la PR. |
 | Validation | 42.2 à 42.4 n'écrivent rien sur le mesh. 42.5 ajoute une écriture, `carte.deplacer`, et le lab valide le chantier avant le merge (L7). Merge : CI verte, validation du lab, puis oui de Julien. |
 | Bloqué par | Rien. |
 
@@ -32,6 +32,8 @@ Le programme (§5, phase 5, bloc 21) veut un seul board, piloté dans A-I-D, sur
 - Le déplacement vers `done`.
 - Le 41 b.
 - Plusieurs cells dans A-I-D (bloc 11).
+
+Multi-mesh : voir le chantier 46 (D312, D313, D317), qui distingue les cartes et propositions par mesh et lie chaque déplacement au mesh du corps signé.
 
 ## 4. Décisions
 

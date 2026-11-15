@@ -1,3 +1,4 @@
+import { useMeshLecture, instantaneMesh } from '../data/meshLecture.js';
 import { useState } from 'react';
 import { EcrireAuMesh } from '../ui/EcrireAuMesh.js';
 import { DemandesAvis } from '../ui/DemandesAvis.js';
@@ -10,11 +11,12 @@ import { Layout } from '../ui/Layout.js';
 
 const EXEMPLE_CONFIG = `mesh:
   cell: ma-cell        # le nom de cette machine dans le mesh, jamais celui d'une autre
-  gateway: http://mesh-gw.example.ts.net:8788`;
+  gateway: http://gateway.example.ts.net:8788`;
 
 function Contenu() {
   const { state } = useAid();
-  const mesh = state?.mesh;
+  const nomMesh = useMeshLecture();
+  const mesh = instantaneMesh(state, nomMesh);
   const [ecriture, setEcriture] = useState(false);
   return (
     <main className="page">
@@ -33,7 +35,12 @@ function Contenu() {
         <>
           <button onClick={() => setEcriture(true)}>Écrire au mesh (à blanc)</button>
           {ecriture && (
-            <EcrireAuMesh action="dm.envoyer" choix onClose={() => setEcriture(false)} />
+            <EcrireAuMesh
+              mesh={nomMesh}
+              action="dm.envoyer"
+              choix
+              onClose={() => setEcriture(false)}
+            />
           )}
         </>
       )}

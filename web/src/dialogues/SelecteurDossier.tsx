@@ -45,8 +45,7 @@ export function SelecteurDossier({
           if (mine !== latest.current) return;
           setListing(l);
           if (!typed.current) setGoto(l.path);
-          if (premier.current && !typed.current && document.activeElement === gotoRef.current)
-            setASelectionner((n) => n + 1);
+          if (premier.current && !typed.current) setASelectionner((n) => n + 1);
           premier.current = false;
           setError(null);
         },
@@ -78,7 +77,9 @@ export function SelecteurDossier({
 
   // un compteur et non la valeur : la sélection se fait même quand le chemin posé est déjà celui du champ
   useLayoutEffect(() => {
-    if (aSelectionner) gotoRef.current?.select();
+    // Le focus peut arriver entre la réponse et le rendu qui pose le chemin dans le champ.
+    if (aSelectionner && !typed.current && document.activeElement === gotoRef.current)
+      gotoRef.current?.select();
   }, [aSelectionner]);
 
   return (

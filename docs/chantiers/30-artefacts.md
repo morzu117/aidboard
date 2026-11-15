@@ -5,7 +5,7 @@
 | État | **Révision 0, 6 novembre 2026, à valider par Julien.** Spec validée par Julien le 6 novembre (`specs/artefacts-v1.md`, ses sept recommandations). Relecture légère du lab faite le 6 novembre (DM 91260 et 91262, programme §5 bis) : les quatre couches tiennent, deux corrections exigées avant le plan, reprises en D165, D166 et D167. |
 | Emplacement final | `docs/chantiers/30-artefacts.md` sur `main`, dans le premier commit du chantier |
 | Base | **b5ecb50** (`origin/main`, PR #123). Les `fichier:ligne` ont été lus sur cette base. |
-| Spec | `specs/artefacts-v1.md` (dossier de travail, hors dépôt ; copie sur morzu-vps dans `~/work/aid-specs/`). Pas de fiche V4 pour cet écran (programme 0.d) : la spec en tient lieu. |
+| Spec | `specs/artefacts-v1.md` (dossier de travail, hors dépôt ; copie sur cell-gestion dans `~/work/aid-specs/`). Pas de fiche V4 pour cet écran (programme 0.d) : la spec en tient lieu. |
 | Programme | `programme.md`, ligne 30 ; §3 règle 9 ; §5 bis |
 | Validation | Julien. Recette sous Node 22 et 24, dans le navigateur **et** dans l'app (WKWebView). |
 

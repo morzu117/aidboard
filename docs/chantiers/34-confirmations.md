@@ -5,8 +5,8 @@
 | État | **Révision 1, 8 novembre 2026.** Julien a tranché Q1 à Q4 de la spec, puis l'armement (D233). Le lab a relu la spec (DM 92515), et ses deux points obligatoires sont écrits en D224 et D226. PASS de lab sur la spec (DM 92518), dont les deux précisions sont écrites en D224 et D226. **Révision 1 :** le lab a relu le plan (DM 92521) ; son point obligatoire sur le désarmement est écrit en D233, et ses recommandations en D223, D224, D227 et D228. |
 | Emplacement final | `docs/chantiers/34-confirmations.md` sur `main`, dans le premier commit du chantier |
 | Base | **9ec6a45** (`origin/main`, PR #129). |
-| Spec | `specs/confirmations-34.md`, révision 3 (dossier de travail, hors dépôt ; copie sur morzu-vps dans `~/work/aid-specs/`). |
-| Organisation | Comme au 43. morzu-vps gère le chantier. Un agent Codex CLI écrit le code et les tests de chaque point, sur un brief tiré de ce plan. morzu-vps relit chaque diff, lance le gate, commite et ouvre la PR. |
+| Spec | `specs/confirmations-34.md`, révision 3 (dossier de travail, hors dépôt ; copie sur cell-gestion dans `~/work/aid-specs/`). |
+| Organisation | Comme au 43. cell-gestion gère le chantier. Un agent Codex CLI écrit le code et les tests de chaque point, sur un brief tiré de ce plan. cell-gestion relit chaque diff, lance le gate, commite et ouvre la PR. |
 | Validation | Le lab valide le 34 (DM 89702) : le plan, puis la frontière sur les diffs. La recette de Julien suit, sur ses appareils. Le merge suit la règle de Julien : la CI verte et la validation du lab. |
 
 ## 1. Pourquoi
@@ -128,6 +128,8 @@ Les noms (sujet, projet, appareil) passent par le relais, comme au 43 (Q4 du 43)
 
 ### D230. La file, l'attente et le résultat
 
+Le [chantier 45](45-confirmations-completes.md) ajoute les paramètres signés sur le Mac et le résultat signé sur le téléphone.
+
 - `pda_demandes` gagne `classe`, `params` (JSON), `resume`, `resultat` (`executee`, `echouee`, `perimee`, `annulee` ou `NULL`) et `raison` (code court, sans contenu). Migration 024.
 - `GET /api/confirmations` liste les demandes ouvertes, et les 20 dernières terminées.
 - `DELETE /api/confirmations/:id` annule une demande ouverte : son `etat` passe à `expiree` (le `CHECK` de la 023 n'admet pas d'autre état, et la table n'est pas recréée) et son `resultat` à `annulee`. Elle est fermée et ne reçoit plus de réponse. Le daemon la retire du relais.
@@ -163,7 +165,7 @@ Le refus fermé de D225 bloquerait tout merge sur une installation qui n'a jamai
 
 ### D234. Un faux numéro annule la demande (décidé par Julien, d'après la V4)
 
-Les fiches V4 (`specs/meta-edge.md`, DM 92552 de morzu-mac) disent : « Une erreur annule et signale la demande. » Julien garde la saisie des 4 chiffres, et y ajoute cette règle.
+Les fiches V4 (`specs/meta-edge.md`, DM 92552 de cell-aid) disent : « Une erreur annule et signale la demande. » Julien garde la saisie des 4 chiffres, et y ajoute cette règle.
 - Seule une réponse **signée** par une passkey active, valide en tout sauf le numéro, annule la demande. Le daemon vérifie le défi et la signature **avec le numéro saisi**, puis le compare au numéro attendu. Un relais ne peut donc pas annuler une demande en forgeant une réponse fausse.
 - La demande passe à `etat = 'expiree'`, `resultat = 'annulee'`, `raison = 'numero'`. Elle est retirée du relais, et l'événement `pda.numero_faux` est journalisé (`{ id, appareil }`, sans le numéro).
 - Le Mac affiche « Annulée : mauvais numéro saisi sur le téléphone ».
@@ -223,6 +225,22 @@ Un merge et un push confirmés de bout en bout avec le relais local et la passke
 
 - *Révision 34.9 — fait.* E2E des confirmations avec relais local, passkey virtuelle et forge factice ; fiche de recette pour les vrais téléphones. Le motif D234 est affiché dans l’attente et les dernières demandes. Le brief final privilégie les cas merge et host ; le push confirmé reste couvert par les tests du 34.5.
 - *Révision 34.9.* `e2e/confirmations.spec.ts` couvre le merge direct puis confirmé, une demande périmée, l'appairage avec le bon numéro puis un faux numéro signé, l'annulation, le réglage, le désarmement, le réarmement et le refus après révocation. Le push confirmé reste couvert par les tests du 34.5. Le texte de D234 s'affiche sur le Mac. La fiche `docs/recette-chantier-34-confirmations.md` est pour Julien. Gate 2467, e2e 117.
+
+### 34.10 Correctif : un `git commit` heurte le verrou de l'index dans l'e2e des confirmations
+
+Sur la CI de la PR #172, deux fois de suite, l'e2e « Confirmations : merge, péremption, numéro, annulation, réglage et armement » a échoué. Son `git commit --allow-empty`, lancé dans le worktree du sujet juste après sa création, a reçu `Unable to create '…/index.lock': File exists`. Hypothèse à prouver : une lecture git du daemon dans ce worktree (un `git status`, par exemple) prend le verrou facultatif de l'index. Les lectures git de la machine distante l'évitent déjà (`GIT_OPTIONAL_LOCKS=0`, `--no-optional-locks`), mais pas les lectures locales. Si c'est le cas, A-I-D peut faire échouer un `git commit` de l'utilisateur dans son propre worktree.
+
+- Prouver la cause : quelle commande git du daemon tient le verrou, et à quel moment.
+- Si c'est une lecture du daemon, toutes ses lectures git locales passent sans verrou facultatif, comme celles de la machine distante. Les écritures (commit, merge, worktree) ne changent pas.
+- Si la cause est ailleurs, elle est décrite, et le correctif est à décider.
+- **Tests :** un test qui montre qu'une lecture du daemon ne crée pas `index.lock` ; l'e2e des confirmations, plusieurs fois de suite ; le gate entier, et `gate:e2e`.
+34.10 commité. La cause a été prouvée par `GIT_TRACE2_EVENT` pendant l'e2e : le `git status --porcelain` de `hasUncommittedChanges` (via `GET /api/topics/:id/git/log`) écrit `index.lock` juste après `worktree add`. Les modifications :
+- `src/daemon/git/exec.ts` : une liste positive de sous-commandes de lecture reçoit `GIT_OPTIONAL_LOCKS=0`. Les écritures et les sous-commandes inconnues gardent leur environnement.
+- Les lectures directes de `aid/workspace.ts`, `host/diff.ts` et `updateCheck.ts` passent aussi sans verrou.
+- 7 lignes existantes remplacées, hors du chantier.
+- `test/git-verrou.test.ts` : une lecture sur un index périmé ne crée pas `index.lock`, et 20 lectures concurrentes laissent passer un commit.
+
+Vérifié : l'e2e des confirmations 5/5 chez Codex, gate vert (3 895 tests), `gate:e2e` entier vert sous Node 22 avec `CI=1` (132), 3/3 passages des tests git, aucun daemon résiduel.
 
 ## 6. Pièges
 

@@ -29,7 +29,7 @@ function tailnet(nom: { v: string | null } = { v: NOM }): TailscaleExec {
           stdout: JSON.stringify({
             BackendState: 'Running',
             Self: { ...(nom.v && { DNSName: `${nom.v}.` }), UserID: 1 },
-            User: { '1': { LoginName: 'julien@exemple' } },
+            User: { '1': { LoginName: 'utilisateur@exemple' } },
           }),
           code: null,
         }

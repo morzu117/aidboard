@@ -798,6 +798,8 @@ test('32.10 : lire une carte du 31 dans la coque mobile, sans écriture', async 
   expect(node('appareil.barre')).toBeTruthy();
   expect(node('carte-board.retour')?.getAttribute('href')).toBe('/board?projet=42');
   expect(node('carte-board.corps.texte')?.textContent).toContain('<b>pas du HTML</b>');
+  expect(document.querySelector('.avatar-cell')).toBeNull();
+  expect(h.calls.some((appel) => appel.url === '/api/avatars')).toBe(false);
   expect(h.calls.every((appel) => appel.method === 'GET')).toBe(true);
 });
 

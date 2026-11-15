@@ -51,7 +51,7 @@ export function registerSwairmRoutes(
     const id = Number((req.params as { id: string }).id);
     if (!Number.isSafeInteger(id) || id < 1) throw new AidHttpError(400, 'identifiant invalide');
     db?.prepare(
-      'UPDATE swairm_propositions SET fermee_a = ? WHERE id = ? AND fermee_a IS NULL',
+      "UPDATE swairm_propositions SET fermee_a = ? WHERE mesh = 'principal' AND id = ? AND fermee_a IS NULL",
     ).run(new Date().toISOString(), id);
     return { ok: true };
   });

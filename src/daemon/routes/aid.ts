@@ -29,15 +29,17 @@ export function registerAidRoutes(
       cell,
       Number((req.params as { id: string }).id),
     );
-    return { params, resume: resumeEtat('carte.deplacer', params) };
+    const { mesh } = db
+      .prepare('SELECT mesh FROM aid_propositions WHERE id = ?')
+      .get(Number((req.params as { id: string }).id)) as { mesh: string };
+    return { mesh, params, resume: resumeEtat('carte.deplacer', params) };
   });
   app.delete('/api/aid/propositions/:id', async (req) => {
     const id = Number((req.params as { id: string }).id);
     if (!Number.isSafeInteger(id) || id < 1) throw new AidHttpError(400, 'identifiant invalide');
-    db.prepare('UPDATE aid_propositions SET fermee_a = ? WHERE id = ? AND fermee_a IS NULL').run(
-      new Date().toISOString(),
-      id,
-    );
+    db.prepare(
+      "UPDATE aid_propositions SET fermee_a = ? WHERE mesh = 'principal' AND id = ? AND fermee_a IS NULL",
+    ).run(new Date().toISOString(), id);
     return { ok: true };
   });
 }
