@@ -242,6 +242,15 @@ Sur la CI de la PR #172, deux fois de suite, l'e2e « Confirmations : merge, pé
 
 Vérifié : l'e2e des confirmations 5/5 chez Codex, gate vert (3 895 tests), `gate:e2e` entier vert sous Node 22 avec `CI=1` (132), 3/3 passages des tests git, aucun daemon résiduel.
 
+### 34.11 Correctif : le test « affichage v2 » de l'action `essai` est instable
+
+Le lab a lancé la suite complète sur son bac à sable (DM 98509, 98514). Une fois sur deux têtes différentes, sous charge, le test `affichage v2 {"action":"essai"}` de `test/web/pda-v2.test.tsx` a échoué. L'écran du téléphone affichait « 1 demande illisible ignorée » au lieu de la demande. Relancé seul, le test passe 4 fois sur 4. La demande signée a donc été refusée comme illisible. Hypothèse à prouver : une borne de temps (fraîcheur, expiration) est franchie sous charge entre la signature et la lecture.
+
+- Prouver la cause sous charge, en mesurant le taux d'échec avant et après la correction.
+- Si la cause est dans le test (une horloge non figée, par exemple), le test est corrigé et ses assertions ne changent pas. Si l'écran refuse à tort une demande valide, c'est un défaut : il est décrit, et le correctif est à décider.
+- **Tests :** le test corrigé sous charge ; le gate entier.
+34.11 commité. Cause établie par la lecture du code et mesurée par instrumentation, retirée ensuite. L'échec lui-même n'a pas été reproduit (0/210 avant). Deux signatures de test ont été mesurées à 900 001 ms, au-delà de la borne de 15 minutes de `lireCorpsDemandeV2`. Le test réutilise une seule valeur de `Date.now()` : 2 lignes existantes remplacées, 1 ajoutée dans `test/web/pda-v2.test.tsx`. Après : 0/60. Gate vert (4 033 tests), 3/3 passages du fichier.
+
 ## 6. Pièges
 
 - **Lignes existantes modifiées.** Ce chantier touche des routes existantes (merge, push, nettoyage, retrait de projet, appairage, options du host). Le nombre de lignes modifiées sera plus élevé qu'aux chantiers précédents. Chaque point le donne et le justifie.

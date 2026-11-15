@@ -75,6 +75,7 @@ afterEach(() => {
 });
 
 function choisir(entree: ParamsAction) {
+  const emise = Date.now();
   demande = {
     ...entree,
     v: 2,
@@ -82,8 +83,8 @@ function choisir(entree: ParamsAction) {
     classe: CLASSE_ACTION[entree.action],
     resume: resumeAction(entree.action, entree.params),
     numero: CLASSE_ACTION[entree.action] === 'toujours' ? null : '1234',
-    emise: Date.now(),
-    echeance: Date.now() + 900000,
+    emise,
+    echeance: emise + 900000,
   } as CorpsDemandeV2;
 }
 const tete = 'abcdef0'.padEnd(40, '1');
