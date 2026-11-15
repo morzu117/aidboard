@@ -44,10 +44,16 @@ afterEach(async () => {
 function scenario(valeur: Record<string, unknown>) {
   writeFileSync(join(dossier, 'scenario.json'), JSON.stringify(valeur));
 }
-async function demarrer() {
+async function demarrer(reprise = false) {
   const aidHome = join(dossier, 'aid');
   mkdirSync(aidHome);
   writeFileSync(join(aidHome, 'config.yaml'), `mesh:\n  home: ${home()}\n`);
+  if (reprise)
+    writeFileSync(
+      join(aidHome, 'rejoindre.json'),
+      JSON.stringify({ ...demande, depuis: Date.now() }),
+      { mode: 0o600 },
+    );
   t = await startTestDaemon(aidHome, {
     config: { mesh: { ...DEFAULT_CONFIG.mesh, home: home(), bin: join(dossier, 'swarph') } },
     tailscaleExec: async (_bin, args) => ({
@@ -349,20 +355,31 @@ test('33.4 : contexte admin conservé pour les commandes après retour sur Machi
   const saisie = { ...demande, gateway: 'https://aid-e2e.ts.net/' };
   const debut = await requete('POST', url, saisie);
   expect(debut.statusCode).toBe(200);
-  expect(debut.json()).toMatchObject({ ...saisie, cheminJeton: jeton() });
-  expect(await attendre('en-attente')).toMatchObject({ ...saisie, cheminJeton: jeton() });
-  expect((await requete('DELETE')).json()).toMatchObject({ ...saisie, cheminJeton: jeton() });
+  expect(debut.json()).toMatchObject({ ...demande, cheminJeton: jeton() });
+  expect(await attendre('en-attente')).toMatchObject({ ...demande, cheminJeton: jeton() });
+  expect((await requete('DELETE')).json()).toMatchObject({ ...demande, cheminJeton: jeton() });
 });
 
 test('33.3bis : le gateway enregistré est normalisé', async () => {
   await demarrer();
   const saisie = { ...demande, gateway: 'https://EXAMPLE.com/' };
   expect((await requete('POST', url, saisie)).statusCode).toBe(200);
-  await attendre('approuve');
+  expect((await attendre('approuve')).gateway).toBe('https://example.com');
   expect(loadConfig(resolvePaths(t!.home)).meshes.essai).toMatchObject({
     cell: demande.cell,
     gateway: 'https://example.com',
   });
   expect(lireConfig()).not.toContain(saisie.gateway);
   expect(existsSync(join(t!.home, 'rejoindre.json'))).toBe(false);
+});
+
+test('33.6 : GET restaure le gateway et le chemin, puis détecte le jeton tardif', async () => {
+  await demarrer(true);
+  const attendu = { ...demande, cheminJeton: jeton() };
+  expect((await requete('GET')).json()).toEqual({ etat: 'interrompue', ...attendu });
+  mkdirSync(join(home(), '.config/swarph'), { recursive: true });
+  writeFileSync(jeton(), '', { mode: 0o000 });
+  expect((await requete('GET')).json()).toEqual({ etat: 'a-voir', ...attendu });
+  rmSync(jeton());
+  expect((await requete('GET')).json()).toEqual({ etat: 'a-voir', ...attendu });
 });

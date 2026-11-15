@@ -15,8 +15,8 @@ export type EtatRejoindre =
   | { etat: 'approuve'; temoin?: string; redemarrage?: boolean; libelle?: string }
   | { etat: 'refuse' | 'expire' }
   | { etat: 'annule'; code?: string }
-  | { etat: 'a-voir'; cell?: string; mesh?: string }
-  | { etat: 'interrompue'; cell: string; mesh: string }
+  | { etat: 'a-voir'; cell?: string; mesh?: string; gateway?: string; cheminJeton?: string }
+  | { etat: 'interrompue'; cell: string; mesh: string; gateway: string; cheminJeton: string }
   | { etat: 'echec'; libelle: string };
 
 export interface DemandeRejoindre {
@@ -124,6 +124,8 @@ export class LanceurRejoindre {
         etat: existe(chemins.tokenFile) ? 'a-voir' : 'interrompue',
         cell: demande.cell,
         mesh: demande.mesh,
+        gateway: demande.gateway,
+        cheminJeton: chemins.tokenFile,
       };
     } catch {
       // Un état illisible ou mal formé ne permet aucune reprise.
@@ -142,6 +144,8 @@ export class LanceurRejoindre {
   }
 
   etat(): EtatRejoindre {
+    if (this.courant.etat === 'interrompue' && existe(this.courant.cheminJeton))
+      this.courant = { ...this.courant, etat: 'a-voir' };
     return { ...this.courant };
   }
 
@@ -164,12 +168,19 @@ export class LanceurRejoindre {
       if (['PATH', 'LANG', 'SSL_CERT_FILE', 'SSL_CERT_DIR'].includes(cle) || cle.startsWith('LC_'))
         env[cle] = process.env[cle];
     }
-    if (this.fichierEtat)
-      writeFileSync(
-        this.fichierEtat,
-        JSON.stringify({ cell: demande.cell, mesh: demande.mesh, gateway, depuis: Date.now() }),
-        { mode: 0o600, flag: 'wx' },
-      );
+    if (this.fichierEtat) {
+      try {
+        writeFileSync(
+          this.fichierEtat,
+          JSON.stringify({ cell: demande.cell, mesh: demande.mesh, gateway, depuis: Date.now() }),
+          { mode: 0o600, flag: 'wx' },
+        );
+      } catch (erreur) {
+        if ((erreur as NodeJS.ErrnoException).code === 'EEXIST')
+          throw new Error(`Demande précédente non effacée : supprimer ${this.fichierEtat}`);
+        throw erreur;
+      }
+    }
     this.actif = true;
     this.courant = { etat: 'demande' };
     const enfant = spawn(this.config.mesh.bin, ['join', gateway, '--name', demande.cell], {

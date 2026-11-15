@@ -174,6 +174,7 @@ Rien de bloquant. Quatre points facultatifs, tous retenus :
 - **b.** Après un redémarrage, l'état restauré donne aussi le gateway et le chemin du jeton, recalculés à partir de la cell restaurée.
 - **c.** L'écran montre le gateway normalisé, celui qui a été rejoint, et non la chaîne tapée.
 - **d.** Si `rejoindre.json` n'a pas pu être effacé, une nouvelle demande est refusée avec un message clair : « Demande précédente non effacée : supprimer <chemin> ».
+33.6 commité. Les quatre points de DM 98426, chacun avec un test. Gate vert (4 003 tests), `gate:e2e` entier vert sous Node 22 avec `CI=1` (137 tests Playwright), 3/3 passages des tests ciblés, aucun daemon résiduel.
 
 ## 7. Pièges
 

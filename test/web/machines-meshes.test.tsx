@@ -225,7 +225,9 @@ test.each(['interrompue', 'a-voir'])(
   '33.3bis : identité de la demande après redémarrage (%s)',
   async (etat) => {
     ouvrir({ etat, cell: 'peer-c', mesh: 'essai-reprise' });
-    expect(await screen.findByText('Cell : peer-c · Mesh : essai-reprise')).toBeTruthy();
+    expect(await screen.findByText(/Cell : peer-c · Mesh : essai-reprise/)).toBeTruthy();
+    expect(screen.getByText(`Gateway : ${contexte.gateway}`)).toBeTruthy();
+    expect(screen.getByText(/Cell : peer-c/).textContent).toContain(contexte.cheminJeton);
     if (etat === 'interrompue') {
       expect(
         screen.getByText("Le daemon a redémarré pendant la demande ; rien n'a été inscrit."),
@@ -234,3 +236,17 @@ test.each(['interrompue', 'a-voir'])(
     }
   },
 );
+
+test('formulaire : affiche le gateway normalisé de la réponse', async () => {
+  ouvrir(undefined, {
+    [`POST ${chemin}`]: json(200, {
+      ...contexte,
+      gateway: 'https://example.com',
+      etat: 'demande',
+    }),
+  });
+  await joindre();
+  await screen.findByText(/principal · peer-a/);
+  remplir();
+  expect(await screen.findByText('Gateway : https://example.com')).toBeTruthy();
+});

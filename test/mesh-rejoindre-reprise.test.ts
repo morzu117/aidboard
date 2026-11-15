@@ -48,6 +48,8 @@ test.each(['absent', 'fichier', 'lien'])(
       etat: type === 'absent' ? 'interrompue' : 'a-voir',
       cell: demande.cell,
       mesh: demande.mesh,
+      gateway: demande.gateway,
+      cheminJeton: jeton(),
     });
     expect(() => lstatSync(fichier())).toThrow();
     expect(reprendre().etat()).toEqual({ etat: 'aucune' });
@@ -103,4 +105,35 @@ test('échec de lancement : état effacé après le résultat final', async () =
   lanceur.lancer(demande);
   await vi.waitFor(() => expect(lanceur!.etat().etat).toBe('echec'));
   expect(() => lstatSync(fichier())).toThrow();
+});
+
+test.each(['fichier', 'lien', 'dossier'])('jeton tardif après interruption : %s', (type) => {
+  writeFileSync(fichier(), JSON.stringify({ ...demande, depuis: Date.now() }));
+  lanceur = reprendre();
+  expect(lanceur.etat().etat).toBe('interrompue');
+  expect(lanceur.etat().etat).toBe('interrompue');
+  mkdirSync(join(dossier, 'home/.config/swarph'), { recursive: true });
+  if (type === 'lien') symlinkSync(join(dossier, 'absent'), jeton());
+  else if (type === 'dossier') mkdirSync(jeton());
+  else writeFileSync(jeton(), '', { mode: 0o000 });
+  const attendu = { etat: 'a-voir', ...demande, cheminJeton: jeton() };
+  expect(lanceur.etat()).toEqual(attendu);
+  rmSync(jeton(), { recursive: true });
+  expect(lanceur.etat()).toEqual(attendu);
+});
+
+test('état précédent non effacé : refus clair puis nouvelle demande possible', async () => {
+  copyFileSync(resolve('test/fixtures/fake-swarph-join.mjs'), join(dossier, 'swarph'));
+  chmodSync(join(dossier, 'swarph'), 0o700);
+  writeFileSync(join(dossier, 'scenario.json'), JSON.stringify({ attente: true }));
+  lanceur = reprendre();
+  writeFileSync(fichier(), 'état précédent');
+  expect(() => lanceur!.lancer(demande)).toThrow(
+    `Demande précédente non effacée : supprimer ${fichier()}`,
+  );
+  expect(lanceur.etat()).toEqual({ etat: 'aucune' });
+  expect(readFileSync(fichier(), 'utf8')).toBe('état précédent');
+  rmSync(fichier());
+  lanceur.lancer(demande);
+  await vi.waitFor(() => expect(lanceur!.etat().etat).toBe('en-attente'));
 });

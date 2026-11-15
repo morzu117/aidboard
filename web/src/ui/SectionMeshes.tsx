@@ -193,7 +193,7 @@ function MeshesAdmin() {
                 mesh,
               });
               setMaintenant(Date.now());
-              setInscription({ ...resultat, gateway, cell, mesh });
+              setInscription(resultat);
               setFormulaire(false);
             });
           }}
@@ -219,6 +219,7 @@ function MeshesAdmin() {
       {(inscription.etat === 'interrompue' || inscription.etat === 'a-voir') && (
         <p>
           Cell : {inscription.cell} · Mesh : {inscription.mesh}
+          {inscription.cheminJeton && <> · Jeton : {inscription.cheminJeton}</>}
         </p>
       )}
       {inscription.etat === 'interrompue' && (

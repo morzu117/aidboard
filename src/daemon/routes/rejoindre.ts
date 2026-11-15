@@ -2,7 +2,11 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { meshPaths } from '../mesh/paths.js';
 import { loadConfig, type AidConfig, ConfigError } from '../config.js';
 import { ajouterMesh, oublierMesh } from '../mesh/config-rejoindre.js';
-import { LanceurRejoindre, type DemandeRejoindre } from '../mesh/rejoindre.js';
+import {
+  LanceurRejoindre,
+  validerGatewayRejoindre,
+  type DemandeRejoindre,
+} from '../mesh/rejoindre.js';
 import type { AidPaths } from '../paths.js';
 import { lireVersionCommande } from '../../shared/version-commande.js';
 import { swarphAtLeast, SWARPH_REJOINDRE_MIN } from '../../shared/swarph-version.js';
@@ -84,6 +88,7 @@ export function registerRejoindreRoutes(
       lanceur.lancer(corps as DemandeRejoindre);
       contexte = {
         ...(corps as DemandeRejoindre),
+        gateway: validerGatewayRejoindre(corps.gateway),
         cheminJeton: meshPaths({ ...deps.config.mesh, cell: corps.cell }).tokenFile,
       };
       return etat();
