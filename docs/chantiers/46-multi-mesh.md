@@ -343,6 +343,15 @@ Le gate du VPS, sous charge, a échoué une fois sur le test « formulaire : ban
 - **Tests :** le test corrigé sous charge ; le gate entier.
 46.7 commité. Cause prouvée par observation du DOM : la région « Aperçu » était rendue sans bandeau tant que `multiple` valait faux, c'est-à-dire tant que la liste n'avait pas répondu, ou en cas d'échec. Une ligne existante remplacée dans `web/src/ui/SelecteurMesh.tsx` : `EnteteMesh` affiche le bandeau si `multiple` ou si le mesh n'est pas `principal`. Trois tests ajoutés : `perso` avec la liste en attente, `perso` avec la liste en échec, `principal` avec un seul mesh (aucun bandeau). Les quatre autres usages (ChangerEtat, DemandesAvisMesh, FormulaireAvisMesh, PropositionsAid) gagnent la même règle. Reste non traité : `principal` en multi-mesh, avant la réponse de la liste. Sous charge : 0 échec sur 30. Gate vert (3 896 tests), 3/3 passages des tests meshes. `gate:e2e` laissé à la CI : un autre e2e tournait sur le VPS, et l'e2e mono-mesh ne change pas.
 
+### 46.8 Correctif : le bandeau manque pour `principal` tant que la liste des meshes n'a pas répondu
+
+Le 46.7 a laissé un trou : avec plusieurs meshes actifs, une écriture vers `principal` s'affiche sans bandeau tant que `GET /api/meshes` n'a pas répondu, ou quand cette lecture a échoué. Pendant ce temps, rien ne dit à l'écran où l'écriture partira. Les cinq usages d'`EnteteMesh` sont concernés : EcrireAuMesh, ChangerEtat, DemandesAvisMesh, FormulaireAvisMesh et PropositionsAid.
+
+- **La règle.** Le bandeau n'est caché que lorsqu'on **sait** qu'un seul mesh est actif, c'est-à-dire que la liste a répondu avec moins de deux meshes actifs. Il s'affiche si la liste n'a pas encore répondu, si sa lecture a échoué, s'il y a deux meshes actifs ou plus, ou si le mesh visé n'est pas `principal`. Avec un seul mesh, le bandeau peut donc paraître un court instant pendant le chargement, puis disparaître. C'est voulu : afficher la cible d'une écriture sans en être sûr vaut mieux que la cacher.
+- **Le code.** La règle vit dans `EnteteMesh` (`web/src/ui/SelecteurMesh.tsx`) et s'appuie sur `charge` et `erreur` de `useMeshes()`. Le hook ne change pas, ni aucun des cinq usages.
+- **Les tests**, dans `test/web/meshes.test.tsx` : `principal` avec la liste en attente (bandeau), `principal` avec la liste en échec (bandeau), `principal` en multi-mesh une fois la liste arrivée (bandeau), `principal` avec un seul mesh une fois la liste arrivée (aucun bandeau). Les tests existants doivent passer, ou leurs changements sont justifiés un par un. Le gate entier.
+46.8 commité. Une condition changée dans `EnteteMesh` : le bandeau s'affiche si la liste est en attente, si elle est en échec, s'il y a deux meshes actifs ou plus, ou si le mesh visé n'est pas `principal`. `useMeshes` et les cinq usages ne changent pas, ni le PDA (son magasin compte comme chargé). Quatre tests ajoutés dans `test/web/meshes.test.tsx`. Gate vert (4 037 tests), gate:e2e 137, 3/3 passages des tests meshes.
+
 ## 6. Pièges
 
 - Ne jamais indexer une donnée par le seul nom d'un mesh : c'est l'empreinte qui le lie à son couple (cell, gateway).
