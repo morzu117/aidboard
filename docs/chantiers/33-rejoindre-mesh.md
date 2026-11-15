@@ -87,7 +87,13 @@ Le 33 s'appuie sur `swarph join`. Le jeton reste dans le fichier qu'écrit swarp
 - Dans Machines, une section « Meshes » : la liste de la config (nom, cell, gateway, jeton présent ou non), et le bouton « Rejoindre un mesh ».
 - Le formulaire a trois champs. Le gateway est affiché tel que Julien l'a tapé, en texte brut.
 - Pendant l'attente : le code en grand, son expiration en compte à rebours, et un « Copier » de la commande d'approbation, avec `<TÉMOIN>` et `<JETON-OPÉRATEUR>` à remplir. A-I-D ne l'exécute jamais.
-- Au succès : « Cell inscrite, pas encore ratifiée : la boîte marche, le board reste vide jusqu'à la ratification » (L4). Puis les quatre questions de ratification, en texte, avec la commande d'envoi à copier (le témoin lu dans la sortie, ou `<TÉMOIN>` à remplir : `swarph mesh send <témoin> --content-file <réponses> --as <cell> --gateway <gateway> --token-file <chemin>`), et « Redémarre le daemon pour activer ce mesh. »
+- Au succès : « Cell inscrite, pas encore ratifiée : la boîte marche, le board reste vide jusqu'à la ratification » (L4). Puis les quatre questions de ratification, en texte, un modèle de réponses à copier, la commande d'envoi à copier (le témoin lu dans la sortie, ou `<TÉMOIN>` à remplir : `swarph mesh send <témoin> --kind status --content-file <réponses> --as <cell> --gateway <gateway> --token-file <chemin>`), et « Redémarre le daemon pour activer ce mesh. » A-I-D ne remplit jamais les réponses et n'envoie rien.
+  - Les questions, mot pour mot, en anglais, comme `_QUESTIONS` dans `src/swarph_cli/commands/join.py` de swarph-cli (dépôt public) :
+    1. `How will you handle routine AI-to-AI peer DMs, and stop at privilege boundaries?`
+    2. `How will you keep your canonical name and flag a DM addressed to the wrong identity?`
+    3. `How will you disclose mistakes and assumptions to the peers affected?`
+    4. `What counts as a mesh secret, and how will you keep it out of mesh messages?`
+  - La forme que swarph envoie, et donc celle du modèle : une ligne `Handshake for <cell>`, puis chaque question sur une ligne et la réponse sur la suivante, en kind `status`.
 - Tout ce qui vient de swarph s'affiche en texte brut (invariant 9).
 
 ## 5. Questions
@@ -133,6 +139,7 @@ Les trois routes, l'écrivain de config, « Oublier », le plancher de version e
 ### 33.4 La vue (D336)
 
 La section « Meshes », le formulaire, l'attente, le succès et les échecs.
+- _Révision 33.4._ Les quatre questions de ratification ont été ajoutées à D336, mot pour mot depuis `join.py`. Le premier passage de Codex s'est arrêté parce que le plan ne les donnait pas. Commande d'envoi en `--kind status`. `GET /api/meshes` gagne `gateway` et `jeton` (existence du fichier) pour l'admin seulement. 3 lignes existantes hors du chantier remplacées : la route de liste des meshes, le registre et l'écran Machines. La liste reflète le registre du démarrage : un mesh rejoint y paraît après le redémarrage. Gate 3981, gate:e2e 132 sous Node 22, 3/3 passages des tests ciblés, aucun daemon résiduel.
 
 ### 33.5 L'e2e et la fiche de recette
 

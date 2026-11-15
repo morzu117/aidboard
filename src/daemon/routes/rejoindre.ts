@@ -1,4 +1,5 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
+import { meshPaths } from '../mesh/paths.js';
 import { loadConfig, type AidConfig, ConfigError } from '../config.js';
 import { ajouterMesh, oublierMesh } from '../mesh/config-rejoindre.js';
 import { LanceurRejoindre, type DemandeRejoindre } from '../mesh/rejoindre.js';
@@ -30,6 +31,8 @@ export function registerRejoindreRoutes(
     }
   });
   // Inclut la lecture de version asynchrone dans l'exclusion des demandes concurrentes.
+  let contexte: (DemandeRejoindre & { cheminJeton: string }) | undefined;
+  const etat = () => ({ ...lanceur.etat(), ...contexte });
   let lancement = false;
   let preparation: Promise<void> | undefined;
   const admin = (req: FastifyRequest, reply: FastifyReply): boolean => {
@@ -46,7 +49,7 @@ export function registerRejoindreRoutes(
   });
   app.get('/api/meshes/rejoindre', async (req, reply) => {
     if (!admin(req, reply)) return reply;
-    return lanceur.etat();
+    return etat();
   });
   app.post('/api/meshes/rejoindre', async (req, reply) => {
     if (!admin(req, reply)) return reply;
@@ -78,7 +81,11 @@ export function registerRejoindreRoutes(
       if (Object.hasOwn(loadConfig(deps.paths).meshes, corps.mesh))
         return reply.code(400).send({ error: 'Mesh déjà configuré' });
       lanceur.lancer(corps as DemandeRejoindre);
-      return lanceur.etat();
+      contexte = {
+        ...(corps as DemandeRejoindre),
+        cheminJeton: meshPaths({ ...deps.config.mesh, cell: corps.cell }).tokenFile,
+      };
+      return etat();
     } catch (erreur) {
       return reply.code(400).send({
         error:
@@ -95,7 +102,7 @@ export function registerRejoindreRoutes(
     if (!admin(req, reply)) return reply;
     await preparation;
     await lanceur.annuler();
-    return lanceur.etat();
+    return etat();
   });
   app.delete('/api/meshes/config/:mesh', async (req, reply) => {
     if (!admin(req, reply)) return reply;

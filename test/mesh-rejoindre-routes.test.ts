@@ -120,6 +120,8 @@ test('serveur principal : quatre routes, succès persistant sans GET, oubli sans
     etat: 'approuve',
     temoin: 'peer-b',
     redemarrage: true,
+    ...demande,
+    cheminJeton: jeton(),
   });
   expect(
     (await t!.d.app.inject({ url: '/api/meshes', headers: t!.headers })).json(),
@@ -148,7 +150,12 @@ test('annuler attend SIGINT et la fin de l’enfant ; une seule demande par daem
   expect((await requete('POST', url, demande)).statusCode).toBe(409);
   await attendre('en-attente');
   const fin = await requete('DELETE');
-  expect(fin.json()).toEqual({ etat: 'annule', code: 'ABCD-EFGH' });
+  expect(fin.json()).toEqual({
+    etat: 'annule',
+    code: 'ABCD-EFGH',
+    ...demande,
+    cheminJeton: jeton(),
+  });
   expect(readFileSync(join(dossier, 'signal'), 'utf8')).toBe('SIGINT');
   expect(existsSync(jeton())).toBe(false);
   expect(loadConfig(resolvePaths(t!.home)).meshes.essai).toBeUndefined();
@@ -318,7 +325,12 @@ test('le mesh rejoindre s’oublie sans annuler la demande ; DELETE rejoindre re
   expect(oubli.statusCode).toBe(200);
   expect(loadConfig(resolvePaths(t!.home)).meshes.rejoindre).toBeUndefined();
   expect((await requete('GET')).json().etat).toBe('en-attente');
-  expect((await requete('DELETE')).json()).toEqual({ etat: 'annule', code: 'ABCD-EFGH' });
+  expect((await requete('DELETE')).json()).toEqual({
+    etat: 'annule',
+    code: 'ABCD-EFGH',
+    ...demande,
+    cheminJeton: jeton(),
+  });
   expect(readFileSync(join(dossier, 'signal'), 'utf8')).toBe('SIGINT');
 });
 
@@ -329,4 +341,15 @@ test('oublier un mesh absent : 404 et config inchangée', async () => {
   expect(r.statusCode).toBe(404);
   expect(r.json()).toEqual({ error: 'Mesh absent de la config' });
   expect(lireConfig()).toBe(avant);
+});
+
+test('33.4 : contexte admin conservé pour les commandes après retour sur Machines', async () => {
+  scenario({ attente: true });
+  await demarrer();
+  const saisie = { ...demande, gateway: 'https://aid-e2e.ts.net/' };
+  const debut = await requete('POST', url, saisie);
+  expect(debut.statusCode).toBe(200);
+  expect(debut.json()).toMatchObject({ ...saisie, cheminJeton: jeton() });
+  expect(await attendre('en-attente')).toMatchObject({ ...saisie, cheminJeton: jeton() });
+  expect((await requete('DELETE')).json()).toMatchObject({ ...saisie, cheminJeton: jeton() });
 });

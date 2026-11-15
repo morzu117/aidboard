@@ -36,7 +36,7 @@ export function registerMeshRoutes(app: FastifyInstance, deps: MeshRouteDeps): v
 
   app.get('/api/avatars', async () => ({ avatars: deps.avatars ?? {} }));
 
-  app.get('/api/meshes', async () => deps.meshes?.liste() ?? []);
+  app.get('/api/meshes', async (req) => deps.meshes?.liste(req.principal?.kind === 'admin') ?? []);
   app.post('/api/meshes/:nom/archiver', async (req, reply) => {
     // Même garde admin locale que PUT /api/host.
     if (req.principal?.kind !== 'admin') return reply.code(403).send({ error: 'admin seulement' });
