@@ -12,7 +12,7 @@ export function registerRejoindreRoutes(
   app: FastifyInstance,
   deps: { config: AidConfig; paths: AidPaths },
 ): void {
-  const lanceur = new LanceurRejoindre(deps.config, (demande) => {
+  const enregistrer = (demande: DemandeRejoindre) => {
     try {
       ajouterMesh(deps.paths, demande.mesh, {
         cell: demande.cell,
@@ -29,7 +29,8 @@ export function registerRejoindreRoutes(
             : 'Configuration non écrite : vérifier config.yaml ; la cell est inscrite',
       };
     }
-  });
+  };
+  const lanceur = new LanceurRejoindre(deps.config, enregistrer, deps.paths);
   // Inclut la lecture de version asynchrone dans l'exclusion des demandes concurrentes.
   let contexte: (DemandeRejoindre & { cheminJeton: string }) | undefined;
   const etat = () => ({ ...lanceur.etat(), ...contexte });

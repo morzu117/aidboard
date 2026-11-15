@@ -7,6 +7,8 @@ import {
   statSync,
   writeFileSync,
 } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { afterEach, beforeEach, expect, test } from 'vitest';
 import { loadConfig } from '../src/daemon/config.js';
 import { ajouterMesh, oublierMesh } from '../src/daemon/mesh/config-rejoindre.js';
@@ -14,8 +16,7 @@ import { resolvePaths } from '../src/daemon/paths.js';
 
 let home: string;
 beforeEach(() => {
-  mkdirSync('/var/tmp/aid-tmp-33.3', { recursive: true });
-  home = mkdtempSync('/var/tmp/aid-tmp-33.3/config-');
+  home = mkdtempSync(join(tmpdir(), 'aid-config-'));
 });
 afterEach(() => rmSync(home, { recursive: true, force: true }));
 const config = { cell: 'peer-a', gateway: 'https://aid-e2e.ts.net' };

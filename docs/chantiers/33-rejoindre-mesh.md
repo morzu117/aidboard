@@ -142,6 +142,14 @@ Deux points facultatifs de la relecture du lab (DM 98355), retenus :
 
 - **f.** Si le daemon redémarre pendant une demande, l'état est perdu. Un jeton peut pourtant avoir été retiré, et l'essai suivant est alors refusé sans explication. A-I-D écrit la demande en cours dans un petit fichier d'état en 0600 (cell, mesh, gateway, heure de début, rien de secret), et l'efface à la fin. Au démarrage, s'il existe : `a-voir` si un fichier existe au chemin du jeton, sinon `interrompue` (« Le daemon a redémarré pendant la demande ; rien n'a été inscrit. »). Puis il est effacé. Un fichier illisible est effacé et ignoré.
 - **g.** La config reçoit le gateway sous sa forme normalisée, celle que renvoie `validerGatewayRejoindre`, et non la chaîne tapée.
+33.3bis commité. Les changements :
+- Le fichier d'état `rejoindre.json` est écrit dans le dossier d'A-I-D (`paths.home`), en `wx` et 0600, avec seulement cell, mesh, gateway et heure de début. Il est effacé à la fin, après l'écriture de la config.
+- Au démarrage, ce fichier donne `a-voir` si le jeton existe, sinon `interrompue`. Un fichier mal formé est effacé et ignoré.
+- La config reçoit la forme normalisée du gateway.
+- La section Meshes affiche l'état `interrompue`.
+- Reprise r1 : les trois fichiers de tests du 33 créaient leurs dossiers sous un chemin `/var/tmp/aid-tmp-…` codé en dur, propre au VPS. Ils passent par `tmpdir()`.
+
+Vérifié : gate 3997, gate:e2e 132 sous Node 22 (avant la reprise r1, qui ne touche que des tests), 3/3 passages des tests ciblés, aucun daemon résiduel.
 
 ### 33.4 La vue (D336)
 

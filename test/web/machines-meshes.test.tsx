@@ -220,3 +220,17 @@ test.each(['aucune', 'approuve', 'refuse', 'expire', 'annule', 'a-voir', 'echec'
     expect(lectures()).toBe(1);
   },
 );
+
+test.each(['interrompue', 'a-voir'])(
+  '33.3bis : identité de la demande après redémarrage (%s)',
+  async (etat) => {
+    ouvrir({ etat, cell: 'peer-c', mesh: 'essai-reprise' });
+    expect(await screen.findByText('Cell : peer-c · Mesh : essai-reprise')).toBeTruthy();
+    if (etat === 'interrompue') {
+      expect(
+        screen.getByText("Le daemon a redémarré pendant la demande ; rien n'a été inscrit."),
+      ).toBeTruthy();
+      expect(screen.getByRole('button', { name: 'Rejoindre un mesh' })).toBeTruthy();
+    }
+  },
+);

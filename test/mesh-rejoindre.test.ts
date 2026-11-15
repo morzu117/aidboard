@@ -10,6 +10,7 @@ import {
   symlink,
   writeFile,
 } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { PassThrough } from 'node:stream';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
@@ -25,8 +26,7 @@ const jeton = () => join(dossier, 'home/.config/swarph/peer-a.peer_token');
 const inscription = () => join(dossier, 'home/.config/swarph/peer-a.join.json');
 
 beforeEach(async () => {
-  await mkdir('/var/tmp/aid-tmp-33.3', { recursive: true });
-  dossier = await mkdtemp('/var/tmp/aid-tmp-33.3/rejoindre-');
+  dossier = await mkdtemp(join(tmpdir(), 'aid-rejoindre-'));
   const bin = join(dossier, 'swarph');
   await copyFile(resolve('test/fixtures/fake-swarph-join.mjs'), bin);
   await chmod(bin, 0o700);

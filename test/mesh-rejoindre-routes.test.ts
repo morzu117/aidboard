@@ -8,6 +8,7 @@ import {
   rmSync,
   writeFileSync,
 } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import { DEFAULT_CONFIG, loadConfig } from '../src/daemon/config.js';
@@ -29,8 +30,7 @@ const config = () => resolvePaths(t!.home).config;
 const lireConfig = () => readFileSync(config(), 'utf8');
 
 beforeEach(() => {
-  mkdirSync('/var/tmp/aid-tmp-33.3', { recursive: true });
-  dossier = mkdtempSync('/var/tmp/aid-tmp-33.3/routes-');
+  dossier = mkdtempSync(join(tmpdir(), 'aid-routes-'));
   copyFileSync(resolve('test/fixtures/fake-swarph-join.mjs'), join(dossier, 'swarph'));
   chmodSync(join(dossier, 'swarph'), 0o700);
   scenario({});
@@ -352,4 +352,17 @@ test('33.4 : contexte admin conservé pour les commandes après retour sur Machi
   expect(debut.json()).toMatchObject({ ...saisie, cheminJeton: jeton() });
   expect(await attendre('en-attente')).toMatchObject({ ...saisie, cheminJeton: jeton() });
   expect((await requete('DELETE')).json()).toMatchObject({ ...saisie, cheminJeton: jeton() });
+});
+
+test('33.3bis : le gateway enregistré est normalisé', async () => {
+  await demarrer();
+  const saisie = { ...demande, gateway: 'https://EXAMPLE.com/' };
+  expect((await requete('POST', url, saisie)).statusCode).toBe(200);
+  await attendre('approuve');
+  expect(loadConfig(resolvePaths(t!.home)).meshes.essai).toMatchObject({
+    cell: demande.cell,
+    gateway: 'https://example.com',
+  });
+  expect(lireConfig()).not.toContain(saisie.gateway);
+  expect(existsSync(join(t!.home, 'rejoindre.json'))).toBe(false);
 });

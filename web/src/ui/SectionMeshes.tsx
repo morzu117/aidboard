@@ -216,6 +216,14 @@ function MeshesAdmin() {
         </form>
       )}
       {adresse && <p>Gateway : {adresse}</p>}
+      {(inscription.etat === 'interrompue' || inscription.etat === 'a-voir') && (
+        <p>
+          Cell : {inscription.cell} · Mesh : {inscription.mesh}
+        </p>
+      )}
+      {inscription.etat === 'interrompue' && (
+        <p>Le daemon a redémarré pendant la demande ; rien n&apos;a été inscrit.</p>
+      )}
       {inscription.etat === 'demande' && <p>Demande en cours…</p>}
       {inscription.etat === 'en-attente' && (
         <div>

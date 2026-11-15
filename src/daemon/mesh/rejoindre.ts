@@ -1,7 +1,9 @@
 import { spawn } from 'node:child_process';
-import { lstatSync, unlinkSync } from 'node:fs';
+import { lstatSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
 import { isIPv4 } from 'node:net';
 import { homedir } from 'node:os';
+import { join } from 'node:path';
+import type { AidPaths } from '../paths.js';
 import { normaliserGateway } from '../../shared/meshes.js';
 import { nomMeshValide, type AidConfig } from '../config.js';
 import { meshPaths } from './paths.js';
@@ -13,7 +15,8 @@ export type EtatRejoindre =
   | { etat: 'approuve'; temoin?: string; redemarrage?: boolean; libelle?: string }
   | { etat: 'refuse' | 'expire' }
   | { etat: 'annule'; code?: string }
-  | { etat: 'a-voir' }
+  | { etat: 'a-voir'; cell?: string; mesh?: string }
+  | { etat: 'interrompue'; cell: string; mesh: string }
   | { etat: 'echec'; libelle: string };
 
 export interface DemandeRejoindre {
@@ -89,6 +92,7 @@ export class LanceurRejoindre {
   private courant: EtatRejoindre = { etat: 'aucune' };
   private arreter?: () => Promise<void>;
   private actif = false;
+  private readonly fichierEtat?: string;
 
   constructor(
     private readonly config: Pick<AidConfig, 'mesh' | 'meshes'>,
@@ -96,7 +100,46 @@ export class LanceurRejoindre {
       redemarrage: boolean;
       libelle?: string;
     },
-  ) {}
+    paths?: Pick<AidPaths, 'home'>,
+  ) {
+    if (!paths) return;
+    this.fichierEtat = join(paths.home, 'rejoindre.json');
+    try {
+      const demande = JSON.parse(readFileSync(this.fichierEtat, 'utf8')) as Record<string, unknown>;
+      if (
+        !demande ||
+        typeof demande.cell !== 'string' ||
+        !nomCell.test(demande.cell) ||
+        typeof demande.mesh !== 'string' ||
+        !nomMeshValide(demande.mesh) ||
+        typeof demande.gateway !== 'string' ||
+        typeof demande.depuis !== 'number' ||
+        !Number.isFinite(demande.depuis) ||
+        Object.keys(demande).some((cle) => !['cell', 'mesh', 'gateway', 'depuis'].includes(cle))
+      )
+        return;
+      validerGatewayRejoindre(demande.gateway);
+      const chemins = meshPaths({ ...this.config.mesh, cell: demande.cell });
+      this.courant = {
+        etat: existe(chemins.tokenFile) ? 'a-voir' : 'interrompue',
+        cell: demande.cell,
+        mesh: demande.mesh,
+      };
+    } catch {
+      // Un état illisible ou mal formé ne permet aucune reprise.
+    } finally {
+      this.effacerEtat();
+    }
+  }
+
+  private effacerEtat(): void {
+    if (!this.fichierEtat) return;
+    try {
+      unlinkSync(this.fichierEtat);
+    } catch {
+      // Une absence ou un refus de suppression ne doit pas masquer l'état final.
+    }
+  }
 
   etat(): EtatRejoindre {
     return { ...this.courant };
@@ -121,6 +164,12 @@ export class LanceurRejoindre {
       if (['PATH', 'LANG', 'SSL_CERT_FILE', 'SSL_CERT_DIR'].includes(cle) || cle.startsWith('LC_'))
         env[cle] = process.env[cle];
     }
+    if (this.fichierEtat)
+      writeFileSync(
+        this.fichierEtat,
+        JSON.stringify({ cell: demande.cell, mesh: demande.mesh, gateway, depuis: Date.now() }),
+        { mode: 0o600, flag: 'wx' },
+      );
     this.actif = true;
     this.courant = { etat: 'demande' };
     const enfant = spawn(this.config.mesh.bin, ['join', gateway, '--name', demande.cell], {
@@ -167,8 +216,9 @@ export class LanceurRejoindre {
         else if (interruption === 'expire') this.courant = { etat: 'expire' };
         else this.courant = issue;
         if (this.courant.etat === 'approuve' && this.enregistrer) {
-          this.courant = { ...this.courant, ...this.enregistrer(demande) };
+          this.courant = { ...this.courant, ...this.enregistrer({ ...demande, gateway }) };
         }
+        this.effacerEtat();
         this.actif = false;
         this.arreter = undefined;
         resolve();
