@@ -181,6 +181,8 @@ test('D176 : la réclamation arrive par relecture, avec code court, nom, identit
   await waitFor(() => expect(node('host.ajouter')).not.toBeNull());
   fireEvent.click(node('host.ajouter')!);
   await waitFor(() => expect(node('host.qr')).not.toBeNull());
+  // Le QR peut apparaître avant l'effet qui installe l'intervalle de relecture.
+  await act(async () => {});
   vue = demande({
     etat: 'reclamee',
     codeCourt: '4821',
@@ -299,6 +301,8 @@ test('D176 : aucune relecture tant qu’aucun QR n’est affiché', async () => 
   vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
   const h = ouvrir();
   await waitFor(() => expect(node('host.ajouter')).not.toBeNull());
+  // Laisser les effets s'installer avant de vérifier l'absence de relecture.
+  await act(async () => {});
   const avant = h.calls.filter((c) => c.url === '/api/host/appairage').length;
   await act(async () => {
     vi.advanceTimersByTime(RELECTURE_DEMANDE_MS * 5);
