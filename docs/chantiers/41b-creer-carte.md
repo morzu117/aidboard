@@ -2,7 +2,7 @@
 
 | Champ | Valeur |
 |---|---|
-| État | **Révision 0, 15 novembre 2026.** D'après la réponse du lab sur ce qui peut avancer sans le #20 (DM 98600) et le verbe `board.cards.create` de swarph-cli 0.82.0 (#1567, DM 98586). Choix de Julien du 15 novembre : le proxy seul, et le projet choisi dans une liste. **Révision 1** : la relecture du lab (DM 98624), avec deux corrections sur le verbe et quatre trous comblés dans D340. Julien a choisi de prévenir pour les obligations ouvertes, sans plus. **Révision 2** : le résumé respecte la borne de 160 caractères du contrat du PDA, et le titre passe dans les lignes signées (arrêt de Codex au 41b.2). |
+| État | **Révision 0, 15 novembre 2026.** D'après la réponse du lab sur ce qui peut avancer sans le #20 (DM 98600) et le verbe `board.cards.create` de swarph-cli 0.82.0 (#1567, DM 98586). Choix de Julien du 15 novembre : le proxy seul, et le projet choisi dans une liste. **Révision 1** : la relecture du lab (DM 98624), avec deux corrections sur le verbe et quatre trous comblés dans D340. Julien a choisi de prévenir pour les obligations ouvertes, sans plus. **Révision 2** : le résumé respecte la borne de 160 caractères du contrat du PDA, et le titre passe dans les lignes signées (arrêt de Codex au 41b.2). **Révision 3** : la relecture du code du 41b.2 par le lab (DM 98688, 98690) ajoute un délai de grâce et une recherche sur tous les projets, repris au 41b.2bis. |
 | Emplacement final | `docs/chantiers/41b-creer-carte.md` sur `main` |
 | Base | `main`. |
 | Organisation | Comme au 41 a. La cell de gestion de Julien gère le chantier. Codex CLI écrit le code et les tests de chaque point. La cell de gestion relit, lance le gate et `gate:e2e`, commite et ouvre la PR. |
@@ -66,7 +66,12 @@ Le proxy ne dédoublonne pas (D339). A-I-D s'en charge, par quatre règles.
 - **Vérifier avant l'envoi.** Au moment de l'envoi, après le oui du téléphone, le daemon relit le board (voir la relecture plus bas). Si une carte porte déjà la ligne Swairm, rien ne part : « Une carte porte déjà ce sujet : #<n>. Rien n'a été créé. » La liste « sans carte » du 41 a peut en effet être périmée, ou une autre cell a pu créer la carte entre-temps.
 - **Une issue certaine** (D339) efface la ligne de `cartes_en_vol`. **Une issue incertaine** la passe à `incertain`, et l'écran dit : « Création incertaine : la carte a peut-être été créée. A-I-D relit le board avant de te laisser recommencer. » A-I-D relit alors le board. Si une carte porte la ligne, la création est réputée faite, et la ligne est effacée. Sinon, la ligne est effacée et le bouton revient. Si la relecture échoue, la ligne reste `incertain`, et le bouton reste désactivé, avec « Relire le board ».
 - **Au démarrage du daemon**, toute ligne de `cartes_en_vol` passe à `incertain` et suit la même relecture avant que le bouton revienne. Un redémarrage pendant l'envoi ne réactive donc rien.
-- **La relecture est directe et complète.** Elle lit `board.cards.list` du projet choisi, **toutes étapes comprises** : une carte done ou parked qui porte la ligne compte. A-I-D filtre ensuite lui-même sur la ligne Swairm exacte (D285). Elle ne passe pas par la recherche de D286, qui pourrait ne pas montrer encore une carte toute neuve. Le point 41b.2 vérifie, dans le document de schéma, comment `board.cards.list` liste toutes les étapes. S'il ne le permet pas en une lecture, il le dit avant de coder.
+- **La lecture couvre tout le board lisible, sans projet** (révision 3, DM 98690). La vérification avant l'envoi et la relecture appellent `board.cards.list` avec un seul paramètre `q`, sans `project` ni `stage`. `q` vaut `<owner>/<dépôt>#<id>`, la partie distinctive de la ligne. Le gateway l'évalue en LIKE SQL au moment de la requête, sur le titre ou le corps de toutes les cartes lisibles. Il n'y a pas d'index, donc pas de retard : la lecture est aussi cohérente qu'une liste. A-I-D filtre ensuite lui-même sur la ligne Swairm exacte (D285, `liensSwairm`). Une carte done ou parked compte, comme une carte d'un autre projet que celui choisi.
+  - Une liste sans filtre n'est pas possible : le proxy refuse toute réponse de plus de 1 Mio, et la liste d'un board réel en fait plusieurs. La liste d'un gros projet dépasse aussi cette limite. La recherche ne rend que les cartes qui correspondent.
+  - Le LIKE ne replie la casse qu'en ASCII. Les noms `owner` et `dépôt` sont en ASCII (D285), donc ce n'est pas un problème.
+- **Le délai de grâce.** Après une issue incertaine, le gateway peut encore finir la création après le délai du proxy (DM 98688). Une relecture qui **trouve** la carte conclut tout de suite. Une relecture **absente** ne conclut que si la ligne est `incertain` depuis au moins 60 s (`DELAI_GRACE_MS`). Avant ce délai, la ligne reste `incertain`, et une seconde lecture est programmée à son terme. `depuis` est remis à l'heure du passage à `incertain`, et, au démarrage, à l'heure du redémarrage pour une ligne qui était `en-vol`.
+- **L'échec de la vérification avant l'envoi** a son propre code, `verification_board`, distinct de `proxy_unavailable`. Le proxy a pu répondre, avec une lecture refusée ou une carte mal formée. Le message ne change pas.
+- **Une réponse 2xx dont l'id est illisible** reste une issue certaine (DM 98688) : le proxy ne rend `ok` qu'avec un JSON complet.
 - Le bouton « Créer la carte » d'un sujet reste désactivé tant qu'une ligne existe pour lui dans `cartes_en_vol`.
 
 ### D341. L'écran
@@ -102,6 +107,26 @@ Fichiers nouveaux : `migrations/033_cartes_en_vol.sql`, `src/daemon/confirmation
 Pour le 41b.3, deux routes : `GET /api/swarph/cartes-en-vol?mesh=` et `POST /api/swarph/cartes-en-vol/relire`. Le résultat de l'envoi porte `message`, `relecture` (trouvee, absente ou echec), `enVol` et `cree`.
 
 Vérifications : gate vert (4 132 tests), gate:e2e 137, tests du chantier 166 fois sur 166, 3 fois. Pendant un premier gate, `test/web/host.test.tsx` (D176) a échoué sous charge, puis il est passé 5 fois sur 5 seul. Ce test est hors du chantier.
+
+### 41b.2bis Le délai de grâce et la recherche sur tout le board (D340, révision 3)
+
+- Le daemon :
+  - la vérification et la relecture passent par `board.cards.list {q}`, sans projet ;
+  - le délai de grâce de 60 s, avec une seconde lecture programmée ;
+  - `depuis` est remis à l'heure du passage à `incertain` ;
+  - le code `verification_board`.
+- Le web :
+  - pendant le délai de grâce, l'écran dit « Création incertaine : A-I-D relira le board dans une minute. » et non « aucune carte » ;
+  - la raison de la désactivation (pas de proxy, ou proxy en lecture seule) s'affiche une seule fois en tête de la section, et non sous chaque sujet.
+- **Tests :**
+  - une carte qui n'apparaît qu'à la seconde lecture ;
+  - une lecture absente avant 60 s, qui ne conclut pas ;
+  - une lecture absente après 60 s, qui conclut ;
+  - une carte d'un autre projet, trouvée ;
+  - le paramètre `q` envoyé seul ;
+  - le code `verification_board` ;
+  - la reprise au démarrage, avec `depuis` remis à jour ;
+  - le message du web pendant le délai.
 
 ### 41b.3 Le web et le téléphone (D341)
 
