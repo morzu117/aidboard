@@ -14,7 +14,7 @@ import {
   useReglages,
 } from '../../web/src/data/swarph.js';
 import { useMeshLecture } from '../../web/src/data/meshLecture.js';
-import type { MeshWeb } from '../../web/src/data/meshes.js';
+import { useMeshes, type MeshWeb } from '../../web/src/data/meshes.js';
 import { Boite } from '../../web/src/ecrans/Boite.js';
 import { Board } from '../../web/src/ecrans/Board.js';
 import { CarteBoard } from '../../web/src/ecrans/CarteBoard.js';
@@ -384,6 +384,58 @@ test.each(['en attente', 'en échec'])(
     await waitFor(() => expect(lireMeshes).toHaveBeenCalled());
     const section = await screen.findByRole('region', { name: 'Aperçu' });
     expect(section.firstElementChild?.textContent).toBe('Mesh : perso');
+  },
+);
+
+test.each(['en attente', 'en échec', 'multi-mesh', 'un seul mesh'])(
+  'formulaire principal : bandeau selon la liste des meshes %s',
+  async (etatListe) => {
+    function EtatListe() {
+      const { charge, erreur } = useMeshes();
+      return (
+        <span>{!charge ? 'Liste en attente' : erreur ? 'Liste en échec' : 'Liste arrivée'}</span>
+      );
+    }
+    const lireMeshes = vi.fn(() => {
+      if (etatListe === 'en échec') throw new TypeError('Liste des meshes indisponible');
+      if (etatListe === 'en attente') return new Promise<Response>(() => {}) as unknown as Response;
+      return json(200, etatListe === 'multi-mesh' ? meshes : [entree('principal')])();
+    });
+    setup(
+      <>
+        <EtatListe />
+        <EcrireAuMesh
+          mesh="principal"
+          action="dm.envoyer"
+          valeurs={{ pair: 'peer-a', texte: 'Texte principal' }}
+          onClose={() => {}}
+        />
+      </>,
+      etat(),
+      '/',
+      {
+        ...routes,
+        'GET /api/meshes': lireMeshes,
+        'POST /api/swarph/ecrire/apercu': json(200, apercu),
+      },
+    );
+    await joindre();
+    await waitFor(() => expect(lireMeshes).toHaveBeenCalled());
+    await screen.findByText(
+      etatListe === 'en attente'
+        ? 'Liste en attente'
+        : etatListe === 'en échec'
+          ? 'Liste en échec'
+          : 'Liste arrivée',
+    );
+    fireEvent.click(screen.getByText("Voir l'aperçu"));
+    const section = await screen.findByRole('region', { name: 'Aperçu' });
+    if (etatListe === 'un seul mesh') {
+      expect(within(section).queryByText(/^Mesh :/)).toBeNull();
+      expect(section.firstElementChild?.textContent).toBe('Résumé exact');
+    } else {
+      expect(section.firstElementChild?.textContent).toBe('Mesh : principal');
+    }
   },
 );
 
