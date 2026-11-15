@@ -139,6 +139,7 @@ Vérifications : gate vert (4 132 tests), gate:e2e 137, tests du chantier 166 fo
 
 - Un e2e « Créer la carte » contre le faux proxy : choix du projet, aperçu, confirmation, carte créée, puis sujet relié à la lecture suivante.
 - La fiche `docs/recette-chantier-41b-creer-carte.md`.
+41b.4 commité : il ajoute `e2e/creer-carte.spec.ts`, avec deux cas. Le gate est vert (4 153 tests) au second passage. Le premier a échoué sur `host.test.tsx` D176, un test instable hors du chantier. gate:e2e 139, nouvel e2e 2 sur 2, trois fois.
 
 ### 41b.5 La vérification réelle
 
