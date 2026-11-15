@@ -334,6 +334,14 @@ Elle va bouger : on ajoute le moins possible.
 - Les renvois depuis les plans 12, 24, 25, 42 et 44.
 46.6 commité. Gate : 3 740 tests passent ; pda-v2 et livraison, lents sous charge, passent 3 fois sur 3 isolés. Démarrage non bloquant, e2e à deux faux meshes, fiche de recette, renvois.
 
+### 46.7 Correctif : le test du formulaire au changement de mesh est instable
+
+Le gate du VPS, sous charge, a échoué une fois sur le test « formulaire : bandeau en tête et aucun texte, fil ou cible transmis au changement de mesh » de `test/web/meshes.test.tsx`. Le test attendait `Mesh : perso` en tête de l'aperçu, et il a reçu `Résumé exact`. Lancé seul, il passe 5 fois sur 5. Hypothèse à prouver : la région « Aperçu » paraît avant que son bandeau soit inséré, et le test lit le bandeau sans attendre.
+
+- Prouver la cause sous charge, en mesurant le taux d'échec avant et après la correction.
+- Si la cause est dans le test, le test attend le bandeau, et ses assertions ne changent pas. Si l'écran affiche vraiment un aperçu sans bandeau, même un court instant, c'est un défaut de D316 : il est décrit, et le correctif est à décider.
+- **Tests :** le test corrigé sous charge ; le gate entier.
+
 ## 6. Pièges
 
 - Ne jamais indexer une donnée par le seul nom d'un mesh : c'est l'empreinte qui le lie à son couple (cell, gateway).
