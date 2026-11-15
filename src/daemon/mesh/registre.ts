@@ -1,5 +1,6 @@
-import { accessSync, constants, statSync } from 'node:fs';
+import { accessSync, constants, existsSync, statSync } from 'node:fs';
 import { delimiter, isAbsolute, resolve } from 'node:path';
+import { meshPaths } from './paths.js';
 import { envSwarph } from './env.js';
 import { meshExec } from './exec.js';
 import type { AidConfig, MeshConfig } from '../config.js';
@@ -97,10 +98,13 @@ export class MeshRegistry {
     };
   }
 
-  liste() {
+  liste(configuration = false) {
     return [...this.entrees.values()].map((e) => ({
       nom: e.nom,
       cell: e.config.cell,
+      ...(configuration
+        ? { gateway: e.config.gateway, jeton: existsSync(meshPaths(e.config).tokenFile) }
+        : {}),
       actif: e.services !== null,
       erreur: e.erreur,
       etat: e.services?.mesh.current() ?? null,

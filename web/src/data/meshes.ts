@@ -6,6 +6,8 @@ import { useAid, useAidClient } from './useAidState.js';
 export interface MeshWeb {
   nom: string;
   cell: string;
+  gateway?: string;
+  jeton?: boolean;
   actif: boolean;
   erreur: string | null;
   etat: MeshState | null;

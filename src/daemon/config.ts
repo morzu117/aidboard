@@ -472,8 +472,7 @@ function lireMeshes(doc: Raw, cfg: AidConfig): void {
   const couples = new Map<string, string>();
   const fichiers = new Map<string, string>();
   for (const [nom, raw] of Object.entries(doc.meshes)) {
-    if (!/^[a-z][a-z0-9-]{0,31}$/.test(nom))
-      throw new ConfigError(`config.yaml : nom de mesh invalide : ${nom}`);
+    if (!nomMeshValide(nom)) throw new ConfigError(`config.yaml : nom de mesh invalide : ${nom}`);
     if (!isRecord(raw)) throw new ConfigError(`config.yaml : meshes.${nom} doit être un objet`);
     rejectUnknown(
       raw,
@@ -797,4 +796,9 @@ function parseAvatars(raw: unknown): SurchargesAvatars {
     });
   }
   return avatars;
+}
+
+/** Forme du nom local de mesh (D311). */
+export function nomMeshValide(nom: string): boolean {
+  return /^[a-z][a-z0-9-]{0,31}$/.test(nom);
 }

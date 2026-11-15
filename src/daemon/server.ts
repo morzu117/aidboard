@@ -1,3 +1,4 @@
+import { registerRejoindreRoutes } from './routes/rejoindre.js';
 import { registerCartesRelieesRoutes } from './routes/cartes-reliees.js';
 import type { MeshRegistry } from './mesh/registre.js';
 import { AvisMeshService } from './mesh/avis.js';
@@ -205,6 +206,7 @@ export async function buildServer(deps: ServerDeps): Promise<FastifyInstance> {
     deps.config.agents.transport,
     deps.meshes,
   );
+  registerRejoindreRoutes(app, { config: deps.config, paths: deps.paths });
   registerMeshRoutes(app, {
     mesh: deps.mesh ?? null,
     meshes: deps.meshes,

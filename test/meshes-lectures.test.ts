@@ -410,3 +410,31 @@ test('mesh sans cell : 404 mesh désactivé ; nom inconnu : 404 mesh inconnu', a
     expect(reponse.json()).toEqual({ error: 'mesh désactivé' });
   }
 });
+
+test('33.4 : liste admin avec gateway et existence du jeton, sans lire son contenu', async () => {
+  const { mkdirSync, writeFileSync, unlinkSync } = await import('node:fs');
+  const { meshPaths } = await import('../src/daemon/mesh/paths.js');
+  const c = await contexte(false, false);
+  const app = Fastify();
+  app.addHook('onRequest', async (req) => {
+    req.principal = { kind: 'admin', via: 'bearer' };
+  });
+  registerMeshRoutes(app, { mesh: null, meshes: c.registre });
+  nettoyages.push(() => app.close());
+  const jeton = meshPaths(c.config.meshes.principal!).tokenFile;
+  mkdirSync(join(c.config.meshes.principal!.home!, '.config/swarph'), { recursive: true });
+  // Un fichier vide suffit : aucune validation ou lecture du contenu pour cette liste.
+  writeFileSync(jeton, '', { mode: 0o000 });
+  const liste = (await app.inject('/api/meshes')).json();
+  expect(liste).toContainEqual(
+    expect.objectContaining({
+      nom: 'principal',
+      gateway: 'https://principal.example.com',
+      jeton: true,
+    }),
+  );
+  expect(liste).toContainEqual(expect.objectContaining({ nom: 'perso', jeton: false }));
+  expect(JSON.stringify(liste)).not.toContain(c.home);
+  unlinkSync(jeton);
+  expect((await app.inject('/api/meshes')).json()[0].jeton).toBe(false);
+});
