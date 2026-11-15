@@ -5,6 +5,12 @@ import { join } from 'node:path';
 
 export type ScenarioProxy =
   | { reponse: Record<string, unknown> }
+  | {
+      traiter: (requete: {
+        verb: string;
+        args: Record<string, unknown>;
+      }) => Record<string, unknown> | Promise<Record<string, unknown>>;
+    }
   | 'request_id_faux'
   | 'illisible'
   | 'silence'
@@ -30,13 +36,17 @@ export async function creerFauxProxy(scenario: ScenarioProxy) {
       return;
     }
     let tampon = '';
-    connexion.on('data', (morceau) => {
+    connexion.on('data', async (morceau) => {
       tampon += morceau.toString();
       const fin = tampon.indexOf('\n');
       if (fin < 0) return;
       const ligne = tampon.slice(0, fin);
       lignes.push(ligne);
-      const requete = JSON.parse(ligne) as { request_id: string };
+      const requete = JSON.parse(ligne) as {
+        request_id: string;
+        verb: string;
+        args: Record<string, unknown>;
+      };
       const succes = JSON.stringify({
         request_id: requete.request_id,
         ok: true,
@@ -45,7 +55,10 @@ export async function creerFauxProxy(scenario: ScenarioProxy) {
       });
       if (typeof scenario === 'object')
         connexion.end(
-          JSON.stringify({ request_id: requete.request_id, ...scenario.reponse }) + '\n',
+          JSON.stringify({
+            request_id: requete.request_id,
+            ...('traiter' in scenario ? await scenario.traiter(requete) : scenario.reponse),
+          }) + '\n',
         );
       else if (scenario === 'request_id_faux')
         connexion.end(

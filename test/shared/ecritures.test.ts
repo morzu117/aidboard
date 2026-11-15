@@ -68,7 +68,7 @@ describe('écritures à blanc', () => {
     'dm.envoyer': { pair: 'peer-b', kind: 'answer', texte, fil: null },
     'canal.poster': { canal: 'general', kind: 'status', texte },
   };
-  for (const action of Object.keys(bases) as ActionEcriture[]) {
+  for (const action of Object.keys(bases) as (keyof typeof bases)[]) {
     it(`ferme le schéma ${action}`, () => {
       const base = bases[action];
       expect(lireParamsEcriture(action, base, 'peer-a').ok).toBe(true);

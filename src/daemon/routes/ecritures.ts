@@ -1,10 +1,18 @@
+import type { CreationsCartes } from '../confirmations/cartes.js';
 import type { MeshRegistry } from '../mesh/registre.js';
 import { nomMeshEcriture } from '../mesh/ecriture.js';
 import { preparerPropositionAid } from '../aid/envoi.js';
 import type { Db } from '../db.js';
 import type { Porte } from '../confirmations/porte.js';
 import type { FastifyInstance } from 'fastify';
-import { argvEcriture, lireParamsEcriture, resumeEcriture } from '../../shared/ecritures.js';
+import {
+  argvEcriture,
+  lireParamsEcriture,
+  resumeEcriture,
+  ligneSwairm,
+  lignesCreation,
+  AVERTISSEMENT_CREATION,
+} from '../../shared/ecritures.js';
 import { nettoyer } from '../../shared/nettoyage.js';
 import { AidHttpError } from '../errors.js';
 import type { BoardReader } from '../mesh/board.js';
@@ -13,6 +21,7 @@ export function registerEcrituresRoutes(
   app: FastifyInstance,
   deps: {
     db?: Db;
+    cartes?: CreationsCartes;
     meshes?: MeshRegistry;
     board: BoardReader | null;
     cell: string;
@@ -40,6 +49,18 @@ export function registerEcrituresRoutes(
     if (nom !== 'principal') throw new AidHttpError(404, 'mesh inconnu');
     return { ...deps, nom };
   };
+  app.get('/api/swarph/cartes-en-vol', async (req) => {
+    const selection = selectionner(req.query);
+    return selection.cartes?.liste(selection.nom) ?? [];
+  });
+  app.post('/api/swarph/cartes-en-vol/relire', async (req) => {
+    const selection = selectionner(req.body);
+    const ligne = (req.body as { ligne?: unknown } | null)?.ligne;
+    if (typeof ligne !== 'string' || ligneSwairm(ligne) !== ligne)
+      throw new AidHttpError(400, 'ligne Swairm invalide');
+    if (!selection.cartes) throw new AidHttpError(409, 'création indisponible');
+    return selection.cartes.relire(selection.nom, ligne);
+  });
   app.post('/api/swarph/etat/envoyer', async (req, reply) => {
     const deps = selectionner(req.body);
     if (!deps.cell || !deps.board) throw new AidHttpError(404, 'mesh désactivé');
@@ -96,7 +117,8 @@ export function registerEcrituresRoutes(
     } | null;
     if (
       !corps ||
-      (corps.action !== 'carte.note' &&
+      (corps.action !== 'carte.creer' &&
+        corps.action !== 'carte.note' &&
         corps.action !== 'dm.envoyer' &&
         corps.action !== 'canal.poster')
     )
@@ -138,11 +160,37 @@ export function registerEcrituresRoutes(
       throw new AidHttpError(404, 'mesh désactivé : `mesh.cell` vide dans config.yaml');
     const corps = req.body as { action?: unknown; params?: unknown } | null;
     const action = corps?.action;
-    if (action !== 'carte.note' && action !== 'dm.envoyer' && action !== 'canal.poster')
+    if (
+      action !== 'carte.creer' &&
+      action !== 'carte.note' &&
+      action !== 'dm.envoyer' &&
+      action !== 'canal.poster'
+    )
       throw new AidHttpError(400, 'action inconnue');
     const lecture = lireParamsEcriture(action, corps?.params, deps.cell);
     if (!lecture.ok) return { ok: false, kind: 'schema', message: lecture.message };
     const params = lecture.params;
+    if ('projet' in params) {
+      for (const texte of [params.titre, params.corps]) {
+        const nettoyage = nettoyer(texte, { hotesPrives: deps.hotesPrives ?? [] });
+        if (!nettoyage.ok) return { ok: false, kind: 'nettoyage', message: nettoyage.classe };
+      }
+      const projets = await deps.board.projects({ fresh: true, sansCache: true });
+      if (!projets.ok) throw new AidHttpError(409, 'liste des projets indisponible');
+      if (!projets.data.some((p) => p.id === params.projet && p.title === params.projetNom))
+        throw new AidHttpError(400, 'projet absent ou nom de projet différent');
+      deps.cartes?.verifier(deps.nom, ligneSwairm(params.corps)!);
+      return {
+        ok: true,
+        aBlanc: true,
+        argv: [],
+        resume: resumeEcriture('carte.creer', params),
+        texte: params.corps,
+        lignes: lignesCreation(params),
+        avertissement: AVERTISSEMENT_CREATION,
+        rappel: null,
+      };
+    }
     const nettoyage = nettoyer(params.texte, { hotesPrives: deps.hotesPrives ?? [] });
     if (!nettoyage.ok)
       return {

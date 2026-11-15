@@ -44,6 +44,12 @@ function ouvrir(
   etat = snapshot(),
 ) {
   const params = {
+    'carte.creer': {
+      projet: 17,
+      projetNom: 'Projet exemple',
+      titre: 'Une carte',
+      corps: 'Swairm: exemple/depot#1',
+    },
     'carte.note': { carte: 101, a: null, kind: 'fyi', texte },
     'dm.envoyer': { pair: 'pair-test', fil: null, kind: 'fyi', texte },
     'canal.poster': { canal: 'canal-test', kind: 'fyi', texte },

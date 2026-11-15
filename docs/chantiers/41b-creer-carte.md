@@ -93,6 +93,15 @@ Ce document, et sa ligne dans `docs/chantiers/README.md`.
 - `board.cards.create` dans `src/daemon/mesh/proxy.ts`, avec son schéma d'arguments. Le faux proxy de test (`test/fixtures/faux-proxy.ts`) apprend le verbe.
 - La table `cartes_en_vol` et sa migration, le verrou par sujet, la vérification avant l'envoi, la relecture directe et la reprise au démarrage (D340).
 - **Tests :** les validations de D338, une par règle, dont le titre blanc et le projet envoyé en entier ; le projet hors liste ; l'absence de proxy (409) ; le proxy en lecture seule ; `verb_not_allowed` (proxy trop ancien) ; chacun des codes du proxy, classé certain ou incertain ; la seconde création concurrente (409) ; une carte trouvée avant l'envoi ; l'envoi incertain, sa relecture qui trouve la carte puis qui ne la trouve pas, et sa relecture en échec ; un redémarrage avec une ligne en vol ; une carte done ou parked qui compte ; aucun champ envoyé hors schéma ; `detail` jamais remonté.
+41b.2 commité, avec deux reprises.
+- Reprise 1 : le résumé reste dans la borne de 160 caractères du contrat du PDA (révision 2 du plan).
+- Reprise 2 : le démarrage n'attend plus le proxy, et aucune ligne `en-vol` ne reste orpheline.
+
+Fichiers nouveaux : `migrations/033_cartes_en_vol.sql`, `src/daemon/confirmations/cartes.ts`, `test/creation-carte.test.ts` et `test/shared/creation-carte.test.ts`.
+
+Pour le 41b.3, deux routes : `GET /api/swarph/cartes-en-vol?mesh=` et `POST /api/swarph/cartes-en-vol/relire`. Le résultat de l'envoi porte `message`, `relecture` (trouvee, absente ou echec), `enVol` et `cree`.
+
+Vérifications : gate vert (4 132 tests), gate:e2e 137, tests du chantier 166 fois sur 166, 3 fois. Pendant un premier gate, `test/web/host.test.tsx` (D176) a échoué sous charge, puis il est passé 5 fois sur 5 seul. Ce test est hors du chantier.
 
 ### 41b.3 Le web et le téléphone (D341)
 

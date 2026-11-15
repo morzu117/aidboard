@@ -23,7 +23,11 @@ test.each(VERBES_PROXY)('succès et requête exacte : %s', async (verbe) => {
   const { proxy, client } = await preparer({
     reponse: { ok: true, status: 201, body: { id: 1 }, detail: 'privé' },
   });
-  expect(await client.appeler(verbe, { content: 'bonjour' })).toEqual({
+  const args =
+    verbe === 'board.cards.create'
+      ? { project: 1, title: 'Bonjour', body: 'Swairm: exemple/depot#1' }
+      : { content: 'bonjour' };
+  expect(await client.appeler(verbe, args)).toEqual({
     ok: true,
     status: 201,
     body: verbe === 'board.cards.move' ? {} : { id: 1 },
@@ -31,7 +35,7 @@ test.each(VERBES_PROXY)('succès et requête exacte : %s', async (verbe) => {
   expect(proxy.lignes).toHaveLength(1);
   const requete = JSON.parse(proxy.lignes[0]!);
   expect(Object.keys(requete).sort()).toEqual(['args', 'request_id', 'verb']);
-  expect(requete).toMatchObject({ verb: verbe, args: { content: 'bonjour' } });
+  expect(requete).toMatchObject({ verb: verbe, args });
   expect(requete.request_id).toMatch(
     /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
   );

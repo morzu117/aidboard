@@ -1,3 +1,4 @@
+import { CreationsCartes } from './confirmations/cartes.js';
 import { registerRejoindreRoutes } from './routes/rejoindre.js';
 import { registerCartesRelieesRoutes } from './routes/cartes-reliees.js';
 import type { MeshRegistry } from './mesh/registre.js';
@@ -252,6 +253,14 @@ export async function buildServer(deps: ServerDeps): Promise<FastifyInstance> {
           ecrivain: new CommitteeWriter(committee),
         })
       : undefined);
+  const cartes = new CreationsCartes(deps.db, (nom) => {
+    if (deps.meshes) return deps.meshes.configuration(nom).proxySocket ?? '';
+    if (nom !== 'principal') throw new AidHttpError(404, 'mesh inconnu');
+    return deps.config.mesh.proxySocket ?? '';
+  });
+  void cartes.reprendre().catch(() => {
+    app.log.warn('Relecture des créations de cartes indisponible au démarrage');
+  });
   const porte = creerPorte({
     db: deps.db,
     config: deps.config,
@@ -259,6 +268,7 @@ export async function buildServer(deps: ServerDeps): Promise<FastifyInstance> {
     actions: creerActionsConfirmation({
       ...deps,
       avis,
+      cartes,
       journal: (type, donnees) => app.log.info(donnees, type),
       actions: actionsConfirmation,
       engine: structural,
@@ -268,6 +278,7 @@ export async function buildServer(deps: ServerDeps): Promise<FastifyInstance> {
   });
   registerAvisMeshRoutes(app, { avis: avis ?? null, porte, meshes: deps.meshes });
   registerEcrituresRoutes(app, {
+    cartes,
     meshes: deps.meshes,
     db: deps.db,
     board: deps.board ?? null,
