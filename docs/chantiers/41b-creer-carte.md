@@ -127,6 +127,7 @@ Vérifications : gate vert (4 132 tests), gate:e2e 137, tests du chantier 166 fo
   - le code `verification_board` ;
   - la reprise au démarrage, avec `depuis` remis à jour ;
   - le message du web pendant le délai.
+41b.2bis commité. Il touche dix fichiers, dont `cartes.ts`, `ecritures.ts`, `server.ts` (onClose), les types partagés, `SwairmBoard.tsx` et `EcrireAuMesh.tsx`, et il ajoute des tests. Gate vert (4 153 tests), gate:e2e 137, tests du chantier 144 sur 144, 3 fois.
 
 ### 41b.3 Le web et le téléphone (D341)
 

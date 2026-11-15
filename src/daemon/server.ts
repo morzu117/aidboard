@@ -258,6 +258,7 @@ export async function buildServer(deps: ServerDeps): Promise<FastifyInstance> {
     if (nom !== 'principal') throw new AidHttpError(404, 'mesh inconnu');
     return deps.config.mesh.proxySocket ?? '';
   });
+  app.addHook('onClose', async () => cartes.arreter());
   void cartes.reprendre().catch(() => {
     app.log.warn('Relecture des créations de cartes indisponible au démarrage');
   });

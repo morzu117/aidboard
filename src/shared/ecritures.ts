@@ -224,6 +224,7 @@ export interface ResultatEnvoi {
     | 'verb_not_allowed'
     | 'bad_args'
     | 'peer_not_allowed'
+    | 'verification_board'
     | 'proxy_unavailable'
     | 'upstream_unreachable'
     | 'upstream_ambiguous'
@@ -235,7 +236,7 @@ export interface ResultatEnvoi {
     | 'obligation-close';
   message?: string;
   cree?: boolean;
-  relecture?: 'trouvee' | 'absente' | 'echec';
+  relecture?: 'trouvee' | 'absente' | 'attente' | 'echec';
   enVol?: boolean;
   id?: number;
   open_obligations: number[];

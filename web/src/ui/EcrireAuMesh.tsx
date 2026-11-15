@@ -400,7 +400,13 @@ function FormulaireEcriture({
                   />
                 </>
               )}
-              {resultat && <p role="status">{resultat.message ?? libelleEnvoi(resultat)}</p>}
+              {resultat && (
+                <p role="status">
+                  {resultat.relecture === 'attente'
+                    ? 'Création incertaine : A-I-D relira le board dans une minute.'
+                    : (resultat.message ?? libelleEnvoi(resultat))}
+                </p>
+              )}
               {action === 'carte.creer' && resultat?.id && <p>Carte : #{resultat.id}</p>}
               {action === 'carte.creer' && resultat?.relecture === 'trouvee' && (
                 <p>Le board a retrouvé la carte.</p>

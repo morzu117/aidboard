@@ -157,12 +157,18 @@ test('création verrouillée pendant la relecture, même si elle échoue', async
   expect(h.calls.find((c) => c.method === 'POST')?.body).toEqual({ mesh: 'principal', ligne });
 });
 
-test.each([false, true])(
-  'résultat du téléphone : incertain %s, message du daemon et suite',
-  async (incertain) => {
+test.each(['succes', 'echec', 'attente'] as const)(
+  'résultat du téléphone : %s, message du daemon et suite',
+  async (issue) => {
+    const incertain = issue !== 'succes';
     const envoye = vi.fn();
     const relire = vi.fn();
-    const message = incertain ? 'Création incertaine : relire le board.' : 'Carte créée : #81.';
+    const message =
+      issue === 'attente'
+        ? 'Création incertaine : A-I-D relira le board dans une minute.'
+        : incertain
+          ? 'Création incertaine : relire le board.'
+          : 'Carte créée : #81.';
     const h = setup(
       <EcrireAuMesh
         mesh="principal"
@@ -195,9 +201,12 @@ test.each([false, true])(
               resultat: incertain ? 'echouee' : 'executee',
               envoi: {
                 code: incertain ? 'upstream_ambiguous' : 'succes',
-                message,
+                message:
+                  issue === 'attente'
+                    ? 'Création incertaine : la carte a peut-être été créée.'
+                    : message,
                 id: incertain ? undefined : 81,
-                relecture: incertain ? 'echec' : undefined,
+                relecture: incertain ? issue : undefined,
                 enVol: incertain,
                 cree: !incertain,
                 open_obligations: [],
@@ -214,6 +223,7 @@ test.each([false, true])(
     fireEvent.click(screen.getByRole('button', { name: "Voir l'aperçu" }));
     fireEvent.click(await screen.findByRole('button', { name: 'Envoyer' }));
     await screen.findByText(message);
+    expect(screen.queryByText('Le board a été relu : aucune carte ne porte ce sujet.')).toBeNull();
     expect(h.calls.find((c) => c.url === '/api/swarph/ecrire/envoyer')?.body).toEqual({
       mesh: 'principal',
       action: 'carte.creer',
@@ -289,4 +299,47 @@ test('relecture réussie sans carte : le bouton redevient disponible', async () 
       false,
     ),
   );
+});
+
+test.each([
+  [false, "n'est pas configuré"],
+  [true, 'lecture seule'],
+] as const)(
+  'raison de désactivation unique en tête de section, proxy configuré %s',
+  async (proxy, raison) => {
+    setup(<SansCarteSwairm />, etat(proxy, false), '/', {
+      ...routes,
+      'GET /api/swairm/board': json(200, {
+        sujets: [sujet, { ...sujet, id: '42' }],
+        cartes: [],
+        board: ok({ cards: [], due: [], searched: 0 }),
+        swairm: { etat: 'ok', data: { projets: [], erreurs: [] } },
+      }),
+    });
+    await waitFor(() => expect(FakeSocket.all.length).toBeGreaterThan(0));
+    act(() => FakeSocket.all[0]!.open());
+    fireEvent.click(await screen.findByText('Sujets Swairm sans carte (2)'));
+    const messages = screen.getAllByText(new RegExp(raison));
+    expect(messages).toHaveLength(1);
+    expect(messages[0]!.closest('li')).toBeNull();
+    for (const bouton of screen.getAllByRole('button', { name: 'Créer la carte' })) {
+      expect(bouton).toHaveProperty('disabled', true);
+      expect(bouton.title).toContain(raison);
+    }
+  },
+);
+
+test('relecture manuelle en attente : message de grâce et bouton toujours verrouillé', async () => {
+  setup(<SansCarteSwairm />, etat(), '/', {
+    ...routes,
+    'GET /api/swarph/cartes-en-vol?mesh=principal': json(200, [{ ligne_swairm: ligne }]),
+    'POST /api/swarph/cartes-en-vol/relire': json(200, { ok: true, id: null, attente: true }),
+  });
+  await waitFor(() => expect(FakeSocket.all.length).toBeGreaterThan(0));
+  act(() => FakeSocket.all[0]!.open());
+  fireEvent.click(await screen.findByText('Sujets Swairm sans carte (1)'));
+  fireEvent.click(await screen.findByRole('button', { name: 'Relire le board' }));
+  await screen.findByText('Création incertaine : A-I-D relira le board dans une minute.');
+  expect(screen.queryByText('Board relu.')).toBeNull();
+  expect(screen.getByRole('button', { name: 'Créer la carte' })).toHaveProperty('disabled', true);
 });

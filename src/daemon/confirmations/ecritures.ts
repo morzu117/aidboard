@@ -81,7 +81,7 @@ export function creerActionEcriture(deps: {
           if (!deps.cartes) throw new AidHttpError(409, 'création indisponible');
           deps.cartes.reserver(mesh, ligne!, creation.projet);
           reserve = true;
-          const avant = await deps.cartes.lire(mesh, creation.projet, ligne!);
+          const avant = await deps.cartes.lire(mesh, ligne!);
           if (!avant.ok || avant.id !== null) {
             deps.cartes.effacer(mesh, ligne!);
             reserve = false;
@@ -94,7 +94,7 @@ export function creerActionEcriture(deps: {
                   message: `Une carte porte déjà ce sujet : #${avant.id}. Rien n'a été créé.`,
                 }
               : {
-                  code: 'proxy_unavailable',
+                  code: 'verification_board',
                   open_obligations: [],
                   cree: false,
                   message: "La vérification du board a échoué. Rien n'a été créé.",
@@ -138,8 +138,14 @@ export function creerActionEcriture(deps: {
             deps.cartes!.incertain(mesh, ligne!);
             reserve = false;
             const relu = await deps.cartes!.relire(mesh, ligne!);
-            envoi.relecture = !relu.ok ? 'echec' : relu.id === null ? 'absente' : 'trouvee';
-            envoi.enVol = !relu.ok;
+            envoi.relecture = !relu.ok
+              ? 'echec'
+              : relu.attente
+                ? 'attente'
+                : relu.id === null
+                  ? 'absente'
+                  : 'trouvee';
+            envoi.enVol = !relu.ok || !!relu.attente;
             if (relu.ok && relu.id !== null) {
               envoi.code = 'succes';
               envoi.id = relu.id;

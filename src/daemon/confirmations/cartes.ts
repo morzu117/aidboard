@@ -11,14 +11,19 @@ export interface CarteEnVol {
   etat: 'en-vol' | 'incertain';
   depuis: string;
 }
-export type RelectureCarte = { ok: true; id: number | null } | { ok: false };
+export type RelectureCarte = { ok: true; id: number | null; attente?: true } | { ok: false };
 
-/** D340 : aucun cache, recherche textuelle, filtre d'étape ou repli CLI. */
+export const DELAI_GRACE_MS = 60_000;
+
+/** D340 : aucun cache, filtre d'étape ou repli CLI. */
 export class CreationsCartes {
   private readonly relectures = new Map<string, Promise<RelectureCarte>>();
+  private readonly minuteurs = new Map<string, ReturnType<typeof setTimeout>>();
+  private arrete = false;
   constructor(
     private readonly db: Db,
     private readonly socket: (mesh: string) => string,
+    private readonly delaiGraceMs = DELAI_GRACE_MS,
   ) {}
 
   liste(mesh: string): CarteEnVol[] {
@@ -43,7 +48,16 @@ export class CreationsCartes {
     if (!resultat.changes) throw new AidHttpError(409, CREATION_EN_COURS);
   }
 
+  arreter(): void {
+    this.arrete = true;
+    for (const minuteur of this.minuteurs.values()) clearTimeout(minuteur);
+    this.minuteurs.clear();
+  }
+
   effacer(mesh: string, ligne: string): void {
+    const cle = JSON.stringify([mesh, ligne]);
+    clearTimeout(this.minuteurs.get(cle));
+    this.minuteurs.delete(cle);
     this.db
       .prepare('DELETE FROM cartes_en_vol WHERE mesh = ? AND ligne_swairm = ?')
       .run(mesh, ligne);
@@ -51,16 +65,23 @@ export class CreationsCartes {
 
   incertain(mesh: string, ligne: string): void {
     this.db
-      .prepare("UPDATE cartes_en_vol SET etat = 'incertain' WHERE mesh = ? AND ligne_swairm = ?")
-      .run(mesh, ligne);
+      .prepare(
+        "UPDATE cartes_en_vol SET etat = 'incertain', depuis = ? WHERE mesh = ? AND ligne_swairm = ?",
+      )
+      .run(new Date().toISOString(), mesh, ligne);
   }
 
-  async lire(mesh: string, projet: number, ligne: string): Promise<RelectureCarte> {
+  async lire(mesh: string, ligne: string): Promise<RelectureCarte> {
     try {
+      const lien = liensSwairm(ligne)[0];
+      if (!lien || ligne !== `Swairm: ${lien.projet}#${lien.id}`) return { ok: false };
+      // D285 borne les trois parties ASCII : q mesure au plus 402 caractères (< 1 000).
+      const q = `${lien.projet}#${lien.id}`;
+      if (q.length > 1000) return { ok: false };
       const reponse = await creerProxyClient({
         socket: this.socket(mesh),
         verbes: VERBES_LECTURE,
-      }).appeler('board.cards.list', { project: projet });
+      }).appeler('board.cards.list', { q });
       if (!reponse.ok || Array.isArray(reponse.body) || !Array.isArray(reponse.body.cards))
         return { ok: false };
       let trouve: number | null = null;
@@ -92,9 +113,23 @@ export class CreationsCartes {
     if (enCours) return enCours;
     const vol = this.liste(mesh).find((v) => v.ligne_swairm === ligne);
     if (!vol || vol.etat !== 'incertain') return Promise.resolve({ ok: false });
-    const lecture = this.lire(mesh, vol.projet, ligne)
+    const lecture = this.lire(mesh, ligne)
       .then((resultat) => {
-        if (resultat.ok) this.effacer(mesh, ligne);
+        if (resultat.ok) {
+          const restant = this.delaiGraceMs - (Date.now() - Date.parse(vol.depuis));
+          if (resultat.id === null && restant > 0) {
+            if (!this.arrete && !this.minuteurs.has(cle)) {
+              const minuteur = setTimeout(() => {
+                this.minuteurs.delete(cle);
+                void this.relire(mesh, ligne).catch(() => {});
+              }, restant);
+              minuteur.unref();
+              this.minuteurs.set(cle, minuteur);
+            }
+            return { ...resultat, attente: true as const };
+          }
+          this.effacer(mesh, ligne);
+        }
         return resultat;
       })
       .finally(() => this.relectures.delete(cle));
@@ -103,7 +138,9 @@ export class CreationsCartes {
   }
 
   async reprendre(): Promise<void> {
-    this.db.prepare("UPDATE cartes_en_vol SET etat = 'incertain'").run();
+    this.db
+      .prepare("UPDATE cartes_en_vol SET etat = 'incertain', depuis = ? WHERE etat = 'en-vol'")
+      .run(new Date().toISOString());
     const lignes = this.db.prepare('SELECT * FROM cartes_en_vol').all() as CarteEnVol[];
     await Promise.all(
       lignes.map(async (v) => {

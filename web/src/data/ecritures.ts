@@ -29,6 +29,7 @@ export type CodeEnvoi =
   | 'demande_trop_grande'
   | 'obligation-close'
   | 'succes'
+  | 'verification_board'
   | 'proxy_unavailable'
   | 'connexion'
   | 'upstream_unreachable'
@@ -44,7 +45,7 @@ export type CodeEnvoi =
 export interface ResultatEnvoi {
   message?: string;
   cree?: boolean;
-  relecture?: 'trouvee' | 'absente' | 'echec';
+  relecture?: 'trouvee' | 'absente' | 'attente' | 'echec';
   enVol?: boolean;
   code: CodeEnvoi;
   id?: number;

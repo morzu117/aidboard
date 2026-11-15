@@ -335,6 +335,7 @@ export const CODES_RESULTAT = [
   'verb_not_allowed',
   'bad_args',
   'peer_not_allowed',
+  'verification_board',
   'proxy_unavailable',
   'upstream_unreachable',
   'upstream_ambiguous',

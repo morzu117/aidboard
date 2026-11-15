@@ -138,14 +138,20 @@ export function SansCarteSwairm() {
   async function relire(s: SujetBoardSwairm) {
     setRelecture(true);
     try {
-      const r = await client.request<{ ok: boolean }>('POST', '/api/swarph/cartes-en-vol/relire', {
-        mesh,
-        ligne: ligneSwairm(s),
-      });
+      const r = await client.request<{ ok: boolean; attente?: boolean }>(
+        'POST',
+        '/api/swarph/cartes-en-vol/relire',
+        {
+          mesh,
+          ligne: ligneSwairm(s),
+        },
+      );
       setVols(
         await client.request('GET', `/api/swarph/cartes-en-vol?mesh=${encodeURIComponent(mesh)}`),
       );
       if (!r.ok) setMessage('Relecture du board impossible. Réessaie.');
+      else if (r.attente)
+        setMessage('Création incertaine : A-I-D relira le board dans une minute.');
       else {
         setMessage('Board relu.');
         await relireBoard();
@@ -186,6 +192,7 @@ export function SansCarteSwairm() {
           {pluriel(termines.length, 'sujet')} merged ou abandoned sans carte non{' '}
           {termines.length > 1 ? 'listés' : 'listé'}.
         </p>
+        {raison && <p>{raison}</p>}
         <ul>
           {vivants.map((s) => (
             <li key={`${s.projet}#${s.id}`}>
@@ -206,7 +213,6 @@ export function SansCarteSwairm() {
               >
                 Créer la carte
               </button>
-              {raison && <p>{raison}</p>}
               {vols?.some((v) => v.ligne_swairm === ligneSwairm(s)) && (
                 <button disabled={relecture} onClick={() => void relire(s)}>
                   Relire le board

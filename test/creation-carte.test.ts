@@ -11,7 +11,7 @@ import { join } from 'node:path';
 import Fastify from 'fastify';
 import { afterEach, expect, test, vi } from 'vitest';
 import { DEFAULT_CONFIG } from '../src/daemon/config.js';
-import { CreationsCartes } from '../src/daemon/confirmations/cartes.js';
+import { CreationsCartes, DELAI_GRACE_MS } from '../src/daemon/confirmations/cartes.js';
 import { creerActionEcriture } from '../src/daemon/confirmations/ecritures.js';
 import type { ContexteAction } from '../src/daemon/confirmations/porte.js';
 import { AidHttpError } from '../src/daemon/errors.js';
@@ -31,6 +31,7 @@ import { migrate, openDb } from '../src/daemon/db.js';
 const nettoyages: (() => unknown | Promise<unknown>)[] = [];
 afterEach(async () => {
   vi.restoreAllMocks();
+  vi.useRealTimers();
   for (const f of nettoyages.splice(0).reverse()) await f();
 });
 const params = {
@@ -41,7 +42,7 @@ const params = {
 };
 const entree = { action: 'carte.creer' as const, params };
 
-async function contexte() {
+async function contexte(delaiGraceMs = DELAI_GRACE_MS) {
   const t = preparerPda();
   nettoyages.push(t.nettoyer);
   let cartes: unknown[] = [];
@@ -87,7 +88,8 @@ async function contexte() {
     },
     log: () => {},
   });
-  const vols = new CreationsCartes(t.db, () => config.mesh.proxySocket);
+  const vols = new CreationsCartes(t.db, () => config.mesh.proxySocket, delaiGraceMs);
+  nettoyages.push(() => vols.arreter());
   const journal = vi.fn();
   const action = creerActionEcriture({ config, board, cartes: vols, journal });
   const ctx = (): ContexteAction => ({ confirmation: true, mesh: 'principal' });
@@ -183,7 +185,7 @@ test('création : lecture directe avant le POST, entier JSON, uniquement trois c
   expect(t.vols.liste('principal')).toEqual([]);
   expect(t.requetes().map((r) => [r.verb, r.args])).toEqual([
     ['board.projects.list', {}],
-    ['board.cards.list', { project: 17 }],
+    ['board.cards.list', { q: 'exemple/depot#sujet-1' }],
     ['board.cards.create', { project: 17, title: params.titre, body: params.corps }],
   ]);
   expect(JSON.stringify(t.journal.mock.calls)).not.toContain(params.titre);
@@ -240,11 +242,11 @@ test('relecture ne confond ni sous-chaîne, ni projet, ni sujet', async () => {
 test('vérification préalable en échec : rien ne part et verrou effacé', async () => {
   const t = await contexte();
   t.echecLecture(true);
-  expect(await t.envoyer()).toMatchObject({ code: 'proxy_unavailable', cree: false });
+  expect(await t.envoyer()).toMatchObject({ code: 'verification_board', cree: false });
   expect(t.requetes().some((r) => r.verb === 'board.cards.create')).toBe(false);
   expect(t.vols.liste('principal')).toEqual([]);
 });
-test.each(['trouvee', 'absente', 'echec'] as const)(
+test.each(['trouvee', 'attente', 'echec'] as const)(
   'envoi incertain : relecture %s',
   async (issue) => {
     const t = await contexte();
@@ -258,15 +260,18 @@ test.each(['trouvee', 'absente', 'echec'] as const)(
     expect(r).toMatchObject({
       code: issue === 'trouvee' ? 'succes' : 'upstream_ambiguous',
       relecture: issue,
-      enVol: issue === 'echec',
+      enVol: issue !== 'trouvee',
       message: CREATION_INCERTAINE,
     });
     if (issue === 'trouvee') expect(r).toMatchObject({ id: 99 });
-    expect(t.vols.liste('principal')).toHaveLength(issue === 'echec' ? 1 : 0);
+    expect(t.vols.liste('principal')).toHaveLength(issue !== 'trouvee' ? 1 : 0);
     if (issue === 'echec') {
       expect(t.vols.liste('principal')[0]?.etat).toBe('incertain');
       await expect(t.preparer()).rejects.toMatchObject({ status: 409, message: CREATION_EN_COURS });
       t.echecLecture(false);
+      t.db
+        .prepare('UPDATE cartes_en_vol SET depuis = ?')
+        .run(new Date(Date.now() - DELAI_GRACE_MS).toISOString());
       expect(await t.vols.relire('principal', params.corps)).toEqual({ ok: true, id: null });
       expect(t.vols.liste('principal')).toEqual([]);
     }
@@ -368,6 +373,19 @@ test('routes : aperçu, liste des verrous et relecture manuelle', async () => {
         payload: { mesh: 'principal', ligne: params.corps },
       })
     ).json(),
+  ).toEqual({ ok: true, id: null, attente: true });
+  expect((await app.inject('/api/swarph/cartes-en-vol?mesh=principal')).json()).toHaveLength(1);
+  t.db
+    .prepare('UPDATE cartes_en_vol SET depuis = ?')
+    .run(new Date(Date.now() - DELAI_GRACE_MS).toISOString());
+  expect(
+    (
+      await app.inject({
+        method: 'POST',
+        url: '/api/swarph/cartes-en-vol/relire',
+        payload: { mesh: 'principal', ligne: params.corps },
+      })
+    ).json(),
   ).toEqual({ ok: true, id: null });
   expect((await app.inject('/api/swarph/cartes-en-vol?mesh=principal')).json()).toEqual([]);
 });
@@ -410,11 +428,17 @@ test.each([false, true])(
       await waitFor(() => daemon.db.prepare('SELECT * FROM cartes_en_vol').all().length === 0);
     const lignes = daemon.db.prepare('SELECT * FROM cartes_en_vol').all();
     expect(lignes).toHaveLength(echec ? 1 : 0);
-    if (echec) expect(lignes[0]).toMatchObject({ etat: 'incertain', depuis: 'avant' });
+    if (echec) {
+      expect(lignes[0]).toMatchObject({ etat: 'incertain' });
+      expect((lignes[0] as { depuis: string }).depuis).not.toBe('avant');
+    }
     expect(
       proxy.lignes.some((l) => {
         const r = JSON.parse(l);
-        return r.verb === 'board.cards.list' && JSON.stringify(r.args) === '{"project":17}';
+        return (
+          r.verb === 'board.cards.list' &&
+          JSON.stringify(r.args) === JSON.stringify({ q: 'exemple/depot#sujet-1' })
+        );
       }),
     ).toBe(true);
   },
@@ -436,12 +460,12 @@ test.each(['interrompu', 'delai', 'format'] as const)(
     });
     expect(await t.envoyer()).toMatchObject({
       code,
-      relecture: 'absente',
-      enVol: false,
+      relecture: 'attente',
+      enVol: true,
       message: CREATION_INCERTAINE,
     });
     expect(t.requetes().filter((r) => r.verb === 'board.cards.list')).toHaveLength(2);
-    expect(t.vols.liste('principal')).toEqual([]);
+    expect(t.vols.liste('principal')).toHaveLength(1);
   },
 );
 
@@ -588,7 +612,7 @@ test('migration 033 : données conservées, idempotence et états fermés', asyn
   expect(() => t.db.prepare('UPDATE cartes_en_vol SET projet = 0').run()).toThrow(/CHECK/);
 });
 test('deux relectures concurrentes partagent une lecture et ne libèrent qu’après sa réussite', async () => {
-  const t = await contexte();
+  const t = await contexte(0);
   t.vols.reserver('principal', params.corps, 17);
   t.vols.incertain('principal', params.corps);
   let terminer!: (r: { ok: true; id: null }) => void;
@@ -632,10 +656,13 @@ test('démarrage non bloquant : state répond pendant une relecture silencieuse,
   const reponse = await daemon.d.app.inject({ url: '/api/state', headers: daemon.headers });
   expect(reponse.statusCode).toBe(200);
   expect(proxy.connexionsActives).toBeGreaterThan(0);
-  expect(daemon.db.prepare('SELECT etat, depuis FROM cartes_en_vol').get()).toEqual({
-    etat: 'incertain',
-    depuis: 'avant',
-  });
+  const vol = daemon.db.prepare('SELECT etat, depuis FROM cartes_en_vol').get() as {
+    etat: string;
+    depuis: string;
+  };
+  expect(vol.etat).toBe('incertain');
+  expect(vol.depuis).not.toBe('avant');
+  expect(Number.isNaN(Date.parse(vol.depuis))).toBe(false);
 });
 
 test('exception après réservation et avant envoi : verrou effacé, aucun POST', async () => {
@@ -664,4 +691,132 @@ test('exception après envoi et avant classement : passage incertain et relectur
   expect(t.vols.liste('principal')[0]?.etat).toBe('incertain');
   expect(t.requetes().filter((r) => r.verb === 'board.cards.list')).toHaveLength(2);
   expect(t.requetes().filter((r) => r.verb === 'board.cards.create')).toHaveLength(1);
+});
+
+test('carte d’un autre projet : trouvée avant envoi, q envoyé seul', async () => {
+  const t = await contexte();
+  t.cartes([{ id: 55, body: params.corps, project: 18, stage: 'done' }]);
+  expect(await t.envoyer()).toMatchObject({ id: 55, cree: false });
+  expect(
+    t
+      .requetes()
+      .filter((r) => r.verb === 'board.cards.list')
+      .map((r) => r.args),
+  ).toEqual([{ q: 'exemple/depot#sujet-1' }]);
+  expect(t.requetes().some((r) => r.verb === 'board.cards.create')).toBe(false);
+});
+
+test('q à la borne D285 reste sous les 1 000 caractères du proxy', async () => {
+  const t = await contexte();
+  const q = `${'a'.repeat(100)}/${'b'.repeat(100)}#${'c'.repeat(200)}`;
+  expect(q.length).toBe(402);
+  expect(await t.vols.lire('principal', `Swairm: ${q}`)).toEqual({ ok: true, id: null });
+  expect(t.requetes()[0].args).toEqual({ q });
+  expect(await t.vols.lire('principal', `Swairm: ${'a'.repeat(1001)}`)).toEqual({ ok: false });
+  expect(t.requetes()).toHaveLength(1);
+});
+
+test('absence avant 60 s : verrou conservé ; carte tardive à la seconde lecture', async () => {
+  const t = await contexte();
+  vi.useFakeTimers();
+  t.vols.reserver('principal', params.corps, 17);
+  t.vols.incertain('principal', params.corps);
+  const lire = vi
+    .spyOn(t.vols, 'lire')
+    .mockResolvedValueOnce({ ok: true, id: null })
+    .mockResolvedValueOnce({ ok: true, id: 99 });
+  expect(await t.vols.relire('principal', params.corps)).toEqual({
+    ok: true,
+    id: null,
+    attente: true,
+  });
+  await vi.advanceTimersByTimeAsync(59_999);
+  expect(lire).toHaveBeenCalledTimes(1);
+  expect(t.vols.liste('principal')[0]).toMatchObject({ etat: 'incertain', projet: 17 });
+  expect(() => t.vols.verifier('principal', params.corps)).toThrow(CREATION_EN_COURS);
+  await vi.advanceTimersByTimeAsync(1);
+  expect(lire).toHaveBeenCalledTimes(2);
+  expect(t.vols.liste('principal')).toEqual([]);
+});
+
+test('absence à 60 s : seconde lecture conclut et efface la ligne', async () => {
+  const t = await contexte();
+  vi.useFakeTimers();
+  t.vols.reserver('principal', params.corps, 17);
+  t.vols.incertain('principal', params.corps);
+  const lire = vi.spyOn(t.vols, 'lire').mockResolvedValue({ ok: true, id: null });
+  await t.vols.relire('principal', params.corps);
+  await vi.advanceTimersByTimeAsync(DELAI_GRACE_MS);
+  expect(lire).toHaveBeenCalledTimes(2);
+  expect(t.vols.liste('principal')).toEqual([]);
+  expect(vi.getTimerCount()).toBe(0);
+});
+
+test('relectures pendant la grâce : un seul minuteur, unref, annulé à l’arrêt', async () => {
+  const t = await contexte(1234);
+  const programmer = vi.spyOn(globalThis, 'setTimeout');
+  t.vols.reserver('principal', params.corps, 17);
+  t.vols.incertain('principal', params.corps);
+  vi.spyOn(t.vols, 'lire').mockResolvedValue({ ok: true, id: null });
+  await t.vols.relire('principal', params.corps);
+  await t.vols.relire('principal', params.corps);
+  expect(programmer).toHaveBeenCalledTimes(1);
+  const minuteur = programmer.mock.results[0]!.value as NodeJS.Timeout;
+  expect(minuteur.hasRef()).toBe(false);
+  const annuler = vi.spyOn(globalThis, 'clearTimeout');
+  t.vols.arreter();
+  expect(annuler).toHaveBeenCalledWith(minuteur);
+  expect(t.vols.liste('principal')).toHaveLength(1);
+});
+
+test('erreur de la seconde relecture absorbée : verrou conservé', async () => {
+  const t = await contexte();
+  vi.useFakeTimers();
+  t.vols.reserver('principal', params.corps, 17);
+  t.vols.incertain('principal', params.corps);
+  const lire = vi
+    .spyOn(t.vols, 'lire')
+    .mockResolvedValueOnce({ ok: true, id: null })
+    .mockRejectedValueOnce(new Error('lecture indisponible'));
+  await t.vols.relire('principal', params.corps);
+  await vi.advanceTimersByTimeAsync(DELAI_GRACE_MS);
+  expect(lire).toHaveBeenCalledTimes(2);
+  expect(t.vols.liste('principal')).toHaveLength(1);
+  expect(vi.getTimerCount()).toBe(0);
+});
+
+test('incertain remet depuis à maintenant ; reprise ne rajeunit que les en-vol', async () => {
+  const t = await contexte();
+  vi.useFakeTimers();
+  t.vols.reserver('principal', params.corps, 17);
+  t.vols.reserver('principal', 'Swairm: exemple/depot#autre', 18);
+  await vi.advanceTimersByTimeAsync(1000);
+  t.vols.incertain('principal', params.corps);
+  const depuisIncertain = new Date().toISOString();
+  expect(t.vols.liste('principal').find((v) => v.ligne_swairm === params.corps)?.depuis).toBe(
+    depuisIncertain,
+  );
+  await vi.advanceTimersByTimeAsync(1000);
+  vi.spyOn(t.vols, 'lire').mockResolvedValue({ ok: true, id: null });
+  await t.vols.reprendre();
+  expect(t.vols.liste('principal')).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        ligne_swairm: params.corps,
+        etat: 'incertain',
+        depuis: depuisIncertain,
+      }),
+      expect.objectContaining({
+        ligne_swairm: 'Swairm: exemple/depot#autre',
+        etat: 'incertain',
+        depuis: new Date().toISOString(),
+      }),
+    ]),
+  );
+  await vi.advanceTimersByTimeAsync(DELAI_GRACE_MS - 1000);
+  expect(t.vols.liste('principal').map((v) => v.ligne_swairm)).toEqual([
+    'Swairm: exemple/depot#autre',
+  ]);
+  await vi.advanceTimersByTimeAsync(1000);
+  expect(t.vols.liste('principal')).toEqual([]);
 });
