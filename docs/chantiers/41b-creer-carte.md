@@ -72,6 +72,10 @@ Le proxy ne dédoublonne pas (D339). A-I-D s'en charge, par quatre règles.
 - **Le délai de grâce.** Après une issue incertaine, le gateway peut encore finir la création après le délai du proxy (DM 98688). Une relecture qui **trouve** la carte conclut tout de suite. Une relecture **absente** ne conclut que si la ligne est `incertain` depuis au moins 60 s (`DELAI_GRACE_MS`). Avant ce délai, la ligne reste `incertain`, et une seconde lecture est programmée à son terme. `depuis` est remis à l'heure du passage à `incertain`, et, au démarrage, à l'heure du redémarrage pour une ligne qui était `en-vol`.
 - **L'échec de la vérification avant l'envoi** a son propre code, `verification_board`, distinct de `proxy_unavailable`. Le proxy a pu répondre, avec une lecture refusée ou une carte mal formée. Le message ne change pas.
 - **Une réponse 2xx dont l'id est illisible** reste une issue certaine (DM 98688) : le proxy ne rend `ok` qu'avec un JSON complet.
+- **Limites acceptées** (relecture du 41b.2bis, DM 98714) :
+  - La comparaison exacte respecte la casse, comme le lien de D285. Une carte écrite à la main avec une autre casse pour `owner/dépôt` ne bloque donc pas la création. Si cette règle change, elle changera pour les deux à la fois.
+  - Une relecture en échec pendant le délai de grâce n'arme pas de minuteur. La ligne reste incertaine, et le bouton reste désactivé jusqu'à « Relire le board » ou au redémarrage. C'est sûr, puisque rien n'est recréé.
+  - `depuis` suit l'horloge murale, pour survivre à un redémarrage. Un saut d'horloge allonge ou raccourcit donc le délai.
 - Le bouton « Créer la carte » d'un sujet reste désactivé tant qu'une ligne existe pour lui dans `cartes_en_vol`.
 
 ### D341. L'écran
