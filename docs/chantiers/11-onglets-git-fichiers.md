@@ -298,6 +298,14 @@ Fichiers : `docs/recette-onglets-git-fichiers.md` (nouveau, sur le modèle de
 
 Vérification : `npm run gate` et `npm run gate:e2e`.
 
+### 11.13 — Correctif : le test « worktree manquant » de `branche.revenir` est instable
+
+Le test `branche.revenir : worktree manquant, 409` de `test/topic-rattacher.test.ts` a échoué sous charge sur le VPS : la route a répondu 202 au lieu de 409. Le test lance la création d'un sujet, puis appelle tout de suite `branche.revenir`. Il compte sur le fait que la création n'a pas encore fait le worktree. Le garde de la route (`existsSync(topic.worktree)`, dans `src/daemon/routes/topics.ts`) dépend donc de l'ordre des deux actions. Hypothèse à prouver : c'est une course dans le test, pas un défaut de la route.
+
+- Prouver la cause sous charge, avec le taux d'échec avant et après la correction.
+- Si la cause est dans le test, il fabrique un worktree manquant de façon certaine, par exemple un sujet créé jusqu'au bout dont le dossier est ensuite retiré. Le test attend toujours un 409, et rien ne change à l'état du sujet. Si la route accepte à tort un sujet sans worktree, c'est un défaut : il est décrit, et le correctif est à décider.
+- **Tests :** le test corrigé sous charge ; le gate entier.
+
 ## Pièges
 
 - Ne jamais stocker l'avance/retard, le journal de commits, la liste des branches ou le
