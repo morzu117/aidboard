@@ -1,6 +1,6 @@
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { isMap, parseDocument } from 'yaml';
-import { ConfigError, nomMeshValide, parseConfig } from '../config.js';
+import { ConfigError, ecrireConfig, nomMeshValide, parseConfig } from '../config.js';
 import type { AidPaths } from '../paths.js';
 
 /** D335 : relire le fichier actuel, préserver ses nœuds YAML et valider avant toute écriture. */
@@ -49,8 +49,8 @@ function modifierMesh(
   } catch {
     throw new ConfigError("config.yaml invalide : rien n'est écrit");
   }
-  // writeFileSync garde les droits du fichier existant ; un nouveau fichier est privé.
-  writeFileSync(paths.config, texte, { mode: 0o600 });
+  // D337 : temporaire puis renommage ; les droits du fichier existant sont gardés, un nouveau est privé.
+  ecrireConfig(paths, texte);
 }
 
 export function ajouterMesh(

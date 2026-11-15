@@ -176,6 +176,10 @@ Rien de bloquant. Quatre points facultatifs, tous retenus :
 - **d.** Si `rejoindre.json` n'a pas pu être effacé, une nouvelle demande est refusée avec un message clair : « Demande précédente non effacée : supprimer <chemin> ».
 33.6 commité. Les quatre points de DM 98426, chacun avec un test. Gate vert (4 003 tests), `gate:e2e` entier vert sous Node 22 avec `CI=1` (137 tests Playwright), 3/3 passages des tests ciblés, aucun daemon résiduel.
 
+### 33.7 Le sixième écrivain de config.yaml (DM 98404, point 2)
+
+Le chantier 55 est mergé avant le 33 : `config-rejoindre.ts` écrit donc `config.yaml` par `ecrireConfig` (D337), un temporaire puis un renommage, au lieu d'un `writeFileSync` sur place. Les droits du fichier existant sont gardés, un nouveau fichier reste en 0600, et un lien cassé est refusé sans rien écrire.
+
 ## 7. Pièges
 
 - Les exemples n'utilisent que des noms neutres et des adresses d'exemple (`aid-e2e.ts.net`, `192.0.2.x`, `peer-a`). Aucun vrai gateway, hôte du tailnet ni jeton dans le dépôt.
