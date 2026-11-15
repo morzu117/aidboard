@@ -1,11 +1,25 @@
 import { PALETTE_AVATARS, type SurchargesAvatars } from '../shared/avatars.js';
 import { FAMILLES_AVIS } from '../shared/avis-mesh-api.js';
-import { isAbsolute, resolve, join } from 'node:path';
+import { dirname, isAbsolute, resolve, join } from 'node:path';
 import { homedir } from 'node:os';
 import { normaliserGateway } from '../shared/meshes.js';
 import { meshPaths } from './mesh/paths.js';
 import { isIP } from 'node:net';
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import {
+  closeSync,
+  existsSync,
+  fchmodSync,
+  fsyncSync,
+  lstatSync,
+  openSync,
+  readFileSync,
+  realpathSync,
+  renameSync,
+  statSync,
+  unlinkSync,
+  writeFileSync,
+} from 'node:fs';
+import { randomUUID } from 'node:crypto';
 import { parse, parseDocument } from 'yaml';
 import type { AidPaths } from './paths.js';
 
@@ -524,6 +538,73 @@ function parseAgents(raw: unknown, cfg: AgentsConfig): void {
   }
 }
 
+/** D337 : remplacer la cible seulement après une écriture complète et synchronisée. */
+export function ecrireConfig(p: AidPaths, texte: string): void {
+  let cible = p.config;
+  let mode = 0o600;
+  let present = false;
+  try {
+    lstatSync(cible);
+    present = true;
+  } catch (erreur) {
+    if ((erreur as NodeJS.ErrnoException).code !== 'ENOENT') throw erreur;
+  }
+  if (present) {
+    try {
+      cible = realpathSync(cible);
+    } catch (erreur) {
+      if ((erreur as NodeJS.ErrnoException).code === 'ENOENT')
+        throw new ConfigError("config.yaml : lien cassé, rien n'est écrit");
+      throw erreur;
+    }
+    mode = statSync(cible).mode & 0o7777;
+  }
+  const dossier = dirname(cible);
+  const temporaire = join(dossier, `.config.yaml.${randomUUID()}.tmp`);
+  let fichier: number | undefined;
+  let cree = false;
+  let renomme = false;
+  try {
+    fichier = openSync(temporaire, 'wx', mode);
+    cree = true;
+    // La création applique le umask ; rétablir exactement les droits demandés.
+    fchmodSync(fichier, mode);
+    writeFileSync(fichier, texte, 'utf8');
+    fsyncSync(fichier);
+    closeSync(fichier);
+    fichier = undefined;
+    renameSync(temporaire, cible);
+    renomme = true;
+  } finally {
+    try {
+      if (fichier !== undefined) closeSync(fichier);
+    } catch {
+      // Le nettoyage ne doit pas masquer l'erreur d'origine.
+    }
+    try {
+      if (cree && !renomme) unlinkSync(temporaire);
+    } catch {
+      // Même garantie si la suppression du temporaire échoue.
+    }
+  }
+  // Certains systèmes ne permettent pas la synchronisation d'un dossier.
+  let repertoire: number | undefined;
+  try {
+    repertoire = openSync(dossier, 'r');
+    fsyncSync(repertoire);
+  } catch {
+    // Au mieux, notamment sous Windows.
+  } finally {
+    if (repertoire !== undefined) {
+      try {
+        closeSync(repertoire);
+      } catch {
+        // Le remplacement a déjà réussi.
+      }
+    }
+  }
+}
+
 /**
  * Chantier 31 (D172) : l'interrupteur du mode host écrit `modeHost.actif` dans config.yaml, en
  * gardant le reste du fichier, commentaires compris. Le résultat est relu par `parseConfig`
@@ -539,7 +620,7 @@ export function ecrireModeHostActif(p: AidPaths, actif: boolean): void {
   }
   const texte = doc.toString();
   parseConfig(texte);
-  writeFileSync(p.config, texte);
+  ecrireConfig(p, texte);
 }
 
 export function ecrireModeHostPush(p: AidPaths, actif: boolean): void {
@@ -552,7 +633,7 @@ export function ecrireModeHostPush(p: AidPaths, actif: boolean): void {
   }
   const texte = doc.toString();
   parseConfig(texte);
-  writeFileSync(p.config, texte);
+  ecrireConfig(p, texte);
 }
 
 export function ecrireModeHostCode(p: AidPaths, actif: boolean): void {
@@ -565,7 +646,7 @@ export function ecrireModeHostCode(p: AidPaths, actif: boolean): void {
   }
   const texte = doc.toString();
   parseConfig(texte);
-  writeFileSync(p.config, texte);
+  ecrireConfig(p, texte);
 }
 
 export function loadConfig(p: AidPaths): AidConfig {
@@ -622,7 +703,7 @@ const DEFAULT_FILE = `# Configuration d'A-I-D. Tout est facultatif : ce sont les
 `;
 
 export function writeDefaultConfigIfAbsent(p: AidPaths): void {
-  if (!existsSync(p.config)) writeFileSync(p.config, DEFAULT_FILE, { mode: 0o600 });
+  if (!existsSync(p.config)) ecrireConfig(p, DEFAULT_FILE);
 }
 
 /** Chantier 30 (D162) : le port des artefacts ; un daemon sur un port libre (0, tests) donne 0. */
@@ -648,7 +729,7 @@ export function ecrireModeHostPda(p: AidPaths, actif: boolean, relais?: string |
   }
   const texte = doc.toString();
   parseConfig(texte);
-  writeFileSync(p.config, texte);
+  ecrireConfig(p, texte);
 }
 
 /** L'unique destination de sortie PDA, validée aussi avant toute écriture. */

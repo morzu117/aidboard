@@ -221,3 +221,4 @@ Indépendants de la pile v0.1 ; chacun porte son propre jalon.
 | 52 | [La release sans push sur `main` : la version passe par une PR, Release ne fait plus que le tag et la publication](52-release-par-pr.md) | `ci/52-release-par-pr` | `main` | 13 : DR1, DR2, DR16 ; 51 : la protection de `main` | — |
 | 53 | [Le champ « Aller au dossier » : une saisie commencée n'est jamais complétée par le premier chargement](53-e2e-dossier.md) | `fix/53-e2e-dossier` | `main` | 51 : l'e2e dans la CI | — |
 | 54 | [Un identifiant neutre dans les tests et le code : le prénom remplacé, avec une garde sur les dossiers de code](54-prenom-tests.md) | `fix/54-prenom-tests` | `main` | 49 : la garde des noms neutres | — |
+| 55 | [config.yaml écrit d'un coup : un fichier temporaire, puis un renommage, pour qu'une coupure ne laisse jamais un fichier tronqué](55-config-atomique.md) | `fix/55-config-atomique` | `main` | 31 : D172 | — |
