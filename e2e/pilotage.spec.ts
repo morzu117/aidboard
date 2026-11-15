@@ -165,6 +165,13 @@ test('un dépôt sans origin s’enregistre ; son sujet se crée, tourne et se n
   await node(page, '1-3.actions.plus').click();
   await page.getByRole('button', { name: 'Nettoyer le sujet' }).click();
   await expect.poll(() => existsSync(worktree), { timeout: 30_000 }).toBe(false);
-  const topics = (await state(page)).topics as Array<{ id: string; state?: string }>;
-  expect(topics.find((t) => t.id === id)?.state ?? 'archived').toBe('archived');
+  await expect
+    .poll(
+      async () => {
+        const topics = (await state(page)).topics as Array<{ id: string; state?: string }>;
+        return topics.find((t) => t.id === id)?.state ?? 'archived';
+      },
+      { timeout: 30_000 },
+    )
+    .toBe('archived');
 });
