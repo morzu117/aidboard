@@ -1,3 +1,4 @@
+import type { CreationsCartes } from './cartes.js';
 import { verifierCibleMesh } from '../mesh/cible-ecriture.js';
 import type { MeshRegistry } from '../mesh/registre.js';
 import { creerActionsAvis } from './avis.js';
@@ -46,6 +47,7 @@ const LIVE = ['starting', 'working', 'needs_input', 'idle'];
 export function creerActionsConfirmation(
   deps: DependancesHost & {
     avis?: AvisMeshService;
+    cartes?: CreationsCartes;
     meshes?: MeshRegistry;
     board?: BoardReader | null;
     db: Db;

@@ -9,6 +9,7 @@ import { createConnection } from 'node:net';
 /** D263 : 15 s visées en amont + 5 s ; à recaler sur le document de schéma du proxy. */
 export const DELAI_PROXY_MS = 20_000;
 export const VERBES_PROXY = [
+  'board.cards.create',
   'board.cards.move',
   'board.cards.say',
   'mesh.send',
@@ -198,6 +199,8 @@ export function creerProxyClient(
         !argumentsLectureValides(verbe, args)
       )
         return Promise.resolve({ ok: false, code: 'bad_args' });
+      if (verbe === 'board.cards.create' && !argumentsCreationValides(args))
+        return Promise.resolve({ ok: false, code: 'bad_args' });
       const requestId = (options.uuid ?? randomUUID)();
       const ligne = JSON.stringify({ verb: verbe, args, request_id: requestId }) + '\n';
       if (!options.socket) return Promise.resolve({ ok: false, code: 'connexion' });
@@ -249,4 +252,20 @@ export function creerProxyClient(
       });
     },
   };
+}
+
+/** D339 : A-I-D expose seulement ces trois champs du schéma de création. */
+export function argumentsCreationValides(args: Record<string, unknown>): boolean {
+  return (
+    Object.keys(args).length === 3 &&
+    Object.keys(args).every((cle) => ['project', 'title', 'body'].includes(cle)) &&
+    Number.isSafeInteger(args.project) &&
+    (args.project as number) > 0 &&
+    typeof args.title === 'string' &&
+    !!args.title.trim() &&
+    Array.from(args.title).length <= 1000 &&
+    typeof args.body === 'string' &&
+    !!args.body.trim() &&
+    Array.from(args.body).length <= 200000
+  );
 }

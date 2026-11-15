@@ -1,3 +1,4 @@
+import { lignesCreation } from '../../../src/shared/ecritures.js';
 import {
   CLASSE_ACTION,
   validerParamsAction,
@@ -125,6 +126,12 @@ export function ParametresSignes({
       lignes = [`Nom : ${d.params.nom}`, `Empreinte : ${d.params.empreinte}`];
       break;
     case 'mesh.ecrire':
+      if (d.params.action === 'carte.creer') {
+        lignes = lignesCreation(d.params.params);
+        break;
+      }
+      lignes = [`Action : ${d.params.action}`, ...champs(d.params.params)];
+      break;
     case 'mesh.etat':
       lignes = [`Action : ${d.params.action}`, ...champs(d.params.params)];
       break;

@@ -1,3 +1,5 @@
+import { liensSwairm } from './swairm-board.js';
+
 export const KINDS_ECRITURE = ['status', 'question', 'answer', 'unblock', 'fyi'] as const;
 export type KindEcriture = (typeof KINDS_ECRITURE)[number];
 interface MessageEcriture {
@@ -5,6 +7,7 @@ interface MessageEcriture {
   texte: string;
 }
 export interface ParametresEcriture {
+  'carte.creer': { projet: number; projetNom: string; titre: string; corps: string };
   'carte.note': MessageEcriture & { carte: number; a: string | null };
   'dm.envoyer': MessageEcriture & { pair: string; fil: string | null };
   'canal.poster': MessageEcriture & { canal: string };
@@ -40,6 +43,28 @@ export function lireParamsEcriture<A extends ActionEcriture>(
     },
   };
   const schemas: Record<ActionEcriture, Record<string, (v: unknown) => string | null>> = {
+    'carte.creer': {
+      projet: (v) => (entier(v) ? null : 'id de projet invalide'),
+      projetNom: (v) =>
+        typeof v === 'string' &&
+        v.trim() &&
+        Array.from(v).length <= 100 &&
+        !/[\p{Cc}\p{Cf}\u2028\u2029]/u.test(v)
+          ? null
+          : 'nom de projet invalide',
+      titre: (v) =>
+        typeof v === 'string' &&
+        v.trim() &&
+        Array.from(v.trim()).length <= 200 &&
+        !/[\p{Cc}\p{Cf}\u2028\u2029]/u.test(v)
+          ? null
+          : 'titre invalide (1 à 200 caractères, sans saut de ligne)',
+      corps: (v) => {
+        const erreur = commun.texte(v);
+        if (erreur) return erreur;
+        return ligneSwairm(v as string) ? null : 'première ligne Swairm invalide';
+      },
+    },
     'carte.note': {
       ...commun,
       carte: (v) => (entier(v) ? null : 'numéro de carte invalide'),
@@ -67,7 +92,13 @@ export function lireParamsEcriture<A extends ActionEcriture>(
     const message = valider(p[cle]);
     if (message) return refus(message);
   }
-  return { ok: true, params: { ...p } as unknown as ParametresEcriture[A] };
+  return {
+    ok: true,
+    params: {
+      ...p,
+      ...(action === 'carte.creer' && { titre: (p.titre as string).trim() }),
+    } as unknown as ParametresEcriture[A],
+  };
 }
 export function argvEcriture<A extends ActionEcriture>(
   action: A,
@@ -78,6 +109,8 @@ export function argvEcriture<A extends ActionEcriture>(
     throw new Error('Paramètres d’écriture invalides');
   const p = { action, params } as Ecriture;
   switch (p.action) {
+    case 'carte.creer':
+      return []; // Création par le proxy seul, aucune commande CLI à proposer.
     case 'carte.note':
       return [
         'board',
@@ -127,6 +160,8 @@ export function resumeEcriture<A extends ActionEcriture>(
     throw new Error('Paramètres d’écriture invalides');
   const p = { action, params } as Ecriture;
   switch (p.action) {
+    case 'carte.creer':
+      return `Création de carte dans le projet #${p.params.projet}`;
     case 'carte.note':
       return `Note ${p.params.kind} sur la carte #${p.params.carte}${p.params.a ? `, à ${p.params.a}` : ''}`;
     case 'dm.envoyer':
@@ -158,6 +193,11 @@ export function argsProxy<A extends ActionEcriture>(action: A, params: Parametre
   if (!lireParamsEcriture(action, params, '').ok)
     throw new Error('Paramètres d’écriture invalides');
   const p = { action, params } as Ecriture;
+  if (p.action === 'carte.creer')
+    return {
+      verb: 'board.cards.create',
+      args: { project: p.params.projet, title: p.params.titre.trim(), body: p.params.corps },
+    };
   const commun = { content: p.params.texte, kind: p.params.kind };
   switch (p.action) {
     case 'carte.note':
@@ -184,6 +224,7 @@ export interface ResultatEnvoi {
     | 'verb_not_allowed'
     | 'bad_args'
     | 'peer_not_allowed'
+    | 'verification_board'
     | 'proxy_unavailable'
     | 'upstream_unreachable'
     | 'upstream_ambiguous'
@@ -193,10 +234,45 @@ export interface ResultatEnvoi {
     | 'connexion'
     | 'format'
     | 'obligation-close';
+  message?: string;
+  cree?: boolean;
+  relecture?: 'trouvee' | 'absente' | 'attente' | 'echec';
+  enVol?: boolean;
   id?: number;
   open_obligations: number[];
   status?: number;
   detail?: string;
   current_stage?: string;
   warn?: string;
+}
+
+/** D285 : la première ligne doit être exacte, sans strip ni normalisation. */
+export function ligneSwairm(corps: string): string | null {
+  const ligne = corps.split('\n')[0]!;
+  const lien = liensSwairm(ligne)[0];
+  return lien && ligne === `Swairm: ${lien.projet}#${lien.id}` ? ligne : null;
+}
+export const AVERTISSEMENT_CREATION =
+  'Le board ouvrira aussi les obligations obligatoires du projet, sans détenteur. A-I-D ne pourra pas les retirer.';
+export const CREATION_EN_COURS = 'Une création de carte est déjà en cours pour ce sujet.';
+export const CREATION_INCERTAINE =
+  'Création incertaine : la carte a peut-être été créée. A-I-D relit le board avant de te laisser recommencer.';
+export function lignesCreation(params: ParametresEcriture['carte.creer']): string[] {
+  return [
+    `Titre : ${params.titre.trim()}`,
+    `Projet : ${params.projetNom} (#${params.projet})`,
+    `Sujet : ${ligneSwairm(params.corps)?.slice('Swairm: '.length) ?? ''}`,
+  ];
+}
+/** D339 et D263 : un format illisible après écriture reste incertain. */
+export function creationIncertaine(code: ResultatEnvoi['code']): boolean {
+  return ['upstream_ambiguous', 'interrompu', 'delai', 'format'].includes(code);
+}
+export function messageCreation(code: ResultatEnvoi['code'], status?: number): string | undefined {
+  if (code === 'verb_not_allowed')
+    return "Le proxy a refusé de créer la carte : il est trop ancien (swarph-cli 0.82.0 requis) ou en lecture seule. Rien n'a été créé.";
+  if (code === 'upstream_error' && status === 403)
+    return "Le board a refusé cette création (403) : ta cell n'a pas le droit d'écrire dans ce projet.";
+  if (creationIncertaine(code)) return CREATION_INCERTAINE;
+  return undefined;
 }

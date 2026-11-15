@@ -172,7 +172,7 @@ const schemas: Record<ActionConfirmee, Record<string, Validation>> = {
     params: () => true,
   },
   'mesh.ecrire': {
-    action: choix('carte.note', 'dm.envoyer', 'canal.poster'),
+    action: choix('carte.creer', 'carte.note', 'dm.envoyer', 'canal.poster'),
     params: () => true,
   },
   merge: {

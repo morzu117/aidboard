@@ -9,6 +9,8 @@ export type ApercuEcriture =
       argv: string[];
       resume: string;
       texte: string;
+      lignes?: string[];
+      avertissement?: string;
       rappel: { obligations: number[] } | { indisponible: true } | null;
     }
   | { ok: false; kind: 'schema' | 'nettoyage'; message: string };
@@ -27,6 +29,7 @@ export type CodeEnvoi =
   | 'demande_trop_grande'
   | 'obligation-close'
   | 'succes'
+  | 'verification_board'
   | 'proxy_unavailable'
   | 'connexion'
   | 'upstream_unreachable'
@@ -40,6 +43,10 @@ export type CodeEnvoi =
   | 'peer_not_allowed';
 
 export interface ResultatEnvoi {
+  message?: string;
+  cree?: boolean;
+  relecture?: 'trouvee' | 'absente' | 'attente' | 'echec';
+  enVol?: boolean;
   code: CodeEnvoi;
   id?: number;
   open_obligations: number[];
