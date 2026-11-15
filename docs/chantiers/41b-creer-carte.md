@@ -45,10 +45,12 @@ Le 41 a liste les « Sujets Swairm sans carte ». Pour chacun, il propose seulem
 
 ### D339. Le transport : le proxy seul
 
-- `board.cards.create` entre dans `VERBES_PROXY`, avec un schéma d'arguments fermé : le projet, le titre et le corps, **sous les noms exacts** du document de schéma de swarph-cli 0.82.0 (`docs/proxy-protocol.md`, dépôt public). Aucun autre champ n'est envoyé.
+- `board.cards.create` entre dans `VERBES_PROXY`, avec un schéma d'arguments fermé : `project`, `title` et `body`. Ce sont les noms du document de schéma de swarph-cli 0.82.0 (`docs/proxy-protocol.md`, dépôt public, ligne du verbe). `priority`, `labels` et `assignee` existent aussi, mais A-I-D ne les envoie pas, ni aucun autre champ. Le proxy fixe lui-même l'acteur à sa cell.
+- Le proxy fait un seul POST, sans lecture préalable. Un refus du gateway (403 : pas de droit sur le projet) arrive en `upstream_error`, avec le statut 403. L'écran dit alors « Le board a refusé cette création (403) : ta cell n'a pas le droit d'écrire dans ce projet. »
+- **Une création ouvre aussi les obligations obligatoires** du menu du board, sans détenteur (document de schéma, § `board.cards.create`). L'aperçu le dit en une ligne : « Le board ouvrira aussi les obligations obligatoires de la carte, sans détenteur. »
 - Sans `mesh.proxySocket`, `preparer` répond 409 `proxy_absent` (D262). Avec un proxy en lecture seule, l'écran le dit et rien n'est demandé (D283).
 - Si le proxy configuré ne répond pas, c'est une erreur, avec les messages de D263. Il n'y a jamais de repli sur le CLI (règle du lab, `docs/proxy-deployment.md` de swarph-cli).
-- La réponse est lue au format du document de schéma : l'id de la carte créée est affiché, et seulement lui. `detail` n'est jamais remonté.
+- Une réponse 2xx renvoie la carte créée telle quelle. A-I-D n'en garde que l'id, qu'il affiche. `detail` n'est jamais remonté.
 
 ### D340. L'envoi incertain ne crée pas de doublon
 
