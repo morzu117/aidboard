@@ -119,6 +119,7 @@ Sur la CI de la PR #171 (Node 24), le test « D126 : pendant la lecture, la tuil
 - Prouver la cause sous charge, en mesurant avant et après la correction sur un grand nombre de passages.
 - Le test attend que la requête soit partie avant de la libérer. Ce qu'il vérifie ne change pas, ni le code de l'écran, sauf si la cause est ailleurs.
 - **Tests :** le test corrigé sous charge ; le gate entier.
+27.11 commité. Cause prouvée par instrumentation, retirée ensuite : `rendre` était encore la fonction vide au moment de l'`act`. Une ligne existante remplacée dans `test/web/livraison.test.tsx`. Sous charge : 8/32 échecs avant, 0/32 après. Gate vert (3 893 tests) au second passage. Le premier a échoué sous charge sur un autre test sans rapport, de `test/web/meshes.test.tsx`, qui passe 5 fois sur 5 seul. Les 19 tests de Livraison passent 3 fois sur 3. Sans `gate:e2e` : seul un test vitest change.
 
 ## 6. Pièges
 
