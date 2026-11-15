@@ -91,6 +91,21 @@ const tete = 'abcdef0'.padEnd(40, '1');
 const cas: [ParamsAction, string[]][] = [
   [
     {
+      action: 'mesh.ecrire',
+      params: {
+        action: 'carte.creer',
+        params: {
+          projet: 17,
+          projetNom: 'Projet exemple',
+          titre: '<b>Une carte</b>',
+          corps: 'Swairm: exemple/depot#41\n\ninterne_texte_libre',
+        },
+      },
+    },
+    ['Titre : <b>Une carte</b>', 'Projet : Projet exemple (#17)', 'Sujet : exemple/depot#41'],
+  ],
+  [
+    {
       action: 'merge',
       params: {
         topicId: 'interne_topic',

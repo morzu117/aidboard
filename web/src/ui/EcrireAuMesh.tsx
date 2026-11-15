@@ -1,3 +1,5 @@
+import { useBoardProjects } from '../data/board.js';
+import { AVERTISSEMENT_CREATION, lignesCreation } from '../../../src/shared/ecritures.js';
 import { EnteteMesh } from './SelecteurMesh.js';
 import { instantaneMesh } from '../data/meshLecture.js';
 import { AidApiError } from '../data/api.js';
@@ -39,6 +41,8 @@ type ParametresFormulaire = {
   onEnvoye?: () => void;
   action: ActionEcriture;
   valeurs?: {
+    titre?: string;
+    ligneSwairm?: string;
     texte?: string;
     kind?: KindEcriture;
     carte?: number;
@@ -49,7 +53,7 @@ type ParametresFormulaire = {
   };
   choix?: boolean;
   onClose: () => void;
-  onRelire?: () => void;
+  onRelire?: () => void | Promise<void>;
 };
 
 function FormulaireEcriture({
@@ -63,6 +67,13 @@ function FormulaireEcriture({
   onEnvoye,
 }: ParametresFormulaire & { mesh: string }) {
   const client = useAidClient();
+  const projets = useBoardProjects(mesh);
+  const [projet, setProjet] = useState('');
+  const [titre, setTitre] = useState(valeurs.titre ?? '');
+  const projetChoisi = projets.result?.ok
+    ? projets.result.data.find((p) => p.id === Number(projet) && p.title)
+    : undefined;
+
   const { state } = useAid();
   const objetMesh = instantaneMesh(state, mesh);
   const lectureSeule = objetMesh?.state.proxyConfigure && !objetMesh.state.ecritures;
@@ -81,6 +92,12 @@ function FormulaireEcriture({
   const idCanal = useId();
   const [action, setAction] = useState(depart);
   const [texte, setTexte] = useState(valeurs.texte ?? '');
+  const creation = {
+    projet: Number(projet),
+    projetNom: projetChoisi?.title ?? '',
+    titre,
+    corps: (valeurs.ligneSwairm ?? '') + (texte ? `\n\n${texte}` : ''),
+  };
   const [kind, setKind] = useState<KindEcriture>(valeurs.kind ?? 'fyi');
   const [carte, setCarte] = useState(String(valeurs.carte ?? ''));
   const [a, setA] = useState(valeurs.a ?? '');
@@ -90,6 +107,7 @@ function FormulaireEcriture({
   const [attente, setAttente] = useState(false);
   const [erreur, setErreur] = useState('');
   const [copie, setCopie] = useState('');
+  const [relectureEnCours, setRelectureEnCours] = useState(false);
   const cadre = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const avant = document.activeElement as HTMLElement | null;
@@ -112,11 +130,18 @@ function FormulaireEcriture({
     const commun = { texte, kind };
     try {
       setApercu(
-        await (action === 'carte.note'
-          ? apercuEcriture(action, { ...commun, carte: Number(carte), a: a || null }, client, mesh)
-          : action === 'dm.envoyer'
-            ? apercuEcriture(action, { ...commun, pair, fil: valeurs.fil ?? null }, client, mesh)
-            : apercuEcriture(action, { ...commun, canal }, client, mesh)),
+        await (action === 'carte.creer'
+          ? apercuEcriture(action, creation, client, mesh)
+          : action === 'carte.note'
+            ? apercuEcriture(
+                action,
+                { ...commun, carte: Number(carte), a: a || null },
+                client,
+                mesh,
+              )
+            : action === 'dm.envoyer'
+              ? apercuEcriture(action, { ...commun, pair, fil: valeurs.fil ?? null }, client, mesh)
+              : apercuEcriture(action, { ...commun, canal }, client, mesh)),
       );
     } catch {
       setErreur('Impossible de lire l’aperçu. Réessaie.');
@@ -134,23 +159,25 @@ function FormulaireEcriture({
     setAttente(true);
     const commun = { texte, kind };
     try {
-      const r = await (action === 'carte.note'
-        ? envoyerEcriture(
-            action,
-            { ...commun, carte: Number(carte), a: a || null },
-            client,
-            propositionSwairm,
-            mesh,
-          )
-        : action === 'dm.envoyer'
+      const r = await (action === 'carte.creer'
+        ? envoyerEcriture(action, creation, client, undefined, mesh)
+        : action === 'carte.note'
           ? envoyerEcriture(
               action,
-              { ...commun, pair, fil: valeurs.fil ?? null },
+              { ...commun, carte: Number(carte), a: a || null },
               client,
-              undefined,
+              propositionSwairm,
               mesh,
             )
-          : envoyerEcriture(action, { ...commun, canal }, client, undefined, mesh));
+          : action === 'dm.envoyer'
+            ? envoyerEcriture(
+                action,
+                { ...commun, pair, fil: valeurs.fil ?? null },
+                client,
+                undefined,
+                mesh,
+              )
+            : envoyerEcriture(action, { ...commun, canal }, client, undefined, mesh));
       if ('confirmation' in r) setConfirmation(r.confirmation);
       else {
         setResultat(r);
@@ -197,7 +224,10 @@ function FormulaireEcriture({
         .join(' ')
     : '';
   return (
-    <Dialogue titre="Écrire au mesh (à blanc)" onClose={onClose}>
+    <Dialogue
+      titre={action === 'carte.creer' ? 'Créer la carte' : 'Écrire au mesh (à blanc)'}
+      onClose={onClose}
+    >
       <div
         ref={cadre}
         onKeyDown={(e) => {
@@ -218,18 +248,47 @@ function FormulaireEcriture({
         }}
       >
         <fieldset disabled={attente || (confirmation !== null && !terminee)} onChange={effacer}>
-          <label htmlFor={idTexte}>Texte</label>
+          {action === 'carte.creer' && (
+            <>
+              <EnteteMesh mesh={mesh} />
+              <label>
+                Projet
+                <select value={projet} onChange={(e) => setProjet(e.target.value)}>
+                  <option value="">Choisir un projet</option>
+                  {projets.result?.ok &&
+                    projets.result.data
+                      .filter((p) => p.title)
+                      .map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.title} (#{p.id})
+                        </option>
+                      ))}
+                </select>
+              </label>
+              {projets.erreur && <p role="alert">{projets.erreur}</p>}
+              <label>
+                Titre
+                <input value={titre} onChange={(e) => setTitre(e.target.value)} />
+              </label>
+              <p>{valeurs.ligneSwairm}</p>
+            </>
+          )}
+          <label htmlFor={idTexte}>{action === 'carte.creer' ? 'Texte facultatif' : 'Texte'}</label>
           <textarea id={idTexte} value={texte} onChange={(e) => setTexte(e.target.value)} />
-          <label htmlFor={idKind}>Kind</label>
-          <select
-            id={idKind}
-            value={kind}
-            onChange={(e) => setKind(e.target.value as KindEcriture)}
-          >
-            {KINDS_ECRITURE.map((k) => (
-              <option key={k}>{k}</option>
-            ))}
-          </select>
+          {action !== 'carte.creer' && (
+            <>
+              <label htmlFor={idKind}>Kind</label>
+              <select
+                id={idKind}
+                value={kind}
+                onChange={(e) => setKind(e.target.value as KindEcriture)}
+              >
+                {KINDS_ECRITURE.map((k) => (
+                  <option key={k}>{k}</option>
+                ))}
+              </select>
+            </>
+          )}
           {choix && (
             <>
               <label htmlFor={idDestination}>Destination</label>
@@ -269,7 +328,10 @@ function FormulaireEcriture({
               <p>Ce post serait lu par tous les membres du canal.</p>
             </>
           )}
-          <button disabled={envoye} onClick={() => void voir()}>
+          <button
+            disabled={envoye || (action === 'carte.creer' && !projetChoisi)}
+            onClick={() => void voir()}
+          >
             Voir l&apos;aperçu
           </button>
         </fieldset>
@@ -278,7 +340,16 @@ function FormulaireEcriture({
             <section aria-label="Aperçu">
               <EnteteMesh mesh={mesh} />
               <p>{apercu.resume}</p>
-              <pre>{commande}</pre>
+              {action === 'carte.creer' ? (
+                <>
+                  {(apercu.lignes ?? lignesCreation(creation)).map((ligne) => (
+                    <p key={ligne}>{ligne}</p>
+                  ))}
+                  <p>{apercu.avertissement ?? AVERTISSEMENT_CREATION}</p>
+                </>
+              ) : (
+                <pre>{commande}</pre>
+              )}
               <pre>{apercu.texte}</pre>
               {apercu.rappel &&
                 ('indisponible' in apercu.rappel ? (
@@ -291,7 +362,7 @@ function FormulaireEcriture({
                     </p>
                   ))
                 ))}
-              {!resultat && !confirmation && (
+              {action !== 'carte.creer' && !resultat && !confirmation && (
                 <p>
                   À blanc : rien n&apos;est parti. L&apos;envoi viendra avec le proxy local (#20).
                 </p>
@@ -329,10 +400,28 @@ function FormulaireEcriture({
                   />
                 </>
               )}
-              {resultat && <p role="status">{libelleEnvoi(resultat)}</p>}
+              {resultat && <p role="status">{resultat.message ?? libelleEnvoi(resultat)}</p>}
+              {action === 'carte.creer' && resultat?.id && <p>Carte : #{resultat.id}</p>}
+              {action === 'carte.creer' && resultat?.relecture === 'trouvee' && (
+                <p>Le board a retrouvé la carte.</p>
+              )}
+              {action === 'carte.creer' && resultat?.relecture === 'absente' && (
+                <p>Le board a été relu : aucune carte ne porte ce sujet.</p>
+              )}
               {resultat &&
                 envoiIncertain(resultat) &&
-                (action === 'carte.note' ? (
+                (action !== 'carte.creer' || resultat.cree !== true) &&
+                (action === 'carte.creer' ? (
+                  <button
+                    disabled={relectureEnCours}
+                    onClick={() => {
+                      setRelectureEnCours(true);
+                      void Promise.resolve(onRelire?.()).finally(() => setRelectureEnCours(false));
+                    }}
+                  >
+                    Relire le board
+                  </button>
+                ) : action === 'carte.note' ? (
                   <button
                     onClick={() => {
                       onClose();
@@ -344,14 +433,22 @@ function FormulaireEcriture({
                 ) : (
                   <p>Vérifie la Boîte ou le canal avant de réessayer.</p>
                 ))}
-              <button onClick={() => void copier(commande, 'commande')}>Copier la commande</button>
-              {copie === 'commande' && <span role="status">Copié</span>}
-              <p>
-                S&apos;exécute avec tous les droits de ta cellule. Écris d&apos;abord le texte dans
-                un fichier et remplace FICHIER par son chemin.
-              </p>
-              <button onClick={() => void copier(apercu.texte, 'texte')}>Copier le texte</button>
-              {copie === 'texte' && <span role="status">Copié</span>}
+              {action !== 'carte.creer' && (
+                <>
+                  <button onClick={() => void copier(commande, 'commande')}>
+                    Copier la commande
+                  </button>
+                  {copie === 'commande' && <span role="status">Copié</span>}
+                  <p>
+                    S&apos;exécute avec tous les droits de ta cellule. Écris d&apos;abord le texte
+                    dans un fichier et remplace FICHIER par son chemin.
+                  </p>
+                  <button onClick={() => void copier(apercu.texte, 'texte')}>
+                    Copier le texte
+                  </button>
+                  {copie === 'texte' && <span role="status">Copié</span>}
+                </>
+              )}
             </section>
           ) : (
             <p role="alert">{apercu.message}</p>

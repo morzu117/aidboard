@@ -107,6 +107,7 @@ Vérifications : gate vert (4 132 tests), gate:e2e 137, tests du chantier 166 fo
 
 - Le bouton, l'écran de création et le sélecteur de projet. L'affichage de `carte.creer` dans l'app du téléphone (`pda-v2`) : le résumé et ses lignes, sans aucun champ interne.
 - **Tests :** l'écran sans proxy, avec un proxy en lecture seule, et avec un proxy ; l'aperçu impossible sans projet ; la ligne Swairm non modifiable ; l'affichage sur le téléphone ; le bouton désactivé pendant la relecture de D340.
+41b.3 commité. Il touche cinq fichiers : `SwairmBoard.tsx`, `EcrireAuMesh.tsx`, `ParametresSignes.tsx` et `data/ecritures.ts` côté web, et `test/web/pda-v2.test.tsx` côté tests. Il ajoute aussi `test/web/creation-carte.test.tsx`, avec 10 tests. Gate vert (4 142 tests), gate:e2e 137, tests web du chantier 80 sur 80, 3 fois. Deux défauts de l'écran sont repris au 41b.2bis : la raison de la désactivation répétée sous chaque sujet, et le libellé « aucune carte » pendant le délai de grâce.
 
 ### 41b.4 L'e2e et la fiche de recette
 
