@@ -234,6 +234,13 @@ Sur la CI de la PR #172, deux fois de suite, l'e2e « Confirmations : merge, pé
 - Si c'est une lecture du daemon, toutes ses lectures git locales passent sans verrou facultatif, comme celles de la machine distante. Les écritures (commit, merge, worktree) ne changent pas.
 - Si la cause est ailleurs, elle est décrite, et le correctif est à décider.
 - **Tests :** un test qui montre qu'une lecture du daemon ne crée pas `index.lock` ; l'e2e des confirmations, plusieurs fois de suite ; le gate entier, et `gate:e2e`.
+34.10 commité. La cause a été prouvée par `GIT_TRACE2_EVENT` pendant l'e2e : le `git status --porcelain` de `hasUncommittedChanges` (via `GET /api/topics/:id/git/log`) écrit `index.lock` juste après `worktree add`. Les modifications :
+- `src/daemon/git/exec.ts` : une liste positive de sous-commandes de lecture reçoit `GIT_OPTIONAL_LOCKS=0`. Les écritures et les sous-commandes inconnues gardent leur environnement.
+- Les lectures directes de `aid/workspace.ts`, `host/diff.ts` et `updateCheck.ts` passent aussi sans verrou.
+- 7 lignes existantes remplacées, hors du chantier.
+- `test/git-verrou.test.ts` : une lecture sur un index périmé ne crée pas `index.lock`, et 20 lectures concurrentes laissent passer un commit.
+
+Vérifié : l'e2e des confirmations 5/5 chez Codex, gate vert (3 895 tests), `gate:e2e` entier vert sous Node 22 avec `CI=1` (132), 3/3 passages des tests git, aucun daemon résiduel.
 
 ## 6. Pièges
 
