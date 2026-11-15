@@ -72,6 +72,7 @@ Le job e2e de la PR #179 a échoué sur `e2e/pilotage.spec.ts`, dans le test « 
 - Prouver la cause : l'ordre entre l'effacement du dossier et le passage à `archived`, dans le code de l'action de nettoyage.
 - Si la cause est dans le test, il attend l'état `archived` par un `expect.poll`, et ses assertions ne s'affaiblissent pas. En particulier, le repli `?? 'archived'` d'un sujet absent de l'état reste tel quel, ou bien il est justifié. Si le daemon peut laisser un sujet `active` après un nettoyage réussi, c'est un défaut : il est décrit, et le correctif est à décider.
 - **Tests :** `e2e/pilotage.spec.ts` répété ; `npm run gate` et `npm run gate:e2e`.
+51.4 commité. Cause prouvée par le code : `topic-cleanup.sh` retire le worktree. `afterSuccess` écrit `archived` seulement quand le script est fini (`actions/service.ts`, `confirmations/actions.ts`). Le test lit maintenant l'état par un `expect.poll` de 30 s. Le repli `?? 'archived'` reste : l'état exclut les sujets archivés par défaut. Gate vert (4 033 tests), `e2e/pilotage.spec.ts` 3 fois sur 3 sur le VPS, et 5 fois sur 5 chez Codex.
 
 ## 4. Fini quand
 
