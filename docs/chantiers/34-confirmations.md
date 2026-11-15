@@ -226,6 +226,22 @@ Un merge et un push confirmés de bout en bout avec le relais local et la passke
 - *Révision 34.9 — fait.* E2E des confirmations avec relais local, passkey virtuelle et forge factice ; fiche de recette pour les vrais téléphones. Le motif D234 est affiché dans l’attente et les dernières demandes. Le brief final privilégie les cas merge et host ; le push confirmé reste couvert par les tests du 34.5.
 - *Révision 34.9.* `e2e/confirmations.spec.ts` couvre le merge direct puis confirmé, une demande périmée, l'appairage avec le bon numéro puis un faux numéro signé, l'annulation, le réglage, le désarmement, le réarmement et le refus après révocation. Le push confirmé reste couvert par les tests du 34.5. Le texte de D234 s'affiche sur le Mac. La fiche `docs/recette-chantier-34-confirmations.md` est pour Julien. Gate 2467, e2e 117.
 
+### 34.10 Correctif : un `git commit` heurte le verrou de l'index dans l'e2e des confirmations
+
+Sur la CI de la PR #172, deux fois de suite, l'e2e « Confirmations : merge, péremption, numéro, annulation, réglage et armement » a échoué. Son `git commit --allow-empty`, lancé dans le worktree du sujet juste après sa création, a reçu `Unable to create '…/index.lock': File exists`. Hypothèse à prouver : une lecture git du daemon dans ce worktree (un `git status`, par exemple) prend le verrou facultatif de l'index. Les lectures git de la machine distante l'évitent déjà (`GIT_OPTIONAL_LOCKS=0`, `--no-optional-locks`), mais pas les lectures locales. Si c'est le cas, A-I-D peut faire échouer un `git commit` de l'utilisateur dans son propre worktree.
+
+- Prouver la cause : quelle commande git du daemon tient le verrou, et à quel moment.
+- Si c'est une lecture du daemon, toutes ses lectures git locales passent sans verrou facultatif, comme celles de la machine distante. Les écritures (commit, merge, worktree) ne changent pas.
+- Si la cause est ailleurs, elle est décrite, et le correctif est à décider.
+- **Tests :** un test qui montre qu'une lecture du daemon ne crée pas `index.lock` ; l'e2e des confirmations, plusieurs fois de suite ; le gate entier, et `gate:e2e`.
+34.10 commité. La cause a été prouvée par `GIT_TRACE2_EVENT` pendant l'e2e : le `git status --porcelain` de `hasUncommittedChanges` (via `GET /api/topics/:id/git/log`) écrit `index.lock` juste après `worktree add`. Les modifications :
+- `src/daemon/git/exec.ts` : une liste positive de sous-commandes de lecture reçoit `GIT_OPTIONAL_LOCKS=0`. Les écritures et les sous-commandes inconnues gardent leur environnement.
+- Les lectures directes de `aid/workspace.ts`, `host/diff.ts` et `updateCheck.ts` passent aussi sans verrou.
+- 7 lignes existantes remplacées, hors du chantier.
+- `test/git-verrou.test.ts` : une lecture sur un index périmé ne crée pas `index.lock`, et 20 lectures concurrentes laissent passer un commit.
+
+Vérifié : l'e2e des confirmations 5/5 chez Codex, gate vert (3 895 tests), `gate:e2e` entier vert sous Node 22 avec `CI=1` (132), 3/3 passages des tests git, aucun daemon résiduel.
+
 ## 6. Pièges
 
 - **Lignes existantes modifiées.** Ce chantier touche des routes existantes (merge, push, nettoyage, retrait de projet, appairage, options du host). Le nombre de lignes modifiées sera plus élevé qu'aux chantiers précédents. Chaque point le donne et le justifie.
