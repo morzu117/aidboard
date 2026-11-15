@@ -41,6 +41,7 @@ export function creerActionEtat(deps: {
         if (!nettoyage.ok) throw new AidHttpError(422, nettoyage.classe);
       }
       if (!mesh.proxySocket) throw new AidHttpError(409, 'proxy_absent');
+      if (mesh.proxyLectureSeule) throw new AidHttpError(409, 'proxy_lecture_seule');
       if (action === 'carte.deplacer') {
         const deplacement = params as ParametresEtat['carte.deplacer'];
         const fiche = await deps.board

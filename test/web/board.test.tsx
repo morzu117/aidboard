@@ -22,7 +22,7 @@ const meshEtat: MeshState = {
   monitor: 'running',
   pending: 0,
   since: null,
-  cell: 'morzu-mac',
+  cell: 'cell-aid',
 };
 const avecMesh = snapshot({ mesh: { state: meshEtat, inbox: [], tailscaleManage: false } });
 const READ_AT = new Date().toISOString();
@@ -118,7 +118,7 @@ test('colonnes dans l’ordre des stage reçus, cartes « slug · #id », sans r
   expect(c101.querySelector('b')).toBeNull();
   expect(c101.textContent).toContain('<b>pas du HTML</b>');
   expect(node('board.carte-103')!.textContent).toContain('2 obligations ouvertes');
-  expect(node('board.identite')!.textContent).toContain('morzu-mac');
+  expect(node('board.identite')!.textContent).toContain('cell-aid');
   // Les colonnes précèdent l’effet qui transmet la fin de lecture au parent.
   await waitFor(() => expect(node('board.pastille')!.textContent).toMatch(/Board lu il y a \d+ s/));
   // lecture seule : aucun champ ni bouton d'écriture
@@ -349,4 +349,14 @@ test('D110 : après une lecture réussie, le bandeau en donne l’heure ; un ref
   await ouvrir({ ok: false, kind: 'forbidden', readAt: READ_AT });
   await waitFor(() => expect(node('board.message')).not.toBeNull());
   expect(node('board.bandeau')).toBeNull();
+});
+
+test('avatar du responsable et absence de disque sans responsable', async () => {
+  await ouvrir(ok([projet]), ok([carte({ id: 101, assignee: 'peer-a' }), carte({ id: 102 })]));
+  await waitFor(() => expect(node('board.carte-101')).not.toBeNull());
+  expect(
+    node('board.carte-101')!.querySelector('.avatar-cell')?.getAttribute('data-initiales'),
+  ).toBe('PA');
+  expect(node('board.carte-101')!.textContent).toContain('peer-a');
+  expect(node('board.carte-102')!.querySelector('.avatar-cell')).toBeNull();
 });

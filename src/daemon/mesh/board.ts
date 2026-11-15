@@ -105,6 +105,11 @@ export class BoardReader {
     return this.load(['board', 'cards', 'list', '--search', q], parseRechercheCartes, {});
   }
 
+  /** Une carte seule : aucun graphe, fil ou appel obligations. */
+  carte(cardId: number, opts: ReadOpts = {}): Promise<BoardResult<BoardCard>> {
+    return this.load(['board', 'cards', 'show', this.id(cardId)], parseCard, opts);
+  }
+
   /** La fiche : `show`, `graph`, `thread` et `obligations` en parallèle, chacun avec son propre résultat. */
   async card(cardId: number, opts: ReadOpts = {}): Promise<BoardCardSheet> {
     const id = this.id(cardId);

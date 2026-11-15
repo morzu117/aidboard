@@ -220,14 +220,14 @@ test('31.8 (D177) : couper tous les accès ferme tout et annule la demande ; le 
 
 test('31.8 (D177) : depuis un appareil, la liste, révoquer un autre, se déconnecter', async () => {
   const { registre, appareil, jeton } = await demarrer();
-  const autre = registre.emettre({ nom: 'B', identite: 'julien@exemple' });
+  const autre = registre.emettre({ nom: 'B', identite: 'utilisateur@exemple' });
   const liste = await surAppareil(jeton, 'GET', '/api/appareils');
   expect(liste.statusCode).toBe(200);
   const lignes = liste.json<Array<{ id: string; moi: boolean }>>();
   expect(lignes.find((l) => l.id === appareil.id)!.moi).toBe(true);
   expect(lignes.find((l) => l.id === autre.appareil.id)!.moi).toBe(false);
   // ni l'identité, ni l'empreinte
-  expect(liste.body).not.toContain('julien@exemple');
+  expect(liste.body).not.toContain('utilisateur@exemple');
   expect(liste.body).not.toContain('empreinte');
   expect(
     (await surAppareil(jeton, 'DELETE', `/api/appareils/${autre.appareil.id}`)).statusCode,

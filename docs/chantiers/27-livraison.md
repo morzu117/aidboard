@@ -112,6 +112,15 @@ Chaque point est un commit, gate vert. Les lignes existantes modifiées sont com
 - **Fichiers** : `e2e/livraison.spec.ts` : son propre daemon, faux `gh` par `AID_GH_BIN`, faux claude `stream` ; ouvrir la PR, relire, revue absente puis page `review` avec `commit:` (à jour, puis obsolète après un commit poussé : merge bloqué), merge confirmé et `--match-head-commit` au journal, onglet Livraison, Livrer sur l'accueil ; `docs/recette-chantier-27-livraison.md`.
 - **Vérification** : `npm run gate` et `npm run gate:e2e`
 
+### 27.11 Correctif : le test « pendant la lecture » de D126 est instable
+
+Sur la CI de la PR #171 (Node 24), le test « D126 : pendant la lecture, la tuile Revue ne conclut rien » a reçu `Lecture…` au lieu de `Obsolète`. Le test libère la réponse de `GET …/git/livraison?revue=…` dès que l'avis est affiché. Si cette requête n'est pas encore partie, il libère une promesse qui n'existe pas encore, et la tuile reste en lecture. C'est l'hypothèse à prouver.
+
+- Prouver la cause sous charge, en mesurant avant et après la correction sur un grand nombre de passages.
+- Le test attend que la requête soit partie avant de la libérer. Ce qu'il vérifie ne change pas, ni le code de l'écran, sauf si la cause est ailleurs.
+- **Tests :** le test corrigé sous charge ; le gate entier.
+27.11 commité. Cause prouvée par instrumentation, retirée ensuite : `rendre` était encore la fonction vide au moment de l'`act`. Une ligne existante remplacée dans `test/web/livraison.test.tsx`. Sous charge : 8/32 échecs avant, 0/32 après. Gate vert (3 893 tests) au second passage. Le premier a échoué sous charge sur un autre test sans rapport, de `test/web/meshes.test.tsx`, qui passe 5 fois sur 5 seul. Les 19 tests de Livraison passent 3 fois sur 3. Sans `gate:e2e` : seul un test vitest change.
+
 ## 6. Pièges
 
 - **Jamais le vrai `gh`** en test ni en e2e : `AID_GH_BIN` vers `test/fixtures/fake-gh.sh`. La recette réelle se fait sur un dépôt jetable de Julien, jamais sur `aidboard`.

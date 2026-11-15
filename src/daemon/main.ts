@@ -1,3 +1,4 @@
+import { MeshRegistry } from './mesh/registre.js';
 import { SwairmAsk } from './swairm/ask.js';
 import type { LigneDemande } from './pda/file.js';
 import { FilePda } from './pda/file.js';
@@ -34,9 +35,7 @@ import { MemoryMirror } from './memory/mirror.js';
 import { MemoryWorker } from './memory/worker.js';
 import { MemoryService } from './memory/service.js';
 import { MemoryStore } from './memory/store.js';
-import { MeshService } from './mesh/service.js';
-import { SwarphReader } from './mesh/lectures.js';
-import { BoardReader } from './mesh/board.js';
+import type { MeshService } from './mesh/service.js';
 import { acquireLock } from './lock.js';
 import { ensureHome, resolvePaths } from './paths.js';
 import { reconcile } from './reconcile.js';
@@ -126,6 +125,10 @@ export async function startDaemon(
   try {
     writeDefaultConfigIfAbsent(paths);
     const config = { ...loadConfig(paths), ...opts.config };
+    if (opts.config?.mesh && !opts.config.meshes)
+      config.meshes = {
+        principal: { ...config.mesh, home: config.mesh.home ?? process.env.HOME ?? homedir() },
+      };
     purgeOldLogs(paths, config.terminal.logRetentionDays);
     const opened = openDb(paths.db);
     db = opened;
@@ -218,6 +221,7 @@ export async function startDaemon(
       config,
       auth,
       port: () => livePort,
+      meshes: () => meshes,
     });
     const devOrigin = process.env.AID_DEV_ORIGIN;
     if (devOrigin) console.error(`AID_DEV_ORIGIN actif : ${devOrigin} accepté comme origine`);
@@ -245,29 +249,12 @@ export async function startDaemon(
       exclude: config.structural.exclude,
     });
     // 12.3 : le service mesh existe seulement si une cell est configurée (D39) ; jamais de connexion automatique
-    const mesh = config.mesh.cell
-      ? new MeshService({
-          config: config.mesh,
-          // le HOME de l'utilisateur (~/.config/swarph, ~/swarph_state), pas AID_HOME
-          home: process.env.HOME ?? homedir(),
-          db: opened,
-          store,
-          log,
-        })
-      : null;
-    // chantier 24 : les lectures du board passent par le même service, donc n'existent qu'avec lui
-    const board = mesh
-      ? new BoardReader({ mesh, proxySocket: config.mesh.proxySocket, cell: config.mesh.cell, log })
-      : null;
-    const swarph = mesh
-      ? new SwarphReader({
-          mesh,
-          proxySocket: config.mesh.proxySocket,
-          cell: config.mesh.cell,
-          gateway: config.mesh.gateway,
-          log,
-        })
-      : null;
+    const meshes = new MeshRegistry({ config, db: opened, store, log });
+    // 46.6 : attend les identités et --version ; les monitors sont relus en arrière-plan
+    await meshes.init();
+    const mesh = meshes.principal?.mesh ?? null;
+    const board = meshes.principal?.board ?? null;
+    const swarph = meshes.principal?.swarph ?? null;
     // 08.8 : construit ici, et non dans buildServer, pour lancer le rattrapage après `listen`
     const indexer = new Indexer({ store, paths, engine: structural });
     // chantier 30 (D162) : le second port s'ouvre après le principal (son CSP cite le port
@@ -303,18 +290,17 @@ export async function startDaemon(
       appairages: new Appairages(),
       webRoot,
       // D175 : l'état sans relire les branches (syncTopicBranches reste au Mac), puis masqué
-      etat: () => buildSnapshot(opened, structural, false, mesh, !!config.swairm.bin),
+      etat: () =>
+        buildSnapshot(
+          opened,
+          structural,
+          false,
+          meshes.principal?.mesh ?? null,
+          !!config.swairm.bin,
+        ),
       signal: store,
       // D178 : un lecteur à part, 60 s ; les appareils partagent ses lectures, le Mac garde ses 5 s
-      board: mesh
-        ? new BoardReader({
-            mesh,
-            proxySocket: config.mesh.proxySocket,
-            cell: config.mesh.cell,
-            log,
-            cacheMs: 60_000,
-          })
-        : null,
+      board: meshes.principal?.boardHost ?? null,
       tailscaleExec: opts.tailscaleExec,
       logger: opts.logger,
       log,
@@ -391,6 +377,7 @@ export async function startDaemon(
       structural,
       indexer,
       mesh,
+      meshes,
       board,
       swarph,
       swairmAsk: new SwairmAsk(config.swairm.bin),
@@ -439,8 +426,6 @@ export async function startDaemon(
     void resumeFromManifest(agents, paths);
     // 08.8 : même esprit — le moteur rattrape chaque sujet en tâche de fond, un à la fois
     void rattraperIndex({ db: opened, store, engine: structural, indexer, log });
-    // 12.3 : relit l'état d'un monitor détaché qui aurait survécu, sans le relancer
-    void mesh?.init();
     const declencheurPush = creerDeclencheur({
       compterPda: () =>
         config.modeHost.actif && config.modeHost.pda
@@ -466,14 +451,16 @@ export async function startDaemon(
       store,
       agents,
       memory,
-      mesh,
+      get mesh() {
+        return meshes.principal?.mesh ?? null;
+      },
       updates: () => updates?.status() ?? null,
       modeHost,
       async stop() {
         await basculePda;
         await filePda?.arreter();
         await declencheurPush.arreter();
-        mesh?.dispose();
+        await meshes.arreter();
         await agents.stopAll('daemon_stop', 5000);
         agents.dispose();
         updates?.dispose();

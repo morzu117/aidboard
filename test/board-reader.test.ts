@@ -35,7 +35,7 @@ function fake(answer: (args: string[]) => MeshExecResult | Promise<MeshExecResul
         return answer(args);
       },
     },
-    cell: 'morzu-mac',
+    cell: 'cell-aid',
     log: (l) => log.push(l),
     now: () => clock,
   });
@@ -59,12 +59,12 @@ test('vecteurs d’arguments exacts pour chaque lecture, toujours --json --as <c
   await t.reader.cards(42);
   await t.reader.card(101);
   expect(t.calls).toEqual([
-    ['board', 'projects', 'list', '--json', '--as', 'morzu-mac'],
-    ['board', 'cards', 'list', '--project', '42', '--json', '--as', 'morzu-mac'],
-    ['board', 'cards', 'show', '101', '--json', '--as', 'morzu-mac'],
-    ['board', 'cards', 'graph', '101', '--json', '--as', 'morzu-mac'],
-    ['board', 'cards', 'thread', '101', '--limit', '1000', '--json', '--as', 'morzu-mac'],
-    ['board', 'obligations', 'list', '--card', '101', '--json', '--as', 'morzu-mac'],
+    ['board', 'projects', 'list', '--json', '--as', 'cell-aid'],
+    ['board', 'cards', 'list', '--project', '42', '--json', '--as', 'cell-aid'],
+    ['board', 'cards', 'show', '101', '--json', '--as', 'cell-aid'],
+    ['board', 'cards', 'graph', '101', '--json', '--as', 'cell-aid'],
+    ['board', 'cards', 'thread', '101', '--limit', '1000', '--json', '--as', 'cell-aid'],
+    ['board', 'obligations', 'list', '--card', '101', '--json', '--as', 'cell-aid'],
   ]);
   for (const args of t.calls) for (const f of FORBIDDEN) expect(args).not.toContain(f);
 });
@@ -106,7 +106,7 @@ test('classification : chaque erreur connue, et unknown jamais confondu avec unr
     classify(fail({ stderr: 'swarph board: gateway unreachable: timed out', exitCode: 1 })),
   ).toBe('unreachable');
   expect(
-    classify(fail({ stderr: "cannot resolve a mesh credential for 'morzu-mac'", exitCode: 1 })),
+    classify(fail({ stderr: "cannot resolve a mesh credential for 'cell-aid'", exitCode: 1 })),
   ).toBe('credential');
   expect(classify(fail({ stderr: 'gateway 500: internal error', exitCode: 1 }))).toBe('unknown');
   // D95 bis : texte réel du gateway pour une carte absente ; un jeton révoqué est un problème d'identifiant
@@ -151,7 +151,7 @@ test('une sortie au-delà de 4 Mo est refusée et signalée, le tampon n’est p
   const log: string[] = [];
   const reader = new BoardReader({
     mesh: { read: (args) => big('swarph', args, { env: process.env, timeoutMs: 10_000 }) },
-    cell: 'morzu-mac',
+    cell: 'cell-aid',
     log: (l) => log.push(l),
   });
   expect(await reader.projects()).toMatchObject({ ok: false, kind: 'too-large' });
@@ -197,8 +197,8 @@ function meshService(exec: MeshExec) {
   const config = {
     ...DEFAULT_CONFIG.mesh,
     bin: FAKE_SWARPH,
-    cell: 'morzu-mac',
-    gateway: 'http://mesh-gw.example.ts.net:8788',
+    cell: 'cell-aid',
+    gateway: 'http://gateway.example.ts.net:8788',
     stateRoot: join(home, 'swarph_state'),
     tailscale: { manage: false, bin: join(FIXTURES, 'fake-tailscale.sh') },
   };
@@ -213,7 +213,7 @@ function meshService(exec: MeshExec) {
   return { svc, home, config };
 }
 
-test('par MeshService.read et le faux swarph : JSON servi, journal limité à board … --json --as morzu-mac', async () => {
+test('par MeshService.read et le faux swarph : JSON servi, journal limité à board … --json --as cell-aid', async () => {
   const home = mkdtempSync(join(tmpdir(), 'aid-board-log-'));
   const swarphLog = join(home, 'swarph.log');
   const { svc, config } = meshService((bin, args, opts) =>
@@ -222,15 +222,15 @@ test('par MeshService.read et le faux swarph : JSON servi, journal limité à bo
       env: { ...opts.env, FAKE_SWARPH_LOG: swarphLog, FAKE_SWARPH_BOARD: BOARD },
     }),
   );
-  const reader = new BoardReader({ mesh: svc, cell: 'morzu-mac', log: () => undefined });
+  const reader = new BoardReader({ mesh: svc, cell: 'cell-aid', log: () => undefined });
   const projects = await reader.projects();
   expect(projects.ok && projects.data.map((p) => p.slug)).toEqual(['projet-test']);
   const sheet = await reader.card(101);
   expect(sheet.card.ok && sheet.graph.ok && sheet.thread.ok && sheet.obligations.ok).toBe(true);
   const lines = readFileSync(swarphLog, 'utf8').trim().split('\n');
   expect(lines).toHaveLength(5);
-  for (const l of lines) expect(l).toMatch(/^board .* --json --as morzu-mac$/);
-  expect(existsSync(join(config.stateRoot, 'morzu-mac', 'mesh-sidecar', 'inbox.log'))).toBe(false);
+  for (const l of lines) expect(l).toMatch(/^board .* --json --as cell-aid$/);
+  expect(existsSync(join(config.stateRoot, 'cell-aid', 'mesh-sidecar', 'inbox.log'))).toBe(false);
 });
 
 test('un connect() en cours dans serial() ne bloque pas une lecture', async () => {
@@ -247,7 +247,7 @@ test('un connect() en cours dans serial() ne bloque pas une lecture', async () =
   const connecting = svc.connect();
   await new Promise((r) => setTimeout(r, 20));
   expect(stuck).toBe(1);
-  const reader = new BoardReader({ mesh: svc, cell: 'morzu-mac', log: () => undefined });
+  const reader = new BoardReader({ mesh: svc, cell: 'cell-aid', log: () => undefined });
   const r = await reader.projects();
   expect(r.ok).toBe(true);
   releaseConnect();

@@ -32,9 +32,16 @@ test('trois aperçus, deux refus et aucune écriture sur le faux swarph', async 
       priority: 'normal',
     }) + '\n',
   );
+  const swarph = join(dossier, 'swarph');
+  // D327 : les réglages du faux CLI sont exportés après le filtrage du daemon.
+  writeFileSync(
+    swarph,
+    `#!/bin/sh\nexport FAKE_SWARPH_BOARD='${board}'\nexport FAKE_SWARPH_LOG='${join(dossier, 'swarph.log')}'\nexec '${join(fixtures, 'fake-swarph.sh')}' "$@"\n`,
+    { mode: 0o700 },
+  );
   writeFileSync(
     join(dossier, 'config.yaml'),
-    `port: ${port}\nagents:\n  transport: pty\nmesh:\n  bin: ${join(fixtures, 'fake-swarph.sh')}\n  cell: peer-a\n  gateway: https://example.com\n  stateRoot: ${join(dossier, 'swarph_state')}\n  tailscale:\n    manage: false\n    bin: ${join(fixtures, 'fake-tailscale.sh')}\n`,
+    `port: ${port}\nagents:\n  transport: pty\nmesh:\n  bin: ${swarph}\n  cell: peer-a\n  gateway: https://example.com\n  stateRoot: ${join(dossier, 'swarph_state')}\n  tailscale:\n    manage: false\n    bin: ${join(fixtures, 'fake-tailscale.sh')}\n`,
     { mode: 0o600 },
   );
   const env = {
@@ -43,7 +50,6 @@ test('trois aperçus, deux refus et aucune écriture sur le faux swarph', async 
     AID_NO_BROWSER: '1',
     SHELL: '/bin/sh',
     PATH: `${join(fixtures, 'bin')}${delimiter}${process.env.PATH}`,
-    FAKE_SWARPH_BOARD: board,
     FAKE_SWARPH_LOG: join(dossier, 'swarph.log'),
     FAKE_TAILSCALE_STATEFILE: join(dossier, 'tailscale.state'),
   };

@@ -1,3 +1,4 @@
+import { AvatarCell } from '../ui/AvatarCell.js';
 import { useCells } from '../data/swarph.js';
 import { CadreSwarph37_5, EtatMonitor37_5, LectureSwarph37_5 } from '../ui/EcranSwarph37_5.js';
 
@@ -32,6 +33,7 @@ function ContenuCells() {
               {[...(locale ? [locale] : []), ...autres].map((pair) => (
                 <tr key={pair.nom} data-node={`cells.cellule-${pair.nom}`}>
                   <td>
+                    <AvatarCell nom={pair.nom} cellLocale={monitor?.cell} />
                     {pair.nom}
                     {pair.nom === monitor?.cell && ' · toi'}
                   </td>

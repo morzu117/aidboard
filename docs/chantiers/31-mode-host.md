@@ -5,7 +5,7 @@
 | État | **Révision 1, 7 novembre 2026.** Relecture du plan par le lab (DM 91366) : validé, sous deux conditions reprises ici, le cookie de demande (D176) et `statusReason` (D175), plus trois ajouts (D175, D180, D183, 31.2). Validation finale du lab après le build et l'e2e. *Révision 0 :* Spec : recommandations validées par Julien le 7 novembre. Relecture de la spec par le lab faite le 7 novembre (DM 91348) : elle tient, avec quatre conditions obligatoires (M1 à M4) et un second port par défaut, retenu par Julien. Le lab relit ce plan, puis valide le chantier (programme §5 bis, DM 89702). |
 | Emplacement final | `docs/chantiers/31-mode-host.md` sur `main`, dans le premier commit du chantier |
 | Base | **13e128a** (`origin/main`, PR #124). Les `fichier:ligne` ont été lus sur cette base. |
-| Spec | `specs/mode-host-v1.md`, révision 1 (dossier de travail, hors dépôt ; copie sur morzu-vps dans `~/work/aid-specs/`). |
+| Spec | `specs/mode-host-v1.md`, révision 1 (dossier de travail, hors dépôt ; copie sur cell-gestion dans `~/work/aid-specs/`). |
 | Programme | `programme.md`, ligne 31 ; §3 invariants 6 à 9 ; §5 bis ; §7 |
 | Prérequis | **Question 0 de la spec, encore ouverte** : HTTPS activé dans la console Tailscale de Julien (MagicDNS et certificats). Les points 31.2 à 31.11 n'en dépendent pas ; la recette, si. |
 | Validation | Le lab (pair distinct du constructeur), plus la recette de Julien sur son Mac et un téléphone, sous Node 22 et 24. |
@@ -206,6 +206,11 @@ Chaque point est un commit, avec le gate vert. Le message de commit compte les l
     - le cookie du Mac sans effet sur le port des appareils.
   - `docs/recette-chantier-31-mode-host.md` : la recette réelle sur le Mac et un téléphone, sous Node 22 et 24. Elle comprend la mesure de 31.2 si elle n'est pas faite, et la note sur la porte 0.b : elle ne s'applique pas à une recette sans pair ni gateway swarph, et s'applique entière sinon. À côté, une note du lab : **le board est lu avec le jeton de pair du Mac**, donc un appareil lit le board aussi largement que le Mac.
 - **Vérification** : `npm run gate` et `npm run gate:e2e`
+
+### 31.12 Correctif : le test « consommée » de D176 est instable
+
+`test/web/host.test.tsx`, test « D176 : consommée, l'appareil apparaît dans la liste, et Fermer retire le QR », échoue parfois sur le VPS : 1 fois sur 3 lancé seul, et une fois dans le gate complet (« expected null not to be null », 1 040 ms), le 14 novembre, sur main ee070eb, hors de tout diff. Le correctif trouve la cause et rend le test déterministe. Aucune assertion n'est relâchée et aucun délai n'est simplement allongé. Si la cause est dans l'écran et pas dans le test, le correctif le dit et corrige l'écran.
+- _Révision 31.12._ Cause prouvée sous charge (6 copies parallèles et 6 charges CPU : 2 échecs sur 30, deux fois) : l'horloge simulée avançait avant l'effet React qui installe l'intervalle de relecture, que les traces temporaires montrent absent au moment de l'avance. L'écran relit bien la liste ; le défaut est dans le test. Correction : un `act` vide après l'attente « Approuvé ». 2 lignes ajoutées, 0 ligne existante modifiée. 20/20 isolés, 10/10 fichier, 12/12 sous charge. Gate 3893, gate:e2e 132 sous Node 22.
 
 ## 6. Pièges
 

@@ -1,7 +1,7 @@
 import { spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import type { Db } from '../db.js';
-import { GIT_ENV } from '../git/exec.js';
+import { GIT_ENV_LECTURE } from '../git/exec.js';
 import { gitLivraison } from '../git/inspect.js';
 import { fichierSensible, filtrerDiff } from './filtreCode.js';
 
@@ -31,7 +31,11 @@ function lireDiff(worktree: string, base: string, tete: string, chemin: string) 
         '--',
         chemin,
       ],
-      { cwd: worktree, env: { ...process.env, ...GIT_ENV }, stdio: ['ignore', 'pipe', 'ignore'] },
+      {
+        cwd: worktree,
+        env: { ...process.env, ...GIT_ENV_LECTURE },
+        stdio: ['ignore', 'pipe', 'ignore'],
+      },
     );
     let sortie = Buffer.alloc(0);
     let coupe = false;

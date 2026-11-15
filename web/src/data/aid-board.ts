@@ -1,3 +1,4 @@
+import { useMeshLecture } from './meshLecture.js';
 import { useSyncExternalStore } from 'react';
 import type { lireBoardAid } from '../../../src/daemon/aid/board.js';
 import { boardStore, type BoardLecture } from './board.js';
@@ -17,9 +18,10 @@ const lireVide = () => vide;
 /** Même magasin et même rythme que les cartes ; aucun abonnement sur le port host. */
 export function useAidBoard() {
   const client = useAidClient();
+  const mesh = useMeshLecture();
   const { state, appareil } = useAid();
   const magasin =
-    state && !appareil
+    state && !appareil && mesh === 'principal'
       ? boardStore<BoardAid>(client, '/api/aid/board', (r) =>
           r.board && 'readAt' in r.board ? r.board.readAt : null,
         )

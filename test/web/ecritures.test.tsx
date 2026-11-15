@@ -60,6 +60,7 @@ function ouvrir(
   const relire = vi.fn();
   const h = setup(
     <EcrireAuMesh
+      mesh="principal"
       action={action}
       valeurs={{ texte, carte: 101, pair: 'pair-test', canal: 'canal-test' }}
       onClose={fermer}
@@ -244,6 +245,7 @@ test.each([null, 'fil-inexploitable', '12345678-1234-1234-1234-123456789abc'])(
     await voir();
     await waitFor(() =>
       expect(h.calls.find((c) => c.method === 'POST')?.body).toEqual({
+        mesh: 'principal',
         action: 'dm.envoyer',
         params: {
           pair: 'pair-test',

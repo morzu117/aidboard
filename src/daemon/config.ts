@@ -1,10 +1,30 @@
-import { isAbsolute } from 'node:path';
+import { PALETTE_AVATARS, type SurchargesAvatars } from '../shared/avatars.js';
+import { FAMILLES_AVIS } from '../shared/avis-mesh-api.js';
+import { dirname, isAbsolute, resolve, join } from 'node:path';
+import { homedir } from 'node:os';
+import { normaliserGateway } from '../shared/meshes.js';
+import { meshPaths } from './mesh/paths.js';
 import { isIP } from 'node:net';
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import {
+  closeSync,
+  existsSync,
+  fchmodSync,
+  fsyncSync,
+  lstatSync,
+  openSync,
+  readFileSync,
+  realpathSync,
+  renameSync,
+  statSync,
+  unlinkSync,
+  writeFileSync,
+} from 'node:fs';
+import { randomUUID } from 'node:crypto';
 import { parse, parseDocument } from 'yaml';
 import type { AidPaths } from './paths.js';
 
 export interface AidConfig {
+  avatars: SurchargesAvatars;
   host: '127.0.0.1';
   port: number;
   editor: string[];
@@ -13,6 +33,7 @@ export interface AidConfig {
   memory: MemoryConfig;
   structural: StructuralConfig;
   mesh: MeshConfig;
+  meshes: Record<string, ConfigMeshNomme>;
   swairm: SwairmConfig;
   github: { bin: string };
   agents: AgentsConfig;
@@ -64,7 +85,11 @@ export interface StructuralConfig {
 }
 
 /** Mesh swarph (chantier 12, D39). `cell` vide = mesh désactivé, rien n'apparaît dans l'UI. Le token n'y figure jamais. */
+export type ConfigMeshNomme = Omit<MeshConfig, 'bin' | 'tailscale'> & { home: string };
+
 export interface MeshConfig {
+  home?: string;
+  avis?: { baseline?: string; familles: Record<string, string> };
   /** nom ou chemin du binaire swarph */
   bin: string;
   cell: string;
@@ -90,6 +115,8 @@ export const DEFAULT_TAILSCALE_BIN =
     : 'tailscale';
 
 export const DEFAULT_CONFIG: AidConfig = {
+  avatars: {},
+  meshes: {},
   swairm: { bin: '' },
   github: { bin: '' },
   agents: { transport: 'stream' },
@@ -118,6 +145,8 @@ export const DEFAULT_CONFIG: AidConfig = {
   artefacts: { port: null },
   modeHost: { actif: false, port: null, push: false, code: false, pda: false, relais: null },
 };
+
+DEFAULT_CONFIG.meshes.principal = configMeshNomme(DEFAULT_CONFIG.mesh);
 
 export class ConfigError extends Error {}
 
@@ -155,6 +184,7 @@ export function parseConfig(text: string): AidConfig {
   rejectUnknown(
     doc,
     [
+      'avatars',
       'host',
       'port',
       'editor',
@@ -163,6 +193,7 @@ export function parseConfig(text: string): AidConfig {
       'memory',
       'structural',
       'mesh',
+      'meshes',
       'swairm',
       'github',
       'agents',
@@ -173,6 +204,7 @@ export function parseConfig(text: string): AidConfig {
   );
 
   const cfg = structuredClone(DEFAULT_CONFIG);
+  if (doc.avatars !== undefined) cfg.avatars = parseAvatars(doc.avatars);
   if (doc.host !== undefined && doc.host !== '127.0.0.1') {
     throw new ConfigError("A-I-D n'écoute que sur 127.0.0.1 : `host` ne peut pas changer");
   }
@@ -202,6 +234,7 @@ export function parseConfig(text: string): AidConfig {
   if (doc.memory !== undefined) parseMemory(doc.memory, cfg.memory);
   if (doc.structural !== undefined) parseStructural(doc.structural, cfg.structural);
   if (doc.mesh !== undefined) parseMesh(doc.mesh, cfg.mesh);
+  lireMeshes(doc, cfg);
   if (doc.github !== undefined) {
     if (!isRecord(doc.github)) throw new ConfigError('config.yaml : github doit être un objet');
     rejectUnknown(doc.github, ['bin'], 'github.');
@@ -338,6 +371,7 @@ function parseMesh(raw: unknown, cfg: MeshConfig): void {
     [
       'bin',
       'cell',
+      'home',
       'cellFile',
       'gateway',
       'stateRoot',
@@ -345,9 +379,35 @@ function parseMesh(raw: unknown, cfg: MeshConfig): void {
       'proxySocket',
       'inboxLog',
       'proxyLectureSeule',
+      'avis',
     ],
     'mesh.',
   );
+  if (raw.home !== undefined) cfg.home = resolve(str(raw.home, 'mesh.home'));
+  if (raw.avis !== undefined) {
+    if (!isRecord(raw.avis)) throw new ConfigError('config.yaml : mesh.avis doit être un objet');
+    rejectUnknown(raw.avis, ['baseline', 'familles'], 'mesh.avis.');
+    const avis: NonNullable<MeshConfig['avis']> = { familles: {} };
+    if (raw.avis.baseline !== undefined)
+      avis.baseline = str(raw.avis.baseline, 'mesh.avis.baseline');
+    if (raw.avis.familles !== undefined) {
+      if (!isRecord(raw.avis.familles))
+        throw new ConfigError('config.yaml : mesh.avis.familles doit être une table');
+      for (const [cell, famille] of Object.entries(raw.avis.familles)) {
+        if (
+          !/^[A-Za-z0-9][A-Za-z0-9_.-]{0,199}$/.test(cell) ||
+          typeof famille !== 'string' ||
+          !FAMILLES_AVIS.includes(famille.toLowerCase() as (typeof FAMILLES_AVIS)[number])
+        )
+          throw new ConfigError(`config.yaml : famille invalide pour ${cell}`);
+        Object.defineProperty(avis.familles, cell, {
+          value: famille.toLowerCase(),
+          enumerable: true,
+        });
+      }
+    }
+    cfg.avis = avis;
+  }
   if (raw.proxyLectureSeule !== undefined)
     cfg.proxyLectureSeule = bool(raw.proxyLectureSeule, 'mesh.proxyLectureSeule');
   if (raw.proxySocket !== undefined)
@@ -373,8 +433,12 @@ function parseMesh(raw: unknown, cfg: MeshConfig): void {
   if (raw.cellFile !== undefined) cfg.cellFile = strOrEmpty(raw.cellFile, 'mesh.cellFile');
   if (raw.gateway !== undefined) {
     cfg.gateway = strOrEmpty(raw.gateway, 'mesh.gateway');
-    if (cfg.gateway !== '' && !/^https?:\/\//.test(cfg.gateway)) {
-      throw new ConfigError('config.yaml : mesh.gateway doit être une URL http(s)');
+    if (cfg.gateway !== '') {
+      try {
+        normaliserGateway(cfg.gateway);
+      } catch (e) {
+        throw new ConfigError(`config.yaml : mesh.gateway : ${(e as Error).message}`);
+      }
     }
   }
   if (raw.stateRoot !== undefined) cfg.stateRoot = strOrEmpty(raw.stateRoot, 'mesh.stateRoot');
@@ -385,6 +449,75 @@ function parseMesh(raw: unknown, cfg: MeshConfig): void {
     if (t.manage !== undefined) cfg.tailscale.manage = bool(t.manage, 'mesh.tailscale.manage');
     if (t.bin !== undefined) cfg.tailscale.bin = str(t.bin, 'mesh.tailscale.bin');
   }
+}
+
+function configMeshNomme(cfg: MeshConfig): ConfigMeshNomme {
+  const mesh = { ...cfg };
+  delete (mesh as Partial<MeshConfig>).bin;
+  delete (mesh as Partial<MeshConfig>).tailscale;
+  return { ...mesh, home: cfg.home ?? process.env.HOME ?? homedir() };
+}
+
+function lireMeshes(doc: Raw, cfg: AidConfig): void {
+  if (doc.meshes === undefined) {
+    cfg.meshes = { principal: configMeshNomme(cfg.mesh) };
+    return;
+  }
+  if (!isRecord(doc.meshes)) throw new ConfigError('config.yaml : meshes doit être une table');
+  if (isRecord(doc.mesh) && Object.keys(doc.mesh).some((k) => !['bin', 'tailscale'].includes(k)))
+    throw new ConfigError(
+      'config.yaml : mesh et meshes : les deux formes ne peuvent pas coexister',
+    );
+  cfg.meshes = {};
+  const couples = new Map<string, string>();
+  const fichiers = new Map<string, string>();
+  for (const [nom, raw] of Object.entries(doc.meshes)) {
+    if (!nomMeshValide(nom)) throw new ConfigError(`config.yaml : nom de mesh invalide : ${nom}`);
+    if (!isRecord(raw)) throw new ConfigError(`config.yaml : meshes.${nom} doit être un objet`);
+    rejectUnknown(
+      raw,
+      [
+        'cell',
+        'gateway',
+        'home',
+        'proxySocket',
+        'proxyLectureSeule',
+        'inboxLog',
+        'cellFile',
+        'stateRoot',
+        'avis',
+      ],
+      `meshes.${nom}.`,
+    );
+    const mesh = structuredClone(DEFAULT_CONFIG.mesh);
+    parseMesh(raw, mesh);
+    const config = configMeshNomme(mesh);
+    cfg.meshes[nom] = config;
+    if (!config.cell) continue;
+    const couple = JSON.stringify([
+      config.cell,
+      config.gateway ? normaliserGateway(config.gateway) : '',
+    ]);
+    const autre = couples.get(couple);
+    if (autre)
+      throw new ConfigError(`config.yaml : meshes ${autre} et ${nom} : même couple cell/gateway`);
+    couples.set(couple, nom);
+    const chemins = meshPaths(config, config.home);
+    for (const [type, chemin] of Object.entries({
+      'fichier de jeton': chemins.tokenFile,
+      'fichier de cell': chemins.cellFile,
+      'dossier d’état': join(chemins.stateRoot, config.cell),
+      'inbox.log': chemins.inboxLog,
+    })) {
+      const absolu = resolve(chemin);
+      const precedent = fichiers.get(absolu);
+      if (precedent && precedent !== nom)
+        throw new ConfigError(`config.yaml : meshes ${precedent} et ${nom} : même ${type}`);
+      fichiers.set(absolu, nom);
+    }
+  }
+  // Compatibilité 46.1 : les services existants continuent à servir uniquement principal.
+  if (cfg.meshes.principal) Object.assign(cfg.mesh, cfg.meshes.principal);
 }
 
 function parseSwairm(raw: unknown, cfg: SwairmConfig): void {
@@ -404,6 +537,73 @@ function parseAgents(raw: unknown, cfg: AgentsConfig): void {
   }
 }
 
+/** D337 : remplacer la cible seulement après une écriture complète et synchronisée. */
+export function ecrireConfig(p: AidPaths, texte: string): void {
+  let cible = p.config;
+  let mode = 0o600;
+  let present = false;
+  try {
+    lstatSync(cible);
+    present = true;
+  } catch (erreur) {
+    if ((erreur as NodeJS.ErrnoException).code !== 'ENOENT') throw erreur;
+  }
+  if (present) {
+    try {
+      cible = realpathSync(cible);
+    } catch (erreur) {
+      if ((erreur as NodeJS.ErrnoException).code === 'ENOENT')
+        throw new ConfigError("config.yaml : lien cassé, rien n'est écrit");
+      throw erreur;
+    }
+    mode = statSync(cible).mode & 0o7777;
+  }
+  const dossier = dirname(cible);
+  const temporaire = join(dossier, `.config.yaml.${randomUUID()}.tmp`);
+  let fichier: number | undefined;
+  let cree = false;
+  let renomme = false;
+  try {
+    fichier = openSync(temporaire, 'wx', mode);
+    cree = true;
+    // La création applique le umask ; rétablir exactement les droits demandés.
+    fchmodSync(fichier, mode);
+    writeFileSync(fichier, texte, 'utf8');
+    fsyncSync(fichier);
+    closeSync(fichier);
+    fichier = undefined;
+    renameSync(temporaire, cible);
+    renomme = true;
+  } finally {
+    try {
+      if (fichier !== undefined) closeSync(fichier);
+    } catch {
+      // Le nettoyage ne doit pas masquer l'erreur d'origine.
+    }
+    try {
+      if (cree && !renomme) unlinkSync(temporaire);
+    } catch {
+      // Même garantie si la suppression du temporaire échoue.
+    }
+  }
+  // Certains systèmes ne permettent pas la synchronisation d'un dossier.
+  let repertoire: number | undefined;
+  try {
+    repertoire = openSync(dossier, 'r');
+    fsyncSync(repertoire);
+  } catch {
+    // Au mieux, notamment sous Windows.
+  } finally {
+    if (repertoire !== undefined) {
+      try {
+        closeSync(repertoire);
+      } catch {
+        // Le remplacement a déjà réussi.
+      }
+    }
+  }
+}
+
 /**
  * Chantier 31 (D172) : l'interrupteur du mode host écrit `modeHost.actif` dans config.yaml, en
  * gardant le reste du fichier, commentaires compris. Le résultat est relu par `parseConfig`
@@ -419,7 +619,7 @@ export function ecrireModeHostActif(p: AidPaths, actif: boolean): void {
   }
   const texte = doc.toString();
   parseConfig(texte);
-  writeFileSync(p.config, texte);
+  ecrireConfig(p, texte);
 }
 
 export function ecrireModeHostPush(p: AidPaths, actif: boolean): void {
@@ -432,7 +632,7 @@ export function ecrireModeHostPush(p: AidPaths, actif: boolean): void {
   }
   const texte = doc.toString();
   parseConfig(texte);
-  writeFileSync(p.config, texte);
+  ecrireConfig(p, texte);
 }
 
 export function ecrireModeHostCode(p: AidPaths, actif: boolean): void {
@@ -445,7 +645,7 @@ export function ecrireModeHostCode(p: AidPaths, actif: boolean): void {
   }
   const texte = doc.toString();
   parseConfig(texte);
-  writeFileSync(p.config, texte);
+  ecrireConfig(p, texte);
 }
 
 export function loadConfig(p: AidPaths): AidConfig {
@@ -482,9 +682,9 @@ const DEFAULT_FILE = `# Configuration d'A-I-D. Tout est facultatif : ce sont les
 #   exclude: []            # dossiers à exclure des résultats (dist, …) — ex. ["dist"]
 # mesh:                    # mesh swarph (chantier 12) ; cell vide = désactivé
 #   bin: swarph
-#   cell: ""               # ex. morzu-mac — sa propre identité, jamais celle d'une autre machine
+#   cell: ""               # ex. cell-aid — sa propre identité, jamais celle d'une autre machine
 #   cellFile: ""           # vide = ~/.config/swarph/cells/<cell>.yaml
-#   gateway: ""            # ex. http://mesh-gw.example.ts.net:8788 (MESH_GATEWAY_URL, pas un secret)
+#   gateway: ""            # ex. http://gateway.example.ts.net:8788 (MESH_GATEWAY_URL, pas un secret)
 #   stateRoot: ""          # vide = ~/swarph_state
 #   tailscale:
 #     manage: false        # true : A-I-D lance tailscale up/down à la connexion ; false : il le lit seulement
@@ -502,7 +702,7 @@ const DEFAULT_FILE = `# Configuration d'A-I-D. Tout est facultatif : ce sont les
 `;
 
 export function writeDefaultConfigIfAbsent(p: AidPaths): void {
-  if (!existsSync(p.config)) writeFileSync(p.config, DEFAULT_FILE, { mode: 0o600 });
+  if (!existsSync(p.config)) ecrireConfig(p, DEFAULT_FILE);
 }
 
 /** Chantier 30 (D162) : le port des artefacts ; un daemon sur un port libre (0, tests) donne 0. */
@@ -528,7 +728,7 @@ export function ecrireModeHostPda(p: AidPaths, actif: boolean, relais?: string |
   }
   const texte = doc.toString();
   parseConfig(texte);
-  writeFileSync(p.config, texte);
+  ecrireConfig(p, texte);
 }
 
 /** L'unique destination de sortie PDA, validée aussi avant toute écriture. */
@@ -558,4 +758,47 @@ export function validerRelais(valeur: unknown): string | null {
       'modeHost.relais : origine HTTPS (port 443), sans chemin, IP ni identifiants requise',
     );
   }
+}
+
+function parseAvatars(raw: unknown): SurchargesAvatars {
+  if (!isRecord(raw)) throw new ConfigError('config.yaml : avatars doit être une table');
+  if (Object.keys(raw).length > 200)
+    throw new ConfigError('config.yaml : avatars accepte au plus 200 entrées');
+  const avatars: SurchargesAvatars = {};
+  for (const [nom, valeur] of Object.entries(raw)) {
+    if (!/^[^\s\p{Cc}]{1,64}$/u.test(nom))
+      throw new ConfigError(
+        'config.yaml : avatars : clé invalide (1 à 64 caractères sans espace ni contrôle)',
+      );
+    if (!isRecord(valeur)) throw new ConfigError(`config.yaml : avatars.${nom} doit être un objet`);
+    rejectUnknown(valeur, ['initiales', 'couleur'], `avatars.${nom}.`);
+    const avatar: SurchargesAvatars[string] = {};
+    if (valeur.initiales !== undefined) {
+      if (typeof valeur.initiales !== 'string' || !/^[\p{L}\p{N}]{1,2}$/u.test(valeur.initiales))
+        throw new ConfigError(
+          `config.yaml : avatars.${nom}.initiales attend une ou deux lettres ou chiffres`,
+        );
+      avatar.initiales = valeur.initiales;
+    }
+    if (valeur.couleur !== undefined) {
+      const couleur = PALETTE_AVATARS.find((couleur) => couleur.id === valeur.couleur);
+      if (!couleur)
+        throw new ConfigError(
+          `config.yaml : avatars.${nom}.couleur doit être un identifiant de la palette`,
+        );
+      avatar.couleur = couleur.id;
+    }
+    Object.defineProperty(avatars, nom, {
+      value: avatar,
+      enumerable: true,
+      configurable: true,
+      writable: true,
+    });
+  }
+  return avatars;
+}
+
+/** Forme du nom local de mesh (D311). */
+export function nomMeshValide(nom: string): boolean {
+  return /^[a-z][a-z0-9-]{0,31}$/.test(nom);
 }

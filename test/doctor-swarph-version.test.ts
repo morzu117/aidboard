@@ -9,12 +9,12 @@ import {
 // 24.5 : la vue board demande swarph 0.72.40 ; en dessous, un ⚠ nommé, jamais un ✗.
 
 const meshOk: MeshProbe = {
-  cell: 'morzu-mac',
+  cell: 'cell-aid',
   bin: 'swarph',
-  cellFile: '/home/j/.config/swarph/cells/morzu-mac.yaml',
+  cellFile: '/home/j/.config/swarph/cells/cell-aid.yaml',
   cellFileReadable: true,
   tokenExists: true,
-  gateway: 'http://mesh-gw.example.ts.net:8788',
+  gateway: 'http://gateway.example.ts.net:8788',
   tailscale: 'running',
 };
 
@@ -58,14 +58,19 @@ test('0.72.25 : un ⚠ qui nomme la version demandée', async () => {
     { level: 'ok', label: 'swarph 0.72.25' },
     {
       level: 'warn',
+      label: 'swarph 0.72.25 : rejoindre un mesh demande 0.80.0',
+      detail: 'uv tool upgrade swarph-cli',
+    },
+    {
+      level: 'warn',
       label: 'swarph 0.72.25 : la vue board demande 0.72.40',
       detail: 'uv tool upgrade swarph-cli',
     },
   ]);
 });
 
-test('0.72.40 et 0.73.0 passent sans ⚠', async () => {
-  for (const v of ['0.72.40', '0.73.0']) {
+test('0.80.0 et 1.0.0 passent sans ⚠', async () => {
+  for (const v of ['0.80.0', '1.0.0']) {
     expect((await swarphLines(v)).filter((c) => c.level !== 'ok')).toEqual([]);
   }
 });
@@ -80,4 +85,15 @@ test('version illisible : le message existant, rien de plus', async () => {
     },
   ]);
   expect((await swarphLines('dev')).filter((c) => c.level !== 'ok')).toEqual([]);
+});
+
+test('0.79.x : rejoindre demande 0.80.0, sans avertissement board', async () => {
+  expect(await swarphLines('0.79.9')).toEqual([
+    { level: 'ok', label: 'swarph 0.79.9' },
+    {
+      level: 'warn',
+      label: 'swarph 0.79.9 : rejoindre un mesh demande 0.80.0',
+      detail: 'uv tool upgrade swarph-cli',
+    },
+  ]);
 });

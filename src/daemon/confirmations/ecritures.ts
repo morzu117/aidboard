@@ -24,6 +24,7 @@ export function creerActionEcriture(deps: {
       const mesh = deps.config?.mesh;
       if (!mesh?.cell || !deps.board) throw new AidHttpError(404, 'mesh désactivé');
       if (!mesh.proxySocket) throw new AidHttpError(409, 'proxy_absent');
+      if (mesh.proxyLectureSeule) throw new AidHttpError(409, 'proxy_lecture_seule');
       const action = entree.action;
       if (action !== 'carte.note' && action !== 'dm.envoyer' && action !== 'canal.poster')
         throw new AidHttpError(400, 'action inconnue');

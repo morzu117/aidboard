@@ -24,7 +24,7 @@ const tailnet: TailscaleExec = async (_bin, args) =>
         stdout: JSON.stringify({
           BackendState: 'Running',
           Self: { DNSName: `${NOM}.`, UserID: 1 },
-          User: { '1': { LoginName: 'julien@exemple' } },
+          User: { '1': { LoginName: 'utilisateur@exemple' } },
         }),
         code: null,
       }
@@ -152,10 +152,10 @@ test('31.6 (D176) : le parcours complet, cookie d’appareil posé une seule foi
 test('31.6 (D179) : l’identité vue par Serve est affichée et dispense de la case, sans être crue', async () => {
   await demarrer();
   const d = await creer();
-  const r = await reclamer(d.code, { 'tailscale-user-login': 'julien@exemple' });
+  const r = await reclamer(d.code, { 'tailscale-user-login': 'utilisateur@exemple' });
   const { demandeId } = r.json<{ demandeId: string }>();
   expect((await mac('GET', '/api/host/appairage')).json()).toMatchObject({
-    demande: { identite: 'julien@exemple' },
+    demande: { identite: 'utilisateur@exemple' },
     identiteVerifiable: false,
   });
   expect((await mac('POST', `/api/host/appairages/${demandeId}/approuver`, {})).statusCode).toBe(

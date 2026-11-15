@@ -11,6 +11,7 @@ import type { AgentManager, AttachmentUpload } from '../pty/manager.js';
 const Body = Type.Object(
   {
     topicId: Type.String({ minLength: 1 }),
+    mesh: Type.Optional(Type.String({ pattern: '^[a-z][a-z0-9-]{0,31}$' })),
     kind: Type.Unsafe<'claude' | 'codex' | 'shell' | 'swarph-cell' | 'swairm-cell'>({
       type: 'string',
       enum: ['claude', 'codex', 'shell', 'swarph-cell', 'swairm-cell'],
@@ -75,6 +76,7 @@ export function registerAgentRoutes(
   app.post('/api/agents', { schema: { body: Body } }, async (req, reply) => {
     const body = req.body as {
       topicId: string;
+      mesh?: string;
       kind: 'claude' | 'codex' | 'shell' | 'swarph-cell' | 'swairm-cell';
     };
     return reply.code(201).send(deps.agents.spawn(body));

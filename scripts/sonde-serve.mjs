@@ -6,7 +6,7 @@
 // en-têtes Tailscale-*, valeurs comprises. Des autres en-têtes, elle ne renvoie que le nom, jamais
 // la valeur (un cookie n'est jamais recopié). Elle ne journalise rien.
 //
-// Usage, sur la décision de Julien (docs/mesure-serve-31.md) :
+// Usage, sur la décision du propriétaire du poste (docs/mesure-serve-31.md) :
 //   node scripts/sonde-serve.mjs            # 127.0.0.1:4899
 //   node scripts/sonde-serve.mjs --port 0   # port libre, affiché au démarrage
 // Puis `tailscale serve reset` à la fin : sinon la sonde reste joignable sur le tailnet.

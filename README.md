@@ -245,8 +245,8 @@ lecteurs sous le même token se volent l'état de lecture) :
 
 ```yaml
 mesh:
-  cell: morzu-mac # vide = désactivé
-  gateway: http://mesh-gw.example.ts.net:8788 # MESH_GATEWAY_URL, pas un secret
+  cell: cell-aid # vide = désactivé
+  gateway: http://gateway.example.ts.net:8788 # MESH_GATEWAY_URL, pas un secret
   # bin: swarph, cellFile: ~/.config/swarph/cells/<cell>.yaml, stateRoot: ~/swarph_state (dérivés)
   # tailscale: { manage: false }
 ```
@@ -273,8 +273,21 @@ npm run dev:daemon      # daemon au premier plan sur le build
 npm run dev:web         # Vite sur 127.0.0.1:5173, proxy vers le daemon
 ```
 
+La CI lance aussi `npm run gate:e2e` sur chaque PR et sur chaque push sur `main`.
+
 En dev, lancer le daemon avec `AID_DEV_ORIGIN=http://127.0.0.1:5173` : sans cela, toute écriture depuis Vite répond 403.
 Les plans de développement sont dans `docs/chantiers/`, les maquettes de référence dans `design/maquettes/`.
+
+### Publier une release
+
+Quand une release est décidée, préparer une branche `release/v<X.Y.Z>`, puis lancer
+`npm run release:preparer -- <X.Y.Z>`. Le script synchronise les trois fichiers de version,
+sans commit ni tag. Ouvrir une PR titrée `release: v<X.Y.Z>`, passer la CI et la merger
+une fois la CI verte et le merge accordé.
+
+Lancer ensuite le workflow **Release** avec cette version (`X.Y.Z`, sans préfixe ni suffixe).
+Il vérifie la version sur `main`, pose le tag sur le commit lu, puis construit et publie
+les deux produits. Seul ce workflow gère le tag ; il ne pousse aucun commit sur `main`.
 
 ### Signature des mises à jour d'AID Board
 

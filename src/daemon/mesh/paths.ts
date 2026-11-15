@@ -1,3 +1,4 @@
+import { homedir } from 'node:os';
 import { join } from 'node:path';
 import type { MeshConfig } from '../config.js';
 
@@ -13,7 +14,11 @@ export interface MeshPaths {
   inboxLog: string;
 }
 
-export function meshPaths(cfg: MeshConfig, home: string): MeshPaths {
+export function meshPaths(
+  cfg: Pick<MeshConfig, 'cell' | 'home' | 'cellFile' | 'stateRoot' | 'inboxLog'>,
+  home = process.env.HOME ?? homedir(),
+): MeshPaths {
+  home = cfg.home ?? home;
   const confDir = join(home, '.config', 'swarph');
   const stateRoot = cfg.stateRoot || join(home, 'swarph_state');
   return {

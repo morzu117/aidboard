@@ -22,7 +22,7 @@ function registre(debut = Date.parse('2026-11-07T10:00:00Z')) {
 
 test('31.4 : un accès de 8 h exactement, sans prolongation par l’usage', () => {
   const { h, r } = registre();
-  const { appareil, jeton } = r.emettre({ nom: 'Téléphone', identite: 'julien@exemple' });
+  const { appareil, jeton } = r.emettre({ nom: 'Téléphone', identite: 'utilisateur@exemple' });
   expect(appareil.etat).toBe('actif');
   expect(Date.parse(appareil.expireA) - h.t).toBe(DUREE_ACCES_MS);
   h.t += DUREE_ACCES_MS - 1;
@@ -102,13 +102,13 @@ test('31.4 : le dernier contact s’écrit au plus une fois par minute', () => {
 
 test('31.4 : la liste, récents d’abord, avec l’état ; la purge à 30 jours', () => {
   const { h, r } = registre();
-  const a = r.emettre({ nom: 'A', identite: 'julien@exemple' });
+  const a = r.emettre({ nom: 'A', identite: 'utilisateur@exemple' });
   h.t += 1000;
   const b = r.emettre({ nom: 'B', identite: null });
   r.revoquer(a.appareil.id);
   expect(r.lister().map((x) => [x.nom, x.etat, x.identite])).toEqual([
     ['B', 'actif', null],
-    ['A', 'revoque', 'julien@exemple'],
+    ['A', 'revoque', 'utilisateur@exemple'],
   ]);
   h.t += GARDE_MS + 1;
   // A révoqué il y a plus de 30 jours, B expiré il y a moins de 30 jours + 8 h : A part, B reste
@@ -118,7 +118,7 @@ test('31.4 : la liste, récents d’abord, avec l’état ; la purge à 30 jours
 });
 
 test('31.4 : le nom proposé, nettoyé et borné', () => {
-  expect(nomAppareil('  iPhone de Julien  ')).toBe('iPhone de Julien');
+  expect(nomAppareil('  Mon iPhone  ')).toBe('Mon iPhone');
   expect(nomAppareil('a\u0000b‮c​d\nE')).toBe('abcdE');
   expect(nomAppareil('')).toBe('Appareil');
   expect(nomAppareil(42)).toBe('Appareil');

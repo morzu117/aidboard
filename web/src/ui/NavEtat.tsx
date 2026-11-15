@@ -1,3 +1,5 @@
+import { useMeshes } from '../data/meshes.js';
+import { PastillesMeshes } from './PastillesMeshes.js';
 import { type Ref, useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router';
 import type { Agent, NavPlacement, Topic } from '../../../src/shared/model.js';
@@ -50,6 +52,7 @@ export function NavEtat({
   piedRef: Ref<HTMLButtonElement>;
 }) {
   const { state, daemon } = useAid();
+  const { multiple } = useMeshes();
   const { pathname } = useLocation();
   const { openNewTopic, meshBascule } = useLayout();
   const [filtre, setFiltre] = useState(garde.filtre);
@@ -194,7 +197,8 @@ export function NavEtat({
       </div>
       <NavVps n={n} />
       <div className="nav-etat-meshes" data-node={n('etat.meshes')}>
-        {mesh ? (
+        <PastillesMeshes />
+        {multiple ? null : mesh ? (
           <Link
             to="/reglages#mesh"
             className="barre-gauche-serveurs-lien"

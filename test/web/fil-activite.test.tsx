@@ -98,8 +98,8 @@ test('D109 : une phrase par type ; un type ou un cas que la table ne sait pas di
   expect(p('topic.state', { indexState: 'indexing' })).toBeNull();
   expect(p('topic.pr', { prNumber: 12 })).toBe('PR #12 ouverte');
   expect(p('action.finished', { outcome: 'failed' })).toBe('Action échouée');
-  expect(p('mesh.dm', { from: 'lab-ovh', kind: 'question' })).toBe('Question de lab-ovh');
-  expect(p('mesh.dm', { from: 'lab-ovh', kind: 'fyi' })).toBe('DM de lab-ovh');
+  expect(p('mesh.dm', { from: 'cell-lab', kind: 'question' })).toBe('Question de cell-lab');
+  expect(p('mesh.dm', { from: 'cell-lab', kind: 'fyi' })).toBe('DM de cell-lab');
   expect(p('approval.requested')).toBe('Une autorisation t’attend');
   expect(p('agent.tool', { name: 'Bash' })).toBeNull();
   // une ligne muette ne laisse pas de trou dans la numérotation

@@ -1,3 +1,4 @@
+import { useMeshLecture } from './meshLecture.js';
 import { useSyncExternalStore } from 'react';
 import type { lireBoardSwairm } from '../../../src/daemon/swairm/board.js';
 import { boardStore, type BoardLecture } from './board.js';
@@ -17,9 +18,10 @@ const lireVide = () => vide;
 /** Même magasin et même rythme que les cartes ; aucun abonnement sur le port host. */
 export function useSwairmBoard() {
   const client = useAidClient();
+  const mesh = useMeshLecture();
   const { state, appareil } = useAid();
   const magasin =
-    state && !appareil
+    state && !appareil && mesh === 'principal'
       ? boardStore<BoardSwairm>(client, '/api/swairm/board', (r) => r.board?.readAt ?? null)
       : null;
   return useSyncExternalStore(
@@ -46,4 +48,4 @@ export const libelleSwairm = (etat: string) =>
 const citer = (texte: string) => "'" + texte.replaceAll("'", "'\"'\"'") + "'";
 export const ligneSwairm = (s: SujetBoardSwairm) => `Swairm: ${s.projet}#${s.id}`;
 export const commandeSwairm = (s: SujetBoardSwairm) =>
-  `swarph board cards create --project <PROJET> --title ${citer(s.titre)} --body ${citer(ligneSwairm(s))}`;
+  `swarph board cards add --project <PROJET> --title ${citer(s.titre)} --body ${citer(ligneSwairm(s))}`;

@@ -86,7 +86,9 @@ export async function appairerHost(
   // le Mac voit le même code court, le nom, et l'identité que le frontal a posée
   await expect(node(mac, 'host.demande.code-court')).toHaveText(code);
   await expect(node(mac, 'host.demande.nom')).toHaveText(nom);
-  await expect(node(mac, 'host.demande.identite')).toHaveText('julien@exemple (non vérifiable)');
+  await expect(node(mac, 'host.demande.identite')).toHaveText(
+    'utilisateur@exemple (non vérifiable)',
+  );
   await node(mac, 'host.demande.approuver').click();
 
   await expect(node(p, 'appareil.barre')).toBeVisible();

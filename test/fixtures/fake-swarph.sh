@@ -118,7 +118,7 @@ if [[ "$1" = "mesh" || "$1" = "rights" || "$1" = "codegraph" || "$1" = "memory" 
   case "${FAKE_SWARPH_BOARD_ERROR:-}" in
     forbidden) echo "swarph $1: gateway 403: no read grant" >&2; exit 1 ;;
     unreachable) echo "swarph $1: gateway unreachable" >&2; exit 1 ;;
-    credential) echo "swarph $1: cannot resolve a mesh credential for 'morzu-mac'" >&2; exit 1 ;;
+    credential) echo "swarph $1: cannot resolve a mesh credential for 'cell-aid'" >&2; exit 1 ;;
     other) echo "swarph $1: something nobody planned for" >&2; exit 1 ;;
     too-old) echo "swarph $1: error: argument: invalid choice" >&2; exit 2 ;;
   esac
@@ -154,7 +154,7 @@ if [ "$1" = "board" ]; then
   case "${FAKE_SWARPH_BOARD_ERROR:-}" in
     forbidden) echo "swarph board: gateway 403: no read grant on this project" >&2; exit 1 ;;
     unreachable) echo "swarph board: gateway unreachable: <urlopen error [Errno 8] nodename nor servname provided, or not known>" >&2; exit 1 ;;
-    credential) echo "swarph board: cannot resolve a mesh credential for 'morzu-mac'" >&2; exit 1 ;;
+    credential) echo "swarph board: cannot resolve a mesh credential for 'cell-aid'" >&2; exit 1 ;;
     other) echo "swarph board: something nobody planned for" >&2; exit 1 ;;
     too-old) echo "swarph board: error: argument {projects,cards,obligations}: invalid choice" >&2; exit 2 ;;
   esac

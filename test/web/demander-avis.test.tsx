@@ -24,7 +24,7 @@ function boite(
   });
   render(
     <AidProvider client={client}>
-      <DemanderAvis etat={etat} onClose={() => {}} />
+      <DemanderAvis mesh="principal" etat={etat} onClose={() => {}} />
     </AidProvider>,
   );
   return fetchImpl;

@@ -1,3 +1,4 @@
+import { instantaneMesh } from '../data/meshLecture.js';
 import { useEffect, useRef, useState } from 'react';
 import {
   MODELES_ASK,
@@ -7,20 +8,26 @@ import {
 } from '../../../src/shared/swairm-ask.js';
 import { AidApiError } from '../data/api.js';
 import { annulerAvis, demanderAvis, type EtatAsk } from '../data/swairm.js';
-import { useAidClient } from '../data/useAidState.js';
+import { FormulaireAvisMesh } from './FormulaireAvisMesh.js';
+import { useAid, useAidClient } from '../data/useAidState.js';
 import { Dialogue } from '../dialogues/Dialogue.js';
 import { TableauAvis } from '../ecrans/TableauAvis.js';
 
 export function DemanderAvis({
+  mesh: nomMesh,
   etat,
   onClose,
   onResultat,
 }: {
+  mesh: string;
   etat: EtatAsk;
   onClose: () => void;
   onResultat?: () => void;
 }) {
   const client = useAidClient();
+  const { state } = useAid();
+  const [destination, setDestination] = useState('mac');
+  const mesh = destination === 'mesh' && instantaneMesh(state, nomMesh)?.state.connected;
   const [question, setQuestion] = useState('');
   const [n, setN] = useState(3);
   const [modeles, setModeles] = useState<ModeleAsk[]>(['sonnet', 'opus']);
@@ -89,7 +96,19 @@ export function DemanderAvis({
           }
         }}
       >
-        {resultat ? (
+        {instantaneMesh(state, nomMesh)?.state.connected && !attente && !resultat && (
+          <div aria-label="Destination">
+            <button aria-pressed={!mesh} onClick={() => setDestination('mac')}>
+              Au Mac
+            </button>
+            <button aria-pressed={!!mesh} onClick={() => setDestination('mesh')}>
+              Au mesh
+            </button>
+          </div>
+        )}
+        {mesh ? (
+          <FormulaireAvisMesh mesh={nomMesh} onResultat={onResultat} />
+        ) : resultat ? (
           <TableauAvis resultat={resultat} />
         ) : (
           <>

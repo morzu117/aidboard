@@ -143,6 +143,11 @@ export function setup(
       h.respond.get(`${method} ${url}`) ??
       (url.startsWith('/api/fs/dirs') ? h.respond.get('GET /api/fs/dirs') : undefined);
     if (custom) return custom(body);
+    if (method === 'GET' && url.startsWith('/api/cartes-reliees?'))
+      return new Response(
+        JSON.stringify(url.includes('carte=') ? null : { groupes: [], suivant: null }),
+        { status: 200 },
+      );
     if (url.startsWith('/api/fs/dirs'))
       return new Response(JSON.stringify(listing()), { status: 200 });
     return new Response('{}', { status: 200 });

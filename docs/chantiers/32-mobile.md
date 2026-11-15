@@ -5,9 +5,9 @@
 | État | **Révision 0, 7 novembre 2026.** Spec validée par Julien (« ok sur tout »). Relecture légère du lab faite sur la frontière (DM 91867, carte #1449) : quatre conditions, C1 à C4, reprises ici. Julien a retenu le filtre de valeurs pour C1. |
 | Emplacement final | `docs/chantiers/32-mobile.md` sur `main`, dans le premier commit du chantier |
 | Base | **ca2e178** (`origin/main`, PR #125). Les `fichier:ligne` ont été lus sur cette base. |
-| Spec | `specs/mobile-v1.md`, révision 2 (dossier de travail, hors dépôt ; copie sur morzu-vps dans `~/work/aid-specs/`). Fiche V4 `mobile.md` (DM 91344). Les maquettes `ecrans/Mobile*.html` n'ont pas encore été reçues : elles ajusteront la mise en page, pas les décisions. |
+| Spec | `specs/mobile-v1.md`, révision 2 (dossier de travail, hors dépôt ; copie sur cell-gestion dans `~/work/aid-specs/`). Fiche V4 `mobile.md` (DM 91344). Les maquettes `ecrans/Mobile*.html` n'ont pas encore été reçues : elles ajusteront la mise en page, pas les décisions. |
 | Programme | `programme.md`, ligne 32 ; §5 bis ; §7 |
-| Organisation | morzu-vps gère le chantier. Le code et les tests de chaque point sont écrits par un agent Codex CLI, dans son propre worktree, sur un brief tiré de ce plan. morzu-vps relit chaque diff, lance le gate et l'e2e, et commite. Tout diff qui touche aussi un test de frontière (liste fermée, clés exactes de l'état masqué, signal) est signalé au lab. |
+| Organisation | cell-gestion gère le chantier. Le code et les tests de chaque point sont écrits par un agent Codex CLI, dans son propre worktree, sur un brief tiré de ce plan. cell-gestion relit chaque diff, lance le gate et l'e2e, et commite. Tout diff qui touche aussi un test de frontière (liste fermée, clés exactes de l'état masqué, signal) est signalé au lab. |
 | Validation | Julien (programme §5 bis), par la recette sur un iPhone et un Android. Le lab revoit la frontière à la fin (points 32.3 à 32.6). |
 
 ## 1. Pourquoi
@@ -64,7 +64,7 @@ Abréviations : `HS` = `src/daemon/host/serveur.ts`, `MQ` = `src/daemon/host/mas
 
 ## 5. Points
 
-Chaque point de code est un brief à Codex. Un point est fini quand son diff est relu, `npm run gate` vert, et commité par morzu-vps.
+Chaque point de code est un brief à Codex. Un point est fini quand son diff est relu, `npm run gate` vert, et commité par cell-gestion.
 
 ### 32.1 Le plan
 Ce document. Pas de code.
@@ -144,11 +144,11 @@ Sujets (filtre par état, nom en gras s'il t'attend), Suivre un sujet (prochaine
 - **Le filtre ne voit pas tout :** un secret écrit en clair dans une phrase passe. Accepté par Julien ; le dire dans la recette.
 - **Les réponses concurrentes :** Mac et téléphone en même temps. Le compare-and-set de D190 couvre aussi la route du Mac.
 - **Les agents Codex de l'utilisateur :** `codex.ts` n'émet que des permissions, pas de questions ; un agent Codex n'est donc jamais tranchable depuis un appareil.
-- **Codex constructeur :** un brief ne demande jamais de modifier un test de frontière sans le dire ; morzu-vps le vérifie au diff.
+- **Codex constructeur :** un brief ne demande jamais de modifier un test de frontière sans le dire ; cell-gestion le vérifie au diff.
 
 ## 7. Fini quand
 
 - Les points 32.1 à 32.11 sont commités, un par point, `npm run gate` vert sur chacun, `npm run e2e` vert en 32.9, 32.10 et 32.11.
 - Le lab a revu la frontière (32.3 à 32.6).
-- La CI de la PR est verte ; morzu-vps merge.
+- La CI de la PR est verte ; cell-gestion merge.
 - La recette de Julien est faite sur un iPhone et un Android, et sa fiche remplie.

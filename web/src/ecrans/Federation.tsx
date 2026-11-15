@@ -96,10 +96,13 @@ function ContenuFederation() {
 export function Federation() {
   const [params] = useSearchParams();
   const { state } = useAid();
-  if (state && !state.mesh) return <Navigate to="/swarph" replace />;
+  if (state && !state.mesh && !Object.keys(state.meshes ?? {}).length)
+    return <Navigate to="/swarph" replace />;
   return (
     <Layout screen="board">
-      {state?.mesh && <ContenuFederation key={params.get('q') ?? ''} />}
+      {(state?.mesh || Object.keys(state?.meshes ?? {}).length) && (
+        <ContenuFederation key={params.get('q') ?? ''} />
+      )}
     </Layout>
   );
 }

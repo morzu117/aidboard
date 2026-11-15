@@ -1,6 +1,7 @@
 import { execFile } from 'node:child_process';
 import { existsSync, mkdtempSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:net';
+import { rmSync, symlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, test } from 'vitest';
@@ -65,6 +66,23 @@ async function boot() {
 }
 
 describe.skipIf(!built)('aid en sous-processus', () => {
+  test.skipIf(process.platform === 'win32')(
+    'daemon refuse un config.yaml en lien cassé',
+    async () => {
+      home = realpathSync(mkdtempSync(join(tmpdir(), 'aid-cli-lien-casse-')));
+      const cible = join(home, 'absente.yaml');
+      symlinkSync(cible, join(home, 'config.yaml'));
+      try {
+        const resultat = await run('daemon');
+        expect(resultat.code).toBe(1);
+        expect(resultat.out).toContain("config.yaml : lien cassé, rien n'est écrit");
+        expect(existsSync(cible)).toBe(false);
+      } finally {
+        rmSync(home, { recursive: true, force: true });
+      }
+    },
+  );
+
   test('status sans daemon, démarrage détaché, status, arrêt', async () => {
     await boot();
     expect(await run('status')).toEqual({ code: 0, out: 'daemon arrêté\n' });

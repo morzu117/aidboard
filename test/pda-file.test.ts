@@ -22,6 +22,7 @@ async function preparer() {
   let reponses: ReponseRelais[] = [];
   const relais = {
     publierAutorises: vi.fn<RelaisPda['publierAutorises']>(async () => true),
+    publierResultat: vi.fn<RelaisPda['publierResultat']>(async () => true),
     deposer: vi.fn<RelaisPda['deposer']>(async () => true),
     retirer: vi.fn(async () => {}),
     tirer: vi.fn(async () => reponses),

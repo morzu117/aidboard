@@ -1,3 +1,4 @@
+import type { MeshRegistry } from '../mesh/registre.js';
 import type { FastifyInstance } from 'fastify';
 import type { Db } from '../db.js';
 import type { EventStore } from '../events/store.js';
@@ -14,11 +15,19 @@ export function registerStateRoutes(
   mesh: MeshService | null = null,
   swairmEnabled = false,
   agentTransport?: 'pty' | 'stream',
+  meshes?: MeshRegistry,
 ): void {
   app.get('/api/state', async (req) => {
     const all = (req.query as { all?: string }).all === '1';
     await syncTopicBranches(db, store);
-    const snapshot = await buildSnapshot(db, engine, all, mesh, swairmEnabled);
+    const snapshot = await buildSnapshot(
+      db,
+      engine,
+      all,
+      meshes?.principal?.mesh ?? mesh,
+      swairmEnabled,
+      meshes,
+    );
     return agentTransport ? { ...snapshot, agentTransport } : snapshot;
   });
 }

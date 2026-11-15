@@ -79,11 +79,14 @@ export function creerRelais(options: OptionsRelais): RequestListener {
     number,
     { curseur: number; id: string; appareil: string; corps: string; recue: number }
   >();
+  const resultats = new Map<string, { corps: string; sig: string; recue: number }>();
   const signatures = new Map<string, number>();
   const adresses = new Map<string, { debut: number; nombre: number }>();
   let curseur = 0;
 
   function purger(heure: number) {
+    for (const [id, resultat] of resultats)
+      if (resultat.recue + 24 * 60 * 60_000 <= heure) resultats.delete(id);
     for (const [id, demande] of demandes) if (demande.echeance <= heure) demandes.delete(id);
     for (const [n, reponse] of reponses) if (reponse.recue + 600000 <= heure) reponses.delete(n);
     for (const [sig, expiration] of signatures) if (expiration < heure) signatures.delete(sig);
@@ -108,22 +111,23 @@ export function creerRelais(options: OptionsRelais): RequestListener {
   return (req, res) => {
     const methode = req.method ?? '';
     const chemin = req.url ?? '';
-    const correspondance = /^\/(demandes|reponses)\/([A-Za-z0-9_-]{22})$/.exec(chemin);
+    const correspondance = /^\/(demandes|reponses|resultats)\/([A-Za-z0-9_-]{22})$/.exec(chemin);
     const id = correspondance?.[2];
     const route =
       chemin === '/autorises'
         ? '/autorises'
-        : chemin === '/demandes'
-          ? '/demandes'
+        : chemin === '/demandes' || chemin === '/resultats'
+          ? chemin
           : /^\/reponses\?apres=(0|[1-9]\d{0,15})$/.test(chemin)
             ? '/reponses'
             : correspondance
               ? `/${correspondance[1]}/:id`
               : 'inconnue';
     const app =
-      (methode === 'GET' && route === '/demandes') ||
+      (methode === 'GET' && (route === '/demandes' || route === '/resultats')) ||
       (methode === 'POST' && route === '/reponses/:id');
     const privee =
+      (methode === 'PUT' && route === '/resultats/:id') ||
       (methode === 'PUT' && route === '/autorises') ||
       ((methode === 'PUT' || methode === 'DELETE') && route === '/demandes/:id') ||
       (methode === 'GET' && route === '/reponses');
@@ -154,14 +158,24 @@ export function creerRelais(options: OptionsRelais): RequestListener {
       for await (const morceau of req) {
         const octets = Buffer.from(morceau);
         taille += octets.length;
-        if (taille > (app && methode === 'POST' ? Math.min(8192, limites.corps) : limites.corps)) {
+        if (
+          taille >
+          (route === '/resultats/:id' && methode === 'PUT'
+            ? Math.min(1024, limites.corps)
+            : app && methode === 'POST'
+              ? Math.min(8192, limites.corps)
+              : limites.corps)
+        ) {
           finir(413);
           return;
         }
         morceaux.push(octets);
       }
       const corps = Buffer.concat(morceaux);
-      if (methode === 'OPTIONS' && (route === '/demandes' || route === '/reponses/:id')) {
+      if (
+        methode === 'OPTIONS' &&
+        (route === '/demandes' || route === '/resultats' || route === '/reponses/:id')
+      ) {
         if (!debit(req)) return finir(429);
         if (req.headers.origin === options.origineApp) {
           res.setHeader('Access-Control-Allow-Methods', 'GET, POST');
@@ -245,6 +259,29 @@ export function creerRelais(options: OptionsRelais): RequestListener {
             suivantes.set(a.id, clePublique(a.cle));
           }
           autorises = suivantes;
+          return finir(204);
+        }
+        if (route === '/resultats')
+          return finir(200, {
+            resultats: [...resultats.values()].map(({ corps, sig }) => ({ corps, sig })),
+          });
+        if (route === '/resultats/:id' && id) {
+          const enveloppe = objet(JSON.parse(corps.toString('utf8')));
+          if (
+            Object.keys(enveloppe).sort().join() !== 'corps,sig' ||
+            typeof enveloppe.corps !== 'string' ||
+            typeof enveloppe.sig !== 'string'
+          )
+            return finir(400);
+          const contenu = objet(
+            JSON.parse(
+              new TextDecoder('utf-8', { fatal: true }).decode(decoderBase64url(enveloppe.corps)),
+            ),
+          );
+          if (contenu.id !== id) return finir(400);
+          resultats.delete(id);
+          resultats.set(id, { corps: enveloppe.corps, sig: enveloppe.sig, recue: now() });
+          if (resultats.size > 50) resultats.delete(resultats.keys().next().value!);
           return finir(204);
         }
         if (route === '/demandes/:id' && id) {

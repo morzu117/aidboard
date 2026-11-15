@@ -5,8 +5,8 @@
 | État | **Révision 0, 8 novembre 2026.** Julien a retenu Q1 à Q4 de la spec. PASS de lab sur la spec (DM 92561), dont les réponses à L1 et L2 sont écrites en D236 et D237. |
 | Emplacement final | `docs/chantiers/38-chronologie-carte.md` sur `main`, dans le premier commit du chantier |
 | Base | **c6b3554** (`origin/main`, PR #130). |
-| Spec | `specs/chronologie-38.md`, révision 1 (dossier de travail, hors dépôt ; copie sur morzu-vps dans `~/work/aid-specs/`). |
-| Organisation | Comme au 34. morzu-vps gère le chantier. Un agent Codex CLI écrit le code et les tests de chaque point, sur un brief tiré de ce plan. morzu-vps relit chaque diff, lance le gate, commite et ouvre la PR. |
+| Spec | `specs/chronologie-38.md`, révision 1 (dossier de travail, hors dépôt ; copie sur cell-gestion dans `~/work/aid-specs/`). |
+| Organisation | Comme au 34. cell-gestion gère le chantier. Un agent Codex CLI écrit le code et les tests de chaque point, sur un brief tiré de ce plan. cell-gestion relit chaque diff, lance le gate, commite et ouvre la PR. |
 | Validation | Julien valide le 38 (programme §5 bis), après sa recette. Le lab relit la spec seulement. Le merge suit la règle de Julien : la CI verte. |
 
 ## 1. Pourquoi

@@ -1,11 +1,11 @@
 # Chantier 13.9 — « Release » : un workflow_dispatch avec un numéro de version, et rien à la main
-# (DR2). Fixe la version (package.json, package-lock.json, tauri.conf.json), commite, pose le tag,
+# (DR2, D329). Contrôle la version préparée par PR, pose le tag sur le commit lu de main,
 # construit AID Server (archives autonomes, DR3/DR12) et AID Board (bundles Tauri signés pour
 # l'updater, DR10), puis publie la release v<version> — jamais en prerelease (DR16).
 #
 # Secrets attendus : TAURI_SIGNING_PRIVATE_KEY (et TAURI_SIGNING_PRIVATE_KEY_PASSWORD si la clé en
 # a un) — voir README.md, « Signature des mises à jour d'AID Board ». Aucun jeton supplémentaire :
-# GITHUB_TOKEN suffit pour pousser le commit de version, le tag et la release.
+# GITHUB_TOKEN suffit pour pousser le tag et créer la release.
 name: Release
 
 on:
@@ -53,29 +53,25 @@ jobs:
         with:
           node-version: '22'
           cache: npm
-      - run: npm ci --ignore-scripts
-      - name: fixer la version (DR1 — package.json est la source, tauri.conf.json la recopie)
+      - name: contrôler la version préparée par PR (DR1, D329)
         run: |
-          npm version "$VERSION" --no-git-tag-version
           node -e '
             const fs = require("node:fs");
-            const f = "app/src-tauri/tauri.conf.json";
-            const conf = JSON.parse(fs.readFileSync(f, "utf8"));
-            conf.version = process.argv[1];
-            fs.writeFileSync(f, JSON.stringify(conf, null, 2) + "\n");
-          ' "$VERSION"
-          npx prettier --write package.json app/src-tauri/tauri.conf.json
-          git --no-pager diff --stat
-      - name: commit, tag, release brouillon
+            for (const fichier of ["package.json", "app/src-tauri/tauri.conf.json"]) {
+              const version = JSON.parse(fs.readFileSync(fichier, "utf8")).version;
+              if (version !== process.env.VERSION) {
+                console.error(`::error::${fichier} porte ${version}, attendu ${process.env.VERSION} : lancer npm run release:preparer -- ${process.env.VERSION}, puis merger la PR de version sur main`);
+                process.exit(1);
+              }
+            }
+          '
+      - name: tag et release brouillon
         id: tag
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git commit -am "release: v$VERSION"
           git tag "v$VERSION"
-          git push origin main "v$VERSION"
+          git push origin "v$VERSION"
           # Brouillon dès maintenant, notes générées par GitHub : les jobs de build y déposent leurs
           # assets (tauri-action réutilise une release existante), publish le rend public à la fin.
           gh release create "v$VERSION" --draft --title "v$VERSION" --generate-notes

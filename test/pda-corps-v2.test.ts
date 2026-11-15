@@ -1,3 +1,4 @@
+import { RAISON_BASELINE_ABSENT } from '../src/shared/avis-mesh-api.js';
 import { createHash, generateKeyPairSync, sign } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import {
@@ -12,6 +13,40 @@ import { verifierAssertion } from '../src/daemon/pda/webauthn.js';
 
 const tete = 'abcdef0' + '1'.repeat(33);
 const exemples: ParametresActions = {
+  'mesh.avis.motion': {
+    params: {
+      id: '20261112T120000Z-abcd',
+      canal: 'avis-test',
+      texte: 'Question citée',
+      echeances: {
+        positions: '2026-11-13T12:00:00Z',
+        rebuttal: '2026-11-13T13:00:00Z',
+        vote: '2026-11-13T14:00:00Z',
+      },
+    },
+  },
+  'mesh.avis': {
+    params: {
+      id: '20261112T120000Z-abcd',
+      nom: 'avis-test',
+      carte: 42,
+      texte: 'Question citée',
+      sieges: [],
+      echeances: {
+        positions: '2026-11-13T12:00:00Z',
+        rebuttal: '2026-11-13T13:00:00Z',
+        vote: '2026-11-13T14:00:00Z',
+      },
+    },
+  },
+  'mesh.avis.baseline-absent': {
+    params: {
+      id: '20261112T120000Z-abcd',
+      canal: 'avis-test',
+      motion: 42,
+      raison: RAISON_BASELINE_ABSENT,
+    },
+  },
   'mesh.etat': {
     action: 'obligation.prendre',
     params: { carte: 42, obligation: 81, attendu: { status: 'open' } },
@@ -171,6 +206,9 @@ it('valide les bornes et types des paramètres sans conversion implicite', () =>
 });
 it('construit exactement les invites D229', () => {
   const attendus: Record<ActionConfirmee, string> = {
+    'mesh.avis.motion': 'Ouvrir la motion : avis-test',
+    'mesh.avis': 'Ouvrir avis-test, carte 42',
+    'mesh.avis.baseline-absent': 'Déclarer le baseline absent : avis-test',
     'mesh.ecrire': 'DM fyi à peer-b',
     'mesh.etat': "Prendre l'obligation #81 (carte #42)",
     merge: 'Merge de exemple/projet#42 (abcdef0), squash, branche supprimée oui',

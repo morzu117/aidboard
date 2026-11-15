@@ -940,7 +940,7 @@ test('« Ouvrir la cell swarph » n’apparaît qu’avec un mesh configuré, et
         monitor: 'running',
         pending: 0,
         since: 't',
-        cell: 'morzu-mac',
+        cell: 'cell-aid',
       },
       inbox: [],
       tailscaleManage: false,

@@ -17,7 +17,7 @@ const dm = (over: Partial<MeshDm> = {}): MeshDm => ({
   id: 1,
   threadId: null,
   from: 'peer',
-  to: 'morzu-mac',
+  to: 'cell-aid',
   kind: 'question',
   content: 'x',
   createdAt: 't',
@@ -109,7 +109,7 @@ test('D140 : le compteur de la barre compte les agents en attente et les DM mis 
         monitor: 'running',
         pending: 0,
         since: null,
-        cell: 'morzu-mac',
+        cell: 'cell-aid',
       },
       inbox: [
         dm({ id: 1, decidedAt: 't' }),

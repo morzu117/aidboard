@@ -77,7 +77,7 @@ Les tests de frontière `host-liste`, `host-masque` et `host-signal` restent inc
 
   ```text
   Swairm: exemple/depot#sans
-  swarph board cards create --project <PROJET> --title 'Sujet sans carte' --body 'Swairm: exemple/depot#sans'
+  swarph board cards add --project <PROJET> --title 'Sujet sans carte' --body 'Swairm: exemple/depot#sans'
   ```
 
   Le titre et le corps sont cités en quotes simples POSIX (révision 41.3).

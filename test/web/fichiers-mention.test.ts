@@ -47,7 +47,7 @@ test('saisieMention : le dernier mot, s’il commence par @ ; pas une adresse', 
   expect(saisieMention('regarde @src/ap')).toBe('src/ap');
   expect(saisieMention('regarde\n@ma')).toBe('ma');
   expect(saisieMention('regarde @src/app.ts ')).toBeNull();
-  expect(saisieMention('écris à julien@exemple')).toBeNull();
+  expect(saisieMention('écris à utilisateur@exemple')).toBeNull();
   expect(saisieMention('rien')).toBeNull();
 });
 

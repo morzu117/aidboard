@@ -401,3 +401,102 @@ describe('relais PDA', () => {
     expect((await signee('GET', '/demandes', '', true)).statut).toBe(401);
   });
 });
+
+function enveloppeResultat(n = 0) {
+  // Le relais ne juge ni les codes ni la signature intérieure.
+  return JSON.stringify({
+    corps: Buffer.from(JSON.stringify({ id: id(n), resultat: 'opaque' })).toString('base64url'),
+    sig: 'opaque',
+  });
+}
+it('résultats : authentification hostile, id lié au chemin et borne avant authentification', async () => {
+  expect(
+    (
+      await envoyer('PUT', `/resultats/${id()}`, 'x'.repeat(1025), {
+        'Transfer-Encoding': 'chunked',
+      })
+    ).statut,
+  ).toBe(413);
+  await autoriser();
+  expect((await signee('PUT', `/resultats/${id()}`, enveloppeResultat(), true)).statut).toBe(401);
+  expect(
+    (await signee('GET', '/resultats', '', true, { 'X-Aid-Appareil': 'inconnu' })).statut,
+  ).toBe(401);
+  expect(
+    (await signee('GET', '/resultats', '', true, { 'X-Aid-Sig': 'A'.repeat(86) })).statut,
+  ).toBe(401);
+  expect((await signee('PUT', `/resultats/${id(1)}`, enveloppeResultat())).statut).toBe(400);
+  expect((await signee('PUT', `/resultats/${id()}`, enveloppeResultat())).statut).toBe(204);
+  for (let i = 0; i < 2; i++) {
+    const r = await signee('GET', '/resultats', '', true, { Origin: origineApp });
+    expect(r.statut).toBe(200);
+    expect(r.headers['access-control-allow-origin']).toBe(origineApp);
+    expect(JSON.parse(r.corps)).toEqual({ resultats: [JSON.parse(enveloppeResultat())] });
+  }
+  for (const ligne of lignes)
+    expect(
+      Object.keys(ligne as object).every((k) =>
+        ['methode', 'route', 'statut', 'id', 'appareil'].includes(k),
+      ),
+    ).toBe(true);
+  expect(JSON.stringify(lignes)).not.toContain('opaque');
+});
+it('résultats : préflight avec CORS exact', async () => {
+  for (const origin of [origineApp, 'https://autre.example.com']) {
+    const r = await envoyer('OPTIONS', '/resultats', '', { Origin: origin });
+    expect(r.statut).toBe(204);
+    expect(r.headers['access-control-allow-origin']).toBe(
+      origin === origineApp ? origineApp : undefined,
+    );
+    expect(r.headers['access-control-allow-methods']).toBe(
+      origin === origineApp ? 'GET, POST' : undefined,
+    );
+    expect(r.headers['access-control-allow-headers']).toBe(
+      origin === origineApp ? 'X-Aid-Heure, X-Aid-Sig, X-Aid-Appareil, Content-Type' : undefined,
+    );
+  }
+});
+it('résultats : 50 au plus, plus ancien évincé et purge à 24 h exactement', async () => {
+  await autoriser();
+  for (let n = 0; n < 51; n++) {
+    expect((await signee('PUT', `/resultats/${id(n)}`, enveloppeResultat(n))).statut).toBe(204);
+    heure++;
+  }
+  const lire = async () =>
+    JSON.parse((await signee('GET', '/resultats', '', true)).corps).resultats;
+  const liste = await lire();
+  expect(liste).toHaveLength(50);
+  expect(liste[0]).toEqual(JSON.parse(enveloppeResultat(1)));
+  heure += 24 * 60 * 60_000 - 52;
+  expect(await lire()).toHaveLength(50);
+  heure += 2;
+  expect(await lire()).toHaveLength(49);
+  heure += 49;
+  expect(await lire()).toEqual([]);
+});
+
+it('résultats : coupe un flux encore ouvert dès le 1025e octet sans signature', async () => {
+  const statut = await new Promise<number>((resolve, reject) => {
+    const req = request(
+      {
+        host: '127.0.0.1',
+        port,
+        method: 'PUT',
+        path: `/resultats/${id()}`,
+        headers: { 'Transfer-Encoding': 'chunked' },
+      },
+      (res) => {
+        res.resume();
+        res.on('end', () => {
+          req.end();
+          resolve(res.statusCode!);
+        });
+      },
+    );
+    req.on('error', reject);
+    req.setTimeout(2000, () => req.destroy(new Error('Le relais attend la fin du flux')));
+    req.write('x'.repeat(1024), () => req.write('x'));
+    // Pas de req.end() avant la réponse : une borne après lecture complète échouerait.
+  });
+  expect(statut).toBe(413);
+});
