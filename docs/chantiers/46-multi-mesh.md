@@ -341,6 +341,7 @@ Le gate du VPS, sous charge, a échoué une fois sur le test « formulaire : ban
 - Prouver la cause sous charge, en mesurant le taux d'échec avant et après la correction.
 - Si la cause est dans le test, le test attend le bandeau, et ses assertions ne changent pas. Si l'écran affiche vraiment un aperçu sans bandeau, même un court instant, c'est un défaut de D316 : il est décrit, et le correctif est à décider.
 - **Tests :** le test corrigé sous charge ; le gate entier.
+46.7 commité. Cause prouvée par observation du DOM : la région « Aperçu » était rendue sans bandeau tant que `multiple` valait faux, c'est-à-dire tant que la liste n'avait pas répondu, ou en cas d'échec. Une ligne existante remplacée dans `web/src/ui/SelecteurMesh.tsx` : `EnteteMesh` affiche le bandeau si `multiple` ou si le mesh n'est pas `principal`. Trois tests ajoutés : `perso` avec la liste en attente, `perso` avec la liste en échec, `principal` avec un seul mesh (aucun bandeau). Les quatre autres usages (ChangerEtat, DemandesAvisMesh, FormulaireAvisMesh, PropositionsAid) gagnent la même règle. Reste non traité : `principal` en multi-mesh, avant la réponse de la liste. Sous charge : 0 échec sur 30. Gate vert (3 896 tests), 3/3 passages des tests meshes. `gate:e2e` laissé à la CI : un autre e2e tournait sur le VPS, et l'e2e mono-mesh ne change pas.
 
 ## 6. Pièges
 
