@@ -215,6 +215,7 @@ Chaque point est un commit, avec le gate vert. Le message de commit compte les l
 ### 31.13 Correctif : le test « réclamation par relecture » de D176 est instable
 
 `test/web/host.test.tsx`, test « D176 : la réclamation arrive par relecture, avec code court, nom, identité non vérifiable ». Il a échoué deux fois dans le gate complet du VPS le 15 novembre (« expected undefined to be '4821' »), hors de tout diff, pendant le chantier 41 b. Lancé seul, il passe 5 fois sur 5. La cause supposée est la même que celle de 31.12 : l'horloge simulée avance une seule fois, peut-être avant que l'effet React n'installe l'intervalle de relecture, et le `waitFor` qui suit n'avance plus l'horloge. Le correctif prouve la cause sous charge et rend le test déterministe. Aucune assertion n'est relâchée, et aucun délai n'est simplement allongé. Si la cause est dans l'écran et pas dans le test, il le dit et corrige l'écran. Il vérifie aussi si d'autres tests de `host.test.tsx` avancent l'horloge de la même façon, et il les corrige de la même manière.
+- _Révision 31.13._ Cause prouvée sous charge : 1 échec sur 30. L'horloge simulée avançait avant l'effet qui installe l'intervalle de relecture. Correction : un `act` vide après l'apparition du QR, et le même `act` avant la mesure du test « aucune relecture tant qu'aucun QR n'est affiché ». 4 lignes ajoutées, 0 ligne existante modifiée. Résultats : 20 sur 20 seul, 10 sur 10 pour le fichier, 12 sur 12 sous charge. Gate 4 153, gate:e2e 139.
 
 ## 6. Pièges
 
