@@ -3,6 +3,8 @@ import { existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { promisify } from 'node:util';
 
+import { GIT_ENV_LECTURE } from './git/exec.js';
+
 const run = promisify(execFile);
 
 // Le bundle place ses chunks à des profondeurs variables : on remonte jusqu'à la racine du dépôt (son .git).
@@ -27,8 +29,16 @@ export interface UpdateStatus {
 export async function checkForUpdate(dir: string, branch = 'main'): Promise<UpdateStatus | null> {
   try {
     const [local, remote] = await Promise.all([
-      run('git', ['rev-parse', 'HEAD'], { cwd: dir, timeout: 5000 }),
-      run('git', ['ls-remote', 'origin', branch], { cwd: dir, timeout: 5000 }),
+      run('git', ['rev-parse', 'HEAD'], {
+        cwd: dir,
+        timeout: 5000,
+        env: { ...process.env, ...GIT_ENV_LECTURE },
+      }),
+      run('git', ['ls-remote', 'origin', branch], {
+        cwd: dir,
+        timeout: 5000,
+        env: { ...process.env, ...GIT_ENV_LECTURE },
+      }),
     ]);
     const localSha = local.stdout.trim();
     const remoteSha = remote.stdout.split('\t')[0]?.trim() ?? '';
