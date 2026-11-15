@@ -249,6 +249,7 @@ Le lab a lancé la suite complète sur son bac à sable (DM 98509, 98514). Une f
 - Prouver la cause sous charge, en mesurant le taux d'échec avant et après la correction.
 - Si la cause est dans le test (une horloge non figée, par exemple), le test est corrigé et ses assertions ne changent pas. Si l'écran refuse à tort une demande valide, c'est un défaut : il est décrit, et le correctif est à décider.
 - **Tests :** le test corrigé sous charge ; le gate entier.
+34.11 commité. Cause établie par la lecture du code et mesurée par instrumentation, retirée ensuite. L'échec lui-même n'a pas été reproduit (0/210 avant). Deux signatures de test ont été mesurées à 900 001 ms, au-delà de la borne de 15 minutes de `lireCorpsDemandeV2`. Le test réutilise une seule valeur de `Date.now()` : 2 lignes existantes remplacées, 1 ajoutée dans `test/web/pda-v2.test.tsx`. Après : 0/60. Gate vert (4 033 tests), 3/3 passages du fichier.
 
 ## 6. Pièges
 
