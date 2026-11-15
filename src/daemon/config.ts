@@ -539,7 +539,7 @@ function parseAgents(raw: unknown, cfg: AgentsConfig): void {
 }
 
 /** D337 : remplacer la cible seulement après une écriture complète et synchronisée. */
-function ecrireConfig(p: AidPaths, texte: string): void {
+export function ecrireConfig(p: AidPaths, texte: string): void {
   let cible = p.config;
   let mode = 0o600;
   let present = false;
@@ -554,7 +554,7 @@ function ecrireConfig(p: AidPaths, texte: string): void {
       cible = realpathSync(cible);
     } catch (erreur) {
       if ((erreur as NodeJS.ErrnoException).code === 'ENOENT')
-        throw new ConfigError('config.yaml : lien cassé, rien n’est écrit');
+        throw new ConfigError("config.yaml : lien cassé, rien n'est écrit");
       throw erreur;
     }
     mode = statSync(cible).mode & 0o7777;
@@ -578,8 +578,13 @@ function ecrireConfig(p: AidPaths, texte: string): void {
   } finally {
     try {
       if (fichier !== undefined) closeSync(fichier);
-    } finally {
+    } catch {
+      // Le nettoyage ne doit pas masquer l'erreur d'origine.
+    }
+    try {
       if (cree && !renomme) unlinkSync(temporaire);
+    } catch {
+      // Même garantie si la suppression du temporaire échoue.
     }
   }
   // Certains systèmes ne permettent pas la synchronisation d'un dossier.

@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   ConfigError,
+  ecrireConfig,
   ecrireModeHostActif,
   ecrireModeHostCode,
   ecrireModeHostPda,
@@ -42,6 +43,36 @@ function temporaires(repertoire = dossier): string[] {
 }
 
 describe('écriture atomique de config.yaml (D337)', () => {
+  it.each(['unlinkSync', 'closeSync'] as const)(
+    '%s : le nettoyage ne masque pas une erreur d’écriture',
+    (operation) => {
+      const ancien = 'port: 4900\n';
+      fs.writeFileSync(chemins.config, ancien);
+      const erreur = new Error('écriture interrompue');
+      vi.spyOn(fs, 'writeFileSync').mockImplementationOnce(() => {
+        throw erreur;
+      });
+      const nettoyer = fs[operation];
+      const nettoyage = vi
+        .spyOn(fs, operation)
+        .mockImplementationOnce((fichier: fs.PathLike | number) => {
+          // Fermer réellement le descripteur pour ne pas le laisser ouvert dans le test.
+          if (operation === 'closeSync') (nettoyer as typeof fs.closeSync)(fichier as number);
+          throw new Error('nettoyage impossible');
+        });
+      let recue: unknown;
+      try {
+        ecrireConfig(chemins, 'port: 4901\n');
+      } catch (echec) {
+        recue = echec;
+      }
+      expect(recue).toBe(erreur);
+      expect(nettoyage).toHaveBeenCalledOnce();
+      expect(fs.readFileSync(chemins.config, 'utf8')).toBe(ancien);
+      expect(temporaires()).toHaveLength(operation === 'unlinkSync' ? 1 : 0);
+    },
+  );
+
   it.each(ecrivains)(
     '%s : conserve le contenu, les droits et ne laisse aucun temporaire',
     (cle, ecrire) => {

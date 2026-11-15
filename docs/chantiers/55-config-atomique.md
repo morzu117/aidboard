@@ -50,6 +50,7 @@ Une coupure pendant l'écriture (courant, plantage, disque plein) laisse un fich
 - Le nettoyage d'après échec ignore ses propres erreurs, selon D337. Test : l'écriture échoue, puis la suppression du temporaire échoue aussi ; l'erreur qui remonte est celle de l'écriture.
 - `ecrireConfig` est exportée.
 - Le refus au démarrage d'un lien cassé : un test montre le message vu par l'utilisateur au démarrage du daemon (`src/daemon/main.ts`).
+55.2 commité. 3 lignes existantes du chantier remplacées dans `src/daemon/config.ts`, 3 tests ajoutés (dont un démarrage en sous-processus dans `test/cli.test.ts`). `main.ts` inchangé : il affiche le message tel quel. Gate vert (3 917 tests), `gate:e2e` entier vert sous Node 22 avec `CI=1` (132 tests Playwright), 3/3 passages des tests ciblés, aucun daemon résiduel.
 
 ## 4. Après le merge
 
