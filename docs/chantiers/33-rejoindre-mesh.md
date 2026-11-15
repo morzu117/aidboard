@@ -166,6 +166,15 @@ Un e2e Machines avec le faux `swarph`, et la fiche `docs/recette-chantier-33-rej
 
 Vérifié : gate vert (3 997 tests), `gate:e2e` entier vert sous Node 22 avec `CI=1` (137 tests Playwright), aucun daemon résiduel. La recette réelle reste à faire.
 
+### 33.6 La relecture finale du lab (DM 98426)
+
+Rien de bloquant. Quatre points facultatifs, tous retenus :
+
+- **a.** Si le daemon meurt sans nettoyage (SIGKILL, manque de mémoire), l'enfant `swarph join` peut lui survivre et retirer le jeton plus tard. Tant que l'état vaut `interrompue`, chaque lecture de l'état refait le `lstat` du jeton, sans le lire, et passe à `a-voir` s'il apparaît.
+- **b.** Après un redémarrage, l'état restauré donne aussi le gateway et le chemin du jeton, recalculés à partir de la cell restaurée.
+- **c.** L'écran montre le gateway normalisé, celui qui a été rejoint, et non la chaîne tapée.
+- **d.** Si `rejoindre.json` n'a pas pu être effacé, une nouvelle demande est refusée avec un message clair : « Demande précédente non effacée : supprimer <chemin> ».
+
 ## 7. Pièges
 
 - Les exemples n'utilisent que des noms neutres et des adresses d'exemple (`aid-e2e.ts.net`, `192.0.2.x`, `peer-a`). Aucun vrai gateway, hôte du tailnet ni jeton dans le dépôt.
