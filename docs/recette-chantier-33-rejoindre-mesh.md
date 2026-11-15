@@ -60,6 +60,14 @@ des exemples. Ne jamais copier le contenu du jeton dans A-I-D.
       restent présents. Lire le rappel et demander à l’opérateur la révocation
       si la cell de recette doit être retirée du gateway.
 
+## Essais du lab (15 novembre 2026)
+
+Le lab a fait deux essais avec le vrai `swarph join` (swarph-cli 0.81.0) contre le gateway de lab, sur son bac à sable. Le code d'A-I-D était celui de 455cefc, appelé par un petit script, hors de l'écran et sans la route. Le commander avait donné son accord. Ces essais ne remplacent pas la recette ci-dessus.
+
+- **Expiration.** L'état passe à `en-attente`, avec le code lu sur la vraie ligne `Code:`. Personne n'approuve. Au bout de 15 minutes, l'état devient `expire`. Il ne reste ni réservation dans `.config/swarph`, ni `rejoindre.json`, et aucun peer n'est inscrit.
+- **Approbation.** L'état passe à `en-attente`, puis le commander approuve avec le témoin du lab. L'état devient `approuve`, avec le témoin lu sur la vraie sortie. Le jeton et `join.json` sont en 0600, vus sans être lus, et `rejoindre.json` est effacé. Le peer est inscrit, non ratifié. Le commander révoque ce peer de test.
+- **Non couvert par ces essais :** l'écriture de `config.yaml`. Le script n'appelait pas la route, qui fait cette écriture. Elle reste couverte par l'e2e.
+
 Constats avec le faux : __________
 
 Constats avec le vrai gateway : __________
