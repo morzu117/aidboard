@@ -2,7 +2,7 @@
 
 | Champ | Valeur |
 |---|---|
-| État | **Révision 0, 15 novembre 2026.** D'après la réponse du lab sur ce qui peut avancer sans le #20 (DM 98600) et le verbe `board.cards.create` de swarph-cli 0.82.0 (#1567, DM 98586). Choix de Julien du 15 novembre : le proxy seul, et le projet choisi dans une liste. **Révision 1** : la relecture du lab (DM 98624), avec deux corrections sur le verbe et quatre trous comblés dans D340. Julien a choisi de prévenir pour les obligations ouvertes, sans plus. |
+| État | **Révision 0, 15 novembre 2026.** D'après la réponse du lab sur ce qui peut avancer sans le #20 (DM 98600) et le verbe `board.cards.create` de swarph-cli 0.82.0 (#1567, DM 98586). Choix de Julien du 15 novembre : le proxy seul, et le projet choisi dans une liste. **Révision 1** : la relecture du lab (DM 98624), avec deux corrections sur le verbe et quatre trous comblés dans D340. Julien a choisi de prévenir pour les obligations ouvertes, sans plus. **Révision 2** : le résumé respecte la borne de 160 caractères du contrat du PDA, et le titre passe dans les lignes signées (arrêt de Codex au 41b.2). |
 | Emplacement final | `docs/chantiers/41b-creer-carte.md` sur `main` |
 | Base | `main`. |
 | Organisation | Comme au 41 a. La cell de gestion de Julien gère le chantier. Codex CLI écrit le code et les tests de chaque point. La cell de gestion relit, lance le gate et `gate:e2e`, commite et ouvre la PR. |
@@ -36,12 +36,13 @@ Le 41 a liste les « Sujets Swairm sans carte ». Pour chacun, il propose seulem
 ### D338. Une quatrième action d'écriture, `carte.creer`
 
 - `mesh.ecrire` gagne l'action `carte.creer`. Elle reste de classe `toujours`, comme les trois autres.
-- Ses paramètres : `mesh`, `projet`, `titre`, `corps`.
+- Ses paramètres : `mesh`, `projet`, `projetNom`, `titre`, `corps`.
   - `projet` : **l'id entier** d'un projet, tel que le renvoie `board.projects.list`. Le proxy n'accepte qu'un entier JSON positif et refuse un slug en `bad_args` (DM 98624). L'écran affiche le nom du projet, mais seul l'id circule. A-I-D n'accepte que des ids qu'il a lus dans cette liste pour ce mesh. `preparer` relit la liste et refuse un projet absent en 400.
   - `titre` : de 1 à 200 caractères, comptés **après** le retrait des espaces en tête et en fin, et sans saut de ligne. Un titre fait seulement d'espaces est refusé, comme le fait le proxy. C'est plus strict que le proxy.
   - `corps` : sa **première ligne** est exactement la ligne Swairm du sujet, au format de D285, puis éventuellement une ligne vide et du texte libre. Le tout fait 4 000 caractères au plus, comme le texte des autres écritures du 35 bis. Un corps dont la première ligne n'est pas une ligne Swairm valide est refusé en 400.
 - Le nettoyage du 35 (secrets, texte libre) s'applique au titre et au corps, comme pour `carte.note`.
-- Le résumé affiché sur le téléphone : « Créer la carte « <titre> » dans <nom du projet> », suivi des lignes « Projet : <nom du projet> » et « Sujet : <owner>/<dépôt>#<id> ». Le nom est lu dans la liste au moment de `preparer`, et il est signé avec la demande.
+- **Le résumé et les lignes du téléphone.** Le résumé signé d'une demande fait 160 caractères au plus (contrat du PDA, `src/shared/confirmations.ts` et `src/shared/pda.ts`). Ce contrat ne change pas. Comme pour les trois autres écritures, le résumé est donc court et ne porte que des valeurs bornées : « Création de carte dans le projet #<id> ». Le reste vient des paramètres signés, affichés en lignes : « Titre : <titre> », « Projet : <nom du projet> (#<id>) » et « Sujet : <owner>/<dépôt>#<id> ».
+- **Le nom du projet** est un paramètre signé, `projetNom`, de 1 à 100 caractères. `preparer` le relit dans la liste et refuse en 400 un nom qui ne correspond pas à l'id. Le client ne peut donc pas faire afficher au téléphone un autre nom que celui du board.
 
 ### D339. Le transport : le proxy seul
 
