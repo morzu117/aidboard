@@ -15,8 +15,8 @@ if (process.argv[2] === '--version') {
 }
 const repertoire = join(process.env.HOME, '.config', 'swarph');
 mkdirSync(repertoire, { recursive: true, mode: 0o700 });
-const jeton = join(repertoire, 'peer-a.peer_token');
-const inscription = join(repertoire, 'peer-a.join.json');
+const jeton = join(repertoire, `${scenario.cell ?? 'peer-a'}.peer_token`);
+const inscription = join(repertoire, `${scenario.cell ?? 'peer-a'}.join.json`);
 const entree = fstatSync(0);
 const nul = statSync('/dev/null');
 writeFileSync(
@@ -55,7 +55,10 @@ process.on('SIGINT', () => {
 console.log(scenario.code ?? 'Code: ABCD-EFGH (expires in 15 minutes).');
 if (scenario.lignes) for (const ligne of scenario.lignes) console.log(ligne);
 if (scenario.bruit) console.log('x'.repeat(10_000));
-setTimeout(() => {
+const programmer = scenario.pilotage ? setInterval : setTimeout;
+programmer(() => {
+  if (scenario.pilotage)
+    Object.assign(scenario, JSON.parse(readFileSync(join(dossier, 'scenario.json'), 'utf8')));
   if (scenario.attente) return;
   if (scenario.erreurs) {
     for (const ligne of scenario.erreurs) console.error(ligne);

@@ -159,6 +159,12 @@ La section « Meshes », le formulaire, l'attente, le succès et les échecs.
 ### 33.5 L'e2e et la fiche de recette
 
 Un e2e Machines avec le faux `swarph`, et la fiche `docs/recette-chantier-33-rejoindre-mesh.md`. La fiche écrit le risque de Q1 : tout agent lancé sous le même utilisateur peut lire le jeton de cell. La recette réelle demande un gateway et un opérateur : elle se fait avec le lab, ou sur le mesh de Julien.
+33.5 commité. Contenu :
+- `e2e/rejoindre-mesh.spec.ts` : 5 scénarios, verts trois fois de suite.
+- `docs/recette-chantier-33-rejoindre-mesh.md` : la partie avec le faux `swarph` et la partie avec un vrai gateway, et en tête le risque de Q1.
+- Le faux `swarph join` prend le nom de la cell du scénario et peut être piloté par fichier : 3 lignes existantes du chantier remplacées.
+
+Vérifié : gate vert (3 997 tests), `gate:e2e` entier vert sous Node 22 avec `CI=1` (137 tests Playwright), aucun daemon résiduel. La recette réelle reste à faire.
 
 ## 7. Pièges
 
