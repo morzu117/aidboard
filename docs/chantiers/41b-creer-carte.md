@@ -2,7 +2,7 @@
 
 | Champ | Valeur |
 |---|---|
-| État | **Révision 0, 15 novembre 2026.** D'après la réponse du lab sur ce qui peut avancer sans le #20 (DM 98600) et le verbe `board.cards.create` de swarph-cli 0.82.0 (#1567, DM 98586). Choix de Julien du 15 novembre : le proxy seul, et le projet choisi dans une liste. |
+| État | **Révision 0, 15 novembre 2026.** D'après la réponse du lab sur ce qui peut avancer sans le #20 (DM 98600) et le verbe `board.cards.create` de swarph-cli 0.82.0 (#1567, DM 98586). Choix de Julien du 15 novembre : le proxy seul, et le projet choisi dans une liste. **Révision 1** : la relecture du lab (DM 98624), avec deux corrections sur le verbe et quatre trous comblés dans D340. Julien a choisi de prévenir pour les obligations ouvertes, sans plus. |
 | Emplacement final | `docs/chantiers/41b-creer-carte.md` sur `main` |
 | Base | `main`. |
 | Organisation | Comme au 41 a. La cell de gestion de Julien gère le chantier. Codex CLI écrit le code et les tests de chaque point. La cell de gestion relit, lance le gate et `gate:e2e`, commite et ouvre la PR. |
@@ -37,26 +37,36 @@ Le 41 a liste les « Sujets Swairm sans carte ». Pour chacun, il propose seulem
 
 - `mesh.ecrire` gagne l'action `carte.creer`. Elle reste de classe `toujours`, comme les trois autres.
 - Ses paramètres : `mesh`, `projet`, `titre`, `corps`.
-  - `projet` : un id ou un slug de projet, tel que le renvoie `board.projects.list`. A-I-D n'accepte que des valeurs qu'il a lues dans cette liste pour ce mesh. `preparer` relit la liste et refuse un projet absent en 400.
-  - `titre` : de 1 à 200 caractères après nettoyage, sans saut de ligne. C'est plus strict que le proxy.
+  - `projet` : **l'id entier** d'un projet, tel que le renvoie `board.projects.list`. Le proxy n'accepte qu'un entier JSON positif et refuse un slug en `bad_args` (DM 98624). L'écran affiche le nom du projet, mais seul l'id circule. A-I-D n'accepte que des ids qu'il a lus dans cette liste pour ce mesh. `preparer` relit la liste et refuse un projet absent en 400.
+  - `titre` : de 1 à 200 caractères, comptés **après** le retrait des espaces en tête et en fin, et sans saut de ligne. Un titre fait seulement d'espaces est refusé, comme le fait le proxy. C'est plus strict que le proxy.
   - `corps` : sa **première ligne** est exactement la ligne Swairm du sujet, au format de D285, puis éventuellement une ligne vide et du texte libre. Le tout fait 4 000 caractères au plus, comme le texte des autres écritures du 35 bis. Un corps dont la première ligne n'est pas une ligne Swairm valide est refusé en 400.
 - Le nettoyage du 35 (secrets, texte libre) s'applique au titre et au corps, comme pour `carte.note`.
-- Le résumé affiché sur le téléphone : « Créer la carte « <titre> » dans <projet> », suivi des lignes « Projet : <projet> » et « Sujet : <owner>/<dépôt>#<id> ».
+- Le résumé affiché sur le téléphone : « Créer la carte « <titre> » dans <nom du projet> », suivi des lignes « Projet : <nom du projet> » et « Sujet : <owner>/<dépôt>#<id> ». Le nom est lu dans la liste au moment de `preparer`, et il est signé avec la demande.
 
 ### D339. Le transport : le proxy seul
 
 - `board.cards.create` entre dans `VERBES_PROXY`, avec un schéma d'arguments fermé : `project`, `title` et `body`. Ce sont les noms du document de schéma de swarph-cli 0.82.0 (`docs/proxy-protocol.md`, dépôt public, ligne du verbe). `priority`, `labels` et `assignee` existent aussi, mais A-I-D ne les envoie pas, ni aucun autre champ. Le proxy fixe lui-même l'acteur à sa cell.
 - Le proxy fait un seul POST, sans lecture préalable. Un refus du gateway (403 : pas de droit sur le projet) arrive en `upstream_error`, avec le statut 403. L'écran dit alors « Le board a refusé cette création (403) : ta cell n'a pas le droit d'écrire dans ce projet. »
-- **Une création ouvre aussi les obligations obligatoires** du menu du board, sans détenteur (document de schéma, § `board.cards.create`). L'aperçu le dit en une ligne : « Le board ouvrira aussi les obligations obligatoires de la carte, sans détenteur. »
+- **Une création ouvre aussi les obligations obligatoires** du menu du projet, sans détenteur : build, validate, plan-review (document de schéma, § `board.cards.create`). Le board les propose ensuite aux cells, et A-I-D ne peut pas les retirer, car le proxy n'a pas de verbe pour ça. **Choix de Julien : prévenir, sans plus.** L'aperçu le dit en une ligne : « Le board ouvrira aussi les obligations obligatoires du projet, sans détenteur. A-I-D ne pourra pas les retirer. » C'est l'opérateur qui choisit le projet et retire ces lignes au besoin.
 - Sans `mesh.proxySocket`, `preparer` répond 409 `proxy_absent` (D262). Avec un proxy en lecture seule, l'écran le dit et rien n'est demandé (D283).
+- **Le verbe n'existe qu'à partir de swarph-cli 0.82.0.** Un proxy plus ancien répond `verb_not_allowed`. L'écran dit : « Le proxy a refusé de créer la carte : il est trop ancien (swarph-cli 0.82.0 requis) ou en lecture seule. Rien n'a été créé. »
+- **Les issues certaines et incertaines**, d'après la table des erreurs du document de schéma :
+  - **certaines, sans relecture** : `bad_args`, `verb_not_allowed`, `peer_not_allowed`, `proxy_unavailable` et `connexion` (refusés avant le gateway), `upstream_unreachable` (échec de connexion avant tout envoi), `upstream_error` avec son statut (le 403 compris), et une réponse 2xx ;
+  - **incertaines, donc D340** : `upstream_ambiguous` (coupure pendant ou après l'envoi), `interrompu` et `delai`.
+  - Les `request_id` du proxy ne servent pas de clé d'idempotence et ne dédoublonnent pas les écritures (document de schéma) : D340 est donc la seule protection.
 - Si le proxy configuré ne répond pas, c'est une erreur, avec les messages de D263. Il n'y a jamais de repli sur le CLI (règle du lab, `docs/proxy-deployment.md` de swarph-cli).
 - Une réponse 2xx renvoie la carte créée telle quelle. A-I-D n'en garde que l'id, qu'il affiche. `detail` n'est jamais remonté.
 
-### D340. L'envoi incertain ne crée pas de doublon
+### D340. Pas de doublon, ni avant, ni pendant, ni après l'envoi
 
-- Si le résultat est `upstream_ambiguous`, `interrompu` ou `delai`, la carte a peut-être été créée. L'écran affiche « Création incertaine : la carte a peut-être été créée. A-I-D relit le board avant de te laisser recommencer. »
-- A-I-D relit alors le board, par la recherche de D286 sur la ligne Swairm. Si une carte porte la ligne, le sujet quitte « sans carte » et la création est réputée faite. Sinon, le bouton « Créer la carte » revient.
-- Tant que cette relecture n'a pas répondu, le bouton « Créer la carte » de ce sujet reste désactivé.
+Le proxy ne dédoublonne pas (D339). A-I-D s'en charge, par quatre règles.
+
+- **Une création en vol par sujet.** Le daemon tient une table `cartes_en_vol` (nouvelle migration), avec une ligne par création : `(mesh, ligne_swairm, projet, etat, depuis)`. `etat` vaut `en-vol` ou `incertain`, et le couple `(mesh, ligne_swairm)` est unique. La ligne est insérée **avant** l'envoi. Une seconde création pour le même sujet, depuis un autre onglet ou depuis le téléphone, est refusée en 409 : « Une création de carte est déjà en cours pour ce sujet. »
+- **Vérifier avant l'envoi.** Au moment de l'envoi, après le oui du téléphone, le daemon relit le board (voir la relecture plus bas). Si une carte porte déjà la ligne Swairm, rien ne part : « Une carte porte déjà ce sujet : #<n>. Rien n'a été créé. » La liste « sans carte » du 41 a peut en effet être périmée, ou une autre cell a pu créer la carte entre-temps.
+- **Une issue certaine** (D339) efface la ligne de `cartes_en_vol`. **Une issue incertaine** la passe à `incertain`, et l'écran dit : « Création incertaine : la carte a peut-être été créée. A-I-D relit le board avant de te laisser recommencer. » A-I-D relit alors le board. Si une carte porte la ligne, la création est réputée faite, et la ligne est effacée. Sinon, la ligne est effacée et le bouton revient. Si la relecture échoue, la ligne reste `incertain`, et le bouton reste désactivé, avec « Relire le board ».
+- **Au démarrage du daemon**, toute ligne de `cartes_en_vol` passe à `incertain` et suit la même relecture avant que le bouton revienne. Un redémarrage pendant l'envoi ne réactive donc rien.
+- **La relecture est directe et complète.** Elle lit `board.cards.list` du projet choisi, **toutes étapes comprises** : une carte done ou parked qui porte la ligne compte. A-I-D filtre ensuite lui-même sur la ligne Swairm exacte (D285). Elle ne passe pas par la recherche de D286, qui pourrait ne pas montrer encore une carte toute neuve. Le point 41b.2 vérifie, dans le document de schéma, comment `board.cards.list` liste toutes les étapes. S'il ne le permet pas en une lecture, il le dit avant de coder.
+- Le bouton « Créer la carte » d'un sujet reste désactivé tant qu'une ligne existe pour lui dans `cartes_en_vol`.
 
 ### D341. L'écran
 
@@ -80,7 +90,8 @@ Ce document, et sa ligne dans `docs/chantiers/README.md`.
 
 - `carte.creer` dans `src/shared/confirmations.ts` (validation, résumé, classe) et dans le parcours d'écriture du 35 bis (`preparer`, l'envoi, le résultat).
 - `board.cards.create` dans `src/daemon/mesh/proxy.ts`, avec son schéma d'arguments. Le faux proxy de test (`test/fixtures/faux-proxy.ts`) apprend le verbe.
-- **Tests :** les validations de D338, une par règle ; le projet hors liste ; l'absence de proxy (409) ; le proxy en lecture seule ; chacun des codes du proxy ; l'envoi incertain et sa relecture (D340) ; aucun champ envoyé hors schéma ; `detail` jamais remonté.
+- La table `cartes_en_vol` et sa migration, le verrou par sujet, la vérification avant l'envoi, la relecture directe et la reprise au démarrage (D340).
+- **Tests :** les validations de D338, une par règle, dont le titre blanc et le projet envoyé en entier ; le projet hors liste ; l'absence de proxy (409) ; le proxy en lecture seule ; `verb_not_allowed` (proxy trop ancien) ; chacun des codes du proxy, classé certain ou incertain ; la seconde création concurrente (409) ; une carte trouvée avant l'envoi ; l'envoi incertain, sa relecture qui trouve la carte puis qui ne la trouve pas, et sa relecture en échec ; un redémarrage avec une ligne en vol ; une carte done ou parked qui compte ; aucun champ envoyé hors schéma ; `detail` jamais remonté.
 
 ### 41b.3 Le web et le téléphone (D341)
 
@@ -94,13 +105,14 @@ Ce document, et sa ligne dans `docs/chantiers/README.md`.
 
 ### 41b.5 La vérification réelle
 
-Le lab la fait sur son bac à sable, contre un vrai proxy en 0.82.0, sur un projet où sa cell de test a le droit d'écrire, quand le commander l'aura accepté (DM 98600). Rien n'est installé par A-I-D.
+Le lab la fait sur son bac à sable, contre un vrai proxy en 0.82.0, sur un projet où sa cell de test a le droit d'écrire, quand le commander l'aura accepté (DM 98600). Le lab lit d'abord le menu du projet (projet 17 proposé), pour savoir quelles obligations la carte ouvrira (DM 98624). Rien n'est installé par A-I-D.
 
 ## 6. Pièges
 
 - Ne jamais écrire avec le jeton de la cell, même si le proxy tombe.
 - Ne jamais accepter un projet qu'A-I-D n'a pas lu dans `board.projects.list` pour ce mesh.
-- Ne jamais recréer une carte après un envoi incertain sans avoir relu le board.
+- Ne jamais recréer une carte après un envoi incertain sans avoir relu le board, ni envoyer sans avoir vérifié qu'aucune carte ne porte déjà la ligne.
+- Ne jamais envoyer un slug comme `project` : seulement l'id entier.
 - Aucun nom de cell réel, de gateway ni de projet réel dans le code, les tests ou la doc.
 
 ## 7. Fini quand
