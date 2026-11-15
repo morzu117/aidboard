@@ -305,6 +305,7 @@ Le test `branche.revenir : worktree manquant, 409` de `test/topic-rattacher.test
 - Prouver la cause sous charge, avec le taux d'échec avant et après la correction.
 - Si la cause est dans le test, il fabrique un worktree manquant de façon certaine, par exemple un sujet créé jusqu'au bout dont le dossier est ensuite retiré. Le test attend toujours un 409, et rien ne change à l'état du sujet. Si la route accepte à tort un sujet sans worktree, c'est un défaut : il est décrit, et le correctif est à décider.
 - **Tests :** le test corrigé sous charge ; le gate entier.
+11.13 commité. Cause établie par lecture du code : la création répond 202 avant le `git worktree add`, et le test n'attendait pas la fin de la création. L'échec n'a pas été reproduit (0/30 avant, sous charge). Le test fabrique maintenant le worktree manquant de façon certaine. Après la correction : 0/30. Gate vert (4 033 tests), fichier passé 3 fois sur 3.
 
 ## Pièges
 

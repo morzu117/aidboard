@@ -1,13 +1,7 @@
+import { existsSync, rmSync } from 'node:fs';
 import { afterEach, expect, test } from 'vitest';
 import { sh } from './helpers/git.js';
-import {
-  type Ctx,
-  finished,
-  makeTopic,
-  postAction,
-  postCreate,
-  setupWorkspace,
-} from './helpers/topics.js';
+import { type Ctx, finished, makeTopic, postAction, setupWorkspace } from './helpers/topics.js';
 
 let c: Ctx;
 afterEach(async () => {
@@ -111,8 +105,12 @@ test('branche.revenir : branche du sujet déjà extraite dans un autre worktree 
 
 test('branche.revenir : worktree manquant, 409', async () => {
   c = await setupWorkspace();
-  const created = (await postCreate(c, 'Draft')).json<{ actionId: string; topicId: string }>();
-  const r = await postAction(c, created.topicId, 'branche.revenir');
+  const { wt, topicId } = await makeTopic(c, 'Draft');
+  const avant = c.t.db.prepare('SELECT * FROM topics WHERE id = ?').get(topicId);
+  rmSync(wt, { recursive: true });
+  expect(existsSync(wt)).toBe(false);
+
+  const r = await postAction(c, topicId, 'branche.revenir');
   expect(r.statusCode).toBe(409);
-  await finished(c.t, created.actionId);
+  expect(c.t.db.prepare('SELECT * FROM topics WHERE id = ?').get(topicId)).toEqual(avant);
 });
