@@ -1,6 +1,6 @@
 import { execFile } from 'node:child_process';
 import type { Workspace } from '../../shared/model.js';
-import { GIT_ENV } from '../git/exec.js';
+import { GIT_ENV_LECTURE } from '../git/exec.js';
 
 /** Ni les erreurs git ni son URL ne sortent de cette fonction. */
 export function lireIdentite(root: string, remote: string, delaiMs = 5000): Promise<string | null> {
@@ -10,7 +10,7 @@ export function lireIdentite(root: string, remote: string, delaiMs = 5000): Prom
       ['remote', 'get-url', remote],
       {
         cwd: root,
-        env: { ...process.env, ...GIT_ENV },
+        env: { ...process.env, ...GIT_ENV_LECTURE },
         timeout: delaiMs,
         maxBuffer: 16 * 1024,
       },

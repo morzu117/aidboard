@@ -152,7 +152,7 @@ export function EcranMesh({
 
 export function EnteteMesh({ mesh }: { mesh: string }) {
   const { multiple } = useMeshes();
-  return multiple ? (
+  return multiple || mesh !== 'principal' ? (
     <p>
       <strong>Mesh : {mesh}</strong>
     </p>

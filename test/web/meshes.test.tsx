@@ -357,6 +357,61 @@ test('formulaire : bandeau en tête et aucun texte, fil ou cible transmis au cha
   });
 });
 
+test.each(['en attente', 'en échec'])(
+  'formulaire perso : bandeau en tête avec la liste des meshes %s',
+  async (etatListe) => {
+    const lireMeshes = vi.fn(() => {
+      if (etatListe === 'en échec') throw new TypeError('Liste des meshes indisponible');
+      return new Promise<Response>(() => {}) as unknown as Response;
+    });
+    setup(
+      <EcrireAuMesh
+        mesh="perso"
+        action="dm.envoyer"
+        valeurs={{ pair: 'peer-a', texte: 'Texte perso' }}
+        onClose={() => {}}
+      />,
+      etat(),
+      '/',
+      {
+        ...routes,
+        'GET /api/meshes': lireMeshes,
+        'POST /api/swarph/ecrire/apercu': json(200, apercu),
+      },
+    );
+    await joindre();
+    fireEvent.click(screen.getByText("Voir l'aperçu"));
+    await waitFor(() => expect(lireMeshes).toHaveBeenCalled());
+    const section = await screen.findByRole('region', { name: 'Aperçu' });
+    expect(section.firstElementChild?.textContent).toBe('Mesh : perso');
+  },
+);
+
+test('formulaire principal : aucun bandeau avec un seul mesh actif', async () => {
+  const lireMeshes = vi.fn(json(200, [entree('principal')]));
+  setup(
+    <EcrireAuMesh
+      mesh="principal"
+      action="dm.envoyer"
+      valeurs={{ pair: 'peer-a', texte: 'Texte principal' }}
+      onClose={() => {}}
+    />,
+    etat(),
+    '/',
+    {
+      ...routes,
+      'GET /api/meshes': lireMeshes,
+      'POST /api/swarph/ecrire/apercu': json(200, apercu),
+    },
+  );
+  await joindre();
+  fireEvent.click(screen.getByText("Voir l'aperçu"));
+  await waitFor(() => expect(lireMeshes).toHaveBeenCalled());
+  const section = await screen.findByRole('region', { name: 'Aperçu' });
+  expect(within(section).queryByText(/^Mesh :/)).toBeNull();
+  expect(section.firstElementChild?.textContent).toBe('Résumé exact');
+});
+
 test.each([1, 3, 4])(
   'barre : %i mesh actif, au plus trois pastilles et le compte restant',
   async (n) => {
