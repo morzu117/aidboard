@@ -217,6 +217,29 @@ Chaque point est un commit, avec le gate vert. Le message de commit compte les l
 `test/web/host.test.tsx`, test « D176 : la réclamation arrive par relecture, avec code court, nom, identité non vérifiable ». Il a échoué deux fois dans le gate complet du VPS le 15 novembre (« expected undefined to be '4821' »), hors de tout diff, pendant le chantier 41 b. Lancé seul, il passe 5 fois sur 5. La cause supposée est la même que celle de 31.12 : l'horloge simulée avance une seule fois, peut-être avant que l'effet React n'installe l'intervalle de relecture, et le `waitFor` qui suit n'avance plus l'horloge. Le correctif prouve la cause sous charge et rend le test déterministe. Aucune assertion n'est relâchée, et aucun délai n'est simplement allongé. Si la cause est dans l'écran et pas dans le test, il le dit et corrige l'écran. Il vérifie aussi si d'autres tests de `host.test.tsx` avancent l'horloge de la même façon, et il les corrige de la même manière.
 - _Révision 31.13._ Cause prouvée sous charge : 1 échec sur 30. L'horloge simulée avançait avant l'effet qui installe l'intervalle de relecture. Correction : un `act` vide après l'apparition du QR, et le même `act` avant la mesure du test « aucune relecture tant qu'aucun QR n'est affiché ». 4 lignes ajoutées, 0 ligne existante modifiée. Résultats : 20 sur 20 seul, 10 sur 10 pour le fichier, 12 sur 12 sous charge. Gate 4 153, gate:e2e 139.
 
+### 31.14 Correctif : un Funnel actif empêche vraiment le mode host (D173, validation du lab)
+
+La validation du code du 31 par le lab (DM 99067, sur main e0191c2) donne PASS, sauf sur un point. D173 promet qu'« un Funnel actif empêche l'activation ». Or `PUT /api/host` démarre le port des appareils sans regarder `serve.funnel`, et seuls la pastille du Cockpit et `aid doctor` le signalent. Avec un Funnel sur ce service, l'interface publique et `/appairage/reclamer` seraient joignables depuis internet, et le plafond global de D179 serait épuisable par n'importe qui. Le lab tient le 31 pour validé une fois ce correctif mergé, avec ses tests et la CI verte.
+
+- **À l'activation :** `PUT /api/host { actif: true }` relit Serve à ce moment. Si un Funnel est actif (`serve.funnel === true`), la route rend 409 « Funnel actif : le cockpit serait sur internet ». Elle n'écrit rien dans `config.yaml` et ne démarre rien. Un Serve **absent** (sortie vide, Serve non configuré) ne bloque rien, puisque le port n'est alors joignable que sur 127.0.0.1. Un Serve **illisible** bloque l'activation, avec un 409 « État de Serve illisible » : on ne sait pas si un Funnel est là (lab, DM 99079).
+- **Au démarrage du daemon :** quand `modeHost.actif` vaut `true`, le port des appareils ne démarre pas si Serve montre un Funnel ou s'il est illisible. L'état le dit, avec la même raison.
+- **Pendant que le mode est actif :** le daemon relit Tailscale toutes les 60 s (`RELECTURE_HOST_MS`, injectable dans les tests), comme D173 le prévoit, et pas seulement à chaque `GET /api/host`.
+  - Un nom changé est pris par le port des appareils.
+  - **Un Funnel apparu arrête le port des appareils**, sans révoquer les appareils (comme l'arrêt du daemon, D172) et sans écrire `config.yaml`. L'état donne la raison « Funnel actif : le port des appareils est arrêté ».
+  - Une seule relecture illisible ne coupe pas, parce qu'un délai de la CLI `tailscale` peut arriver. **Deux relectures illisibles d'affilée arrêtent le port**, avec la raison « État de Serve illisible : le port des appareils est arrêté », et le daemon le journalise sans contenu.
+  - Le port ne redémarre pas seul quand le Funnel disparaît. Il faut un nouveau `PUT /api/host { actif: true }`, qui refait la vérification.
+  - Le minuteur est `unref`, et il est annulé à l'arrêt du daemon et quand le mode est éteint.
+- **Tests :**
+  - le 409 de l'activation, sans écriture de la config ;
+  - le refus au démarrage ;
+  - un Funnel apparu à la relecture, qui arrête le port sans révoquer les appareils ;
+  - un nom changé, pris à la relecture ;
+  - l'absence de redémarrage seul ;
+  - le minuteur annulé à l'arrêt.
+  - le 409 d'un Serve illisible à l'activation, le refus au démarrage avec un Serve illisible, et l'arrêt après deux relectures illisibles d'affilée, mais pas après une seule ;
+  - **un e2e** dans `e2e/mode-host.spec.ts` : la sortie synthétique de `tailscale` montre un Funnel. Le port des appareils reste fermé, l'écran du Mac donne la raison, et l'activation rend 409.
+- _Révision 31.14._ Fait en trois passes : le Funnel, puis l'état illisible et l'e2e (DM 99079), puis la revue des captures. La raison passe en alerte sous l'interrupteur, et le bouton désactivé porte un `title`. Le style global des boutons désactivés manque dans toute l'app : il relève du 56. Le hook `onClose` n'annule que le minuteur, puisque `stop()` fermait déjà le port. Gate 4 166, gate:e2e 141, e2e du mode host 8/8 trois fois.
+
 ## 6. Pièges
 
 - **Serve en local.** Tout processus du Mac peut joindre `127.0.0.1:4890` en posant `Host`, `X-Forwarded-*` et `Tailscale-*`. Sans cookie d'appareil valide, il n'obtient rien. Ces en-têtes ne valent jamais seuls (D179).
