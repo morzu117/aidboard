@@ -1,0 +1,4 @@
+schema_version: '1.1'
+name: figer-ecran-existant
+expected_outcome: |
+  Une fiche JSON de l'écran Machines tirée de l'application : tous les nœuds du composant, y compris ceux calculés, en provenance existant, avec les états et leur mise en place, et l'avertissement que la fiche fige l'existant.
