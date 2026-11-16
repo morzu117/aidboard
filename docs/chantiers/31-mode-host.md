@@ -238,6 +238,7 @@ La validation du code du 31 par le lab (DM 99067, sur main e0191c2) donne PASS, 
   - le minuteur annulé à l'arrêt.
   - le 409 d'un Serve illisible à l'activation, le refus au démarrage avec un Serve illisible, et l'arrêt après deux relectures illisibles d'affilée, mais pas après une seule ;
   - **un e2e** dans `e2e/mode-host.spec.ts` : la sortie synthétique de `tailscale` montre un Funnel. Le port des appareils reste fermé, l'écran du Mac donne la raison, et l'activation rend 409.
+- _Révision 31.14._ Fait en trois passes : le Funnel, puis l'état illisible et l'e2e (DM 99079), puis la revue des captures. La raison passe en alerte sous l'interrupteur, et le bouton désactivé porte un `title`. Le style global des boutons désactivés manque dans toute l'app : il relève du 56. Le hook `onClose` n'annule que le minuteur, puisque `stop()` fermait déjà le port. Gate 4 166, gate:e2e 141, e2e du mode host 8/8 trois fois.
 
 ## 6. Pièges
 
