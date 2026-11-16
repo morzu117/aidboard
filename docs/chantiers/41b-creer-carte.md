@@ -148,6 +148,7 @@ Vérifications : gate vert (4 132 tests), gate:e2e 137, tests du chantier 166 fo
 ### 41b.5 La vérification réelle
 
 Le lab la fait sur son bac à sable, contre un vrai proxy en 0.82.0, sur un projet où sa cell de test a le droit d'écrire, quand le commander l'aura accepté (DM 98600). Le lab lit d'abord le menu du projet (projet 17 proposé), pour savoir quelles obligations la carte ouvrira (DM 98624). Rien n'est installé par A-I-D.
+- _Révision 41b.5._ Faite par le lab le 2026-11-16 (DM 99179), avec le go du commander (DM 99119). Proxy 0.83.0, projet #17, un appareil simulé à la place du téléphone, sur le choix de Julien (DM 99147). Un seul `board.cards.create`, en 200. Le corps commence par la ligne Swairm. Le sujet est relié à la lecture suivante. Aucun jeton dans le journal du daemon. Le doublon posé dans un autre projet n'est pas exercé, parce que la cell de test ne lit que le projet #17. Les constats sont dans `docs/recette-chantier-41b-creer-carte.md`. Les deux remarques sur l'écran passent au tri du chantier 56.
 
 ## 6. Pièges
 
