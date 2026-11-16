@@ -1,0 +1,4 @@
+schema_version: '1.1'
+name: fiche-depuis-export-design
+expected_outcome: |
+  Une fiche JSON de l'écran Serveurs tirée de l'export .dc.html et du brief : nœuds nommés à la convention, styles en références de tokens, provenance de chaque élément, états et tailles absents de l'export signalés à confirmer et non inventés.

@@ -1,0 +1,4 @@
+schema_version: '1.1'
+name: contrat-chantier-en-prose
+expected_outcome: |
+  Une fiche JSON de l'écran de création de carte et un contrat d'acceptation au format du skill, dérivés du plan 41b : bornes de D338, messages exacts de D339, critères rattachés à un niveau et à un fichier de test, éléments déduits signalés à confirmer.
