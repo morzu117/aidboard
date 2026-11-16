@@ -188,3 +188,15 @@
 .alerte-secret code {
   overflow-wrap: anywhere;
 }
+
+/* 56.8 : contenir la largeur intrinsèque de la matrice dans son défileur. */
+.machines-section:has(.combinaisons-defile),
+.combinaisons-defile {
+  min-width: 0;
+  max-width: 100%;
+}
+.combinaisons th,
+.combinaisons td {
+  overflow-wrap: normal;
+  word-break: normal;
+}

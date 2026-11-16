@@ -1,6 +1,7 @@
 export const CLASSES = [
   'erreur',
   'refus',
+  'visuel',
   'cible disparue',
   'clic impossible',
   'annulé',

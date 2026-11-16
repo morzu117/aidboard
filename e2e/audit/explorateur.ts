@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { Page, Request, Response, ConsoleMessage } from '@playwright/test';
 import { CLASSES, classer, type Classe, type Observation } from './classement.js';
+import { detecterVisuel, type TrouvailleVisuelle } from '../visuel.js';
 import type { Ecran } from './environnement.js';
 
 const SELECTEUR = 'button, a[href], [role="button"], summary, input, select, textarea';
@@ -66,6 +67,7 @@ export interface Resultat extends ElementReleve {
   classe: Classe | null;
   exclusion: string | null;
   observation: Observation;
+  visuel?: TrouvailleVisuelle;
 }
 interface EcranReleve {
   nom: string;
@@ -361,7 +363,7 @@ export async function explorer(options: {
     const propre = (s: string) => s.replace(/[|\n\r]/g, ' ');
     const lignes = resultats.map(
       (r) =>
-        `| ${r.classe ?? 'exclu'} | ${propre(r.ecran)} | ${r.format} | ${propre(r.node ?? '(sans data-node)')} | ${propre(r.texte)} | ${propre(r.exclusion ?? '')} |`,
+        `| ${r.classe ?? 'exclu'} | ${propre(r.ecran)} | ${r.format} | ${propre(r.node ?? r.visuel?.selecteur ?? '(sans data-node)')} | ${propre(r.texte)} | ${propre(r.visuel ? `${r.visuel.regle} : ${JSON.stringify(r.visuel.mesures)}` : (r.exclusion ?? ''))} |`,
     );
     await writeFile(
       join(dossier, 'rapport.md'),
@@ -372,7 +374,7 @@ export async function explorer(options: {
         `- exclusions : ${resultats.filter((r) => r.exclusion).length}`,
         `- écrans non chargés : ${ecrans.filter((e) => e.erreurChargement).length}`,
         '',
-        '| Classe | Écran | Format | data-node | Texte | Exclusion |',
+        '| Classe | Écran | Format | data-node / sélecteur | Texte | Exclusion / règle et mesures |',
         '| --- | --- | --- | --- | --- | --- |',
         ...lignes,
         '',
@@ -402,6 +404,26 @@ export async function explorer(options: {
         await options.reinitialiser?.(ecran);
         await page.goto(ecran.chemin, { waitUntil: 'networkidle', timeout: 20_000 });
         await page.screenshot({ path: join(dossier, capture), fullPage: true });
+        for (const trouvaille of await detecterVisuel(page)) {
+          resultats.push({
+            node: trouvaille.node,
+            texte: trouvaille.texte,
+            cible: trouvaille.selecteur,
+            title: '',
+            actif: false,
+            href: '',
+            action: '',
+            balise: '',
+            type: '',
+            label: '',
+            ecran: ecran.nom,
+            format: taille,
+            classe: 'visuel',
+            exclusion: null,
+            observation: vide(false),
+            visuel: trouvaille,
+          });
+        }
         const elements = (await relever(page)).filter(options.choisirElements ?? (() => true));
         for (const element of elements) {
           const exclusion =

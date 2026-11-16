@@ -114,6 +114,7 @@ L'explorateur remplit les champs, accepte les confirmations dans un daemon jetab
   - Un mot n'est jamais coupé en son milieu. Un tableau trop large défile dans son conteneur, ou passe en lignes empilées.
 - **Le libellé collé** « peer-agéré par le proxy » de la barre de gauche.
 - **Les tests (D342).** Pour chaque écran corrigé, un e2e l'affiche aux deux formats et appelle le détecteur : aucune trouvaille sur les éléments corrigés. Il clique aussi les boutons concernés. Un test unitaire du détecteur, sur des pages synthétiques : un bouton natif, un lien bleu, un texte pâle, un débordement, un mot écrit une lettre par ligne, un chevauchement, chacun détecté. Une page propre ne donne rien.
+- _Révision 56.8._ Une passe de Codex, avec une limite de trois heures. Le détecteur est en place, essayé sur 15 cas synthétiques dans le vrai navigateur. Un socle `natifs.css` en `:where()` sert aux trois apps. Les tableaux défilent dans leur cadre, pour garder leurs colonnes. Sur la barre du compositeur, les règles de retour à la ligne ne s'appliquent que sous 720 px, pour que Remote garde sa place sur bureau. `e2e/visuel-ecrans.spec.ts` passe les 22 écrans aux deux formats et clique leurs boutons, avec le PDA réel. Sur les 44 vues de ces écrans, l'explorateur trouve 131 défauts `visuel` avant le correctif et 2 après. Les deux restants sont confiés au 56.9 : le chemin d'un projet et la clé publique, coupés sur téléphone. La cell de gestion a relu le diff et les captures aux deux formats. Gate 4 176, gate:e2e 168.
 
 ### 56.9 La mise en page de Machines, les textes bruts et les petits écarts
 
@@ -127,11 +128,13 @@ L'explorateur remplit les champs, accepte les confirmations dans un daemon jetab
   - la section « Contrôles » vide ;
   - « Bloqué : aucune PR ouverte. » centré ;
   - l'onglet actif des sous-onglets swarph.
+  - sur téléphone, le chemin d'un projet dans Réglages et la clé publique du daemon dans Machines, qui se coupent en plein mot (les deux trouvailles laissées par le 56.8) ;
+  - « Confirmer » et « Refuser » du PDA, de même style : l'action principale doit se distinguer.
 - **Les tests (D342)**, comme au 56.8.
 
 ### 56.g Le garde (D345)
 
-Il vient après les correctifs, pour que la liste de départ soit courte. Le garde de couverture de D345 s'y ajoute. Le branchement du détecteur visuel dans la CI attend le oui de Julien : il ferait échouer `gate:e2e` sur toute trouvaille hors exceptions, dans les écrans que les e2e affichent.
+Il vient après les correctifs, pour que la liste de départ soit courte. Le garde de couverture de D345 s'y ajoute. Le détecteur visuel y est aussi branché dans la CI : `gate:e2e` échoue sur toute trouvaille hors exceptions, dans les écrans que les e2e affichent. Julien a dit oui le 16 novembre : « ok pour brancher le détecteur en CI ».
 
 ## 4. Pièges
 

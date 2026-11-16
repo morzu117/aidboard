@@ -170,3 +170,18 @@ a.marque {
 .accueil-decision td {
   padding-bottom: var(--sp-4);
 }
+
+/* 56.8 : le badge reste entier ; le nom du serveur cède la place. */
+.nav-vps-etat {
+  flex: none;
+  white-space: nowrap;
+}
+.nav-vps-entete > .barre-gauche-sujet-nom {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.nav-etat-meshes > a > .nav-etat-sujet-projet {
+  display: block;
+}

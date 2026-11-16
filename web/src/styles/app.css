@@ -3063,3 +3063,57 @@ a.composer-menu-ligne {
     min-height: 320px;
   }
 }
+
+/* 56.8 : les actions passent à la ligne sans écraser le profil ni ses libellés. */
+@media (max-width: 720px) {
+  .composer-barre,
+  .composer-reglages,
+  .composer-profil {
+    flex-wrap: wrap;
+  }
+  .composer-reglages {
+    flex: 1 1 220px;
+  }
+  .composer-reglages > *,
+  .composer-profil > * {
+    flex-shrink: 0;
+    overflow-wrap: normal;
+    word-break: normal;
+  }
+  .composer-profil {
+    max-width: 100%;
+  }
+  .composer-profil-part {
+    white-space: nowrap;
+  }
+  .composer-barre > .bouton-icone {
+    flex-shrink: 0;
+  }
+}
+/* Les tableaux conservent leurs colonnes ; seul leur cadre défile. */
+.accueil-table-scroll {
+  min-width: 0;
+  max-width: 100%;
+}
+.accueil-table-scroll .table-sujets {
+  min-width: 640px;
+}
+.serveur-discussions-table .bouton {
+  white-space: nowrap;
+  overflow-wrap: normal;
+  word-break: normal;
+}
+.serveur-discussions-table {
+  display: block;
+  overflow-x: auto;
+}
+.serveur-discussions-table th,
+.serveur-discussions-table td {
+  white-space: nowrap;
+  overflow-wrap: normal;
+  word-break: normal;
+}
+.carte-board-table td.carte-board-etat {
+  overflow-wrap: normal;
+  word-break: normal;
+}

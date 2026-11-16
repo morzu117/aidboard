@@ -264,3 +264,15 @@
   border-inline-start: 0.25rem solid currentColor;
   padding: 0.75rem;
 }
+
+/* 56.8 : le tableau du board défile, au lieu d'imposer des colonnes étroites. */
+.appareil-coque .carte-board-table {
+  display: block;
+  table-layout: auto;
+  max-width: 100%;
+}
+.appareil-coque .carte-board-table th,
+.appareil-coque .carte-board-table td {
+  overflow-wrap: normal;
+  word-break: normal;
+}

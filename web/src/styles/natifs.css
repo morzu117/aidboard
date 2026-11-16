@@ -1,0 +1,41 @@
+/* 56.8 : socle des trois apps ; les classes de composants restent prioritaires. */
+:where(button, input, select, textarea) {
+  font: inherit;
+  color: var(--text);
+  background-color: var(--surface-input);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-s);
+  box-sizing: border-box;
+}
+/* Les contrôles déjà dimensionnés par une classe gardent leur remplissage. */
+:where(button:not([class]), input:not([class]), select:not([class]), textarea:not([class])) {
+  padding: var(--sp-2) var(--sp-3);
+}
+:where(button) {
+  background-color: var(--surface-3);
+  cursor: pointer;
+}
+:where(input[type='checkbox'], input[type='radio']) {
+  accent-color: var(--acc);
+  padding: 0;
+}
+:where(a:any-link) {
+  color: var(--acc);
+}
+:where(button, input, select, textarea):where(:disabled, [aria-disabled='true']) {
+  color: var(--muted);
+  background-color: var(--surface-3);
+  border-color: var(--line);
+  cursor: not-allowed;
+  opacity: 1;
+}
+:where(
+  button:focus-visible,
+  input:focus-visible,
+  select:focus-visible,
+  textarea:focus-visible,
+  a:focus-visible
+) {
+  outline: 2px solid var(--acc);
+  outline-offset: 2px;
+}
