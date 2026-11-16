@@ -72,7 +72,7 @@ test('routes admin : 409 sans relais/host, refus au PUT, essais sans nom et arr�
       method: 'POST',
       url: '/api/host/pda/essai',
       headers: t.headers,
-      payload: { sujet: 'Exemple' },
+      payload: {},
     });
   expect((await essai()).statusCode).toBe(409);
   t.d.modeHost.noterNom('aid-e2e.ts.net');
@@ -115,7 +115,7 @@ test('un dépôt refusé par le relais donne 502 et expire la demande', async ()
     method: 'POST',
     url: '/api/host/pda/essai',
     headers: t.headers,
-    payload: { sujet: 'Exemple' },
+    payload: {},
   });
   expect(reponse.statusCode).toBe(502);
   expect(reponse.json()).toEqual({ error: 'relais injoignable' });
@@ -129,5 +129,27 @@ test('43.7 : les variantes du relais donnent la même origine dans la CSP', () =
     expect(cspAppareils('aid-e2e.ts.net', relais).split('; ')[2]).toBe(
       "connect-src 'self' wss://aid-e2e.ts.net https://example.com",
     );
+  }
+});
+
+test('essai : corps absent ou vide accepté, tout autre contenu refusé', async () => {
+  const t = await startTestDaemon();
+  nettoyages.push(() => t.d.stop());
+  const envoyer = (payload?: unknown) =>
+    t.d.app.inject({
+      method: 'POST',
+      url: '/api/host/pda/essai',
+      headers: t.headers,
+      ...(payload === undefined
+        ? {}
+        : {
+            headers: { ...t.headers, 'content-type': 'application/json' },
+            payload: JSON.stringify(payload),
+          }),
+    });
+  for (const payload of [undefined, {}]) expect((await envoyer(payload)).statusCode).toBe(409);
+  for (const payload of [{ sujet: 'x' }, { autre: true }, [], 'texte', 42, null]) {
+    const reponse = await envoyer(payload);
+    expect(reponse.statusCode).toBe(400);
   }
 });

@@ -19,7 +19,6 @@ export function PanneauPda({ etat }: { etat: EtatModeHostDaemon['pda'] }) {
   const [relais, setRelais] = useState(etat?.relais ?? '');
   const [appareils, setAppareils] = useState<AppareilPda[]>([]);
   const [cle, setCle] = useState('');
-  const [sujet, setSujet] = useState('Essai');
   const [demande, setDemande] = useState<string | null>(null);
   const [resultat, setResultat] = useState('');
   const [erreur, setErreur] = useState('');
@@ -217,24 +216,13 @@ export function PanneauPda({ etat }: { etat: EtatModeHostDaemon['pda'] }) {
       >
         Faire tourner la clé
       </button>
-      <label className="cockpit-champ" data-node="machines.pda.sujet-libelle">
-        <span data-node="machines.pda.sujet-titre">Sujet</span>
-        <input
-          data-node="machines.pda.sujet"
-          maxLength={80}
-          value={sujet}
-          onChange={(e) => setSujet(e.target.value)}
-        />
-      </label>
       <button
         className="bouton"
         data-node="machines.pda.essai"
         disabled={occupe || demande !== null}
         onClick={() =>
           void agir(async () => {
-            const r = await client.request<{ id: string }>('POST', '/api/host/pda/essai', {
-              sujet,
-            });
+            const r = await client.request<{ id: string }>('POST', '/api/host/pda/essai');
             setDemande(r.id);
             setResultat('Demande envoyée, en attente…');
           })
@@ -242,7 +230,9 @@ export function PanneauPda({ etat }: { etat: EtatModeHostDaemon['pda'] }) {
       >
         Envoyer une demande d’essai
       </button>
-      <p role="status">{resultat}</p>
+      <p role="status" data-node="machines.pda.resultat">
+        {resultat}
+      </p>
       {erreur && (
         <p className="message-erreur" role="alert">
           {erreur}

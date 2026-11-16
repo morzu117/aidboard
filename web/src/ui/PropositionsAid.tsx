@@ -116,7 +116,7 @@ export function PropositionAidVue({
           >
             Envoyer
           </button>
-          {confirmation && (
+          {confirmation && !resultat && (
             <AttenteConfirmation
               id={confirmation}
               toujours
@@ -129,7 +129,11 @@ export function PropositionAidVue({
               }}
             />
           )}
-          {resultat && <p role="status">{libelleDeplacement(resultat)}</p>}
+          {resultat && (
+            <p role="status" data-node="deplacement.resultat">
+              {libelleDeplacement(resultat)}
+            </p>
+          )}
           <button onClick={() => setApercu(null)}>Fermer</button>
         </Dialogue>
       )}

@@ -382,7 +382,7 @@ function FormulaireEcriture({
                   l&apos;aperçu reste disponible.
                 </p>
               )}
-              {confirmation && (
+              {confirmation && !resultat && (
                 <>
                   {!terminee && <p>En attente de ta confirmation sur le téléphone.</p>}
                   <AttenteConfirmation
@@ -401,13 +401,16 @@ function FormulaireEcriture({
                 </>
               )}
               {resultat && (
-                <p role="status">
+                <p role="status" data-node="ecrire-mesh.resultat">
                   {resultat.relecture === 'attente'
                     ? 'Création incertaine : A-I-D relira le board dans une minute.'
                     : (resultat.message ?? libelleEnvoi(resultat))}
+                  {action === 'carte.creer' &&
+                    resultat.id &&
+                    !resultat.message?.includes(`#${resultat.id}`) &&
+                    ` Carte : #${resultat.id}`}
                 </p>
               )}
-              {action === 'carte.creer' && resultat?.id && <p>Carte : #{resultat.id}</p>}
               {action === 'carte.creer' && resultat?.relecture === 'trouvee' && (
                 <p>Le board a retrouvé la carte.</p>
               )}

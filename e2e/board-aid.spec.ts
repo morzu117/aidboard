@@ -380,6 +380,8 @@ test('A-I-D : sujets reliés, création et déplacement confirmé sur un faux pr
     await expect(
       mac.getByRole('dialog').getByRole('status').filter({ hasText: 'Droit manquant' }),
     ).toBeVisible({ timeout: 30_000 });
+    await expect(mac.getByRole('dialog').getByRole('status')).toHaveCount(1);
+    await expect(mac.getByRole('dialog').getByText('Exécutée', { exact: true })).toHaveCount(0);
     await expect(mac.getByRole('dialog')).not.toContainText(
       'execute requis ; swarph board cards confirm-flow',
     );

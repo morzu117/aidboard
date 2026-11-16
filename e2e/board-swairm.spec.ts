@@ -24,6 +24,20 @@ test('board unifié : liens, copies, transition proposée et abandon sans écrit
   const cartes = lire('cards-list-42.json');
   cartes.cards[0].body = 'Swairm: exemple/depot#41\nSwairm: exemple/depot#double';
   cartes.cards[1].body = 'Swairm: exemple/depot#double';
+  cartes.cards.push({
+    ...cartes.cards[0],
+    id: 103,
+    title: 'Carte reliée unique',
+    body: 'Swairm: exemple/depot#liee',
+  });
+  sauver('cards-show-103.json', {
+    ...lire('cards-show-101.json'),
+    id: 103,
+    title: 'Carte reliée unique',
+    body: 'Swairm: exemple/depot#liee',
+  });
+  sauver('cards-graph-103.json', lire('cards-graph-101.json'));
+  sauver('cards-thread-103.json', lire('cards-thread-101.json'));
   sauver('cards-list-42.json', cartes);
   sauver('cards-search.json', { ...cartes, searched: 2 });
   sauver('cards-show-101.json', { ...lire('cards-show-101.json'), body: cartes.cards[0].body });
@@ -109,6 +123,7 @@ mesh:
   const env = {
     ...process.env,
     AID_HOME: dossier,
+    AID_GH_BIN: join(fixtures, 'fake-gh.sh'),
     AID_NO_BROWSER: '1',
     SHELL: '/bin/sh',
     PATH: `${join(fixtures, 'bin')}${delimiter}${process.env.PATH}`,
@@ -214,6 +229,13 @@ mesh:
     await expect(
       page.getByRole('heading', { name: 'Proposer une note sur la carte #101' }),
     ).toHaveCount(0);
+    await page.goto(`${base}/board`);
+    const lectureCommits = page.waitForResponse(
+      (r) => new URL(r.url()).pathname === '/api/swairm/board/103/commits',
+    );
+    await node(page, 'board.carte-103').click();
+    expect((await lectureCommits).status()).toBe(200);
+    await expect(node(page, 'carte-board.chronologie')).toBeVisible();
     expect(ecritures).toEqual([]);
     const appels = readFileSync(join(dossier, 'appels-swarph.jsonl'), 'utf8')
       .trim()

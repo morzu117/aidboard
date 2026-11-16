@@ -74,6 +74,7 @@ Le bouton du menu ne recouvre plus aucune action, même après défilement. Le p
 ### 56.6 Les textes et les liens (D02, D09, D10, D14)
 
 Sur l'appareil, la liste des fichiers dit que la lecture du code est coupée et ne propose pas le lien. La création de carte n'affiche qu'un statut final. L'en-tête du Board distingue la lecture et les écritures sous confirmation. Le champ « Sujet » de l'essai PDA est retiré de l'écran et de la route. Le Board ne demande plus les commits d'une carte non reliée.
+- _Révision 56.6._ Deux passes. Dans la première, l'environnement d'audit remplissait encore le champ retiré. `audit-essai` dépassait son délai, et son daemon et son relais restaient en vie sur leurs ports, ce qui faisait échouer `board-aid` (EADDRINUSE) puis l'audit suivant (« relais injoignable »). La reprise corrige l'audit. Le nettoyage de l'audit quand il échoue est confié au 56.7. Gate 4 169, gate:e2e 147, specs touchées 29/29 trois fois. Le diff du daemon (livraison de l'appareil, route d'essai) part à la revue du lab avant la PR.
 
 ### 56.7 L'explorateur et les `data-node` (D13)
 

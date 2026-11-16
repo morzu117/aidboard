@@ -1,3 +1,7 @@
+import { Appairages } from '../src/daemon/host/appairage.js';
+import { RegistreAppareils } from '../src/daemon/host/appareils.js';
+import { COOKIE_APPAREIL, ouvrirServeurAppareils } from '../src/daemon/host/serveur.js';
+import { startTestDaemon } from './helpers/daemon.js';
 import { expect, test } from 'vitest';
 import { ASK_TEXT_ANSWER } from '../src/shared/question.js';
 import { etatPourAppareil, raisonAppareil } from '../src/daemon/host/masque.js';
@@ -349,4 +353,57 @@ test('32.12 : choix affichés avec saisie libre au milieu et autre réponse no',
     ],
   };
   expect(etatPourAppareil(s).agents[0]!.question!.options).toEqual(['Premier', 'Second']);
+});
+
+test('56.6 D175 : livraison enrichie du seul booléen code.actif, état masqué inchangé', async () => {
+  const t = await startTestDaemon();
+  let fermer: (() => Promise<unknown>) | undefined;
+  try {
+    const registre = new RegistreAppareils(t.db);
+    const { jeton } = registre.emettre({ nom: 'Téléphone', identite: null });
+    const livraison = {
+      head: null,
+      fichiers: [],
+      controles: [],
+      revue: { etat: 'aucune' as const, surLaTete: false },
+      blocage: null,
+      citations: [],
+      prNumber: null,
+    };
+    let actif = false;
+    const serveur = await ouvrirServeurAppareils({
+      port: 0,
+      interdits: [],
+      nom: () => 'aid-e2e.ts.net',
+      registre,
+      appairages: new Appairages(),
+      webRoot: null,
+      etat: async () => snapshot(),
+      livraison: async () => livraison,
+      code: { db: t.db, actif: () => actif },
+    });
+    if (!serveur.disponible) throw new Error('serveur indisponible');
+    fermer = () => serveur.app.close();
+    const lire = (url: string) =>
+      serveur.app.inject({
+        url,
+        headers: {
+          host: 'aid-e2e.ts.net',
+          'x-aid-cockpit': '1',
+          cookie: `${COOKIE_APPAREIL}=${jeton}`,
+        },
+      });
+    for (const valeur of [false, true]) {
+      actif = valeur;
+      const reponse = await lire('/api/appareils/sujets/s/livraison');
+      expect(reponse.statusCode).toBe(200);
+      expect(reponse.json()).toEqual({ ...livraison, code: { actif: valeur } });
+      const etat = await lire('/api/state');
+      expect(etat.statusCode).toBe(200);
+      expect(etat.json()).toEqual(etatPourAppareil(snapshot()));
+    }
+  } finally {
+    await fermer?.();
+    await t.d.stop();
+  }
 });

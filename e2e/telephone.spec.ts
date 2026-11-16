@@ -178,7 +178,7 @@ test('56.5 D03 D04 D05 : Machines, formulaire PDA, actions après défilement, r
     // Les champs sont séparés de leur titre, les cases de leur texte et le relais du bloc PDA.
     for (const viewport of [{ width: 1280, height: 800 }, TELEPHONE]) {
       await page.setViewportSize(viewport);
-      for (const champ of ['relais', 'sujet']) {
+      for (const champ of ['relais']) {
         const titre = (await node(page, `machines.pda.${champ}-titre`).boundingBox())!;
         const boite = (await node(page, `machines.pda.${champ}`).boundingBox())!;
         expect(boite.y - (titre.y + titre.height)).toBeGreaterThanOrEqual(7);
@@ -211,9 +211,7 @@ test('56.5 D03 D04 D05 : Machines, formulaire PDA, actions après défilement, r
     await page.setViewportSize(TELEPHONE);
     await capturerBoutons(page, 'machines-haut', node(page, 'machines.entete.titre'));
     await capturerBoutons(page, 'machines-pda', node(page, 'machines.pda'));
-    const sujet = node(page, 'machines.pda.sujet');
-    await sujet.click();
-    await sujet.fill('Essai téléphone');
+    await expect(page.getByLabel('Sujet', { exact: true })).toHaveCount(0);
     const essai = node(page, 'machines.pda.essai');
     await cliquer(page, essai, '/api/host/pda/essai', 502);
     await expect(node(page, 'machines.pda').getByRole('alert')).toHaveText('relais injoignable');
@@ -222,6 +220,7 @@ test('56.5 D03 D04 D05 : Machines, formulaire PDA, actions après défilement, r
     refuserRelais = false;
     const reponse = await cliquer(page, essai, '/api/host/pda/essai');
     expect(await page.evaluate(() => window.scrollY)).toBeGreaterThan(0);
+    expect(reponse.request().postData()).toBeNull();
     const { id } = (await reponse.json()) as { id: string };
     expect(depots).toContain(id);
     expect(db.prepare('SELECT action, etat FROM pda_demandes WHERE id = ?').get(id)).toEqual({

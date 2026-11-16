@@ -7,6 +7,7 @@ import Database from 'better-sqlite3';
 import { expect, type Page, test } from '@playwright/test';
 import { appairerHost, demarrerHost, ORIGINE_APPAREIL } from './host-helpers.js';
 import { createTopic, fermerContextes, newRepo, node, registerWorkspace } from './helpers.js';
+import { capturerBoutons } from './captures-boutons.js';
 import { NOM_E2E, ouvrirServeLocal } from './serve-local.js';
 
 const PORT = Number(process.env.AID_E2E_PORT ?? 4871) + 4;
@@ -151,8 +152,36 @@ test.describe.serial('push et diff (32b.10), Chromium', () => {
   });
 
   test('diff réel : secret masqué, .env refusé puis lecture coupée', async () => {
+    const requetes: string[] = [];
+    telephone.on('request', (r) => {
+      if (new URL(r.url()).pathname.endsWith('/diff')) requetes.push(r.url());
+    });
+    for (const ecran of ['livraison', 'tour']) {
+      await telephone.goto(`${ORIGINE_APPAREIL}/sujets/${sujet}/${ecran}`);
+      await expect(node(telephone, 'appareil.fichiers.code-coupe')).toHaveText(
+        'La lecture du code est coupée sur le Mac.',
+      );
+      await expect(node(telephone, 'appareil.fichiers').getByRole('link')).toHaveCount(0);
+      await expect(node(telephone, 'appareil.fichiers')).toContainText('normal.txt');
+      await capturerBoutons(
+        telephone,
+        `56-6-${ecran}-coupee`,
+        node(telephone, 'appareil.fichiers'),
+      );
+    }
+    expect(requetes).toEqual([]);
     await code().click();
     await expect(code()).toBeChecked();
+    for (const ecran of ['livraison', 'tour']) {
+      await telephone.goto(`${ORIGINE_APPAREIL}/sujets/${sujet}/${ecran}`);
+      const lien = telephone.getByRole('link', { name: /normal.txt/ });
+      await expect(lien).toBeVisible();
+      await expect(node(telephone, 'appareil.fichiers.code-coupe')).toHaveCount(0);
+      await capturerBoutons(telephone, `56-6-${ecran}-allumee`, lien);
+      await lien.click();
+      await expect(telephone.locator('.appareil-diff')).toContainText('+bonjour');
+    }
+    expect(requetes).toHaveLength(2);
     const livraison = (await telephone.evaluate(
       async (id) => (await fetch(`/api/appareils/sujets/${id}/livraison`)).json(),
       sujet,
@@ -168,10 +197,20 @@ test.describe.serial('push et diff (32b.10), Chromium', () => {
     await expect(telephone.locator('main')).not.toContainText('secret-factice-recette');
     await telephone.goto(`${chemin}${sensible}`);
     await expect(telephone.getByText('Fichier sensible : il se lit sur le Mac.')).toBeVisible();
+    await telephone.goto(`${ORIGINE_APPAREIL}/sujets/${sujet}/livraison`);
+    const lienPerime = telephone.getByRole('link', { name: /normal.txt/ });
+    await expect(lienPerime).toBeVisible();
     await code().click();
     await expect(code()).not.toBeChecked();
-    await telephone.goto(`${chemin}${normal}`);
+    const refus = telephone.waitForResponse((r) => new URL(r.url()).pathname.endsWith('/diff'));
+    await lienPerime.click();
+    expect((await refus).status()).toBe(403);
     await expect(telephone.getByText('La lecture du code est coupée sur le Mac.')).toBeVisible();
+    await code().click();
+    await expect(code()).toBeChecked();
+    await telephone.goto(`${ORIGINE_APPAREIL}/sujets/${sujet}/livraison`);
+    await telephone.getByRole('link', { name: /normal.txt/ }).click();
+    await expect(telephone.locator('.appareil-diff')).toContainText('+bonjour');
   });
 
   test('révocation : aucun abonnement actif', async () => {

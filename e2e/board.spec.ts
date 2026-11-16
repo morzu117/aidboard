@@ -188,3 +188,25 @@ test('sans mesh.cell : ni lien Board ni route', async ({ browser }) => {
     execFileSync(process.execPath, [CLI, 'stop', '--force'], { env, timeout: 30_000 });
   }
 });
+
+test('56.6 : les cartes sans lien Swairm ne demandent aucun commit', async ({ browser }) => {
+  const page = await openApp(await browser.newContext());
+  const requetes: string[] = [];
+  const erreurs: string[] = [];
+  page.on('request', (r) => {
+    if (new URL(r.url()).pathname.endsWith('/commits')) requetes.push(r.url());
+  });
+  page.on('console', (m) => {
+    if (m.type() === 'error') erreurs.push(m.text());
+  });
+  page.on('pageerror', (e) => erreurs.push(e.message));
+  for (const id of [101, 102]) {
+    await page.locator('[data-node$=".barre.nav-board"]').click();
+    await node(page, 'board.relire').click();
+    await node(page, `board.carte-${id}`).click();
+    await expect(node(page, 'carte-board.corps.texte')).toBeVisible();
+    await expect(node(page, 'carte-board.chronologie')).toBeVisible();
+  }
+  expect(requetes).toEqual([]);
+  expect(erreurs).toEqual([]);
+});

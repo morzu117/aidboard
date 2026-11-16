@@ -9,6 +9,7 @@ import { tmpdir } from 'node:os';
 import { expect, test } from '@playwright/test';
 import { appairerHost, demarrerHost, ORIGINE_APPAREIL } from './host-helpers.js';
 import { fermerContextes, node } from './helpers.js';
+import { capturerBoutons } from './captures-boutons.js';
 import { NOM_E2E, ouvrirServeLocal } from './serve-local.js';
 
 const PORT = Number(process.env.AID_E2E_PORT ?? 4871) + 18;
@@ -105,6 +106,8 @@ process.stdout.write(${JSON.stringify(
       const cartes: Array<typeof modele> = [];
       const creations: Array<{ verb: string; args: Record<string, unknown> }> = [];
       const recherches: Array<Record<string, unknown>> = [];
+      const notes: Array<Record<string, unknown>> = [];
+      let refuserNote = true;
       const proxy = createServer((connexion) => {
         connexion.on('error', () => undefined);
         let tampon = '';
@@ -125,6 +128,26 @@ process.stdout.write(${JSON.stringify(
               ),
               searched: cartes.length,
             };
+          } else if (verb === 'board.card.get') {
+            body = {
+              ...JSON.parse(readFileSync(join(fixtures, 'cards-show-101.json'), 'utf8')),
+              ...cartes.find((c) => c.id === args.id),
+            };
+          } else if (verb === 'board.cards.graph' || verb === 'board.cards.thread') {
+            body = JSON.parse(
+              readFileSync(
+                join(
+                  fixtures,
+                  verb.endsWith('graph') ? 'cards-graph-101.json' : 'cards-thread-101.json',
+                ),
+                'utf8',
+              ),
+            );
+          } else if (verb === 'board.obligations.list') {
+            body = { obligations: [] };
+          } else if (verb === 'board.cards.say') {
+            if (!refuserNote) notes.push(requete);
+            body = { id: 105, open_obligations: [], closed_obligations: [] };
           } else if (verb === 'board.cards.create') {
             creations.push(requete);
             const carte = {
@@ -140,9 +163,11 @@ process.stdout.write(${JSON.stringify(
           connexion.end(
             JSON.stringify({
               request_id: requete.request_id,
-              ...(body === undefined
-                ? { ok: false, error: 'verb_not_allowed' }
-                : { ok: true, status: 200, body }),
+              ...(verb === 'board.cards.say' && refuserNote
+                ? { ok: false, error: 'upstream_error', status: 403 }
+                : body === undefined
+                  ? { ok: false, error: 'verb_not_allowed' }
+                  : { ok: true, status: 200, body }),
             }) + '\n',
           );
         });
@@ -255,6 +280,12 @@ swairm:
         await enregistrer('PDA recette');
         const origine = `http://127.0.0.1:${PORT}`;
         await mac.goto(`${origine}/board`);
+        await expect(node(mac, 'board.identite')).toContainText('confirmation sur le téléphone');
+        await expect(node(mac, 'board.identite')).not.toContainText('Lecture seule');
+        await capturerBoutons(mac, '56-6-board-mac', node(mac, 'board.identite'));
+        await telephone.goto(`${ORIGINE_APPAREIL}/board`);
+        await expect(node(telephone, 'board.identite')).toContainText('Lecture seule');
+        await capturerBoutons(telephone, '56-6-board-appareil', node(telephone, 'board.identite'));
         const sansCarte = mac.locator('details').filter({ hasText: 'Sujets Swairm sans carte' });
         await expect(sansCarte.locator('summary')).toHaveText('Sujets Swairm sans carte (1)');
         await sansCarte.locator('summary').click();
@@ -307,6 +338,13 @@ swairm:
             .getByRole('status')
             .filter({ hasText: doublon ? 'Une carte porte déjà ce sujet' : 'Parti.' }),
         ).toBeVisible({ timeout: 35_000 });
+        await expect(dialogue.getByRole('status')).toHaveCount(1);
+        await expect(dialogue.getByText('Exécutée', { exact: true })).toHaveCount(0);
+        await capturerBoutons(
+          mac,
+          doublon ? '56-6-creation-doublon' : '56-6-creation-fin',
+          dialogue.getByRole('status'),
+        );
         expect(recherches.slice(debutRecherches)).toContainEqual({ q: 'owner-a/depot-a#sans' });
         if (doublon) {
           expect(creations).toEqual([]);
@@ -333,6 +371,38 @@ swairm:
             await expect(sansCarte).not.toContainText('owner-a/depot-a#sans');
           }).toPass({ timeout: 20_000, intervals: [1000] });
           expect(creations).toHaveLength(1);
+          await node(mac, 'board.carte-103').click();
+          for (const refus of [true, false]) {
+            refuserNote = refus;
+            await mac
+              .getByRole('button', { name: 'Écrire une note (à blanc)', exact: true })
+              .click();
+            const note = mac.getByRole('dialog');
+            await note.getByLabel('Texte', { exact: true }).fill('Étape vérifiée.');
+            await note.getByRole('button', { name: "Voir l'aperçu" }).click();
+            await note.getByRole('button', { name: 'Envoyer', exact: true }).click();
+            const numeroNote = mac.locator('strong').filter({ hasText: /^\d{4}$/ });
+            await expect(numeroNote).toBeVisible();
+            const valeurNote = (await numeroNote.textContent())!;
+            expect(notes).toEqual([]);
+            await telephone.goto(`${ORIGINE_APPAREIL}/pda`);
+            await telephone.getByRole('button', { name: 'Actualiser' }).click();
+            await telephone.getByLabel(/^Retape le numéro/).fill(valeurNote);
+            await telephone.getByRole('button', { name: 'Confirmer', exact: true }).click();
+            await expect(note.getByRole('status')).toHaveText(
+              refus ? 'Le gateway a refusé (statut 403).' : 'Parti.',
+              { timeout: 35_000 },
+            );
+            await expect(note.getByRole('status')).toHaveCount(1);
+            await expect(note.getByText('Exécutée', { exact: true })).toHaveCount(0);
+            if (refus) expect(notes).toEqual([]);
+            await note.getByRole('button', { name: 'Fermer', exact: true }).click();
+          }
+          expect(notes).toHaveLength(1);
+          expect(notes[0]).toMatchObject({
+            verb: 'board.cards.say',
+            args: { id: 103, content: 'Étape vérifiée.' },
+          });
         }
       } finally {
         const nettoyages = await Promise.allSettled([

@@ -129,3 +129,16 @@ test.each([
   await ouvrir({ ...lecture, pr: { ...lecture.pr!, state } });
   expect(screen.getByText(`PR #7 (${libelle})`)).toBeTruthy();
 });
+
+test('56.6 : aucune requête de commits pour une carte sans ligne Swairm', async () => {
+  const h = setup(<Contenu cardId={1} />, snapshot(), '/', {
+    'GET /api/board/cards/1': json(200, {
+      ...fiche,
+      card: ok(parseCard({ id: 1, body: 'Carte ordinaire' })!.value),
+    }),
+  });
+  await waitFor(() => expect(FakeSocket.all.length).toBeGreaterThan(0));
+  act(() => FakeSocket.all[0]!.open());
+  await screen.findByText('Carte ordinaire');
+  expect(h.calls.some((c) => c.url.endsWith('/commits'))).toBe(false);
+});

@@ -399,6 +399,8 @@ test('attente du téléphone puis résultat de cette demande', async () => {
   );
   expect(await screen.findByText('Parti.', {}, { timeout: 4500 })).toBeTruthy();
   expect(screen.queryByText('En attente de ta confirmation sur le téléphone.')).toBeNull();
+  expect(screen.queryByText('Exécutée')).toBeNull();
+  expect(screen.getAllByRole('status')).toHaveLength(1);
 });
 
 test.each(['dm.envoyer', 'canal.poster', 'carte.note'] as const)(
@@ -510,7 +512,8 @@ test('un envoi incertain est une demande exécutée et reste verrouillé', async
   expect(
     await screen.findByText(libelleEnvoi({ code: 'interrompu', open_obligations: [] })),
   ).toBeTruthy();
-  expect(screen.getByText('Exécutée')).toBeTruthy();
+  expect(screen.queryByText('Exécutée')).toBeNull();
+  expect(screen.getAllByRole('status')).toHaveLength(1);
   expect(screen.getByRole('button', { name: 'Envoyer' })).toHaveProperty('disabled', true);
   expect(screen.queryByRole('button', { name: 'Réessayer' })).toBeNull();
 });
@@ -572,5 +575,34 @@ test('demande trop grande : message précis et aperçu conservé', async () => {
     texte,
   );
   expect(screen.queryByText('En attente de ta confirmation sur le téléphone.')).toBeNull();
+  expect(screen.queryByText('Exécutée')).toBeNull();
+  expect(screen.getAllByRole('status')).toHaveLength(1);
   expect(screen.getByRole('button', { name: 'Copier le texte' })).toHaveProperty('disabled', false);
+});
+
+test('56.6 : une note confirmée conserve un seul statut métier', async () => {
+  const h = ouvrir('carte.note');
+  h.respond.set('POST /api/swarph/ecrire/envoyer', json(202, { confirmation: 'note' }));
+  h.respond.set(
+    'GET /api/confirmations',
+    json(200, {
+      ouvertes: [],
+      recentes: [
+        {
+          id: 'note',
+          classe: 'defaut',
+          resume: 'Note',
+          echeance: 1,
+          etat: 'consommee',
+          resultat: 'executee',
+          envoi: { code: 'succes', open_obligations: [] },
+        },
+      ],
+    }),
+  );
+  await voir();
+  await userEvent.click(await screen.findByRole('button', { name: 'Envoyer' }));
+  expect(await screen.findByText('Parti.')).toBeTruthy();
+  expect(screen.getAllByRole('status')).toHaveLength(1);
+  expect(screen.queryByText('Exécutée')).toBeNull();
 });

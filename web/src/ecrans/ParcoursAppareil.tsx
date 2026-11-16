@@ -113,6 +113,7 @@ export function SuivreAppareil({ relire = false }: { relire?: boolean }) {
 }
 
 type Livraison = {
+  code: { actif: boolean };
   head: string | null;
   fichiers: Array<{ nom: string; ajouts: number; retraits: number }>;
   controles: Array<{ nom: string; etat: string }>;
@@ -237,15 +238,30 @@ export function BadgeAppareil() {
 
 function FichiersAppareil({ id, livraison }: { id: string; livraison: Livraison }) {
   return (
-    <ul>
-      {livraison.fichiers.map((fichier, index) => (
-        <li key={index}>
-          <Link to={`${chemin(id)}/fichiers/${index}`} state={{ livraison }}>
-            {fichier.nom} · +{fichier.ajouts} −{fichier.retraits}
-          </Link>
-        </li>
-      ))}
-    </ul>
+    <>
+      {!livraison.code.actif && (
+        <p data-node="appareil.fichiers.code-coupe">La lecture du code est coupée sur le Mac.</p>
+      )}
+      <ul data-node="appareil.fichiers">
+        {livraison.fichiers.map((fichier, index) => (
+          <li key={index} data-node={`appareil.fichiers.${index}`}>
+            {livraison.code.actif ? (
+              <Link
+                data-node={`appareil.fichiers.${index}.diff`}
+                to={`${chemin(id)}/fichiers/${index}`}
+                state={{ livraison }}
+              >
+                {fichier.nom} · +{fichier.ajouts} −{fichier.retraits}
+              </Link>
+            ) : (
+              <span data-node={`appareil.fichiers.${index}.resume`}>
+                {fichier.nom} · +{fichier.ajouts} −{fichier.retraits}
+              </span>
+            )}
+          </li>
+        ))}
+      </ul>
+    </>
   );
 }
 

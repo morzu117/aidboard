@@ -213,8 +213,10 @@ export async function preparerAudit(browser: Browser) {
       .filter({ hasText: 'PDA audit' })
       .getByRole('button', { name: 'Activer', exact: true })
       .click();
-    await mac.getByLabel('Sujet', { exact: true }).fill('Demande synthétique');
     await mac.getByRole('button', { name: 'Envoyer une demande d’essai' }).click();
+    await expect(mac.locator('[data-node="machines.pda.resultat"]')).toContainText(
+      'Demande envoyée',
+    );
     const routesMac = [
       '/',
       '/boite',

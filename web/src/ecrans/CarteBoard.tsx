@@ -441,9 +441,11 @@ function Fiche({
 /** Chantier 31 (D180) : aussi monté par l'interface d'un appareil, sans la coque du Mac. */
 export function Contenu({ cardId }: { cardId: number }) {
   const mesh = useMeshLecture();
-  const commits = useSwairmCommits(mesh === 'principal' ? cardId : 0);
   const { result, enLecture, luA, erreur, relire, reussieA } = useBoardCard(cardId);
   const c = result?.card.ok ? result.card.data : null;
+  const commits = useSwairmCommits(
+    mesh === 'principal' && c && liensSwairm(c.body ?? '').length > 0 ? cardId : 0,
+  );
   return (
     <main className="page carte-board" data-node="carte-board">
       <nav className="carte-board-ariane" aria-label="Fil d’Ariane" data-node="carte-board.ariane">

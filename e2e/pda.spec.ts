@@ -146,14 +146,17 @@ test('PDA : passkey, essais, UV, révocation, rotation et coque hors ligne', asy
       await telephone.goto(`${ORIGINE_APPAREIL}/pda`);
     };
     await enregistrer('PDA premier');
-    const envoyer = async (sujet: string) => {
-      await mac.getByLabel('Sujet', { exact: true }).fill(sujet);
+    const envoyer = async () => {
+      await expect(mac.getByLabel('Sujet', { exact: true })).toHaveCount(0);
       const retour = mac.waitForResponse(
         (r) => r.url().endsWith('/api/host/pda/essai') && r.request().method() === 'POST',
       );
       await mac.getByRole('button', { name: 'Envoyer une demande d’essai' }).click();
       const reponse = await retour;
       expect(reponse.status()).toBe(200);
+      expect(reponse.request().postData()).toBeNull();
+      await expect(node(mac, 'machines.pda.resultat')).toContainText('Demande envoyée');
+      await capturerBoutons(mac, '56-6-panneau-pda-resultat', node(mac, 'machines.pda.resultat'));
       return (await reponse.json()).id as string;
     };
     const confirmer = async (page: Page) => {
@@ -162,18 +165,31 @@ test('PDA : passkey, essais, UV, révocation, rotation et coque hors ligne', asy
       await page.getByLabel('Retape le numéro').fill(numero);
       await page.getByRole('button', { name: 'Confirmer', exact: true }).click();
     };
-    await envoyer('Essai confirmé');
+    expect(
+      await mac.evaluate(
+        async () =>
+          (
+            await fetch('/api/host/pda/essai', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'x-aid-cockpit': '1' },
+              body: JSON.stringify({ sujet: 'x' }),
+            })
+          ).status,
+      ),
+    ).toBe(400);
+    await capturerBoutons(mac, '56-6-panneau-pda', node(mac, 'machines.pda.essai'));
+    await envoyer();
     await telephone.getByRole('button', { name: 'Actualiser' }).click();
     await expect(telephone.getByRole('heading', { name: "Demande d'essai" })).toBeVisible();
     await expect(telephone.getByText('Essai confirmé', { exact: true })).toHaveCount(0);
     await confirmer(telephone);
     await expect(mac.getByText('Confirmée', { exact: true })).toBeVisible({ timeout: 30_000 });
-    await envoyer('Essai refusé');
+    await envoyer();
     await telephone.getByRole('button', { name: 'Actualiser' }).click();
     await telephone.getByRole('button', { name: 'Refuser', exact: true }).click();
     await expect(mac.getByText('Refusée', { exact: true })).toBeVisible({ timeout: 30_000 });
     await cdp.send('WebAuthn.setUserVerified', { authenticatorId, isUserVerified: false });
-    const uv = await envoyer('UV refusée');
+    const uv = await envoyer();
     await telephone.getByRole('button', { name: 'Actualiser' }).click();
     await confirmer(telephone);
     const etat = (id: string) =>
@@ -210,7 +226,7 @@ test('PDA : passkey, essais, UV, révocation, rotation et coque hors ligne', asy
       .filter({ hasText: 'PDA premier' })
       .getByRole('button', { name: 'Révoquer' })
       .click();
-    const revoquee = await envoyer('Après révocation');
+    const revoquee = await envoyer();
     const refus = telephone.waitForResponse(
       (r) => r.url() === `${RELAIS}/demandes` && r.status() === 401,
     );
@@ -233,7 +249,7 @@ test('PDA : passkey, essais, UV, révocation, rotation et coque hors ligne', asy
     await expect(mac.getByRole('button', { name: 'Faire tourner la clé' })).toBeEnabled();
     await arreter(relais);
     await lancerRelais();
-    await envoyer('Après rotation');
+    await envoyer();
     await telephone.getByRole('button', { name: 'Actualiser' }).click();
     await expect(telephone.getByText(/demandes? illisibles? ignorée/)).toBeVisible();
     await expect(telephone.getByRole('heading', { name: "Demande d'essai" })).toHaveCount(0);

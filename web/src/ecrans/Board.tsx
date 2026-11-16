@@ -317,7 +317,7 @@ function Cartes({
 export function Contenu({ cell }: { cell: string }) {
   const projets = useBoardProjects();
   const mesh = useMeshLecture();
-  const { state } = useAid();
+  const { state, appareil } = useAid();
   const cellLue = instantaneMesh(state, mesh)?.state.cell ?? cell;
   const [params, setParams] = useSearchParams();
   const [cartes, setCartes] = useState<{
@@ -346,8 +346,13 @@ export function Contenu({ cell }: { cell: string }) {
             Board
           </h1>
           <p className="resume" data-node="board.identite">
-            Lecture seule, sous l’identité de la cell <strong>{cellLue}</strong>
+            {appareil
+              ? 'Lecture seule, sous l’identité de la cell '
+              : 'Lecture sous l’identité de la cell '}
+            <strong>{cellLue}</strong>
             {projet ? ` · projet ${projet.id}` : ''}.
+            {!appareil &&
+              ' Créer, déplacer une carte et noter une étape passent par une confirmation sur le téléphone.'}
           </p>
         </div>
         <div className="board-lecture">

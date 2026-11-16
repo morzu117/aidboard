@@ -90,7 +90,7 @@ test('32.7 : contrat fermé, filtrage, authentification et aucune action lancée
   expect(r.statusCode).toBe(200);
   const corps = r.json();
   expect(Object.keys(corps).sort()).toEqual(
-    ['head', 'fichiers', 'controles', 'revue', 'blocage', 'citations', 'prNumber'].sort(),
+    ['head', 'fichiers', 'controles', 'revue', 'blocage', 'citations', 'prNumber', 'code'].sort(),
   );
   expect(corps.fichiers).toEqual([{ nom: 'src/exemple.txt', ajouts: 1, retraits: 0 }]);
   expect(Object.keys(corps.controles[0]).sort()).toEqual(['etat', 'nom']);
