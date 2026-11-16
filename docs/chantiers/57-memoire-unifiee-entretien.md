@@ -31,7 +31,7 @@ Relevé le 16 novembre 2026.
 **Le poste Windows**
 
 - `gbrain` 0.48.1 est dans le `PATH` (`~/.bun/bin/gbrain`), avec une base locale `~/.gbrain/brain.pglite`. Le chantier 10 a été exécuté sur le Mac ; ce poste n'a pas été traité.
-- Sources locales : `lessons` 38 pages, `skifer` 99, `skifer-board` 46, `swairm` 22, `descent-wf` 3. **`skifer` et `skifer-board` ne figurent pas dans le chantier 10** : elles n'ont jamais été triées.
+- Sources locales : `lessons` 38 pages, `projet-b` 99, `projet-b-board` 46, `swairm` 22, `projet-a` 3. **`projet-b` et `projet-b-board` ne figurent pas dans le chantier 10** : elles n'ont jamais été triées.
 - `~/.aid` est dans WSL (Ubuntu). Le miroir mémoire a 13 pages, toutes sous `aid/`, aucune leçon, 18 commits depuis le 12 novembre. Aucun job, aucune proposition, aucun vecteur : Ollama est injoignable depuis WSL.
 
 **Le code de la mémoire**
@@ -71,7 +71,7 @@ Les chiffres de l'analyse du 16 novembre sur un miroir de 431 pages (76 leçons,
 - Rien n'est supprimé avant d'être sauvegardé : la base locale est exportée en entier sous `~/.aid/backups/gbrain-<date>/` avant tout triage.
 - Le triage suit la règle du chantier 10 : ce qui est dérivable d'un dépôt git est écarté, ce qui est une page de cycle ou une leçon est importé par `aid mem import`, qui n'écrase jamais l'existant.
 - Les 38 pages de `lessons` sont comparées aux leçons d'`aid mem` : le chantier 10 les avait trouvées redondantes sur le Mac, à un slug près. Le même contrôle est refait ici, page à page.
-- `skifer` et `skifer-board` sont triées pour la première fois. Leur namespace cible est à confirmer (§8).
+- `projet-b` et `projet-b-board` sont triées pour la première fois. Leur namespace cible est à confirmer (§8).
 - Le retrait (`bun remove -g gbrain`, suppression de `~/.gbrain`) vient en dernier, sur l'accord de Julien, une fois l'import vérifié.
 
 ### DM11. Les blocs rendus viennent du noyau du dépôt
@@ -215,6 +215,6 @@ Migration `memory_usage`, écriture dans `search` et `get`, `aid mem usage`.
 
 1. **Le distant du miroir** : un dépôt GitHub privé, ou un dépôt nu sur une de tes machines ?
 2. **La machine de référence** : laquelle porte le miroir le plus complet (celui de 431 pages) ? C'est elle qui pousse la première.
-3. **`skifer` et `skifer-board`** : ces projets vivent-ils encore ? Si oui, sous quel namespace `aid mem` vont leurs pages de cycle ?
+3. **`projet-b` et `projet-b-board`** : ces projets vivent-ils encore ? Si oui, sous quel namespace `aid mem` vont leurs pages de cycle ?
 4. **Le seuil de découpage à 40 lignes** : valeur proposée sans mesure sur les vraies leçons. À ajuster sur la distribution réelle, que seule la machine de référence peut donner.
 5. **Le contrat d'acceptation** de ce chantier reste à écrire avec le skill `contrat-acceptation`, une fois ce plan relu.
