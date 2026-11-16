@@ -39,9 +39,43 @@ Ce document.
 
 La cell de gestion lance l'explorateur, regarde le rapport et les captures, puis montre la liste à Julien. Le plan reçoit la liste des points de correctif, de 56.4 à 56.n.
 
-### 56.4 à 56.n Les correctifs
+- _Révision 56.3._ Codex a fait le diagnostic sans toucher au dépôt. La cell de gestion l'a relu et a vérifié D08 et D14 elle-même. Sur 86 groupes : 14 défauts distincts, 26 refus attendus et dits à l'écran, 51 faux positifs de l'explorateur et 2 manques de l'environnement. Aucune action n'est impossible, et les refus de sécurité restent en place. Julien a vu la liste le 2026-11-16 et choisi de retirer le champ « Sujet » de l'essai PDA (D14).
 
-Un point par écran ou par groupe d'écrans. Chacun respecte D342 : un e2e qui clique, le cas réel qui active le bouton, le cas d'erreur, et la revue des captures.
+| Défaut | Gravité | Ce que l'utilisateur voit | Point |
+|---|---|---|---|
+| D01 | gênant | Les boutons désactivés ont l'air actifs : aucun style commun pour `:disabled` et `[aria-disabled]` | 56.4 |
+| D02 | gênant | Sur l'appareil, le lien de diff d'un fichier est proposé alors que la lecture du code est coupée (403 `code_coupe`) | 56.6 |
+| D03 | gênant | Sur téléphone, le bouton fixe du menu recouvre « Envoyer une demande d'essai » et « Éteindre le mode host » | 56.5 |
+| D04, D05 | cosmétique | Panneau PDA : « Sujet » et « PDA : confirmations hors du tailnet » collés à leur voisin | 56.5 |
+| D06 | gênant | L'adresse du relais est figée sans dire qu'il faut couper le PDA | 56.4 |
+| D07 | gênant | Serveurs, création et configuration : « Enregistrer » désactivé sans dire ce qui manque | 56.4 |
+| D08 | gênant | Discussion d'un serveur sur téléphone : le panneau garde 360 px, et le bandeau s'écrit une lettre par ligne | 56.5 |
+| D09 | cosmétique | Après la création d'une carte, « Exécutée » et « Parti. » ensemble | 56.6 |
+| D10 | gênant | L'en-tête du Board dit « Lecture seule » alors que la création de carte écrit | 56.6 |
+| D11 | gênant | Mémoire swarph : « Recharger » inerte avant « Lister », sans le dire | 56.4 |
+| D12 | gênant | PDA, enregistrement : le nom est obligatoire sans que l'écran le dise | 56.4 |
+| D13 | cosmétique | Des éléments interactifs sans `data-node` | 56.7 |
+| D14 | gênant | Le champ « Sujet » de l'essai PDA est vérifié puis ignoré : il est retiré | 56.6 |
+
+### 56.4 à 56.7 Les correctifs
+
+Chacun respecte D342 : un e2e qui clique, le cas réel qui active le bouton, le cas d'erreur, et la revue des captures.
+
+### 56.4 Les boutons désactivés (D01, D06, D07, D11, D12)
+
+Un style commun pour `.bouton:disabled` et `[aria-disabled="true"]` : contraste plus faible, curseur `not-allowed`, et le primaire qui ne reste pas vert. Chaque bouton désactivé de D06, D07, D11 et D12 dit pourquoi, par un texte visible lié au champ ou au bouton (`aria-describedby`). Un `title` seul ne suffit pas sur téléphone. Les e2e montrent chaque bouton désactivé avec sa raison, puis actif dans le cas réel, puis cliqué, avec son effet.
+
+### 56.5 Le téléphone et la mise en page (D03, D04, D05, D08)
+
+Le bouton du menu ne recouvre plus aucune action, même après défilement. Le panneau PDA range ses libellés et ses champs. La discussion d'un serveur passe en une colonne sous 720 px. Les e2e cliquent les actions recouvertes en 390 × 844, après défilement.
+
+### 56.6 Les textes et les liens (D02, D09, D10, D14)
+
+Sur l'appareil, la liste des fichiers dit que la lecture du code est coupée et ne propose pas le lien. La création de carte n'affiche qu'un statut final. L'en-tête du Board distingue la lecture et les écritures sous confirmation. Le champ « Sujet » de l'essai PDA est retiré de l'écran et de la route. Le Board ne demande plus les commits d'une carte non reliée.
+
+### 56.7 L'explorateur et les `data-node` (D13)
+
+L'explorateur remplit les champs, accepte les confirmations dans un daemon jetable, remet les préférences entre deux écrans et ignore les 404 voulus. Chaque élément interactif reçoit un `data-node` stable. L'audit complet est relancé : la liste qui reste devient la liste de départ du garde.
 
 ### 56.g Le garde (D345)
 
