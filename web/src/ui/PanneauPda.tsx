@@ -92,8 +92,8 @@ export function PanneauPda({ etat }: { etat: EtatModeHostDaemon['pda'] }) {
     setAppareils(await client.request<AppareilPda[]>('GET', '/api/host/pda/appareils'));
   }
   return (
-    <div>
-      <label>
+    <div className="pda-formulaire" data-node="machines.pda">
+      <label className="cockpit-case" data-node="machines.pda.activation-libelle">
         <input
           type="checkbox"
           role="switch"
@@ -117,8 +117,8 @@ export function PanneauPda({ etat }: { etat: EtatModeHostDaemon['pda'] }) {
         />
         PDA : confirmations hors du tailnet
       </label>
-      <label>
-        Adresse du relais
+      <label className="cockpit-champ" data-node="machines.pda.relais-libelle">
+        <span data-node="machines.pda.relais-titre">Adresse du relais</span>
         <input
           type="url"
           data-node="machines.pda.relais"
@@ -217,12 +217,18 @@ export function PanneauPda({ etat }: { etat: EtatModeHostDaemon['pda'] }) {
       >
         Faire tourner la clé
       </button>
-      <label>
-        Sujet
-        <input maxLength={80} value={sujet} onChange={(e) => setSujet(e.target.value)} />
+      <label className="cockpit-champ" data-node="machines.pda.sujet-libelle">
+        <span data-node="machines.pda.sujet-titre">Sujet</span>
+        <input
+          data-node="machines.pda.sujet"
+          maxLength={80}
+          value={sujet}
+          onChange={(e) => setSujet(e.target.value)}
+        />
       </label>
       <button
         className="bouton"
+        data-node="machines.pda.essai"
         disabled={occupe || demande !== null}
         onClick={() =>
           void agir(async () => {

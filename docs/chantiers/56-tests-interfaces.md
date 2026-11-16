@@ -69,6 +69,7 @@ Un style commun pour `.bouton:disabled` et `[aria-disabled="true"]` : contraste 
 ### 56.5 Le téléphone et la mise en page (D03, D04, D05, D08)
 
 Le bouton du menu ne recouvre plus aucune action, même après défilement. Le panneau PDA range ses libellés et ses champs. La discussion d'un serveur passe en une colonne sous 720 px. Les e2e cliquent les actions recouvertes en 390 × 844, après défilement.
+- _Révision 56.5._ Une passe. 22 captures relues par la cell de gestion. Deux constats restent hors de ce point, pour l'audit final du 56.7 : sur téléphone, le tableau de l'Accueil déborde (la colonne Agent est coupée), et le champ du relais désactivé reste gris clair dans le thème sombre. Codex signale aussi la barre d'options du compositeur, tassée sur téléphone. Gate 4 165, gate:e2e 146, e2e du téléphone et de la mise en page 13/13 trois fois.
 
 ### 56.6 Les textes et les liens (D02, D09, D10, D14)
 

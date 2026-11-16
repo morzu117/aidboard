@@ -249,10 +249,11 @@ export function Cockpit() {
       {e && (
         <div>
           {h.confirmations.push ?? (
-            <label>
+            <label className="cockpit-case" data-node="host.push-libelle">
               <input
                 type="checkbox"
                 role="switch"
+                data-node="host.push"
                 checked={e.push ?? false}
                 disabled={h.occupe}
                 onChange={() => {
@@ -274,10 +275,11 @@ export function Cockpit() {
           </p>
           <p>{e.abonnements ?? 0} abonnements</p>
           {h.confirmations.code ?? (
-            <label>
+            <label className="cockpit-case" data-node="host.code-libelle">
               <input
                 type="checkbox"
                 role="switch"
+                data-node="host.code"
                 checked={e.code ?? false}
                 disabled={h.occupe}
                 onChange={() => void h.basculerCode(!e.code)}
