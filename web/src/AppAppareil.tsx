@@ -35,21 +35,33 @@ function Barre({ board }: { board: boolean }) {
             Ton Mac · tailnet
           </p>
         </div>
-        <NavLink className="appareil-lien" to="/informations">
+        <NavLink
+          data-node="appareil.navigation.informations"
+          className="appareil-lien"
+          to="/informations"
+        >
           Informations
         </NavLink>
-        <NavLink className="appareil-lien" to="/notifications">
+        <NavLink
+          data-node="appareil.navigation.notifications"
+          className="appareil-lien"
+          to="/notifications"
+        >
           Notifications
         </NavLink>
-        <NavLink className="appareil-lien" to="/appareils">
+        <NavLink
+          data-node="appareil.navigation.appareils-connectes"
+          className="appareil-lien"
+          to="/appareils"
+        >
           Appareils connectés
         </NavLink>
       </header>
       <nav className="appareil-navigation" aria-label="Navigation">
-        <NavLink to="/" end className={lien}>
+        <NavLink data-node="appareil.navigation.a-traiter" to="/" end className={lien}>
           À traiter
         </NavLink>
-        <NavLink to="/sujets" className={lien}>
+        <NavLink data-node="appareil.navigation.sujets" to="/sujets" className={lien}>
           Sujets
         </NavLink>
         {board && (

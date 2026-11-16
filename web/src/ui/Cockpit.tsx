@@ -105,6 +105,7 @@ function Demande({ h, d, now }: { h: ModeHostEtat; d: VueDemande | null; now: nu
         {d.identite === null && (
           <label className="host-case" data-node="host.demande.sans-identite">
             <input
+              data-node="machines.cockpit.appareil-tagge-sans-identite-tailscale"
               type="checkbox"
               checked={sansIdentite}
               onChange={(e) => setSansIdentite(e.target.checked)}

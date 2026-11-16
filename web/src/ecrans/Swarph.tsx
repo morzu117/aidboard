@@ -33,7 +33,12 @@ function Contenu() {
       </div>
       {mesh && (
         <>
-          <button onClick={() => setEcriture(true)}>Écrire au mesh (à blanc)</button>
+          <button
+            data-node="swarph.actions.ecrire-au-mesh-a-blanc"
+            onClick={() => setEcriture(true)}
+          >
+            Écrire au mesh (à blanc)
+          </button>
           {ecriture && (
             <EcrireAuMesh
               mesh={nomMesh}

@@ -22,6 +22,7 @@ function Copier({ texte, nom }: { texte: string; nom: string }) {
     <div>
       <pre>{texte}</pre>
       <button
+        data-node="machines.meshes.copier-nom"
         type="button"
         className="bouton"
         aria-label={`Copier ${nom}`}
@@ -150,6 +151,7 @@ function MeshesAdmin() {
             </span>
             {m.nom !== 'principal' && (
               <button
+                data-node={`machines.meshes.oublier-${m.nom}`}
                 type="button"
                 className="bouton"
                 disabled={occupe}
@@ -177,7 +179,12 @@ function MeshesAdmin() {
         </p>
       )}
       {!attente && inscription.etat !== 'a-voir' && (
-        <button type="button" className="bouton" onClick={() => setFormulaire(true)}>
+        <button
+          data-node="machines.meshes.rejoindre-un-mesh"
+          type="button"
+          className="bouton"
+          onClick={() => setFormulaire(true)}
+        >
           Rejoindre un mesh
         </button>
       )}
@@ -200,17 +207,37 @@ function MeshesAdmin() {
         >
           <label>
             Adresse du gateway
-            <input required value={gateway} onChange={(e) => setGateway(e.target.value)} />
+            <input
+              data-node="machines.meshes.adresse-du-gateway"
+              required
+              value={gateway}
+              onChange={(e) => setGateway(e.target.value)}
+            />
           </label>
           <label>
             Nom de la nouvelle cell
-            <input required value={cell} onChange={(e) => setCell(e.target.value)} />
+            <input
+              data-node="machines.meshes.nom-de-la-nouvelle-cell"
+              required
+              value={cell}
+              onChange={(e) => setCell(e.target.value)}
+            />
           </label>
           <label>
             Nom local du mesh
-            <input required value={mesh} onChange={(e) => setMesh(e.target.value)} />
+            <input
+              data-node="machines.meshes.nom-local-du-mesh"
+              required
+              value={mesh}
+              onChange={(e) => setMesh(e.target.value)}
+            />
           </label>
-          <button className="bouton" type="submit" disabled={occupe}>
+          <button
+            data-node="machines.meshes.rejoindre"
+            className="bouton"
+            type="submit"
+            disabled={occupe}
+          >
             Rejoindre
           </button>
         </form>
@@ -239,6 +266,7 @@ function MeshesAdmin() {
             />
           )}
           <button
+            data-node="machines.meshes.annuler"
             type="button"
             className="bouton"
             disabled={occupe}

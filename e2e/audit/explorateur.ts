@@ -14,6 +14,11 @@ export const FORMATS = [
 // Les exclusions restent visibles dans le rapport, hors du classement des clics.
 export const EXCLUSIONS = [
   {
+    champ: 'label',
+    motif: /^Terminal input$/,
+    raison: 'Saisie native de xterm : attribuée au terminal hôte, hors boutons applicatifs.',
+  },
+  {
     champ: 'action',
     motif: /^daemon\.(maj|stop|restart|cycle)/,
     raison: 'Met à jour ou arrête le daemon audité.',
@@ -52,6 +57,8 @@ interface ElementReleve {
   action: string;
   cible: string;
   balise: string;
+  type: string;
+  label: string;
 }
 export interface Resultat extends ElementReleve {
   ecran: string;
@@ -128,6 +135,12 @@ async function relever(page: Page): Promise<ElementReleve[]> {
           action: e.getAttribute('data-action') ?? '',
           cible: `html > ${segments.join(' > ')}`,
           balise: e.tagName.toLowerCase(),
+          type: e.getAttribute('type') ?? '',
+          label:
+            e.getAttribute('aria-label') ??
+            (e as HTMLInputElement).labels?.[0]?.textContent?.trim() ??
+            e.closest('label')?.textContent?.trim() ??
+            '',
         },
       ];
     }),
@@ -138,10 +151,18 @@ async function cliquer(
   page: Page,
   element: ElementReleve,
   verifierDaemon: () => Promise<boolean>,
+  dossierAutorise?: string,
 ): Promise<Observation> {
   const observation = vide(element.actif);
   const consoleErreur = (message: ConsoleMessage) => {
-    if (message.type() === 'error') observation.erreursConsole++;
+    // Chromium double les refus HTTP par un message réseau ; le statut reste dans reponses.
+    if (
+      message.type() === 'error' &&
+      !/^Failed to load resource: the server responded with a status of [45]\d\d/.test(
+        message.text(),
+      )
+    )
+      observation.erreursConsole++;
   };
   const pageErreur = () => {
     observation.erreursPage++;
@@ -157,6 +178,11 @@ async function cliquer(
   const navigation = () => {
     navigations++;
   };
+  const dialogue = async (d: import('@playwright/test').Dialog) => {
+    observation.dialogueAnnule = true;
+    await d.dismiss();
+  };
+  page.on('dialog', dialogue);
   page.on('console', consoleErreur);
   page.on('pageerror', pageErreur);
   page.on('response', reponse);
@@ -196,7 +222,7 @@ async function cliquer(
     // Un clic précédent peut déplacer ou retirer une ligne : suivre son identité, jamais son voisin.
     const cible = page.locator(retrouve?.cible ?? element.cible);
     if (!retrouve) {
-      observation.echecClic = true;
+      observation.cibleDisparue = true;
     } else if (
       (await cible.isDisabled()) ||
       (await cible.getAttribute('aria-disabled')) === 'true'
@@ -205,8 +231,77 @@ async function cliquer(
     } else {
       observation.actif = true;
       try {
-        await cible.click({ timeout: 3000 });
-      } catch {
+        if (element.balise === 'select') {
+          const autre = await cible
+            .locator('option:not(:disabled)')
+            .evaluateAll(
+              (options) => (options as HTMLOptionElement[]).find((o) => !o.selected)?.value,
+            );
+          if (autre !== undefined) {
+            const ancienne = await cible.inputValue();
+            await cible.selectOption(autre);
+            observation.saisie = await cible.inputValue();
+            observation.filtreChange = observation.saisie !== ancienne;
+            if (element.node === 'memoire.filtres.mode') {
+              await page.locator('[data-node="memoire-swarph.tag"]').fill('audit');
+              await page.locator('[data-node="memoire-swarph.lister"]').click({ timeout: 3000 });
+            }
+          } else await cible.click({ timeout: 3000 });
+        } else if (
+          element.balise === 'textarea' ||
+          (element.balise === 'input' &&
+            ['', 'text', 'search', 'email', 'url', 'number', 'password', 'tel'].includes(
+              element.type,
+            ))
+        ) {
+          const numero = await cible
+            .locator('xpath=ancestor::section[1]')
+            .locator('.pda-numero')
+            .textContent({ timeout: 200 })
+            .catch(() => null);
+          const valeur =
+            numero?.trim() ||
+            (element.type === 'number'
+              ? '42'
+              : element.type === 'email'
+                ? 'audit@example.com'
+                : element.type === 'url'
+                  ? 'https://example.com'
+                  : element.node === 'serveur-config.dossier' && dossierAutorise
+                    ? dossierAutorise
+                    : 'audit-synthetique');
+          await cible.fill(valeur, { timeout: 3000 });
+          observation.saisie = await cible.inputValue();
+          if (element.node === '1-1.consigne.champ')
+            await page.locator('[data-node="1-1.consigne.envoyer"]').click({ timeout: 3000 });
+          if (element.node === 'serveur-config.dossier')
+            await page
+              .locator('[data-node="serveur-config.dossier-ajouter"]')
+              .click({ timeout: 3000 });
+          if (element.node === 'federation.requete') await cible.press('Enter');
+        } else {
+          // Un filtre déjà choisi doit être quitté avant de revenir à cette valeur.
+          const selection =
+            (await cible.getAttribute('aria-pressed')) ??
+            (await cible.getAttribute('aria-selected'));
+          if (selection === 'true') {
+            const groupe = cible.locator('..');
+            const autre = groupe.locator('[aria-pressed="false"], [aria-selected="false"]').first();
+            if (await autre.count()) {
+              await autre.click({ timeout: 3000 });
+              observation.filtreChange =
+                ((await cible.getAttribute('aria-pressed')) ??
+                  (await cible.getAttribute('aria-selected'))) === 'false';
+            }
+          }
+          await cible.click({ timeout: 3000 });
+          if (observation.filtreChange)
+            observation.filtreChange =
+              ((await cible.getAttribute('aria-pressed')) ??
+                (await cible.getAttribute('aria-selected'))) === 'true';
+        }
+      } catch (erreur) {
+        observation.causeClic = erreur instanceof Error ? erreur.name : 'Erreur de clic';
         observation.echecClic = true;
       }
       await page.waitForTimeout(1500);
@@ -224,6 +319,7 @@ async function cliquer(
       observation.daemonArrete = !(await verifierDaemon());
     }
   } finally {
+    page.off('dialog', dialogue);
     page.off('console', consoleErreur);
     page.off('pageerror', pageErreur);
     page.off('response', reponse);
@@ -236,8 +332,14 @@ async function cliquer(
 /** Recharge avant chaque clic ; les trouvailles sont des données et ne font jamais échouer le test. */
 export async function explorer(options: {
   ecrans: Ecran[];
+  formats?: typeof FORMATS;
   verifierDaemon: () => Promise<boolean>;
   dossier?: string;
+  reinitialiser?: (ecran: Ecran) => Promise<void>;
+  preparerAction?: (ecran: Ecran, element: ElementReleve) => Promise<void>;
+  dossierAutorise?: string;
+  apresAction?: (ecran: Ecran, element: ElementReleve, observation: Observation) => Promise<void>;
+  choisirElements?: (element: ElementReleve) => boolean;
 }) {
   const dossier = options.dossier ?? join(tmpdir(), 'aid-audit-ui');
   await mkdir(join(dossier, 'captures'), { recursive: true });
@@ -247,8 +349,8 @@ export async function explorer(options: {
   const sauver = async () => {
     resultats.sort(
       (a, b) =>
-        (a.classe === null ? 5 : CLASSES.indexOf(a.classe)) -
-          (b.classe === null ? 5 : CLASSES.indexOf(b.classe)) ||
+        (a.classe === null ? CLASSES.length : CLASSES.indexOf(a.classe)) -
+          (b.classe === null ? CLASSES.length : CLASSES.indexOf(b.classe)) ||
         a.ecran.localeCompare(b.ecran) ||
         a.format.localeCompare(b.format),
     );
@@ -283,7 +385,7 @@ export async function explorer(options: {
     return rapport;
   };
   for (const ecran of options.ecrans) {
-    for (const format of FORMATS) {
+    for (const format of options.formats ?? FORMATS) {
       const page = ecran.page;
       const taille = `${format.width}x${format.height}`;
       const capture = `captures/${String(ecrans.length + 1).padStart(3, '0')}-${taille}.png`;
@@ -296,20 +398,27 @@ export async function explorer(options: {
       };
       ecrans.push(relevéEcran);
       await page.setViewportSize(format);
-      const dialogue = (d: import('@playwright/test').Dialog) => d.dismiss();
-      page.on('dialog', dialogue);
       try {
+        await options.reinitialiser?.(ecran);
         await page.goto(ecran.chemin, { waitUntil: 'networkidle', timeout: 20_000 });
         await page.screenshot({ path: join(dossier, capture), fullPage: true });
-        const elements = await relever(page);
+        const elements = (await relever(page)).filter(options.choisirElements ?? (() => true));
         for (const element of elements) {
           const exclusion =
             EXCLUSIONS.find((r) => r.motif.test(element[r.champ] ?? ''))?.raison ?? null;
           let observation = vide(element.actif);
           if (!exclusion) {
             try {
+              await options.reinitialiser?.(ecran);
               await page.goto(ecran.chemin, { waitUntil: 'networkidle', timeout: 20_000 });
-              observation = await cliquer(page, element, options.verifierDaemon);
+              await options.preparerAction?.(ecran, element);
+              observation = await cliquer(
+                page,
+                element,
+                options.verifierDaemon,
+                options.dossierAutorise,
+              );
+              await options.apresAction?.(ecran, element, observation);
             } catch {
               observation.echecClic = true;
               observation.daemonArrete = !(await options.verifierDaemon());
@@ -329,7 +438,6 @@ export async function explorer(options: {
         relevéEcran.erreurChargement = true;
         await options.verifierDaemon();
       } finally {
-        page.off('dialog', dialogue);
         await sauver();
       }
     }

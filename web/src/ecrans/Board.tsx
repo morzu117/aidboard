@@ -280,6 +280,7 @@ function Cartes({
         <div className="board-onglets" role="tablist" data-node="board.onglets">
           {cols.map(([s, l]) => (
             <button
+              data-node={`board.colonnes.etat-${s}`}
               key={s}
               className={`board-onglet${s === visible![0] ? ' est-actif' : ''}`}
               role="tab"
@@ -398,6 +399,7 @@ export function Contenu({ cell }: { cell: string }) {
         <nav className="board-projets" aria-label="Projets" data-node="board.projets">
           {liste.map((p) => (
             <button
+              data-node={`board.projets.choisir-${p.id}`}
               key={p.id}
               type="button"
               className={`board-projet${p.id === projet?.id ? ' est-actif' : ''}`}

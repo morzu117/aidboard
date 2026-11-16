@@ -821,6 +821,7 @@ function Contenu() {
                             >
                               <td data-node={`${rowId}.sujet`}>
                                 <Link
+                                  data-node={`${rowId}.ouvrir`}
                                   className="ligne-sujet-lien"
                                   data-action="sujet.ouvrir"
                                   to={`/sujets/${t.id}`}
@@ -932,7 +933,11 @@ function Contenu() {
                 </p>
                 {mesh ? (
                   <p className="texte-discret" data-node="1-1.aside.etat.mesh">
-                    <Link to="/reglages#mesh" data-action="nav.reglages-mesh">
+                    <Link
+                      data-node="accueil.table.reglages-mesh"
+                      to="/reglages#mesh"
+                      data-action="nav.reglages-mesh"
+                    >
                       {etatMonitor(
                         mesh.state,
                         mesh.inbox.filter((d) => !d.seenAt && A_TRAITER.has(d.kind)).length,
@@ -946,7 +951,12 @@ function Contenu() {
                     <p className="texte-discret">
                       Sans swarph, A-I-D reste local : ni mesh, ni DM, ni board partagé.
                     </p>
-                    <Link className="lien" to="/swarph" data-action="nav.swarph">
+                    <Link
+                      data-node="accueil.table.connecter-a-swarph"
+                      className="lien"
+                      to="/swarph"
+                      data-action="nav.swarph"
+                    >
                       Connecter à swarph →
                     </Link>
                   </div>

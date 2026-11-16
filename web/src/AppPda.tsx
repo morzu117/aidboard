@@ -236,7 +236,9 @@ export function AppPda() {
           <>
             <strong className="pda-empreinte">{empreinte}</strong>
             <p>Compare-la sur le Mac, puis active cet appareil là-bas</p>
-            <a href="/pda">Confirmations</a>
+            <a data-node="pda.actions.confirmations" href="/pda">
+              Confirmations
+            </a>
           </>
         ) : (
           <form
@@ -274,11 +276,17 @@ export function AppPda() {
           </form>
         )
       ) : pret && !appareil ? (
-        <a href="/pda/enregistrer">Enregistrer cet appareil</a>
+        <a data-node="pda.actions.enregistrer-cet-appareil" href="/pda/enregistrer">
+          Enregistrer cet appareil
+        </a>
       ) : (
         appareil && (
           <>
-            <button disabled={occupe} onClick={() => void rafraichir()}>
+            <button
+              data-node="pda.actions.actualiser"
+              disabled={occupe}
+              onClick={() => void rafraichir()}
+            >
               Actualiser
             </button>
             {illisibles > 0 && (
@@ -359,10 +367,16 @@ function Demande({
       <strong className="pda-numero">{entree.demande.numero}</strong>
       <label>
         {demande.numero === null ? 'Retape le numéro affiché sur le Mac' : 'Retape le numéro'}
-        <input inputMode="numeric" value={numero} onChange={(e) => setNumero(e.target.value)} />
+        <input
+          data-node={`pda.demande.${demande.id}.numero`}
+          inputMode="numeric"
+          value={numero}
+          onChange={(e) => setNumero(e.target.value)}
+        />
       </label>
       <div className="appareil-actions">
         <button
+          data-node={`pda.demande.${demande.id}.confirmer`}
           disabled={
             occupe ||
             (demande.numero === null ? !/^\d{4}$/.test(numero) : numero !== demande.numero)
@@ -371,7 +385,11 @@ function Demande({
         >
           Confirmer
         </button>
-        <button disabled={occupe} onClick={() => void repondre(entree, 'non', '')}>
+        <button
+          data-node={`pda.demande.${demande.id}.refuser`}
+          disabled={occupe}
+          onClick={() => void repondre(entree, 'non', '')}
+        >
           Refuser
         </button>
       </div>
@@ -385,5 +403,9 @@ export function LienPda() {
       .then((p) => setPresent(!!p))
       .catch(() => undefined);
   }, []);
-  return present ? <a href="/pda">Confirmations</a> : null;
+  return present ? (
+    <a data-node="pda.navigation.confirmations" href="/pda">
+      Confirmations
+    </a>
+  ) : null;
 }

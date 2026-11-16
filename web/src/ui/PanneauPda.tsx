@@ -147,6 +147,7 @@ export function PanneauPda({ etat }: { etat: EtatModeHostDaemon['pda'] }) {
               ? confirmation.attente
               : a.etat === 'attente' && (
                   <button
+                    data-node={`machines.pda.activer-${a.id}`}
                     className="bouton"
                     disabled={occupe || (!!confirmation.id && !confirmation.terminee)}
                     onClick={() => {
@@ -163,6 +164,7 @@ export function PanneauPda({ etat }: { etat: EtatModeHostDaemon['pda'] }) {
                 )}
             {a.etat !== 'revoque' && (
               <button
+                data-node={`machines.pda.revoquer-${a.id}`}
                 className="bouton bouton--danger"
                 disabled={occupe}
                 onClick={() => {
@@ -181,6 +183,7 @@ export function PanneauPda({ etat }: { etat: EtatModeHostDaemon['pda'] }) {
         <>
           <code>{cle}</code>
           <button
+            data-node="machines.pda.copier"
             className="bouton"
             onClick={() => void agir(() => navigator.clipboard.writeText(cle))}
           >
@@ -196,6 +199,7 @@ export function PanneauPda({ etat }: { etat: EtatModeHostDaemon['pda'] }) {
         son redémarrage avec la nouvelle clé publique.
       </p>
       <button
+        data-node="machines.pda.faire-tourner-la-cle"
         className="bouton bouton--danger"
         disabled={occupe}
         onClick={() => {

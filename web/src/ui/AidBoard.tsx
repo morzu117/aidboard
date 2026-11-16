@@ -60,7 +60,13 @@ export function AidCarte({ carte, fiche = false }: { carte: number; fiche?: bool
                         <>
                           <dt>PR</dt>
                           <dd>
-                            {s.prUrl ? <a href={s.prUrl}>#{s.prNumber}</a> : `#${s.prNumber}`}
+                            {s.prUrl ? (
+                              <a data-node={`accueil.board.pr-${s.sujetId}`} href={s.prUrl}>
+                                #{s.prNumber}
+                              </a>
+                            ) : (
+                              `#${s.prNumber}`
+                            )}
                           </dd>
                         </>
                       )}
@@ -69,7 +75,11 @@ export function AidCarte({ carte, fiche = false }: { carte: number; fiche?: bool
                       carte={result.cartes.find((c) => c.id === carte)}
                       cell={state?.mesh?.state.cell ?? ''}
                     />
-                    <Link className="bouton" to={`/sujets/${s.sujetId}`}>
+                    <Link
+                      data-node={`accueil.board.ouvrir-le-sujet-${s.sujetId}`}
+                      className="bouton"
+                      to={`/sujets/${s.sujetId}`}
+                    >
                       Ouvrir le sujet
                     </Link>
                   </>
@@ -105,7 +115,9 @@ export function SansCarteAid() {
     <section>
       <ErreursAid />
       <details>
-        <summary>Sujets sans carte ({vivants.length})</summary>
+        <summary data-node="accueil.board.sujets-sans-carte">
+          Sujets sans carte ({vivants.length})
+        </summary>
         <p>
           {pluriel(termines.length, 'sujet')} merged ou archived sans carte non{' '}
           {termines.length > 1 ? 'listés' : 'listé'}.
@@ -120,7 +132,12 @@ export function SansCarteAid() {
               {s.lien === null ? (
                 <span>Pas de remote GitHub : pas de lien possible</span>
               ) : (
-                <button onClick={() => void copier(s.lien!)}>Copier la ligne</button>
+                <button
+                  data-node={`accueil.board.copier-la-ligne-${s.sujetId}`}
+                  onClick={() => void copier(s.lien!)}
+                >
+                  Copier la ligne
+                </button>
               )}
             </li>
           ))}
@@ -156,7 +173,12 @@ export function NouveauSujetCarte({
   )
     return null;
   return (
-    <Link className="bouton" to="/sujets/nouveau" state={{ carte, titre: titre.slice(0, 200) }}>
+    <Link
+      data-node="accueil.board.nouveau-sujet"
+      className="bouton"
+      to="/sujets/nouveau"
+      state={{ carte, titre: titre.slice(0, 200) }}
+    >
       Nouveau sujet
     </Link>
   );

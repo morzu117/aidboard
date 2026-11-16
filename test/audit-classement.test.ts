@@ -24,7 +24,16 @@ describe('classement D343', () => {
     [{ reponses: [{ chemin: '/api/test', statut: 503 }], actif: false }, 'erreur'],
     [{ erreursConsole: 1, reponses: [{ chemin: '/api/test', statut: 401 }] }, 'erreur'],
     [{ erreursPage: 1 }, 'erreur'],
-    [{ echecClic: true }, 'sans effet'],
+    [
+      { reponses: [{ chemin: '/api/swairm/board/101/commits', statut: 404 }], navigation: true },
+      'ok',
+    ],
+    [{ reponses: [{ chemin: '/api/autre', statut: 404 }] }, 'refus'],
+    [{ echecClic: true }, 'clic impossible'],
+    [{ cibleDisparue: true }, 'cible disparue'],
+    [{ dialogueAnnule: true }, 'annulé'],
+    [{ saisie: 'audit' }, 'ok'],
+    [{ filtreChange: true }, 'ok'],
     [{ daemonArrete: true }, 'sans effet'],
   ] as Array<[Partial<Observation>, string]>)('%j → %s', (observations, attendu) => {
     const releve = Object.freeze({ ...neutre, ...observations });

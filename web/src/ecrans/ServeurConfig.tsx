@@ -211,7 +211,7 @@ function Etapes({ test }: { test: ServerTest }) {
       )}
       {test.raw && (
         <details className="serveur-test-brut">
-          <summary>Sortie brute</summary>
+          <summary data-node="serveur.configuration.sortie-brute">Sortie brute</summary>
           <pre data-node="serveur-config.test.brut">{test.raw}</pre>
         </details>
       )}
@@ -397,6 +397,7 @@ function Formulaire({
         <div className="serveur-config-titres">
           <nav className="texte-faible" aria-label="Fil d’Ariane">
             <Link
+              data-node="serveur.configuration.serveurs"
               to="/serveurs"
               onClick={(e) => {
                 if (!modifie) return;
@@ -488,6 +489,7 @@ function Formulaire({
               <span className="serveur-champ-titre">Couleur</span>
               {COULEURS.map((c) => (
                 <button
+                  data-node={`serveur.configuration.couleur-${c.valeur}`}
                   key={c.valeur}
                   type="button"
                   aria-pressed={b.color === c.valeur}
@@ -537,6 +539,7 @@ function Formulaire({
                 </p>
                 <label className="case">
                   <input
+                    data-node="serveur.configuration.profil-shell"
                     type="checkbox"
                     checked={b.loadProfile}
                     onChange={(e) => maj({ loadProfile: e.target.checked })}
@@ -579,6 +582,7 @@ function Formulaire({
                   <label className="serveur-champ">
                     Utilisateur
                     <input
+                      data-node="serveur.configuration.utilisateur"
                       className="champ serveur-mono"
                       value={b.user}
                       onChange={(e) => maj({ user: e.target.value })}
@@ -587,6 +591,7 @@ function Formulaire({
                   <label className="serveur-champ">
                     Clé (chemin local)
                     <input
+                      data-node="serveur.configuration.cle-ssh"
                       className="champ serveur-mono"
                       value={b.identityFile}
                       placeholder="~/.ssh/id_ed25519"
@@ -596,6 +601,7 @@ function Formulaire({
                   <label className="serveur-champ">
                     Rebond
                     <input
+                      data-node="serveur.configuration.rebond"
                       className="champ serveur-mono"
                       value={b.jump}
                       placeholder="bastion"
@@ -646,6 +652,7 @@ function Formulaire({
               <label className="serveur-champ">
                 Shell distant
                 <input
+                  data-node="serveur.configuration.shell-distant"
                   className="champ serveur-mono"
                   value={b.shell}
                   onChange={(e) => maj({ shell: e.target.value })}
@@ -705,6 +712,7 @@ function Formulaire({
             </label>
             <label className="case">
               <input
+                data-node="serveur.configuration.confirmation-destructive"
                 type="checkbox"
                 checked={b.confirmDestructive}
                 onChange={(e) => maj({ confirmDestructive: e.target.checked })}
@@ -722,6 +730,7 @@ function Formulaire({
                 <span key={d} className="pastille pastille--code serveur-mono">
                   {d}
                   <button
+                    data-node={`serveur.configuration.retirer-dossier-${d}`}
                     type="button"
                     className="serveur-dossier-retirer"
                     aria-label={`Retirer ${d}`}
@@ -764,6 +773,7 @@ function Formulaire({
                       dans {r.cwd}
                     </span>
                     <button
+                      data-node={`serveur.configuration.revoquer-${r.id}`}
                       type="button"
                       className="bouton bouton--fantome"
                       aria-label={`Révoquer ${r.pattern}`}
@@ -861,7 +871,12 @@ function Formulaire({
         <Dialogue titre="Abandonner les modifications ?" onClose={() => setQuitter(false)}>
           <p className="texte-discret">Les changements non enregistrés seront perdus.</p>
           <div className="dialogue-actions">
-            <button className="bouton" type="button" onClick={() => setQuitter(false)}>
+            <button
+              data-node="serveur.configuration.continuer-la-saisie"
+              className="bouton"
+              type="button"
+              onClick={() => setQuitter(false)}
+            >
               Continuer la saisie
             </button>
             <button
@@ -898,6 +913,7 @@ function Formulaire({
           )}
           <div className="dialogue-actions">
             <button
+              data-node="serveur.configuration.annuler"
               className="bouton"
               type="button"
               disabled={enCours}

@@ -334,7 +334,12 @@ function Chronologie({
                   : commits.pr.state}
             ){' '}
             {commits.pr.url?.startsWith('https://github.com/') && (
-              <a href={commits.pr.url} target="_blank" rel="noreferrer noopener">
+              <a
+                data-node="carte.liens.pr"
+                href={commits.pr.url}
+                target="_blank"
+                rel="noreferrer noopener"
+              >
                 {commits.pr.url}
               </a>
             )}
@@ -359,7 +364,12 @@ function GitHub({ card }: { card: BoardCard }) {
         <li key={k} data-node={`carte-board.lien-${k}`}>
           <span className="texte-discret">{k} </span>
           {GITHUB.test(v) ? (
-            <a href={v} target="_blank" rel="noreferrer noopener">
+            <a
+              data-node={`carte.liens.github-${k}`}
+              href={v}
+              target="_blank"
+              rel="noreferrer noopener"
+            >
               {v}
             </a>
           ) : (
@@ -411,7 +421,12 @@ function Fiche({
       </Bloc>
       {objetMesh && c && (
         <>
-          <button onClick={() => setEcriture(true)}>Écrire une note (à blanc)</button>
+          <button
+            data-node="carte.actions.ecrire-une-note-a-blanc"
+            onClick={() => setEcriture(true)}
+          >
+            Écrire une note (à blanc)
+          </button>
           {ecriture && (
             <EcrireAuMesh
               mesh={s.mesh}

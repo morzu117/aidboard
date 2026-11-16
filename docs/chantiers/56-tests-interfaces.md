@@ -79,6 +79,25 @@ Sur l'appareil, la liste des fichiers dit que la lecture du code est coupée et 
 ### 56.7 L'explorateur et les `data-node` (D13)
 
 L'explorateur remplit les champs, accepte les confirmations dans un daemon jetable, remet les préférences entre deux écrans et ignore les 404 voulus. Chaque élément interactif reçoit un `data-node` stable. L'audit complet est relancé : la liste qui reste devient la liste de départ du garde.
+- _Révision 56.7._ Trois passes de Codex. Les deux premières ont été coupées par la limite d'une heure du lanceur, pendant l'audit. La cell de gestion a lancé elle-même l'audit complet, qui dure 1,2 h.
+  - Le nettoyage de l'audit arrête tout, même après un échec. Le daemon et le relais s'arrêtent en dernier, et les ports libres en sont la preuve. Le home temporaire est supprimé. Un PID n'est tué que s'il appartient au daemon de l'audit. Un e2e fait échouer la préparation exprès, puis vérifie que les ports et les dossiers sont libérés.
+  - L'explorateur remplit les champs, choisit une autre option dans les select et quitte un filtre puis y revient. Il note « annulé » quand un dialogue est refusé. Il sépare « cible disparue » et « clic impossible » de « sans effet ». Il remet la fixture à neuf quand l'appareil ou le host est coupé. Il renouvelle l'essai PDA, que D210 fait expirer au redémarrage, et il ignore le 404 voulu des commits du Board.
+  - 96 `data-node` sont ajoutés dans 22 fichiers d'écran, sans autre changement. La cell de gestion l'a vérifié en retirant les `data-node` des deux versions et en repassant Prettier.
+  - L'audit, avant → après (68 vues au lieu de 72, car les routes inconnues sont vérifiées pendant la préparation) : erreur 16 → 13, sans effet 84 → 2, désactivé 46 → 34, refus 0, cible disparue 14, annulé 6, aucun écran non chargé.
+    - Les 13 erreurs sont des 502 du serveur de test, qui n'a pas de transport distant.
+    - Les 14 cibles disparues sont des appareils et des confirmations récentes, retirés par la remise à neuf.
+    - Les 2 « sans effet » sont un select à une seule option.
+  - `e2e/audit/inventaire.json` (321 identifiants) et `e2e/audit/non-couverts.json` (272 exceptions, chacune motivée) sont la liste de départ du 56.g.
+  - La revue des 68 captures confirme les deux constats de la cell de gestion : le tableau de l'Accueil déborde sur téléphone, et le relais désactivé est trop pâle dans le thème sombre. Elle trouve aussi des défauts nouveaux sur 45 captures. Les plus visibles :
+    - du texte écrit à la verticale et des libellés qui se chevauchent dans la barre de saisie d'une discussion, sur téléphone ;
+    - les tableaux du board qui se chevauchent sur téléphone ;
+    - des boutons et des champs sans style, blancs ou gris clair, sur le fond sombre ;
+    - des liens bleus par défaut dans toute l'app de l'appareil ;
+    - une zone de Machines sans mise en page ;
+    - des badges et des boutons coupés en plein mot ;
+    - des libellés techniques bruts.
+    L'audit ne voit aucun de ces défauts, parce qu'il ne regarde que le comportement. Ils sont confiés au 56.8, et leur détection automatique au 56.g.
+  - Résultats : gate 4 176, gate:e2e 149, `audit-essai` trois fois de suite en moins de deux minutes.
 
 ### 56.g Le garde (D345)
 

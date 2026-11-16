@@ -102,6 +102,7 @@ export function PanneauConfirmations() {
         <div>
           <p>Confirmations désarmées le {date(reglage.desarmeA!)}</p>
           <button
+            data-node="machines.confirmations.rearmer"
             className="bouton"
             disabled={occupe}
             onClick={() =>
@@ -122,10 +123,17 @@ export function PanneauConfirmations() {
               {date(d.echeance)}
             </span>
             <details>
-              <summary>Paramètres signés</summary>
+              <summary data-node={`machines.confirmations.parametres-signes-${d.id}`}>
+                Paramètres signés
+              </summary>
               <ParametresSignes action={d.action ?? ''} params={d.params} surface="mac" />
             </details>
-            <button className="bouton" disabled={occupe} onClick={() => void annuler(d.id)}>
+            <button
+              data-node={`machines.confirmations.annuler-${d.id}`}
+              className="bouton"
+              disabled={occupe}
+              onClick={() => void annuler(d.id)}
+            >
               Annuler
             </button>
           </li>
@@ -138,7 +146,9 @@ export function PanneauConfirmations() {
             {d.action?.startsWith('mesh.avis') && noms[d.action]} {d.resume} —{' '}
             {resultatConfirmation(d)}
             <details>
-              <summary>Paramètres signés</summary>
+              <summary data-node={`machines.confirmations.parametres-recents-${d.id}`}>
+                Paramètres signés
+              </summary>
               <ParametresSignes action={d.action ?? ''} params={d.params} surface="mac" />
             </details>
           </li>
@@ -152,6 +162,7 @@ export function PanneauConfirmations() {
           {(!confirmation.id || confirmation.terminee || cible !== a.action) && (
             <label>
               <input
+                data-node={`machines.confirmations.action-${a.action}`}
                 type="checkbox"
                 role="switch"
                 checked={ACTIONS_MESH.has(a.action) || a.actif}
@@ -178,16 +189,26 @@ export function PanneauConfirmations() {
           {confirmation.id && cible === 'desarmer' ? (
             confirmation.attente
           ) : phrase === null ? (
-            <button className="bouton" disabled={enAttente} onClick={() => setPhrase('')}>
+            <button
+              data-node="machines.confirmations.desarmer"
+              className="bouton"
+              disabled={enAttente}
+              onClick={() => setPhrase('')}
+            >
               Désarmer
             </button>
           ) : (
             <div>
               <label>
                 Tape DÉSARMER pour confirmer
-                <input value={phrase} onChange={(e) => setPhrase(e.target.value)} />
+                <input
+                  data-node="machines.confirmations.tape-desarmer-pour-confirmer"
+                  value={phrase}
+                  onChange={(e) => setPhrase(e.target.value)}
+                />
               </label>
               <button
+                data-node="machines.confirmations.confirmer-desarmement"
                 className="bouton"
                 disabled={occupe || enAttente || phrase !== 'DÉSARMER'}
                 onClick={() =>

@@ -101,10 +101,18 @@ export function Tour({ agent, horsLigne }: { agent: Agent; horsLigne: boolean })
       <p>{tour.resume}</p>
       {tour.marque === 'a_reprendre' && <p>À reprendre sur le Mac</p>}
       <div className="appareil-actions">
-        <button disabled={horsLigne || envoi} onClick={() => void marquer('relu')}>
+        <button
+          data-node={`appareil.tour.${agent.id}.relu`}
+          disabled={horsLigne || envoi}
+          onClick={() => void marquer('relu')}
+        >
           Marquer relu
         </button>
-        <button disabled={horsLigne || envoi} onClick={() => void marquer('a_reprendre')}>
+        <button
+          data-node={`appareil.tour.${agent.id}.reprendre`}
+          disabled={horsLigne || envoi}
+          onClick={() => void marquer('a_reprendre')}
+        >
           À reprendre sur le Mac
         </button>
       </div>

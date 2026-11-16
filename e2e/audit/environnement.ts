@@ -1,6 +1,9 @@
 import { execFileSync, spawn, type ChildProcess } from 'node:child_process';
 import { once } from 'node:events';
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { createServer } from 'node:net';
+import type { Duplex } from 'node:stream';
+import { tmpdir } from 'node:os';
 import { delimiter, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import Database from 'better-sqlite3';
@@ -8,6 +11,8 @@ import { expect, type Browser, type Page } from '@playwright/test';
 import { createTopic, newRepo, registerWorkspace } from '../helpers.js';
 import { preparerMeshes } from '../helpers-multi-mesh.js';
 import { appairerHost, demarrerHost, ORIGINE_APPAREIL } from '../host-helpers.js';
+import type { Observation } from './classement.js';
+import { appartientAuDaemonAudit } from './identite-processus.js';
 import { NOM_E2E, ouvrirServeLocal } from '../serve-local.js';
 
 export const PORT_AUDIT = Number(process.env.AID_E2E_PORT ?? 4871) + 40;
@@ -33,21 +38,14 @@ export interface Ecran {
 }
 
 /** Même harnais pour l'essai CI et l'audit complet ; tous les services extérieurs sont locaux. */
-export async function preparerAudit(browser: Browser) {
+export async function preparerAudit(
+  browser: Browser,
+  options: {
+    apresPreparation?: (ressources: { home: string; dossier: string }) => Promise<void>;
+  } = {},
+) {
   const faux = await preparerMeshes(['principal']);
   const bin = join(faux.dossier, 'bin');
-  mkdirSync(bin);
-  for (const [nom, fichier] of Object.entries({
-    claude: 'fake-agent.sh',
-    codex: 'fake-agent.sh',
-    gh: 'fake-gh.sh',
-    swarph: 'fake-swarph.sh',
-    swairm: 'fake-swairm.sh',
-    tailscale: 'fake-tailscale.sh',
-  }))
-    writeFileSync(join(bin, nom), `#!/bin/sh\nexec '${join(FIXTURES, fichier)}' "$@"\n`, {
-      mode: 0o700,
-    });
   const env = {
     // Le watcher de mise à jour ne doit jamais contacter le remote du dépôt du chantier.
     GIT_ALLOW_PROTOCOL: 'file',
@@ -63,35 +61,149 @@ export async function preparerAudit(browser: Browser) {
   let home = '';
   let relais: ChildProcess | undefined;
   const frontaux: Awaited<ReturnType<typeof ouvrirServeLocal>>[] = [];
+  const connexions = new Set<Duplex>();
+  const ajouterFrontal = (frontal: (typeof frontaux)[number]) => {
+    frontaux.push(frontal);
+    // closeAllConnections ne ferme pas les connexions promues en WebSocket.
+    frontal.on('connection', (connexion) => {
+      connexions.add(connexion);
+      connexion.once('close', () => connexions.delete(connexion));
+    });
+  };
   const contextes: Awaited<ReturnType<Browser['newContext']>>[] = [];
-  const arreter = () => {
-    if (home)
-      execFileSync(process.execPath, [CLI, 'stop', '--force'], {
-        env: { ...process.env, AID_HOME: home },
-        timeout: 30_000,
-        stdio: 'ignore',
-      });
+  const portsDaemonLibres = async () =>
+    (
+      await Promise.all(
+        [PORT_AUDIT, PORT_AUDIT + 10, PORT_AUDIT + 20].map(
+          (port) =>
+            new Promise<boolean>((resolve) => {
+              const serveur = createServer();
+              serveur.once('error', () => resolve(false));
+              serveur.listen(port, '127.0.0.1', () => serveur.close(() => resolve(true)));
+            }),
+        ),
+      )
+    ).every(Boolean);
+  const arreter = async () => {
+    let info: { pid: number; token: string } | undefined;
+    try {
+      if (home) info = JSON.parse(readFileSync(join(home, 'daemon.json'), 'utf8'));
+    } catch {
+      // Un démarrage avorté peut ne pas avoir écrit daemon.json.
+    }
+    if (info) {
+      try {
+        await fetch(`http://127.0.0.1:${PORT_AUDIT}/api/daemon/stop`, {
+          method: 'POST',
+          headers: { authorization: `Bearer ${info.token}`, 'content-type': 'application/json' },
+          body: JSON.stringify({ force: true }),
+          signal: AbortSignal.timeout(3000),
+        });
+      } catch {
+        // Le processus peut déjà être arrêté ; les ports sont l'autorité ci-dessous.
+      }
+    }
+    const attendre = async () => {
+      const fin = Date.now() + 3000;
+      while (!(await portsDaemonLibres()) && Date.now() < fin)
+        await new Promise((resolve) => setTimeout(resolve, 50));
+      return portsDaemonLibres();
+    };
+    if (await attendre()) return;
+    if (info) {
+      if (!appartientAuDaemonAudit(info.pid, home))
+        throw new Error('Ports du daemon audit encore occupés');
+      try {
+        process.kill(info.pid, 'SIGKILL');
+      } catch (erreur) {
+        if ((erreur as NodeJS.ErrnoException).code !== 'ESRCH') throw erreur;
+      }
+    }
+    if (!(await attendre())) throw new Error('Ports du daemon audit encore occupés');
+  };
+  const redemarrer = () => {
+    // Reprendre la configuration sauvegardée, sans que demarrerHost ne la réécrive.
+    execFileSync(process.execPath, [CLI], {
+      env: {
+        ...process.env,
+        ...env,
+        AID_HOME: home,
+        AID_NO_BROWSER: '1',
+        SHELL: '/bin/sh',
+        PATH: chemin,
+      },
+      timeout: 40_000,
+      stdio: 'ignore',
+    });
+    return (JSON.parse(readFileSync(join(home, 'daemon.json'), 'utf8')) as { token: string }).token;
   };
   const fermer = async () => {
-    await Promise.all(contextes.map((c) => c.close()));
-    if (relais && relais.exitCode === null) {
-      const fin = once(relais, 'exit');
-      relais.kill('SIGTERM');
-      await fin;
+    // Un contexte déjà fermé ou un frontal défaillant ne doit retenir aucun autre port.
+    for (const connexion of connexions) connexion.destroy();
+    const resultats = await Promise.allSettled([
+      ...contextes.map((c) => c.close()),
+      ...frontaux.map(async (frontal) => {
+        frontal.closeAllConnections();
+        await new Promise<void>((resolve, reject) =>
+          frontal.close((erreur) => (erreur ? reject(erreur) : resolve())),
+        );
+      }),
+      faux.fermer(),
+    ]);
+    // Le daemon et le relais sont les derniers, même si le nettoyage précédent échoue.
+    resultats.push(
+      ...(await Promise.allSettled([
+        Promise.resolve().then(arreter),
+        (async () => {
+          if (!relais || relais.exitCode !== null || relais.signalCode !== null) return;
+          const fin = once(relais, 'exit');
+          const delai = setTimeout(() => relais?.kill('SIGKILL'), 3000);
+          try {
+            relais.kill('SIGTERM');
+            await fin;
+          } finally {
+            clearTimeout(delai);
+          }
+        })(),
+      ])),
+    );
+    // Garder les preuves et les fichiers ouverts si le daemon retient encore un port.
+    if (await portsDaemonLibres()) {
+      resultats.push(
+        ...(await Promise.allSettled([
+          Promise.resolve().then(() => {
+            if (home) rmSync(home, { recursive: true, force: true });
+          }),
+          Promise.resolve().then(() => rmSync(faux.dossier, { recursive: true, force: true })),
+        ])),
+      );
     }
-    for (const frontal of frontaux) {
-      frontal.closeAllConnections();
-      await new Promise<void>((resolve) => frontal.close(() => resolve()));
-    }
-    try {
-      arreter();
-    } finally {
-      await faux.fermer();
-    }
+    const echecs = resultats.filter((r) => r.status === 'rejected');
+    if (echecs.length)
+      throw new AggregateError(
+        echecs.map((r) => r.reason),
+        'Nettoyage audit',
+      );
   };
   try {
-    const instance = demarrerHost(PORT_AUDIT, faux.supplement, chemin, { env, configuration });
-    home = instance.home;
+    home = mkdtempSync(join(tmpdir(), 'aid-audit-host-'));
+    mkdirSync(bin);
+    for (const [nom, fichier] of Object.entries({
+      claude: 'fake-agent.sh',
+      codex: 'fake-agent.sh',
+      gh: 'fake-gh.sh',
+      swarph: 'fake-swarph.sh',
+      swairm: 'fake-swairm.sh',
+      tailscale: 'fake-tailscale.sh',
+    }))
+      writeFileSync(join(bin, nom), `#!/bin/sh\nexec '${join(FIXTURES, fichier)}' "$@"\n`, {
+        mode: 0o700,
+      });
+    const instance = demarrerHost(PORT_AUDIT, faux.supplement, chemin, {
+      home,
+      env,
+      configuration,
+    });
     const origine = `http://127.0.0.1:${PORT_AUDIT}`;
     const contexte = await browser.newContext();
     contextes.push(contexte);
@@ -151,8 +263,8 @@ export async function preparerAudit(browser: Browser) {
     } finally {
       base.close();
     }
-    frontaux.push(await ouvrirServeLocal({ dir: home, port: FRONTAL, versPort: PORT_AUDIT + 20 }));
-    frontaux.push(
+    ajouterFrontal(await ouvrirServeLocal({ dir: home, port: FRONTAL, versPort: PORT_AUDIT + 20 }));
+    ajouterFrontal(
       await ouvrirServeLocal({ dir: home, port: FRONTAL_RELAIS, versPort: PORT_RELAIS }),
     );
     await mac.goto(`${origine}/machines`);
@@ -238,7 +350,6 @@ export async function preparerAudit(browser: Browser) {
       '/sujets/nouveau',
       `/sujets/${sujet}`,
       `/sujets/${sujet}/livraison`,
-      '/route-inconnue-audit',
     ];
     const routesAppareil = [
       '/',
@@ -253,8 +364,12 @@ export async function preparerAudit(browser: Browser) {
       '/board/cartes/101?mesh=principal',
       '/appareils',
       '/appairer',
-      '/route-inconnue-audit',
     ];
+    // Vérifier les routes de repli sans auditer deux fois leur écran d'arrivée.
+    await mac.goto(`${origine}/route-inconnue-audit`);
+    await expect(mac).toHaveURL(`${origine}/`);
+    await appareil.goto(`${ORIGINE_APPAREIL}/route-inconnue-audit`);
+    await expect(appareil).toHaveURL(`${ORIGINE_APPAREIL}/`);
     const ecrans: Ecran[] = [
       ...routesAppareil.map((p) => ({
         nom: `appareil ${p}`,
@@ -268,9 +383,213 @@ export async function preparerAudit(browser: Browser) {
       })),
       ...routesMac.map((p) => ({ nom: `Mac ${p}`, chemin: `${origine}${p}`, page: mac })),
     ];
+    // Sauvegarde cohérente de la fixture synthétique, avant toute action de l'explorateur.
+    // Révoquer/couper un accès ne doit pas priver les écrans suivants de leur appareil.
+    const sauvegarde = join(faux.dossier, 'etat-initial.db');
+    const baseInitiale = new Database(join(home, 'state.db'));
+    try {
+      await baseInitiale.backup(sauvegarde);
+    } finally {
+      baseInitiale.close();
+    }
+    const fichiersInitiaux = new Map(
+      ['config.yaml', 'pda-signature.pem'].map((nom) => [nom, readFileSync(join(home, nom))]),
+    );
+    const cookiesInitiaux = await Promise.all(contextes.map((c) => c.cookies()));
+    const remettreANeuf = async () => {
+      await arreter();
+      for (const suffixe of ['-wal', '-shm'])
+        rmSync(join(home, `state.db${suffixe}`), { force: true });
+      copyFileSync(sauvegarde, join(home, 'state.db'));
+      for (const [nom, contenu] of fichiersInitiaux) writeFileSync(join(home, nom), contenu);
+      const token = redemarrer();
+      for (const [i, contexte] of contextes.entries()) {
+        await contexte.clearCookies();
+        await contexte.addCookies(cookiesInitiaux[i]!);
+      }
+      await mac.request.get(`${origine}/?token=${token}`);
+    };
+    const headers = { origin: origine, 'x-aid-cockpit': '1' };
+    const instantFixture = new Date().toISOString();
+    const preparerAgents = async () => {
+      const etat = await (await mac.request.get(`${origine}/api/state`, { headers })).json();
+      for (const kind of ['claude', 'codex']) {
+        let agent = etat.agents.find(
+          (a: { kind: string; status: string }) =>
+            a.kind === kind && ['starting', 'working', 'needs_input', 'idle'].includes(a.status),
+        );
+        if (!agent) {
+          const r = await mac.request.post(`${origine}/api/agents`, {
+            headers,
+            data: { topicId: sujet, kind },
+          });
+          if (!r.ok()) throw new Error(`Fixture agent : ${r.status()}`);
+          agent = await r.json();
+        }
+        // Signal synthétique de fin de tour ; le processus derrière est bien le faux PTY vivant.
+        const r = await mac.request.post(`${origine}/api/events`, {
+          headers,
+          data: {
+            source: 'hook:claude',
+            type: 'agent.status',
+            agentId: agent.id,
+            topicId: sujet,
+            ts: instantFixture,
+            data: { status: 'idle' },
+          },
+        });
+        if (!r.ok()) throw new Error(`Fixture statut : ${r.status()}`);
+      }
+      const base = new Database(join(home, 'state.db'));
+      try {
+        base
+          .prepare(
+            'UPDATE mesh_inbox SET seen_at = NULL, decided_at = NULL WHERE mesh = ? AND id = ?',
+          )
+          .run('principal', 46);
+        base.prepare('DELETE FROM tours_marques').run();
+      } finally {
+        base.close();
+      }
+    };
+    await preparerAgents();
+    const dossierAutorise = join(faux.dossier, 'dossier-autorise');
+    mkdirSync(dossierAutorise);
+    let creation = 0;
+    let passageServeur = 0;
+    let demandeEssai: string | undefined;
+    const preparerAction = async (ecran: Ecran, element: { node: string | null }) => {
+      const page = ecran.page;
+      const champ = (id: string) => page.locator(`[data-node="${id}"]`);
+      if (element.node === '1-1.consigne.envoyer')
+        await champ('1-1.consigne.champ').fill('Consigne synthétique audit');
+      if (element.node === 'serveur-config.dossier-ajouter')
+        await champ('serveur-config.dossier').fill(dossierAutorise);
+      if (element.node === 'serveur-config.enregistrer') {
+        // Chaque création/configuration possède un nom libre, y compris entre les formats.
+        await champ('serveur-config.nom').fill(`Serveur synthétique audit ${++passageServeur}`);
+        await champ('serveur-config.mode-command').click();
+        await champ('serveur-config.cible').fill('true');
+      }
+      if (element.node === 'nouveau-sujet.pied.creer') {
+        await champ('nouveau-sujet.besoin.titre-sujet').fill(
+          `Sujet synthétique audit ${++creation}`,
+        );
+        await champ('nouveau-sujet.travail.agent').selectOption('aucun');
+      }
+      if (element.node === 'pda.enregistrement.enregistrer')
+        await champ('pda.enregistrement.nom').fill('Appareil synthétique audit');
+      // Le renouvellement de l'essai change son id ; cibler la demande fraîche de cette action.
+      if (ecran.nom === 'PDA /pda' && element.node?.startsWith('pda.demande.') && demandeEssai)
+        element.node = element.node.replace(
+          /^pda\.demande\.[^.]+\./,
+          `pda.demande.${demandeEssai}.`,
+        );
+      if (element.node?.startsWith('pda.demande.') && element.node.endsWith('.confirmer')) {
+        const section = champ(element.node).locator('xpath=ancestor::section[1]');
+        await section
+          .locator('input')
+          .fill((await section.locator('.pda-numero').textContent())!.trim());
+      }
+    };
+    const apresAction = async (
+      ecran: Ecran,
+      element: { node: string | null },
+      observation: Observation,
+    ) => {
+      if (
+        ecran.nom !== 'PDA /pda' ||
+        !element.node?.startsWith('pda.demande.') ||
+        observation.echecClic ||
+        observation.cibleDisparue ||
+        observation.dialogueAnnule
+      )
+        return;
+      const etat = element.node.endsWith('.confirmer')
+        ? 'confirmee'
+        : element.node.endsWith('.refuser')
+          ? 'refusee'
+          : null;
+      if (!etat) return;
+      const id = element.node.split('.')[2]!;
+      // L'acquittement du relais précède le traitement par le daemon : attendre avant d'annuler.
+      await expect
+        .poll(async () => {
+          const resultat = await mac.request.get(`${origine}/api/host/pda/demandes/${id}`, {
+            headers,
+          });
+          return (await resultat.json()).etat;
+        })
+        .toBe(etat);
+    };
+    const preferences = await mac.evaluate(
+      async () => (await (await fetch('/api/nav')).json()).prefs,
+    );
+    const stockages = new Map<Page, Record<string, string>>();
+    for (const page of [mac, appareil])
+      stockages.set(page, await page.evaluate(() => ({ ...localStorage })));
+    const reinitialiser = async (ecran: Ecran) => {
+      const appareils = await mac.request.get(`${origine}/api/host/appareils`, { headers });
+      const host = await mac.request.get(`${origine}/api/host`, { headers });
+      if (
+        !(await host.json()).actif ||
+        (await appareils.json()).some(
+          (a: { nom: string; etat: string }) => a.nom === 'Appareil audit' && a.etat !== 'actif',
+        )
+      ) {
+        await remettreANeuf();
+      }
+      if (!(await (await mac.request.get(`${origine}/api/host`, { headers })).json()).actif) {
+        const reponse = await mac.request.put(`${origine}/api/host`, {
+          headers,
+          data: { actif: true },
+        });
+        if (!reponse.ok()) throw new Error(`Restauration host : ${reponse.status()}`);
+      }
+      await preparerAgents();
+      const nav = await mac.request.patch(`${origine}/api/nav/prefs`, {
+        headers,
+        data: preferences,
+      });
+      if (!nav.ok()) throw new Error(`Restauration préférences : ${nav.status()}`);
+      if (ecran.nom.includes('/discussion')) {
+        const panneau = await mac.request.put(`${origine}/api/servers/${serveur}/panel`, {
+          headers,
+          data: { open: true, tab: 'files' },
+        });
+        if (!panneau.ok()) throw new Error(`Restauration panneau : ${panneau.status()}`);
+      }
+      if (ecran.nom === 'PDA /pda') {
+        // D210 expire les demandes à la reprise du daemon : ne jamais réutiliser l'essai initial.
+        const file = await mac.request.get(`${origine}/api/confirmations`, { headers });
+        if (!file.ok()) throw new Error(`Lecture des essais PDA : ${file.status()}`);
+        const ouvertes = (await file.json()).ouvertes as Array<{ id: string; action: string }>;
+        for (const demande of ouvertes.filter((d) => d.action === 'essai')) {
+          const annulation = await mac.request.delete(
+            `${origine}/api/confirmations/${demande.id}`,
+            { headers },
+          );
+          if (!annulation.ok() && annulation.status() !== 409)
+            throw new Error(`Annulation essai PDA : ${annulation.status()}`);
+        }
+        const essai = await mac.request.post(`${origine}/api/host/pda/essai`, { headers });
+        if (!essai.ok()) throw new Error(`Nouvel essai PDA : ${essai.status()}`);
+        demandeEssai = ((await essai.json()) as { id: string }).id;
+      }
+      await ecran.page.evaluate((stockage) => {
+        localStorage.clear();
+        for (const [cle, valeur] of Object.entries(stockage)) localStorage.setItem(cle, valeur);
+      }, stockages.get(ecran.page)!);
+    };
+    await options.apresPreparation?.({ home, dossier: faux.dossier });
     return {
       ecrans,
       fermer,
+      reinitialiser,
+      preparerAction,
+      apresAction,
+      dossierAutorise,
+      remettreANeuf,
       async verifierDaemon() {
         try {
           // Toute réponse HTTP prouve que le daemon répond, même un refus d'accès.
@@ -280,21 +599,21 @@ export async function preparerAudit(browser: Browser) {
           /* La vérification fait partie du relevé, puis redémarre le même home. */
         }
         try {
-          arreter();
+          await arreter();
         } catch {
           /* Déjà arrêté. */
         }
-        const nouvelleInstance = demarrerHost(PORT_AUDIT, faux.supplement, chemin, {
-          home,
-          env,
-          configuration,
-        });
-        await mac.request.get(`${origine}/?token=${nouvelleInstance.token}`);
+        const token = redemarrer();
+        await mac.request.get(`${origine}/?token=${token}`);
         return false;
       },
     };
   } catch (erreur) {
-    await fermer();
+    try {
+      await fermer();
+    } catch (nettoyage) {
+      throw new AggregateError([erreur, nettoyage], 'Préparation et nettoyage audit');
+    }
     throw erreur;
   }
 }

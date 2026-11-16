@@ -23,7 +23,12 @@ function ContenuMemoire() {
   };
   const navigation = (valeur: string) =>
     slugValide(valeur) ? (
-      <button type="button" className="bouton" onClick={() => ouvrir(valeur)}>
+      <button
+        data-node={`memoire.pages.ouvrir-${valeur}`}
+        type="button"
+        className="bouton"
+        onClick={() => ouvrir(valeur)}
+      >
         {valeur}
       </button>
     ) : (
@@ -48,6 +53,7 @@ function ContenuMemoire() {
       >
         <label htmlFor={`${id}-filtre`}>Filtre</label>
         <select
+          data-node="memoire.filtres.mode"
           id={`${id}-filtre`}
           value={filtre}
           onChange={(event) => setFiltre(event.target.value)}
