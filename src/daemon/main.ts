@@ -104,6 +104,7 @@ export async function startDaemon(
     remoteBins?: Partial<Record<RemoteKind, string>>;
     /** chantier 31 (D173) : l'exécution de `tailscale` ; un test passe une fausse sortie */
     tailscaleExec?: TailscaleExec;
+    relectureHostMs?: number;
     /** chantier 31 : le build de l'interface, servi aux deux ports ; null = aucun (tests) */
     webRoot?: string | null;
     /** chantier 31 (D174), tests : les routes du port du Mac */
@@ -302,6 +303,7 @@ export async function startDaemon(
       // D178 : un lecteur à part, 60 s ; les appareils partagent ses lectures, le Mac garde ses 5 s
       board: meshes.principal?.boardHost ?? null,
       tailscaleExec: opts.tailscaleExec,
+      relectureHostMs: opts.relectureHostMs,
       logger: opts.logger,
       log,
     });

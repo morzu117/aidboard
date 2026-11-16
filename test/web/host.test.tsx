@@ -136,6 +136,8 @@ test('D171 : le port des appareils indisponible, sa raison, et pas d’ajout pos
   });
   await waitFor(() => expect(node('host.raison')?.textContent).toBe('le port 4890 est occupé'));
   expect((node('host.ajouter') as HTMLButtonElement).disabled).toBe(true);
+  expect(node('host.ajouter')?.title).toBe('le port 4890 est occupé');
+  expect(node('host.raison')?.getAttribute('role')).toBe('alert');
 });
 
 test('D181 : Ajouter un appareil, le QR en SVG local, le temps restant, Nouveau code', async () => {
@@ -405,4 +407,30 @@ test('D205 : le code est coupé par défaut, le Mac peut le montrer puis le coup
   expect(h.calls.find((c) => c.url === '/api/host/code')?.body).toEqual({ actif: true });
   fireEvent.click(interrupteur);
   await waitFor(() => expect((interrupteur as HTMLInputElement).checked).toBe(false));
+});
+
+test('31.14 : les raisons Funnel du daemon sont affichées telles quelles', async () => {
+  ouvrir({
+    'GET /api/host': json(200, etat({ actif: false })),
+    'PUT /api/host': json(409, { error: 'Funnel actif : le cockpit serait sur internet' }),
+  });
+  await waitFor(() => expect(node('host.interrupteur')).not.toBeNull());
+  fireEvent.click(node('host.interrupteur')!);
+  await waitFor(() =>
+    expect(node('host.erreur')?.textContent).toBe('Funnel actif : le cockpit serait sur internet'),
+  );
+});
+
+test('31.14 : la raison de l’arrêt du port est affichée telle quelle', async () => {
+  ouvrir({
+    'GET /api/host': json(
+      200,
+      etat({ disponible: false, raison: 'Funnel actif : le port des appareils est arrêté' }),
+    ),
+  });
+  await waitFor(() =>
+    expect(node('host.raison')?.textContent).toBe(
+      'Funnel actif : le port des appareils est arrêté',
+    ),
+  );
 });

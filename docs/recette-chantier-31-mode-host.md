@@ -45,6 +45,7 @@ Rappels qui valent pour toute la recette :
 | `modeHost` dans la config, `PUT /api/host`, la ligne de `aid doctor` (D172) | `test/host-mode.test.ts`, `test/host-route.test.ts`, `test/config.test.ts`, `test/doctor.test.ts` |
 | Machines › Ton cockpit : pilule, interrupteur, commande, QR, approbation, case « Appareil taggé », liste, Révoquer, Couper (D172, D176, D177, D181) | `test/web/host.test.tsx` |
 | L'interface d'un appareil : détection, barre réduite, accueil sans bouton, `/ws/signal`, écrans pleins, Appareils connectés, `/appairer` (D180) | `test/web/appareil.test.tsx` |
+| Un Funnel ou un Serve illisible : 409 à l'activation, pas d'ouverture au démarrage, arrêt à la relecture de 60 s (deux lectures illisibles d'affilée), raison en alerte et bouton d'appairage désactivé (D173, 31.14) | `test/host-mode.test.ts`, `test/host-tailscale.test.ts`, `test/web/host.test.tsx`, `e2e/mode-host-funnel.spec.ts` |
 | De bout en bout, sous Chromium : voir ci-dessous | `e2e/mode-host.spec.ts` |
 
 Ce que l'e2e a mesuré sous Chromium (31.11) :
@@ -83,6 +84,11 @@ en `127.0.0.1:<port>`, toutes les requêtes d'un appareil reçoivent 421 (voir 3
   - Constat : _à remplir_
 - [ ] HTTPS est activé dans la console Tailscale (question 0 de la spec)
 - [ ] `tailscale serve status` est vide avant de commencer (sinon, s'arrêter et le noter)
+- [ ] Aucun Funnel n'est actif sur ce Mac, **sur aucun service** (31.14). La détection est
+  globale : un Funnel sur un service sans rapport avec A-I-D bloque aussi le mode host, avec
+  « Funnel actif : le cockpit serait sur internet ». C'est voulu, pour que rien ne soit sur internet
+  (lab, DM 99146). Une CLI `tailscale` introuvable ou en erreur bloque aussi, avec « État de Serve
+  illisible ».
 - [ ] L'instance de recette tourne sur la branche `feat/31-mode-host` (head : _à noter_), sous
   Node 22 (`node --version` : _à noter_), sur un port autre que 4870 (_à noter_) ; son port des
   appareils est 20 plus haut (_à noter_)

@@ -9,13 +9,18 @@ import { fauxTailscale, NOM_E2E } from './serve-local.js';
 const CLI = join(import.meta.dirname, '../dist/cli/aid.js');
 export const ORIGINE_APPAREIL = `https://${NOM_E2E}`;
 
-export function demarrerHost(PORT: number, supplement = '', chemin = process.env.PATH) {
+export function demarrerHost(
+  PORT: number,
+  supplement = '',
+  chemin = process.env.PATH,
+  funnel = false,
+) {
   const PORT_APPAREILS = PORT + 20;
   let home = '';
   let token = '';
   home = realpathSync(mkdtempSync(join(tmpdir(), 'aid-e2e-host-')));
   const bin = join(home, 'tailscale');
-  writeFileSync(bin, fauxTailscale(PORT_APPAREILS), { mode: 0o700 });
+  writeFileSync(bin, fauxTailscale(PORT_APPAREILS, funnel), { mode: 0o700 });
   writeFileSync(
     join(home, 'config.yaml'),
     [

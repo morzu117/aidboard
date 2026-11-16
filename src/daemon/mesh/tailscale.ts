@@ -139,10 +139,13 @@ export async function lireServe(
   ports: { appareils: number; interdits: number[] },
   exec: TailscaleExec = realExec,
 ): Promise<LectureServe> {
-  const { stdout, code } = await exec(bin, ['serve', 'status', '--json']);
-  if (code === 'ENOENT' || code === 'EACCES')
-    return { etat: 'absent', funnel: false, interdits: [] };
-  return parseServe(stdout, ports);
+  try {
+    const { stdout, code } = await exec(bin, ['serve', 'status', '--json']);
+    if (code !== null) return { etat: 'illisible', funnel: false, interdits: [] };
+    return parseServe(stdout, ports);
+  } catch {
+    return { etat: 'illisible', funnel: false, interdits: [] };
+  }
 }
 
 /** D173 : la commande à copier ; A-I-D ne la lance jamais. */
