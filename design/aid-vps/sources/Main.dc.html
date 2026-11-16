@@ -45,7 +45,7 @@ button{font-family:inherit;cursor:pointer}
 <div style="padding: 18px 24px 0; flex-shrink: 0">
 <div style="display: flex; align-items: flex-start; gap: 12px">
 <div style="flex-grow: 1; min-width: 0">
-<div style="font-size: 13px; color: #8d94a0">orgasso / sujet</div>
+<div style="font-size: 13px; color: #8d94a0">projet-d / sujet</div>
 <h1 style="margin: 2px 0 0; font-size: 24px; font-weight: 600">restart-dev</h1>
 </div>
 <button style="background: #16191e; color: #e6e8eb; border: 1px solid #23272e; border-radius: 8px; padding: 8px 12px; font-size: 13px">Ouvrir dans l'éditeur</button>
@@ -95,7 +95,7 @@ button{font-family:inherit;cursor:pointer}
 <div style="line-height: 1.55; max-width: 92%">{{t.outro}}</div>
 <sc-if value="{{t.decision}}" hint-placeholder-val="{{false}}">
 <div style="border: 1px solid #5a4514; background: #1a150a; border-radius: 12px; padding: 14px 16px; display: flex; flex-direction: column; gap: 10px">
-<div style="display: flex; align-items: center; gap: 8px; font-size: 12px; color: #f2b84b"><span style="width: 8px; height: 8px; border-radius: 50%; background: #f2b84b"></span>Décision · morzu117/Orgasso#decision/1</div>
+<div style="display: flex; align-items: center; gap: 8px; font-size: 12px; color: #f2b84b"><span style="width: 8px; height: 8px; border-radius: 50%; background: #f2b84b"></span>Décision · morzu117/projet-d#decision/1</div>
 <div style="font-weight: 500">Sujet swairm/capacitor-socle garé (plan v1)</div>
 <div style="display: flex; gap: 8px">
 <button style="background: #5de0a1; color: #06251a; border: 0; border-radius: 8px; padding: 8px 12px; font-weight: 600; font-size: 13px">Relancer le plan</button>
@@ -223,8 +223,8 @@ class Component extends DCLogic {
       { id: 'q1', time: '09:12', q: 'Reprends le sujet capacitor-socle et dis-moi ce qui bloque.',
         intro: 'Je regarde l\'état du projet, la boîte de réception et le journal des événements.',
         calls: [
-          { cmd: 'swairm> inbox', out: '1 décision', detail: 'morzu117/Orgasso#decision/1  decision\nSujet swairm/capacitor-socle garé (plan v1)' },
-          { cmd: 'swairm> status', out: 'waiting_you · parked', detail: 'swairm — morzu117/Orgasso · 1 à toi\nwaiting_you  parked  swairm/capacitor-socle' },
+          { cmd: 'swairm> inbox', out: '1 décision', detail: 'morzu117/projet-d#decision/1  decision\nSujet swairm/capacitor-socle garé (plan v1)' },
+          { cmd: 'swairm> status', out: 'waiting_you · parked', detail: 'swairm — morzu117/projet-d · 1 à toi\nwaiting_you  parked  swairm/capacitor-socle' },
           { cmd: 'swairm> events', out: '20 derniers', detail: '10  branch_push_intent  swairm/capacitor-socle\n11  branch_pushed       swairm/capacitor-socle\n20  decision_opened     swairm/capacitor-socle\n22  budget_spent        swairm/capacitor-socle' }
         ],
         outro: 'Le sujet swairm/capacitor-socle est garé (plan v1) : le pas de commande cap-deps s\'est arrêté.' },
@@ -303,7 +303,7 @@ class Component extends DCLogic {
       commits: [
         { msg: 'Ruche : activer l\'Extracteur', when: 'il y a 12 j', hash: '42aedda', color: '#a78bfa' },
         { msg: 'Merge pull request #5 · maquettes', when: 'il y a 13 j', hash: '23c7a40', color: '#6ea8ff' },
-        { msg: 'Maquettes : Orgasso', when: 'il y a 14 j', hash: 'df915f1', color: '#a78bfa' },
+        { msg: 'Maquettes : Projet-d', when: 'il y a 14 j', hash: 'df915f1', color: '#a78bfa' },
         { msg: 'Merge pull request #4 · chore/vitest-include', when: 'il y a 14 j', hash: '67e7407', color: '#6ea8ff' },
         { msg: 'Vitest trouve les tests où qu\'ils soient', when: 'il y a 14 j', hash: 'ed9ec6c', color: '#a78bfa' },
         { msg: 'Merge pull request #3 · chore/deps-base', when: 'il y a 14 j', hash: 'f7c8af2', color: '#6ea8ff' },

@@ -7,6 +7,12 @@ import { expect, test } from 'vitest';
 
 const racine = resolve(import.meta.dirname, '..');
 const empreintesInterdites = new Set([
+  '10fb93e25e0253e7dc9cd78af23092e4510f5240897c5d581001f3e1a2bc2742',
+  '7811f8511991cc485c15cc6f478f4657447e2d1860ea42a71579aa55f8a39ff5',
+  '3d37e768b95b3fbbcff2cb174c48631f43b14d3a225edc846920ceb297e93b47',
+  'e9011d1f715c6f749c0d68bb48a9ba8d1d5513d93a49d096fc8d8d4b2e1c662e',
+  'f0fd47934b1a412d5b71b4b876c2e28f18c9e7a0adac2028532b832ee3a955e9',
+  '0a2633f8944a93d00dd5a018e00f9cf8e4d43da4387677b47301063a9a1c2f12',
   'c0ab82d169373693ef572b8823d4891cde42f078790f554b83e963e57cf582d8',
   '67f529e88f0fb9c6a53265b17485b6c5eb4302eb1d0f177232173f919a4fb377',
   'a6d4b41ebbca787a96604add881bf09187f8ec2d912d95eb01337a31c670b457',
@@ -24,7 +30,8 @@ function verifierNomsNeutres(
   empreintesCode?: ReadonlySet<string>,
 ) {
   const estCode = /^(e2e|test|src|web|scripts|app)\//.test(fichier);
-  for (const mot of texte.match(/[A-Za-z0-9_-]+/g) ?? []) {
+  const mots = texte.match(/[A-Za-z0-9_-]+/g) ?? [];
+  for (const mot of mots.flatMap((mot) => [mot, ...mot.split(/[_-]/)])) {
     const empreinte = createHash('sha256').update(mot.toLowerCase()).digest('hex');
     if (empreintes.has(empreinte) || (estCode && empreintesCode?.has(empreinte))) {
       throw new Error(`Nom non neutre dans ${fichier}`);
@@ -80,4 +87,14 @@ test('la garde du code rejette un nom interdit seulement dans les dossiers ciblÃ
     );
   }
   expect(() => verifierNomsNeutresCode(nom, 'docs/exemple.md', empreintes)).not.toThrow();
+});
+
+test('la garde rejette un composant interdit dans un nom composÃ©', () => {
+  const nom = 'exemple';
+  const empreintes = new Set([createHash('sha256').update(nom).digest('hex')]);
+  for (const variante of ['improve_exemple_supervisor', 'improve-exemple-supervisor']) {
+    expect(() => verifierNomsNeutres(variante, 'exemple.txt', empreintes)).toThrow(
+      'Nom non neutre dans exemple.txt',
+    );
+  }
 });
