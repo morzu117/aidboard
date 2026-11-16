@@ -97,6 +97,7 @@ export function PanneauPda({ etat }: { etat: EtatModeHostDaemon['pda'] }) {
         <input
           type="checkbox"
           role="switch"
+          data-node="machines.pda.actif"
           checked={pda?.actif ?? false}
           disabled={occupe}
           onChange={() => {
@@ -120,12 +121,19 @@ export function PanneauPda({ etat }: { etat: EtatModeHostDaemon['pda'] }) {
         Adresse du relais
         <input
           type="url"
+          data-node="machines.pda.relais"
+          aria-describedby={pda?.actif ? 'machines-pda-relais-raison' : undefined}
           placeholder="https://relais.example.com"
           value={relais}
           disabled={occupe || !!pda?.actif}
           onChange={(e) => setRelais(e.target.value)}
         />
       </label>
+      {pda?.actif && (
+        <p id="machines-pda-relais-raison" data-node="machines.pda.relais-raison">
+          Coupe le PDA pour modifier le relais.
+        </p>
+      )}
       <h3>Appareils PDA</h3>
       <ul className="machines-appareils">
         {appareils.map((a) => (

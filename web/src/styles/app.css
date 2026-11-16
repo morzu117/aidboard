@@ -3000,3 +3000,12 @@ a.composer-menu-ligne {
   outline-offset: 2px;
   box-shadow: 0 0 0 2px var(--surface-1);
 }
+
+/* 56.4 : état commun, y compris les variantes primaire, contour et danger. */
+.bouton:disabled,
+.bouton[aria-disabled='true'] {
+  background: var(--surface-3);
+  border-color: var(--line);
+  color: var(--muted);
+  cursor: not-allowed;
+}

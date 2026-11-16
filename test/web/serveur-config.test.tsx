@@ -466,3 +466,27 @@ test('colonne de test : échec sans message dit « Échec du test » ; à dépar
   act(() => FakeSocket.all.at(-1)!.push({ kind: 'ephemeral', type: 'server.test', test: enCours }));
   expect(node('serveur-config.test.conclusion')?.textContent).toContain('Échec du test');
 });
+
+test('un refus du test après enregistrement affiche seulement l’erreur, puis rend la raison après correction', async () => {
+  const h = ouvrir('/serveurs/srv_1/configuration', [serveur()], {
+    'PATCH /api/servers/srv_1': json(200, serveur({ workdir: '~/src', updatedAt: 't2' })),
+    'POST /api/servers/srv_1/test': json(409, { error: 'test déjà en cours' }),
+  });
+  await waitFor(() => expect(node('serveur-config.titre')).not.toBeNull());
+  saisir(champ('Répertoire de travail'), '~/src');
+  h.respond.set('GET /api/servers', json(200, [serveur({ workdir: '~/src', updatedAt: 't2' })]));
+  fireEvent.click(enregistrer());
+  await waitFor(() =>
+    expect(screen.getByRole('alert').textContent).toContain('test déjà en cours'),
+  );
+  expect(screen.getAllByRole('alert')).toHaveLength(1);
+  expect(enregistrer().disabled).toBe(true);
+  expect(document.getElementById('serveur-config-probleme')).toBeNull();
+  expect(enregistrer().hasAttribute('aria-describedby')).toBe(false);
+  saisir(champ('Shell distant'), 'zsh');
+  saisir(champ('Shell distant'), 'bash');
+  expect(screen.queryByRole('alert')).toBeNull();
+  expect(document.getElementById('serveur-config-probleme')?.textContent).toBe(
+    'Aucune modification',
+  );
+});

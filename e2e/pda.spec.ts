@@ -3,12 +3,13 @@ import { once } from 'node:events';
 import { readFileSync } from 'node:fs';
 import type { Server } from 'node:https';
 import { createServer } from 'node:net';
-import { join } from 'node:path';
+import { delimiter, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import Database from 'better-sqlite3';
 import { expect, test, type Page } from '@playwright/test';
 import { appairerHost, demarrerHost, ORIGINE_APPAREIL } from './host-helpers.js';
-import { fermerContextes } from './helpers.js';
+import { fermerContextes, node } from './helpers.js';
+import { capturerBoutons } from './captures-boutons.js';
 import { NOM_E2E, ouvrirServeLocal } from './serve-local.js';
 
 const PORT = Number(process.env.AID_E2E_PORT ?? 4871) + 6;
@@ -260,5 +261,141 @@ test('PDA : passkey, essais, UV, révocation, rotation et coque hors ligne', asy
         timeout: 30_000,
       });
     expect(nettoyages.filter((nettoyage) => nettoyage.status === 'rejected')).toEqual([]);
+  }
+});
+
+test('56.4 D06 D12 : relais figé, nom requis, refus réels et reprise', async ({ browser }) => {
+  test.setTimeout(120_000);
+  let instance: ReturnType<typeof demarrerHost> | undefined;
+  let frontal: Server | undefined;
+  let base: Database.Database | undefined;
+  const contextes = [];
+  try {
+    // Le transport du relais reste sur la boucle locale, sans service extérieur.
+    instance = demarrerHost(
+      PORT,
+      '',
+      `${join(import.meta.dirname, '../test/fixtures/bin-stream')}${delimiter}${process.env.PATH}`,
+      {
+        env: {
+          NODE_OPTIONS: `${process.env.NODE_OPTIONS ?? ''} --import ${pathToFileURL(join(import.meta.dirname, 'pda-fetch.mjs')).href}`,
+          AID_E2E_RELAIS_PORT: String(await portLibre()),
+        },
+      },
+    );
+    base = new Database(join(instance.home, 'state.db'));
+    frontal = await ouvrirServeLocal({ dir: instance.home, port: FRONTAL, versPort: PORT + 20 });
+    const contexte = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+    contextes.push(contexte);
+    const mac = await contexte.newPage();
+    await mac.goto(`http://127.0.0.1:${PORT}/?token=${instance.token}`);
+    await mac.goto(`http://127.0.0.1:${PORT}/machines`);
+    const adresse = node(mac, 'machines.pda.relais');
+    const interrupteur = node(mac, 'machines.pda.actif');
+    const basculer = async (statut = 200) => {
+      mac.once('dialog', (dialogue) => dialogue.accept());
+      const retour = mac.waitForResponse(
+        (r) => r.url().endsWith('/api/host/pda') && r.request().method() === 'PUT',
+      );
+      await interrupteur.click();
+      expect((await retour).status()).toBe(statut);
+    };
+    const etat = () =>
+      mac.evaluate(
+        async () =>
+          (await (await fetch('/api/host')).json()).pda as { actif: boolean; relais: string },
+      );
+    await adresse.fill(RELAIS);
+    await basculer();
+    await expect(adresse).toBeDisabled();
+    await expect(node(mac, 'machines.pda.relais-raison')).toHaveText(
+      'Coupe le PDA pour modifier le relais.',
+    );
+    await expect(adresse).toHaveAccessibleDescription('Coupe le PDA pour modifier le relais.');
+    await capturerBoutons(mac, 'machines-pda-desactive', adresse);
+    expect(await etat()).toMatchObject({ actif: true, relais: RELAIS });
+    await basculer();
+    await expect(adresse).toBeEnabled();
+    await expect(node(mac, 'machines.pda.relais-raison')).toHaveCount(0);
+    expect((await etat()).actif).toBe(false);
+    await adresse.fill('https://relais.example.com');
+    await capturerBoutons(mac, 'machines-pda-actif', adresse);
+    await adresse.fill('http://example.com');
+    await basculer(400);
+    await expect(mac.getByText('relais invalide', { exact: true })).toBeVisible();
+    await expect(interrupteur).not.toBeChecked();
+    expect((await etat()).actif).toBe(false);
+    await adresse.fill('https://relais.example.com');
+    await basculer();
+    await expect(interrupteur).toBeChecked();
+    expect((await etat()).relais).toBe('https://relais.example.com');
+    await expect(adresse).toHaveValue('https://relais.example.com');
+    await expect(mac.getByText('relais invalide', { exact: true })).toHaveCount(0);
+    const telephone = await appairerHost(browser, mac, PORT, 'Appareil recette');
+    contextes.push(telephone.context());
+    const cdp = await telephone.context().newCDPSession(telephone);
+    await cdp.send('WebAuthn.enable');
+    await cdp.send('WebAuthn.addVirtualAuthenticator', {
+      options: {
+        protocol: 'ctap2',
+        transport: 'internal',
+        hasResidentKey: true,
+        hasUserVerification: true,
+        isUserVerified: true,
+      },
+    });
+    await telephone.goto(`${ORIGINE_APPAREIL}/pda/enregistrer`);
+    const nom = node(telephone, 'pda.enregistrement.nom');
+    const enregistrer = node(telephone, 'pda.enregistrement.enregistrer');
+    const raison = node(telephone, 'pda.enregistrement.raison');
+    await expect(enregistrer).toBeDisabled();
+    await expect(nom).toHaveAttribute('required', '');
+    await expect(raison).toHaveText('Saisis un nom pour enregistrer cet appareil.');
+    await expect(nom).toHaveAccessibleName('Nom de cet appareil (obligatoire)');
+    await expect(nom).toHaveAccessibleDescription(await raison.innerText());
+    await expect(enregistrer).toHaveAccessibleDescription(await raison.innerText());
+    await capturerBoutons(telephone, 'pda-enregistrement-desactive', enregistrer);
+    await nom.fill('PDA recette');
+    await expect(enregistrer).toBeEnabled();
+    await expect(raison).toHaveCount(0);
+    await expect(enregistrer).not.toHaveAttribute('aria-describedby');
+    await expect(nom).not.toHaveAttribute('aria-describedby');
+    await capturerBoutons(telephone, 'pda-enregistrement-actif', enregistrer);
+    // La page reste ouverte pendant que le Mac coupe le PDA : vrai refus 403 du daemon.
+    await basculer();
+    const refus = telephone.waitForResponse(
+      (r) => r.url().endsWith('/api/appareils/moi/pda') && r.request().method() === 'POST',
+    );
+    await enregistrer.click();
+    expect((await refus).status()).toBe(403);
+    await expect(telephone.getByRole('status')).toHaveText('Enregistrement refusé');
+    expect(base.prepare('SELECT nom FROM pda_appareils').all()).toEqual([]);
+    await expect(enregistrer).toBeEnabled();
+    await basculer();
+    const retour = telephone.waitForResponse(
+      (r) => r.url().endsWith('/api/appareils/moi/pda') && r.request().method() === 'POST',
+    );
+    await enregistrer.click();
+    expect((await retour).ok()).toBe(true);
+    await expect(telephone.locator('.pda-empreinte')).toBeVisible();
+    await expect(
+      telephone.getByText('Compare-la sur le Mac, puis active cet appareil là-bas'),
+    ).toBeVisible();
+    expect(base.prepare('SELECT nom, etat FROM pda_appareils').all()).toEqual([
+      { nom: 'PDA recette', etat: 'attente' },
+    ]);
+    await mac.reload();
+    await expect(mac.getByRole('listitem').filter({ hasText: 'PDA recette' })).toContainText(
+      'en attente',
+    );
+  } finally {
+    await Promise.all(contextes.map((contexte) => contexte.close()));
+    await fermer(frontal);
+    base?.close();
+    if (instance)
+      execFileSync(process.execPath, [CLI, 'stop', '--force'], {
+        env: { ...process.env, AID_HOME: instance.home },
+        timeout: 30_000,
+      });
   }
 });

@@ -60,6 +60,7 @@ La cell de gestion lance l'explorateur, regarde le rapport et les captures, puis
 ### 56.4 à 56.7 Les correctifs
 
 Chacun respecte D342 : un e2e qui clique, le cas réel qui active le bouton, le cas d'erreur, et la revue des captures.
+- _Révision 56.4._ Trois passes : le correctif, puis deux retouches de la cell de gestion après la revue des captures. La raison du PDA disparaît une fois le nom rempli, et la garde `!erreur` est rétablie dans Serveurs. Ensuite, les captures ne se prennent que sur demande, avec `AID_E2E_CAPTURES`. Gate 4 165, gate:e2e 143, e2e ciblés 7/7 trois fois ; après la seconde retouche, 9/9 deux fois, multi-mesh compris.
 
 ### 56.4 Les boutons désactivés (D01, D06, D07, D11, D12)
 
@@ -85,6 +86,7 @@ Il vient après les correctifs, pour que la liste de départ soit courte.
 
 - **L'explorateur clique tout.** Il ne tourne que contre un daemon isolé, avec les faux de l'e2e. Jamais contre le daemon de Julien, jamais avec le vrai claude, codex, gh, tailscale ni swarph.
 - **Les ports.** Ceux de l'e2e (4871 à 4873, 4891 à 4893), via `AID_E2E_PORT`. L'explorateur ne tourne pas en même temps qu'un `gate:e2e`.
+- **Les captures de revue (D342, règle 4).** `AID_E2E_CAPTURES=<dossier>` active les captures avant un commit d’interface ; sans cette variable, le helper ne crée aucun dossier et ne modifie pas la taille de la page.
 - **Le rapport et les captures** restent sous `$TMPDIR`. Les données sont synthétiques, mais rien n'est commité, sauf l'inventaire.
 - **Aucun vrai nom** de cell, de dépôt ni d'hôte dans les fixtures (garde des noms neutres, 49 et 54).
 

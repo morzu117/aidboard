@@ -241,16 +241,36 @@ export function AppPda() {
         ) : (
           <form
             className="appairer-form"
+            data-node="pda.enregistrement.formulaire"
             onSubmit={(e) => {
               e.preventDefault();
               void enregistrer();
             }}
           >
-            <label>
-              Nom de cet appareil
-              <input value={nom} maxLength={80} onChange={(e) => setNom(e.target.value)} />
+            <label data-node="pda.enregistrement.libelle">
+              Nom de cet appareil (obligatoire)
+              <input
+                data-node="pda.enregistrement.nom"
+                value={nom}
+                maxLength={80}
+                required
+                aria-describedby={!nom.trim() ? 'pda-enregistrement-raison' : undefined}
+                onChange={(e) => setNom(e.target.value)}
+              />
             </label>
-            <button disabled={occupe || !nom.trim()}>Enregistrer cet appareil</button>
+            {!nom.trim() && (
+              <p id="pda-enregistrement-raison" data-node="pda.enregistrement.raison">
+                Saisis un nom pour enregistrer cet appareil.
+              </p>
+            )}
+            <button
+              className="bouton bouton--primaire"
+              data-node="pda.enregistrement.enregistrer"
+              aria-describedby={!nom.trim() ? 'pda-enregistrement-raison' : undefined}
+              disabled={occupe || !nom.trim()}
+            >
+              Enregistrer cet appareil
+            </button>
           </form>
         )
       ) : pret && !appareil ? (

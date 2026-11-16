@@ -91,7 +91,12 @@ function ContenuMemoire() {
           </p>
         )}
       </form>
-      <LectureSwarph376 {...liste} node="memoire-swarph.liste" desactive={soumis === null} />
+      <LectureSwarph376
+        {...liste}
+        node="memoire-swarph.liste"
+        desactive={soumis === null}
+        raison={soumis === null ? 'Clique sur Lister pour charger la mémoire.' : undefined}
+      />
       <EtatsSwarph376 {...liste} node="memoire-swarph.liste" memoire />
       {liste.result?.ok && (
         <ul data-node="memoire-swarph.liste">

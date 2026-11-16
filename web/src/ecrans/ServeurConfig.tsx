@@ -268,7 +268,17 @@ function Formulaire({
       ? { ...b, allowedDirs: [...b.allowedDirs, enAttente] }
       : b;
   const modifie = signature(final) !== signature(initial);
-  const probleme = invalide(final);
+  const manquants = [
+    !final.name.trim() && 'nom affiché',
+    !final.targets[final.mode].trim() &&
+      { command: 'commande de connexion', ssh_host: 'hôte', ssh_alias: 'alias' }[final.mode],
+    !final.workdir.trim() && 'répertoire de travail',
+    !final.shell.trim() && 'shell distant',
+  ].filter(Boolean);
+  const probleme =
+    manquants.length > 1
+      ? `Champs obligatoires manquants : ${manquants.join(', ')}.`
+      : invalide(final);
   const test = plusRecent(id ? (tests[id] ?? null) : null, testLu);
   const testEnCours = lancement || (test !== null && test.finishedAt === null);
 
@@ -416,7 +426,9 @@ function Formulaire({
           type="submit"
           form="serveur-config-formulaire"
           disabled={!modifie || probleme !== null || enCours}
-          aria-describedby={modifie && probleme ? 'serveur-config-probleme' : undefined}
+          aria-describedby={
+            !erreur && (probleme || !modifie) ? 'serveur-config-probleme' : undefined
+          }
         >
           Enregistrer
         </button>
@@ -426,14 +438,14 @@ function Formulaire({
             {erreur}
           </p>
         )}
-        {!erreur && modifie && probleme && (
+        {!erreur && (probleme || !modifie) && (
           <p
             className="serveur-config-probleme"
             id="serveur-config-probleme"
             aria-live="polite"
-            data-node="serveur-config.erreur"
+            data-node={probleme ? 'serveur-config.erreur' : 'serveur-config.raison'}
           >
-            {probleme}
+            {probleme ?? 'Aucune modification'}
           </p>
         )}
       </div>
