@@ -33,6 +33,7 @@ Ce document.
 - **Tests :**
   - un test unitaire du classement, sur des relevés synthétiques ;
   - un essai de l'explorateur sur deux écrans, joué en CI pour qu'il ne pourrisse pas, sans faire échouer la CI sur ses trouvailles.
+- _Révision 56.2._ Codex a été coupé par sa limite pendant l'audit complet, à 49 écrans sur 72. La cell de gestion l'a relancé seule, sur une machine libre : 59 min, 16 erreurs, 84 sans effet, 46 désactivés, 1 114 ok, 4 exclusions, aucun écran non chargé. Deux lignes existantes sont modifiées : la signature de `demarrerHost` et l'exclusion `**/audit/**` dans `playwright.config.ts`. Gate 4 164, gate:e2e 140, essai de l'audit 3 fois sur 3.
 
 ### 56.3 L'audit et son tri (D344)
 

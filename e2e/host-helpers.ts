@@ -9,11 +9,16 @@ import { fauxTailscale, NOM_E2E } from './serve-local.js';
 const CLI = join(import.meta.dirname, '../dist/cli/aid.js');
 export const ORIGINE_APPAREIL = `https://${NOM_E2E}`;
 
-export function demarrerHost(PORT: number, supplement = '', chemin = process.env.PATH) {
+export function demarrerHost(
+  PORT: number,
+  supplement = '',
+  chemin = process.env.PATH,
+  options: { home?: string; env?: NodeJS.ProcessEnv; configuration?: string } = {},
+) {
   const PORT_APPAREILS = PORT + 20;
   let home = '';
   let token = '';
-  home = realpathSync(mkdtempSync(join(tmpdir(), 'aid-e2e-host-')));
+  home = options.home ?? realpathSync(mkdtempSync(join(tmpdir(), 'aid-e2e-host-')));
   const bin = join(home, 'tailscale');
   writeFileSync(bin, fauxTailscale(PORT_APPAREILS), { mode: 0o700 });
   writeFileSync(
@@ -27,12 +32,14 @@ export function demarrerHost(PORT: number, supplement = '', chemin = process.env
       supplement,
       'modeHost:',
       '  actif: true',
+      options.configuration ?? '',
       '',
     ].join('\n'),
     { mode: 0o600 },
   );
   const env = {
     ...process.env,
+    ...options.env,
     AID_HOME: home,
     AID_NO_BROWSER: '1',
     SHELL: '/bin/sh',
