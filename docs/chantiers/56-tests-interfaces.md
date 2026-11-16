@@ -20,6 +20,7 @@ Les gates sont verts, et pourtant Julien trouve souvent, à l'usage, un bouton q
 | **D343** | **L'explorateur.** C'est un outil d'audit, hors du gate : `npm run audit:ui`, avec sa propre config Playwright (`playwright.audit.config.ts`) et ses fichiers sous `e2e/audit/`.<br>• **Ce qu'il démarre.** Un daemon isolé, avec les faux de l'e2e : un dépôt, un sujet, un serveur, un mesh avec son board et un faux proxy, le mode host actif avec une sortie synthétique de `tailscale`, et un appareil appairé. Aucun réseau, aucun vrai nom.<br>• **Ce qu'il parcourt.** Chaque route de `web/src/App.tsx`, avec un id réel pour les routes paramétrées, puis l'app de l'appareil et l'app du PDA. Il passe chaque écran dans les deux formats de D342.<br>• **Sur chaque écran**, il prend une capture, puis il liste les éléments interactifs visibles : `button`, `a[href]`, `[role=button]`, `summary`, `input`, `select`, `textarea`. Pour chacun, il relève le `data-node` (ou son absence), le texte, l'état actif ou désactivé, et le `title`.<br>• **Il clique chaque élément actif**, sur une page rechargée à neuf. Il attend 1,5 s, puis il relève les erreurs de la console, les erreurs de page, les réponses ≥ 400 (chemin et statut, jamais le corps), la navigation, les mutations du DOM et les requêtes parties.<br>• **Il classe chaque élément :** `erreur` (une erreur de la console ou de page, ou une réponse 5xx), `refus` (une réponse 4xx), `sans effet` (ni requête, ni navigation, ni mutation), `desactive` (jamais actif sur cet écran), `ok`.<br>• **Les exclusions.** Une liste écrite dans le code, avec la raison de chaque entrée. Elle couvre les boutons qui arrêtent le daemon ou ouvrent un programme externe. Si le daemon ne répond plus après un clic, l'explorateur le note et le redémarre.<br>• **Le rapport** est écrit sous `$TMPDIR/aid-audit-ui/` : `rapport.json`, un `rapport.md` trié par gravité, et les captures. Rien de tout cela n'est commité. | Julien : « audit, puis garde ». |
 | **D344** | **Le tri de l'audit.** La cell de gestion lit le rapport et regarde les captures, puis elle trie :<br>• les vrais défauts, regroupés par écran ;<br>• les faux positifs de l'explorateur (un `sans effet` qui en a bien un, comme une copie dans le presse-papiers), corrigés dans l'explorateur ;<br>• les boutons désactivés à bon droit, avec le cas réel qui les rend actifs.<br>Elle montre la liste à Julien. Chaque groupe de défauts devient un point de correctif, avec son e2e qui clique (D342). | — |
 | **D345** | **Le garde de couverture.**<br>• **Le relevé des clics.** Un script d'init (`context.addInitScript`), posé par une fixture commune à tous les e2e, écoute les clics en phase de capture. Il note le `data-node` le plus proche de chaque clic. À la fin de chaque test, la fixture ajoute ces ids à un fichier de relevé sous `$TMPDIR`.<br>• **L'inventaire.** L'explorateur en sort un : `e2e/audit/inventaire.json`, commité, avec les `data-node` des éléments interactifs, normalisés (les segments variables, comme un id de sujet, sont remplacés par `*`).<br>• **Le contrôle.** Après `gate:e2e`, `npm run couverture:ui` compare le relevé à l'inventaire. Un élément de l'inventaire qui n'a jamais été cliqué fait échouer la CI, sauf s'il figure dans `e2e/audit/non-couverts.json`, avec une raison.<br>• **Le cliquet.** La liste `non-couverts.json` part de l'état de l'audit, et elle ne peut que diminuer. Un élément nouveau ne peut pas y entrer sans une raison relue par la cell de gestion.<br>• **Un élément interactif sans `data-node`** compte comme non couvert. | Julien : « audit, puis garde ». |
+| **D346** | **Le détecteur visuel.** La revue des captures du 56.7 trouve des défauts visuels sur 45 vues sur 68. L'explorateur ne les voit pas, parce qu'il ne regarde que le comportement. Un module `e2e/visuel.ts` les cherche dans le navigateur, sur la page affichée, à partir des styles calculés et des boîtes :<br>• **le style par défaut** : un `button`, un `input`, un `select`, un `textarea` ou une case à cocher dont le fond, la bordure ou la couleur du texte sont ceux du navigateur ; un lien dont la couleur est le bleu ou le violet par défaut ;<br>• **le contraste** : un texte visible dont le contraste avec son fond est sous 4,5:1 (3:1 pour un gros texte, ou un élément désactivé qui l'annonce) ;<br>• **le débordement** : un élément dont le contenu dépasse sa boîte (`scrollWidth > clientWidth + 1`) sans conteneur qui défile, ou qui sort de la fenêtre ;<br>• **le texte écrasé** : un libellé court qui passe sur plus de lignes que de mots, comme un mot écrit une lettre par ligne ou coupé en plein milieu ;<br>• **le chevauchement** : deux textes frères dont les boîtes se recouvrent.<br>Chaque trouvaille donne l'écran, le format, le sélecteur ou le `data-node`, la règle et les mesures. L'explorateur l'appelle sur chaque vue, et son rapport gagne une classe `visuel`. Une liste d'exceptions écrite dans le code, avec une raison par entrée, couvre par exemple la zone de xterm. | Cell de gestion, 16 novembre, après la revue des captures du 56.7. |
 
 ## 3. Les points
 
@@ -99,9 +100,38 @@ L'explorateur remplit les champs, accepte les confirmations dans un daemon jetab
     L'audit ne voit aucun de ces défauts, parce qu'il ne regarde que le comportement. Ils sont confiés au 56.8, et leur détection automatique au 56.g.
   - Résultats : gate 4 176, gate:e2e 149, `audit-essai` trois fois de suite en moins de deux minutes.
 
+### 56.8 Le détecteur visuel, les éléments natifs et les débordements (D346)
+
+- Le module `e2e/visuel.ts` de D346, et son branchement dans l'explorateur, avec la classe `visuel`.
+- **Les éléments natifs sans style.** Un style de base commun, dans les trois apps (Mac, appareil, PDA), pour `button`, `input`, `select`, `textarea`, les cases à cocher et les liens, aux couleurs du thème, en clair comme en sombre. Écrans concernés : `/swarph` (« Écrire au mesh (à blanc) », la ligne de la demande d'avis, « Relire les demandes au mesh »), Boîte de réception (« Répondre (à blanc) »), carte du board (« Écrire une note (à blanc) »), `/swarph/federation` (le champ Requête), `/swarph/memoire` (la liste Filtre), le PDA (« Actualiser », le champ du numéro), Réglages et Machines (les cases), et tous les liens de l'app de l'appareil. Le champ du relais désactivé doit rester lisible dans le thème sombre.
+- **Les débordements sur téléphone.**
+  - La barre d'outils sous le champ de saisie d'une discussion : « claude · » s'écrit une lettre par ligne, et les libellés se chevauchent.
+  - Les tableaux « Graphe d'étapes » et « Obligations » de la carte du board : les colonnes se chevauchent, et les mots sont coupés en plein milieu.
+  - Le tableau de l'Accueil, dont la colonne Agent est coupée.
+  - Le tableau « Combinaisons disponibles » de Machines.
+  - « Reprendre » dans Serveurs.
+  - Le badge « Injoignable » de la barre de gauche.
+  - Un mot n'est jamais coupé en son milieu. Un tableau trop large défile dans son conteneur, ou passe en lignes empilées.
+- **Le libellé collé** « peer-agéré par le proxy » de la barre de gauche.
+- **Les tests (D342).** Pour chaque écran corrigé, un e2e l'affiche aux deux formats et appelle le détecteur : aucune trouvaille sur les éléments corrigés. Il clique aussi les boutons concernés. Un test unitaire du détecteur, sur des pages synthétiques : un bouton natif, un lien bleu, un texte pâle, un débordement, un mot écrit une lettre par ligne, un chevauchement, chacun détecté. Une page propre ne donne rien.
+
+### 56.9 La mise en page de Machines, les textes bruts et les petits écarts
+
+- **Machines** : le cadre « Appareils PDA » (marges, colonnes, « Révoquer » qui déborde), les dates ISO brutes, la liste des confirmations (dix « Paramètres signés » sans espacement), le cadre « Mac local · ici ».
+- **Les textes bruts** : « (agents.transport: pty) » dans Livraison ; l'erreur shell brute dans la carte d'un serveur de la barre de gauche ; « active » non traduit ; les valeurs connues du board (`not-taken`, `withdrawn`, `requested`, `unstaffable`), affichées en français. Le texte libre venu du mesh reste tel quel, mais il passe proprement à la ligne.
+- **Les petits écarts** :
+  - le tableau de `/swarph/cells` : en-têtes, séparateurs, tiret pour une valeur vide ;
+  - la taille des cases et le vide dans la configuration d'un serveur ;
+  - l'alignement du bandeau « BLOQUÉ » ;
+  - la largeur de la barre de gauche sur la page d'un sujet ;
+  - la section « Contrôles » vide ;
+  - « Bloqué : aucune PR ouverte. » centré ;
+  - l'onglet actif des sous-onglets swarph.
+- **Les tests (D342)**, comme au 56.8.
+
 ### 56.g Le garde (D345)
 
-Il vient après les correctifs, pour que la liste de départ soit courte.
+Il vient après les correctifs, pour que la liste de départ soit courte. Le garde de couverture de D345 s'y ajoute. Le branchement du détecteur visuel dans la CI attend le oui de Julien : il ferait échouer `gate:e2e` sur toute trouvaille hors exceptions, dans les écrans que les e2e affichent.
 
 ## 4. Pièges
 
