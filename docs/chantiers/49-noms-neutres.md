@@ -67,6 +67,7 @@ Julien a demandé que les noms de ses projets personnels sortent aussi du dépô
 - D326 s'applique : l'historique git ne change pas, et le propriétaire du dépôt reste dans les URL GitHub.
 - La garde `test/noms-neutres.test.ts` reçoit les empreintes de ces six noms, pour tous les fichiers suivis.
 - **Tests :** le gate entier, sans attente modifiée autrement que par le remplacement, et la garde qui échoue si l'un des six noms revient.
+- _Révision 49.3._ 20 fichiers, 149 lignes remplacées, aucun fichier renommé. Gate 4 167. La garde découpe aussi sur `_` et `-`, et le gate reste vert avec ce découpage sur tout le dépôt.
 
 ## 4. Pièges
 

@@ -79,21 +79,21 @@ class Component extends DCLogic {
       Object.assign({ branch, project, step, note, agent, when, cta, border: border || '#23272e' }, style);
     const columns = [
       { title: 'À décider', color: '#f2b84b', count: 1, hint: 'attend ta réponse', cards: [
-        card('feat/restart-dev', 'orgasso', 'restart-dev', 'Sujet swairm/capacitor-socle garé (plan v1). Décision #1 ouverte.', 'swairm-cell · libre', '18 min', 'Trancher', primary, '#5a4514')
+        card('feat/restart-dev', 'projet-d', 'restart-dev', 'Sujet swairm/capacitor-socle garé (plan v1). Décision #1 ouverte.', 'swairm-cell · libre', '18 min', 'Trancher', primary, '#5a4514')
       ] },
       { title: 'Récents', color: '#6ea8ff', count: 4, hint: 'moins de 24 h', cards: [
-        card('feat/lieutenants', 'descent-wf', 'lieutenants', 'Agent libre. Index à jour.', 'claude · libre', '2 min', 'Reprendre', plain),
+        card('feat/lieutenants', 'projet-a', 'lieutenants', 'Agent libre. Index à jour.', 'claude · libre', '2 min', 'Reprendre', plain),
         card('swairm-cli-interact', 'swairm', 'move_to_cli', 'Agent libre. Index à jour.', 'claude · libre', '58 min', 'Reprendre', plain),
         card('docs/cell-swairm-rewrap', 'a-i-d', 'remote-origin-missing', 'Agent libre. Origine distante absente.', 'claude · libre', '10 h', 'Reprendre', plain),
-        card('refactor/minimal-examples', 'skifer', 'improve_skifer_supervisor', 'Aucun agent lancé.', 'aucun agent', 'maintenant', 'Lancer un agent', plain)
+        card('refactor/minimal-examples', 'projet-b', 'improve_projet_b_supervisor', 'Aucun agent lancé.', 'aucun agent', 'maintenant', 'Lancer un agent', plain)
       ] },
       { title: 'Dormants', color: '#5b616c', count: 3, hint: 'plus de 7 jours', cards: [
-        card('feat/supports-pagination-formats', 'myskooli', 'review_parent_mode', 'Agent libre depuis 10 jours.', 'claude · libre', '10 j', 'Reprendre', plain),
+        card('feat/supports-pagination-formats', 'projet-c', 'review_parent_mode', 'Agent libre depuis 10 jours.', 'claude · libre', '10 j', 'Reprendre', plain),
         card('feat/refacto', 'agent-kernel', 'refacto', 'Aucun agent. Index indisponible.', 'aucun agent', '10 j', 'Lancer un agent', plain),
-        card('fix/update-demo', 'demo-sts', 'update_demo', 'Aucun agent. Index indisponible.', 'aucun agent', '9 j', 'Lancer un agent', plain)
+        card('fix/update-demo', 'projet-f', 'update_demo', 'Aucun agent. Index indisponible.', 'aucun agent', '9 j', 'Lancer un agent', plain)
       ] }
     ];
-    return { projects: ['a-i-d', 'agent-kernel', 'demo-sts', 'descent-wf', 'myskooli', 'orgasso', 'skifer', 'swairm'], columns };
+    return { projects: ['a-i-d', 'agent-kernel', 'projet-f', 'projet-a', 'projet-c', 'projet-d', 'projet-b', 'swairm'], columns };
   }
 }
 </script>

@@ -41,7 +41,7 @@ Swairm (`754697c`) et déployée dans `~/.swairm/deploy` ; `swairm --version` r�
       seule fois au démarrage, et c'est elle qui décide à la fois de l'apparition du bouton
       (`server.ts`) et du lancement (`manager.ts`). Changer `swairm.bin` sans redémarrer ne change
       rien, ni dans un sens ni dans l'autre
-- [x] Un sujet actif avec worktree, sur un projet doté d'un board (`morzu117/Orgasso`).
+- [x] Un sujet actif avec worktree, sur un projet doté d'un board (`morzu117/projet-d`).
       Dépôt sans board et dépôt sans origin pour les replis S2 : **non disponibles au moment
       de la recette**, 14.d non testée. Q1 et Q4 : voir « Ce que la recette a révélé »
 
@@ -115,11 +115,11 @@ prouvé par `test/reprise.test.ts` ; la recette vérifie le cycle réel.
 ## Ce que la recette a révélé
 
 **Recette déroulée partiellement le 2026-10-26**, sur release A-I-D 0.4.0 et `swairm` 0.0.0
-(board-schema=1, commit 754697c), sujet `morzu117/Orgasso` (worktree `restart-dev`).
+(board-schema=1, commit 754697c), sujet `morzu117/projet-d` (worktree `restart-dev`).
 14.a, 14.b, 14.c et 14.e passent. 14.d non testable (pas de dépôt de repli disponible).
 14.f partiellement fait. 14.g à 14.j non déroulées (reportées).
 
-- **14.b/14.c — projet déduit, commandes de base** : l'invite s'ouvre sur `morzu117/Orgasso`
+- **14.b/14.c — projet déduit, commandes de base** : l'invite s'ouvre sur `morzu117/projet-d`
   sans avoir passé `--project`, la déduction par l'`origin` fonctionne. `help`, `status`,
   `inbox`, `events` répondent correctement avec un contenu cohérent. `clear` n'est pas une
   commande connue (`commande inconnue : clear (tape help)`) — comportement correct, documenté

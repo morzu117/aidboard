@@ -42,7 +42,7 @@ button{font-family:inherit;cursor:pointer}
 <span style="width: 10px; height: 10px; border-radius: 50%; background: #f2b84b; flex-shrink: 0"></span>
 <div style="flex-grow: 1; min-width: 0">
 <div style="font-weight: 500">Sujet swairm/capacitor-socle garé (plan v1)</div>
-<div style="font-size: 12px; color: #a99a73; margin-top: 3px; font-family: 'JetBrains Mono', monospace">orgasso · feat/restart-dev · décision #1 · il y a 18 min</div>
+<div style="font-size: 12px; color: #a99a73; margin-top: 3px; font-family: 'JetBrains Mono', monospace">projet-d · feat/restart-dev · décision #1 · il y a 18 min</div>
 </div>
 <button style="background: #5de0a1; color: #06251a; border: 0; border-radius: 8px; padding: 8px 12px; font-weight: 600; font-size: 13px">Relancer le plan</button>
 <button style="background: #16191e; color: #e6e8eb; border: 1px solid #23272e; border-radius: 8px; padding: 8px 12px; font-size: 13px">Ouvrir le sujet</button>
@@ -108,19 +108,19 @@ class Component extends DCLogic {
     const g = '#5b616c', b = '#6ea8ff', a = '#f2b84b', m = '#5de0a1';
     const row = (branch, step, project, agent, index, when, dot, agentColor) => ({ branch, step, project, agent, index, when, dot, agentColor: agentColor || '#8d94a0', cta: agent === 'aucun agent' ? 'Lancer' : 'Reprendre', btnBg: '#16191e', btnColor: '#e6e8eb', btnBorder: '1px solid #23272e' });
     const rows = [
-      Object.assign(row('feat/restart-dev', 'restart-dev', 'orgasso', 'swairm-cell · libre', 'indisponible', 'il y a 18 min', a, '#c4c9d2'), { cta: 'Trancher', btnBg: '#5de0a1', btnColor: '#06251a', btnBorder: '0' }),
-      row('feat/lieutenants', 'lieutenants', 'descent-wf', 'claude · libre', 'à jour', 'il y a 2 min', b, '#c4c9d2'),
+      Object.assign(row('feat/restart-dev', 'restart-dev', 'projet-d', 'swairm-cell · libre', 'indisponible', 'il y a 18 min', a, '#c4c9d2'), { cta: 'Trancher', btnBg: '#5de0a1', btnColor: '#06251a', btnBorder: '0' }),
+      row('feat/lieutenants', 'lieutenants', 'projet-a', 'claude · libre', 'à jour', 'il y a 2 min', b, '#c4c9d2'),
       row('swairm-cli-interact', 'move_to_cli', 'swairm', 'claude · libre', 'à jour', 'il y a 58 min', g, '#c4c9d2'),
       row('docs/cell-swairm-rewrap', 'remote-origin-missing', 'a-i-d', 'claude · libre', 'à jour', 'il y a 10 h', g, '#c4c9d2'),
-      row('refactor/minimal-examples', 'improve_skifer_supervisor', 'skifer', 'aucun agent', 'à jour', 'à l\'instant', g),
-      row('fix/update-demo', 'update_demo', 'demo-sts', 'aucun agent', 'indisponible', 'il y a 9 j', g),
+      row('refactor/minimal-examples', 'improve_projet_b_supervisor', 'projet-b', 'aucun agent', 'à jour', 'à l\'instant', g),
+      row('fix/update-demo', 'update_demo', 'projet-f', 'aucun agent', 'indisponible', 'il y a 9 j', g),
       row('feat/refacto', 'refacto', 'agent-kernel', 'aucun agent', 'indisponible', 'il y a 10 j', g),
-      row('feat/supports-pagination-formats', 'review_parent_mode', 'myskooli', 'claude · libre', 'à jour', 'il y a 10 j', g, '#c4c9d2')
+      row('feat/supports-pagination-formats', 'review_parent_mode', 'projet-c', 'claude · libre', 'à jour', 'il y a 10 j', g, '#c4c9d2')
     ];
     const feed = [
-      { time: '09:48', ev: 'lease_released', where: 'swairm-cell · orgasso' },
-      { time: '09:48', ev: 'lease_acquired', where: 'swairm-cell · orgasso' },
-      { time: '09:40', ev: 'lease_released', where: 'swairm-cell · orgasso' },
+      { time: '09:48', ev: 'lease_released', where: 'swairm-cell · projet-d' },
+      { time: '09:48', ev: 'lease_acquired', where: 'swairm-cell · projet-d' },
+      { time: '09:40', ev: 'lease_released', where: 'swairm-cell · projet-d' },
       { time: '13:00', ev: 'decision_opened', where: 'swairm/capacitor-socle' },
       { time: '13:00', ev: 'extraction', where: 'swairm/capacitor-socle' },
       { time: '13:00', ev: 'branch_pushed', where: 'swairm/capacitor-socle' },
