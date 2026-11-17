@@ -7,6 +7,7 @@ import {
   rmSync,
   writeFileSync,
 } from 'node:fs';
+import { hostname } from 'node:os';
 import { dirname, join, relative, sep } from 'node:path';
 import { git, type GitResult } from '../git/exec.js';
 import { assertMemSlug, isValidMemSlug } from './slug.js';
@@ -35,6 +36,104 @@ export class MemoryMirror {
   private timer: NodeJS.Timeout | null = null;
   private chain: Promise<void> = Promise.resolve();
   push = false;
+  // Le service sérialise aussi le tirage avec les écritures de pages.
+  synchronize: (action: () => Promise<void>) => Promise<void> = (action) => action();
+  readonly pulledSlugs = new Set<string>();
+
+  get conflicts(): string[] {
+    const marker = join(this.root, '.git', 'aid-memory-conflicts.json');
+    return existsSync(marker) ? (JSON.parse(readFileSync(marker, 'utf8')) as string[]) : [];
+  }
+
+  async pull(): Promise<void> {
+    await this.synchronize(async () => {
+      await this.pullFromOrigin();
+    });
+  }
+
+  private async pullFromOrigin(): Promise<boolean> {
+    if (this.conflicts.length > 0) {
+      this.log('miroir mémoire : conflit en attente, synchronisation arrêtée');
+      return false;
+    }
+    if (!this.push) return false;
+    if (!(await this.exec(this.root, ['remote', 'get-url', 'origin'])).ok) return false;
+    const fail = (message: string) => {
+      this.log(`miroir mémoire : ${message}`);
+      return false;
+    };
+    const fetched = await this.exec(this.root, ['fetch', '-q', 'origin']);
+    if (!fetched.ok) return fail(`git fetch a échoué : ${fetched.stderr}`);
+    const branch = await this.exec(this.root, ['symbolic-ref', '--quiet', '--short', 'HEAD']);
+    if (!branch.ok) return fail('branche du miroir absente');
+    const remote = `refs/remotes/origin/${branch.stdout}`;
+    if (!(await this.exec(this.root, ['rev-parse', '--verify', remote])).ok) return true;
+    const before = await this.exec(this.root, ['rev-parse', '--verify', 'HEAD']);
+    if (await this.dirty()) return fail('fichiers non commités, tirage différé');
+    const ff = await this.exec(this.root, ['merge', '--ff-only', remote]);
+    if (!ff.ok) {
+      // Garder le contenu exact du sommet local, même si plusieurs commits sont rejoués.
+      const local = new Map<string, string>();
+      for await (const page of this.readAll()) local.set(page.slug, page.text);
+      const rebase = await this.exec(this.root, ['-c', 'rerere.enabled=false', 'rebase', remote]);
+      if (!rebase.ok) {
+        const unmerged = await this.exec(this.root, [
+          'diff',
+          '--name-only',
+          '--diff-filter=U',
+          '-z',
+        ]);
+        const paths = unmerged.stdout.split('\0').filter(Boolean);
+        const slugs = paths
+          .filter((path) => path.endsWith('.md') && isValidMemSlug(path.slice(0, -3)))
+          .map((path) => path.slice(0, -3));
+        // Le marqueur survit au redémarrage ; aucune nouvelle tentative ne résout le conflit.
+        writeFileSync(
+          join(this.root, '.git', 'aid-memory-conflicts.json'),
+          JSON.stringify(paths.length > 0 ? paths : ['rebase interrompu']),
+          { mode: 0o600 },
+        );
+        const aborted = await this.exec(this.root, ['rebase', '--abort']);
+        if (!aborted.ok) return fail(`git rebase --abort a échoué : ${aborted.stderr}`);
+        const machine =
+          hostname()
+            .toLowerCase()
+            .replace(/[^a-z0-9._-]/g, '-') || 'local';
+        for (const slug of slugs) {
+          const text = local.get(slug);
+          if (text !== undefined) {
+            const copy = `${slug}.conflit-${machine}`;
+            writeFileSync(join(this.root, `${copy}.md`), text, { mode: 0o600, flag: 'wx' });
+            if (isValidMemSlug(copy)) this.pulledSlugs.add(copy);
+          }
+          const restored = await this.exec(this.root, [
+            'restore',
+            '--source',
+            remote,
+            '--worktree',
+            '--',
+            `${slug}.md`,
+          ]);
+          if (!restored.ok) return fail(`copie distante du conflit : ${restored.stderr}`);
+          this.pulledSlugs.add(slug);
+        }
+        return fail(`conflit en attente : ${paths.join(', ') || rebase.stderr}`);
+      }
+    }
+    const changed = await this.exec(
+      this.root,
+      before.ok
+        ? ['diff', '--name-only', '--no-renames', '-z', before.stdout, 'HEAD']
+        : ['ls-tree', '-r', '--name-only', '-z', 'HEAD'],
+    );
+    if (!changed.ok) return fail(`lecture des pages tirées : ${changed.stderr}`);
+    for (const path of changed.stdout.split('\0')) {
+      if (path.endsWith('.md') && isValidMemSlug(path.slice(0, -3))) {
+        this.pulledSlugs.add(path.slice(0, -3));
+      }
+    }
+    return true;
+  }
 
   constructor(
     readonly root: string,
@@ -61,6 +160,11 @@ export class MemoryMirror {
         await this.exec(this.root, ['config', key, value]);
       }
     }
+    // Un dépôt neuf peut avancer vers origin sans fabriquer un historique concurrent.
+    const unborn = !(await this.exec(this.root, ['rev-parse', '--verify', 'HEAD'])).ok;
+    if (unborn && readFileSync(ignore, 'utf8') === '') rmSync(ignore);
+    await this.pull();
+    if (!existsSync(ignore)) writeFileSync(ignore, '', { mode: 0o600 });
   }
 
   pathOf(slug: string): string {
@@ -100,6 +204,11 @@ export class MemoryMirror {
   }
 
   private async commit(messages: string[]): Promise<void> {
+    await this.synchronize(() => this.commitAndPush(messages));
+  }
+
+  private async commitAndPush(messages: string[]): Promise<void> {
+    if (this.conflicts.length > 0) return this.log('miroir mémoire : conflit en attente');
     const add = await this.exec(this.root, ['add', '-A']);
     if (!add.ok) return this.log(`miroir mémoire : git add a échoué : ${add.stderr}`);
     if ((await this.exec(this.root, ['diff', '--cached', '--quiet'])).ok) return;
@@ -116,6 +225,12 @@ export class MemoryMirror {
   async pushIfConfigured(): Promise<void> {
     if (!this.push) return;
     if (!(await this.exec(this.root, ['remote', 'get-url', 'origin'])).ok) return;
+    if (!(await this.pullFromOrigin())) return;
+    if (!(await this.exec(this.root, ['rev-parse', '--verify', '@{upstream}'])).ok) {
+      const first = await this.exec(this.root, ['push', '-q', '-u', 'origin', 'HEAD']);
+      if (!first.ok) this.log(`miroir mémoire : git push a échoué : ${first.stderr}`);
+      return;
+    }
     const r = await this.exec(this.root, ['push', '-q']);
     if (!r.ok) this.log(`miroir mémoire : git push a échoué : ${r.stderr}`);
   }

@@ -165,6 +165,29 @@ export class MemoryService {
     });
   }
 
+  // DM12 : seuls les fichiers touchés par le tirage sont relus, sans réécrire le miroir.
+  synchronizeMirror(action: () => Promise<void>): Promise<void> {
+    return this.deps.queue.run(QUEUE_KEY, async () => {
+      const { store, mirror } = this.deps;
+      await action();
+      for (const slug of mirror.pulledSlugs) {
+        let text: string;
+        try {
+          text = readFileSync(mirror.pathOf(slug), 'utf8');
+        } catch (err) {
+          if ((err as NodeJS.ErrnoException).code !== 'ENOENT') throw err;
+          store.remove(slug);
+          this.deps.onRemove?.(slug);
+          mirror.pulledSlugs.delete(slug);
+          continue;
+        }
+        store.put(slug, text, { kind: 'force' }, 'mirror');
+        this.deps.onWrite?.(slug);
+        mirror.pulledSlugs.delete(slug);
+      }
+    });
+  }
+
   // Le miroir fait foi : on vide l'index et on relit chaque fichier.
   reindex(): Promise<{ pages: number }> {
     return this.deps.queue.run(QUEUE_KEY, async () => {

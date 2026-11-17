@@ -198,6 +198,8 @@ export async function startDaemon(
       if (hybridOn) worker?.start();
       else log('ollama injoignable : recherche FTS5 seule');
     }
+    mirror.synchronize = (action) => memory.synchronizeMirror(action);
+    await memory.synchronizeMirror(async () => {});
     let maintenanceTimer: NodeJS.Timeout | null = null;
     if (chatModel) {
       worker?.start();
