@@ -1,4 +1,5 @@
 import * as sqliteVec from 'sqlite-vec';
+import { LESSON_NS } from '../../shared/memory.js';
 import type { Db } from '../db.js';
 
 export interface Embedder {
@@ -160,11 +161,11 @@ export class VectorIndex {
         `SELECT v.slug, vec_distance_cosine(v.embedding, origin.embedding) AS distance
          FROM memory_vectors v JOIN memory_pages p ON p.slug = v.slug
          CROSS JOIN memory_vectors origin
-         WHERE origin.slug = ? AND v.slug != origin.slug AND p.namespace = 'lesson'
+         WHERE origin.slug = ? AND v.slug != origin.slug AND p.namespace = ?
            AND vec_distance_cosine(v.embedding, origin.embedding) <= ?
          ORDER BY distance, v.slug LIMIT 3`,
       )
-      .all(slug, distance) as Array<{ slug: string; distance: number }>;
+      .all(slug, LESSON_NS, distance) as Array<{ slug: string; distance: number }>;
   }
 
   count(): number {

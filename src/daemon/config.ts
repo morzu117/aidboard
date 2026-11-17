@@ -21,6 +21,7 @@ import {
 } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import { parse, parseDocument } from 'yaml';
+import { DEFAULT_DUPLICATE_DISTANCE } from '../shared/memory.js';
 import type { AidPaths } from './paths.js';
 
 export interface AidConfig {
@@ -139,7 +140,7 @@ export const DEFAULT_CONFIG: AidConfig = {
       enabled: false,
       model: 'qwen3:8b',
       window: '02:00-06:00',
-      duplicateDistance: 0.15,
+      duplicateDistance: DEFAULT_DUPLICATE_DISTANCE,
       maxPerNight: 20,
       splitLines: 40,
     },
@@ -710,7 +711,7 @@ const DEFAULT_FILE = `# Configuration d'A-I-D. Tout est facultatif : ce sont les
 #     enabled: false         # propositions (tags, doublons, découpage) par un modèle local, jamais appliquées sans clic
 #     model: qwen3:8b
 #     window: "02:00-06:00"
-#     duplicateDistance: 0.15 # distance cosinus maximale des candidats doublons (]0, 2])
+#     duplicateDistance: ${DEFAULT_DUPLICATE_DISTANCE} # distance cosinus maximale des candidats doublons (]0, 2])
 #     maxPerNight: 20        # jobs créés depuis le début de la fenêtre courante
 #     splitLines: 40         # découpage au-delà de ce nombre de lignes non vides
 #   git:

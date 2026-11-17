@@ -238,6 +238,9 @@ export class MemoryStore {
       if (!r) return false;
       this.ftsDelete(r);
       this.db.prepare('DELETE FROM memory_pages WHERE slug = ?').run(slug);
+      this.db
+        .prepare('DELETE FROM memory_duplicate_pairs WHERE slug_a = ? OR slug_b = ?')
+        .run(slug, slug);
       return true;
     })();
   }

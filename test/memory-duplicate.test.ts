@@ -8,6 +8,7 @@ import { VectorIndex } from '../src/daemon/memory/embed.js';
 import { MemoryJobs } from '../src/daemon/memory/jobs.js';
 import { type ChatModel, MemoryProposals, runMaintainJob } from '../src/daemon/memory/maintain.js';
 import { MemoryStore } from '../src/daemon/memory/store.js';
+import { startTestDaemon, waitFor } from './helpers/daemon.js';
 
 let home: string;
 let db: Db;
@@ -191,5 +192,125 @@ test('duplicateDistance : défaut, bornes et valeurs invalides', () => {
     expect(() =>
       parseConfig(`memory:\n  maintenance:\n    duplicateDistance: ${distance}`),
     ).toThrow('duplicateDistance');
+  }
+});
+
+test.each(['lesson/test/a', source])(
+  'suppression de %s : la paire est rejugée après recréation',
+  async (slug) => {
+    page(source);
+    page('lesson/test/a');
+    await run();
+    expect(pairs()).toHaveLength(1);
+    expect(store.remove(slug)).toBe(true);
+    expect(pairs()).toEqual([]);
+    page(slug);
+    expect(store.get(slug)?.revision).toBe(1);
+    await run();
+    expect(chat).toHaveBeenCalledTimes(2);
+    expect(pairs()).toHaveLength(1);
+  },
+);
+
+test('échec de création : aucun oui enregistré, puis nouvelle tentative', async () => {
+  page(source);
+  page('lesson/test/a');
+  chat.mockResolvedValue('{"doublon":true,"rationale":"même leçon"}');
+  const create = vi.spyOn(proposals, 'create').mockImplementationOnce(() => {
+    throw new Error('création impossible');
+  });
+  await expect(run()).rejects.toThrow('création impossible');
+  expect(pairs()).toEqual([]);
+  expect(proposals.list()).toEqual([]);
+  await run();
+  expect(chat).toHaveBeenCalledTimes(2);
+  expect(proposals.list()).toHaveLength(1);
+  expect(pairs()[0]).toMatchObject({ verdict: 'oui' });
+  create.mockRestore();
+});
+
+test('vecteur orphelin : aucun candidat absent du store n’est jugé', async () => {
+  page(source);
+  vectors.upsert('lesson/test/absente', new Float32Array([1, 0]));
+  await run();
+  expect(chat).not.toHaveBeenCalled();
+  expect(pairs()).toEqual([]);
+  expect(proposals.list()).toEqual([]);
+});
+
+test('oui déjà jugé : relance symétrique et après décision sans seconde proposition', async () => {
+  page(source);
+  page('lesson/test/a');
+  chat.mockResolvedValue('{"doublon":true,"rationale":"même leçon"}');
+  await run();
+  await run();
+  await run('lesson/test/a');
+  proposals.decide(proposals.list()[0]!.id, 'rejected');
+  await run();
+  expect(chat).toHaveBeenCalledTimes(1);
+  expect(proposals.list()).toHaveLength(1);
+  expect(pairs()).toHaveLength(1);
+});
+
+test.each([0.1, 0.3])('daemon : vecteurs et seuil %s transmis au job doublon', async (distance) => {
+  const embed = vi.fn(async (texts: string[]) =>
+    texts.map((content) => new Float32Array(content.includes('Candidate') ? [0.8, 0.6] : [1, 0])),
+  );
+  const t = await startTestDaemon(join(home, 'daemon'), {
+    config: {
+      memory: {
+        embeddings: { provider: 'off', model: 'fake', url: 'http://127.0.0.1:1' },
+        maintenance: {
+          enabled: false,
+          model: 'fake',
+          window: '00:00-00:00',
+          duplicateDistance: distance,
+        },
+        git: { push: false },
+      },
+    },
+    memory: {
+      embedder: { model: 'fake', ready: async () => true, embed },
+      chatModel: { chat },
+      pollMs: 5,
+    },
+  });
+  try {
+    for (const [slug, body] of [
+      [source, text],
+      ['lesson/test/a', `${text} Candidate`],
+    ]) {
+      const response = await t.d.app.inject({
+        method: 'PUT',
+        url: `/api/memory/pages/${slug}`,
+        headers: t.headers,
+        payload: { text: body },
+      });
+      expect(response.statusCode).toBe(201);
+    }
+    await waitFor(
+      () =>
+        (
+          t.db
+            .prepare(
+              "SELECT count(*) AS n FROM memory_jobs WHERE kind = 'embed' AND state = 'done'",
+            )
+            .get() as { n: number }
+        ).n === 2,
+    );
+    const id = new MemoryJobs(t.db).enqueue('maintain', source);
+    await waitFor(
+      () =>
+        (t.db.prepare('SELECT state FROM memory_jobs WHERE id = ?').get(id) as { state: string })
+          .state === 'done',
+    );
+    expect(embed).toHaveBeenCalled();
+    expect(chat).toHaveBeenCalledTimes(distance > 0.2 ? 1 : 0);
+    expect(t.db.prepare('SELECT * FROM memory_duplicate_pairs').all()).toHaveLength(
+      distance > 0.2 ? 1 : 0,
+    );
+    if (distance > 0.2) expect(chat.mock.calls[0]?.[1]).toContain('Candidat : lesson/test/a');
+  } finally {
+    await t.d.stop();
   }
 });

@@ -7,7 +7,7 @@ import type {
   ProposalKind,
   ProposalState,
 } from '../../shared/memory.js';
-import { LESSON_NS } from '../../shared/memory.js';
+import { DEFAULT_DUPLICATE_DISTANCE, LESSON_NS } from '../../shared/memory.js';
 import type { Db } from '../db.js';
 import type { VectorIndex } from './embed.js';
 import type { MemoryJob, MemoryJobs } from './jobs.js';
@@ -292,7 +292,10 @@ async function runTags(
 
 async function runDuplicate(page: MemoryPage, deps: MaintainDeps): Promise<void> {
   const candidates =
-    deps.vectors?.duplicateCandidates(page.slug, deps.duplicateDistance ?? 0.15) ?? [];
+    deps.vectors?.duplicateCandidates(
+      page.slug,
+      deps.duplicateDistance ?? DEFAULT_DUPLICATE_DISTANCE,
+    ) ?? [];
   for (const hit of candidates) {
     const candidate = deps.store.get(hit.slug);
     if (!candidate || deps.store.duplicatePairJudged(page, candidate)) continue;
@@ -304,7 +307,6 @@ async function runDuplicate(page: MemoryPage, deps: MaintainDeps): Promise<void>
     if (!Value.Check(DuplicatePayload, payload)) {
       throw new Error('proposition duplicate : forme JSON invalide');
     }
-    deps.store.recordDuplicatePair(page, candidate, payload.doublon ? 'oui' : 'non');
     if (payload.doublon) {
       deps.proposals.create(
         'duplicate',
@@ -312,8 +314,10 @@ async function runDuplicate(page: MemoryPage, deps: MaintainDeps): Promise<void>
         { duplicateOf: candidate.slug, rationale: payload.rationale },
         payload.rationale,
       );
+      deps.store.recordDuplicatePair(page, candidate, 'oui');
       return;
     }
+    deps.store.recordDuplicatePair(page, candidate, 'non');
   }
 }
 
