@@ -1,3 +1,4 @@
+import type { CodeRefusCommandant } from '../../../src/shared/commandant-reponse.js';
 import type { ActionEcriture, ParametresEcriture } from '../../../src/shared/ecritures.js';
 import { AidApiError } from './api.js';
 import type { AidClient } from './client.js';
@@ -25,6 +26,7 @@ export function apercuEcriture<A extends ActionEcriture>(
 }
 
 export type CodeEnvoi =
+  | CodeRefusCommandant
   | 'proxy_lecture_seule'
   | 'demande_trop_grande'
   | 'obligation-close'

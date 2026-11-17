@@ -1,7 +1,8 @@
 import { createHash } from 'node:crypto';
 
-const unicodeValide = (texte: string): boolean =>
-  !/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/.test(texte);
+import { texteCommandantValide } from './commandant-texte.js';
+import { unicodeValide } from './commandant-texte.js';
+export { texteCommandantValide, longueurCommandant } from './commandant-texte.js';
 
 export type JsonCommandant =
   null | boolean | number | string | JsonCommandant[] | { [cle: string]: JsonCommandant };
@@ -63,17 +64,6 @@ export const STATUTS_COMMANDANT = [
   'withdrawn',
 ] as const;
 export type StatutCommandant = (typeof STATUTS_COMMANDANT)[number];
-/* eslint-disable no-control-regex, no-misleading-character-class -- chaque caractère de ces plages est refusé */
-const INTERDITS =
-  /[\u0000-\u001f\u007f-\u009f\u00ad\u034f\u061c\u180e\u200b-\u200f\u2028-\u202e\u2060-\u206f\ufeff]/u;
-/* eslint-enable no-control-regex, no-misleading-character-class */
-export const longueurCommandant = (texte: string): number => [...texte].length;
-export const texteCommandantValide = (texte: unknown, maximum: number): texte is string =>
-  typeof texte === 'string' &&
-  unicodeValide(texte) &&
-  longueurCommandant(texte) <= maximum &&
-  !INTERDITS.test(texte);
-
 /** Retourne un instant, jamais une chaîne comparable lexicalement. */
 export function dateCommandant(valeur: unknown): number | null {
   if (typeof valeur !== 'string') return null;
@@ -172,6 +162,7 @@ export function controlerLigneCommandant(entree: unknown): ControleCommandant {
     id === null ||
     typeof v.type !== 'string' ||
     !v.type ||
+    !texteCommandantValide(v.type, 100) ||
     !v.params ||
     typeof v.params !== 'object' ||
     Array.isArray(v.params)

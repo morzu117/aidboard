@@ -119,12 +119,17 @@ export class ServiceCommandant {
       erreur: null,
     };
   }
-  async battement(mesh: string): Promise<void> {
+  async battement(mesh: string, ouvertureForcee = false): Promise<void> {
     const e = this.obtenir(mesh);
     const ouverture = e.ouvertJusqua <= this.maintenant();
     e.ouvertJusqua = this.maintenant() + 65_000;
-    if (ouverture) await this.actualiser(mesh);
-    else this.programmer(mesh, e);
+    const derniere = e.etat.derniereLecture ? Date.parse(e.etat.derniereLecture) : -Infinity;
+    if (ouvertureForcee ? this.maintenant() - derniere > 10_000 : ouverture)
+      await this.actualiser(mesh);
+    else {
+      await e.lecture;
+      this.programmer(mesh, e);
+    }
   }
   private programmer(mesh: string, e: Entree): void {
     clearTimeout(e.minuteur);
@@ -288,6 +293,38 @@ export class ServiceCommandant {
       return controle;
     } catch {
       return { erreur: { genre: 'transport', code: 'reseau' } };
+    }
+  }
+  /** Le secret reste dans le service, y compris lors d'une réponse confirmée. */
+  async decider(mesh: string, id: number, decision: string, digest: string) {
+    const e = this.obtenir(mesh);
+    if (e.etat.identifiant.etat === 'absent' || ARRETS.has(e.etat.identifiant.etat))
+      return {
+        ok: false as const,
+        erreur: { genre: 'transport' as const, code: 'identifiant' as const },
+      };
+    try {
+      const lu = this.identifiants.lire(mesh);
+      if (!lu)
+        return {
+          ok: false as const,
+          erreur: { genre: 'transport' as const, code: 'identifiant' as const },
+        };
+      const resultat = await new ClientCommandant(
+        this.options.meshes()[mesh]!.gateway,
+        lu.valeur,
+        this.options.client,
+      ).decider(id, decision, digest);
+      if (!resultat.ok) {
+        this.traiterErreur(e, resultat.erreur);
+        this.programmer(mesh, e);
+      }
+      return resultat;
+    } catch {
+      return {
+        ok: false as const,
+        erreur: { genre: 'transport' as const, code: 'reseau' as const },
+      };
     }
   }
   private cheminNotifies(mesh: string): string {

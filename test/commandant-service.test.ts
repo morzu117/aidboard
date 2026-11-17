@@ -96,6 +96,52 @@ describe('lecture périodique du commandant', () => {
     await t.service.battement('principal');
     expect(faux.transport).toHaveBeenCalledTimes(14);
   });
+  it('borne vingt ouvertures forcées en une seconde à une lecture de la passerelle', async () => {
+    vi.useFakeTimers();
+    const faux = transportMemoire();
+    const t = preparer({ client: { transport: faux.transport } });
+    await t.service.saisir('principal', IDENTIFIANT_COCKPIT_TEST);
+    await t.service.battement('principal');
+    await vi.advanceTimersByTimeAsync(10_001);
+    faux.transport.mockClear();
+    for (let i = 0; i < 20; i++) {
+      await t.service.battement('principal', true);
+      await vi.advanceTimersByTimeAsync(50);
+    }
+    const listes = faux.transport.mock.calls.filter(([url]) =>
+      new URL(String(url)).pathname.endsWith('/requests'),
+    );
+    expect(listes).toHaveLength(1);
+    expect(faux.transport).toHaveBeenCalledTimes(2);
+    await vi.advanceTimersByTimeAsync(9_000);
+    await t.service.battement('principal', true);
+    expect(faux.transport).toHaveBeenCalledTimes(2);
+    await vi.advanceTimersByTimeAsync(1);
+    await t.service.battement('principal', true);
+    expect(faux.transport).toHaveBeenCalledTimes(4);
+  });
+  it('une ouverture forcée récente attend la lecture en cours sans en lancer une autre', async () => {
+    vi.useFakeTimers();
+    const faux = transportMemoire();
+    const t = preparer({ client: { transport: faux.transport } });
+    await t.service.saisir('principal', IDENTIFIANT_COCKPIT_TEST);
+    faux.transport.mockClear();
+    faux.transport.mockImplementationOnce(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 250));
+      return new Response(JSON.stringify([...faux.lignes.values()]));
+    });
+    const lecture = t.service.actualiser('principal');
+    let termine = false;
+    const battement = t.service.battement('principal', true).then(() => {
+      termine = true;
+    });
+    await vi.advanceTimersByTimeAsync(249);
+    expect(termine).toBe(false);
+    await vi.advanceTimersByTimeAsync(1);
+    await Promise.all([lecture, battement]);
+    expect(termine).toBe(true);
+    expect(faux.transport).toHaveBeenCalledTimes(2);
+  });
   it.each([
     ['expired', 'expire'],
     ['revoked', 'revoque'],

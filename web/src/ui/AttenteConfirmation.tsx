@@ -1,5 +1,6 @@
+import { libelleReponseCommandant } from '../../../src/shared/commandant-reponse.js';
 import type { ResultatEnvoi } from '../data/ecritures.js';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { useAidClient } from '../data/useAidState.js';
 
 export interface Confirmation {
@@ -20,6 +21,10 @@ export interface FileConfirmations {
   recentes: Confirmation[];
 }
 export function resultatConfirmation(d: Confirmation): string | null {
+  if (d.action === 'mesh.commandant.repondre') {
+    const libelle = libelleReponseCommandant(d.resultat, d.envoi?.code);
+    if (libelle) return libelle;
+  }
   if (d.resultat === 'annulee' && d.raison === 'numero')
     return 'Annulée : mauvais numéro saisi sur le téléphone';
   const resultat = {
@@ -46,12 +51,14 @@ export function AttenteConfirmation({
   onExecutee,
   onTerminee,
   onFermer,
+  complement,
 }: {
   id: string;
   toujours?: boolean;
   onExecutee?: () => void | Promise<void>;
   onTerminee?: (demande?: Confirmation) => void;
   onFermer?: () => void;
+  complement?: ReactNode;
 }) {
   const client = useAidClient();
   const [numero, setNumero] = useState<string | null>(null);
@@ -106,6 +113,7 @@ export function AttenteConfirmation({
   return (
     <div>
       <p role="status">{resultat ?? 'En attente de confirmation sur le téléphone'}</p>
+      {resultat && complement}
       {!resultat && numero !== null && (
         <div>
           <strong style={{ fontSize: '3rem', letterSpacing: '0.2em' }}>{numero}</strong>
@@ -114,6 +122,7 @@ export function AttenteConfirmation({
       )}
       {!resultat && (
         <button
+          data-node="confirmation.attente.annuler"
           className="bouton"
           onClick={() => {
             void client.request('DELETE', `/api/confirmations/${id}`).then(
@@ -122,6 +131,7 @@ export function AttenteConfirmation({
                 finie.current?.();
                 setNumero(null);
                 setResultat('Annulée');
+                setErreur('');
               },
               (e: unknown) => setErreur(e instanceof Error ? e.message : String(e)),
             );

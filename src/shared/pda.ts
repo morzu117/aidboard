@@ -1,3 +1,4 @@
+import { CODES_REFUS_COMMANDANT } from './commandant-reponse.js';
 import type { ResultatEnvoi } from './ecritures.js';
 import {
   ACTIONS_MESH,
@@ -331,6 +332,7 @@ function lireCorpsDemandeV2(c: Record<string, unknown>): CorpsDemandeV2 {
 export const RESULTATS_PDA = ['executee', 'echouee', 'perimee', 'annulee'] as const;
 export const RAISONS_RESULTAT = ['perime', 'delai', 'script', 'numero'] as const;
 export const CODES_RESULTAT = [
+  ...CODES_REFUS_COMMANDANT,
   'succes',
   'verb_not_allowed',
   'bad_args',

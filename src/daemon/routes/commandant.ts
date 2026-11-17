@@ -1,3 +1,5 @@
+import type { Porte } from '../confirmations/porte.js';
+import { AidHttpError } from '../errors.js';
 import type { FastifyInstance } from 'fastify';
 import type { ServiceCommandant } from '../commandant/service.js';
 import { identifiantCockpitValide } from '../commandant/identifiant.js';
@@ -7,11 +9,14 @@ export function registerCommandantRoutes(
   app: FastifyInstance,
   service: ServiceCommandant | undefined,
   mac: boolean,
+  porte?: Porte,
 ): void {
   void app.register(async (routes) => {
-    routes.setErrorHandler((_erreur, _req, reply) =>
-      reply.code(500).send({ error: 'Commande cockpit impossible' }),
-    );
+    routes.setErrorHandler((erreur, _req, reply) => {
+      if (erreur instanceof AidHttpError)
+        return reply.code(erreur.status).send({ error: erreur.message });
+      return reply.code(500).send({ error: 'Commande cockpit impossible' });
+    });
     routes.addHook('onRequest', async (_req, reply) => {
       reply.header('Cache-Control', 'no-store');
     });
@@ -52,11 +57,47 @@ export function registerCommandantRoutes(
       async (req, reply) => {
         const s = obtenir(req.params.mesh);
         if (!s) return reply.code(404).send({ error: 'Mesh commandant indisponible' });
-        void s.battement(req.params.mesh).catch(() => {});
+        const ouverture = (req.body as { ouverture?: unknown } | null)?.ouverture === true;
+        const lecture = s.battement(req.params.mesh, ouverture);
+        if (ouverture) await lecture;
+        else void lecture.catch(() => {});
         return reply.code(204).send();
       },
     );
     if (!mac) return;
+    routes.post<{ Params: { mesh: string; id: string } }>(
+      '/api/commandant/:mesh/demandes/:id/reponse',
+      async (req, reply) => {
+        if (req.principal?.kind !== 'admin')
+          return reply.code(403).send({ error: 'admin seulement' });
+        if (!obtenir(req.params.mesh) || !porte)
+          return reply.code(404).send({ error: 'Mesh commandant indisponible' });
+        const corps = req.body as { digest?: unknown; decision?: unknown } | null;
+        if (
+          !/^\d+$/.test(req.params.id) ||
+          !Number.isSafeInteger(Number(req.params.id)) ||
+          !corps ||
+          typeof corps.digest !== 'string' ||
+          !/^[a-f0-9]{64}$/.test(corps.digest) ||
+          typeof corps.decision !== 'string' ||
+          Object.keys(corps).some((k) => !['digest', 'decision'].includes(k))
+        )
+          return reply.code(400).send({ error: 'commandant_parametres' });
+        const demande = await porte.demander(
+          'mesh.commandant.repondre',
+          {
+            mesh: req.params.mesh,
+            params: {
+              requestId: Number(req.params.id),
+              digest: corps.digest,
+              decision: corps.decision,
+            },
+          },
+          req,
+        );
+        return reply.code(202).send(demande);
+      },
+    );
     routes.put<{ Params: { mesh: string } }>(
       '/api/commandant/:mesh/identifiant',
       async (req, reply) => {

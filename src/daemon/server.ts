@@ -211,7 +211,6 @@ export async function buildServer(deps: ServerDeps): Promise<FastifyInstance> {
     deps.meshes,
   );
   registerRejoindreRoutes(app, { config: deps.config, paths: deps.paths });
-  registerCommandantRoutes(app, deps.commandant, true);
   registerMeshRoutes(app, {
     mesh: deps.mesh ?? null,
     meshes: deps.meshes,
@@ -281,6 +280,7 @@ export async function buildServer(deps: ServerDeps): Promise<FastifyInstance> {
     file: () => deps.pda?.obtenir() ?? null,
     signaler: () => deps.pda?.obtenir()?.signaler(),
   });
+  registerCommandantRoutes(app, deps.commandant, true, porte);
   registerAvisMeshRoutes(app, { avis: avis ?? null, porte, meshes: deps.meshes });
   registerEcrituresRoutes(app, {
     cartes,

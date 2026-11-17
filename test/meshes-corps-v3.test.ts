@@ -26,6 +26,15 @@ const echeances = {
   vote: '2027-01-01T14:00:00Z',
 };
 const exemples = {
+  'mesh.commandant.repondre': {
+    mesh: 'principal',
+    requestId: 1235,
+    type: 'decision',
+    digest: 'a'.repeat(64),
+    decision: 'oui',
+    question: 'Question ?',
+    options: ['oui', 'non'],
+  },
   'mesh.ecrire': {
     action: 'dm.envoyer',
     params: { pair: 'perso', fil: null, kind: 'fyi', texte: 'Bonjour' },

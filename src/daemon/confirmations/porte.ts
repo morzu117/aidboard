@@ -14,6 +14,7 @@ import type { FilePda, LigneDemande } from '../pda/file.js';
 import { creerReglage } from './reglage.js';
 
 export type ActionPorte =
+  | 'mesh.commandant.repondre'
   | 'mesh.avis.motion'
   | 'mesh.avis'
   | 'mesh.avis.baseline-absent'

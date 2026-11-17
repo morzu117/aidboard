@@ -1,3 +1,4 @@
+import { libelleReponseCommandant } from '../../src/shared/commandant-reponse.js';
 import { ACTIONS_MESH } from '../../src/shared/confirmations.js';
 import { ParametresSignes } from './ui/ParametresSignes.js';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -24,6 +25,10 @@ export function libelleResultat(
     return maintenant - repondueA > 24 * 60 * 60_000
       ? 'Résultat non reçu, à lire sur le Mac'
       : 'En attente du résultat';
+  if (corps.action === 'mesh.commandant.repondre') {
+    const libelle = libelleReponseCommandant(corps.resultat, corps.code);
+    if (libelle) return libelle;
+  }
   const incertain =
     corps.raison === 'delai' ||
     ['upstream_ambiguous', 'delai', 'interrompu'].includes(corps.code ?? '');

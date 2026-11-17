@@ -1,3 +1,5 @@
+import type { ServiceCommandant } from '../commandant/service.js';
+import { creerActionCommandant } from './commandant.js';
 import type { CreationsCartes } from './cartes.js';
 import { verifierCibleMesh } from '../mesh/cible-ecriture.js';
 import type { MeshRegistry } from '../mesh/registre.js';
@@ -46,6 +48,7 @@ const LIVE = ['starting', 'working', 'needs_input', 'idle'];
 
 export function creerActionsConfirmation(
   deps: DependancesHost & {
+    commandant?: ServiceCommandant;
     avis?: AvisMeshService;
     cartes?: CreationsCartes;
     meshes?: MeshRegistry;
@@ -169,6 +172,7 @@ export function creerActionsConfirmation(
     }) as ActionsPorte[A];
   return {
     ...creerActionsHost(deps),
+    'mesh.commandant.repondre': creerActionCommandant(deps.commandant),
     'mesh.avis': parMesh('mesh.avis'),
     'mesh.avis.motion': parMesh('mesh.avis.motion'),
     'mesh.avis.baseline-absent': parMesh('mesh.avis.baseline-absent'),

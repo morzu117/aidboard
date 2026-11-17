@@ -1,3 +1,4 @@
+import { Commandant } from './ecrans/Commandant.js';
 import { Federation } from './ecrans/Federation.js';
 import { MemoireSwarph } from './ecrans/MemoireSwarph.js';
 import { Navigate, Route, Routes } from 'react-router';
@@ -30,6 +31,7 @@ export function App() {
         <Route path="/consignes" element={<Consignes />} />
         <Route path="/reglages" element={<Reglages />} />
         {/* chantier 25 (D102) */}
+        <Route path="/swarph/commandant" element={<Commandant />} />
         <Route path="/swarph" element={<Swarph />} />
         {/* chantier 37 (D242) */}
         <Route path="/swarph/cells" element={<Cells />} />

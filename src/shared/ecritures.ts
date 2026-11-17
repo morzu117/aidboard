@@ -1,3 +1,4 @@
+import type { CodeRefusCommandant } from './commandant-reponse.js';
 import { liensSwairm } from './swairm-board.js';
 
 export const KINDS_ECRITURE = ['status', 'question', 'answer', 'unblock', 'fyi'] as const;
@@ -220,6 +221,7 @@ export const REFUS_FIL_PROXY =
   'Un DM dans un fil ne peut pas encore partir par le proxy. Copie la commande, ou envoie-le hors fil.';
 export interface ResultatEnvoi {
   code:
+    | CodeRefusCommandant
     | 'succes'
     | 'verb_not_allowed'
     | 'bad_args'

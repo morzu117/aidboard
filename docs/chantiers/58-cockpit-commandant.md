@@ -81,6 +81,21 @@ L'e2e et les tests jouent la passerelle avec un faux, dans `test/fixtures/`. Ce 
   - le garde de couverture (D345) et le détecteur visuel (D346) sont verts ;
   - l'inventaire gagne les nouveaux ids.
 
+- _Révision 58.3._ Trois passes de Codex.
+  - **La décision de Julien (17 novembre) : la réponse se lance depuis le Mac seulement.**
+    - Codex s'était arrêté, à raison : une confirmation `toujours` a un numéro que seul le Mac affiche (D304, chantier 45). Répondre depuis un appareil aurait exposé ce numéro au port des appareils.
+    - La route `POST /api/commandant/:mesh/demandes/:id/reponse` n'existe donc que sur le port du Mac. Sur le port des appareils, elle rend 404, avec un test. Aucun test de frontière ne change.
+    - Le téléphone appairé lit la file et le détail. Pour une question, il affiche « Réponds depuis l'écran du Mac : demande #<id>, digest <16 hex> ».
+  - **Ce qui est livré :**
+    - l'action `mesh.commandant.repondre` (`src/daemon/confirmations/commandant.ts`). Elle relit la ligne à `preparer` et à `executer`, ne répond qu'à une ligne inchangée, et exige `answered` et `decided_via=cockpit` dans la ligne rendue. Le résultat signé porte un code fermé du contrat, jamais un corps distant ;
+    - l'écran `/swarph/commandant` du Mac, l'écran `/commandant` des appareils (en lecture), la section Cockpit de Réglages swarph, et les paramètres signés au PDA avec le texte D351.
+  - **La relecture de la cell** a donné une passe :
+    - une ouverture d'écran ne force une lecture de la passerelle que si la dernière date de plus de 10 s ;
+    - l'écran relit la file après chaque résultat ;
+    - chaque code a sa phrase en français ;
+    - l'écran reprend les composants de Swarph.
+  - **Tests.** Gate 4 510, `gate:e2e` 186 et couverture verts. Les douze refus de `decide` de l'A2 et de l'A3, la demande périmée et le refus de `preparer` sont joués dans le navigateur, avec leurs captures dans les deux formats.
+
 ### 58.4 La vérification réelle
 
 Elle a lieu sur la passerelle où Julien est le commandant (section 6). Elle attend donc le portage de la file dans la passerelle publique de swarph-cli (carte #1645). Elle se fait avec le lab, sur une vraie question créée par une cell :

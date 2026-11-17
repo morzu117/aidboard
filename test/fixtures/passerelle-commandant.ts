@@ -1,6 +1,8 @@
 import { createServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import {
+  STATUTS_COMMANDANT,
+  type StatutCommandant,
   digestCommandant,
   questionRepondable,
   texteCommandantValide,
@@ -112,6 +114,8 @@ export async function creerPasserelleCommandant() {
     digestFaux: false,
     avantDetail: null as null | ((id: number) => void),
     delaiMs: 0,
+    erreurDecide: null as null | { http: number; corps: unknown },
+    apresDecide: null as null | ((ligne: LigneCommandant) => void),
     erreurListe: null as null | { http: number; corps: unknown },
     corpsListe: undefined as unknown,
     texteBrut: null as string | null,
@@ -169,6 +173,21 @@ export async function creerPasserelleCommandant() {
     const ligne = lignes.get(id);
     if (!ligne) return erreur(404, 'not_found');
     if (detail) return envoyer(200, rendre(ligne));
+    if (scenario.erreurDecide) {
+      const erreur = scenario.erreurDecide.corps as { error?: unknown; status?: unknown } | null;
+      if (
+        scenario.erreurDecide.http === 409 &&
+        erreur?.error === 'not_pending' &&
+        STATUTS_COMMANDANT.includes(erreur.status as StatutCommandant)
+      )
+        Object.assign(ligne, {
+          status: erreur.status as StatutCommandant,
+          decided_by: 'sso:exemple',
+          decided_via: 'sso',
+          decided_at: DATE_COMMANDANT_TEST,
+        });
+      return envoyer(scenario.erreurDecide.http, scenario.erreurDecide.corps);
+    }
     if (ligne.type !== 'decision') return erreur(403, 'cockpit_not_allowed');
     if (ligne.needs_sso || !questionRepondable(ligne.params)) return erreur(403, 'needs_sso');
     if (!Object.hasOwn(corps, 'decision'))
@@ -196,6 +215,7 @@ export async function creerPasserelleCommandant() {
       decided_via: 'cockpit',
       decided_at: DATE_COMMANDANT_TEST,
     });
+    scenario.apresDecide?.(ligne);
     return envoyer(200, rendre(ligne));
   });
   function rendre(ligne: LigneCommandant) {

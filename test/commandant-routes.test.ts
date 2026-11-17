@@ -258,6 +258,21 @@ it('le port appareils sert uniquement les quatre lectures ; PUT/DELETE de l’id
         })
       ).statusCode,
     ).toBe(404);
+  await t.service.actualiser('principal');
+  const avant = t.db.prepare('SELECT COUNT(*) AS n FROM pda_demandes').get();
+  const appels = t.faux.appels.length;
+  expect(
+    (
+      await s.app.inject({
+        method: 'POST',
+        url: '/api/commandant/principal/demandes/1235/reponse',
+        headers,
+        payload: { digest: 'a'.repeat(64), decision: 'oui' },
+      })
+    ).statusCode,
+  ).toBe(404);
+  expect(t.db.prepare('SELECT COUNT(*) AS n FROM pda_demandes').get()).toEqual(avant);
+  expect(t.faux.appels).toHaveLength(appels);
   expect(routes.sort()).toEqual(
     [
       'GET /api/commandant/:mesh',

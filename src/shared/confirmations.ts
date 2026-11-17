@@ -1,3 +1,4 @@
+import { texteCommandantValide } from './commandant-texte.js';
 import type { ConfirmationAvisMesh, ConfirmationMotionAvis } from './avis-mesh-api.js';
 import { RAISON_BASELINE_ABSENT } from './avis-mesh-api.js';
 import {
@@ -8,6 +9,15 @@ import {
 } from './ecritures.js';
 import { lireParamsEtat, resumeEtat, type ActionEtat, type Etat } from './etats.js';
 export interface ParametresActions {
+  'mesh.commandant.repondre': {
+    mesh: string;
+    requestId: number;
+    type: 'decision';
+    digest: string;
+    decision: string;
+    question: string;
+    options: string[];
+  };
   'mesh.avis': { params: ConfirmationAvisMesh };
   'mesh.avis.motion': { params: ConfirmationMotionAvis };
   'mesh.avis.baseline-absent': {
@@ -47,6 +57,7 @@ export interface ParametresActions {
 }
 export type ActionConfirmee = keyof ParametresActions;
 export const ACTIONS_MESH: ReadonlySet<string> = new Set([
+  'mesh.commandant.repondre',
   'mesh.ecrire',
   'mesh.etat',
   'mesh.avis',
@@ -55,6 +66,7 @@ export const ACTIONS_MESH: ReadonlySet<string> = new Set([
 ]);
 export type ClasseConfirmation = 'toujours' | 'defaut';
 export const CLASSE_ACTION = Object.freeze({
+  'mesh.commandant.repondre': 'toujours',
   'mesh.avis': 'toujours',
   'mesh.avis.motion': 'toujours',
   'mesh.avis.baseline-absent': 'toujours',
@@ -120,6 +132,16 @@ const branche: Validation = (v) =>
   !v.includes('..') &&
   !/^[-/]/.test(v);
 const schemas: Record<ActionConfirmee, Record<string, Validation>> = {
+  'mesh.commandant.repondre': {
+    mesh: motif(/^[a-z0-9][a-z0-9-]{0,62}$/),
+    requestId: (v) => typeof v === 'number' && Number.isSafeInteger(v) && v >= 0,
+    type: choix('decision'),
+    digest: motif(/^[a-f0-9]{64}$/),
+    decision: (v) => texteCommandantValide(v, 1000) && v.length > 0,
+    question: (v) => texteCommandantValide(v, 360),
+    options: (v) =>
+      Array.isArray(v) && v.length <= 6 && v.every((o) => texteCommandantValide(o, 40)),
+  },
   'mesh.avis': {
     params: (v) => {
       const p = v as ConfirmationAvisMesh | null;
@@ -226,6 +248,11 @@ export function validerParamsAction(action: ActionConfirmee, params: unknown): b
     (action !== 'mesh.etat' || lireParamsEtat(p.action as ActionEtat, p.params).ok) &&
     (action !== 'mesh.ecrire' || lireParamsEcriture(p.action as ActionEcriture, p.params, '').ok) &&
     (action !== 'merge' || p.nettoyer === true || p.teteNettoyage === null) &&
+    (action !== 'mesh.commandant.repondre' ||
+      (Array.isArray(p.options) &&
+        (p.options.length > 0
+          ? p.options.includes(p.decision)
+          : typeof p.decision === 'string' && p.decision.trim().length > 0))) &&
     Object.keys(p).length === Object.keys(schema).length &&
     Object.entries(schema).every(([cle, valider]) => Object.hasOwn(p, cle) && valider(p[cle]))
   );
@@ -244,6 +271,9 @@ export function resumeAction(
   const p = { action, params } as ParamsAction;
   let resume: string;
   switch (p.action) {
+    case 'mesh.commandant.repondre':
+      resume = `Demande #${p.params.requestId} : ${[...p.params.decision].slice(0, 100).join('')}${[...p.params.decision].length > 100 ? '…' : ''}`;
+      break;
     case 'mesh.avis':
       resume = `Ouvrir ${p.params.params.nom}, carte ${p.params.params.carte}`;
       break;
