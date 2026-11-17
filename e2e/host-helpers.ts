@@ -13,14 +13,19 @@ export function demarrerHost(
   PORT: number,
   supplement = '',
   chemin = process.env.PATH,
-  options: { home?: string; env?: NodeJS.ProcessEnv; configuration?: string } = {},
+  options: {
+    home?: string;
+    env?: NodeJS.ProcessEnv;
+    configuration?: string;
+    funnel?: boolean;
+  } = {},
 ) {
   const PORT_APPAREILS = PORT + 20;
   let home = '';
   let token = '';
   home = options.home ?? realpathSync(mkdtempSync(join(tmpdir(), 'aid-e2e-host-')));
   const bin = join(home, 'tailscale');
-  writeFileSync(bin, fauxTailscale(PORT_APPAREILS), { mode: 0o700 });
+  writeFileSync(bin, fauxTailscale(PORT_APPAREILS, options.funnel ?? false), { mode: 0o700 });
   writeFileSync(
     join(home, 'config.yaml'),
     [

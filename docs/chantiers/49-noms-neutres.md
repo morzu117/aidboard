@@ -50,6 +50,25 @@ Le dépôt est public. Depuis le chantier 12, des plans, des fiches de recette, 
 - **Tests :** le fichier passe, et un lancement ne laisse aucun dossier.
 49.2 commité. Gate vert (3 884 tests). Le test des cartes reliées utilise le dossier temporaire du système.
 
+### 49.3 Les noms de projets (2026-11-16)
+
+Julien a demandé que les noms de ses projets personnels sortent aussi du dépôt. Ils figuraient dans les maquettes, les plans 08 et 10, deux fiches et deux tests. Ils sont remplacés ainsi, dans tous les fichiers suivis, avec leurs variantes de casse et les noms composés qui les contiennent :
+
+| Ce qui est remplacé | Remplaçant |
+|---|---|
+| Le projet dont la source gbrain a été traitée en 10.4 | `projet-a` |
+| Le projet dont les sources gbrain du poste Windows n'ont pas été triées (et sa variante « board ») | `projet-b` (`projet-b-board`) |
+| Le troisième projet réel du chantier 10 | `projet-c` |
+| Le projet des maquettes rangé sous le compte GitHub de Julien | `projet-d` |
+| La source gbrain traitée en 10.2 | `projet-e` |
+| Le projet de démonstration des maquettes | `projet-f` |
+
+- Les noms `projet-a` et `projet-b` suivent ceux du plan 57.
+- D326 s'applique : l'historique git ne change pas, et le propriétaire du dépôt reste dans les URL GitHub.
+- La garde `test/noms-neutres.test.ts` reçoit les empreintes de ces six noms, pour tous les fichiers suivis.
+- **Tests :** le gate entier, sans attente modifiée autrement que par le remplacement, et la garde qui échoue si l'un des six noms revient.
+- _Révision 49.3._ 20 fichiers, 149 lignes remplacées, aucun fichier renommé. Gate 4 167. La garde découpe aussi sur `_` et `-`, et le gate reste vert avec ce découpage sur tout le dépôt.
+
 ## 4. Pièges
 
 - Un remplacement aveugle peut toucher un nom plus long qui contient l'ancien : remplacer des mots entiers.

@@ -98,13 +98,14 @@ export async function ouvrirServeLocal(opts: {
 }
 
 /** La sortie synthétique de `tailscale` : running, le nom e2e, Serve vers le port des appareils. */
-export function fauxTailscale(portAppareils: number): string {
+export function fauxTailscale(portAppareils: number, funnel = false): string {
   const status = JSON.stringify({
     BackendState: 'Running',
     Self: { DNSName: `${NOM_E2E}.`, UserID: 1 },
     User: { '1': { LoginName: LOGIN_E2E } },
   });
   const serve = JSON.stringify({
+    AllowFunnel: { [`${NOM_E2E}:443`]: funnel },
     TCP: { '443': { HTTPS: true } },
     Web: {
       [`${NOM_E2E}:443`]: { Handlers: { '/': { Proxy: `http://127.0.0.1:${portAppareils}` } } },

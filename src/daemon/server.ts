@@ -323,6 +323,7 @@ export async function buildServer(deps: ServerDeps): Promise<FastifyInstance> {
   );
   registerArtefactRoutes(app, { db: deps.db, artefacts: deps.artefacts });
   if (deps.modeHost) {
+    app.addHook('onClose', async () => deps.modeHost!.annulerRelecture());
     registerHostRoutes(app, {
       config: deps.config,
       paths: deps.paths,

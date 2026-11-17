@@ -245,7 +245,7 @@ L'ancienne interface définit cinq états ; la couleur du point doit les reflét
 
 ## 7. Ce qui est illustratif dans les maquettes
 
-Ne pas recopier : les trois échanges du fil (questions, réponses, sorties de commandes), les boutons de la carte de décision, les noms de groupes de la maquette Sidebar (« Produit », « Orchestration », « Pagination des formats », « Redémarrage dev », « Lieutenants »), l'arborescence de l'onglet Fichiers, les points menthe/bleu des sujets, les temps relatifs. Sont réels : les noms de projets, de branches et d'étapes (`feat/restart-dev`, `swairm-cli-interact`…), la décision `morzu117/Orgasso#decision/1`, les hashes et messages de commits du panneau Git, les événements du journal.
+Ne pas recopier : les trois échanges du fil (questions, réponses, sorties de commandes), les boutons de la carte de décision, les noms de groupes de la maquette Sidebar (« Produit », « Orchestration », « Pagination des formats », « Redémarrage dev », « Lieutenants »), l'arborescence de l'onglet Fichiers, les points menthe/bleu des sujets, les temps relatifs. Sont réels : les noms de projets, de branches et d'étapes (`feat/restart-dev`, `swairm-cli-interact`…), la décision `morzu117/projet-d#decision/1`, les hashes et messages de commits du panneau Git, les événements du journal.
 
 ## 8. Hors périmètre
 

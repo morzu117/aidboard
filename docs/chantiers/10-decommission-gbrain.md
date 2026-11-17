@@ -26,19 +26,19 @@ Vérifié le 2026-10-17 (`gbrain sources list --json`, `gbrain status default --
 
 | Source    | Chemin local                        | Pages | Dernière synchro        | Nature |
 | --------- | ------------------------------------ | ----- | ------------------------ | --- |
-| `default` | `~/.gbrain/sources/default`          | 418   | **jamais** (`null`)      | orpheline, pas de dépôt git associé. **Traitée (10.1, 2026-10-17)** : 346 transcripts + 23 cartes swairm `verdict: périmée` + 21 dev-handoff klasso non validés + 2 pages bruit gardés au froid dans le backup ; 26 fichiers extraits en 29 pages `aid mem` (détail : `~/.aid/backups/gbrain-2026-10-17/default/TRIAGE-10.1.md`). |
-| `klasso`  | `~/Projects/myskooli`                | 1202  | 2026-09-24 (540h, severe) | **Traitée (10.2, 2026-10-17)** : 1085 pages (`code`/`design_wf`/`docs`/`style`/`packages`/meta) redondantes avec le dépôt git, vérifiées par contenu, écartées ; 6 pages mortes ou doublons écartées ; 111 extraites en `aid mem` (dont 1 nouveau namespace `versos/`, un projet découvert en triage). Détail : `~/.aid/backups/gbrain-2026-10-17/klasso/TRIAGE-10.2.md`. |
+| `default` | `~/.gbrain/sources/default`          | 418   | **jamais** (`null`)      | orpheline, pas de dépôt git associé. **Traitée (10.1, 2026-10-17)** : 346 transcripts + 23 cartes swairm `verdict: périmée` + 21 dev-handoff projet-e non validés + 2 pages bruit gardés au froid dans le backup ; 26 fichiers extraits en 29 pages `aid mem` (détail : `~/.aid/backups/gbrain-2026-10-17/default/TRIAGE-10.1.md`). |
+| `projet-e`  | `~/Projects/projet-c`                | 1202  | 2026-09-24 (540h, severe) | **Traitée (10.2, 2026-10-17)** : 1085 pages (`code`/`design_wf`/`docs`/`style`/`packages`/meta) redondantes avec le dépôt git, vérifiées par contenu, écartées ; 6 pages mortes ou doublons écartées ; 111 extraites en `aid mem` (dont 1 nouveau namespace `versos/`, un projet découvert en triage). Détail : `~/.aid/backups/gbrain-2026-10-17/projet-e/TRIAGE-10.2.md`. |
 | `swairm`  | `~/Projects/swairm`                  | 153   | 2026-10-15 (fresh)        | **Traitée (10.3, 2026-10-17)** : 83 pages (`code`/`design`/`docs`/`morphs`/notes racine) redondantes avec le dépôt git ou doublons exacts de pages déjà extraites en 10.1, écartées ; 70 pages de cycle (`swairm/swairm/{dev-handoff,plan,review,retro}/*`) extraites sous `swairm/{dev-handoff,plan,review,retro}/*`. Détail : `~/.aid/backups/gbrain-2026-10-17/swairm/TRIAGE-10.3.md`. |
-| `descent-wf` | `~/Projects/descent-wf`           | 152   | 2026-10-15 (fresh)        | **Traitée (10.4, 2026-10-17)** : 71 pages (`design`/`docs`/`ressources`/`tools`/notes racine + 1 page de test) redondantes avec le dépôt git ou sans valeur, écartées ; 81 pages extraites (`descent-wf/{dev-handoff,plan,review}/*`, 56 ; `swairm/{anticipation,decisions,reine}/*`, 25). Détail : `~/.aid/backups/gbrain-2026-10-17/descent-wf/TRIAGE-10.4.md`. |
+| `projet-a` | `~/Projects/projet-a`           | 152   | 2026-10-15 (fresh)        | **Traitée (10.4, 2026-10-17)** : 71 pages (`design`/`docs`/`ressources`/`tools`/notes racine + 1 page de test) redondantes avec le dépôt git ou sans valeur, écartées ; 81 pages extraites (`projet-a/{dev-handoff,plan,review}/*`, 56 ; `swairm/{anticipation,decisions,reine}/*`, 25). Détail : `~/.aid/backups/gbrain-2026-10-17/projet-a/TRIAGE-10.4.md`. |
 | `lessons` | `~/.agent-kernel` (= agent-kernel)    | 48    | 2026-10-15 (fresh)        | **déjà redondant** : vérifié page à page, c'est une réindexation du contenu déjà commité d'agent-kernel (`adapters/`, `policy/`, `roles/`, `commands/sync.md`) plus les leçons déjà présentes dans `aid mem` sous un slug légèrement différent (accents normalisés différemment). Rien d'unique à récupérer ici. |
 
-Aucun des quatre projets réels (myskooli, swairm, descent-wf — hors `default`, orpheline) n'a de
+Aucun des quatre projets réels (projet-c, swairm, projet-a — hors `default`, orpheline) n'a de
 mirroir markdown commité de ses pages gbrain : seuls `.gbrain-owner.json` et
 `.git/gbrain-managed.json` (métadonnées internes de gbrain) existent dans leurs dépôts. Le
 contenu des pages n'existe **qu'en base** (Supabase, `GBRAIN_DATABASE_URL`).
 
 `aid mem list` (sur ce poste) : 25 pages, toutes `lesson/*`. Aucune ne porte de préfixe
-`swairm/`, `myskooli/` ou `descent-wf/` — la taxonomie transverse (`lesson/<domaine>/<slug>`,
+`swairm/`, `projet-c/` ou `projet-a/` — la taxonomie transverse (`lesson/<domaine>/<slug>`,
 `policy/namespace.md`) est déjà en place côté `aid`, mais rien des quatre sources à risque n'y a
 encore été extrait.
 
@@ -47,7 +47,7 @@ fichier `.gbrain-owner.json` (untracked) existe aussi à la racine d'`agent-kern
 
 ## 3. Cible et hors-périmètre
 
-Cible : chaque page des quatre sources à risque (`default`, `klasso`, `swairm`, `descent-wf`)
+Cible : chaque page des quatre sources à risque (`default`, `projet-e`, `swairm`, `projet-a`)
 est, selon sa nature, soit (a) extraite dans `aid mem` sous un namespace cohérent avec
 `policy/namespace.md`, soit (b) explicitement jugée superflue et journalisée comme telle (pas
 silencieusement perdue) — jamais la troisième option implicite (ni gardée, ni actée). Une fois
@@ -84,12 +84,12 @@ Décisions ouvertes (à valider par Julien, une par point d'exécution) :
   valeur ajoutée sur ce que git donne déjà. Pas de règle générale fiable sans relire un
   échantillon par source — à trancher au moment de chaque point (10.1-10.4), pas ici.
 - **DO2 — Namespace cible dans `aid mem`.** Décidée (Julien, 2026-10-17) : mixte. Préfixe projet
-  (`klasso/…`, `swairm/…`) pour le contenu propre à un projet (notes, décisions, design, docs,
+  (`projet-e/…`, `swairm/…`) pour le contenu propre à un projet (notes, décisions, design, docs,
   timelines) ; `lesson/<domaine>/<slug>` pour le généralisable au-delà du projet d'origine
   (insights opérationnels, rétros de process). Appliquée pour 10.1 (voir TRIAGE-10.1.md) ; à
   reconduire pour 10.2-10.4.
 - **DO3 — Ordre des sources.** `default` (orpheline, jamais synchronisée, le risque le plus
-  ancien) d'abord, ou les projets actifs (`klasso`, plus gros volume) d'abord ? Proposé : `default`
+  ancien) d'abord, ou les projets actifs (`projet-e`, plus gros volume) d'abord ? Proposé : `default`
   d'abord — c'est la seule qui n'a strictement aucune autre copie, nulle part.
 
 ## 5. Contrat
@@ -115,23 +115,23 @@ closes et vérifiées.
 
 Export réutilisé (backup déjà présent, complet et vérifié). Triage intégral page par page :
 392 pages gardées au froid dans le backup (346 transcripts, 23 cartes swairm `verdict: périmée`,
-21 dev-handoff klasso `agent_written`/non validés redondants avec git, 2 pages bruit), 26
-fichiers extraits en 29 pages `aid mem` (namespace mixte DO2 : `klasso/…`, `swairm/…`,
+21 dev-handoff projet-e `agent_written`/non validés redondants avec git, 2 pages bruit), 26
+fichiers extraits en 29 pages `aid mem` (namespace mixte DO2 : `projet-e/…`, `swairm/…`,
 `lesson/<domaine>/…`). Détail et justification page-type par page-type :
 `~/.aid/backups/gbrain-2026-10-17/default/TRIAGE-10.1.md`. Vérifié par `aid mem list`/`get`/
 `search` sur un échantillon.
 
-### 10.2 — Source `klasso` / myskooli (1202 pages) — **fait (2026-10-17)**
+### 10.2 — Source `projet-e` / projet-c (1202 pages) — **fait (2026-10-17)**
 
 Confirmé : les pages `code` (920) ainsi que `design_wf`/`docs`/`style`/`packages`/les 4 fichiers
 meta racine (165 de plus, 1085 au total) correspondent à des fichiers toujours présents et à
-jour dans le dépôt `myskooli` (vérifié par contenu, pas que par chemin) — écartées sans
+jour dans le dépôt `projet-c` (vérifié par contenu, pas que par chemin) — écartées sans
 extraction. Le reste (`memoire`, cycles `dev-handoff`/`plan`/`review`/`retro`, 4 pages `swairm`
 capturées par erreur d'attribution) a été trié page par page : 111 extraites dans `aid mem`
-(`klasso/memoire/*`, `lesson/<domaine>/*`, `klasso/{dev-handoff,plan,review,retro}/*`,
+(`projet-e/memoire/*`, `lesson/<domaine>/*`, `projet-e/{dev-handoff,plan,review,retro}/*`,
 `swairm/{decisions,reine}/*`, et un nouveau namespace `versos/*` pour un projet découvert en
 triage), 6 écartées (1 page morte sur gbrain lui-même, 5 doublons vérifiés de leçons déjà
-présentes). Détail : `~/.aid/backups/gbrain-2026-10-17/klasso/TRIAGE-10.2.md`.
+présentes). Détail : `~/.aid/backups/gbrain-2026-10-17/projet-e/TRIAGE-10.2.md`.
 
 ### 10.3 — Source `swairm` (153 pages) — **fait (2026-10-17)**
 
@@ -147,20 +147,20 @@ déjà présentes dans `aid mem` (vérifié avant extraction), donc rien à dupl
 seule la trace de cycle (coût, PR, findings) manquait. Détail :
 `~/.aid/backups/gbrain-2026-10-17/swairm/TRIAGE-10.3.md`.
 
-### 10.4 — Source `descent-wf` (152 pages) — **fait (2026-10-17)**
+### 10.4 — Source `projet-a` (152 pages) — **fait (2026-10-17)**
 
 Même profil que swairm (§10.3), même traitement. Confirmé : `design` (3), `docs` (63, y compris
 `plans/01-30`, `handoffs/*`, `releves/acte-1/*`), `ressources` (1), `tools/skill_editor` (1) et
 les notes racine `agents.md`/`claude.md` (dépassées par le dépôt) — 70 pages — sont redondantes
-avec le dépôt `descent-wf` ; `swairm/preflight-test.md` (1) est une page de test triviale. Total
-écarté : 71. Le reste (81 pages) a été extrait : `descent-wf/{dev-handoff,plan,review}/*` (56,
+avec le dépôt `projet-a` ; `swairm/preflight-test.md` (1) est une page de test triviale. Total
+écarté : 71. Le reste (81 pages) a été extrait : `projet-a/{dev-handoff,plan,review}/*` (56,
 cycles réels du moteur de règles, aucun dossier `retro` dans cette source) et
 `swairm/{anticipation,decisions,reine}/*` (25 cartes de la ruche swairm travaillant sur ce
 dépôt — 3 anticipations **validées** cette fois, à la différence des 23 `périmée` de 10.1 ;
 10 décisions + 12 tours de reine avec PR réelles). Vérifié non dupliqué dans le backup de la
-source `swairm` elle-même. Détail : `~/.aid/backups/gbrain-2026-10-17/descent-wf/TRIAGE-10.4.md`.
+source `swairm` elle-même. Détail : `~/.aid/backups/gbrain-2026-10-17/projet-a/TRIAGE-10.4.md`.
 
-Les quatre sources à risque (`default`, `klasso`, `swairm`, `descent-wf`) sont closes. Reste
+Les quatre sources à risque (`default`, `projet-e`, `swairm`, `projet-a`) sont closes. Reste
 10.5 (retrait des composants) et 10.6 (geste externe, Julien).
 
 ### 10.5 — Retrait des composants — **fait (2026-10-17)**
@@ -177,7 +177,7 @@ migration 0.9.0) sont laissées telles quelles : historique, pas prescriptif.
 Côté machine : `bun remove -g gbrain` (vérifié : plus dans le `PATH`), `VOYAGE_API_KEY` et
 `GBRAIN_DATABASE_URL` retirés de `~/.config/agent-kernel/secrets.env` (sauvegarde locale
 `secrets.env.bak-10.5`, jamais commitée), `.gbrain-owner.json` et `.git/gbrain-managed.json`
-supprimés dans les quatre projets concernés (`agent-kernel`, `myskooli`, `swairm`, `descent-wf`).
+supprimés dans les quatre projets concernés (`agent-kernel`, `projet-c`, `swairm`, `projet-a`).
 
 `npm run gate` (aidboard) vert (commit `29964b5`) : les 4 échecs rencontrés en premier passage
 (`test/memory-routes.test.ts`, `test/cli-mem.test.ts`) n'étaient pas une régression de ce point —
@@ -206,7 +206,7 @@ supprimés/révoqués.
 - La source `default` n'a pas de `local_path` git — son export est la seule sauvegarde possible
   avant tout accès perdu à Supabase. Ne pas la traiter en dernier en se fiant à sa petite taille
   relative : c'est la plus fragile, pas la plus grosse qui compte ici.
-- Les pages `code` de `klasso` peuvent sembler redondantes avec git alors qu'elles datent d'un
+- Les pages `code` de `projet-e` peuvent sembler redondantes avec git alors qu'elles datent d'un
   état du fichier déjà réécrit depuis — comparer le contenu, pas seulement l'existence du
   chemin, avant d'écarter.
 - Une page gbrain « cyclique » (namespace projet) qui n'a pas encore sa retro écrite n'est pas
@@ -215,7 +215,7 @@ supprimés/révoqués.
   vérifié : différence de normalisation de slug (accents), pas de contenu manquant. Ne pas
   reproduire cette confusion pour les autres sources sans la même vérification page à page.
 - Une source gbrain peut contenir des pages d'un **autre projet que celui qu'elle nomme** :
-  10.2 (source `klasso`) contenait 4 pages `swairm` (ruche qui travaillait sur ce dépôt) et 1
+  10.2 (source `projet-e`) contenait 4 pages `swairm` (ruche qui travaillait sur ce dépôt) et 1
   page `versos` (un projet jamais mentionné dans ce chantier, capturé par erreur
   d'attribution). Vérifier qu'un titre/chemin correspond vraiment au projet de la source avant
   de le classer dans son namespace — sinon il finit dans le mauvais dossier ou, pire, écarté à
@@ -233,7 +233,7 @@ supprimés/révoqués.
 - Toutes les cartes `anticipation` ne sont pas périmées : celles de 10.1 l'étaient (23/23,
   `verdict: périmée`) mais celles de 10.4 étaient `verdict: validée` (proposition réalisée, PR
   citée) — toujours lire le champ `verdict`, ne jamais présumer du statut par type de page seul.
-- Un sous-dossier `swairm/` dans une source projet (`klasso` en 10.2, `descent-wf` en 10.4) n'est
+- Un sous-dossier `swairm/` dans une source projet (`projet-e` en 10.2, `projet-a` en 10.4) n'est
   pas forcément une erreur d'attribution : c'est aussi la convention de la ruche pour classer ses
   propres cartes (décisions, tours de reine, anticipations) par type d'auteur plutôt que par
   projet, même quand leur contenu appartient bien au projet de la source. Vérifier le contenu
@@ -242,7 +242,7 @@ supprimés/révoqués.
 
 ## 8. Fini quand
 
-- [x] Les quatre sources à risque (`default`, `klasso`, `swairm`, `descent-wf`) ont un export brut
+- [x] Les quatre sources à risque (`default`, `projet-e`, `swairm`, `projet-a`) ont un export brut
   sauvegardé, un triage explicite et journalisé, et leurs pages retenues sont dans `aid mem`,
   vérifiées par échantillon.
 - [x] `adapters/gbrain.md` et toute référence prescriptive à gbrain dans `agent-kernel` ont

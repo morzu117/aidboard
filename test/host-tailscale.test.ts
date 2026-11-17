@@ -49,7 +49,7 @@ test('31.3 (D173) : binaire absent, ou sortie vide', async () => {
     compte: null,
   });
   expect((await lireServe('tailscale', { appareils: 4890, interdits: [] }, absent)).etat).toBe(
-    'absent',
+    'illisible',
   );
   const vide: TailscaleExec = async () => ({ stdout: '', code: null });
   expect((await lireTailnet('tailscale', vide)).etat).toBe('stopped');
@@ -114,4 +114,22 @@ test('31.3 (D182) : un Funnel actif, et les ports interdits exposés', () => {
 
 test('31.3 (D173) : la commande à copier, que A-I-D ne lance pas', () => {
   expect(commandeServe(4890)).toBe('tailscale serve --bg --https=443 http://127.0.0.1:4890');
+});
+
+test('31.14 : une lecture Serve échouée est illisible, une sortie vide réussie est absente', async () => {
+  for (const code of ['ENOENT', 'EACCES', 'ERR']) {
+    expect((await lireServe('tailscale', PORTS, async () => ({ stdout: '', code }))).etat).toBe(
+      'illisible',
+    );
+  }
+  expect(
+    (
+      await lireServe('tailscale', PORTS, async () => {
+        throw new Error('contenu synthétique privé');
+      })
+    ).etat,
+  ).toBe('illisible');
+  expect((await lireServe('tailscale', PORTS, async () => ({ stdout: '', code: null }))).etat).toBe(
+    'absent',
+  );
 });

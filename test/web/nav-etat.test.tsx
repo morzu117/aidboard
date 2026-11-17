@@ -53,7 +53,7 @@ const run = (i: number) => ({
 });
 const etat = (over = {}) =>
   snapshot({
-    workspaces: [ws({ id: 'ws_1', name: 'aid' }), ws({ id: 'ws_2', name: 'skifer', root: '/s' })],
+    workspaces: [ws({ id: 'ws_1', name: 'aid' }), ws({ id: 'ws_2', name: 'projet-b', root: '/s' })],
     topics: [
       topic({ id: 'tp_1', branch: 'feat/decider' }),
       topic({ id: 'tp_2', branch: 'feat/relire' }),
@@ -101,7 +101,7 @@ test('D103 : les sections dans l’ordre, vides masquées ; gras si À décider,
   expect(sectionDuSujet('tp_3')).toBe('en-cours');
   expect(n('etat.sujet-tp_1')!.className).toContain('nav-etat-sujet--a-decider');
   expect(n('etat.sujet-tp_1')!.textContent).toContain('feat/decider');
-  expect(n('etat.sujet-tp_3')!.textContent).toContain('skifer');
+  expect(n('etat.sujet-tp_3')!.textContent).toContain('projet-b');
   // archivé : nulle part
   expect(n('etat.sujet-tp_5')).toBeNull();
   // En pause est repliée par défaut
@@ -122,8 +122,8 @@ test('D105 : une tuile par projet filtre la liste ; « Nouveau sujet » part du 
   open();
   await waitFor(() => expect(n('etat.projet-ws_2')).not.toBeNull());
   const tuile = n('etat.projet-ws_2')!;
-  expect(tuile.textContent).toBe('S');
-  expect(tuile.getAttribute('title')).toBe('skifer');
+  expect(tuile.textContent).toBe('P');
+  expect(tuile.getAttribute('title')).toBe('projet-b');
   expect(n('etat.projet-ws_1')!.textContent).toBe('A');
   await userEvent.click(tuile);
   expect(tuile.getAttribute('aria-pressed')).toBe('true');

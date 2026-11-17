@@ -38,7 +38,7 @@ Relevé le 2026-10-25.
 | Le chemin d'écriture prévu passe par GitHub (`/swairm <verbe>` en commentaire, accusé par réaction, `swairm-command/1`). Il dépend des chantiers 07c puis 08, **dont aucun plan n'existe encore** dans `docs/chantiers/`.                               | `docs/github-fait-foi.md` §3.1, §5, §6, §11                                       |
 | Le cockpit de la ruche 2 (`scripts/cockpit.py`) n'a ni pidfile, ni garde contre un double lancement ; `scripts/start-hive.sh` lance encore la ruche 1.                                                                                                 | `docs/github-fait-foi.md` §6, `scripts/start-hive.sh`                             |
 | `swairm` n'est pas sur le `PATH` de ce poste. Le lanceur résout son lien symbolique pour trouver `.venv/bin/python`.                                                                                                                                   | `bin/swairm`                                                                      |
-| Boards présents : `morzu117/Orgasso` (une carte « à toi », `swairm/capacitor-socle`, gare) et `morzu117/swairm-essai`.                                                                                                                                 | `swairm status` du 2026-10-25, lu avec le clone de déploiement (donc avant 07a/b) |
+| Boards présents : `morzu117/projet-d` (une carte « à toi », `swairm/capacitor-socle`, gare) et `morzu117/swairm-essai`.                                                                                                                                 | `swairm status` du 2026-10-25, lu avec le clone de déploiement (donc avant 07a/b) |
 
 ## 3. Ce qu'A-I-D fera, pour que Swairm sache à quoi se brancher
 

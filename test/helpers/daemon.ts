@@ -35,6 +35,7 @@ export async function startTestDaemon(
     remoteBins?: Partial<Record<'claude' | 'codex', string>>;
     /** Chantier 31 (D173) : la sortie de `tailscale`. Par défaut, binaire absent : jamais le vrai. */
     tailscaleExec?: TailscaleExec;
+    relectureHostMs?: number;
     /** Chantier 31 : un faux build de l'interface ; absent = aucun, comme hors build. */
     webRoot?: string | null;
     /** Chantier 31 (D174) : relève les routes du port du Mac. */
@@ -75,7 +76,10 @@ export async function startTestDaemon(
       env: { ...process.env, FAKE_SSH_HOME: home },
     },
     remoteBins: extra.remoteBins,
-    tailscaleExec: extra.tailscaleExec ?? (async () => ({ stdout: '', code: 'ENOENT' })),
+    relectureHostMs: extra.relectureHostMs,
+    tailscaleExec:
+      extra.tailscaleExec ??
+      (async (_bin, args) => ({ stdout: '', code: args[0] === 'serve' ? null : 'ENOENT' })),
     webRoot: extra.webRoot ?? null,
     onRoute: extra.onRoute,
   });

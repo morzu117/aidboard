@@ -242,6 +242,11 @@ export function Cockpit() {
           </button>
         )}
       </div>
+      {e?.actif && e.raison && (
+        <p className="message-erreur" role="alert" data-node="host.raison">
+          {e.raison}
+        </p>
+      )}
       <p className="texte-discret" data-node="machines.cockpit.phrase">
         {e?.actif
           ? `Ce cockpit écoute sur ce Mac (127.0.0.1). Tes appareils du tailnet entrent par Tailscale Serve, sur ${e.tailnet.nom ?? 'le nom du Mac'}, en lecture seule, 8 heures par accès.`
@@ -301,11 +306,6 @@ export function Cockpit() {
           {h.erreur}
         </p>
       )}
-      {e?.actif && e.raison && (
-        <p className="texte-discret" data-node="host.raison">
-          {e.raison}
-        </p>
-      )}
       {e?.actif && e.serve.etat !== 'ok' && <Commande commande={e.commande} />}
       <ul className="machines-appareils" data-node="machines.cockpit.appareils">
         <li data-node="machines.cockpit.appareil-local">
@@ -324,6 +324,7 @@ export function Cockpit() {
               type="button"
               data-node="host.ajouter"
               disabled={h.occupe || !e.disponible}
+              title={h.occupe || !e.disponible ? (e.raison ?? 'Action en cours') : undefined}
               onClick={() => void h.nouveauCode()}
             >
               Ajouter un appareil

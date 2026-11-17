@@ -94,6 +94,13 @@ export function registerHostRoutes(
     reply.header('Cache-Control', 'no-store');
     const actif = (req.body as { actif?: unknown } | null)?.actif;
     if (typeof actif !== 'boolean') return reply.code(400).send({ error: 'actif : true ou false' });
+    const lecture = actif ? await deps.modeHost.lireTailscale() : undefined;
+    if (lecture?.serve.etat === 'illisible') {
+      app.log.warn('État de Serve illisible');
+      return reply.code(409).send({ error: 'État de Serve illisible' });
+    }
+    if (lecture?.serve.funnel)
+      return reply.code(409).send({ error: 'Funnel actif : le cockpit serait sur internet' });
     try {
       ecrireModeHostActif(deps.paths, actif);
     } catch (err) {
@@ -102,7 +109,7 @@ export function registerHostRoutes(
     }
     deps.config.modeHost.actif = actif;
     await deps.pda?.synchroniser();
-    if (actif) await deps.modeHost.demarrer();
+    if (actif) await deps.modeHost.demarrer(lecture);
     else await deps.modeHost.arreter({ couper: true });
     return etat();
   });

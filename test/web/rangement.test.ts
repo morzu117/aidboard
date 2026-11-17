@@ -56,8 +56,8 @@ test('D108 : la prochaine chose, de la question à la phase', () => {
 });
 
 test('D105 : la tuile garde sa couleur quand le projet est renommé, et reste dans la palette', () => {
-  const a = tuileProjet('ws_abc', 'skifer', 8);
-  expect(a.lettre).toBe('S');
+  const a = tuileProjet('ws_abc', 'projet-b', 8);
+  expect(a.lettre).toBe('P');
   expect(tuileProjet('ws_abc', 'autre nom', 8).couleur).toBe(a.couleur);
   for (const id of ['ws_1', 'ws_2', 'ws_3', 'ws_zz'])
     expect(tuileProjet(id, 'x', 8).couleur).toBeLessThan(8);
