@@ -112,6 +112,7 @@ export function registerMemoryRoutes(app: FastifyInstance, deps: MemoryRouteDeps
   app.get('/api/memory/pages/*', async (req) => {
     const page = memory.get(slugOf(req));
     if (!page) throw new AidHttpError(404, 'page absente');
+    memory.store.recordUsage([page.slug], 'get');
     return page;
   });
 
@@ -145,7 +146,18 @@ export function registerMemoryRoutes(app: FastifyInstance, deps: MemoryRouteDeps
     const q = req.query as { q?: string; scope?: string; limit?: string };
     if (!q.q) throw new AidHttpError(400, 'q est requis');
     const limit = Math.min(Math.max(Number.parseInt(q.limit ?? '10', 10) || 10, 1), 100);
-    return memory.search(q.q, q.scope && q.scope !== 'all' ? q.scope : 'all', limit);
+    const result = await memory.search(q.q, q.scope && q.scope !== 'all' ? q.scope : 'all', limit);
+    memory.store.recordUsage(
+      result.hits.map((hit) => hit.slug),
+      'search',
+    );
+    return result;
+  });
+
+  app.get('/api/memory/usage', async (req) => {
+    // Le bilan local suit les autres routes de diagnostic, réservées à l'administrateur.
+    adminOnly(req);
+    return { pages: memory.store.usage() };
   });
 
   app.get('/api/memory/health', async (req) => {

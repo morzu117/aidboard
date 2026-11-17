@@ -13,6 +13,7 @@ export const MEM_HELP = `aid mem : la mémoire des agents (pages markdown, reche
                                                       contenu sur stdin ; existante sans option = refus
   aid mem search "<termes>" [--scope <ns>|all] [--limit N] [--json]
   aid mem list <prefix> [--json]
+  aid mem usage [--json]                              lectures par page et dernière lecture
   aid mem rm <slug>
   aid mem purge [--dry-run] [--orphelines]              pages cycliques closes ; orphelines = liste seule
   aid mem export --dir <dir> [--scope <ns>|all]
@@ -87,6 +88,17 @@ export async function runMem(
         return await put(call, positionals[0], values, io);
       case 'search':
         return await search(call, positionals[0], values, io);
+      case 'usage': {
+        const { status, json } = await call('GET', '/api/memory/usage');
+        if (status !== 200) return fail(status, json, io);
+        if (values.json) io.out(JSON.stringify(json));
+        else {
+          const pages = json.pages as Array<{ slug: string; reads: number; lastReadAt: string }>;
+          for (const page of pages) io.out(`${page.reads}  ${page.lastReadAt}  ${page.slug}`);
+          if (pages.length === 0) io.out('aucune lecture');
+        }
+        return 0;
+      }
       case 'list':
         return await list(call, positionals[0] ?? '', values, io);
       case 'rm':

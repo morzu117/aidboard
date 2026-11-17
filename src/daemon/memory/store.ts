@@ -137,6 +137,27 @@ export class MemoryStore {
     return r ? fromRow(r) : undefined;
   }
 
+  recordUsage(slugs: string[], op: 'search' | 'get'): void {
+    const at = new Date().toISOString();
+    // DM18 : runs n'a pas de colonne de rôle ; ne pas lui substituer le rôle d'un agent.
+    const insert = this.db.prepare(
+      'INSERT INTO memory_usage (slug, op, role, at) VALUES (?, ?, NULL, ?)',
+    );
+    this.db.transaction(() => {
+      for (const slug of slugs) insert.run(slug, op, at);
+    })();
+  }
+
+  usage(): Array<{ slug: string; reads: number; lastReadAt: string }> {
+    // Seules les pages lues figurent au bilan ; le slug départage les nombres égaux.
+    return this.db
+      .prepare(
+        `SELECT slug, COUNT(*) AS reads, MAX(at) AS lastReadAt FROM memory_usage
+         GROUP BY slug ORDER BY reads DESC, slug ASC`,
+      )
+      .all() as Array<{ slug: string; reads: number; lastReadAt: string }>;
+  }
+
   duplicatePairJudged(a: MemoryPage, b: MemoryPage): boolean {
     const [first, second] = a.slug < b.slug ? [a, b] : [b, a];
     return !!this.db
