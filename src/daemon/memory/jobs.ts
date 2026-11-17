@@ -40,13 +40,13 @@ export class MemoryJobs {
     return row.n;
   }
 
-  claim(now = new Date().toISOString()): MemoryJob | undefined {
+  claim(now = new Date().toISOString(), embedReady = true): MemoryJob | undefined {
     return this.db.transaction((): MemoryJob | undefined => {
       const job = this.db
         .prepare(
-          "SELECT id, kind, slug, attempts FROM memory_jobs WHERE state = 'pending' AND (run_after IS NULL OR run_after <= ?) ORDER BY created_at LIMIT 1",
+          "SELECT id, kind, slug, attempts FROM memory_jobs WHERE state = 'pending' AND (run_after IS NULL OR run_after <= ?) AND (kind != 'embed' OR ?) ORDER BY created_at LIMIT 1",
         )
-        .get(now) as MemoryJob | undefined;
+        .get(now, Number(embedReady)) as MemoryJob | undefined;
       if (!job) return undefined;
       this.db
         .prepare(

@@ -91,12 +91,13 @@ test('recherche hybride : une page sans mot commun avec la requête remonte par 
   expect(slugs[0]).toBe('aid/plan/felin');
 });
 
-test('Embedder.ready() faux : recherche FTS5 seule, jamais de job', async () => {
+test('Embedder.ready() faux : recherche FTS5 seule, job en attente', async () => {
   const embedder = fakeEmbedder({}, { ready: false });
   t = await startTestDaemon(undefined, { memory: { embedder, pollMs: 5 } });
   await put('aid/plan/x', 'un mot rare : zythum');
   expect((await health()).vectors).toBe('off');
-  expect((await health()).pendingJobs).toBe(0);
+  expect((await health()).pendingJobs).toBe(1);
+  expect(t.db.prepare('SELECT attempts FROM memory_jobs').get()).toEqual({ attempts: 0 });
   const r = await search('zythum');
   expect(r.json()).toMatchObject({ mode: 'fts', hits: [{ slug: 'aid/plan/x' }] });
 });
@@ -113,4 +114,54 @@ test('échec d’embedding : le job passe à failed après 3 tentatives, le put 
     .get('aid/plan/x');
   expect(job).toMatchObject({ state: 'failed', attempts: 3 });
   expect((await health()).pendingJobs).toBe(0);
+});
+
+test('DM16 : rattrapage après démarrage indisponible, puis après une nouvelle panne', async () => {
+  const availability = { ready: false };
+  let probes = 0;
+  const fake = fakeEmbedder(
+    {
+      'x\n\ncontenu': [1, 0, 0],
+      'ancienne\n\ncontenu': [0, 1, 0],
+      'y\n\ncontenu': [0, 0, 1],
+    },
+    availability,
+  );
+  t = await startTestDaemon(undefined, {
+    memory: {
+      embedder: {
+        ...fake,
+        ready: async () => {
+          probes++;
+          return availability.ready;
+        },
+      },
+      pollMs: 5,
+      maintenanceScheduleMs: 20,
+    },
+  });
+  await put('aid/plan/x', 'contenu');
+  await put('aid/plan/ancienne', 'contenu');
+  // Simule une page importée avant la file persistante, sans job à reprendre.
+  t.db.prepare('DELETE FROM memory_jobs WHERE slug = ?').run('aid/plan/ancienne');
+  const before = probes;
+  await waitFor(() => probes > before + 1);
+  expect(jobState('aid/plan/x')).toBe('pending');
+  expect(vectorCount()).toBe(0);
+  availability.ready = true;
+  await waitFor(() => vectorCount() === 2);
+  expect(t.db.prepare('SELECT count(*) AS n FROM memory_jobs').get()).toEqual({ n: 2 });
+  const recovered = probes;
+  availability.ready = false;
+  await waitFor(() => probes > recovered + 1);
+  expect((await health()).vectors).toBe('off');
+  await put('aid/plan/y', 'contenu');
+  const down = probes;
+  await waitFor(() => probes > down + 1);
+  expect(
+    t.db.prepare('SELECT state, attempts FROM memory_jobs WHERE slug = ?').get('aid/plan/y'),
+  ).toEqual({ state: 'pending', attempts: 0 });
+  availability.ready = true;
+  await waitFor(() => vectorCount() === 3);
+  expect((await health()).vectors).toBe('ollama');
 });

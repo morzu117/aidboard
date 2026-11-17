@@ -170,6 +170,7 @@ export async function startDaemon(
             store: memStore,
             vectors: vectors ?? undefined,
             embedder: embedder ?? undefined,
+            embedReady: () => hybridOn,
             log,
             backoffMs: opts.memory?.backoffMs,
             pollMs: opts.memory?.pollMs,
@@ -195,37 +196,68 @@ export async function startDaemon(
       log,
       ...(embedder && vectors && { hybrid: { index: vectors, embedder, enabled: () => hybridOn } }),
       onWrite: (slug) => {
-        if (!hybridOn) return;
+        if (!embedder || !vectors) return;
         jobs.enqueue('embed', slug);
         worker?.notify();
       },
       onRemove: (slug) => vectors?.remove(slug),
     });
-    if (embedder && vectors) {
-      // DM5 : décidé une fois au démarrage, pas de nouvel essai en boucle
-      hybridOn = await embedder.ready();
-      if (hybridOn) worker?.start();
-      else log('ollama injoignable : recherche FTS5 seule');
-    }
     mirror.synchronize = (action) => memory.synchronizeMirror(action);
     await memory.synchronizeMirror(async () => {});
     let maintenanceTimer: NodeJS.Timeout | null = null;
-    if (chatModel) {
-      worker?.start();
-      const tick = () => {
-        const n = scheduleMaintenance(new Date(), {
-          store: memStore,
-          jobs,
-          proposals,
-          enabled: maintCfg.enabled,
-          window: maintCfg.window,
-          maxPerNight: maintCfg.maxPerNight,
-          splitLines: maintCfg.splitLines,
-        });
-        if (n > 0) worker?.notify();
+    let maintenanceTick: Promise<void> | null = null;
+    if (worker) {
+      const tick = (): Promise<void> => {
+        // DM16 : un seul sondage en vol, partagé avec la disponibilité du worker.
+        if (maintenanceTick) return maintenanceTick;
+        maintenanceTick = (async () => {
+          if (embedder && vectors) {
+            const wasReady = hybridOn;
+            hybridOn = await embedder.ready();
+            if (hybridOn && !wasReady) {
+              // Matérialiser avant enqueue : store.all() garde un curseur ouvert.
+              const pages = [...memStore.all()];
+              const indexed = new Set(
+                vectors.meta()
+                  ? (
+                      opened.prepare('SELECT slug FROM memory_vectors').all() as { slug: string }[]
+                    ).map((page) => page.slug)
+                  : [],
+              );
+              for (const page of pages) {
+                if (!indexed.has(page.slug)) jobs.enqueue('embed', page.slug);
+              }
+              worker.notify();
+            } else if (!hybridOn && wasReady) {
+              log('ollama injoignable : recherche FTS5 seule');
+            }
+          }
+          const n = scheduleMaintenance(new Date(), {
+            store: memStore,
+            jobs,
+            proposals,
+            enabled: !!chatModel && maintCfg.enabled,
+            window: maintCfg.window,
+            maxPerNight: maintCfg.maxPerNight,
+            splitLines: maintCfg.splitLines,
+          });
+          if (n > 0) worker.notify();
+        })()
+          .catch((err: unknown) => {
+            hybridOn = false;
+            log(`mémoire : planificateur : ${String(err)}`);
+          })
+          .finally(() => {
+            maintenanceTick = null;
+          });
+        return maintenanceTick;
       };
-      tick();
-      maintenanceTimer = setInterval(tick, opts.memory?.maintenanceScheduleMs ?? 15 * 60_000);
+      await tick();
+      worker.start();
+      maintenanceTimer = setInterval(
+        () => void tick(),
+        opts.memory?.maintenanceScheduleMs ?? 15 * 60_000,
+      );
       maintenanceTimer.unref();
     }
     let livePort = config.port;
@@ -497,6 +529,7 @@ export async function startDaemon(
         agents.dispose();
         updates?.dispose();
         if (maintenanceTimer) clearInterval(maintenanceTimer);
+        await maintenanceTick;
         await worker?.stop();
         await mirror.flush();
         if (serveurArtefacts?.disponible) await serveurArtefacts.app.close();
