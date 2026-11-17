@@ -15,6 +15,15 @@ import { assertMemSlug, isValidMemSlug } from './slug.js';
 export type GitExec = (cwd: string, args: string[]) => Promise<GitResult>;
 export type Logger = (line: string) => void;
 
+export interface MirrorSyncHealth {
+  push: boolean;
+  origin: boolean;
+  // Comparaison avec la dernière référence récupérée ; null si elle est inconnue.
+  ahead: number | null;
+  behind: number | null;
+  conflicts: string[];
+}
+
 // Parcourt un dossier de pages, par ordre de slug : un `.md` par page, chemin relatif sans extension = slug.
 export function* walkMarkdown(root: string, dir = root): Iterable<{ slug: string; path: string }> {
   const entries = readdirSync(dir, { withFileTypes: true }).sort((a, b) =>
@@ -39,6 +48,33 @@ export class MemoryMirror {
   // Le service sérialise aussi le tirage avec les écritures de pages.
   synchronize: (action: () => Promise<void>) => Promise<void> = (action) => action();
   readonly pulledSlugs = new Set<string>();
+
+  async syncHealth(): Promise<MirrorSyncHealth> {
+    const origin = (await this.exec(this.root, ['remote', 'get-url', 'origin'])).ok;
+    const health: MirrorSyncHealth = {
+      push: this.push,
+      origin,
+      ahead: null,
+      behind: null,
+      conflicts: this.conflicts,
+    };
+    if (!origin) return health;
+    const branch = await this.exec(this.root, ['symbolic-ref', '--quiet', '--short', 'HEAD']);
+    if (!branch.ok) return health;
+    // La santé ne déclenche ni réseau ni synchronisation du miroir.
+    const counts = await this.exec(this.root, [
+      'rev-list',
+      '--left-right',
+      '--count',
+      `HEAD...refs/remotes/origin/${branch.stdout}`,
+    ]);
+    if (counts.ok && /^\d+\s+\d+$/.test(counts.stdout.trim())) {
+      const [ahead, behind] = counts.stdout.trim().split(/\s+/).map(Number);
+      health.ahead = ahead!;
+      health.behind = behind!;
+    }
+    return health;
+  }
 
   get conflicts(): string[] {
     const marker = join(this.root, '.git', 'aid-memory-conflicts.json');

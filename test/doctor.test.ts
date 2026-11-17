@@ -40,6 +40,62 @@ const good: Probes = {
 const levels = async (over: Partial<Probes>) =>
   (await runChecks({ ...good, ...over })).map((c) => `${c.level}:${c.label}`);
 
+test('57.5 : doctor signale le distant absent, les écarts et les conflits mémoire', async () => {
+  const check = async (mirrorSync: {
+    push: boolean;
+    origin: boolean;
+    ahead: number | null;
+    behind: number | null;
+    conflicts: string[];
+  }) =>
+    runChecks({
+      ...good,
+      memoryHealth: async () => ({
+        pages: {},
+        fts: true,
+        vectors: 'off',
+        pendingJobs: 0,
+        failedJobs: 0,
+        mirrorDirty: false,
+        mirrorSync,
+      }),
+    });
+  const absent = { push: false, origin: false, ahead: null, behind: null, conflicts: [] };
+  expect((await check(absent)).every((c) => c.level === 'ok')).toBe(true);
+  expect(await check({ ...absent, push: true })).toContainEqual(
+    expect.objectContaining({
+      level: 'warn',
+      detail: expect.stringContaining('distant origin absent'),
+    }),
+  );
+  expect(await check({ ...absent, origin: true })).toContainEqual(
+    expect.objectContaining({
+      level: 'warn',
+      detail: expect.stringContaining('avance/retard inconnus'),
+    }),
+  );
+  for (const [ahead, behind] of [
+    [0, 0],
+    [2, 0],
+    [0, 3],
+    [2, 3],
+  ]) {
+    expect(await check({ ...absent, origin: true, ahead: ahead!, behind: behind! })).toContainEqual(
+      expect.objectContaining({
+        level: ahead || behind ? 'warn' : 'ok',
+        label: `miroir mémoire : ${ahead} commit(s) en avance, ${behind} en retard`,
+        detail: 'par rapport à la dernière référence origin récupérée',
+      }),
+    );
+  }
+  expect(await check({ ...absent, conflicts: ['lesson/base.md'] })).toContainEqual(
+    expect.objectContaining({
+      level: 'warn',
+      detail: expect.stringContaining('conflit en attente : lesson/base.md'),
+    }),
+  );
+});
+
 test('une machine saine : aucun ⚠ ni ✗', async () => {
   const checks = await runChecks(good);
   expect(checks.filter((c) => c.level !== 'ok')).toEqual([]);

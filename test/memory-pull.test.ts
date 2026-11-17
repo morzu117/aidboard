@@ -126,6 +126,8 @@ test('57.4 : conflit conservé sans résolution automatique, y compris après re
   restarted.scheduleCommit('ne doit pas commiter le conflit');
   await restarted.flush();
   expect(restarted.conflicts).toEqual(['lesson/base.md']);
+  expect((await restarted.syncHealth()).conflicts).toEqual(['lesson/base.md']);
+  expect((await b.service.health()).mirrorSync?.conflicts).toEqual(['lesson/base.md']);
   expect(sh(origin, 'rev-parse', 'main')).toBe(remoteHead);
   expect(b.logs.some((line) => line.includes('conflit en attente'))).toBe(true);
 });
@@ -162,6 +164,55 @@ test('57.4 : le daemon tire au démarrage et relit les pages dans la base exista
     },
   });
   expect(daemon.d.memory.get('lesson/demarrage')?.body).toBe('reçu au démarrage');
+  const health = await daemon.d.app.inject({
+    method: 'GET',
+    url: '/api/memory/health',
+    headers: daemon.headers,
+  });
+  expect(health.statusCode).toBe(200);
+  expect(health.json().mirrorSync).toEqual({
+    push: true,
+    origin: true,
+    ahead: 0,
+    behind: 0,
+    conflicts: [],
+  });
+});
+
+test('57.5 : santé du miroir sans origin, avec push désactivé puis activé', async () => {
+  const home = mkdtempSync(join(tmpdir(), 'aid-health-'));
+  homes.push(home);
+  const { mirror, service } = await machine(home);
+  expect((await service.health()).mirrorSync).toEqual({
+    push: false,
+    origin: false,
+    ahead: null,
+    behind: null,
+    conflicts: [],
+  });
+  mirror.push = true;
+  expect((await service.health()).mirrorSync).toMatchObject({ push: true, origin: false });
+  const origin = join(home, 'empty.git');
+  mkdirSync(origin);
+  sh(origin, 'init', '--bare', '-q', '-b', 'main');
+  sh(mirror.root, 'remote', 'add', 'origin', origin);
+  expect(await mirror.syncHealth()).toMatchObject({ origin: true, ahead: null, behind: null });
+});
+
+test('57.5 : avance et retard selon le dernier fetch, sans synchronisation par la santé', async () => {
+  const { a, b } = await pair();
+  expect((await b.service.health()).mirrorSync).toMatchObject({ ahead: 0, behind: 0 });
+  b.mirror.push = false;
+  await put(b, 'lesson/locale', 'locale');
+  expect(await b.mirror.syncHealth()).toMatchObject({ ahead: 1, behind: 0 });
+  await put(a, 'lesson/distante', 'distante');
+  // La lecture de santé ne fetch pas et ne masque pas la date implicite de la référence.
+  expect(await b.mirror.syncHealth()).toMatchObject({ ahead: 1, behind: 0 });
+  sh(b.mirror.root, 'fetch', '-q', 'origin');
+  const head = sh(b.mirror.root, 'rev-parse', 'HEAD');
+  expect((await b.service.health()).mirrorSync).toMatchObject({ ahead: 1, behind: 1 });
+  expect(sh(b.mirror.root, 'rev-parse', 'HEAD')).toBe(head);
+  expect(b.service.get('lesson/distante')).toBeUndefined();
 });
 
 test('57.4 : premier tirage dans un miroir sans commit', async () => {

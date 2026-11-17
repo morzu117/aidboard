@@ -15,6 +15,7 @@ export interface MemoryHealth {
   pendingJobs: number;
   failedJobs: number;
   mirrorDirty: boolean;
+  mirrorSync?: import('./mirror.js').MirrorSyncHealth;
 }
 import type { WorkspaceQueue } from '../actions/queue.js';
 import type { EventStore } from '../events/store.js';
@@ -115,6 +116,7 @@ export class MemoryService {
       pendingJobs: jobs.pending,
       failedJobs: jobs.failed,
       mirrorDirty: await this.deps.mirror.dirty(),
+      mirrorSync: await this.deps.mirror.syncHealth(),
     };
   }
 
