@@ -8,7 +8,7 @@
 | Contrat | La spec #1630 v2.1 du lab (corps de la carte, version 7), section 5 : « What A-I-D gets ». Le contrat sur le fil est l'annexe A (post 99673 de #1630) : les lignes JSON (A1), le corps de `decide` et ses erreurs (A2), l'en-tête cockpit (A3), et trois vecteurs du digest (A4). Elle est **proposée**, et elle devient contraignante quand l'accept du build de la passerelle la cite. Elle a été relue par drop (PASS #5604) et par la cell de gestion (DM 99312 et 99332). |
 | Organisation | La cell de gestion de Julien gère le chantier. Un agent Codex CLI code sur un brief tiré de ce plan. La cell de gestion relit le diff, regarde les captures, lance le gate et `gate:e2e`, commite et ouvre la PR. |
 | Validation | Le chantier touche le mesh, un identifiant et le PDA. Il faut donc la CI verte, la relecture du lab sur le diff du daemon, et le oui de Julien. |
-| Dépend de | Les étapes 1 et 2 de la spec #1630, côté passerelle : `summary`, `why`, `digest`, la lecture d'une ligne, `decided_by` et `decided_via`, puis l'identifiant cockpit. **Aucun code du 58.2 ne part avant leur merge.** Le 17 novembre à 07:09Z, ces étapes ne sont pas lancées : le build attend l'ordre du commandant (DM 99675). **Une question d'autorité reste ouverte**, voir la section 6. |
+| Dépend de | Les étapes 1 et 2 de la spec #1630, côté passerelle : `summary`, `why`, `digest`, la lecture d'une ligne, `decided_by` et `decided_via`, puis l'identifiant cockpit. **Aucun code du 58.2 ne part avant leur merge.** Le 17 novembre à 07:09Z, ces étapes ne sont pas lancées : le build attend l'ordre du commandant (DM 99675). Qui tient le cockpit : voir la section 6, tranchée par Julien. |
 
 ## 1. Le constat
 
@@ -90,7 +90,7 @@ Elle a lieu après le merge des étapes 1 et 2 de la passerelle. Elle se fait av
 - 58.2 et 58.3 sont mergés, avec la CI verte, la relecture du lab et le oui de Julien.
 - La vérification réelle du 58.4 est faite et notée ici.
 
-## 6. Question ouverte : qui tient le cockpit
+## 6. Qui tient le cockpit
 
 Le lab l'a soulevée comme bloquante (DM 99675, point 4a).
 
@@ -105,3 +105,7 @@ Le lab l'a soulevée comme bloquante (DM 99675, point 4a).
 - (3) le commandant délègue à Julien, en connaissance de cause.
 
 Le code du 58.2 et du 58.3 ne dépend pas de la réponse : il prend un identifiant par mesh, quel qu'en soit le titulaire. Le 58.4 en dépend.
+
+**La décision de Julien (17 novembre) : l'option (2).** Le cockpit sert seulement sur une passerelle dont Julien est le commandant. Le 58.4 se fait sur une passerelle bac à sable, où il l'est. Aucune autorité n'est déléguée. Sur le mesh du lab, A-I-D ne tient pas d'identifiant cockpit.
+
+**L'ordre de Julien, le même jour.** Aucun code du 58.2 ne part avant que l'accept du build de la passerelle cite l'annexe A.
