@@ -1,9 +1,15 @@
 import { Type } from '@sinclair/typebox';
 import { Value } from '@sinclair/typebox/value';
 import { monotonicFactory } from 'ulid';
-import type { MemoryProposal, ProposalKind, ProposalState } from '../../shared/memory.js';
+import type {
+  MemoryPage,
+  MemoryProposal,
+  ProposalKind,
+  ProposalState,
+} from '../../shared/memory.js';
 import { LESSON_NS } from '../../shared/memory.js';
 import type { Db } from '../db.js';
+import type { VectorIndex } from './embed.js';
 import type { MemoryJob, MemoryJobs } from './jobs.js';
 import type { MemoryService, WriteContext } from './service.js';
 import { isValidMemSlug } from './slug.js';
@@ -130,7 +136,7 @@ const TagsPayload = Type.Object(
   { additionalProperties: false },
 );
 const DuplicatePayload = Type.Object(
-  { duplicateOf: Type.String({ minLength: 1 }), rationale: Type.String({ minLength: 1 }) },
+  { doublon: Type.Boolean(), rationale: Type.String({ minLength: 1 }) },
   { additionalProperties: false },
 );
 const SplitPage = Type.Object(
@@ -240,6 +246,8 @@ export function scheduleMaintenance(now: Date, deps: SchedulerDeps): number {
 }
 
 export interface MaintainDeps {
+  vectors?: VectorIndex;
+  duplicateDistance?: number;
   store: MemoryStore;
   proposals: MemoryProposals;
   model: ChatModel;
@@ -247,7 +255,7 @@ export interface MaintainDeps {
 }
 
 const TAGS_PROMPT = `Tu proposes des tags pour une page de mémoire. Réponds uniquement en JSON de la forme {"tags": ["tag1", "tag2"]}, 1 à 5 tags courts, en minuscules, de préférence parmi les tags existants donnés.`;
-const DUPLICATE_PROMPT = `Tu compares une nouvelle leçon aux leçons les plus proches. Réponds uniquement en JSON de la forme {"duplicateOf": "<slug>", "rationale": "<justification>"}.`;
+const DUPLICATE_PROMPT = `Tu compares uniquement les deux leçons données. Un non est la réponse normale : réponds oui seulement si elles font doublon. Réponds uniquement en JSON de la forme {"doublon": true | false, "rationale": "<justification>"}.`;
 const SPLIT_PROMPT = `Tu découpes une leçon trop longue en pages atomiques. Réponds uniquement en JSON de la forme {"pages": [{"slug": "...", "title": "...", "frontmatter": {}, "body": "..."}]}, 2 à 4 pages.`;
 
 async function runTags(
@@ -264,16 +272,31 @@ async function runTags(
   deps.proposals.create('tags', page.slug, payload, `${payload.tags.length} tag(s) proposé(s)`);
 }
 
-async function runDuplicate(
-  page: { slug: string; namespace: string; title: string; body: string },
-  deps: MaintainDeps,
-): Promise<void> {
-  const content = await deps.model.chat(DUPLICATE_PROMPT, `Titre : ${page.title}\n\n${page.body}`);
-  const payload = parseJson(content);
-  if (!Value.Check(DuplicatePayload, payload)) {
-    throw new Error('proposition duplicate : forme JSON invalide');
+async function runDuplicate(page: MemoryPage, deps: MaintainDeps): Promise<void> {
+  const candidates =
+    deps.vectors?.duplicateCandidates(page.slug, deps.duplicateDistance ?? 0.15) ?? [];
+  for (const hit of candidates) {
+    const candidate = deps.store.get(hit.slug);
+    if (!candidate || deps.store.duplicatePairJudged(page, candidate)) continue;
+    const content = await deps.model.chat(
+      DUPLICATE_PROMPT,
+      `Leçon : ${page.slug}\nTitre : ${page.title}\n\n${page.body}\n\nCandidat : ${candidate.slug}\nTitre : ${candidate.title}\n\n${candidate.body}`,
+    );
+    const payload = parseJson(content);
+    if (!Value.Check(DuplicatePayload, payload)) {
+      throw new Error('proposition duplicate : forme JSON invalide');
+    }
+    deps.store.recordDuplicatePair(page, candidate, payload.doublon ? 'oui' : 'non');
+    if (payload.doublon) {
+      deps.proposals.create(
+        'duplicate',
+        page.slug,
+        { duplicateOf: candidate.slug, rationale: payload.rationale },
+        payload.rationale,
+      );
+      return;
+    }
   }
-  deps.proposals.create('duplicate', page.slug, payload, payload.rationale);
 }
 
 async function runSplit(

@@ -151,6 +151,22 @@ export class VectorIndex {
       .all(toBlob(vector), k) as Array<{ slug: string; distance: number }>;
   }
 
+  duplicateCandidates(slug: string, distance: number): Array<{ slug: string; distance: number }> {
+    if (!this.hasTable()) return [];
+    // Filtrer lesson/ avant la limite évite que les pages cycliques masquent les trois voisins.
+    // À distance égale, le slug départage les candidats pour un ordre stable.
+    return this.db
+      .prepare(
+        `SELECT v.slug, vec_distance_cosine(v.embedding, origin.embedding) AS distance
+         FROM memory_vectors v JOIN memory_pages p ON p.slug = v.slug
+         CROSS JOIN memory_vectors origin
+         WHERE origin.slug = ? AND v.slug != origin.slug AND p.namespace = 'lesson'
+           AND vec_distance_cosine(v.embedding, origin.embedding) <= ?
+         ORDER BY distance, v.slug LIMIT 3`,
+      )
+      .all(slug, distance) as Array<{ slug: string; distance: number }>;
+  }
+
   count(): number {
     if (!this.hasTable()) return 0;
     return (this.db.prepare('SELECT count(*) AS c FROM memory_vectors').get() as { c: number }).c;

@@ -137,6 +137,33 @@ export class MemoryStore {
     return r ? fromRow(r) : undefined;
   }
 
+  duplicatePairJudged(a: MemoryPage, b: MemoryPage): boolean {
+    const [first, second] = a.slug < b.slug ? [a, b] : [b, a];
+    return !!this.db
+      .prepare(
+        `SELECT 1 FROM memory_duplicate_pairs
+         WHERE slug_a = ? AND slug_b = ? AND revision_a = ? AND revision_b = ?`,
+      )
+      .get(first.slug, second.slug, first.revision, second.revision);
+  }
+
+  recordDuplicatePair(a: MemoryPage, b: MemoryPage, verdict: 'oui' | 'non'): void {
+    const [first, second] = a.slug < b.slug ? [a, b] : [b, a];
+    this.db
+      .prepare(
+        `INSERT OR REPLACE INTO memory_duplicate_pairs
+         (slug_a, slug_b, revision_a, revision_b, verdict, judged_at) VALUES (?, ?, ?, ?, ?, ?)`,
+      )
+      .run(
+        first.slug,
+        second.slug,
+        first.revision,
+        second.revision,
+        verdict,
+        new Date().toISOString(),
+      );
+  }
+
   // Transaction synchrone : rien d'asynchrone ici, le fichier et le commit viennent après.
   put(slug: string, text: string, mode: PutMode, author: string, title?: string): MemoryPage {
     assertMemSlug(slug);

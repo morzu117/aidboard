@@ -174,7 +174,15 @@ export async function startDaemon(
             backoffMs: opts.memory?.backoffMs,
             pollMs: opts.memory?.pollMs,
             maintain: chatModel
-              ? (job) => runMaintainJob(job, { store: memStore, proposals, model: chatModel, log })
+              ? (job) =>
+                  runMaintainJob(job, {
+                    store: memStore,
+                    proposals,
+                    model: chatModel,
+                    log,
+                    vectors: vectors ?? undefined,
+                    duplicateDistance: maintCfg.duplicateDistance,
+                  })
               : undefined,
           })
         : null;
