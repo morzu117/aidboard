@@ -1,12 +1,12 @@
-import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync } from 'node:fs';
-import { hostname, tmpdir } from 'node:os';
+import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, expect, test } from 'vitest';
 import { WorkspaceQueue } from '../src/daemon/actions/queue.js';
 import { openDb, type Db } from '../src/daemon/db.js';
 import { EventStore } from '../src/daemon/events/store.js';
 import { git } from '../src/daemon/git/exec.js';
-import { MemoryMirror } from '../src/daemon/memory/mirror.js';
+import { machineName, MemoryMirror, type GitExec } from '../src/daemon/memory/mirror.js';
 import { MemoryService } from '../src/daemon/memory/service.js';
 import { MemoryStore } from '../src/daemon/memory/store.js';
 import { startTestDaemon, type TestDaemon } from './helpers/daemon.js';
@@ -24,7 +24,7 @@ afterEach(async () => {
   for (const home of homes.splice(0)) rmSync(home, { recursive: true, force: true });
 });
 
-async function pair() {
+async function pair(exec: GitExec = git) {
   const home = mkdtempSync(join(tmpdir(), 'aid-pull-'));
   homes.push(home);
   const origin = join(home, 'origin.git');
@@ -39,16 +39,16 @@ async function pair() {
   const bHome = join(home, 'b');
   mkdirSync(bHome);
   sh(home, 'clone', '-q', origin, join(bHome, 'memory'));
-  const b = await machine(bHome);
+  const b = await machine(bHome, exec);
   await b.service.reindex();
   b.mirror.push = true;
   return { home, origin, a, b };
 }
 
-async function machine(home: string) {
+async function machine(home: string, exec: GitExec = git) {
   mkdirSync(home, { recursive: true });
   const logs: string[] = [];
-  const mirror = new MemoryMirror(join(home, 'memory'), git, (line) => logs.push(line), 60_000);
+  const mirror = new MemoryMirror(join(home, 'memory'), exec, (line) => logs.push(line), 60_000);
   mirrors.push(mirror);
   await mirror.init();
   const db = openDb(join(home, 'state.db'));
@@ -109,11 +109,7 @@ test('57.4 : conflit conservé sans résolution automatique, y compris après re
   await put(a, 'lesson/base', 'version distante\n\nfin');
   const remoteHead = sh(origin, 'rev-parse', 'main');
   await put(b, 'lesson/base', 'version locale\n\nfin');
-  const machineName =
-    hostname()
-      .toLowerCase()
-      .replace(/[^a-z0-9._-]/g, '-') || 'local';
-  const copy = `lesson/base.conflit-${machineName}`;
+  const copy = `lesson/base.conflit-${machineName()}`;
   expect(b.mirror.conflicts).toEqual(['lesson/base.md']);
   expect(readFileSync(b.mirror.pathOf(copy), 'utf8')).toBe('version locale\n\nfin\n');
   expect(b.service.get(copy)?.body).toBe('version locale\n\nfin');
@@ -250,4 +246,113 @@ test('57.4 : des fichiers locaux non commités empêchent le tirage sans être �
   expect(readFileSync(b.mirror.pathOf('lesson/base'), 'utf8')).toBe('brouillon local');
   expect(b.logs.some((line) => line.includes('tirage différé'))).toBe(true);
   expect(b.mirror.conflicts).toEqual([]);
+});
+
+test('57.4 : deux commits locaux rejoués, seul le commit en conflit est copié', async () => {
+  const { a, b } = await pair();
+  b.mirror.push = false;
+  await put(b, 'lesson/locale', 'premier commit local');
+  await put(b, 'lesson/base', 'second commit local');
+  await put(a, 'lesson/base', 'distant');
+  b.mirror.push = true;
+  await b.mirror.pull();
+  expect(b.mirror.conflicts).toEqual(['lesson/base.md']);
+  expect(b.service.get(`lesson/base.conflit-${machineName()}`)?.body).toBe('second commit local');
+  expect(b.service.get('lesson/locale')?.body).toBe('premier commit local');
+  expect(existsSync(b.mirror.pathOf(`lesson/locale.conflit-${machineName()}`))).toBe(false);
+  expect(sh(b.mirror.root, 'log', '-2', '--format=%s').split('\n')).toHaveLength(2);
+});
+
+test('57.4 : rebase sans conflit abandonné sans marqueur, puis nouvelle tentative', async () => {
+  let reject = true;
+  const calls: string[][] = [];
+  const { a, b } = await pair(async (cwd, args, timeout) => {
+    calls.push(args);
+    if (reject && args.includes('rebase') && !args.includes('--abort')) {
+      return { ok: false, code: 1, stdout: '', stderr: 'verrou git' };
+    }
+    return git(cwd, args, timeout);
+  });
+  b.mirror.push = false;
+  await put(b, 'lesson/locale', 'locale');
+  await put(a, 'lesson/distante', 'distante');
+  b.mirror.push = true;
+  await b.mirror.pull();
+  expect(calls).toContainEqual(['rebase', '--abort']);
+  expect(b.mirror.conflicts).toEqual([]);
+  expect(existsSync(join(b.mirror.root, '.git/aid-memory-conflicts.json'))).toBe(false);
+  expect(b.logs.filter((line) => line.includes('sans conflit'))).toHaveLength(1);
+  reject = false;
+  await b.mirror.pull();
+  expect(sh(b.mirror.root, 'show', 'HEAD:lesson/distante.md')).toContain('distante');
+});
+
+test('57.4 : collisions de copies numérotées sans interrompre les autres slugs', async () => {
+  const { a, b } = await pair();
+  await put(a, 'lesson/autre', 'base autre');
+  await b.mirror.pull();
+  b.mirror.push = false;
+  const copy = `lesson/base.conflit-${machineName()}`;
+  await put(b, copy, 'ancienne copie');
+  await put(b, `${copy}-2`, 'deuxième copie');
+  await b.service.put('lesson/base', 'locale base', { kind: 'force' }, { author: 'test' });
+  await b.service.put('lesson/autre', 'locale autre', { kind: 'force' }, { author: 'test' });
+  await b.mirror.flush();
+  await a.service.put('lesson/base', 'distante base', { kind: 'force' }, { author: 'test' });
+  await a.service.put('lesson/autre', 'distante autre', { kind: 'force' }, { author: 'test' });
+  await a.mirror.flush();
+  b.mirror.push = true;
+  await b.mirror.pull();
+  expect(b.mirror.conflicts).toEqual(['lesson/autre.md', 'lesson/base.md']);
+  expect(b.service.get(copy)?.body).toBe('ancienne copie');
+  expect(b.service.get(`${copy}-2`)?.body).toBe('deuxième copie');
+  expect(b.service.get(`${copy}-3`)?.body).toBe('locale base');
+  expect(b.service.get(`lesson/autre.conflit-${machineName()}`)?.body).toBe('locale autre');
+  expect(b.service.get('lesson/base')?.body).toBe('distante base');
+  expect(b.service.get('lesson/autre')?.body).toBe('distante autre');
+});
+
+test.each(['{', '{}', '[12]'])('57.4 : marqueur corrompu %s toléré', async (content) => {
+  const { b } = await pair();
+  writeFileSync(join(b.mirror.root, '.git/aid-memory-conflicts.json'), content);
+  expect(b.mirror.conflicts).toEqual(['marqueur illisible']);
+  expect((await b.mirror.syncHealth()).conflicts).toEqual(['marqueur illisible']);
+  await b.mirror.pull();
+  expect(b.logs.at(-1)).toContain('conflit en attente');
+});
+
+test('57.4 : marqueur illisible toléré', async () => {
+  const { b } = await pair();
+  mkdirSync(join(b.mirror.root, '.git/aid-memory-conflicts.json'));
+  expect(b.mirror.conflicts).toEqual(['marqueur illisible']);
+});
+
+test('57.4 : relecture de la diff distante même si le rebase garde le contenu local', async () => {
+  const { a, b } = await pair();
+  b.mirror.push = false;
+  await put(b, 'lesson/base', 'identique');
+  await put(b, 'lesson/locale', 'locale');
+  await put(a, 'lesson/base', 'identique');
+  b.written.length = 0;
+  b.mirror.push = true;
+  await b.mirror.pushIfConfigured();
+  expect(b.written).toEqual(['lesson/base']);
+  expect(b.service.get('lesson/locale')?.body).toBe('locale');
+});
+
+test('57.4 : fetch borné à 30 secondes au démarrage et avant push', async () => {
+  const timeouts: (number | undefined)[] = [];
+  const { b } = await pair(async (cwd, args, timeout) => {
+    if (args[0] === 'fetch') {
+      timeouts.push(timeout);
+      return { ok: false, code: null, stdout: '', stderr: 'délai dépassé' };
+    }
+    return git(cwd, args, timeout);
+  });
+  await b.mirror.init();
+  await put(b, 'lesson/locale', 'locale');
+  expect(timeouts).toEqual([30_000, 30_000]);
+  expect(b.logs.filter((line) => line.includes('git fetch a échoué'))).toHaveLength(2);
+  const result = await git(b.mirror.root, ['-c', 'alias.attendre=!sleep 2', 'attendre'], 20);
+  expect(result.ok).toBe(false);
 });

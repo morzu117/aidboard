@@ -12,8 +12,16 @@ import { dirname, join, relative, sep } from 'node:path';
 import { git, type GitResult } from '../git/exec.js';
 import { assertMemSlug, isValidMemSlug } from './slug.js';
 
-export type GitExec = (cwd: string, args: string[]) => Promise<GitResult>;
+export type GitExec = (cwd: string, args: string[], timeout?: number) => Promise<GitResult>;
 export type Logger = (line: string) => void;
+
+export function machineName(): string {
+  return (
+    hostname()
+      .toLowerCase()
+      .replace(/[^a-z0-9._-]/g, '-') || 'local'
+  );
+}
 
 export interface MirrorSyncHealth {
   push: boolean;
@@ -78,7 +86,14 @@ export class MemoryMirror {
 
   get conflicts(): string[] {
     const marker = join(this.root, '.git', 'aid-memory-conflicts.json');
-    return existsSync(marker) ? (JSON.parse(readFileSync(marker, 'utf8')) as string[]) : [];
+    try {
+      const paths: unknown = JSON.parse(readFileSync(marker, 'utf8'));
+      return Array.isArray(paths) && paths.every((path) => typeof path === 'string')
+        ? paths
+        : ['marqueur illisible'];
+    } catch (error) {
+      return (error as NodeJS.ErrnoException).code === 'ENOENT' ? [] : ['marqueur illisible'];
+    }
   }
 
   async pull(): Promise<void> {
@@ -98,13 +113,14 @@ export class MemoryMirror {
       this.log(`miroir mémoire : ${message}`);
       return false;
     };
-    const fetched = await this.exec(this.root, ['fetch', '-q', 'origin']);
-    if (!fetched.ok) return fail(`git fetch a échoué : ${fetched.stderr}`);
     const branch = await this.exec(this.root, ['symbolic-ref', '--quiet', '--short', 'HEAD']);
     if (!branch.ok) return fail('branche du miroir absente');
     const remote = `refs/remotes/origin/${branch.stdout}`;
-    if (!(await this.exec(this.root, ['rev-parse', '--verify', remote])).ok) return true;
-    const before = await this.exec(this.root, ['rev-parse', '--verify', 'HEAD']);
+    const before = await this.exec(this.root, ['rev-parse', '--verify', remote]);
+    const fetched = await this.exec(this.root, ['fetch', '-q', 'origin'], 30_000);
+    if (!fetched.ok) return fail(`git fetch a échoué : ${fetched.stderr}`);
+    const after = await this.exec(this.root, ['rev-parse', '--verify', remote]);
+    if (!after.ok) return true;
     if (await this.dirty()) return fail('fichiers non commités, tirage différé');
     const ff = await this.exec(this.root, ['merge', '--ff-only', remote]);
     if (!ff.ok) {
@@ -119,27 +135,34 @@ export class MemoryMirror {
           '--diff-filter=U',
           '-z',
         ]);
-        const paths = unmerged.stdout.split('\0').filter(Boolean);
+        const paths = unmerged.ok ? unmerged.stdout.split('\0').filter(Boolean) : [];
+        if (paths.length === 0) {
+          await this.exec(this.root, ['rebase', '--abort']);
+          return fail(`git rebase a échoué sans conflit : ${rebase.stderr}`);
+        }
         const slugs = paths
           .filter((path) => path.endsWith('.md') && isValidMemSlug(path.slice(0, -3)))
           .map((path) => path.slice(0, -3));
         // Le marqueur survit au redémarrage ; aucune nouvelle tentative ne résout le conflit.
-        writeFileSync(
-          join(this.root, '.git', 'aid-memory-conflicts.json'),
-          JSON.stringify(paths.length > 0 ? paths : ['rebase interrompu']),
-          { mode: 0o600 },
-        );
+        writeFileSync(join(this.root, '.git', 'aid-memory-conflicts.json'), JSON.stringify(paths), {
+          mode: 0o600,
+        });
         const aborted = await this.exec(this.root, ['rebase', '--abort']);
         if (!aborted.ok) return fail(`git rebase --abort a échoué : ${aborted.stderr}`);
-        const machine =
-          hostname()
-            .toLowerCase()
-            .replace(/[^a-z0-9._-]/g, '-') || 'local';
+        const machine = machineName();
         for (const slug of slugs) {
           const text = local.get(slug);
           if (text !== undefined) {
-            const copy = `${slug}.conflit-${machine}`;
-            writeFileSync(join(this.root, `${copy}.md`), text, { mode: 0o600, flag: 'wx' });
+            let copy = `${slug}.conflit-${machine}`;
+            for (let suffix = 2; ; suffix++) {
+              try {
+                writeFileSync(join(this.root, `${copy}.md`), text, { mode: 0o600, flag: 'wx' });
+                break;
+              } catch (error) {
+                if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
+                copy = `${slug}.conflit-${machine}-${suffix}`;
+              }
+            }
             if (isValidMemSlug(copy)) this.pulledSlugs.add(copy);
           }
           const restored = await this.exec(this.root, [
@@ -159,8 +182,8 @@ export class MemoryMirror {
     const changed = await this.exec(
       this.root,
       before.ok
-        ? ['diff', '--name-only', '--no-renames', '-z', before.stdout, 'HEAD']
-        : ['ls-tree', '-r', '--name-only', '-z', 'HEAD'],
+        ? ['diff', '--name-only', '--no-renames', '-z', before.stdout, after.stdout]
+        : ['ls-tree', '-r', '--name-only', '-z', after.stdout],
     );
     if (!changed.ok) return fail(`lecture des pages tirées : ${changed.stderr}`);
     for (const path of changed.stdout.split('\0')) {
@@ -254,11 +277,15 @@ export class MemoryMirror {
         : `mem: ${messages.length} pages\n\n${messages.join('\n')}`;
     const commit = await this.exec(this.root, ['commit', '-q', '-m', message]);
     if (!commit.ok) return this.log(`miroir mémoire : git commit a échoué : ${commit.stderr}`);
-    await this.pushIfConfigured();
+    await this.pushFromOrigin();
   }
 
   // DM1 : `memory.git.push` ; jamais bloquant, l'échec est journalisé.
   async pushIfConfigured(): Promise<void> {
+    await this.synchronize(() => this.pushFromOrigin());
+  }
+
+  private async pushFromOrigin(): Promise<void> {
     if (!this.push) return;
     if (!(await this.exec(this.root, ['remote', 'get-url', 'origin'])).ok) return;
     if (!(await this.pullFromOrigin())) return;
