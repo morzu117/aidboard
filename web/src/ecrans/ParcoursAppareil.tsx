@@ -180,6 +180,7 @@ export function LivraisonAppareil() {
           <h2>Fichiers</h2>
           <FichiersAppareil id={id!} livraison={livraison} />
           <h2>Contrôles</h2>
+          {livraison.controles.length === 0 && <p>Aucun contrôle connu pour cette tête.</p>}
           <ul>
             {livraison.controles.map((controle, index) => (
               <li key={index}>

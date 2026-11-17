@@ -1,3 +1,4 @@
+import { libelleBoard } from '../ui/libellesBoard.js';
 import { CartesReliees } from '../ui/CartesReliees.js';
 import { AvatarCell } from '../ui/AvatarCell.js';
 import { AidCarte, ErreursAid, NouveauSujetCarte } from '../ui/AidBoard.js';
@@ -102,7 +103,7 @@ function Graphe({ g, cellLocale }: { g: BoardGraph; cellLocale?: string }) {
                 <td>{s.step ?? TIRET}</td>
                 <td>{s.mandatory === null ? TIRET : s.mandatory ? 'oui' : 'non'}</td>
                 {/* en entier, jamais abrégé : ce texte explique le blocage */}
-                <td className="carte-board-etat">{s.state ?? TIRET}</td>
+                <td className="carte-board-etat">{libelleBoard(s.state)}</td>
                 <td>
                   {s.holder && <AvatarCell nom={s.holder} cellLocale={cellLocale} />}
                   {s.holder ?? TIRET}
@@ -177,8 +178,8 @@ function Obligations({
                   {x.holder ?? TIRET}
                 </td>
                 {/* status fait foi ; state n'est qu'une indication (#1456) */}
-                <td>{x.status ?? TIRET}</td>
-                <td className="texte-discret">{x.state ?? TIRET}</td>
+                <td>{libelleBoard(x.status)}</td>
+                <td className="texte-discret">{libelleBoard(x.state)}</td>
                 <td>{x.closed ? (x.closedAt ? `oui, ${date(x.closedAt)}` : 'oui') : 'non'}</td>
                 <td>
                   {x.closeOutcome

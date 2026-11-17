@@ -62,13 +62,15 @@ test('la fiche : corps brut, graphe, fil, obligation retirée fermée', async ({
   await expect(node(page, 'carte-board.corps.texte')).toContainText('<b>pas du HTML</b>');
   await expect(node(page, 'carte-board.corps.texte').locator('b')).toHaveCount(0);
   await expect(node(page, 'carte-board.graphe.manque')).toHaveText('build, validate');
-  await expect(node(page, 'carte-board.graphe.etape-0')).toContainText(/unstaffable .* then ask\)/);
+  await expect(node(page, 'carte-board.graphe.etape-0')).toContainText(
+    /sans détenteur disponible .* then ask\)/,
+  );
   await expect(node(page, 'carte-board.fil').locator('.carte-board-auteur')).toHaveText([
     'peer-a',
     'peer-b',
   ]);
   await expect(page.locator('.carte-board-fil script')).toHaveCount(0);
-  await expect(node(page, 'carte-board.obligation-9101')).toContainText('withdrawn');
+  await expect(node(page, 'carte-board.obligation-9101')).toContainText('retirée');
   await node(page, 'carte-board.retour').click();
   // retour au projet de la carte
   await expect(page).toHaveURL(/\/board\?projet=42$/);

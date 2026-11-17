@@ -140,9 +140,9 @@ export function PanneauPda({ etat }: { etat: EtatModeHostDaemon['pda'] }) {
             <span>{a.nom}</span>
             <span>{{ attente: 'en attente', actif: 'actif', revoque: 'révoqué' }[a.etat]}</span>
             <code className="host-code-court">{a.empreinte}</code>
-            <span>Créé : {a.cree_a}</span>
-            {a.active_a && <span>Activé : {a.active_a}</span>}
-            {a.revoque_a && <span>Révoqué : {a.revoque_a}</span>}
+            <span>Créé : {new Date(a.cree_a).toLocaleString('fr-FR')}</span>
+            {a.active_a && <span>Activé : {new Date(a.active_a).toLocaleString('fr-FR')}</span>}
+            {a.revoque_a && <span>Révoqué : {new Date(a.revoque_a).toLocaleString('fr-FR')}</span>}
             {a.id === activation && confirmation.id
               ? confirmation.attente
               : a.etat === 'attente' && (

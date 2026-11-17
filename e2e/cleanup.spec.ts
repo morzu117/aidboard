@@ -20,5 +20,5 @@ test('nettoyer un sujet avec des modifications non commitées est refusé, rien 
   await page.getByRole('button', { name: 'Nettoyer le sujet' }).click();
   await expect(page.getByRole('alert')).toContainText('non commitées');
   await expect(page.getByRole('button', { name: 'Supprimer quand même' })).toHaveCount(0);
-  await expect(node(page, '1-3.entete.etat')).toHaveText('active');
+  await expect(node(page, '1-3.entete.etat')).toHaveText('actif');
 });

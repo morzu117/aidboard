@@ -242,9 +242,38 @@ export async function detecterVisuel(page: Page): Promise<TrouvailleVisuelle[]> 
         const lignes = new Set(rectangles.filter((r) => r.width > 0).map((r) => Math.round(r.top)))
           .size;
         const mots = texte.split(/\s+/).length;
-        if (texte.length <= 120 && lignes > mots && !rogne(e))
+        // Un code de pleine largeur peut couper une chaîne technique sans espaces.
+        // Un code étroit ou une lettre par ligne reste un défaut.
+        const codeLisible =
+          e.tagName === 'CODE' &&
+          style.display === 'block' &&
+          style.overflowWrap === 'anywhere' &&
+          style.wordBreak === 'normal' &&
+          e.getBoundingClientRect().width >= Math.min(200, innerWidth * 0.8) &&
+          texte.length / lignes >= 16;
+        if (texte.length <= 120 && lignes > mots && !rogne(e) && !codeLisible)
           ajouter(e, 'texte écrasé', { lignes, mots });
       }
+      // Les fragments masqués par une ellipse ne peuvent pas recouvrir un texte voisin.
+      const partieVisible = (rectangle: DOMRect, element: Element) => {
+        let gauche = rectangle.left,
+          droite = rectangle.right,
+          haut = rectangle.top,
+          bas = rectangle.bottom;
+        for (let courant: Element | null = element; courant; courant = courant.parentElement) {
+          const style = getComputedStyle(courant);
+          const boite = courant.getBoundingClientRect();
+          if (['hidden', 'clip'].includes(style.overflowX)) {
+            gauche = Math.max(gauche, boite.left);
+            droite = Math.min(droite, boite.right);
+          }
+          if (['hidden', 'clip'].includes(style.overflowY)) {
+            haut = Math.max(haut, boite.top);
+            bas = Math.min(bas, boite.bottom);
+          }
+        }
+        return { left: gauche, right: droite, top: haut, bottom: bas };
+      };
       const elements = [...textes.keys()];
       for (let i = 0; i < elements.length; i++) {
         const a = elements[i]!;
@@ -253,8 +282,10 @@ export async function detecterVisuel(page: Page): Promise<TrouvailleVisuelle[]> 
           if (a.parentElement !== b.parentElement) continue;
           let largeur = 0,
             hauteur = 0;
-          const recouvre = textes.get(a)!.some((r) =>
-            textes.get(b)!.some((s) => {
+          const recouvre = textes.get(a)!.some((rectangleA) =>
+            textes.get(b)!.some((rectangleB) => {
+              const r = partieVisible(rectangleA, a);
+              const s = partieVisible(rectangleB, b);
               const l = Math.min(r.right, s.right) - Math.max(r.left, s.left);
               const h = Math.min(r.bottom, s.bottom) - Math.max(r.top, s.top);
               if (l <= 1 || h <= 1) return false;

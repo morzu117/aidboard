@@ -276,3 +276,10 @@
   overflow-wrap: normal;
   word-break: normal;
 }
+
+/* 56.9 : les variantes de bouton du PDA gardent leur couleur et leur contraste. */
+.pda-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+}

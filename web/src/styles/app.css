@@ -3117,3 +3117,51 @@ a.composer-menu-ligne {
   overflow-wrap: normal;
   word-break: normal;
 }
+
+/* 56.9 : ajustements des écrans de configuration et des lectures du mesh. */
+.serveur-bloc > .serveur-champ {
+  flex: none;
+}
+.serveur-config .case input[type='checkbox'] {
+  flex: 0 0 16px;
+  width: 16px;
+  height: 16px;
+}
+[data-node='onglets-swarph'] {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+}
+[data-node='onglets-swarph'] [aria-current='page'] {
+  color: var(--text);
+  background: var(--surface-3);
+  border-bottom: 2px solid var(--acc);
+}
+[data-node='cells.tableau'] {
+  width: 100%;
+  border-collapse: collapse;
+}
+[data-node='cells.tableau'] th,
+[data-node='cells.tableau'] td {
+  padding: var(--sp-3) var(--sp-2);
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  vertical-align: top;
+}
+.chemin-technique {
+  display: block;
+  width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: normal;
+}
+.carte-board-texte {
+  overflow-wrap: normal;
+  word-break: normal;
+}
+@media (min-width: 1280px) {
+  /* Le rail réduit (D58) garde ses 72 px. */
+  .corps-ecran--sujet .barre-gauche:not(.barre-gauche--rail) {
+    width: 240px;
+  }
+}

@@ -542,7 +542,7 @@ function RelancerRevue({
   const [erreur, setErreur] = useState<string | null>(null);
   const raison =
     state?.agentTransport === 'pty'
-      ? 'Les agents sont lancés en terminal (agents.transport: pty) : la revue ne se relance qu’en transport stream.'
+      ? 'Les agents sont lancés en terminal : la revue ne peut être relancée qu’en mode flux.'
       : topic.worktreeMissing
         ? 'Le worktree du sujet manque.'
         : !tete || !mergeBase

@@ -118,3 +118,37 @@ test("D346 : contraste d'un placeholder, sans inventer du texte dans une case", 
     expect.objectContaining({ selecteur: '#cible' }),
   ]);
 });
+
+test('D346 : code technique pleine largeur lisible, code tassé toujours détecté', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  const cle = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'.repeat(2);
+  await page.setContent(`<body style="background:white;color:black">
+    <code id="lisible" style="display:block;width:100%;overflow-wrap:anywhere;word-break:normal">${cle}</code>
+    <code id="tasse" style="display:block;width:8px;overflow-wrap:anywhere;word-break:normal">${cle}</code>
+  </body>`);
+  const defauts = await detecterVisuel(page);
+  expect(defauts.filter((d) => d.selecteur === '#lisible')).toEqual([]);
+  expect(defauts).toContainEqual(
+    expect.objectContaining({ selecteur: '#tasse', regle: 'texte écrasé' }),
+  );
+});
+
+test('D346 : ellipse sans faux chevauchement, recouvrement visible toujours détecté', async ({
+  page,
+}) => {
+  await page.setContent(`<body style="background:white;color:black">
+    <div style="display:flex;gap:8px;white-space:nowrap">
+      <span id="cible" style="display:block;flex:none;width:100px;overflow:hidden;text-overflow:ellipsis">Un nom de serveur beaucoup plus long</span>
+      <span id="voisin">Injoignable</span>
+    </div>
+  </body>`);
+  expect(await detecterVisuel(page)).toEqual([]);
+  await page.locator('#voisin').evaluate((e) => {
+    e.style.transform = 'translateX(-25px)';
+  });
+  expect(await detecterVisuel(page)).toContainEqual(
+    expect.objectContaining({ selecteur: '#cible', regle: 'chevauchement' }),
+  );
+});

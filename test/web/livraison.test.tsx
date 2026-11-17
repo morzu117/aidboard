@@ -641,7 +641,7 @@ test('D129 : claude au choix ; un refus s’affiche et rien ne bouge', async () 
 test('D129 : en transport PTY, ou sans origin/<base>, le bouton est désactivé avec la raison', async () => {
   ouvrir(topic(), {}, gitLu(), { agentTransport: 'pty' });
   const raison = await attendre('livraison.relancer-revue.raison');
-  expect(raison.textContent).toContain('agents.transport: pty');
+  expect(raison.textContent).toContain('Les agents sont lancés en terminal');
   expect((node('livraison.relancer-revue.bouton') as HTMLButtonElement).disabled).toBe(true);
   cleanup();
   ouvrir(topic(), {}, gitLu({ mergeBase: null, empreinte: null, files: [] }));

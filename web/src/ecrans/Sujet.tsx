@@ -1,3 +1,4 @@
+import { libelleAid } from '../data/aid-board.js';
 import { useEffect, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router';
 import type { StoredEvent } from '../../../src/shared/events.js';
@@ -624,7 +625,7 @@ function Contenu({
             data-node="1-3.entete.etat"
             data-bind="sujet.etat"
           >
-            {topic.state}
+            {libelleAid(topic.state)}
           </span>
           <button
             className="pastille pastille--code"

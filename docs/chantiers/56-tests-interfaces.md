@@ -131,10 +131,11 @@ L'explorateur remplit les champs, accepte les confirmations dans un daemon jetab
   - sur téléphone, le chemin d'un projet dans Réglages et la clé publique du daemon dans Machines, qui se coupent en plein mot (les deux trouvailles laissées par le 56.8) ;
   - « Confirmer » et « Refuser » du PDA, de même style : l'action principale doit se distinguer.
 - **Les tests (D342)**, comme au 56.8.
+- _Révision 56.9._ Une passe de Codex, plus une retouche de la cell de gestion après la revue des captures. Codex traduisait aussi les noms d'étape du board (« idée », « avant construction »), alors que la colonne Étape, la chronologie et « Déplacer » les gardent tels quels. Seuls les états et statuts sont traduits, par `libellesBoard.ts`. Le `gate:e2e` complet a aussi trouvé deux régressions que les e2e ciblés de Codex ne voyaient pas, corrigées par la cell : la largeur de 240 px de la barre sur la page d'un sujet écrasait le rail réduit, et `cleanup.spec.ts` attendait encore « active ». Une valeur inconnue reste telle quelle. Le détecteur gagne deux règles étroites, chacune testée par un cas synthétique : un bloc `code` de pleine largeur peut couper une chaîne technique sans espace, et une ellipse ne compte plus comme un chevauchement, puisque le texte masqué ne recouvre rien. La carte d'un serveur dans la barre de gauche dit « Connexion impossible » et renvoie au diagnostic, au lieu de l'erreur shell. Sur les 22 vues des écrans corrigés, l'explorateur trouve 3 défauts `visuel` avant le correctif et 0 après. `e2e/visuel-56-9.spec.ts` passe le détecteur sur les pages entières. Gate 4 187, gate:e2e 174.
 
 ### 56.g Le garde (D345)
 
-Il vient après les correctifs, pour que la liste de départ soit courte. Le garde de couverture de D345 s'y ajoute. Le détecteur visuel y est aussi branché dans la CI : `gate:e2e` échoue sur toute trouvaille hors exceptions, dans les écrans que les e2e affichent. Julien a dit oui le 16 novembre : « ok pour brancher le détecteur en CI ».
+Il vient après les correctifs, pour que la liste de départ soit courte. Le garde de couverture de D345 s'y ajoute. Le détecteur visuel y est aussi branché dans la CI : `gate:e2e` échoue sur toute trouvaille hors exceptions, dans les écrans que les e2e affichent. Julien a dit oui le 16 novembre : « ok pour brancher le détecteur en CI ». Avant le branchement, un cas connu à traiter : sur le rail réduit de la barre de gauche, la pastille de compte posée sur le coin d'une case dépasse sa boîte de 4 px, ce qui est voulu, et le détecteur la signale comme un débordement.
 
 ## 4. Pièges
 

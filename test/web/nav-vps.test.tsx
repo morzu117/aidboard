@@ -109,7 +109,9 @@ test('injoignable : l’étape du dernier test, « Diagnostiquer » relance le t
     [statut('a', { state: 'unreachable', latencyMs: null, reason: 'timeout' })],
   );
   await waitFor(() => expect(carte('a', '.etat')?.textContent).toBe('Injoignable'));
-  expect(carte('a', '.detail')!.textContent).toBe('timeout');
+  expect(carte('a', '.detail')!.textContent).toBe(
+    'Connexion impossible. Consulte le diagnostic du serveur.',
+  );
   await userEvent.click(carte('a', '.action')!);
   expect(h.calls.some((c) => c.method === 'POST' && c.url === '/api/servers/a/test')).toBe(true);
   const test: ServerTest = {
@@ -126,7 +128,11 @@ test('injoignable : l’étape du dernier test, « Diagnostiquer » relance le t
   act(() => {
     FakeSocket.all.at(-1)!.push({ kind: 'ephemeral', type: 'server.test', test });
   });
-  await waitFor(() => expect(carte('a', '.detail')!.textContent).toBe('SSH : Connection refused'));
+  await waitFor(() =>
+    expect(carte('a', '.detail')!.textContent).toBe(
+      'SSH : échec de la connexion. Consulte le diagnostic du serveur.',
+    ),
+  );
   act(() => {
     FakeSocket.all.at(-1)!.push({
       kind: 'ephemeral',

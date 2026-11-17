@@ -374,9 +374,10 @@ function Demande({
           onChange={(e) => setNumero(e.target.value)}
         />
       </label>
-      <div className="appareil-actions">
+      <div className="pda-actions">
         <button
           data-node={`pda.demande.${demande.id}.confirmer`}
+          className="bouton bouton--primaire"
           disabled={
             occupe ||
             (demande.numero === null ? !/^\d{4}$/.test(numero) : numero !== demande.numero)
@@ -387,6 +388,7 @@ function Demande({
         </button>
         <button
           data-node={`pda.demande.${demande.id}.refuser`}
+          className="bouton bouton--danger"
           disabled={occupe}
           onClick={() => void repondre(entree, 'non', '')}
         >

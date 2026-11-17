@@ -164,7 +164,7 @@ test('en-tête : fil d’Ariane, titre, état, branche, base ; le worktree n’e
   await screen.findByText('Mon sujet');
   expect(text('1-3.entete.workspace')).toBe('aid');
   expect(text('1-3.entete.titre')).toBe('Mon sujet');
-  expect(text('1-3.entete.etat')).toBe('active');
+  expect(text('1-3.entete.etat')).toBe('actif');
   expect(text('1-3.entete.branche')).toBe('feat/s');
   expect(text('1-3.entete.base.branche')).toBe('origin/main');
   // §5.3 : le chemin du worktree a quitté l'en-tête, il n'apparaît qu'au menu ⋯ ouvert.
