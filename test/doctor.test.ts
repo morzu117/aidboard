@@ -62,13 +62,21 @@ test('57.5 : doctor signale le distant absent, les écarts et les conflits mémo
     });
   const absent = { push: false, origin: false, ahead: null, behind: null, conflicts: [] };
   expect((await check(absent)).every((c) => c.level === 'ok')).toBe(true);
+  for (const counts of [
+    { ahead: null, behind: null },
+    { ahead: 2, behind: 3 },
+  ]) {
+    expect(
+      (await check({ ...absent, origin: true, ...counts })).every((c) => c.level === 'ok'),
+    ).toBe(true);
+  }
   expect(await check({ ...absent, push: true })).toContainEqual(
     expect.objectContaining({
       level: 'warn',
       detail: expect.stringContaining('distant origin absent'),
     }),
   );
-  expect(await check({ ...absent, origin: true })).toContainEqual(
+  expect(await check({ ...absent, push: true, origin: true })).toContainEqual(
     expect.objectContaining({
       level: 'warn',
       detail: expect.stringContaining('avance/retard inconnus'),
@@ -80,7 +88,9 @@ test('57.5 : doctor signale le distant absent, les écarts et les conflits mémo
     [0, 3],
     [2, 3],
   ]) {
-    expect(await check({ ...absent, origin: true, ahead: ahead!, behind: behind! })).toContainEqual(
+    expect(
+      await check({ ...absent, push: true, origin: true, ahead: ahead!, behind: behind! }),
+    ).toContainEqual(
       expect.objectContaining({
         level: ahead || behind ? 'warn' : 'ok',
         label: `miroir mémoire : ${ahead} commit(s) en avance, ${behind} en retard`,
@@ -220,6 +230,7 @@ test('mémoire : N pages par namespace, triées, aucune anomalie → ✓', async
       pendingJobs: 0,
       failedJobs: 0,
       mirrorDirty: false,
+      mirrorSync: { push: false, origin: false, ahead: null, behind: null, conflicts: [] },
     }),
   });
   expect(checks).toContainEqual({ level: 'ok', label: 'mémoire : 2 pages (aid 1, lesson 1)' });
@@ -235,6 +246,7 @@ test('mémoire : miroir non commité ou jobs en échec → ⚠ avec la commande 
       pendingJobs: 0,
       failedJobs: 0,
       mirrorDirty: true,
+      mirrorSync: { push: false, origin: false, ahead: null, behind: null, conflicts: [] },
     }),
   });
   const dirtyCheck = dirty.find((c) => c.label.startsWith('mémoire'))!;
@@ -250,6 +262,7 @@ test('mémoire : miroir non commité ou jobs en échec → ⚠ avec la commande 
       pendingJobs: 0,
       failedJobs: 2,
       mirrorDirty: false,
+      mirrorSync: { push: false, origin: false, ahead: null, behind: null, conflicts: [] },
     }),
   });
   const failedCheck = failed.find((c) => c.label.startsWith('mémoire'))!;

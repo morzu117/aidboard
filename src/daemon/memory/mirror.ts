@@ -74,7 +74,7 @@ export class MemoryMirror {
       'rev-list',
       '--left-right',
       '--count',
-      `HEAD...refs/remotes/origin/${branch.stdout}`,
+      `HEAD...refs/remotes/origin/${branch.stdout.trim()}`,
     ]);
     if (counts.ok && /^\d+\s+\d+$/.test(counts.stdout.trim())) {
       const [ahead, behind] = counts.stdout.trim().split(/\s+/).map(Number);

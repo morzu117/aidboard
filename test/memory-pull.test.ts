@@ -173,6 +173,14 @@ test('57.4 : le daemon tire au démarrage et relit les pages dans la base exista
     behind: 0,
     conflicts: [],
   });
+  mkdirSync(join(daemonHome, 'memory/.git/aid-memory-conflicts.json'));
+  const unreadable = await daemon.d.app.inject({
+    method: 'GET',
+    url: '/api/memory/health',
+    headers: daemon.headers,
+  });
+  expect(unreadable.statusCode).toBe(200);
+  expect(unreadable.json().mirrorSync.conflicts).toEqual(['marqueur illisible']);
 });
 
 test('57.5 : santé du miroir sans origin, avec push désactivé puis activé', async () => {
@@ -355,4 +363,27 @@ test('57.4 : fetch borné à 30 secondes au démarrage et avant push', async () 
   expect(b.logs.filter((line) => line.includes('git fetch a échoué'))).toHaveLength(2);
   const result = await git(b.mirror.root, ['-c', 'alias.attendre=!sleep 2', 'attendre'], 20);
   expect(result.ok).toBe(false);
+});
+
+test.each(['detached', 'locale'])('57.5 : référence inconnue avec HEAD %s', async (head) => {
+  const { b } = await pair();
+  if (head === 'detached') sh(b.mirror.root, 'checkout', '--detach', '-q');
+  else sh(b.mirror.root, 'checkout', '-q', '-b', 'locale');
+  await expect(b.mirror.syncHealth()).resolves.toEqual({
+    push: true,
+    origin: true,
+    ahead: null,
+    behind: null,
+    conflicts: [],
+  });
+});
+
+test('57.5 : les sorties git de branche et de compte sont normalisées', async () => {
+  const { b } = await pair(async (cwd, args, timeout) => {
+    const result = await git(cwd, args, timeout);
+    return args[0] === 'symbolic-ref' || args[0] === 'rev-list'
+      ? { ...result, stdout: result.stdout + '\n' }
+      : result;
+  });
+  expect(await b.mirror.syncHealth()).toMatchObject({ ahead: 0, behind: 0 });
 });
