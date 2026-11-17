@@ -38,6 +38,7 @@ export interface OptionsModeHost {
   reponses?: OptionsServeurAppareils['reponses'];
   signal?: OptionsServeurAppareils['signal'];
   board?: OptionsServeurAppareils['board'];
+  commandant?: OptionsServeurAppareils['commandant'];
   tailscaleExec?: TailscaleExec;
   relectureHostMs?: number;
   logger?: boolean;
@@ -163,6 +164,7 @@ export class ModeHost {
       this.raison = null;
       if (this.serveur?.disponible) return this.etat();
       this.serveur = await ouvrirServeurAppareils({
+        commandant: this.opts.commandant,
         port: this.opts.port(),
         interdits: this.opts.interdits(),
         nom: () => this.nom,

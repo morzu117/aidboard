@@ -1,5 +1,7 @@
 import { CreationsCartes } from './confirmations/cartes.js';
 import { registerRejoindreRoutes } from './routes/rejoindre.js';
+import { registerCommandantRoutes } from './routes/commandant.js';
+import type { ServiceCommandant } from './commandant/service.js';
 import { registerCartesRelieesRoutes } from './routes/cartes-reliees.js';
 import type { MeshRegistry } from './mesh/registre.js';
 import { AvisMeshService } from './mesh/avis.js';
@@ -95,6 +97,7 @@ export interface ServerDeps {
   /** 12.4 : null ou absent = mesh désactivé, les routes /api/mesh répondent 404 */
   mesh?: MeshService | null;
   meshes?: MeshRegistry;
+  commandant?: ServiceCommandant;
   /** chantier 24 : null ou absent = mesh désactivé, les routes /api/board répondent 404 */
   board?: BoardReader | null;
   swarph?: SwarphReader | null;
@@ -208,6 +211,7 @@ export async function buildServer(deps: ServerDeps): Promise<FastifyInstance> {
     deps.meshes,
   );
   registerRejoindreRoutes(app, { config: deps.config, paths: deps.paths });
+  registerCommandantRoutes(app, deps.commandant, true);
   registerMeshRoutes(app, {
     mesh: deps.mesh ?? null,
     meshes: deps.meshes,

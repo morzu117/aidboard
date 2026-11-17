@@ -1,4 +1,6 @@
 import { MeshRegistry } from './mesh/registre.js';
+import { ServiceCommandant } from './commandant/service.js';
+import { notifierCommandant } from './push/commandant.js';
 import { SwairmAsk } from './swairm/ask.js';
 import type { LigneDemande } from './pda/file.js';
 import { FilePda } from './pda/file.js';
@@ -272,7 +274,19 @@ export async function startDaemon(
     // artefacts, dont il refuse les ports ; seulement si `modeHost.actif`
     const webRoot = opts.webRoot === undefined ? defaultWebRoot() : opts.webRoot;
     const fournisseurPda = creerFournisseurClePda(paths.home);
+    const commandant: ServiceCommandant = new ServiceCommandant({
+      home: paths.home,
+      meshes: () => config.meshes,
+      notifier: (id) =>
+        notifierCommandant(id, {
+          db: opened,
+          store,
+          actif: () => config.modeHost.actif && config.modeHost.push,
+          envoi: () => ({ clesVapid: modeHost.fournisseurPush!.obtenir() }),
+        }),
+    });
     const modeHost = new ModeHost({
+      commandant,
       config,
       port: () => portAppareils(config),
       interdits: () => [
@@ -363,6 +377,7 @@ export async function startDaemon(
       },
     };
     const app = await buildServer({
+      commandant,
       clePda: fournisseurPda,
       pda,
       webRoot,
@@ -414,6 +429,7 @@ export async function startDaemon(
     if (!serveurArtefacts.disponible) log(`artefacts indisponibles : ${serveurArtefacts.raison}`);
     // un port occupé n'empêche pas non plus le daemon de démarrer : GET /api/host et doctor le disent
     if (config.modeHost.actif) await modeHost.demarrer();
+    await commandant.demarrer();
     writeFileSync(
       paths.daemonJson,
       JSON.stringify({
@@ -459,6 +475,7 @@ export async function startDaemon(
       updates: () => updates?.status() ?? null,
       modeHost,
       async stop() {
+        await commandant.arreter();
         await basculePda;
         await filePda?.arreter();
         await declencheurPush.arreter();

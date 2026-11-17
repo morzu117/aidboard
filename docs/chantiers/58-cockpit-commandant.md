@@ -55,6 +55,17 @@ Côté daemon, sans écran :
 
 L'e2e et les tests jouent la passerelle avec un faux, dans `test/fixtures/`. Ce faux suit le JSON d'exemple du lab, champ pour champ. Les tests vérifient aussi qu'aucun journal, aucun événement et aucune réponse HTTP ne contient l'identifiant.
 
+- _Révision 58.2._ Quatre passes de Codex. Les deux premières se sont arrêtées sur des questions légitimes.
+  - **La lecture de `needs_sso`.** La règle « absent = `null` » de l'A.2 F1 aurait refusé les exemples de l'A1. La cell a tranché : `needs_sso` est un champ dérivé. Il vaut `true` pour une action, et `params.needs_sso ?? false` pour une `decision`. La règle « absent = `null` » ne vaut que pour `question`, `options` et `head_sha`. Le lab est saisi (DM 99718).
+  - **Deux fichiers gardés.** La cell a autorisé `test/host-liste.test.ts` : le port des appareils gagne les quatre lectures (`GET /api/commandant/:mesh`, `…/demandes/:id`, `…/identifiant`, `POST …/battement`). La saisie et la suppression restent sur le Mac, avec un test. Elle a aussi autorisé `web/public/sw.js` : une charge `{"c": <id>}` seule donne « Demande au commandant #<id> ».
+  - **Ce qui est livré :**
+    - `src/shared/commandant.ts` : JCS, digest, contrôle d'une ligne, avec la règle de caractères étendue au proposant, à la réponse, au résultat et aux `decided_by` / `executed_by` ;
+    - `src/daemon/commandant/` : l'identifiant, le client et le service de lecture ;
+    - `src/daemon/routes/commandant.ts` et `src/daemon/push/commandant.ts` ;
+    - le faux de la passerelle, `test/fixtures/passerelle-commandant.ts`.
+  - **L'historique des ids notifiés** est élagué aux demandes encore `pending`, seulement après une lecture complète et sans refus.
+  - Gate 4 370.
+
 ### 58.3 Les écrans et la réponse (D349, D350, D351)
 
 - **L'écran** `/swarph/commandant`, avec la liste et le détail, dans Swarph, à côté des Demandes au mesh.

@@ -54,13 +54,14 @@ export interface ResultatEnvoi {
 
 export async function envoyer(
   abonnement: AbonnementPush,
-  n: number,
+  n: number | { c: number },
   deps: DependancesEnvoi,
 ): Promise<ResultatEnvoi> {
   const endpoint = verifierEndpoint(abonnement.endpoint);
   if (!endpoint) return { statut: 'echec' };
   try {
-    const corps = chiffrer(abonnement.p256dh, abonnement.auth, Buffer.from(JSON.stringify({ n })));
+    const charge = typeof n === 'number' ? { n } : { c: n.c };
+    const corps = chiffrer(abonnement.p256dh, abonnement.auth, Buffer.from(JSON.stringify(charge)));
     const reponse = await (deps.transport ?? fetch)(endpoint, {
       method: 'POST',
       redirect: 'manual',

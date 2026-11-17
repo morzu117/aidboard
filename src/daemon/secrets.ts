@@ -17,6 +17,7 @@ const USERINFO = /([a-z][a-z0-9+.-]*:\/\/)([^\s/]+)@/gi;
  * par famille écarte les mots ordinaires (`task-list`, `sk-learn`).
  */
 const TOKENS: readonly RegExp[] = [
+  /\b(swck_)[A-Za-z0-9_-]{43}/g,
   /\b(gh[pousr]_)[A-Za-z0-9]{36,}\b/g,
   /\b(github_pat_)[A-Za-z0-9_]{22,}/g,
   /\b(glpat-)[A-Za-z0-9_-]{20,}/g,
