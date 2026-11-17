@@ -31,6 +31,27 @@ describe('JCS du commandant', () => {
       '707bea717c787a3875ccfaeaf4dff634b288a862b85078f2d067c441fa3bd758',
     );
   });
+  it('reproduit V6 tel quel (vecteur neutre imbriqué, #1630)', () => {
+    const valeur = {
+      id: 1238,
+      params: {
+        before: [
+          { app_id: 4242, context: 'unit tests (py3.12)' },
+          { app_id: 4242, context: 'unit tests (py3.14)' },
+        ],
+        branch: 'main',
+        checks: [
+          { app_id: 4242, context: 'unit tests (py3.14)' },
+          { app_id: 4242, context: 'lint' },
+        ],
+        repo: 'example-org/example-repo',
+      },
+      type: 'required_checks',
+    };
+    expect(digestCommandant(valeur)).toBe(
+      '0dbec962431013b10d8b9ad0baf29659aa71ba756834a610c1a3798659381484',
+    );
+  });
   it('trie les clés UTF-16, y compris numériques, dans les tableaux imbriqués', () => {
     expect(
       serialiserJcs({ z: [{ z: -7, a: [{ b: true, a: null }] }], '2': 2, '10': 10, a: '' }),
