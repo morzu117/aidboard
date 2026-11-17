@@ -6,7 +6,7 @@ import { readFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import Database from 'better-sqlite3';
-import { expect, test } from '@playwright/test';
+import { expect, test } from './test.js';
 import { appairerHost, demarrerHost, ORIGINE_APPAREIL } from './host-helpers.js';
 import { createTopic, fermerContextes, newRepo, node, registerWorkspace } from './helpers.js';
 import { NOM_E2E, ouvrirServeLocal } from './serve-local.js';
@@ -380,6 +380,8 @@ test('A-I-D : sujets reliés, création et déplacement confirmé sur un faux pr
     await expect(
       mac.getByRole('dialog').getByRole('status').filter({ hasText: 'Droit manquant' }),
     ).toBeVisible({ timeout: 30_000 });
+    await expect(mac.getByRole('dialog').getByRole('status')).toHaveCount(1);
+    await expect(mac.getByRole('dialog').getByText('Exécutée', { exact: true })).toHaveCount(0);
     await expect(mac.getByRole('dialog')).not.toContainText(
       'execute requis ; swarph board cards confirm-flow',
     );

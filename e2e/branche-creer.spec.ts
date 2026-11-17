@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from './test.js';
 import { sh } from '../test/helpers/git.js';
 import { createTopic, newRepo, node, openApp, registerWorkspace } from './helpers.js';
 import { fermerContextes } from './helpers.js';

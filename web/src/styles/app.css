@@ -1201,6 +1201,9 @@ a.composer-menu-ligne {
 .volet-fermer {
   display: none;
 }
+.navigation-mobile {
+  display: none;
+}
 .bouton-volant {
   position: fixed;
   top: var(--sp-4);
@@ -1227,14 +1230,13 @@ a.composer-menu-ligne {
 }
 
 @media (max-width: 1279.98px) {
-  /* recette (chantier 15, point 1) : .bouton-volant--nav est fixed sur le même coin que la
-     marque — la barre réserve sa place plutôt que de déplacer le bouton. Les variantes
-     [data-viewport="phone"/"tablet"] de maquette.css posent déjà un padding-left (même
-     spécificité, mais avant dans la feuille) : repris ici pour gagner la cascade. */
-  .barre,
-  [data-viewport='phone'] .barre,
-  [data-viewport='tablet'] .barre {
-    padding-left: calc(var(--sp-4) + var(--h-tactile) + var(--sp-3));
+  /* La navigation réserve sa propre hauteur et défile avec la page : aucune action masquée. */
+  .navigation-mobile {
+    display: flex;
+    flex: none;
+    padding: var(--sp-2) var(--sp-4);
+    background: var(--surface-1);
+    border-bottom: 1px solid var(--line);
   }
   .volet:not(.est-ouvert) {
     display: none;
@@ -2999,4 +3001,224 @@ a.composer-menu-ligne {
   outline: 1px solid var(--text);
   outline-offset: 2px;
   box-shadow: 0 0 0 2px var(--surface-1);
+}
+
+/* 56.4 : état commun, y compris les variantes primaire, contour et danger. */
+.bouton:disabled,
+.bouton[aria-disabled='true'] {
+  background: var(--surface-3);
+  border-color: var(--line);
+  color: var(--muted);
+  cursor: not-allowed;
+}
+
+/* 56.5 : cases sur une ligne, champs sous leur libellé, blocs PDA séparés. */
+.cockpit-case {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+.cockpit-case > input {
+  flex: none;
+  margin: 0;
+}
+.cockpit-champ {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--sp-2);
+}
+.cockpit-champ > input {
+  width: 100%;
+  max-width: 440px;
+  box-sizing: border-box;
+}
+.pda-formulaire {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--sp-3);
+  margin: var(--sp-4) 0;
+}
+.pda-formulaire > .cockpit-champ {
+  width: 100%;
+}
+
+@media (max-width: 719.98px) {
+  /* Le fil précède le panneau ; la page défile pour garder toutes les actions accessibles. */
+  .cadre:has(.discussion) {
+    height: auto;
+    min-height: 100dvh;
+    overflow: visible;
+  }
+  .discussion:has(> .panneau-serveur) {
+    display: flex;
+  }
+  .discussion > .discussion-colonne {
+    flex: none;
+    min-height: 320px;
+  }
+  .discussion > .panneau-serveur {
+    width: 100%;
+    min-height: 320px;
+  }
+}
+
+/* 56.8 : les actions passent à la ligne sans écraser le profil ni ses libellés. */
+@media (max-width: 720px) {
+  .composer-barre,
+  .composer-reglages,
+  .composer-profil {
+    flex-wrap: wrap;
+  }
+  .composer-reglages {
+    flex: 1 1 220px;
+  }
+  .composer-reglages > *,
+  .composer-profil > * {
+    flex-shrink: 0;
+    overflow-wrap: normal;
+    word-break: normal;
+  }
+  .composer-profil {
+    max-width: 100%;
+  }
+  .composer-profil-part {
+    white-space: nowrap;
+  }
+  .composer-barre > .bouton-icone {
+    flex-shrink: 0;
+  }
+}
+/* Les tableaux conservent leurs colonnes ; seul leur cadre défile. */
+.accueil-table-scroll {
+  min-width: 0;
+  max-width: 100%;
+}
+.accueil-table-scroll .table-sujets {
+  min-width: 640px;
+}
+.serveur-discussions-table .bouton {
+  white-space: nowrap;
+  overflow-wrap: normal;
+  word-break: normal;
+}
+.serveur-discussions-table {
+  display: block;
+  overflow-x: auto;
+}
+.serveur-discussions-table th,
+.serveur-discussions-table td {
+  white-space: nowrap;
+  overflow-wrap: normal;
+  word-break: normal;
+}
+.carte-board-table td.carte-board-etat {
+  overflow-wrap: normal;
+  word-break: normal;
+}
+
+/* 56.9 : ajustements des écrans de configuration et des lectures du mesh. */
+.serveur-bloc > .serveur-champ {
+  flex: none;
+}
+.serveur-config .case input[type='checkbox'] {
+  flex: 0 0 16px;
+  width: 16px;
+  height: 16px;
+}
+[data-node='onglets-swarph'] {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+}
+[data-node='onglets-swarph'] [aria-current='page'] {
+  color: var(--text);
+  background: var(--surface-3);
+  border-bottom: 2px solid var(--acc);
+}
+[data-node='cells.tableau'] {
+  width: 100%;
+  border-collapse: collapse;
+}
+[data-node='cells.tableau'] th,
+[data-node='cells.tableau'] td {
+  padding: var(--sp-3) var(--sp-2);
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  vertical-align: top;
+}
+.chemin-technique {
+  display: block;
+  width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: normal;
+}
+.carte-board-texte {
+  overflow-wrap: normal;
+  word-break: normal;
+}
+@media (min-width: 1280px) {
+  /* Le rail réduit (D58) garde ses 72 px. */
+  .corps-ecran--sujet .barre-gauche:not(.barre-gauche--rail) {
+    width: 240px;
+  }
+}
+
+/* 56.g : lisibilité dans les colonnes étroites, y compris sur bureau. */
+.decision-carte--resolue .decision-issue {
+  color: var(--text);
+}
+[data-node='3-4.index'] {
+  box-sizing: border-box;
+  height: auto;
+  max-width: 100%;
+  white-space: normal;
+}
+.selecteur-dossier__barre > .champ {
+  min-width: 0;
+  flex: 1;
+}
+.selecteur-dossier__barre > .bouton {
+  flex: none;
+  white-space: nowrap;
+}
+.composer {
+  container-type: inline-size;
+}
+@container (max-width: 640px) {
+  .composer-barre,
+  .composer-reglages,
+  .composer-profil {
+    flex-wrap: wrap;
+  }
+  .composer-reglages {
+    flex: 1 1 220px;
+  }
+  .composer-reglages > *,
+  .composer-profil > * {
+    flex-shrink: 0;
+    overflow-wrap: normal;
+    word-break: normal;
+  }
+  .composer-profil-part {
+    white-space: nowrap;
+  }
+  /* Le mode prend sa ligne ; le profil laisse ensuite Remote à droite du modèle. */
+  .composer-reglages > [data-node$='.mode'] {
+    flex-basis: 100%;
+    text-align: left;
+  }
+}
+.avis-mesh-table {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+}
+.avis-mesh-table th,
+.avis-mesh-table td {
+  min-width: 130px;
+  overflow-wrap: normal;
+  word-break: normal;
 }

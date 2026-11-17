@@ -260,7 +260,9 @@ function Contenu() {
         <p className="message-erreur" role="alert" data-node="discussion.introuvable">
           Cette discussion n’existe plus sur ce serveur.
         </p>
-        <Link to="/serveurs">Retour aux serveurs</Link>
+        <Link data-node="discussion.navigation.retour-aux-serveurs" to="/serveurs">
+          Retour aux serveurs
+        </Link>
       </main>
     );
 
@@ -269,8 +271,10 @@ function Contenu() {
       <div className="discussion-entete" data-node="discussion.entete">
         <div className="discussion-titres">
           <nav className="texte-faible" aria-label="Fil d’Ariane">
-            <Link to="/serveurs">Serveurs</Link> /{' '}
-            <span data-node="discussion.serveur">{serveurNom}</span>
+            <Link data-node="discussion.navigation.serveurs" to="/serveurs">
+              Serveurs
+            </Link>{' '}
+            / <span data-node="discussion.serveur">{serveurNom}</span>
           </nav>
           <h1 className="titre-ecran" data-node="discussion.titre">
             {discussion?.name ?? '…'}

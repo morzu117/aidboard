@@ -1,8 +1,9 @@
+import { verifierEcranGarde } from './ecrans-garde.js';
 import { execFileSync } from 'node:child_process';
 import { mkdtempSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { delimiter, join } from 'node:path';
-import { type Browser, expect, type Page, test } from '@playwright/test';
+import { type Browser, expect, type Page, test } from './test.js';
 import { newRepo, node, registerWorkspace, state } from './helpers.js';
 import { fermerContextes } from './helpers.js';
 
@@ -168,6 +169,11 @@ test.describe.serial('Boîte, Nouveau sujet et Reprendre (chantier 28)', () => {
     await expect(page.getByRole('dialog')).toHaveCount(0);
     await expect.poll(async () => (await agentsDuSujet()).at(-1)?.status).toMatch(VIVANT);
     expect((await agentsDuSujet()).length).toBe(1);
+    await verifierEcranGarde(
+      page,
+      'decision-close',
+      page.locator('.decision-issue').filter({ hasText: 'Demande close' }).first(),
+    );
   });
 
   test('D149 : Transférer à codex, avec l’alerte des fichiers non commités', async () => {

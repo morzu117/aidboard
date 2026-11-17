@@ -288,7 +288,9 @@ test('le tour renouvelle une publication de plus de cinq minutes et retente un �
 test('essai signé en v2, résumé sans sujet', async () => {
   const t = await preparer();
   const enveloppe = t.relais.deposer.mock.calls[0]![1];
-  expect(JSON.parse(Buffer.from(enveloppe.corps, 'base64url').toString())).toMatchObject({
+  const corps = JSON.parse(Buffer.from(enveloppe.corps, 'base64url').toString());
+  expect(corps).not.toHaveProperty('sujet');
+  expect(corps).toMatchObject({
     v: 2,
     action: 'essai',
     params: {},

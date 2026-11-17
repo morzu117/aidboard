@@ -9,7 +9,7 @@ import {
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { delimiter, join } from 'node:path';
-import { expect, test } from '@playwright/test';
+import { expect, test } from './test.js';
 import { node, openApp } from './helpers.js';
 import { fermerContextes } from './helpers.js';
 
@@ -62,13 +62,15 @@ test('la fiche : corps brut, graphe, fil, obligation retirée fermée', async ({
   await expect(node(page, 'carte-board.corps.texte')).toContainText('<b>pas du HTML</b>');
   await expect(node(page, 'carte-board.corps.texte').locator('b')).toHaveCount(0);
   await expect(node(page, 'carte-board.graphe.manque')).toHaveText('build, validate');
-  await expect(node(page, 'carte-board.graphe.etape-0')).toContainText(/unstaffable .* then ask\)/);
+  await expect(node(page, 'carte-board.graphe.etape-0')).toContainText(
+    /sans détenteur disponible .* then ask\)/,
+  );
   await expect(node(page, 'carte-board.fil').locator('.carte-board-auteur')).toHaveText([
     'peer-a',
     'peer-b',
   ]);
   await expect(page.locator('.carte-board-fil script')).toHaveCount(0);
-  await expect(node(page, 'carte-board.obligation-9101')).toContainText('withdrawn');
+  await expect(node(page, 'carte-board.obligation-9101')).toContainText('retirée');
   await node(page, 'carte-board.retour').click();
   // retour au projet de la carte
   await expect(page).toHaveURL(/\/board\?projet=42$/);
@@ -187,4 +189,26 @@ test('sans mesh.cell : ni lien Board ni route', async ({ browser }) => {
   } finally {
     execFileSync(process.execPath, [CLI, 'stop', '--force'], { env, timeout: 30_000 });
   }
+});
+
+test('56.6 : les cartes sans lien Swairm ne demandent aucun commit', async ({ browser }) => {
+  const page = await openApp(await browser.newContext());
+  const requetes: string[] = [];
+  const erreurs: string[] = [];
+  page.on('request', (r) => {
+    if (new URL(r.url()).pathname.endsWith('/commits')) requetes.push(r.url());
+  });
+  page.on('console', (m) => {
+    if (m.type() === 'error') erreurs.push(m.text());
+  });
+  page.on('pageerror', (e) => erreurs.push(e.message));
+  for (const id of [101, 102]) {
+    await page.locator('[data-node$=".barre.nav-board"]').click();
+    await node(page, 'board.relire').click();
+    await node(page, `board.carte-${id}`).click();
+    await expect(node(page, 'carte-board.corps.texte')).toBeVisible();
+    await expect(node(page, 'carte-board.chronologie')).toBeVisible();
+  }
+  expect(requetes).toEqual([]);
+  expect(erreurs).toEqual([]);
 });

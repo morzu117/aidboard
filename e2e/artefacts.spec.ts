@@ -1,9 +1,10 @@
+import { verifierEcranGarde } from './ecrans-garde.js';
 import { execFileSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { createServer, type Server } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { type Browser, expect, type Frame, type Page, test } from '@playwright/test';
+import { type Browser, expect, type Frame, type Page, test } from './test.js';
 import { createTopic, fermerContextes, newRepo, node, registerWorkspace } from './helpers.js';
 
 test.afterAll(({ browser }) => fermerContextes(browser));
@@ -162,6 +163,7 @@ test.describe.serial('la frontière des artefacts (chantier 30)', () => {
     await expect(
       page.frameLocator('[data-node="1-3.artefacts.cadre"]').locator('#carre'),
     ).toHaveCount(1);
+    await verifierEcranGarde(page, 'artefact-svg', page.locator('.artefact-entete'));
   });
 
   test('D169 : l’artefact mesure sa prison et publie son verdict', async () => {

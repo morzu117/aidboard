@@ -2,7 +2,7 @@ import { execFileSync } from 'node:child_process';
 import { mkdtempSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { delimiter, join } from 'node:path';
-import { type Browser, expect, type Page, test } from '@playwright/test';
+import { type Browser, expect, type Page, test } from './test.js';
 import { createTopic, fermerContextes, newRepo, node, registerWorkspace } from './helpers.js';
 
 test.afterAll(({ browser }) => fermerContextes(browser));

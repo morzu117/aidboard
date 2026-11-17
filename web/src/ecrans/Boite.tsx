@@ -174,6 +174,7 @@ function Article({ n, e }: { n: number; e: Element }) {
         <div className="element-actions">
           {e.nature === 'relire' && a.statusAt && (
             <button
+              data-node={id('marquer-relu')}
               className="bouton"
               type="button"
               disabled={busy}
@@ -440,7 +441,11 @@ function ArticleMesh({ n, dm, state }: { n: number; dm: DmMesh; state: StateSnap
         >
           Vu
         </button>
-        {objetMesh && <button onClick={() => setEcriture(true)}>Répondre (à blanc)</button>}
+        {objetMesh && (
+          <button data-node={id('repondre')} onClick={() => setEcriture(true)}>
+            Répondre (à blanc)
+          </button>
+        )}
         {objetMesh && ecriture && (
           <EcrireAuMesh
             mesh={dm.mesh}
@@ -683,10 +688,11 @@ function Contenu() {
     <div className="filtres" data-node="1-2.filtres">
       {multiple && (
         <details>
-          <summary>Filtrer par mesh</summary>
+          <summary data-node="boite.messages.filtrer-par-mesh">Filtrer par mesh</summary>
           <label>
             Mesh{' '}
             <select
+              data-node="boite.filtres.mesh"
               aria-label="Filtrer par mesh"
               value={filtreMesh}
               onChange={(e) => setFiltreMesh(e.target.value)}

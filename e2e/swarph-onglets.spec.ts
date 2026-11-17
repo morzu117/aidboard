@@ -2,8 +2,9 @@ import { execFileSync } from 'node:child_process';
 import { mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { delimiter, join } from 'node:path';
-import { expect, test } from '@playwright/test';
+import { expect, test } from './test.js';
 import { fermerContextes, node, openApp } from './helpers.js';
+import { capturerBoutons } from './captures-boutons.js';
 
 const erreur = (valeur: string | null) => {
   const fichier = join(process.env.AID_E2E_HOME!, 'board-error');
@@ -126,5 +127,56 @@ test('Federation sans index local sur un daemon isolé', async ({ browser }) => 
     await expect(node(page, 'federation.etat')).toHaveAttribute('data-kind', 'no-index');
   } finally {
     execFileSync(process.execPath, [cli, 'stop', '--force'], { env, timeout: 30_000 });
+  }
+});
+
+test('56.4 D11 : Recharger explique Lister, relit réellement et reprend après refus', async ({
+  browser,
+}) => {
+  const page = await openApp(await browser.newContext());
+  try {
+    await page.goto(`${process.env.AID_E2E_URL}/swarph/memoire`);
+    const recharger = node(page, 'memoire-swarph.liste.recharger');
+    const raison = node(page, 'memoire-swarph.liste.raison');
+    const journal = () =>
+      readFileSync(join(process.env.AID_E2E_HOME!, 'swarph.log'), 'utf8')
+        .split('\n')
+        .filter((ligne) => ligne.startsWith('memory list ')).length;
+    await expect(recharger).toBeDisabled();
+    await expect(raison).toHaveText('Clique sur Lister pour charger la mémoire.');
+    await expect(recharger).toHaveAccessibleDescription(await raison.innerText());
+    await capturerBoutons(page, 'memoire-desactive', recharger);
+    // Lister peut utiliser le cache partagé ; Recharger force ensuite une lecture du CLI.
+    const lecture = page.waitForResponse((r) => new URL(r.url()).pathname === '/api/swarph/memory');
+    await node(page, 'memoire-swarph.lister').click();
+    expect(await (await lecture).json()).toMatchObject({
+      ok: true,
+      data: [{ slug: 'page-sans-tag', title: 'Page sans tag' }],
+      readAt: expect.any(String),
+    });
+    await expect(node(page, 'memoire-swarph.liste')).toContainText('Page sans tag');
+    await expect(recharger).toBeEnabled();
+    await expect(raison).toHaveCount(0);
+    await capturerBoutons(page, 'memoire-actif', recharger);
+    const apresListe = journal();
+    await recharger.click();
+    await expect.poll(journal).toBeGreaterThan(apresListe);
+    await expect(node(page, 'memoire-swarph.liste')).toContainText('Page sans tag');
+    erreur('forbidden');
+    const refus = page.waitForResponse((r) => new URL(r.url()).pathname === '/api/swarph/memory');
+    await recharger.click();
+    expect(await (await refus).json()).toMatchObject({ ok: false, kind: 'forbidden' });
+    await expect(node(page, 'memoire-swarph.liste.etat')).toContainText(
+      "Ta cellule n'a pas, ou plus, accès à cette mémoire.",
+    );
+    await expect(recharger).toBeEnabled();
+    erreur(null);
+    const avantReprise = journal();
+    await recharger.click();
+    await expect.poll(journal).toBeGreaterThan(avantReprise);
+    await expect(node(page, 'memoire-swarph.liste')).toContainText('Page sans tag');
+    await expect(node(page, 'memoire-swarph.liste.etat')).toHaveCount(0);
+  } finally {
+    await page.context().close();
   }
 });

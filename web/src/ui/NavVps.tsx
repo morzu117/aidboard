@@ -33,8 +33,8 @@ export function etatVps(status: ServerStatus): EtatVps {
 /** Ce qui a lâché au dernier test, sinon la raison de l'état mesuré. */
 function etapeEchouee(test: ServerTest | undefined, status: ServerStatus): string | null {
   const etape = test?.finishedAt ? test.steps.find((s) => s.state === 'failed') : undefined;
-  if (etape) return `${etape.label} : ${etape.detail ?? test?.error ?? 'échec'}`;
-  return status.reason;
+  if (etape) return `${etape.label} : échec de la connexion. Consulte le diagnostic du serveur.`;
+  return status.reason ? 'Connexion impossible. Consulte le diagnostic du serveur.' : null;
 }
 
 function Carte({

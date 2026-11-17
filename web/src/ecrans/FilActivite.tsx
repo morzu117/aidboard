@@ -152,7 +152,11 @@ export function FilActivite() {
               return (
                 <li key={ev.id} className="activite-ligne" data-node={ligneId}>
                   {ev.topicId ? (
-                    <Link className="activite-lien" to={`/sujets/${ev.topicId}`}>
+                    <Link
+                      data-node={`${ligneId}.ouvrir`}
+                      className="activite-lien"
+                      to={`/sujets/${ev.topicId}`}
+                    >
                       {contenu}
                     </Link>
                   ) : (

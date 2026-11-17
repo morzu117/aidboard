@@ -1,3 +1,4 @@
+import { libelleBoard } from '../ui/libellesBoard.js';
 import { CartesReliees } from '../ui/CartesReliees.js';
 import { AvatarCell } from '../ui/AvatarCell.js';
 import { AidCarte, ErreursAid, NouveauSujetCarte } from '../ui/AidBoard.js';
@@ -102,7 +103,7 @@ function Graphe({ g, cellLocale }: { g: BoardGraph; cellLocale?: string }) {
                 <td>{s.step ?? TIRET}</td>
                 <td>{s.mandatory === null ? TIRET : s.mandatory ? 'oui' : 'non'}</td>
                 {/* en entier, jamais abrégé : ce texte explique le blocage */}
-                <td className="carte-board-etat">{s.state ?? TIRET}</td>
+                <td className="carte-board-etat">{libelleBoard(s.state)}</td>
                 <td>
                   {s.holder && <AvatarCell nom={s.holder} cellLocale={cellLocale} />}
                   {s.holder ?? TIRET}
@@ -177,8 +178,8 @@ function Obligations({
                   {x.holder ?? TIRET}
                 </td>
                 {/* status fait foi ; state n'est qu'une indication (#1456) */}
-                <td>{x.status ?? TIRET}</td>
-                <td className="texte-discret">{x.state ?? TIRET}</td>
+                <td>{libelleBoard(x.status)}</td>
+                <td className="texte-discret">{libelleBoard(x.state)}</td>
                 <td>{x.closed ? (x.closedAt ? `oui, ${date(x.closedAt)}` : 'oui') : 'non'}</td>
                 <td>
                   {x.closeOutcome
@@ -334,7 +335,12 @@ function Chronologie({
                   : commits.pr.state}
             ){' '}
             {commits.pr.url?.startsWith('https://github.com/') && (
-              <a href={commits.pr.url} target="_blank" rel="noreferrer noopener">
+              <a
+                data-node="carte.liens.pr"
+                href={commits.pr.url}
+                target="_blank"
+                rel="noreferrer noopener"
+              >
                 {commits.pr.url}
               </a>
             )}
@@ -359,7 +365,12 @@ function GitHub({ card }: { card: BoardCard }) {
         <li key={k} data-node={`carte-board.lien-${k}`}>
           <span className="texte-discret">{k} </span>
           {GITHUB.test(v) ? (
-            <a href={v} target="_blank" rel="noreferrer noopener">
+            <a
+              data-node={`carte.liens.github-${k}`}
+              href={v}
+              target="_blank"
+              rel="noreferrer noopener"
+            >
               {v}
             </a>
           ) : (
@@ -411,7 +422,12 @@ function Fiche({
       </Bloc>
       {objetMesh && c && (
         <>
-          <button onClick={() => setEcriture(true)}>Écrire une note (à blanc)</button>
+          <button
+            data-node="carte.actions.ecrire-une-note-a-blanc"
+            onClick={() => setEcriture(true)}
+          >
+            Écrire une note (à blanc)
+          </button>
           {ecriture && (
             <EcrireAuMesh
               mesh={s.mesh}
@@ -441,9 +457,11 @@ function Fiche({
 /** Chantier 31 (D180) : aussi monté par l'interface d'un appareil, sans la coque du Mac. */
 export function Contenu({ cardId }: { cardId: number }) {
   const mesh = useMeshLecture();
-  const commits = useSwairmCommits(mesh === 'principal' ? cardId : 0);
   const { result, enLecture, luA, erreur, relire, reussieA } = useBoardCard(cardId);
   const c = result?.card.ok ? result.card.data : null;
+  const commits = useSwairmCommits(
+    mesh === 'principal' && c && liensSwairm(c.body ?? '').length > 0 ? cardId : 0,
+  );
   return (
     <main className="page carte-board" data-node="carte-board">
       <nav className="carte-board-ariane" aria-label="Fil d’Ariane" data-node="carte-board.ariane">

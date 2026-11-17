@@ -70,13 +70,15 @@ test('activation, révocation et rotation confirmées', async () => {
   );
   await screen.findByText('nouvelle-cle');
 });
-test('essai sans numéro, relu après trois secondes', async () => {
-  ouvrir({
+test('essai sans sujet ni numéro, relu après trois secondes', async () => {
+  const h = ouvrir({
     'POST /api/host/pda/essai': json(200, { id: 'demande', numero: '9876' }),
     'GET /api/host/pda/demandes/demande': json(200, { etat: 'confirmee', numero: '9876' }),
   });
+  expect(screen.queryByLabelText('Sujet')).toBeNull();
   fireEvent.click(screen.getByText('Envoyer une demande d’essai'));
   await screen.findByText('Demande envoyée, en attente…');
+  expect(h.calls.find((c) => c.url === '/api/host/pda/essai')?.body).toBeUndefined();
   expect(document.body.textContent).not.toContain('9876');
   await waitFor(() => expect(screen.getByRole('status').textContent).toBe('Confirmée'), {
     timeout: 4500,

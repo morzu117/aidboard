@@ -8,6 +8,7 @@ import { App } from './App.js';
 import { AppAppareil } from './AppAppareil.js';
 import { detecterMode } from './data/appareil.js';
 import './styles/maquette.css';
+import './styles/natifs.css';
 import './styles/app.css';
 import './styles/coque.css';
 import './styles/sujet.css';

@@ -249,7 +249,7 @@ test.each([null, -257, 'empreinte'] as const)(
         ),
     );
     render(<AppPda />);
-    fireEvent.change(await screen.findByLabelText('Nom de cet appareil'), {
+    fireEvent.change(await screen.findByLabelText('Nom de cet appareil (obligatoire)'), {
       target: { value: 'Téléphone' },
     });
     fireEvent.click(screen.getByRole('button', { name: 'Enregistrer cet appareil' }));
@@ -355,7 +355,7 @@ test('enregistrement réussi : empreinte comparée et clé privée non extractib
     return new Response('{}');
   });
   render(<AppPda />);
-  fireEvent.change(await screen.findByLabelText('Nom de cet appareil'), {
+  fireEvent.change(await screen.findByLabelText('Nom de cet appareil (obligatoire)'), {
     target: { value: 'Téléphone' },
   });
   fireEvent.click(screen.getByRole('button', { name: 'Enregistrer cet appareil' }));

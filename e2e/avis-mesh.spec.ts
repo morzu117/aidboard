@@ -1,3 +1,4 @@
+import { verifierEcranGarde } from './ecrans-garde.js';
 import { execFileSync, spawn, type ChildProcess } from 'node:child_process';
 import { once } from 'node:events';
 import type { Server } from 'node:https';
@@ -7,7 +8,7 @@ import { pathToFileURL } from 'node:url';
 import Database from 'better-sqlite3';
 import { mkdtempSync, readFileSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { expect, test } from '@playwright/test';
+import { expect, test } from './test.js';
 import { appairerHost, demarrerHost, ORIGINE_APPAREIL } from './host-helpers.js';
 import { fermerContextes, node } from './helpers.js';
 import { NOM_E2E, ouvrirServeLocal } from './serve-local.js';
@@ -391,6 +392,16 @@ swairm:
       '',
       'insuffisant',
     ]);
+    const justification = tableau.getByText('Justification', { exact: true }).first();
+    await justification.click();
+    await expect(justification.locator('..')).toContainText('Tests utiles.');
+    await expect(justification.locator('..')).toHaveAttribute('open', '');
+    await justification.click();
+    await verifierEcranGarde(
+      mac,
+      'avis-mesh',
+      tableau.getByRole('cell', { name: 'insuffisant', exact: true }).last(),
+    );
     for (const appel of appels()) expect(appel.args.slice(-2)).toEqual(['--as', 'peer-c']);
   } finally {
     const nettoyages = await Promise.allSettled([

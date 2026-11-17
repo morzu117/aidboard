@@ -333,3 +333,9 @@
   margin: 0;
   font-family: ui-monospace, monospace;
 }
+
+/* 56.9 : le motif est aligné sous l'action qu'il explique. */
+.livraison-blocage {
+  align-self: center;
+  text-align: center;
+}

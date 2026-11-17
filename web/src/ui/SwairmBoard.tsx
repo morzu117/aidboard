@@ -187,7 +187,9 @@ export function SansCarteSwairm() {
       )}
       <ErreursSwairm />
       <details>
-        <summary>Sujets Swairm sans carte ({vivants.length})</summary>
+        <summary data-node="board.swairm.sujets-swairm-sans-carte">
+          Sujets Swairm sans carte ({vivants.length})
+        </summary>
         <p>
           {pluriel(termines.length, 'sujet')} merged ou abandoned sans carte non{' '}
           {termines.length > 1 ? 'listés' : 'listé'}.
@@ -199,9 +201,20 @@ export function SansCarteSwairm() {
               <span>
                 {s.projet}#{s.id} · {s.titre} · {libelleSwairm(s.etat)}
               </span>
-              <button onClick={() => void copier(ligneSwairm(s))}>Copier la ligne</button>
-              <button onClick={() => void copier(commandeSwairm(s))}>Copier la commande</button>
               <button
+                data-node={`board.swairm.copier-la-ligne-${s.projet}-${s.id}`}
+                onClick={() => void copier(ligneSwairm(s))}
+              >
+                Copier la ligne
+              </button>
+              <button
+                data-node={`board.swairm.copier-la-commande-${s.projet}-${s.id}`}
+                onClick={() => void copier(commandeSwairm(s))}
+              >
+                Copier la commande
+              </button>
+              <button
+                data-node={`board.swairm.creer-la-carte-${s.projet}-${s.id}`}
                 disabled={
                   !!raison ||
                   vols === null ||
@@ -214,7 +227,11 @@ export function SansCarteSwairm() {
                 Créer la carte
               </button>
               {vols?.some((v) => v.ligne_swairm === ligneSwairm(s)) && (
-                <button disabled={relecture} onClick={() => void relire(s)}>
+                <button
+                  data-node={`board.swairm.relire-le-board-${s.projet}-${s.id}`}
+                  disabled={relecture}
+                  onClick={() => void relire(s)}
+                >
                   Relire le board
                 </button>
               )}

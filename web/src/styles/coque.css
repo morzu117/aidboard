@@ -170,3 +170,33 @@ a.marque {
 .accueil-decision td {
   padding-bottom: var(--sp-4);
 }
+
+/* 56.8 : le badge reste entier ; le nom du serveur cède la place. */
+.nav-vps-etat {
+  flex: none;
+  white-space: nowrap;
+}
+.nav-vps-entete > .barre-gauche-sujet-nom {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.nav-etat-meshes > a > .nav-etat-sujet-projet {
+  display: block;
+}
+
+/* 56.9 : séparer le ton du constat, même quand le titre revient à la ligne. */
+.discussion .bandeau-constat {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--sp-1) var(--sp-2);
+}
+.discussion > .bandeau {
+  margin: var(--sp-3) var(--sp-8);
+}
+.discussion:has(> .panneau-serveur) > .bandeau {
+  grid-row: 3;
+  grid-column: 1 / -1;
+}

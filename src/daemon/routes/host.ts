@@ -155,14 +155,15 @@ export function registerHostRoutes(
   }
   app.post('/api/host/pda/essai', async (req, reply) => {
     if (!admin(req, reply)) return reply;
-    const corps = req.body as { sujet?: unknown } | null;
+    const corps: unknown = req.body;
     if (
-      !corps ||
-      typeof corps.sujet !== 'string' ||
-      corps.sujet.length > 80 ||
-      Object.keys(corps).some((c) => c !== 'sujet')
+      corps !== undefined &&
+      (corps === null ||
+        typeof corps !== 'object' ||
+        Array.isArray(corps) ||
+        Object.keys(corps).length > 0)
     )
-      return reply.code(400).send({ error: 'sujet : 80 caractères au plus' });
+      return reply.code(400).send({ error: 'La demande d’essai ne prend aucun paramètre.' });
     const file = deps.pda?.obtenir();
     if (!file || !deps.modeHost.nomLu()?.endsWith('.ts.net'))
       return reply.code(409).send({ error: 'PDA ou nom Tailscale indisponible' });

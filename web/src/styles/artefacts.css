@@ -77,3 +77,12 @@
   height: 100%;
   border: 0;
 }
+
+/* 56.g : le chemin garde sa propre ligne, les actions se rangent dessous. */
+.artefact-entete .fil-ariane {
+  flex-basis: 100%;
+}
+.artefact-entete > .actions {
+  flex-wrap: wrap;
+  max-width: 100%;
+}

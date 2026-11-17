@@ -87,15 +87,17 @@ test('carte 101 : corps brut, graphe complet, obligation retirée fermée, fil e
   // graphe : ordre reçu, state en entier
   const etapes = [0, 1, 2].map((i) => ligne(`carte-board.graphe.etape-${i}`).cells[0]!.textContent);
   expect(etapes).toEqual(['build', 'validate', 'spec-review']);
-  expect(node('carte-board.graphe.etape-0')!.textContent).toMatch(/unstaffable .* then ask\)/);
+  expect(node('carte-board.graphe.etape-0')!.textContent).toMatch(
+    /sans détenteur disponible .* then ask\)/,
+  );
   expect(node('carte-board.graphe.manque')!.textContent).toBe('build, validate');
   expect(node('carte-board.graphe.non-confirme')!.textContent).toBe('build, validate');
   expect(node('carte-board.graphe.deduite')!.textContent).toBe('pre-build (graph unfilled)');
   // obligation withdrawn + requested : fermée, preuve « — » sans close_outcome
   const o = ligne('carte-board.obligation-9101');
   const cells = [...o.cells].map((c) => c.textContent);
-  expect(cells[3]).toBe('withdrawn');
-  expect(cells[4]).toBe('requested');
+  expect(cells[3]).toBe('retirée');
+  expect(cells[4]).toBe('demandée');
   expect(cells[5]).toMatch(/^oui/);
   expect(cells[6]).toBe('—');
   expect(node('carte-board.obligations.tronquee')).toBeNull();

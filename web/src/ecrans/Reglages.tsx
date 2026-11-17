@@ -79,9 +79,9 @@ function Projets() {
                   : `${pluriel(n, 'sujet')} ${n > 1 ? 'ouverts' : 'ouvert'}`}
               </span>
             </div>
-            <p className="element-detail" data-node={`${id}.chemin`}>
+            <code className="element-detail chemin-technique" data-node={`${id}.chemin`}>
               {w.root}
-            </p>
+            </code>
             <div className="element-actions">
               <button
                 className="bouton bouton--contour"

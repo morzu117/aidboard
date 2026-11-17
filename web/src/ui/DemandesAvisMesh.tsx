@@ -74,13 +74,22 @@ function ListeDemandesMesh({ mesh }: { mesh: string }) {
     <section aria-label="Demandes au mesh">
       <h3>Demandes au mesh</h3>
       <EnteteMesh mesh={mesh} />
-      <button onClick={() => void liste.relire()}>Relire les demandes au mesh</button>
+      <button
+        data-node="swarph.demandes.relire-les-demandes-au-mesh"
+        onClick={() => void liste.relire()}
+      >
+        Relire les demandes au mesh
+      </button>
       {liste.erreur && <p role="alert">{liste.erreur}</p>}
       {erreur && <p role="alert">{erreur}</p>}
       <ul>
         {liste.result?.demandes?.map((demande) => (
           <li key={demande.id}>
-            <button disabled={attente} onClick={() => void ouvrir(demande)}>
+            <button
+              data-node={`swarph.demandes.carte-${demande.id}`}
+              disabled={attente}
+              onClick={() => void ouvrir(demande)}
+            >
               <time dateTime={demande.date}>{new Date(demande.date).toLocaleString('fr-FR')}</time>{' '}
               — {demande.cells.join(', ')} — Carte {demande.carte} —{' '}
               {ETATS_AVIS[demande.etat] ?? demande.etat}
@@ -91,10 +100,16 @@ function ListeDemandesMesh({ mesh }: { mesh: string }) {
               </p>
             )}
             {demande.etat === 'confirmation' && demande.confirmation && (
-              <button onClick={() => confirmation.recevoir(demande)}>Suivre la confirmation</button>
+              <button
+                data-node={`swarph.demandes.suivre-la-confirmation-${demande.id}`}
+                onClick={() => confirmation.recevoir(demande)}
+              >
+                Suivre la confirmation
+              </button>
             )}
             {demande.etat === 'salle-sans-motion' && (
               <button
+                data-node={`swarph.demandes.rouvrir-la-motion-${demande.id}`}
                 disabled={attente}
                 onClick={() => {
                   setReprise(demande);
@@ -112,6 +127,7 @@ function ListeDemandesMesh({ mesh }: { mesh: string }) {
         <section aria-label="Nouvelles durées">
           <DureesAvis heures={heures} onChange={setHeures} />
           <button
+            data-node="swarph.demandes.envoyer-la-motion"
             disabled={
               attente || Object.values(heures).some((h) => !Number.isFinite(h) || h < 1 || h > 168)
             }
@@ -129,13 +145,18 @@ function ListeDemandesMesh({ mesh }: { mesh: string }) {
             setId(null);
           }}
         >
-          <button disabled={attente} onClick={() => void ouvrir({ id, mesh: resultat.mesh })}>
+          <button
+            data-node="swarph.demandes.relire"
+            disabled={attente}
+            onClick={() => void ouvrir({ id, mesh: resultat.mesh })}
+          >
             Relire
           </button>
           {resultat.phase === 'positions' &&
             luA > Date.parse(resultat.echeances.positions) &&
             resultat.baseline?.etat === 'attendu' && (
               <button
+                data-node="swarph.demandes.declarer-le-baseline-absent"
                 disabled={attente}
                 onClick={() => void agir({ id, mesh: resultat.mesh }, 'baseline-absent')}
               >
@@ -147,6 +168,7 @@ function ListeDemandesMesh({ mesh }: { mesh: string }) {
             cellLocale={instantaneMesh(state, resultat.mesh)?.state.cell}
           />
           <button
+            data-node="swarph.demandes.fermer"
             autoFocus
             onClick={() => {
               setResultat(null);

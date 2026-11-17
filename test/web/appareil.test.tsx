@@ -709,6 +709,7 @@ test('32.10 : livraison en lecture, champs et merge toujours désactivé', async
   const h = monter({ kind: 'appareil', moi: MOI }, '/sujets/tp_1/livraison', {
     'GET /api/appareils/sujets/tp_1/livraison': () =>
       reponse(200, {
+        code: { actif: false },
         head: 'abc1234',
         fichiers: [{ nom: 'src/exemple.ts', ajouts: 3, retraits: 1 }],
         controles: [{ nom: 'gate', etat: 'success' }],
@@ -804,6 +805,7 @@ test('32.10 : lire une carte du 31 dans la coque mobile, sans écriture', async 
 });
 
 const LIVRAISON_DIFF = {
+  code: { actif: true },
   head: 'a'.repeat(40),
   fichiers: [
     { nom: 'z.ts', ajouts: 2, retraits: 1 },

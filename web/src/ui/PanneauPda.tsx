@@ -19,7 +19,6 @@ export function PanneauPda({ etat }: { etat: EtatModeHostDaemon['pda'] }) {
   const [relais, setRelais] = useState(etat?.relais ?? '');
   const [appareils, setAppareils] = useState<AppareilPda[]>([]);
   const [cle, setCle] = useState('');
-  const [sujet, setSujet] = useState('Essai');
   const [demande, setDemande] = useState<string | null>(null);
   const [resultat, setResultat] = useState('');
   const [erreur, setErreur] = useState('');
@@ -92,11 +91,12 @@ export function PanneauPda({ etat }: { etat: EtatModeHostDaemon['pda'] }) {
     setAppareils(await client.request<AppareilPda[]>('GET', '/api/host/pda/appareils'));
   }
   return (
-    <div>
-      <label>
+    <div className="pda-formulaire" data-node="machines.pda">
+      <label className="cockpit-case" data-node="machines.pda.activation-libelle">
         <input
           type="checkbox"
           role="switch"
+          data-node="machines.pda.actif"
           checked={pda?.actif ?? false}
           disabled={occupe}
           onChange={() => {
@@ -116,16 +116,23 @@ export function PanneauPda({ etat }: { etat: EtatModeHostDaemon['pda'] }) {
         />
         PDA : confirmations hors du tailnet
       </label>
-      <label>
-        Adresse du relais
+      <label className="cockpit-champ" data-node="machines.pda.relais-libelle">
+        <span data-node="machines.pda.relais-titre">Adresse du relais</span>
         <input
           type="url"
+          data-node="machines.pda.relais"
+          aria-describedby={pda?.actif ? 'machines-pda-relais-raison' : undefined}
           placeholder="https://relais.example.com"
           value={relais}
           disabled={occupe || !!pda?.actif}
           onChange={(e) => setRelais(e.target.value)}
         />
       </label>
+      {pda?.actif && (
+        <p id="machines-pda-relais-raison" data-node="machines.pda.relais-raison">
+          Coupe le PDA pour modifier le relais.
+        </p>
+      )}
       <h3>Appareils PDA</h3>
       <ul className="machines-appareils">
         {appareils.map((a) => (
@@ -133,13 +140,14 @@ export function PanneauPda({ etat }: { etat: EtatModeHostDaemon['pda'] }) {
             <span>{a.nom}</span>
             <span>{{ attente: 'en attente', actif: 'actif', revoque: 'révoqué' }[a.etat]}</span>
             <code className="host-code-court">{a.empreinte}</code>
-            <span>Créé : {a.cree_a}</span>
-            {a.active_a && <span>Activé : {a.active_a}</span>}
-            {a.revoque_a && <span>Révoqué : {a.revoque_a}</span>}
+            <span>Créé : {new Date(a.cree_a).toLocaleString('fr-FR')}</span>
+            {a.active_a && <span>Activé : {new Date(a.active_a).toLocaleString('fr-FR')}</span>}
+            {a.revoque_a && <span>Révoqué : {new Date(a.revoque_a).toLocaleString('fr-FR')}</span>}
             {a.id === activation && confirmation.id
               ? confirmation.attente
               : a.etat === 'attente' && (
                   <button
+                    data-node={`machines.pda.activer-${a.id}`}
                     className="bouton"
                     disabled={occupe || (!!confirmation.id && !confirmation.terminee)}
                     onClick={() => {
@@ -156,6 +164,7 @@ export function PanneauPda({ etat }: { etat: EtatModeHostDaemon['pda'] }) {
                 )}
             {a.etat !== 'revoque' && (
               <button
+                data-node={`machines.pda.revoquer-${a.id}`}
                 className="bouton bouton--danger"
                 disabled={occupe}
                 onClick={() => {
@@ -174,6 +183,7 @@ export function PanneauPda({ etat }: { etat: EtatModeHostDaemon['pda'] }) {
         <>
           <code>{cle}</code>
           <button
+            data-node="machines.pda.copier"
             className="bouton"
             onClick={() => void agir(() => navigator.clipboard.writeText(cle))}
           >
@@ -189,6 +199,7 @@ export function PanneauPda({ etat }: { etat: EtatModeHostDaemon['pda'] }) {
         son redémarrage avec la nouvelle clé publique.
       </p>
       <button
+        data-node="machines.pda.faire-tourner-la-cle"
         className="bouton bouton--danger"
         disabled={occupe}
         onClick={() => {
@@ -209,18 +220,13 @@ export function PanneauPda({ etat }: { etat: EtatModeHostDaemon['pda'] }) {
       >
         Faire tourner la clé
       </button>
-      <label>
-        Sujet
-        <input maxLength={80} value={sujet} onChange={(e) => setSujet(e.target.value)} />
-      </label>
       <button
         className="bouton"
+        data-node="machines.pda.essai"
         disabled={occupe || demande !== null}
         onClick={() =>
           void agir(async () => {
-            const r = await client.request<{ id: string }>('POST', '/api/host/pda/essai', {
-              sujet,
-            });
+            const r = await client.request<{ id: string }>('POST', '/api/host/pda/essai');
             setDemande(r.id);
             setResultat('Demande envoyée, en attente…');
           })
@@ -228,7 +234,9 @@ export function PanneauPda({ etat }: { etat: EtatModeHostDaemon['pda'] }) {
       >
         Envoyer une demande d’essai
       </button>
-      <p role="status">{resultat}</p>
+      <p role="status" data-node="machines.pda.resultat">
+        {resultat}
+      </p>
       {erreur && (
         <p className="message-erreur" role="alert">
           {erreur}

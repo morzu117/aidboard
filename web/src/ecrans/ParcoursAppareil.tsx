@@ -23,6 +23,7 @@ export function SujetsAppareil() {
       <div role="group" aria-label="Filtrer par état" className="appareil-actions">
         {[null, ...new Set(appareil?.topics.map((sujet) => sujet.state))].map((etat) => (
           <button
+            data-node={`appareil.filtres.etat-${etat ?? 'tous'}`}
             key={etat ?? 'tous'}
             aria-pressed={filtre === etat}
             onClick={() => setFiltre(etat)}
@@ -36,7 +37,7 @@ export function SujetsAppareil() {
           .filter((sujet) => filtre === null || sujet.state === filtre)
           .map((sujet) => (
             <li key={sujet.id}>
-              <Link to={chemin(sujet.id)}>
+              <Link data-node={`appareil.sujets.ouvrir-${sujet.id}`} to={chemin(sujet.id)}>
                 {agentsDuSujet(appareil, sujet.id).some(attendDecision) ? (
                   <strong>{sujet.title}</strong>
                 ) : (
@@ -61,7 +62,9 @@ export function SuivreAppareil({ relire = false }: { relire?: boolean }) {
     return (
       <main className="page">
         <h1>Sujet introuvable</h1>
-        <Link to="/sujets">Sujets</Link>
+        <Link data-node="appareil.parcours.sujets" to="/sujets">
+          Sujets
+        </Link>
       </main>
     );
   const agents = agentsDuSujet(appareil, sujet.id);
@@ -74,7 +77,9 @@ export function SuivreAppareil({ relire = false }: { relire?: boolean }) {
     sujet.prNumber !== null || !!lecture?.livraison?.head || !!lecture?.livraison?.fichiers.length;
   return (
     <main className="page">
-      <Link to={relire ? chemin(sujet.id) : '/sujets'}>{relire ? sujet.title : 'Sujets'}</Link>
+      <Link data-node="appareil.sujet.retour" to={relire ? chemin(sujet.id) : '/sujets'}>
+        {relire ? sujet.title : 'Sujets'}
+      </Link>
       <h1 className="titre-ecran">{relire ? 'Relire un tour' : sujet.title}</h1>
       {relire && lecture?.livraison && (
         <FichiersAppareil id={sujet.id} livraison={lecture.livraison} />
@@ -102,10 +107,16 @@ export function SuivreAppareil({ relire = false }: { relire?: boolean }) {
             <section aria-label="Dernier tour">
               <h2>Dernier tour</h2>
               <p>{dernier.tour!.resume}</p>
-              <Link to={`${chemin(sujet.id)}/tour`}>Relire un tour</Link>
+              <Link data-node="appareil.parcours.relire-un-tour" to={`${chemin(sujet.id)}/tour`}>
+                Relire un tour
+              </Link>
             </section>
           )}
-          {livraison && <Link to={`${chemin(sujet.id)}/livraison`}>Livrer</Link>}
+          {livraison && (
+            <Link data-node="appareil.parcours.livrer" to={`${chemin(sujet.id)}/livraison`}>
+              Livrer
+            </Link>
+          )}
         </>
       )}
     </main>
@@ -113,6 +124,7 @@ export function SuivreAppareil({ relire = false }: { relire?: boolean }) {
 }
 
 type Livraison = {
+  code: { actif: boolean };
   head: string | null;
   fichiers: Array<{ nom: string; ajouts: number; retraits: number }>;
   controles: Array<{ nom: string; etat: string }>;
@@ -156,7 +168,9 @@ export function LivraisonAppareil() {
   const livraison = lecture && lecture.id === id ? lecture.livraison : undefined;
   return (
     <main className="page">
-      <Link to={chemin(id ?? '')}>Suivre le sujet</Link>
+      <Link data-node="appareil.parcours.suivre-le-sujet" to={chemin(id ?? '')}>
+        Suivre le sujet
+      </Link>
       <h1 className="titre-ecran">Autoriser un merge</h1>
       {lecture && lecture.id === id && lecture.erreur && <p role="alert">{lecture.erreur}</p>}
       {horsLigne && !livraison && <p>Livraison indisponible hors ligne.</p>}
@@ -166,6 +180,7 @@ export function LivraisonAppareil() {
           <h2>Fichiers</h2>
           <FichiersAppareil id={id!} livraison={livraison} />
           <h2>Contrôles</h2>
+          {livraison.controles.length === 0 && <p>Aucun contrôle connu pour cette tête.</p>}
           <ul>
             {livraison.controles.map((controle, index) => (
               <li key={index}>
@@ -184,7 +199,9 @@ export function LivraisonAppareil() {
         </>
       )}
       <div className="appareil-actions">
-        <button disabled>Merger</button>
+        <button data-node="appareil.parcours.merger" disabled>
+          Merger
+        </button>
       </div>
       <p>Le merge se confirme sur le Mac.</p>
     </main>
@@ -237,15 +254,30 @@ export function BadgeAppareil() {
 
 function FichiersAppareil({ id, livraison }: { id: string; livraison: Livraison }) {
   return (
-    <ul>
-      {livraison.fichiers.map((fichier, index) => (
-        <li key={index}>
-          <Link to={`${chemin(id)}/fichiers/${index}`} state={{ livraison }}>
-            {fichier.nom} · +{fichier.ajouts} −{fichier.retraits}
-          </Link>
-        </li>
-      ))}
-    </ul>
+    <>
+      {!livraison.code.actif && (
+        <p data-node="appareil.fichiers.code-coupe">La lecture du code est coupée sur le Mac.</p>
+      )}
+      <ul data-node="appareil.fichiers">
+        {livraison.fichiers.map((fichier, index) => (
+          <li key={index} data-node={`appareil.fichiers.${index}`}>
+            {livraison.code.actif ? (
+              <Link
+                data-node={`appareil.fichiers.${index}.diff`}
+                to={`${chemin(id)}/fichiers/${index}`}
+                state={{ livraison }}
+              >
+                {fichier.nom} · +{fichier.ajouts} −{fichier.retraits}
+              </Link>
+            ) : (
+              <span data-node={`appareil.fichiers.${index}.resume`}>
+                {fichier.nom} · +{fichier.ajouts} −{fichier.retraits}
+              </span>
+            )}
+          </li>
+        ))}
+      </ul>
+    </>
   );
 }
 
@@ -308,7 +340,9 @@ function LectureFichierAppareil() {
   const fichier = lecture?.livraison?.fichiers[Number(index)];
   return (
     <main className="page">
-      <Link to={`${chemin(id ?? '')}/livraison`}>Livrer</Link>
+      <Link data-node="appareil.sujet.livrer" to={`${chemin(id ?? '')}/livraison`}>
+        Livrer
+      </Link>
       <h1 className="titre-ecran">Lire un fichier</h1>
       {fichier && (
         <h2>
@@ -349,7 +383,12 @@ function LectureFichierAppareil() {
             )}
             {lecture.etat === 'perimee' && (
               <div className="appareil-actions">
-                <button onClick={() => setRelecture((n) => n + 1)}>Relire</button>
+                <button
+                  data-node="appareil.parcours.relire"
+                  onClick={() => setRelecture((n) => n + 1)}
+                >
+                  Relire
+                </button>
               </div>
             )}
           </>

@@ -104,7 +104,9 @@ export function NotificationsAppareil() {
         )
       )}
       {erreur && <p role="alert">{erreur}</p>}
-      <Link to="/appareils">Appareils connectés</Link>
+      <Link data-node="appareil.notifications.appareils" to="/appareils">
+        Appareils connectés
+      </Link>
     </main>
   );
 }

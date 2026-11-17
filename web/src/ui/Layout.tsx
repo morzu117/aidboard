@@ -135,23 +135,10 @@ export function Layout({ screen, children }: { screen: EcranId; children: ReactN
       }}
     >
       <Shell>
-        <Barre
-          screen={screen}
-          daemon={daemon}
-          waiting={waiting}
-          onNewTopic={() => openNewTopic()}
-          onPalette={() => setPalette(true)}
-          mesh={barreMesh}
-          boardLuA={screen === 'board' ? boardLuA : null}
-          sansSwarph={!!state && !state.mesh}
-        />
-        <div
-          className={`corps-ecran${screen === '1-3' ? ' corps-ecran--sujet' : ''}`}
-          data-node={`${screen}.corps`}
-        >
+        <div className="navigation-mobile" data-node={`${screen}.navigation-mobile`}>
           <button
             ref={boutonNavRef}
-            className="bouton-icone bouton-volant bouton-volant--nav"
+            className="bouton-icone"
             data-node={`${screen}.volet.ouvrir-nav`}
             type="button"
             aria-label="Ouvrir la navigation"
@@ -168,6 +155,21 @@ export function Layout({ screen, children }: { screen: EcranId; children: ReactN
               />
             </svg>
           </button>
+        </div>
+        <Barre
+          screen={screen}
+          daemon={daemon}
+          waiting={waiting}
+          onNewTopic={() => openNewTopic()}
+          onPalette={() => setPalette(true)}
+          mesh={barreMesh}
+          boardLuA={screen === 'board' ? boardLuA : null}
+          sansSwarph={!!state && !state.mesh}
+        />
+        <div
+          className={`corps-ecran${screen === '1-3' ? ' corps-ecran--sujet' : ''}`}
+          data-node={`${screen}.corps`}
+        >
           <Volet
             screen={screen}
             nom="nav"

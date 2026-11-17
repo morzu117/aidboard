@@ -363,7 +363,7 @@ export async function ouvrirServeurAppareils(
     const { id } = req.params as { id: string };
     const livraison = await opts.livraison?.(id);
     if (!livraison) return reply.code(404).send({ error: 'sujet inconnu' });
-    return livraison;
+    return { ...livraison, code: { actif: opts.code?.actif() ?? false } };
   });
 
   app.get('/api/appareils/sujets/:id/fichiers/:index/diff', async (req, reply) => {

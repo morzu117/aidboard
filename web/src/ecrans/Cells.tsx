@@ -37,9 +37,9 @@ function ContenuCells() {
                     {pair.nom}
                     {pair.nom === monitor?.cell && ' · toi'}
                   </td>
-                  <td>{pair.version}</td>
+                  <td>{pair.version || '—'}</td>
                   <td>
-                    {pair.nom === monitor?.cell && <EtatMonitor37_5 etat={monitor.monitor} />}
+                    {pair.nom === monitor?.cell ? <EtatMonitor37_5 etat={monitor.monitor} /> : '—'}
                   </td>
                 </tr>
               ))}

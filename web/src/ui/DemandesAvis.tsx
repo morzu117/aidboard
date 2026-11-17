@@ -43,7 +43,10 @@ export function DemandesAvis() {
       <ul>
         {demandes.map((demande) => (
           <li key={demande.id}>
-            <button onClick={() => void ouvrir(demande.id)}>
+            <button
+              data-node={`swarph.avis.ouvrir-${demande.id}`}
+              onClick={() => void ouvrir(demande.id)}
+            >
               <time dateTime={demande.genere_a}>
                 {new Date(demande.genere_a).toLocaleString('fr-FR')}
               </time>{' '}

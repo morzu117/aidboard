@@ -80,6 +80,8 @@ test('409 confirm-flow : texte brut, aucun bouton ni autre envoi, proposition co
   fireEvent.click(await screen.findByRole('button', { name: 'Envoyer' }));
   const r = await screen.findByText("Flow non confirmé (l'orchestrateur doit le confirmer)");
   expect(r.querySelector('b')).toBeNull();
+  expect(screen.getAllByRole('status')).toHaveLength(1);
+  expect(screen.queryByText('Échouée')).toBeNull();
   expect(screen.queryByRole('button', { name: /confirm-flow/ })).toBeNull();
   expect(h.calls.filter((c) => c.method === 'POST')).toHaveLength(1);
   expect(screen.getByRole('button', { name: 'Envoyer' }).hasAttribute('disabled')).toBe(true);

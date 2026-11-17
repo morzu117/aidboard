@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act, cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, expect, test, vi } from 'vitest';
 import { EcrireAuMesh } from '../../web/src/ui/EcrireAuMesh.js';
 import { SansCarteSwairm } from '../../web/src/ui/SwairmBoard.js';
@@ -222,7 +222,9 @@ test.each(['succes', 'echec', 'attente'] as const)(
     fireEvent.change(screen.getByRole('combobox', { name: 'Projet' }), { target: { value: '17' } });
     fireEvent.click(screen.getByRole('button', { name: "Voir l'aperçu" }));
     fireEvent.click(await screen.findByRole('button', { name: 'Envoyer' }));
-    await screen.findByText(message);
+    await screen.findByText(message, { exact: false });
+    expect(screen.getAllByRole('status')).toHaveLength(1);
+    expect(screen.queryByText('Exécutée')).toBeNull();
     expect(screen.queryByText('Le board a été relu : aucune carte ne porte ce sujet.')).toBeNull();
     expect(h.calls.find((c) => c.url === '/api/swarph/ecrire/envoyer')?.body).toEqual({
       mesh: 'principal',
@@ -271,8 +273,10 @@ test('succès : relecture fraîche du board et sujet désormais relié', async (
   fireEvent.change(screen.getByRole('combobox', { name: 'Projet' }), { target: { value: '17' } });
   fireEvent.click(screen.getByRole('button', { name: "Voir l'aperçu" }));
   fireEvent.click(await screen.findByRole('button', { name: 'Envoyer' }));
-  await screen.findByText('Carte créée.');
-  expect(screen.getByText('Carte : #81')).toBeTruthy();
+  await screen.findByText('Carte créée.', { exact: false });
+  const dialogue = within(screen.getByRole('dialog'));
+  expect(dialogue.getByRole('status').textContent).toContain('Carte : #81');
+  expect(dialogue.getAllByRole('status')).toHaveLength(1);
   await screen.findByText('Sujets Swairm sans carte (0)');
   expect(h.calls.some((c) => c.url === '/api/swairm/board?fresh=1')).toBe(true);
 });

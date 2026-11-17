@@ -8,7 +8,8 @@ if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error('Port e
 const transport = globalThis.fetch;
 globalThis.fetch = (entree, options) => {
   const url = new URL(entree instanceof Request ? entree.url : entree);
-  if (url.origin !== origine) return transport(entree, options);
+  if (url.origin !== origine && url.origin !== 'https://relais.example.com')
+    return transport(entree, options);
   url.protocol = 'http:';
   url.hostname = '127.0.0.1';
   url.port = String(port);

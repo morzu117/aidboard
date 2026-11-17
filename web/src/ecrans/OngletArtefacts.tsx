@@ -221,6 +221,7 @@ export function OngletArtefacts({
                 className="bouton"
                 type="button"
                 data-action="artefacts.recharger"
+                data-node="1-3.artefacts.recharger"
                 disabled={chargement || (choisie.type !== 'md' && portIndisponible)}
                 onClick={() => ouvrir(choisie)}
               >
@@ -230,6 +231,7 @@ export function OngletArtefacts({
                 <a
                   className="bouton"
                   data-action="artefacts.ouvrir-a-part"
+                  data-node="1-3.artefacts.ouvrir-a-part"
                   href={vue.lien.aPart}
                   target="_blank"
                   rel="noopener noreferrer"

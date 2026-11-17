@@ -47,12 +47,14 @@ export function LectureSwarph376({
   relire,
   node,
   desactive = false,
+  raison,
 }: {
   luA: string | null;
   enLecture: boolean;
   relire: () => void;
   node: string;
   desactive?: boolean;
+  raison?: string;
 }) {
   return (
     <div data-node={`${node}.lecture`}>
@@ -61,11 +63,17 @@ export function LectureSwarph376({
         type="button"
         className="bouton"
         disabled={enLecture || desactive}
+        aria-describedby={raison ? `${node}-raison` : undefined}
         onClick={relire}
         data-node={`${node}.recharger`}
       >
         Recharger
       </button>
+      {raison && (
+        <p id={`${node}-raison`} data-node={`${node}.raison`}>
+          {raison}
+        </p>
+      )}
     </div>
   );
 }

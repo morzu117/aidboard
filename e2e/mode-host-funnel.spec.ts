@@ -2,7 +2,7 @@ import { execFileSync } from 'node:child_process';
 import { mkdirSync } from 'node:fs';
 import { connect } from 'node:net';
 import { join } from 'node:path';
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page } from './test.js';
 import { demarrerHost } from './host-helpers.js';
 import { node } from './helpers.js';
 
@@ -26,7 +26,7 @@ async function capturerMachines(page: Page, dossier: string, etat: string) {
 test('31.14 : Funnel ferme le port dès le démarrage et refuse l’activation sur le Mac', async ({
   page,
 }, info) => {
-  const { home, token } = demarrerHost(PORT, '', process.env.PATH, true);
+  const { home, token } = demarrerHost(PORT, '', process.env.PATH, { funnel: true });
   try {
     const resultat = await new Promise<string>((resolve, reject) => {
       const socket = connect({ host: '127.0.0.1', port: PORT + 20 });

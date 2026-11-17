@@ -1,6 +1,6 @@
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { expect, test } from '@playwright/test';
+import { expect, test } from './test.js';
 import { createTopic, newRepo, node, openApp, registerWorkspace } from './helpers.js';
 import { fermerContextes } from './helpers.js';
 
@@ -20,5 +20,5 @@ test('nettoyer un sujet avec des modifications non commitées est refusé, rien 
   await page.getByRole('button', { name: 'Nettoyer le sujet' }).click();
   await expect(page.getByRole('alert')).toContainText('non commitées');
   await expect(page.getByRole('button', { name: 'Supprimer quand même' })).toHaveCount(0);
-  await expect(node(page, '1-3.entete.etat')).toHaveText('active');
+  await expect(node(page, '1-3.entete.etat')).toHaveText('actif');
 });

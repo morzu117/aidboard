@@ -211,7 +211,7 @@ function Etapes({ test }: { test: ServerTest }) {
       )}
       {test.raw && (
         <details className="serveur-test-brut">
-          <summary>Sortie brute</summary>
+          <summary data-node="serveur.configuration.sortie-brute">Sortie brute</summary>
           <pre data-node="serveur-config.test.brut">{test.raw}</pre>
         </details>
       )}
@@ -268,7 +268,17 @@ function Formulaire({
       ? { ...b, allowedDirs: [...b.allowedDirs, enAttente] }
       : b;
   const modifie = signature(final) !== signature(initial);
-  const probleme = invalide(final);
+  const manquants = [
+    !final.name.trim() && 'nom affiché',
+    !final.targets[final.mode].trim() &&
+      { command: 'commande de connexion', ssh_host: 'hôte', ssh_alias: 'alias' }[final.mode],
+    !final.workdir.trim() && 'répertoire de travail',
+    !final.shell.trim() && 'shell distant',
+  ].filter(Boolean);
+  const probleme =
+    manquants.length > 1
+      ? `Champs obligatoires manquants : ${manquants.join(', ')}.`
+      : invalide(final);
   const test = plusRecent(id ? (tests[id] ?? null) : null, testLu);
   const testEnCours = lancement || (test !== null && test.finishedAt === null);
 
@@ -387,6 +397,7 @@ function Formulaire({
         <div className="serveur-config-titres">
           <nav className="texte-faible" aria-label="Fil d’Ariane">
             <Link
+              data-node="serveur.configuration.serveurs"
               to="/serveurs"
               onClick={(e) => {
                 if (!modifie) return;
@@ -416,7 +427,9 @@ function Formulaire({
           type="submit"
           form="serveur-config-formulaire"
           disabled={!modifie || probleme !== null || enCours}
-          aria-describedby={modifie && probleme ? 'serveur-config-probleme' : undefined}
+          aria-describedby={
+            !erreur && (probleme || !modifie) ? 'serveur-config-probleme' : undefined
+          }
         >
           Enregistrer
         </button>
@@ -426,14 +439,14 @@ function Formulaire({
             {erreur}
           </p>
         )}
-        {!erreur && modifie && probleme && (
+        {!erreur && (probleme || !modifie) && (
           <p
             className="serveur-config-probleme"
             id="serveur-config-probleme"
             aria-live="polite"
-            data-node="serveur-config.erreur"
+            data-node={probleme ? 'serveur-config.erreur' : 'serveur-config.raison'}
           >
-            {probleme}
+            {probleme ?? 'Aucune modification'}
           </p>
         )}
       </div>
@@ -476,6 +489,7 @@ function Formulaire({
               <span className="serveur-champ-titre">Couleur</span>
               {COULEURS.map((c) => (
                 <button
+                  data-node={`serveur.configuration.couleur-${c.valeur}`}
                   key={c.valeur}
                   type="button"
                   aria-pressed={b.color === c.valeur}
@@ -525,6 +539,7 @@ function Formulaire({
                 </p>
                 <label className="case">
                   <input
+                    data-node="serveur.configuration.profil-shell"
                     type="checkbox"
                     checked={b.loadProfile}
                     onChange={(e) => maj({ loadProfile: e.target.checked })}
@@ -567,6 +582,7 @@ function Formulaire({
                   <label className="serveur-champ">
                     Utilisateur
                     <input
+                      data-node="serveur.configuration.utilisateur"
                       className="champ serveur-mono"
                       value={b.user}
                       onChange={(e) => maj({ user: e.target.value })}
@@ -575,6 +591,7 @@ function Formulaire({
                   <label className="serveur-champ">
                     Clé (chemin local)
                     <input
+                      data-node="serveur.configuration.cle-ssh"
                       className="champ serveur-mono"
                       value={b.identityFile}
                       placeholder="~/.ssh/id_ed25519"
@@ -584,6 +601,7 @@ function Formulaire({
                   <label className="serveur-champ">
                     Rebond
                     <input
+                      data-node="serveur.configuration.rebond"
                       className="champ serveur-mono"
                       value={b.jump}
                       placeholder="bastion"
@@ -634,6 +652,7 @@ function Formulaire({
               <label className="serveur-champ">
                 Shell distant
                 <input
+                  data-node="serveur.configuration.shell-distant"
                   className="champ serveur-mono"
                   value={b.shell}
                   onChange={(e) => maj({ shell: e.target.value })}
@@ -693,6 +712,7 @@ function Formulaire({
             </label>
             <label className="case">
               <input
+                data-node="serveur.configuration.confirmation-destructive"
                 type="checkbox"
                 checked={b.confirmDestructive}
                 onChange={(e) => maj({ confirmDestructive: e.target.checked })}
@@ -710,6 +730,7 @@ function Formulaire({
                 <span key={d} className="pastille pastille--code serveur-mono">
                   {d}
                   <button
+                    data-node={`serveur.configuration.retirer-dossier-${d}`}
                     type="button"
                     className="serveur-dossier-retirer"
                     aria-label={`Retirer ${d}`}
@@ -752,6 +773,7 @@ function Formulaire({
                       dans {r.cwd}
                     </span>
                     <button
+                      data-node={`serveur.configuration.revoquer-${r.id}`}
                       type="button"
                       className="bouton bouton--fantome"
                       aria-label={`Révoquer ${r.pattern}`}
@@ -849,7 +871,12 @@ function Formulaire({
         <Dialogue titre="Abandonner les modifications ?" onClose={() => setQuitter(false)}>
           <p className="texte-discret">Les changements non enregistrés seront perdus.</p>
           <div className="dialogue-actions">
-            <button className="bouton" type="button" onClick={() => setQuitter(false)}>
+            <button
+              data-node="serveur.configuration.continuer-la-saisie"
+              className="bouton"
+              type="button"
+              onClick={() => setQuitter(false)}
+            >
               Continuer la saisie
             </button>
             <button
@@ -886,6 +913,7 @@ function Formulaire({
           )}
           <div className="dialogue-actions">
             <button
+              data-node="serveur.configuration.annuler"
               className="bouton"
               type="button"
               disabled={enCours}

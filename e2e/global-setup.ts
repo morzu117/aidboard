@@ -2,6 +2,7 @@ import { execFileSync } from 'node:child_process';
 import { mkdtempSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { delimiter, join } from 'node:path';
+import { fichierClics, fichierVisuel } from './releves.js';
 
 // AID_E2E_PORT : quand 4871 est pris sur le poste (l'app de bureau AID.app l'écoute, constaté le 2026-10-20)
 const PORT = Number(process.env.AID_E2E_PORT ?? 4871);
@@ -10,6 +11,8 @@ const CLI = join(import.meta.dirname, '../dist/cli/aid.js');
 // Un daemon neuf par exécution : AID_HOME temporaire, port 4871, shell /bin/sh pour des terminaux sobres.
 // Le faux « claude » des fixtures passe devant le PATH : jamais le vrai agent dans un test.
 export default async function globalSetup() {
+  writeFileSync(fichierClics(), '');
+  writeFileSync(fichierVisuel(), '');
   const home = realpathSync(mkdtempSync(join(tmpdir(), 'aid-e2e-')));
   // 12.7 : le mesh swarph sur les faux binaires (D40) — jamais le vrai swarph ni Tailscale, aucun réseau
   const fixtures = join(import.meta.dirname, '../test/fixtures');
