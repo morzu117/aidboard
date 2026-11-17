@@ -65,6 +65,24 @@ export interface OptionsClientCommandant {
   maximumOctets?: number;
   transport?: typeof fetch;
 }
+
+/** hostname est déjà validé et normalisé par URL, y compris les adresses IPv6. */
+function hoteHttpAutorise(hote: string): boolean {
+  if (
+    hote === 'localhost' ||
+    hote === '[::1]' ||
+    hote.endsWith('.ts.net') ||
+    hote.startsWith('[fd7a:115c:a1e0:')
+  )
+    return true;
+  const ipv4 = /^(\d+)\.(\d+)\.(\d+)\.(\d+)$/.exec(hote);
+  return (
+    ipv4 !== null &&
+    (Number(ipv4[1]) === 127 ||
+      (Number(ipv4[1]) === 100 && Number(ipv4[2]) >= 64 && Number(ipv4[2]) <= 127))
+  );
+}
+
 export class ClientCommandant {
   constructor(
     private readonly gateway: string,
@@ -109,6 +127,7 @@ export class ClientCommandant {
         url.hash
       )
         return refus('gateway');
+      if (url.protocol === 'http:' && !hoteHttpAutorise(url.hostname)) return refus('gateway');
       url.pathname = url.pathname.replace(/\/$/, '') + chemin.split('?')[0];
       url.search = chemin.includes('?') ? chemin.split('?')[1]! : '';
     } catch {

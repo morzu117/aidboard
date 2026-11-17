@@ -64,7 +64,10 @@ L'e2e et les tests jouent la passerelle avec un faux, dans `test/fixtures/`. Ce 
     - `src/daemon/routes/commandant.ts` et `src/daemon/push/commandant.ts` ;
     - le faux de la passerelle, `test/fixtures/passerelle-commandant.ts`.
   - **L'historique des ids notifiés** est élagué aux demandes encore `pending`, seulement après une lecture complète et sans refus.
-  - Gate 4 370.
+  - **La relecture du lab** (DM 99805) a donné deux ajouts :
+    - Les quatre lectures du port des appareils sont refusées sans cookie, avec un cookie invalide ou un appareil révoqué, avec un Host ou une Origin étrangers, et sans `x-aid-cockpit`. Un cas couvre chaque route, et aucun appel ne part vers la passerelle.
+    - Le client n'accepte `http:` que vers une passerelle locale (loopback) ou sur le tailnet (100.64.0.0/10, fd7a:115c:a1e0::/48, `*.ts.net`). Ailleurs, `https:` est exigé, pour que `swck_` ne passe jamais en clair.
+  - Gate 4 411.
 
 ### 58.3 Les écrans et la réponse (D349, D350, D351)
 

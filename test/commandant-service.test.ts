@@ -21,7 +21,7 @@ function preparer(options: Partial<ConstructorParameters<typeof ServiceCommandan
   const notifier = vi.fn<(id: number) => Promise<void>>(async () => {});
   const service = new ServiceCommandant({
     home,
-    meshes: () => ({ principal: { gateway: 'http://example.com', cell: 'cell-lab' } }),
+    meshes: () => ({ principal: { gateway: 'https://example.com', cell: 'cell-lab' } }),
     notifier,
     ...options,
   });
@@ -156,8 +156,8 @@ describe('lecture périodique du commandant', () => {
     const faux = transportMemoire();
     const t = preparer({
       meshes: () => ({
-        principal: { gateway: 'http://example.com', cell: 'cell-lab' },
-        secondaire: { gateway: 'http://example.com', cell: 'cell-test' },
+        principal: { gateway: 'https://example.com', cell: 'cell-lab' },
+        secondaire: { gateway: 'https://example.com', cell: 'cell-test' },
       }),
       client: { transport: faux.transport },
     });

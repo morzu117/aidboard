@@ -8,6 +8,7 @@ import { afterEach, expect, it, vi } from 'vitest';
 import { migrate } from '../src/daemon/db.js';
 import { EventStore } from '../src/daemon/events/store.js';
 import { ServiceCommandant } from '../src/daemon/commandant/service.js';
+import { IdentifiantsCockpit } from '../src/daemon/commandant/identifiant.js';
 import { registerCommandantRoutes } from '../src/daemon/routes/commandant.js';
 import { notifierCommandant } from '../src/daemon/push/commandant.js';
 import { RegistreAppareils } from '../src/daemon/host/appareils.js';
@@ -305,3 +306,68 @@ it('le battement répond sans attendre une passerelle lente', async () => {
   expect(t.service.etat('principal').derniereLecture).toBe(avant);
   await t.service.actualiser('principal');
 });
+it.each(
+  [
+    { methode: 'GET' as const, chemin: '/api/commandant/principal' },
+    { methode: 'GET' as const, chemin: '/api/commandant/principal/demandes/1235' },
+    { methode: 'GET' as const, chemin: '/api/commandant/principal/identifiant' },
+    { methode: 'POST' as const, chemin: '/api/commandant/principal/battement' },
+  ].flatMap((route) =>
+    [
+      { situation: 'sans cookie', code: 401 },
+      { situation: 'cookie invalide', code: 401 },
+      { situation: 'appareil révoqué', code: 401 },
+      { situation: 'Host étranger', code: 421 },
+      { situation: 'Origin étrangère', code: 403 },
+      { situation: 'sans provenance', code: 403 },
+    ].map((cas) => ({ ...route, ...cas })),
+  ),
+)(
+  '$methode $chemin : $situation est refusé avant toute lecture distante',
+  async ({ methode, chemin, situation, code }) => {
+    const t = await preparer();
+    new IdentifiantsCockpit(t.home).ecrire('principal', IDENTIFIANT_COCKPIT_TEST);
+    const s = await ouvrirServeurAppareils({
+      port: 0,
+      interdits: [],
+      nom: () => 'aid-e2e.ts.net',
+      registre: t.registre,
+      appairages: new Appairages(),
+      webRoot: null,
+      commandant: t.service,
+    });
+    if (!s.disponible) throw new Error(s.raison);
+    nettoyages.push(() => s.app.close());
+    const headers: Record<string, string> = {
+      host: 'aid-e2e.ts.net',
+      origin: 'https://aid-e2e.ts.net',
+      cookie: `${COOKIE_APPAREIL}=${t.jeton}`,
+      'x-aid-cockpit': '1',
+    };
+    switch (situation) {
+      case 'sans cookie':
+        delete headers.cookie;
+        break;
+      case 'cookie invalide':
+        headers.cookie = `${COOKIE_APPAREIL}=invalide`;
+        break;
+      case 'appareil révoqué': {
+        const lu = t.registre.authentifier(t.jeton);
+        if (!lu.ok) throw new Error('Appareil de test absent');
+        expect(t.registre.revoquer(lu.appareil.id)).toBe(true);
+        break;
+      }
+      case 'Host étranger':
+        headers.host = 'example.com';
+        break;
+      case 'Origin étrangère':
+        headers.origin = 'https://example.com';
+        break;
+      case 'sans provenance':
+        delete headers['x-aid-cockpit'];
+        break;
+    }
+    expect((await s.app.inject({ method: methode, url: chemin, headers })).statusCode).toBe(code);
+    expect(t.faux.appels).toEqual([]);
+  },
+);

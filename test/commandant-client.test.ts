@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ClientCommandant, erreurCommandant } from '../src/daemon/commandant/client.js';
 import { digestCommandant } from '../src/shared/commandant.js';
 import {
@@ -278,4 +278,41 @@ describe('client HTTP et faux contractuel', () => {
     faux.scenario.texteBrut = 'invalide';
     expect(await c.liste()).toMatchObject({ erreur: { code: 'json' } });
   });
+});
+it.each([
+  'http://example.com',
+  'http://100.63.255.255',
+  'http://100.128.0.0',
+  'http://[fd7a:115c:a1df:ffff:ffff:ffff:ffff:ffff]',
+  'http://[fd7a:115c:a1e1::]',
+  'http://aid-e2e.ts.net.example.com',
+])('refuse la passerelle HTTP hors du réseau autorisé %s sans transport', async (gateway) => {
+  const transport = vi.fn<typeof fetch>(async () => new Response('[]'));
+  const client = new ClientCommandant(gateway, IDENTIFIANT_COCKPIT_TEST, { transport });
+  for (const resultat of [
+    await client.liste(),
+    await client.detail(1235),
+    await client.decider(1235, 'oui', '0'.repeat(64)),
+  ]) {
+    expect(resultat).toEqual({ ok: false, erreur: { genre: 'transport', code: 'gateway' } });
+  }
+  expect(transport).not.toHaveBeenCalled();
+});
+it.each([
+  'http://localhost',
+  'http://127.0.0.1',
+  'http://127.255.255.255',
+  'http://[::1]',
+  'http://100.64.0.1',
+  'http://100.127.255.255',
+  'http://[fd7a:115c:a1e0::1]',
+  'http://[FD7A:115C:A1E0:FFFF:FFFF:FFFF:FFFF:FFFF]',
+  'http://aid-e2e.ts.net',
+  'https://example.com',
+])('accepte la passerelle %s', async (gateway) => {
+  const transport = vi.fn<typeof fetch>(async () => new Response('[]'));
+  expect(
+    await new ClientCommandant(gateway, IDENTIFIANT_COCKPIT_TEST, { transport }).liste(),
+  ).toEqual({ ok: true, valeur: [] });
+  expect(transport).toHaveBeenCalledTimes(1);
 });
