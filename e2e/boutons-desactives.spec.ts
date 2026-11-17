@@ -2,7 +2,7 @@ import { execFileSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, realpathSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { delimiter, join } from 'node:path';
-import { expect, test, type Locator } from '@playwright/test';
+import { expect, test, type Locator } from './test.js';
 import { capturerBoutons } from './captures-boutons.js';
 import { node } from './helpers.js';
 import { demarrerHost } from './host-helpers.js';
@@ -112,6 +112,31 @@ test('56.4 D01 D07 : création et configuration, raisons, refus et reprise', asy
     expect((await lire())[0]!.target).toBe('aid-e2e.ts.net');
     await page.reload();
     await expect(node(page, 'serveur-config.cible')).toHaveValue('aid-e2e.ts.net');
+    await test.step('56.g D342 : Annuler abandonne une modification sans écrire au daemon', async () => {
+      const configuration = page.url();
+      const modifications: string[] = [];
+      page.on('request', (requete) => {
+        if (requete.method() === 'PATCH') modifications.push(new URL(requete.url()).pathname);
+      });
+      await node(page, 'serveur-config.nom').fill('Nom à abandonner');
+      await expect(enregistrer).toBeEnabled();
+      await node(page, 'serveur-config.annuler').click();
+      const dialogue = page.getByRole('dialog', { name: 'Abandonner les modifications ?' });
+      await dialogue.getByRole('button', { name: 'Continuer la saisie' }).click();
+      await expect(node(page, 'serveur-config.nom')).toHaveValue('Nom à abandonner');
+      await node(page, 'serveur-config.annuler').click();
+      await dialogue.getByRole('button', { name: 'Abandonner', exact: true }).click();
+      await expect(page).toHaveURL(/\/serveurs$/);
+      await expect(page.getByText('Nom à abandonner', { exact: true })).toHaveCount(0);
+      expect((await lire())[0]).toMatchObject({
+        name: 'Serveur recette',
+        target: 'aid-e2e.ts.net',
+      });
+      expect(modifications).toEqual([]);
+      await page.goto(configuration);
+      await expect(node(page, 'serveur-config.nom')).toHaveValue('Serveur recette');
+      await expect(enregistrer).toBeDisabled();
+    });
   } finally {
     await contexte.close();
     execFileSync(

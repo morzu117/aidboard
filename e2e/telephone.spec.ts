@@ -3,7 +3,7 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { delimiter, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { expect, test, type Locator, type Page } from '@playwright/test';
+import { expect, test, type Locator, type Page } from './test.js';
 import Database from 'better-sqlite3';
 import { capturerBoutons } from './captures-boutons.js';
 import {

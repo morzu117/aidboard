@@ -2,13 +2,13 @@ import { access, mkdtemp, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createServer } from 'node:net';
-import { expect } from '@playwright/test';
+import { expect } from './test.js';
 import { preparerAudit, PORT_AUDIT } from './audit/environnement.js';
 import { explorer } from './audit/explorateur.js';
 import { capturerBoutons } from './captures-boutons.js';
 import { CLASSES } from './audit/classement.js';
 
-import { test } from './audit/fixture.js';
+import { test } from './test-audit.js';
 
 test('explorateur : saisie, filtre et confirmation annulée sur deux écrans', async ({
   audit: environnement,

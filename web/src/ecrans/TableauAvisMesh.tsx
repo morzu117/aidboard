@@ -44,7 +44,7 @@ export function TableauAvisMesh({
           <option value="numeros">Par numéro</option>
         </select>
       </label>
-      <table>
+      <table className="avis-mesh-table">
         <caption>Avis par sous-question</caption>
         <thead>
           <tr>
@@ -111,7 +111,9 @@ export function TableauAvisMesh({
                     </span>
                     {reponse?.justification && (
                       <details>
-                        <summary>Justification</summary>
+                        <summary data-node={`avis-mesh.justification-${ligne.n}-${avis.i}`}>
+                          Justification
+                        </summary>
                         <div style={{ whiteSpace: 'pre-wrap' }}>{reponse.justification}</div>
                       </details>
                     )}

@@ -1,7 +1,7 @@
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { readFile, mkdtemp, rm } from 'node:fs/promises';
-import { expect, test } from '@playwright/test';
+import { expect, test } from './test.js';
 import { explorer } from './audit/explorateur.js';
 import { detecterVisuel } from './visuel.js';
 
@@ -150,5 +150,75 @@ test('D346 : ellipse sans faux chevauchement, recouvrement visible toujours dét
   });
   expect(await detecterVisuel(page)).toContainEqual(
     expect.objectContaining({ selecteur: '#cible', regle: 'chevauchement' }),
+  );
+});
+
+test('D346 : compte du rail à 4 px permis, dépassement plus grand détecté', async ({ page }) => {
+  await page.setContent(`<body style="background:white;color:black">
+    <style>
+      .barre-gauche-rail-case { position:relative;display:block;width:36px;height:36px;margin:20px;color:black }
+      .barre-gauche-rail-compte { position:absolute;right:-4px;top:-4px;font-size:12px }
+    </style>
+    <a id="case" href="#" class="barre-gauche-rail-case barre-gauche-rail-vue"><span>Vue</span><span class="barre-gauche-rail-compte">2</span></a>
+  </body>`);
+  expect(await detecterVisuel(page)).toEqual([]);
+  await page.locator('.barre-gauche-rail-compte').evaluate((e) => {
+    e.style.right = '-9px';
+  });
+  expect(await detecterVisuel(page)).toContainEqual(
+    expect.objectContaining({ selecteur: '#case', regle: 'débordement' }),
+  );
+});
+
+test('56.g : coupure au tiret permise, mot voisin écrasé toujours détecté', async ({ page }) => {
+  await page.setContent(`<body style="background:white;color:black">
+    <div id="tirets" style="width:90px;font:16px monospace">depot-long-tres</div>
+    <div id="ecrase" style="width:8px;word-break:break-all">Bonjour</div>
+  </body>`);
+  const defauts = await detecterVisuel(page);
+  expect(defauts.filter((d) => d.selecteur === '#tirets')).toEqual([]);
+  expect(defauts).toContainEqual(
+    expect.objectContaining({ selecteur: '#ecrase', regle: 'texte écrasé' }),
+  );
+});
+
+for (const balise of ['th', 'summary']) {
+  test(`56.g : texte rendu du ${balise} composé, voisin réellement écrasé détecté`, async ({
+    page,
+  }) => {
+    const contenu = `<${balise} id="compose" style="width:60px;font:16px monospace">peer-a <span>ok</span><p>Vote : maintient</p></${balise}>`;
+    await page.setContent(`<body style="background:white;color:black">
+      ${balise === 'th' ? `<table style="table-layout:fixed;width:60px"><tr>${contenu}</tr></table>` : `<details open>${contenu}</details>`}
+      <div id="ecrase" style="width:8px;word-break:break-all">Bonjour</div>
+    </body>`);
+    const defauts = await detecterVisuel(page);
+    expect(defauts.filter((d) => d.selecteur === '#compose' && d.regle === 'texte écrasé')).toEqual(
+      [],
+    );
+    expect(defauts).toContainEqual(
+      expect.objectContaining({ selecteur: '#ecrase', regle: 'texte écrasé' }),
+    );
+  });
+}
+
+test('56.g : saisie native défilante permise, boîte hors fenêtre toujours détectée', async ({
+  page,
+}) => {
+  await page.setContent(`<body style="background:white;color:black">
+    <input id="interne" style="width:80px;color:black;background:white;border:1px solid black" value="Un chemin synthétique volontairement plus long que le champ">
+    <input id="externe" style="display:block;width:2000px;color:black;background:white;border:1px solid black" value="Court">
+  </body>`);
+  expect(
+    await page.locator('#interne').evaluate((e: HTMLInputElement) => {
+      e.scrollLeft = e.scrollWidth;
+      return e.scrollLeft;
+    }),
+  ).toBeGreaterThan(0);
+  const defauts = await detecterVisuel(page);
+  expect(defauts.filter((d) => d.selecteur === '#interne' && d.regle === 'débordement')).toEqual(
+    [],
+  );
+  expect(defauts).toContainEqual(
+    expect.objectContaining({ selecteur: '#externe', regle: 'débordement' }),
   );
 });

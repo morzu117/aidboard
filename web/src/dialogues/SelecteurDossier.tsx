@@ -88,6 +88,7 @@ export function SelecteurDossier({
         <input
           className="champ"
           aria-label="Aller au dossier"
+          data-node="selecteur-dossier.chemin"
           value={goto}
           onChange={(e) => {
             typed.current = true;
@@ -97,7 +98,12 @@ export function SelecteurDossier({
           ref={gotoRef}
           spellCheck={false}
         />
-        <button className="bouton" type="button" onClick={submitGoto}>
+        <button
+          className="bouton"
+          type="button"
+          onClick={submitGoto}
+          data-node="selecteur-dossier.aller"
+        >
           Aller
         </button>
       </div>

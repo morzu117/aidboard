@@ -1,3 +1,4 @@
+import { verifierEcranGarde } from './ecrans-garde.js';
 import { execFileSync } from 'node:child_process';
 import {
   cpSync,
@@ -13,7 +14,7 @@ import {
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { delimiter, join } from 'node:path';
-import { expect, test } from '@playwright/test';
+import { expect, test } from './test.js';
 import { parse } from 'yaml';
 
 const cli = join(import.meta.dirname, '../dist/cli/aid.js');
@@ -71,6 +72,12 @@ for (const issue of ['approuve', 'refuse', 'expire', 'annule', 'oublier']) {
       await page.goto(`${origine}/machines`);
       const section = page.getByRole('region', { name: 'Meshes', exact: true });
       await expect(section).toBeVisible();
+      if (issue === 'approuve')
+        await verifierEcranGarde(
+          page,
+          'machines-relais',
+          page.locator('[data-node="machines.pda.relais"]'),
+        );
       page.on('response', (reponse) => {
         if (
           reponse.url().startsWith(origine) &&
@@ -151,6 +158,7 @@ for (const issue of ['approuve', 'refuse', 'expire', 'annule', 'oublier']) {
         }
         if (issue !== 'approuve') expect(readFileSync(config, 'utf8')).toBe(avant);
       }
+      if (issue === 'approuve') await verifierEcranGarde(page, 'machines-inscription', section);
       expect(await page.locator('body').textContent()).not.toContain(fauxJeton);
       expect((await Promise.all(lectures)).join('\n')).not.toContain(fauxJeton);
       await contexte.close();

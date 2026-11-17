@@ -6,7 +6,7 @@ import { createServer } from 'node:net';
 import { delimiter, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import Database from 'better-sqlite3';
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page } from './test.js';
 import { appairerHost, demarrerHost, ORIGINE_APPAREIL } from './host-helpers.js';
 import { fermerContextes, node } from './helpers.js';
 import { capturerBoutons } from './captures-boutons.js';

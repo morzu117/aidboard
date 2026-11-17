@@ -1,8 +1,8 @@
 import { mkdir, writeFile, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { expect } from '@playwright/test';
+import { expect } from './test.js';
 import { node } from './helpers.js';
-import { test } from './audit/fixture.js';
+import { test } from './test-audit.js';
 import { optionsNavigateur } from './audit/environnement.js';
 import { detecterVisuel } from './visuel.js';
 

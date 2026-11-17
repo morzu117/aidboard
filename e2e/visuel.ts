@@ -116,6 +116,29 @@ export async function detecterVisuel(page: Page): Promise<TrouvailleVisuelle[]> 
       const style = getComputedStyle(e);
       return style.textOverflow === 'ellipsis' && /(hidden|clip)/.test(style.overflowX);
     };
+    // Le compte du rail est posé sur le coin de sa case, à 4 px (D346).
+    // Seul ce débordement géométrique est permis ; un autre enfant reste contrôlé.
+    const compteDuRail = (e: HTMLElement): boolean => {
+      if (!e.matches('.barre-gauche-rail-case.barre-gauche-rail-vue')) return false;
+      const boite = e.getBoundingClientRect();
+      const compte = e.querySelector(':scope > .barre-gauche-rail-compte');
+      if (!compte || getComputedStyle(compte).position !== 'absolute') return false;
+      const badge = compte.getBoundingClientRect();
+      return (
+        boite.left >= 0 &&
+        boite.right <= innerWidth &&
+        e.scrollWidth <= e.clientWidth + 4 &&
+        badge.right <= boite.right + 4 &&
+        badge.right > boite.right &&
+        badge.top >= boite.top - 4 &&
+        badge.bottom <= boite.bottom &&
+        [...e.children].every((enfant) => {
+          if (enfant === compte) return true;
+          const cadre = enfant.getBoundingClientRect();
+          return cadre.left >= boite.left && cadre.right <= boite.right;
+        })
+      );
+    };
     const textes = new Map<Element, DOMRect[]>();
     try {
       for (const e of document.body.querySelectorAll('*')) {
@@ -178,11 +201,19 @@ export async function detecterVisuel(page: Page): Promise<TrouvailleVisuelle[]> 
               valeurs: identiques.map((p) => `${p}: ${style.getPropertyValue(p)}`).join('; '),
             });
         }
+        // Les saisies à une ligne défilent nativement, même avec overflow-x: clip.
+        // Leur boîte doit toujours rester dans la fenêtre.
+        const saisieDefilante =
+          e instanceof HTMLInputElement &&
+          ['text', 'search', 'url', 'email', 'tel', 'password'].includes(e.type);
         if (
           e.clientWidth &&
           !rogne(e) &&
           !defile(e) &&
-          (e.scrollWidth > e.clientWidth + 1 || boite.right > innerWidth + 1 || boite.left < -1)
+          !compteDuRail(e) &&
+          ((e.scrollWidth > e.clientWidth + 1 && !saisieDefilante) ||
+            boite.right > innerWidth + 1 ||
+            boite.left < -1)
         ) {
           ajouter(e, 'débordement', {
             scrollWidth: e.scrollWidth,
@@ -241,7 +272,10 @@ export async function detecterVisuel(page: Page): Promise<TrouvailleVisuelle[]> 
           .trim();
         const lignes = new Set(rectangles.filter((r) => r.width > 0).map((r) => Math.round(r.top)))
           .size;
-        const mots = texte.split(/\s+/).length;
+        // Un tiret est un point de coupure naturel. Dans un en-tête composé,
+        // innerText compte aussi les enfants visibles, contrairement aux seuls nœuds directs.
+        const texteRendu = e.matches('th, summary') ? e.innerText.trim() : texte;
+        const mots = texteRendu.split(/[\s\u00ad-]+/u).filter(Boolean).length;
         // Un code de pleine largeur peut couper une chaîne technique sans espaces.
         // Un code étroit ou une lettre par ligne reste un défaut.
         const codeLisible =

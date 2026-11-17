@@ -2,6 +2,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { Page, Request, Response, ConsoleMessage } from '@playwright/test';
+import { normaliserNode } from '../normaliser-node.js';
 import { CLASSES, classer, type Classe, type Observation } from './classement.js';
 import { detecterVisuel, type TrouvailleVisuelle } from '../visuel.js';
 import type { Ecran } from './environnement.js';
@@ -62,6 +63,7 @@ interface ElementReleve {
   label: string;
 }
 export interface Resultat extends ElementReleve {
+  nodeNormalise?: string | null;
   ecran: string;
   format: string;
   classe: Classe | null;
@@ -448,6 +450,7 @@ export async function explorer(options: {
           }
           resultats.push({
             ...element,
+            nodeNormalise: element.node ? normaliserNode(element.node) : null,
             href: element.href ? cheminPublic(new URL(element.href, ecran.chemin).href) : '',
             ecran: ecran.nom,
             format: taille,

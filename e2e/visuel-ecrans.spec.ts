@@ -1,7 +1,7 @@
 import { mkdir, writeFile, rm } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
-import { expect, type Page, type Locator } from '@playwright/test';
-import { test } from './audit/fixture.js';
+import { expect, type Page, type Locator } from './test.js';
+import { test } from './test-audit.js';
 import { optionsNavigateur, type Ecran } from './audit/environnement.js';
 import { detecterVisuel } from './visuel.js';
 import { node, openApp, url } from './helpers.js';

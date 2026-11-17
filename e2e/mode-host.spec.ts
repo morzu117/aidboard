@@ -1,7 +1,7 @@
 import { execFileSync } from 'node:child_process';
 import type { Server } from 'node:https';
 import { join } from 'node:path';
-import { type Browser, type BrowserContext, expect, type Page, test } from '@playwright/test';
+import { type Browser, type BrowserContext, expect, type Page, test } from './test.js';
 import { appairerHost, demarrerHost } from './host-helpers.js';
 import { createTopic, fermerContextes, newRepo, node, registerWorkspace } from './helpers.js';
 import { NOM_E2E, ouvrirServeLocal } from './serve-local.js';

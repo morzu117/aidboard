@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { expect, test } from '@playwright/test';
+import { expect, test } from './test.js';
 import { appairerHost, demarrerHost, ORIGINE_APPAREIL } from './host-helpers.js';
 import { fermerContextes, node } from './helpers.js';
 import { capturerBoutons } from './captures-boutons.js';

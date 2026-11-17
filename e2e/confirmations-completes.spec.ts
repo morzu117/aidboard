@@ -5,7 +5,7 @@ import { createServer } from 'node:net';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import Database from 'better-sqlite3';
-import { expect, test } from '@playwright/test';
+import { expect, test } from './test.js';
 import { appairerHost, demarrerHost, ORIGINE_APPAREIL } from './host-helpers.js';
 import { fermerContextes } from './helpers.js';
 import { NOM_E2E, ouvrirServeLocal } from './serve-local.js';

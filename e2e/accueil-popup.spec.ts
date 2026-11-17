@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page } from './test.js';
 import { createTopic, newRepo, node, openApp, registerWorkspace, url } from './helpers.js';
 import { fermerContextes } from './helpers.js';
 

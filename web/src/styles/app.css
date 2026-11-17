@@ -3165,3 +3165,60 @@ a.composer-menu-ligne {
     width: 240px;
   }
 }
+
+/* 56.g : lisibilité dans les colonnes étroites, y compris sur bureau. */
+.decision-carte--resolue .decision-issue {
+  color: var(--text);
+}
+[data-node='3-4.index'] {
+  box-sizing: border-box;
+  height: auto;
+  max-width: 100%;
+  white-space: normal;
+}
+.selecteur-dossier__barre > .champ {
+  min-width: 0;
+  flex: 1;
+}
+.selecteur-dossier__barre > .bouton {
+  flex: none;
+  white-space: nowrap;
+}
+.composer {
+  container-type: inline-size;
+}
+@container (max-width: 640px) {
+  .composer-barre,
+  .composer-reglages,
+  .composer-profil {
+    flex-wrap: wrap;
+  }
+  .composer-reglages {
+    flex: 1 1 220px;
+  }
+  .composer-reglages > *,
+  .composer-profil > * {
+    flex-shrink: 0;
+    overflow-wrap: normal;
+    word-break: normal;
+  }
+  .composer-profil-part {
+    white-space: nowrap;
+  }
+  /* Le mode prend sa ligne ; le profil laisse ensuite Remote à droite du modèle. */
+  .composer-reglages > [data-node$='.mode'] {
+    flex-basis: 100%;
+    text-align: left;
+  }
+}
+.avis-mesh-table {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+}
+.avis-mesh-table th,
+.avis-mesh-table td {
+  min-width: 130px;
+  overflow-wrap: normal;
+  word-break: normal;
+}

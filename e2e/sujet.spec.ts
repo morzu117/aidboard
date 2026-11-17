@@ -1,8 +1,9 @@
+import { verifierEcranGarde } from './ecrans-garde.js';
 import { execFileSync } from 'node:child_process';
 import { mkdtempSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { delimiter, join } from 'node:path';
-import { type Browser, expect, type Page, test } from '@playwright/test';
+import { type Browser, expect, type Page, test } from './test.js';
 import { createTopic, newRepo, node, registerWorkspace } from './helpers.js';
 import { fermerContextes } from './helpers.js';
 
@@ -157,5 +158,15 @@ test.describe.serial('écran Sujet (chantier 26)', () => {
     await expect(node(page, '1-3.entete.index')).toHaveCount(0);
     await node(page, '1-3.onglets.fichiers').click();
     await expect(node(page, '3-4.index')).toHaveText('index absent : lecture directe');
+    for (const suffixe of ['mode', 'modele']) {
+      const bouton = node(page, `${DN}.${suffixe}`);
+      await expect(bouton).toBeEnabled();
+      await bouton.click();
+      await expect(page.locator('.composer-menu')).toBeVisible();
+      await bouton.click();
+      await expect(page.locator('.composer-menu')).toHaveCount(0);
+    }
+    await verifierEcranGarde(page, 'sujet-fichiers-compositeur', node(page, '3-4.index'));
+    await verifierEcranGarde(page, 'sujet-compositeur', page.locator('.composer'));
   });
 });

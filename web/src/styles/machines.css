@@ -273,3 +273,13 @@
 [data-node='machines.cockpit'] .machines-appareils {
   padding: var(--sp-3) var(--sp-4);
 }
+
+/* 56.g : placeholder actif lisible et commandes contenues dans leur cadre. */
+[data-node='machines.pda.relais']::placeholder {
+  color: var(--muted);
+  opacity: 1;
+}
+[data-node='machines.meshes'] pre {
+  max-width: 100%;
+  overflow-x: auto;
+}

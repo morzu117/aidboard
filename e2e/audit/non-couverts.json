@@ -40,10 +40,6 @@
     "raison": "Aucun clic e2e du gate attribuable avec certitude à cet identifiant ; présent dans le relevé d’audit."
   },
   {
-    "node": "1-1.barre-gauche.vps.serveur-*.action",
-    "raison": "Aucun clic e2e du gate attribuable avec certitude à cet identifiant ; présent dans le relevé d’audit."
-  },
-  {
     "node": "1-1.barre-gauche.vps.serveur-*.ouvrir",
     "raison": "Aucun clic e2e du gate attribuable avec certitude à cet identifiant ; présent dans le relevé d’audit."
   },
@@ -57,10 +53,6 @@
   },
   {
     "node": "1-1.barre.nav-consignes",
-    "raison": "Aucun clic e2e du gate attribuable avec certitude à cet identifiant ; présent dans le relevé d’audit."
-  },
-  {
-    "node": "1-1.barre.nav-machines",
     "raison": "Aucun clic e2e du gate attribuable avec certitude à cet identifiant ; présent dans le relevé d’audit."
   },
   {
@@ -81,10 +73,6 @@
   },
   {
     "node": "1-1.table.ligne-*.ouvrir",
-    "raison": "Aucun clic e2e du gate attribuable avec certitude à cet identifiant ; présent dans le relevé d’audit."
-  },
-  {
-    "node": "1-1.volet.ouvrir-nav",
     "raison": "Aucun clic e2e du gate attribuable avec certitude à cet identifiant ; présent dans le relevé d’audit."
   },
   {
@@ -176,8 +164,88 @@
     "raison": "Aucun clic e2e du gate attribuable avec certitude à cet identifiant ; présent dans le relevé d’audit."
   },
   {
-    "node": "1-2.volet.ouvrir-nav",
-    "raison": "Aucun clic e2e du gate attribuable avec certitude à cet identifiant ; présent dans le relevé d’audit."
+    "node": "1-3.actions.editeur",
+    "raison": "Écran omis de l’inventaire du 56.7, ajouté au 56.g depuis l’audit ; aucun clic e2e du gate sur cet identifiant."
+  },
+  {
+    "node": "1-3.barre-gauche.etat.meshes.mesh",
+    "raison": "Écran omis de l’inventaire du 56.7, ajouté au 56.g depuis l’audit ; aucun clic e2e du gate sur cet identifiant."
+  },
+  {
+    "node": "1-3.barre-gauche.etat.section-a-relire.bascule",
+    "raison": "Écran omis de l’inventaire du 56.7, ajouté au 56.g depuis l’audit ; aucun clic e2e du gate sur cet identifiant."
+  },
+  {
+    "node": "1-3.barre-gauche.etat.section-en-pause.bascule",
+    "raison": "Écran omis de l’inventaire du 56.7, ajouté au 56.g depuis l’audit ; aucun clic e2e du gate sur cet identifiant."
+  },
+  {
+    "node": "1-3.barre-gauche.etat.sujet-*",
+    "raison": "Écran omis de l’inventaire du 56.7, ajouté au 56.g depuis l’audit ; aucun clic e2e du gate sur cet identifiant."
+  },
+  {
+    "node": "1-3.barre-gauche.etat.vue-archives",
+    "raison": "Écran omis de l’inventaire du 56.7, ajouté au 56.g depuis l’audit ; aucun clic e2e du gate sur cet identifiant."
+  },
+  {
+    "node": "1-3.barre-gauche.etat.vue-epingles",
+    "raison": "Écran omis de l’inventaire du 56.7, ajouté au 56.g depuis l’audit ; aucun clic e2e du gate sur cet identifiant."
+  },
+  {
+    "node": "1-3.barre-gauche.etat.vue-tous",
+    "raison": "Écran omis de l’inventaire du 56.7, ajouté au 56.g depuis l’audit ; aucun clic e2e du gate sur cet identifiant."
+  },
+  {
+    "node": "1-3.barre-gauche.vps.ajouter",
+    "raison": "Écran omis de l’inventaire du 56.7, ajouté au 56.g depuis l’audit ; aucun clic e2e du gate sur cet identifiant."
+  },
+  {
+    "node": "1-3.barre-gauche.vps.liste",
+    "raison": "Écran omis de l’inventaire du 56.7, ajouté au 56.g depuis l’audit ; aucun clic e2e du gate sur cet identifiant."
+  },
+  {
+    "node": "1-3.barre-gauche.vps.serveur-*.action",
+    "raison": "Écran omis de l’inventaire du 56.7, ajouté au 56.g depuis l’audit ; aucun clic e2e du gate sur cet identifiant."
+  },
+  {
+    "node": "1-3.barre-gauche.vps.serveur-*.ouvrir",
+    "raison": "Écran omis de l’inventaire du 56.7, ajouté au 56.g depuis l’audit ; aucun clic e2e du gate sur cet identifiant."
+  },
+  {
+    "node": "1-3.barre.marque",
+    "raison": "Écran omis de l’inventaire du 56.7, ajouté au 56.g depuis l’audit ; aucun clic e2e du gate sur cet identifiant."
+  },
+  {
+    "node": "1-3.barre.mesh",
+    "raison": "Écran omis de l’inventaire du 56.7, ajouté au 56.g depuis l’audit ; aucun clic e2e du gate sur cet identifiant."
+  },
+  {
+    "node": "1-3.barre.nav-accueil",
+    "raison": "Écran omis de l’inventaire du 56.7, ajouté au 56.g depuis l’audit ; aucun clic e2e du gate sur cet identifiant."
+  },
+  {
+    "node": "1-3.barre.nav-board",
+    "raison": "Écran omis de l’inventaire du 56.7, ajouté au 56.g depuis l’audit ; aucun clic e2e du gate sur cet identifiant."
+  },
+  {
+    "node": "1-3.barre.nav-boite",
+    "raison": "Écran omis de l’inventaire du 56.7, ajouté au 56.g depuis l’audit ; aucun clic e2e du gate sur cet identifiant."
+  },
+  {
+    "node": "1-3.barre.nav-consignes",
+    "raison": "Écran omis de l’inventaire du 56.7, ajouté au 56.g depuis l’audit ; aucun clic e2e du gate sur cet identifiant."
+  },
+  {
+    "node": "1-3.barre.nav-machines",
+    "raison": "Écran omis de l’inventaire du 56.7, ajouté au 56.g depuis l’audit ; aucun clic e2e du gate sur cet identifiant."
+  },
+  {
+    "node": "1-3.barre.nav-reglages",
+    "raison": "Écran omis de l’inventaire du 56.7, ajouté au 56.g depuis l’audit ; aucun clic e2e du gate sur cet identifiant."
+  },
+  {
+    "node": "1-3.barre.recherche",
+    "raison": "Écran omis de l’inventaire du 56.7, ajouté au 56.g depuis l’audit ; aucun clic e2e du gate sur cet identifiant."
   },
   {
     "node": "1-3.conversation.composer.champ",
@@ -188,20 +256,16 @@
     "raison": "Contrôle désactivé dans la fixture ; cas actif à couvrir ou règle permanente à exempter au 56.g."
   },
   {
-    "node": "1-3.conversation.composer.mode",
-    "raison": "Aucun clic e2e du gate attribuable avec certitude à cet identifiant ; présent dans le relevé d’audit."
-  },
-  {
-    "node": "1-3.conversation.composer.modele",
-    "raison": "Aucun clic e2e du gate attribuable avec certitude à cet identifiant ; présent dans le relevé d’audit."
-  },
-  {
     "node": "1-3.conversation.injoignable.reconnecter",
     "raison": "Aucun clic e2e du gate attribuable avec certitude à cet identifiant ; présent dans le relevé d’audit."
   },
   {
-    "node": "accueil.board.sujets-sans-carte",
-    "raison": "Aucun clic e2e du gate attribuable avec certitude à cet identifiant ; présent dans le relevé d’audit."
+    "node": "1-3.entete.workspace",
+    "raison": "Écran omis de l’inventaire du 56.7, ajouté au 56.g depuis l’audit ; aucun clic e2e du gate sur cet identifiant."
+  },
+  {
+    "node": "1-3.onglets.plan",
+    "raison": "Écran omis de l’inventaire du 56.7, ajouté au 56.g depuis l’audit ; aucun clic e2e du gate sur cet identifiant."
   },
   {
     "node": "accueil.table.reglages-mesh",
@@ -265,10 +329,6 @@
   },
   {
     "node": "appareil.sujets.ouvrir-*",
-    "raison": "Aucun clic e2e du gate attribuable avec certitude à cet identifiant ; présent dans le relevé d’audit."
-  },
-  {
-    "node": "appareil.tour.*.relu",
     "raison": "Aucun clic e2e du gate attribuable avec certitude à cet identifiant ; présent dans le relevé d’audit."
   },
   {
@@ -336,10 +396,6 @@
     "raison": "Aucun clic e2e du gate attribuable avec certitude à cet identifiant ; présent dans le relevé d’audit."
   },
   {
-    "node": "board.barre.nav-board",
-    "raison": "Aucun clic e2e du gate attribuable avec certitude à cet identifiant ; présent dans le relevé d’audit."
-  },
-  {
     "node": "board.barre.nav-boite",
     "raison": "Aucun clic e2e du gate attribuable avec certitude à cet identifiant ; présent dans le relevé d’audit."
   },
@@ -369,18 +425,6 @@
   },
   {
     "node": "board.colonnes.etat-idea",
-    "raison": "Aucun clic e2e du gate attribuable avec certitude à cet identifiant ; présent dans le relevé d’audit."
-  },
-  {
-    "node": "board.swairm.sujets-swairm-sans-carte",
-    "raison": "Aucun clic e2e du gate attribuable avec certitude à cet identifiant ; présent dans le relevé d’audit."
-  },
-  {
-    "node": "board.volet.ouvrir-nav",
-    "raison": "Aucun clic e2e du gate attribuable avec certitude à cet identifiant ; présent dans le relevé d’audit."
-  },
-  {
-    "node": "cells.recharger",
     "raison": "Aucun clic e2e du gate attribuable avec certitude à cet identifiant ; présent dans le relevé d’audit."
   },
   {
@@ -484,40 +528,120 @@
     "raison": "Contrôle désactivé dans la fixture ; cas actif à couvrir ou règle permanente à exempter au 56.g."
   },
   {
-    "node": "discussion.panneau.bascule",
-    "raison": "Aucun clic e2e du gate attribuable avec certitude à cet identifiant ; présent dans le relevé d’audit."
-  },
-  {
-    "node": "discussion.panneau.fermer",
-    "raison": "Aucun clic e2e du gate attribuable avec certitude à cet identifiant ; présent dans le relevé d’audit."
-  },
-  {
-    "node": "discussion.panneau.onglet-*",
-    "raison": "Le parcours d’audit rencontre un refus ou une erreur ; succès et reprise à attribuer à un e2e."
-  },
-  {
-    "node": "federation.recharger",
-    "raison": "Contrôle désactivé dans la fixture ; cas actif à couvrir ou règle permanente à exempter au 56.g."
-  },
-  {
     "node": "federation.requete",
     "raison": "Champ sans clic e2e explicitement attribué ; fill/selectOption ne produisent pas un clic."
   },
   {
-    "node": "host.appareil.*.revoquer",
-    "raison": "Aucun clic e2e du gate attribuable avec certitude à cet identifiant ; présent dans le relevé d’audit."
+    "node": "livraison.barre-gauche.etat.meshes.mesh",
+    "raison": "Écran omis de l’inventaire du 56.7, ajouté au 56.g depuis l’audit ; aucun clic e2e du gate sur cet identifiant."
   },
   {
-    "node": "host.code",
-    "raison": "Champ sans clic e2e explicitement attribué ; fill/selectOption ne produisent pas un clic."
+    "node": "livraison.barre-gauche.etat.section-a-relire.bascule",
+    "raison": "Écran omis de l’inventaire du 56.7, ajouté au 56.g depuis l’audit ; aucun clic e2e du gate sur cet identifiant."
   },
   {
-    "node": "host.interrupteur",
-    "raison": "Aucun clic e2e du gate attribuable avec certitude à cet identifiant ; présent dans le relevé d’audit."
+    "node": "livraison.barre-gauche.etat.section-en-pause.bascule",
+    "raison": "Écran omis de l’inventaire du 56.7, ajouté au 56.g depuis l’audit ; aucun clic e2e du gate sur cet identifiant."
   },
   {
-    "node": "host.push",
-    "raison": "Champ sans clic e2e explicitement attribué ; fill/selectOption ne produisent pas un clic."
+    "node": "livraison.barre-gauche.etat.sujet-*",
+    "raison": "Écran omis de l’inventaire du 56.7, ajouté au 56.g depuis l’audit ; aucun clic e2e du gate sur cet identifiant."
+  },
+  {
+    "node": "livraison.barre-gauche.etat.vue-archives",
+    "raison": "Écran omis de l’inventaire du 56.7, ajouté au 56.g depuis l’audit ; aucun clic e2e du gate sur cet identifiant."
+  },
+  {
+    "node": "livraison.barre-gauche.etat.vue-epingles",
+    "raison": "Écran omis de l’inventaire du 56.7, ajouté au 56.g depuis l’audit ; aucun clic e2e du gate sur cet identifiant."
+  },
+  {
+    "node": "livraison.barre-gauche.etat.vue-tous",
+    "raison": "Écran omis de l’inventaire du 56.7, ajouté au 56.g depuis l’audit ; aucun clic e2e du gate sur cet identifiant."
+  },
+  {
+    "node": "livraison.barre-gauche.reduire",
+    "raison": "Écran omis de l’inventaire du 56.7, ajouté au 56.g depuis l’audit ; aucun clic e2e du gate sur cet identifiant."
+  },
+  {
+    "node": "livraison.barre-gauche.vps.ajouter",
+    "raison": "Écran omis de l’inventaire du 56.7, ajouté au 56.g depuis l’audit ; aucun clic e2e du gate sur cet identifiant."
+  },
+  {
+    "node": "livraison.barre-gauche.vps.liste",
+    "raison": "Écran omis de l’inventaire du 56.7, ajouté au 56.g depuis l’audit ; aucun clic e2e du gate sur cet identifiant."
+  },
+  {
+    "node": "livraison.barre-gauche.vps.serveur-*.action",
+    "raison": "Écran omis de l’inventaire du 56.7, ajouté au 56.g depuis l’audit ; aucun clic e2e du gate sur cet identifiant."
+  },
+  {
+    "node": "livraison.barre-gauche.vps.serveur-*.ouvrir",
+    "raison": "Écran omis de l’inventaire du 56.7, ajouté au 56.g depuis l’audit ; aucun clic e2e du gate sur cet identifiant."
+  },
+  {
+    "node": "livraison.barre.marque",
+    "raison": "Écran omis de l’inventaire du 56.7, ajouté au 56.g depuis l’audit ; aucun clic e2e du gate sur cet identifiant."
+  },
+  {
+    "node": "livraison.barre.mesh",
+    "raison": "Écran omis de l’inventaire du 56.7, ajouté au 56.g depuis l’audit ; aucun clic e2e du gate sur cet identifiant."
+  },
+  {
+    "node": "livraison.barre.nav-accueil",
+    "raison": "Écran omis de l’inventaire du 56.7, ajouté au 56.g depuis l’audit ; aucun clic e2e du gate sur cet identifiant."
+  },
+  {
+    "node": "livraison.barre.nav-board",
+    "raison": "Écran omis de l’inventaire du 56.7, ajouté au 56.g depuis l’audit ; aucun clic e2e du gate sur cet identifiant."
+  },
+  {
+    "node": "livraison.barre.nav-boite",
+    "raison": "Écran omis de l’inventaire du 56.7, ajouté au 56.g depuis l’audit ; aucun clic e2e du gate sur cet identifiant."
+  },
+  {
+    "node": "livraison.barre.nav-consignes",
+    "raison": "Écran omis de l’inventaire du 56.7, ajouté au 56.g depuis l’audit ; aucun clic e2e du gate sur cet identifiant."
+  },
+  {
+    "node": "livraison.barre.nav-machines",
+    "raison": "Écran omis de l’inventaire du 56.7, ajouté au 56.g depuis l’audit ; aucun clic e2e du gate sur cet identifiant."
+  },
+  {
+    "node": "livraison.barre.nav-reglages",
+    "raison": "Écran omis de l’inventaire du 56.7, ajouté au 56.g depuis l’audit ; aucun clic e2e du gate sur cet identifiant."
+  },
+  {
+    "node": "livraison.barre.nouveau-sujet",
+    "raison": "Écran omis de l’inventaire du 56.7, ajouté au 56.g depuis l’audit ; aucun clic e2e du gate sur cet identifiant."
+  },
+  {
+    "node": "livraison.barre.recherche",
+    "raison": "Écran omis de l’inventaire du 56.7, ajouté au 56.g depuis l’audit ; aucun clic e2e du gate sur cet identifiant."
+  },
+  {
+    "node": "livraison.controles.relancer",
+    "raison": "Écran omis de l’inventaire du 56.7, ajouté au 56.g depuis l’audit ; aucun clic e2e du gate sur cet identifiant."
+  },
+  {
+    "node": "livraison.fichiers.fichier-*",
+    "raison": "Écran omis de l’inventaire du 56.7, ajouté au 56.g depuis l’audit ; aucun clic e2e du gate sur cet identifiant."
+  },
+  {
+    "node": "livraison.fil-ariane.sujet",
+    "raison": "Écran omis de l’inventaire du 56.7, ajouté au 56.g depuis l’audit ; aucun clic e2e du gate sur cet identifiant."
+  },
+  {
+    "node": "livraison.relancer-revue.agent",
+    "raison": "Écran omis de l’inventaire du 56.7, ajouté au 56.g depuis l’audit ; aucun clic e2e du gate sur cet identifiant."
+  },
+  {
+    "node": "livraison.relancer-revue.bouton",
+    "raison": "Écran omis de l’inventaire du 56.7, ajouté au 56.g depuis l’audit ; aucun clic e2e du gate sur cet identifiant."
+  },
+  {
+    "node": "livraison.volet.ouvrir-nav",
+    "raison": "Écran omis de l’inventaire du 56.7, ajouté au 56.g depuis l’audit ; aucun clic e2e du gate sur cet identifiant."
   },
   {
     "node": "machines.ajouter",
@@ -612,10 +736,6 @@
     "raison": "Aucun clic e2e du gate attribuable avec certitude à cet identifiant ; présent dans le relevé d’audit."
   },
   {
-    "node": "machines.confirmations.action-merge",
-    "raison": "Champ sans clic e2e explicitement attribué ; fill/selectOption ne produisent pas un clic."
-  },
-  {
     "node": "machines.confirmations.action-mesh.ecrire",
     "raison": "Toujours confirmée : interrupteur de sécurité permanent, aucun clic autorisé."
   },
@@ -648,14 +768,6 @@
     "raison": "Aucun clic e2e du gate attribuable avec certitude à cet identifiant ; présent dans le relevé d’audit."
   },
   {
-    "node": "machines.pda.copier",
-    "raison": "Aucun clic e2e du gate attribuable avec certitude à cet identifiant ; présent dans le relevé d’audit."
-  },
-  {
-    "node": "machines.volet.ouvrir-nav",
-    "raison": "Aucun clic e2e du gate attribuable avec certitude à cet identifiant ; présent dans le relevé d’audit."
-  },
-  {
     "node": "memoire.filtres.mode",
     "raison": "Champ sans clic e2e explicitement attribué ; fill/selectOption ne produisent pas un clic."
   },
@@ -664,8 +776,116 @@
     "raison": "Aucun clic e2e du gate attribuable avec certitude à cet identifiant ; présent dans le relevé d’audit."
   },
   {
-    "node": "pda.demande.*.numero",
-    "raison": "Numéro rempli par fill dans l’essai PDA ; aucun clic dédié sur le champ."
+    "node": "nouveau-sujet.barre-gauche.etat.meshes.mesh",
+    "raison": "Écran omis de l’inventaire du 56.7, ajouté au 56.g depuis l’audit ; aucun clic e2e du gate sur cet identifiant."
+  },
+  {
+    "node": "nouveau-sujet.barre-gauche.etat.section-a-relire.bascule",
+    "raison": "Écran omis de l’inventaire du 56.7, ajouté au 56.g depuis l’audit ; aucun clic e2e du gate sur cet identifiant."
+  },
+  {
+    "node": "nouveau-sujet.barre-gauche.etat.sujet-*",
+    "raison": "Écran omis de l’inventaire du 56.7, ajouté au 56.g depuis l’audit ; aucun clic e2e du gate sur cet identifiant."
+  },
+  {
+    "node": "nouveau-sujet.barre-gauche.etat.vue-archives",
+    "raison": "Écran omis de l’inventaire du 56.7, ajouté au 56.g depuis l’audit ; aucun clic e2e du gate sur cet identifiant."
+  },
+  {
+    "node": "nouveau-sujet.barre-gauche.etat.vue-epingles",
+    "raison": "Écran omis de l’inventaire du 56.7, ajouté au 56.g depuis l’audit ; aucun clic e2e du gate sur cet identifiant."
+  },
+  {
+    "node": "nouveau-sujet.barre-gauche.etat.vue-tous",
+    "raison": "Écran omis de l’inventaire du 56.7, ajouté au 56.g depuis l’audit ; aucun clic e2e du gate sur cet identifiant."
+  },
+  {
+    "node": "nouveau-sujet.barre-gauche.reduire",
+    "raison": "Écran omis de l’inventaire du 56.7, ajouté au 56.g depuis l’audit ; aucun clic e2e du gate sur cet identifiant."
+  },
+  {
+    "node": "nouveau-sujet.barre-gauche.vps.ajouter",
+    "raison": "Écran omis de l’inventaire du 56.7, ajouté au 56.g depuis l’audit ; aucun clic e2e du gate sur cet identifiant."
+  },
+  {
+    "node": "nouveau-sujet.barre-gauche.vps.liste",
+    "raison": "Écran omis de l’inventaire du 56.7, ajouté au 56.g depuis l’audit ; aucun clic e2e du gate sur cet identifiant."
+  },
+  {
+    "node": "nouveau-sujet.barre-gauche.vps.serveur-*.action",
+    "raison": "Écran omis de l’inventaire du 56.7, ajouté au 56.g depuis l’audit ; aucun clic e2e du gate sur cet identifiant."
+  },
+  {
+    "node": "nouveau-sujet.barre-gauche.vps.serveur-*.ouvrir",
+    "raison": "Écran omis de l’inventaire du 56.7, ajouté au 56.g depuis l’audit ; aucun clic e2e du gate sur cet identifiant."
+  },
+  {
+    "node": "nouveau-sujet.barre.marque",
+    "raison": "Écran omis de l’inventaire du 56.7, ajouté au 56.g depuis l’audit ; aucun clic e2e du gate sur cet identifiant."
+  },
+  {
+    "node": "nouveau-sujet.barre.mesh",
+    "raison": "Écran omis de l’inventaire du 56.7, ajouté au 56.g depuis l’audit ; aucun clic e2e du gate sur cet identifiant."
+  },
+  {
+    "node": "nouveau-sujet.barre.nav-accueil",
+    "raison": "Écran omis de l’inventaire du 56.7, ajouté au 56.g depuis l’audit ; aucun clic e2e du gate sur cet identifiant."
+  },
+  {
+    "node": "nouveau-sujet.barre.nav-board",
+    "raison": "Écran omis de l’inventaire du 56.7, ajouté au 56.g depuis l’audit ; aucun clic e2e du gate sur cet identifiant."
+  },
+  {
+    "node": "nouveau-sujet.barre.nav-boite",
+    "raison": "Écran omis de l’inventaire du 56.7, ajouté au 56.g depuis l’audit ; aucun clic e2e du gate sur cet identifiant."
+  },
+  {
+    "node": "nouveau-sujet.barre.nav-consignes",
+    "raison": "Écran omis de l’inventaire du 56.7, ajouté au 56.g depuis l’audit ; aucun clic e2e du gate sur cet identifiant."
+  },
+  {
+    "node": "nouveau-sujet.barre.nav-machines",
+    "raison": "Écran omis de l’inventaire du 56.7, ajouté au 56.g depuis l’audit ; aucun clic e2e du gate sur cet identifiant."
+  },
+  {
+    "node": "nouveau-sujet.barre.nav-reglages",
+    "raison": "Écran omis de l’inventaire du 56.7, ajouté au 56.g depuis l’audit ; aucun clic e2e du gate sur cet identifiant."
+  },
+  {
+    "node": "nouveau-sujet.barre.recherche",
+    "raison": "Écran omis de l’inventaire du 56.7, ajouté au 56.g depuis l’audit ; aucun clic e2e du gate sur cet identifiant."
+  },
+  {
+    "node": "nouveau-sujet.besoin.projet",
+    "raison": "Écran omis de l’inventaire du 56.7, ajouté au 56.g depuis l’audit ; aucun clic e2e du gate sur cet identifiant."
+  },
+  {
+    "node": "nouveau-sujet.besoin.titre-sujet",
+    "raison": "Écran omis de l’inventaire du 56.7, ajouté au 56.g depuis l’audit ; aucun clic e2e du gate sur cet identifiant."
+  },
+  {
+    "node": "nouveau-sujet.besoin.type",
+    "raison": "Écran omis de l’inventaire du 56.7, ajouté au 56.g depuis l’audit ; aucun clic e2e du gate sur cet identifiant."
+  },
+  {
+    "node": "nouveau-sujet.pied.annuler",
+    "raison": "Écran omis de l’inventaire du 56.7, ajouté au 56.g depuis l’audit ; aucun clic e2e du gate sur cet identifiant."
+  },
+  {
+    "node": "nouveau-sujet.travail.agent",
+    "raison": "Écran omis de l’inventaire du 56.7, ajouté au 56.g depuis l’audit ; aucun clic e2e du gate sur cet identifiant."
+  },
+  {
+    "node": "nouveau-sujet.travail.modele",
+    "raison": "Écran omis de l’inventaire du 56.7, ajouté au 56.g depuis l’audit ; aucun clic e2e du gate sur cet identifiant."
+  },
+  {
+    "node": "nouveau-sujet.travail.permissions",
+    "raison": "Écran omis de l’inventaire du 56.7, ajouté au 56.g depuis l’audit ; aucun clic e2e du gate sur cet identifiant."
+  },
+  {
+    "node": "nouveau-sujet.volet.ouvrir-nav",
+    "raison": "Écran omis de l’inventaire du 56.7, ajouté au 56.g depuis l’audit ; aucun clic e2e du gate sur cet identifiant."
   },
   {
     "node": "pda.enregistrement.nom",
@@ -673,10 +893,6 @@
   },
   {
     "node": "pda.navigation.confirmations",
-    "raison": "Aucun clic e2e du gate attribuable avec certitude à cet identifiant ; présent dans le relevé d’audit."
-  },
-  {
-    "node": "reglages-swarph.recharger",
     "raison": "Aucun clic e2e du gate attribuable avec certitude à cet identifiant ; présent dans le relevé d’audit."
   },
   {
@@ -772,10 +988,6 @@
     "raison": "Aucun clic e2e du gate attribuable avec certitude à cet identifiant ; présent dans le relevé d’audit."
   },
   {
-    "node": "reglages.volet.ouvrir-nav",
-    "raison": "Aucun clic e2e du gate attribuable avec certitude à cet identifiant ; présent dans le relevé d’audit."
-  },
-  {
     "node": "serveur-config.cible",
     "raison": "Champ sans clic e2e explicitement attribué ; fill/selectOption ne produisent pas un clic."
   },
@@ -792,10 +1004,6 @@
     "raison": "Champ sans clic e2e explicitement attribué ; fill/selectOption ne produisent pas un clic."
   },
   {
-    "node": "serveur-config.mode-*",
-    "raison": "Aucun clic e2e du gate attribuable avec certitude à cet identifiant ; présent dans le relevé d’audit."
-  },
-  {
     "node": "serveur-config.nom",
     "raison": "Champ sans clic e2e explicitement attribué ; fill/selectOption ne produisent pas un clic."
   },
@@ -808,20 +1016,12 @@
     "raison": "Champ sans clic e2e explicitement attribué ; fill/selectOption ne produisent pas un clic."
   },
   {
-    "node": "serveur-config.session",
-    "raison": "Champ sans clic e2e explicitement attribué ; fill/selectOption ne produisent pas un clic."
-  },
-  {
     "node": "serveur-config.supprimer",
     "raison": "Aucun clic e2e du gate attribuable avec certitude à cet identifiant ; présent dans le relevé d’audit."
   },
   {
     "node": "serveur-config.tester",
     "raison": "Aucun clic e2e du gate attribuable avec certitude à cet identifiant ; présent dans le relevé d’audit."
-  },
-  {
-    "node": "serveur.configuration.confirmation-destructive",
-    "raison": "Champ sans clic e2e explicitement attribué ; fill/selectOption ne produisent pas un clic."
   },
   {
     "node": "serveur.configuration.couleur-#4fd1d9",
@@ -854,10 +1054,6 @@
   {
     "node": "serveur.configuration.couleur-#f59e6b",
     "raison": "Aucun clic e2e du gate attribuable avec certitude à cet identifiant ; présent dans le relevé d’audit."
-  },
-  {
-    "node": "serveur.configuration.profil-shell",
-    "raison": "Champ sans clic e2e explicitement attribué ; fill/selectOption ne produisent pas un clic."
   },
   {
     "node": "serveur.configuration.retirer-dossier-~",
@@ -976,19 +1172,11 @@
     "raison": "Aucun clic e2e du gate attribuable avec certitude à cet identifiant ; présent dans le relevé d’audit."
   },
   {
-    "node": "serveurs.serveur-*.discussion-1.reprendre",
-    "raison": "Aucun clic e2e du gate attribuable avec certitude à cet identifiant ; présent dans le relevé d’audit."
-  },
-  {
     "node": "serveurs.serveur-*.ouvrir",
     "raison": "Aucun clic e2e du gate attribuable avec certitude à cet identifiant ; présent dans le relevé d’audit."
   },
   {
     "node": "serveurs.serveur-*.plus",
-    "raison": "Aucun clic e2e du gate attribuable avec certitude à cet identifiant ; présent dans le relevé d’audit."
-  },
-  {
-    "node": "serveurs.volet.ouvrir-nav",
     "raison": "Aucun clic e2e du gate attribuable avec certitude à cet identifiant ; présent dans le relevé d’audit."
   },
   {
