@@ -182,6 +182,7 @@ export async function startDaemon(
                     log,
                     vectors: vectors ?? undefined,
                     duplicateDistance: maintCfg.duplicateDistance,
+                    splitLines: maintCfg.splitLines,
                   })
               : undefined,
           })
@@ -218,6 +219,8 @@ export async function startDaemon(
           proposals,
           enabled: maintCfg.enabled,
           window: maintCfg.window,
+          maxPerNight: maintCfg.maxPerNight,
+          splitLines: maintCfg.splitLines,
         });
         if (n > 0) worker?.notify();
       };

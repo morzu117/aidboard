@@ -73,7 +73,14 @@ export interface SwairmConfig {
 export interface MemoryConfig {
   embeddings: { provider: 'off' | 'ollama'; model: string; url: string };
   // Facultatif pour les configurations injectées ; le job applique aussi le défaut de 0.15.
-  maintenance: { enabled: boolean; model: string; window: string; duplicateDistance?: number };
+  maintenance: {
+    enabled: boolean;
+    model: string;
+    window: string;
+    duplicateDistance?: number;
+    maxPerNight?: number;
+    splitLines?: number;
+  };
   git: { push: boolean };
 }
 
@@ -133,6 +140,8 @@ export const DEFAULT_CONFIG: AidConfig = {
       model: 'qwen3:8b',
       window: '02:00-06:00',
       duplicateDistance: 0.15,
+      maxPerNight: 20,
+      splitLines: 40,
     },
     git: { push: false },
   },
@@ -326,7 +335,16 @@ function parseMemory(raw: unknown, cfg: MemoryConfig): void {
   const m = raw.maintenance;
   if (m !== undefined) {
     if (!isRecord(m)) throw new ConfigError('config.yaml : memory.maintenance doit être un objet');
-    rejectUnknown(m, ['enabled', 'model', 'window', 'duplicateDistance'], 'memory.maintenance.');
+    rejectUnknown(
+      m,
+      ['enabled', 'model', 'window', 'duplicateDistance', 'maxPerNight', 'splitLines'],
+      'memory.maintenance.',
+    );
+    // Les deux limites sont des entiers strictement positifs, comme les autres limites de config.
+    for (const key of ['maxPerNight', 'splitLines'] as const) {
+      if (m[key] !== undefined)
+        cfg.maintenance[key] = positiveInt(m[key], `memory.maintenance.${key}`);
+    }
     if (m.duplicateDistance !== undefined) {
       const distance = m.duplicateDistance;
       if (
@@ -693,6 +711,8 @@ const DEFAULT_FILE = `# Configuration d'A-I-D. Tout est facultatif : ce sont les
 #     model: qwen3:8b
 #     window: "02:00-06:00"
 #     duplicateDistance: 0.15 # distance cosinus maximale des candidats doublons (]0, 2])
+#     maxPerNight: 20        # jobs créés depuis le début de la fenêtre courante
+#     splitLines: 40         # découpage au-delà de ce nombre de lignes non vides
 #   git:
 #     push: false            # true : git push de ~/.aid/memory après chaque commit, si un remote origin existe
 # structural:

@@ -105,6 +105,8 @@ test('memory : les défauts', () => {
       model: 'qwen3:8b',
       window: '02:00-06:00',
       duplicateDistance: 0.15,
+      maxPerNight: 20,
+      splitLines: 40,
     },
     git: { push: false },
   });

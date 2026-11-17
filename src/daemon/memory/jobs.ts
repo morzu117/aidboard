@@ -33,6 +33,13 @@ export class MemoryJobs {
     return id;
   }
 
+  countCreatedSince(kind: JobKind, since: string): number {
+    const row = this.db
+      .prepare('SELECT count(*) AS n FROM memory_jobs WHERE kind = ? AND created_at >= ?')
+      .get(kind, since) as { n: number };
+    return row.n;
+  }
+
   claim(now = new Date().toISOString()): MemoryJob | undefined {
     return this.db.transaction((): MemoryJob | undefined => {
       const job = this.db

@@ -78,14 +78,15 @@ test('page sans tags : une proposition « tags » ouverte, la page ne change pas
     config: { memory: MEMORY_CFG({ enabled: true, window: '00:00-23:59' }) },
     memory: { chatModel: fixedChatModel('{"tags":["chat","sommeil"]}'), maintenanceScheduleMs: 20 },
   });
-  expect((await put('aid/plan/felin', 'Le chat dort sur le canapé.')).statusCode).toBe(201);
-  await waitFor(() => jobState('aid/plan/felin') === 'done', 5000, 'job maintain terminé');
+  await put('lesson/test/vocabulaire', '---\ntags: [chat, sommeil]\n---\nVocabulaire.');
+  expect((await put('lesson/test/felin', 'Le chat dort sur le canapé.')).statusCode).toBe(201);
+  await waitFor(() => jobState('lesson/test/felin') === 'done', 5000, 'job maintain terminé');
 
   const open = openProposals();
   expect(open).toHaveLength(1);
-  expect(open[0]).toMatchObject({ kind: 'tags', slug: 'aid/plan/felin' });
+  expect(open[0]).toMatchObject({ kind: 'tags', slug: 'lesson/test/felin' });
 
-  const page = await getPage('aid/plan/felin');
+  const page = await getPage('lesson/test/felin');
   expect(page.revision).toBe(1);
   expect(page.frontmatter.tags).toBeUndefined();
 });
@@ -95,15 +96,16 @@ test('apply : les tags sont écrits, la révision augmente', async () => {
     config: { memory: MEMORY_CFG({ enabled: true, window: '00:00-23:59' }) },
     memory: { chatModel: fixedChatModel('{"tags":["chat","sommeil"]}'), maintenanceScheduleMs: 20 },
   });
-  await put('aid/plan/felin', 'Le chat dort sur le canapé.');
-  await waitFor(() => jobState('aid/plan/felin') === 'done', 5000, 'job maintain terminé');
+  await put('lesson/test/vocabulaire', '---\ntags: [chat, sommeil]\n---\nVocabulaire.');
+  await put('lesson/test/felin', 'Le chat dort sur le canapé.');
+  await waitFor(() => jobState('lesson/test/felin') === 'done', 5000, 'job maintain terminé');
   const [proposal] = openProposals();
 
   const res = await apply(proposal!.id);
   expect(res.statusCode).toBe(200);
   expect(res.json()).toMatchObject({ state: 'applied' });
 
-  const page = await getPage('aid/plan/felin');
+  const page = await getPage('lesson/test/felin');
   expect(page.revision).toBe(2);
   expect(page.frontmatter.tags).toEqual(['chat', 'sommeil']);
 });
@@ -117,8 +119,9 @@ test('réponse JSON invalide : le job échoue, aucune proposition n’est créé
       backoffMs: [],
     },
   });
-  await put('aid/plan/x', 'contenu quelconque');
-  await waitFor(() => jobState('aid/plan/x') === 'failed', 5000, 'job maintain en échec');
+  await put('lesson/test/vocabulaire', '---\ntags: [chat, sommeil]\n---\nVocabulaire.');
+  await put('lesson/test/x', 'contenu quelconque');
+  await waitFor(() => jobState('lesson/test/x') === 'failed', 5000, 'job maintain en échec');
   expect(openProposals()).toEqual([]);
 });
 
@@ -155,8 +158,8 @@ test('désactivé : aucun job créé même dans la fenêtre', () => {
 
 test('page éligible, dans la fenêtre : un job par page, plafonné à maxPerNight', () => {
   const { store, jobs, proposals } = freshDb();
-  store.put('aid/plan/a', 'contenu a', { kind: 'create' }, 'test');
-  store.put('aid/plan/b', 'contenu b', { kind: 'create' }, 'test');
+  store.put('lesson/test/a', 'contenu a', { kind: 'create' }, 'test');
+  store.put('lesson/test/b', 'contenu b', { kind: 'create' }, 'test');
   const now = new Date('2026-01-01T03:00:00');
   const n = scheduleMaintenance(now, {
     store,

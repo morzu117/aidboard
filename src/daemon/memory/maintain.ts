@@ -187,11 +187,14 @@ function lineCount(body: string): number {
 function eligibleKind(
   page: { slug: string; namespace: string; frontmatter: Record<string, unknown>; body: string },
   proposals: MemoryProposals,
+  splitLines = 40,
+  hasVocabulary = true,
 ): ProposalKind | null {
+  if (page.namespace !== LESSON_NS) return null;
   const rejected = new Set(rejectedKinds(page.frontmatter));
   for (const kind of PRIORITY) {
     if (rejected.has(kind) || proposals.pending(page.slug, kind)) continue;
-    if (kind === 'tags') {
+    if (kind === 'tags' && hasVocabulary) {
       const tags = page.frontmatter.tags;
       if (!Array.isArray(tags) || tags.length === 0) return 'tags';
     } else if (kind === 'duplicate') {
@@ -199,7 +202,7 @@ function eligibleKind(
     } else if (kind === 'split') {
       if (
         page.namespace === LESSON_NS &&
-        (page.frontmatter.a_decouper === true || lineCount(page.body) > 15)
+        (page.frontmatter.a_decouper === true || lineCount(page.body) > splitLines)
       ) {
         return 'split';
       }
@@ -227,19 +230,27 @@ export interface SchedulerDeps {
   enabled: boolean;
   window: string;
   maxPerNight?: number;
+  splitLines?: number;
 }
 
 // Un job `maintain` par page éligible, au plus `maxPerNight`, seulement dans la fenêtre et si activé.
 export function scheduleMaintenance(now: Date, deps: SchedulerDeps): number {
   if (!deps.enabled || !inWindow(now, deps.window)) return 0;
-  const max = deps.maxPerNight ?? 20;
+  // La fenêtre suit l'heure locale du planificateur, y compris après minuit.
+  const [hour, minute] = deps.window.split('-')[0]!.split(':').map(Number);
+  const start = new Date(now);
+  start.setHours(hour!, minute!, 0, 0);
+  if (start > now) start.setDate(start.getDate() - 1);
+  const max =
+    (deps.maxPerNight ?? 20) - deps.jobs.countCreatedSince('maintain', start.toISOString());
+  const hasVocabulary = existingTags(deps.store, LESSON_NS).length > 0;
   // Matérialiser la liste avant d'enfiler : `jobs.enqueue` exécute d'autres requêtes sur la même
   // connexion, ce que better-sqlite3 refuse tant qu'un `.iterate()` est encore ouvert.
   const pages = [...deps.store.all()];
   let n = 0;
   for (const page of pages) {
     if (n >= max) break;
-    if (!eligibleKind(page, deps.proposals)) continue;
+    if (!eligibleKind(page, deps.proposals, deps.splitLines, hasVocabulary)) continue;
     if (deps.jobs.enqueue('maintain', page.slug)) n++;
   }
   return n;
@@ -248,13 +259,14 @@ export function scheduleMaintenance(now: Date, deps: SchedulerDeps): number {
 export interface MaintainDeps {
   vectors?: VectorIndex;
   duplicateDistance?: number;
+  splitLines?: number;
   store: MemoryStore;
   proposals: MemoryProposals;
   model: ChatModel;
   log: (line: string) => void;
 }
 
-const TAGS_PROMPT = `Tu proposes des tags pour une page de mémoire. Réponds uniquement en JSON de la forme {"tags": ["tag1", "tag2"]}, 1 à 5 tags courts, en minuscules, de préférence parmi les tags existants donnés.`;
+const TAGS_PROMPT = `Tu proposes des tags pour une page de mémoire. Réponds uniquement en JSON de la forme {"tags": ["tag1", "tag2"]}, 1 à 5 tags courts, en minuscules, exclusivement parmi les tags existants donnés.`;
 const DUPLICATE_PROMPT = `Tu compares uniquement les deux leçons données. Un non est la réponse normale : réponds oui seulement si elles font doublon. Réponds uniquement en JSON de la forme {"doublon": true | false, "rationale": "<justification>"}.`;
 const SPLIT_PROMPT = `Tu découpes une leçon trop longue en pages atomiques. Réponds uniquement en JSON de la forme {"pages": [{"slug": "...", "title": "...", "frontmatter": {}, "body": "..."}]}, 2 à 4 pages.`;
 
@@ -262,13 +274,19 @@ async function runTags(
   page: { slug: string; namespace: string; title: string; body: string },
   deps: MaintainDeps,
 ): Promise<void> {
-  const tags = existingTags(deps.store, page.namespace);
+  const tags = existingTags(deps.store, LESSON_NS);
+  if (tags.length === 0) return;
   const content = await deps.model.chat(
     TAGS_PROMPT,
     `Tags existants du namespace « ${page.namespace} » : ${tags.join(', ') || '(aucun)'}\n\nTitre : ${page.title}\n\n${page.body}`,
   );
   const payload = parseJson(content);
   if (!Value.Check(TagsPayload, payload)) throw new Error('proposition tags : forme JSON invalide');
+  const refused = payload.tags.filter((tag) => !tags.includes(tag));
+  if (refused.length > 0) {
+    for (const tag of refused) deps.log(`proposition tags refusée : tag hors vocabulaire : ${tag}`);
+    return;
+  }
   deps.proposals.create('tags', page.slug, payload, `${payload.tags.length} tag(s) proposé(s)`);
 }
 
@@ -318,7 +336,12 @@ async function runSplit(
 export async function runMaintainJob(job: MemoryJob, deps: MaintainDeps): Promise<void> {
   const page = job.slug ? deps.store.get(job.slug) : undefined;
   if (!page) return;
-  const kind = eligibleKind(page, deps.proposals);
+  const kind = eligibleKind(
+    page,
+    deps.proposals,
+    deps.splitLines,
+    existingTags(deps.store, LESSON_NS).length > 0,
+  );
   if (!kind) return;
   if (kind === 'tags') await runTags(page, deps);
   else if (kind === 'duplicate') await runDuplicate(page, deps);
