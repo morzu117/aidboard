@@ -399,13 +399,19 @@ export async function applyProposal(
       slugs.add(p.slug);
     }
     const created: string[] = [];
-    for (const p of pages) {
-      const text = renderMarkdown({
-        frontmatter: splitFrontmatter(p.frontmatter, proposal.slug),
-        body: p.body,
-      });
-      await memory.put(p.slug, text, { kind: 'create' }, MAINTENANCE_CTX, p.title);
-      created.push(p.slug);
+    try {
+      for (const p of pages) {
+        const text = renderMarkdown({
+          frontmatter: splitFrontmatter(p.frontmatter, proposal.slug),
+          body: p.body,
+        });
+        await memory.put(p.slug, text, { kind: 'create' }, MAINTENANCE_CTX, p.title);
+        created.push(p.slug);
+      }
+    } catch (err) {
+      // Annuler les créations réussies de cette application avant de propager l'échec.
+      for (const slug of created) await memory.remove(slug, MAINTENANCE_CTX);
+      throw err;
     }
     const fm = { ...page.frontmatter, remplacee_par: created };
     const text = renderMarkdown({ frontmatter: fm, body: page.body });

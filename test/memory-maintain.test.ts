@@ -1,7 +1,7 @@
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, expect, test } from 'vitest';
+import { afterEach, expect, test, vi } from 'vitest';
 import { type Db, openDb } from '../src/daemon/db.js';
 import { MemoryJobs } from '../src/daemon/memory/jobs.js';
 import {
@@ -9,6 +9,7 @@ import {
   MemoryProposals,
   scheduleMaintenance,
 } from '../src/daemon/memory/maintain.js';
+import { MemoryService } from '../src/daemon/memory/service.js';
 import { MemoryStore } from '../src/daemon/memory/store.js';
 import { startTestDaemon, waitFor, type TestDaemon } from './helpers/daemon.js';
 
@@ -277,3 +278,59 @@ test.each(['occupé', 'répété', 'hors lesson', 'invalide'])(
     expect(openProposals().map((p) => p.id)).toContain(proposal.id);
   },
 );
+
+test('split : filtre aussi une proposition créée directement sans filtrage préalable', async () => {
+  t = await startTestDaemon();
+  await put(splitSource, splitText);
+  const proposals = new MemoryProposals(t.db);
+  const proposal = proposals.create('split', splitSource, { pages: splitPages() }, 'Découpage');
+
+  expect((await apply(proposal.id)).statusCode).toBe(200);
+  expect((await getPage('lesson/test/premiere')).frontmatter).toEqual({
+    tags: ['test'],
+    title: 'Première',
+    issu_de: splitSource,
+  });
+  expect((await getPage('lesson/test/seconde')).frontmatter).toEqual({
+    title: 'Seconde',
+    issu_de: splitSource,
+  });
+  expect(proposals.get(proposal.id)?.state).toBe('applied');
+});
+
+test('split : annule la première création si le deuxième put échoue et reste ouverte', async () => {
+  t = await startTestDaemon();
+  await put(splitSource, splitText);
+  const sourceBefore = await getPage(splitSource);
+  const proposals = new MemoryProposals(t.db);
+  const proposal = proposals.create('split', splitSource, { pages: splitPages() }, 'Découpage');
+  const originalPut = MemoryService.prototype.put;
+  const putSpy = vi.spyOn(MemoryService.prototype, 'put').mockImplementation(function (
+    this: MemoryService,
+    ...args: Parameters<MemoryService['put']>
+  ) {
+    if (args[0] === 'lesson/test/seconde' && args[2].kind === 'create') {
+      return Promise.reject(new Error('échec simulé du deuxième put'));
+    }
+    return originalPut.apply(this, args);
+  });
+  const removeSpy = vi.spyOn(MemoryService.prototype, 'remove');
+  try {
+    const response = await apply(proposal.id);
+    expect(response.statusCode).toBe(500);
+    expect(response.json()).toEqual({ error: 'erreur interne' });
+    expect(removeSpy).toHaveBeenCalledExactlyOnceWith('lesson/test/premiere', {
+      author: 'maintenance',
+    });
+    for (const { slug } of splitPages()) {
+      expect(
+        (await t.d.app.inject({ url: `/api/memory/pages/${slug}`, headers: t.headers })).statusCode,
+      ).toBe(404);
+    }
+    expect(await getPage(splitSource)).toEqual(sourceBefore);
+    expect(proposals.get(proposal.id)?.state).toBe('open');
+  } finally {
+    putSpy.mockRestore();
+    removeSpy.mockRestore();
+  }
+});
