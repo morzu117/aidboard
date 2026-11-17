@@ -235,6 +235,7 @@ export interface ResultatEnvoi {
     | 'interrompu'
     | 'connexion'
     | 'format'
+    | 'envoyee_rendu_inattendu'
     | 'obligation-close';
   message?: string;
   cree?: boolean;

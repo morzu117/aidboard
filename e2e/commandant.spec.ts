@@ -22,6 +22,7 @@ import {
   CODES_REFUS_COMMANDANT,
   HTTP_REFUS_COMMANDANT,
   messageErreurCommandant,
+  libelleReponseCommandant,
 } from '../src/shared/commandant-reponse.js';
 
 const PORT = Number(process.env.AID_E2E_PORT ?? 4871) + 14;
@@ -480,7 +481,7 @@ test('Cockpit : Mac, PDA réel, appareils en lecture seule et refus exacts de de
     await libre.click();
     await libre.fill('x\u200b');
     await expect(mac.getByRole('button', { name: 'Répondre', exact: true })).toBeDisabled();
-    await libre.fill('Réponse de test');
+    await libre.fill('  Réponse de test  ');
     await capture(mac, 'mac-libre', libre);
     const texteId = await oui(1240, 'Répondre');
     await expect
@@ -498,6 +499,54 @@ test('Cockpit : Mac, PDA réel, appareils en lecture seule et refus exacts de de
       answer: 'Réponse de test',
       decided_via: 'cockpit',
     });
+
+    reinitialiser();
+    faux.scenario.apresDecide = (ligne) => {
+      ligne.decided_via = 'sso';
+    };
+    await relire();
+    await ouvrir(1235);
+    const renduInattendu = await oui(1235, 'oui');
+    await expect
+      .poll(
+        () =>
+          (
+            base!.prepare('SELECT resultat FROM pda_demandes WHERE id = ?').get(renduInattendu) as {
+              resultat: string;
+            }
+          ).resultat,
+        { timeout: 35_000 },
+      )
+      .toBe('echouee');
+    const messageRendu = libelleReponseCommandant('echouee', 'envoyee_rendu_inattendu');
+    await expect(mac.getByText(messageRendu, { exact: true })).toBeVisible();
+    await expect(
+      mac.locator('[data-node="commandant.ouvrir"]').filter({ hasText: '#1235 —' }),
+    ).toHaveCount(0);
+    await expect(
+      mac.getByRole('article', { name: 'Demande #1235', exact: true }).getByRole('button'),
+    ).toHaveCount(0);
+    expect(
+      JSON.parse(
+        (
+          base.prepare('SELECT envoi FROM pda_demandes WHERE id = ?').get(renduInattendu) as {
+            envoi: string;
+          }
+        ).envoi,
+      ),
+    ).toMatchObject({ code: 'envoyee_rendu_inattendu' });
+    expect(faux.lignes.get(1235)?.status).toBe('answered');
+    await capture(mac, 'envoyee-rendu-inattendu', mac.getByText(messageRendu, { exact: true }));
+    await expect(async () => {
+      await telephone.getByRole('button', { name: 'Actualiser', exact: true }).click();
+      await expect(telephone.getByText(messageRendu, { exact: true })).toBeVisible();
+    }).toPass({ timeout: 35_000, intervals: [3000] });
+    await capture(
+      telephone,
+      'pda-envoyee-rendu-inattendu',
+      telephone.getByText(messageRendu, { exact: true }),
+    );
+    faux.scenario.apresDecide = null;
 
     for (const code of CODES_REFUS_COMMANDANT) {
       reinitialiser();

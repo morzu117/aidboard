@@ -38,7 +38,7 @@ function transportMemoire() {
     return new Response(
       JSON.stringify(
         id === 'requests'
-          ? [...lignes.values()].filter((v) => v.status === 'pending')
+          ? { requests: [...lignes.values()].filter((v) => v.status === 'pending') }
           : lignes.get(Number(id)),
       ),
     );
@@ -128,7 +128,7 @@ describe('lecture périodique du commandant', () => {
     faux.transport.mockClear();
     faux.transport.mockImplementationOnce(async () => {
       await new Promise((resolve) => setTimeout(resolve, 250));
-      return new Response(JSON.stringify([...faux.lignes.values()]));
+      return new Response(JSON.stringify({ requests: [...faux.lignes.values()] }));
     });
     const lecture = t.service.actualiser('principal');
     let termine = false;
@@ -247,7 +247,7 @@ describe('lecture périodique du commandant', () => {
     });
     const transport: typeof fetch = async () => {
       await attente;
-      return new Response(JSON.stringify([ligneCommandantTest(1)]));
+      return new Response(JSON.stringify({ requests: [ligneCommandantTest(1)] }));
     };
     const t = preparer({ client: { transport } });
     const saisie = t.service.saisir('principal', IDENTIFIANT_COCKPIT_TEST);
@@ -263,7 +263,11 @@ describe('lecture périodique du commandant', () => {
   it('le détail refuse un id divergent et un digest faux', async () => {
     let ligne = ligneCommandantTest(2);
     const transport: typeof fetch = async (url) =>
-      new Response(JSON.stringify(new URL(String(url)).pathname.endsWith('requests') ? [] : ligne));
+      new Response(
+        JSON.stringify(
+          new URL(String(url)).pathname.endsWith('requests') ? { requests: [] } : ligne,
+        ),
+      );
     const t = preparer({ client: { transport } });
     await t.service.saisir('principal', IDENTIFIANT_COCKPIT_TEST);
     expect(await t.service.detail('principal', 1)).toMatchObject({
@@ -272,7 +276,7 @@ describe('lecture périodique du commandant', () => {
       raison: 'forme',
     });
     ligne = { ...ligneCommandantTest(1), digest: '0'.repeat(64) };
-    expect(await t.service.detail('principal', 1)).toMatchObject({ raison: 'digest' });
+    expect(await t.service.relireDetail('principal', 1)).toMatchObject({ raison: 'digest' });
   });
 });
 it('un 401 terminal invalide aussi une lecture concurrente qui répond tardivement', async () => {
@@ -285,7 +289,7 @@ it('un 401 terminal invalide aussi une lecture concurrente qui répond tardiveme
   const transport = vi.fn<typeof fetch>(async (url) => {
     if (new URL(String(url)).pathname.endsWith('requests')) {
       if (bloquer) await attente;
-      return new Response('[]');
+      return new Response('{"requests":[]}');
     }
     return new Response(JSON.stringify({ error: 'cockpit_credential_expired' }), { status: 401 });
   });
@@ -351,4 +355,76 @@ it('élague les ids sortis de pending seulement après une lecture complète, sa
   expect(ids()).toEqual([2]);
   expect(statSync(fichier).mtimeMs).toBe(modification);
   expect(suite.notifier).not.toHaveBeenCalled();
+});
+
+it.each([[], {}, { requests: {} }])(
+  'refuse une liste sans enveloppe requests valide : %j',
+  async (corps) => {
+    const faux = await creerPasserelleCommandant();
+    nettoyages.push(() => faux.fermer());
+    faux.scenario.corpsListe = corps;
+    const t = preparer({ meshes: () => ({ principal: { gateway: faux.url, cell: 'cell-lab' } }) });
+    await t.service.saisir('principal', IDENTIFIANT_COCKPIT_TEST);
+    expect(t.service.etat('principal')).toMatchObject({
+      lignes: [],
+      erreur: { genre: 'transport', code: 'json' },
+    });
+    expect(t.notifier).not.toHaveBeenCalled();
+    expect(faux.appels).toHaveLength(1);
+  },
+);
+it('borne vingt lectures du détail en une seconde, puis relit après dix secondes', async () => {
+  const faux = await creerPasserelleCommandant();
+  nettoyages.push(() => faux.fermer());
+  let maintenant = Date.now();
+  const t = preparer({
+    maintenant: () => maintenant,
+    meshes: () => ({ principal: { gateway: faux.url, cell: 'cell-lab' } }),
+  });
+  await t.service.saisir('principal', IDENTIFIANT_COCKPIT_TEST);
+  faux.appels.length = 0;
+  for (let i = 0; i < 20; i++) {
+    expect(await t.service.detail('principal', 1235)).toMatchObject({ valide: true });
+    maintenant += 50;
+  }
+  expect(faux.appels).toHaveLength(1);
+  maintenant += 9000;
+  await t.service.detail('principal', 1235);
+  expect(faux.appels).toHaveLength(2);
+  await t.service.relireDetail('principal', 1235);
+  await t.service.relireDetail('principal', 1235);
+  expect(faux.appels).toHaveLength(4);
+});
+it('vingt lectures concurrentes attendent le même détail en cours', async () => {
+  const faux = await creerPasserelleCommandant();
+  nettoyages.push(() => faux.fermer());
+  const t = preparer({ meshes: () => ({ principal: { gateway: faux.url, cell: 'cell-lab' } }) });
+  await t.service.saisir('principal', IDENTIFIANT_COCKPIT_TEST);
+  faux.appels.length = 0;
+  faux.scenario.delaiMs = 50;
+  const resultats = await Promise.all(
+    Array.from({ length: 20 }, () => t.service.detail('principal', 1235)),
+  );
+  expect(resultats.every((r) => 'valide' in r && r.valide)).toBe(true);
+  expect(faux.appels).toHaveLength(1);
+});
+
+it('isole le cache du détail par mesh et par id', async () => {
+  const faux = await creerPasserelleCommandant();
+  nettoyages.push(() => faux.fermer());
+  const t = preparer({
+    meshes: () => ({
+      principal: { gateway: faux.url, cell: 'cell-lab' },
+      secondaire: { gateway: faux.url, cell: 'cell-autre' },
+    }),
+  });
+  await t.service.saisir('principal', IDENTIFIANT_COCKPIT_TEST);
+  await t.service.saisir('secondaire', IDENTIFIANT_COCKPIT_TEST);
+  faux.appels.length = 0;
+  for (const mesh of ['principal', 'secondaire'])
+    for (const id of [1234, 1235]) {
+      await t.service.detail(mesh, id);
+      await t.service.detail(mesh, id);
+    }
+  expect(faux.appels).toHaveLength(4);
 });

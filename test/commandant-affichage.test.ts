@@ -70,3 +70,9 @@ it('ne réfléchit pas un code distant inconnu', () => {
     'Lecture ou réponse impossible (HTTP 500).',
   );
 });
+
+it('explique le rendu inattendu après un envoi accepté, sur le Mac comme sur le PDA', () => {
+  expect(libelleReponseCommandant('echouee', 'envoyee_rendu_inattendu')).toBe(
+    "La passerelle a accepté l'envoi, mais sa réponse ne correspond pas : la réponse est peut-être enregistrée. Relis la demande avant de recommencer.",
+  );
+});

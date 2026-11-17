@@ -39,6 +39,7 @@ export type CodeEnvoi =
   | 'delai'
   | 'interrompu'
   | 'format'
+  | 'envoyee_rendu_inattendu'
   | 'upstream_error'
   | 'verb_not_allowed'
   | 'bad_args'

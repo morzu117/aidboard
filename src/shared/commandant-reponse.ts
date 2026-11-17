@@ -101,6 +101,8 @@ export function libelleReponseCommandant(resultat: string | null, code?: string 
   if (resultat === 'perimee')
     return 'Périmée : la demande a changé. Relis-la avant de recommencer.';
   if (resultat === 'executee') return 'Répondu';
+  if (resultat === 'echouee' && code === 'envoyee_rendu_inattendu')
+    return "La passerelle a accepté l'envoi, mais sa réponse ne correspond pas : la réponse est peut-être enregistrée. Relis la demande avant de recommencer.";
   if (resultat === 'echouee') return messageErreurCommandant(code ?? 'connexion');
   return '';
 }

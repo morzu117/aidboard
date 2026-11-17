@@ -94,7 +94,12 @@ L'e2e et les tests jouent la passerelle avec un faux, dans `test/fixtures/`. Ce 
     - l'écran relit la file après chaque résultat ;
     - chaque code a sa phrase en français ;
     - l'écran reprend les composants de Swarph.
-  - **Tests.** Gate 4 510, `gate:e2e` 186 et couverture verts. Les douze refus de `decide` de l'A2 et de l'A3, la demande périmée et le refus de `preparer` sont joués dans le navigateur, avec leurs captures dans les deux formats.
+  - **La relecture du lab** (DM 99883), faite contre le vrai code de la passerelle (PR 334 mergée, main 4989daa), a donné une quatrième passe :
+    - la vraie liste rend `{"requests": [...]}`, pas un tableau nu. Le faux suivait l'ancien exemple : il est corrigé, et toute autre forme est refusée. C'est le piège « le faux et le vrai » ;
+    - une réponse libre est rognée avant la signature, comme la passerelle le fait ;
+    - le détail lu par un écran est borné à un appel par id et par 10 s. `preparer` et `executer` relisent toujours la passerelle ;
+    - un `decide` accepté mais mal rendu donne le code fermé `envoyee_rendu_inattendu` : « la réponse est peut-être enregistrée ».
+  - **Tests.** Gate 4 518, `gate:e2e` 186 et couverture verts. Les douze refus de `decide` de l'A2 et de l'A3, la demande périmée et le refus de `preparer` sont joués dans le navigateur, avec leurs captures dans les deux formats.
 
 ### 58.4 La vérification réelle
 

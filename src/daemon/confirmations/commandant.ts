@@ -34,7 +34,7 @@ export function creerActionCommandant(
         !/^[a-f0-9]{64}$/.test(p.digest)
       )
         throw new AidHttpError(400, 'commandant_parametres');
-      const controle = await obtenir().detail(mesh, p.requestId!);
+      const controle = await obtenir().relireDetail(mesh, p.requestId!);
       if ('erreur' in controle) throw new AidHttpError(409, `commandant_${controle.erreur.code}`);
       if (!controle.valide) throw new AidHttpError(409, `commandant_illisible_${controle.raison}`);
       const { ligne } = controle;
@@ -44,10 +44,12 @@ export function creerActionCommandant(
       if (!controle.repondable) throw new AidHttpError(409, 'commandant_limites');
       if (ligne.digest !== p.digest) throw new AidHttpError(409, 'commandant_digest_mismatch');
       const options = ligne.params.options as string[];
+      const decision =
+        !options.length && typeof p.decision === 'string' ? p.decision.trim() : p.decision;
       if (
         options.length
-          ? !options.includes(p.decision!)
-          : !texteCommandantValide(p.decision, 1000) || !p.decision.trim()
+          ? !options.includes(decision!)
+          : !texteCommandantValide(decision, 1000) || !decision.trim()
       )
         throw new AidHttpError(400, 'commandant_bad_answer');
       const params: Parametres = {
@@ -55,7 +57,7 @@ export function creerActionCommandant(
         requestId: ligne.id,
         type: 'decision',
         digest: ligne.digest,
-        decision: p.decision!,
+        decision: decision!,
         question: ligne.params.question as string,
         options: [...options],
       };
@@ -67,7 +69,7 @@ export function creerActionCommandant(
       if (!ctx.confirmation) throw new AidHttpError(409, 'confirmation_requise');
       if (!validerParamsAction('mesh.commandant.repondre', p) || ctx.mesh !== p.mesh)
         throw new AidHttpError(409, 'perime');
-      const controle = await obtenir().detail(p.mesh, p.requestId);
+      const controle = await obtenir().relireDetail(p.mesh, p.requestId);
       if ('erreur' in controle) {
         refusPasserelle(ctx, controle.erreur);
         return;
@@ -97,7 +99,7 @@ export function creerActionCommandant(
         ligne.ligne.status !== 'answered' ||
         ligne.ligne.decided_via !== 'cockpit'
       ) {
-        ctx.envoi = { code: 'format', open_obligations: [] };
+        ctx.envoi = { code: 'envoyee_rendu_inattendu', open_obligations: [] };
         return;
       }
       ctx.envoi = { code: 'succes', open_obligations: [] };

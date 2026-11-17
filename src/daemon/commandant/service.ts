@@ -23,6 +23,12 @@ export interface EtatFileCommandant {
   derniereLecture: string | null;
   erreur: ErreurCommandant | null;
 }
+type DetailCommandant = ControleCommandant | { erreur: ErreurCommandant };
+interface DetailMemorise {
+  date: number;
+  enCours: boolean;
+  lecture: Promise<DetailCommandant>;
+}
 interface Entree {
   etat: EtatFileCommandant;
   generation: number;
@@ -30,6 +36,7 @@ interface Entree {
   minuteur?: ReturnType<typeof setTimeout>;
   lecture?: Promise<void>;
   notifies: Set<number>;
+  details: Map<number, DetailMemorise>;
 }
 export interface OptionsServiceCommandant {
   home: string;
@@ -71,6 +78,7 @@ export class ServiceCommandant {
         generation: 0,
         ouvertJusqua: 0,
         notifies: this.lireNotifies(mesh),
+        details: new Map(),
       };
       this.entrees.set(mesh, entree);
     }
@@ -94,6 +102,7 @@ export class ServiceCommandant {
     const e = this.obtenir(mesh);
     this.identifiants.ecrire(mesh, valeur);
     e.generation++;
+    e.details.clear();
     clearTimeout(e.minuteur);
     e.etat = {
       lignes: [],
@@ -110,6 +119,7 @@ export class ServiceCommandant {
     const e = this.obtenir(mesh);
     this.identifiants.supprimer(mesh);
     e.generation++;
+    e.details.clear();
     clearTimeout(e.minuteur);
     e.etat = {
       lignes: [],
@@ -173,7 +183,10 @@ export class ServiceCommandant {
       }
       e.etat.lignes = [];
       e.etat.refusees = [];
-      if (ARRETS.has(e.etat.identifiant.etat)) e.generation++;
+      if (ARRETS.has(e.etat.identifiant.etat)) {
+        e.generation++;
+        e.details.clear();
+      }
     }
   }
   private async lire(mesh: string, e: Entree): Promise<void> {
@@ -197,7 +210,11 @@ export class ServiceCommandant {
         this.traiterErreur(e, resultat.erreur);
         return;
       }
-      if (!Array.isArray(resultat.valeur)) {
+      const demandes =
+        resultat.valeur !== null && typeof resultat.valeur === 'object'
+          ? (resultat.valeur as Record<string, unknown>).requests
+          : undefined;
+      if (!Array.isArray(demandes)) {
         e.etat.erreur = { genre: 'transport', code: 'json' };
         return;
       }
@@ -206,7 +223,7 @@ export class ServiceCommandant {
       const lignes: Validee[] = [],
         refusees: Refusee[] = [];
       const idsEnAttente = new Set<number>();
-      for (const brute of resultat.valeur) {
+      for (const brute of demandes) {
         const controle = controlerLigneCommandant(brute);
         if (!controle.valide) {
           refusees.push(controle);
@@ -262,7 +279,30 @@ export class ServiceCommandant {
       if (courant()) e.etat.erreur = { genre: 'transport', code: 'reseau' };
     }
   }
-  async detail(
+  /** Les lectures d'écran partagent le dernier résultat contrôlé pendant dix secondes. */
+  async detail(mesh: string, id: number): Promise<DetailCommandant> {
+    const e = this.obtenir(mesh);
+    const precedent = e.details.get(id);
+    if (precedent && (precedent.enCours || this.maintenant() - precedent.date < 10_000))
+      return structuredClone(await precedent.lecture);
+    return this.relireDetail(mesh, id);
+  }
+  /** Les deux phases de confirmation relisent toujours la passerelle. */
+  async relireDetail(mesh: string, id: number): Promise<DetailCommandant> {
+    const e = this.obtenir(mesh);
+    for (const [cle, detail] of e.details)
+      if (!detail.enCours && this.maintenant() - detail.date >= 10_000) e.details.delete(cle);
+    const memorise: DetailMemorise = {
+      date: this.maintenant(),
+      enCours: true,
+      lecture: this.lireDetail(mesh, id).finally(() => {
+        memorise.enCours = false;
+      }),
+    };
+    e.details.set(id, memorise);
+    return structuredClone(await memorise.lecture);
+  }
+  private async lireDetail(
     mesh: string,
     id: number,
   ): Promise<ControleCommandant | { erreur: ErreurCommandant }> {
@@ -315,6 +355,8 @@ export class ServiceCommandant {
         lu.valeur,
         this.options.client,
       ).decider(id, decision, digest);
+      // Après un envoi, le détail peut avoir changé, même en cas de refus.
+      e.details.delete(id);
       if (!resultat.ok) {
         this.traiterErreur(e, resultat.erreur);
         this.programmer(mesh, e);

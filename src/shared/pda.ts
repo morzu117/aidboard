@@ -346,6 +346,7 @@ export const CODES_RESULTAT = [
   'interrompu',
   'connexion',
   'format',
+  'envoyee_rendu_inattendu',
   'obligation-close',
 ] as const satisfies readonly ResultatEnvoi['code'][];
 // Une évolution de l'énumération d'envoi doit aussi fermer la liste du résultat signé.

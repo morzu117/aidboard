@@ -161,12 +161,11 @@ export async function creerPasserelleCommandant() {
         return;
       }
       if (scenario.corpsListe !== undefined) return envoyer(200, scenario.corpsListe);
-      return envoyer(
-        200,
-        [...lignes.values()]
+      return envoyer(200, {
+        requests: [...lignes.values()]
           .filter((v) => url.searchParams.get('status') !== 'pending' || v.status === 'pending')
           .map(rendre),
-      );
+      });
     }
     const id = Number(correspondance![1]);
     if (detail) scenario.avantDetail?.(id);
@@ -210,7 +209,7 @@ export async function creerPasserelleCommandant() {
     if (corps.digest !== digestCommandant(ligne)) return erreur(409, 'digest_mismatch');
     Object.assign(ligne, {
       status: 'answered',
-      answer: corps.answer,
+      answer: (corps.answer as string).trim(),
       decided_by: 'cockpit:ck_1234abcd',
       decided_via: 'cockpit',
       decided_at: DATE_COMMANDANT_TEST,

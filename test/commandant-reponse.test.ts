@@ -135,8 +135,8 @@ const refus: Array<[string, (v: LigneCommandant) => void, string]> = [
 it.each(refus)('preparer refuse %s sans decide', async (_nom, changer, code) => {
   const t = await preparer();
   // Transport fidèle à la ligne brute pour jouer un résumé ou digest mal formé.
-  const original = t.service.detail.bind(t.service);
-  vi.spyOn(t.service, 'detail').mockImplementation(async (mesh, id) => {
+  const original = t.service.relireDetail.bind(t.service);
+  vi.spyOn(t.service, 'relireDetail').mockImplementation(async (mesh, id) => {
     const c = await original(mesh, id);
     if ('valide' in c && c.valide) {
       changer(c.ligne);
@@ -156,7 +156,7 @@ it('preparer refuse une lecture impossible et une option absente', async () => {
   t.faux.lignes.delete(1235);
   await expect(t.action.preparer(t.entree, t.ctx)).rejects.toThrow('commandant_not_found');
 });
-it.each(['', '   ', 'x'.repeat(1001), 'x\u200b', 'x\n'])(
+it.each(['', '   ', 'x'.repeat(1001), 'x\u200b', 'x\ny'])(
   'refuse le texte libre hors règle (%s)',
   async (decision) => {
     const t = await preparer();
@@ -276,7 +276,7 @@ it.each(['sso', 'statut', 'digest', 'id', 'answer'])(
       if (cas === 'id') v.id++;
     };
     await t.action.executer(p, t.ctx);
-    expect(t.ctx.envoi?.code).toBe('format');
+    expect(t.ctx.envoi?.code).toBe('envoyee_rendu_inattendu');
   },
 );
 it('ferme le schéma signé aux clés supplémentaires et aux caractères interdits', async () => {
@@ -336,16 +336,16 @@ it('conserve exactement une option signée, sans appliquer le trim réservé au 
   const t = await preparer();
   const v = ligneCommandantTest(1235, 'decision', {
     question: 'Choix littéral ?',
-    options: [' oui ', ' '],
+    options: [' oui ', 'non'],
   });
   t.faux.lignes.set(1235, v);
   const p = await t.action.preparer(
-    { mesh: 'principal', params: { requestId: 1235, digest: v.digest, decision: ' ' } },
+    { mesh: 'principal', params: { requestId: 1235, digest: v.digest, decision: ' oui ' } },
     t.ctx,
   );
-  expect(p.decision).toBe(' ');
+  expect(p.decision).toBe(' oui ');
   await t.action.executer(p, t.ctx);
-  expect(t.ctx.envoi?.code).toBe('succes');
+  expect(t.ctx.envoi?.code).toBe('envoyee_rendu_inattendu');
 });
 
 it.each(['decision\u202e', 'decision\n', 'decision\u200b', 'x'.repeat(101)])(
@@ -362,3 +362,23 @@ it.each(['decision\u202e', 'decision\n', 'decision\u200b', 'x'.repeat(101)])(
     });
   },
 );
+
+it('rogne la réponse libre avant signature et accepte le rendu identique de la passerelle', async () => {
+  const t = await preparer();
+  const ligne = ligneCommandantTest(1235, 'decision', {
+    question: 'Question libre ?',
+    options: [],
+  });
+  t.faux.lignes.set(1235, ligne);
+  const p = await t.action.preparer(
+    {
+      mesh: 'principal',
+      params: { requestId: 1235, digest: ligne.digest, decision: '  oui libre  ' },
+    },
+    t.ctx,
+  );
+  expect(p.decision).toBe('oui libre');
+  await t.action.executer(p, t.ctx);
+  expect(t.ctx.envoi?.code).toBe('succes');
+  expect(t.faux.lignes.get(1235)).toMatchObject({ answer: 'oui libre', decided_via: 'cockpit' });
+});
