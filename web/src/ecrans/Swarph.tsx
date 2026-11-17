@@ -49,6 +49,11 @@ function Contenu() {
           )}
         </>
       )}
+      {mesh && (
+        <Link data-node="swarph.commandant" className="bouton" to="/swarph/commandant">
+          Cockpit du commandant
+        </Link>
+      )}
       {state?.swairm?.enabled && <DemandesAvis />}
       {mesh ? (
         <section className="groupe" data-node="swarph.configure" aria-label="Déjà configuré">

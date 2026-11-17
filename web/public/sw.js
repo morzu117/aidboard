@@ -55,7 +55,15 @@ self.addEventListener('fetch', (event) => {
 self.addEventListener('push', (event) => {
   let body = "Une décision t'attend";
   try {
-    const n = event.data?.json()?.n;
+    const charge = event.data?.json();
+    if (
+      charge &&
+      Object.keys(charge).length === 1 &&
+      Number.isSafeInteger(charge.c) &&
+      charge.c >= 0
+    )
+      body = `Demande au commandant #${charge.c}`;
+    const n = charge && !Object.hasOwn(charge, 'c') ? charge.n : undefined;
     if (Number.isInteger(n) && n > 1) body = `${n} décisions t'attendent`;
   } catch {
     // La charge illisible garde le texte générique.

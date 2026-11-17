@@ -30,6 +30,10 @@ const tailnet: TailscaleExec = async (_bin, args) =>
 
 /** D174 : exactement ce que le port des appareils déclare */
 const LISTE = [
+  'GET /api/commandant/:mesh',
+  'GET /api/commandant/:mesh/demandes/:id',
+  'GET /api/commandant/:mesh/identifiant',
+  'POST /api/commandant/:mesh/battement',
   'GET /pda-cle.js',
   'POST /api/appareils/moi/pda',
   'GET /api/appareils/push/cle',

@@ -1,3 +1,4 @@
+import { CockpitCommandant } from './ui/CockpitCommandant.js';
 import { useEffect, useMemo, useState } from 'react';
 import { Navigate, NavLink, Route, Routes, useLocation, useParams } from 'react-router';
 import { AidClient, type AccesFini } from './data/client.js';
@@ -127,6 +128,14 @@ function Coque({ moi }: { moi: Moi | null }) {
         </p>
       )}
       <Routes>
+        <Route
+          path="/commandant"
+          element={
+            <main className="page">
+              <CockpitCommandant mesh="principal" appareil />
+            </main>
+          }
+        />
         <Route path="/" element={<AccueilAppareil />} />
         <Route path="/sujets" element={<SujetsAppareil />} />
         <Route path="/sujets/:id" element={<SuivreAppareil />} />

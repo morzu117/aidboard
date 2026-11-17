@@ -1,3 +1,4 @@
+import { ReglagesCockpit } from '../ui/ReglageCockpit.js';
 import { useReglages } from '../data/swarph.js';
 import { CadreSwarph37_5, EtatMonitor37_5, LectureSwarph37_5 } from '../ui/EcranSwarph37_5.js';
 
@@ -11,6 +12,7 @@ function ContenuReglagesSwarph() {
       lecture={lecture}
       resultat={resultat}
     >
+      <ReglagesCockpit />
       {resultat?.ok && (
         <>
           <section data-node="reglages-swarph.groupes">

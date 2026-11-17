@@ -1,4 +1,6 @@
 import type { creerFournisseurClePda } from '../pda/cle.js';
+import { registerCommandantRoutes } from '../routes/commandant.js';
+import type { ServiceCommandant } from '../commandant/service.js';
 import { diffPourAppareil } from './diff.js';
 import {
   abonnementsActifs,
@@ -138,6 +140,7 @@ export interface OptionsServeurAppareils {
   };
   /** D178 : le lecteur du board des appareils, cache de 60 s ; null = mesh désactivé */
   board?: BoardReader | null;
+  commandant?: ServiceCommandant;
   /** tests : l'horloge de l'échéance des sockets */
   now?: () => number;
   /** D174, tests : chaque route déclarée sur ce port */
@@ -267,6 +270,7 @@ export async function ouvrirServeurAppareils(
     if (reply.statusCode >= 400) req.log.warn({ req, statusCode: reply.statusCode }, 'refus');
   });
 
+  registerCommandantRoutes(app, opts.commandant, false);
   app.get('/pda-cle.js', async (_req, reply) => {
     if (!opts.clePda) return reply.code(404).send();
     return reply

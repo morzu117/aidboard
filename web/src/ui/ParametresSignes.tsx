@@ -1,3 +1,4 @@
+import { AVERTISSEMENT_COMMANDANT } from '../../../src/shared/commandant-texte.js';
 import { lignesCreation } from '../../../src/shared/ecritures.js';
 import {
   CLASSE_ACTION,
@@ -57,6 +58,16 @@ export function ParametresSignes({
   let lignes: string[] = [];
   let texteMotion: string | undefined;
   switch (d.action) {
+    case 'mesh.commandant.repondre':
+      lignes = [
+        `Question : ${d.params.question}`,
+        ...d.params.options.map((o) => `Option : ${o}`),
+        `Réponse choisie : ${d.params.decision}`,
+        `Id : ${d.params.requestId}`,
+        `Digest : ${d.params.digest.slice(0, 16)}`,
+        AVERTISSEMENT_COMMANDANT,
+      ];
+      break;
     case 'mesh.avis':
     case 'mesh.avis.motion': {
       const p = d.params.params;

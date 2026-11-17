@@ -89,7 +89,12 @@ export function EcranMesh({
         <div className="groupe-filtres" style={{ margin: 'var(--sp-4) var(--sp-8) 0' }}>
           <label>
             Mesh{' '}
-            <select aria-label="Mesh" value={mesh} onChange={(e) => choisir(e.target.value)}>
+            <select
+              data-node="mesh.selecteur"
+              aria-label="Mesh"
+              value={mesh}
+              onChange={(e) => choisir(e.target.value)}
+            >
               {meshes.map((m) => (
                 <option key={m.nom} value={m.nom} disabled={!m.actif}>
                   {m.nom}
