@@ -14,6 +14,7 @@ export const MEM_HELP = `aid mem : la mémoire des agents (pages markdown, reche
   aid mem search "<termes>" [--scope <ns>|all] [--limit N] [--json]
   aid mem list <prefix> [--json]
   aid mem rm <slug>
+  aid mem purge [--dry-run] [--orphelines]              pages cycliques closes ; orphelines = liste seule
   aid mem export --dir <dir> [--scope <ns>|all]
   aid mem import --dir <dir> [--namespace <ns>]
   aid mem reindex                                     reconstruit l'index depuis ~/.aid/memory
@@ -90,6 +91,20 @@ export async function runMem(
         return await list(call, positionals[0] ?? '', values, io);
       case 'rm':
         return await rm(call, positionals[0], io);
+      case 'purge': {
+        const { status, json } = await call('POST', '/api/memory/purge', {
+          dryRun: !!values['dry-run'],
+          orphelines: !!values.orphelines,
+        });
+        if (status !== 200) return fail(status, json, io);
+        // Les orphelines sont des tâches ; la purge et son aperçu listent les pages.
+        const entries = (json.orphelines ? json.tasks : json.slugs) as string[];
+        for (const entry of entries) io.out(entry);
+        io.out(
+          `${entries.length} ${json.orphelines ? 'tâche(s) orpheline(s)' : json.dryRun ? 'page(s) à purger' : 'page(s) purgée(s)'}`,
+        );
+        return 0;
+      }
       case 'export':
         return await exportPages(call, values, io);
       case 'import':
@@ -114,6 +129,8 @@ export async function runMem(
 }
 
 const OPTIONS = {
+  'dry-run': { type: 'boolean' },
+  orphelines: { type: 'boolean' },
   title: { type: 'string' },
   append: { type: 'boolean' },
   'expected-revision': { type: 'string' },

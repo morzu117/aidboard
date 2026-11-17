@@ -64,6 +64,50 @@ export class MemoryService {
     return this.deps.store.list(prefix);
   }
 
+  async purge(options: { dryRun?: boolean; orphelines?: boolean }) {
+    // Matérialiser les pages ferme le curseur SQLite avant toute suppression.
+    const pages = [...this.deps.store.all()];
+    const tasks = new Map<string, { namespace: string; task: string; slugs: string[] }>();
+    for (const page of pages) {
+      const match = /^([^/]+)\/(?:plan|dev-handoff|review)\/([^/]+)$/.exec(page.slug);
+      if (!match) continue;
+      const [, namespace, task] = match;
+      if (!namespace || !task) continue;
+      const key = `${namespace}/${task}`;
+      const entry = tasks.get(key) ?? { namespace, task, slugs: [] as string[] };
+      entry.slugs.push(page.slug);
+      tasks.set(key, entry);
+    }
+    const selected: string[] = [];
+    const slugs: string[] = [];
+    for (const [key, entry] of tasks) {
+      const escaped = entry.task.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const citation = new RegExp(`(^|[^a-z0-9-])${escaped}([^a-z0-9-]|$)`);
+      // Une citation peut figurer dans le corps ou le frontmatter de la rétro.
+      const closed = pages.some(
+        (page) =>
+          page.slug.startsWith(`${entry.namespace}/retro/`) &&
+          page.slug.split('/').length === 3 &&
+          citation.test(renderMarkdown(page)),
+      );
+      if (closed === !options.orphelines) {
+        selected.push(key);
+        slugs.push(...entry.slugs);
+      }
+    }
+    const dryRun = !!(options.dryRun || options.orphelines);
+    if (!dryRun) {
+      for (const slug of slugs) await this.remove(slug, { author: 'admin' });
+    }
+    // Les tâches sont qualifiées par namespace pour distinguer les homonymes.
+    return {
+      dryRun,
+      orphelines: !!options.orphelines,
+      tasks: selected.sort(),
+      slugs: slugs.sort(),
+    };
+  }
+
   // FTS d'abord ; si les vecteurs répondent, fusion RRF des deux classements (DM5).
   async search(
     q: string,

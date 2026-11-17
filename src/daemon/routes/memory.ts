@@ -32,6 +32,11 @@ const ExportBody = Type.Object(
   { additionalProperties: false },
 );
 
+const PurgeBody = Type.Object(
+  { dryRun: Type.Optional(Type.Boolean()), orphelines: Type.Optional(Type.Boolean()) },
+  { additionalProperties: false },
+);
+
 export interface MemoryRouteDeps {
   db: Db;
   memory: MemoryService;
@@ -151,6 +156,11 @@ export function registerMemoryRoutes(app: FastifyInstance, deps: MemoryRouteDeps
   app.post('/api/memory/reindex', async (req) => {
     adminOnly(req);
     return memory.reindex();
+  });
+
+  app.post('/api/memory/purge', { schema: { body: PurgeBody } }, async (req) => {
+    adminOnly(req);
+    return memory.purge(req.body as Static<typeof PurgeBody>);
   });
 
   app.post('/api/memory/export', { schema: { body: ExportBody } }, async (req) => {
