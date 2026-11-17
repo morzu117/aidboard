@@ -171,3 +171,106 @@ test('page éligible, dans la fenêtre : un job par page, plafonné à maxPerNig
     { c: 1 },
   );
 });
+
+const splitSource = 'lesson/test/source';
+const splitText =
+  '---\ntags: [test]\nentretien_rejete: [duplicate]\na_decouper: true\n---\nLeçon à découper.';
+const splitPages = (secondSlug = 'lesson/test/seconde') => [
+  {
+    slug: 'lesson/test/premiere',
+    title: 'Première',
+    frontmatter: {
+      tags: ['test'],
+      title: 'Titre modèle',
+      issu_de: 'origine-falsifiee',
+      remplacee_par: ['intrus'],
+      entretien_rejete: ['split'],
+    },
+    body: 'Première leçon.',
+  },
+  { slug: secondSlug, title: 'Seconde', frontmatter: {}, body: 'Seconde leçon.' },
+];
+
+test('split : crée les pages, filtre le frontmatter et impose leur origine', async () => {
+  t = await startTestDaemon(undefined, {
+    config: { memory: MEMORY_CFG({ enabled: true, window: '00:00-23:59' }) },
+    memory: {
+      chatModel: fixedChatModel(JSON.stringify({ pages: splitPages() })),
+      maintenanceScheduleMs: 20,
+    },
+  });
+  await put(splitSource, splitText);
+  await waitFor(() => jobState(splitSource) === 'done', 5000, 'découpage proposé');
+  const [proposal] = new MemoryProposals(t.db).list('open');
+  const payload = proposal!.payload as { pages: Array<{ frontmatter: unknown }> };
+  expect(payload.pages[0]!.frontmatter).toEqual({
+    tags: ['test'],
+    title: 'Titre modèle',
+    issu_de: splitSource,
+  });
+  expect((await apply(proposal!.id)).statusCode).toBe(200);
+  expect((await getPage('lesson/test/premiere')).frontmatter).toEqual({
+    tags: ['test'],
+    title: 'Première',
+    issu_de: splitSource,
+  });
+  expect((await getPage('lesson/test/seconde')).frontmatter).toEqual({
+    title: 'Seconde',
+    issu_de: splitSource,
+  });
+  expect((await getPage(splitSource)).frontmatter.remplacee_par).toEqual([
+    'lesson/test/premiere',
+    'lesson/test/seconde',
+  ]);
+});
+
+test.each(['aid/plan/intrus', 'lesson/../intrus'])(
+  'split : refuse le slug %s avant de créer une proposition',
+  async (slug) => {
+    t = await startTestDaemon(undefined, {
+      config: { memory: MEMORY_CFG({ enabled: true, window: '00:00-23:59' }) },
+      memory: {
+        chatModel: fixedChatModel(JSON.stringify({ pages: splitPages(slug) })),
+        maintenanceScheduleMs: 20,
+        backoffMs: [],
+      },
+    });
+    await put(splitSource, splitText);
+    await waitFor(() => jobState(splitSource) === 'failed', 5000, 'découpage refusé');
+    expect(openProposals()).toEqual([]);
+    expect((await getPage(splitSource)).revision).toBe(1);
+  },
+);
+
+test.each(['occupé', 'répété', 'hors lesson', 'invalide'])(
+  'split : slug %s en deuxième position, aucune écriture partielle',
+  async (cas) => {
+    t = await startTestDaemon();
+    await put(splitSource, splitText);
+    const secondSlug =
+      cas === 'répété'
+        ? 'lesson/test/premiere'
+        : cas === 'hors lesson'
+          ? 'aid/plan/intrus'
+          : cas === 'invalide'
+            ? 'lesson/../intrus'
+            : 'lesson/test/seconde';
+    if (cas === 'occupé') await put(secondSlug, 'Contenu à préserver.');
+    const sourceBefore = await getPage(splitSource);
+    const existingBefore = cas === 'occupé' ? await getPage(secondSlug) : undefined;
+    const proposal = new MemoryProposals(t.db).create(
+      'split',
+      splitSource,
+      { pages: splitPages(secondSlug) },
+      'Découpage',
+    );
+    expect((await apply(proposal.id)).statusCode).toBeGreaterThanOrEqual(400);
+    expect(
+      (await t.d.app.inject({ url: '/api/memory/pages/lesson/test/premiere', headers: t.headers }))
+        .statusCode,
+    ).toBe(404);
+    expect(await getPage(splitSource)).toEqual(sourceBefore);
+    if (existingBefore) expect(await getPage(secondSlug)).toEqual(existingBefore);
+    expect(openProposals().map((p) => p.id)).toContain(proposal.id);
+  },
+);

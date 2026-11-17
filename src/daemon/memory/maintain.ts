@@ -6,6 +6,7 @@ import { LESSON_NS } from '../../shared/memory.js';
 import type { Db } from '../db.js';
 import type { MemoryJob, MemoryJobs } from './jobs.js';
 import type { MemoryService, WriteContext } from './service.js';
+import { isValidMemSlug } from './slug.js';
 import { renderMarkdown } from './store.js';
 import type { MemoryStore } from './store.js';
 
@@ -283,6 +284,10 @@ async function runSplit(
   const payload = parseJson(content);
   if (!Value.Check(SplitPayload, payload))
     throw new Error('proposition split : forme JSON invalide');
+  for (const p of payload.pages) {
+    assertSplitSlug(p.slug);
+    p.frontmatter = splitFrontmatter(p.frontmatter, page.slug);
+  }
   deps.proposals.create('split', page.slug, payload, `découpage en ${payload.pages.length} pages`);
 }
 
@@ -295,6 +300,20 @@ export async function runMaintainJob(job: MemoryJob, deps: MaintainDeps): Promis
   if (kind === 'tags') await runTags(page, deps);
   else if (kind === 'duplicate') await runDuplicate(page, deps);
   else await runSplit(page, deps);
+}
+
+function assertSplitSlug(slug: string): void {
+  if (!isValidMemSlug(slug) || !slug.startsWith(`${LESSON_NS}/`)) {
+    throw new Error('proposition split : slug invalide ou hors de lesson/');
+  }
+}
+
+function splitFrontmatter(fm: Record<string, unknown>, source: string): Record<string, unknown> {
+  return {
+    ...(Object.hasOwn(fm, 'tags') && { tags: fm.tags }),
+    ...(Object.hasOwn(fm, 'title') && { title: fm.title }),
+    issu_de: source,
+  };
 }
 
 const MAINTENANCE_CTX: WriteContext = { author: 'maintenance' };
@@ -325,10 +344,21 @@ export async function applyProposal(
         body: string;
       }>;
     };
+    const slugs = new Set<string>();
+    for (const p of pages) {
+      assertSplitSlug(p.slug);
+      if (slugs.has(p.slug) || memory.get(p.slug)) {
+        throw new Error(`proposition split : slug déjà pris : ${p.slug}`);
+      }
+      slugs.add(p.slug);
+    }
     const created: string[] = [];
     for (const p of pages) {
-      const text = renderMarkdown({ frontmatter: p.frontmatter, body: p.body });
-      await memory.put(p.slug, text, { kind: 'force' }, MAINTENANCE_CTX, p.title);
+      const text = renderMarkdown({
+        frontmatter: splitFrontmatter(p.frontmatter, proposal.slug),
+        body: p.body,
+      });
+      await memory.put(p.slug, text, { kind: 'create' }, MAINTENANCE_CTX, p.title);
       created.push(p.slug);
     }
     const fm = { ...page.frontmatter, remplacee_par: created };
