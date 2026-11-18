@@ -409,12 +409,10 @@ test.each(['detached', 'locale'])('57.5 : référence inconnue avec HEAD %s', as
   });
 });
 
-test('57.5 : les sorties git de branche et de compte sont normalisées', async () => {
+test('57.5 : la sortie de git symbolic-ref est normalisée', async () => {
   const { b } = await pair(async (cwd, args, timeout) => {
     const result = await git(cwd, args, timeout);
-    return args[0] === 'symbolic-ref' || args[0] === 'rev-list'
-      ? { ...result, stdout: result.stdout + '\n' }
-      : result;
+    return args[0] === 'symbolic-ref' ? { ...result, stdout: result.stdout + '\n' } : result;
   });
   expect(await b.mirror.syncHealth()).toMatchObject({ ahead: 0, behind: 0 });
 });

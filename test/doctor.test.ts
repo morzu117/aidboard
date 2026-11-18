@@ -62,21 +62,27 @@ test('57.5 : doctor signale le distant absent, les écarts et les conflits mémo
     });
   const absent = { push: false, origin: false, ahead: null, behind: null, conflicts: [] };
   expect((await check(absent)).every((c) => c.level === 'ok')).toBe(true);
-  for (const counts of [
-    { ahead: null, behind: null },
-    { ahead: 2, behind: 3 },
-  ]) {
-    expect(
-      (await check({ ...absent, origin: true, ...counts })).every((c) => c.level === 'ok'),
-    ).toBe(true);
-  }
+  expect(await check({ ...absent, origin: true, ahead: 2, behind: 3 })).toContainEqual(
+    expect.objectContaining({
+      level: 'warn',
+      label: 'miroir mémoire : 2 commit(s) en avance, 3 en retard',
+    }),
+  );
+  expect(
+    await check({ ...absent, origin: true, ahead: 0, behind: 0, conflicts: ['x'] }),
+  ).toContainEqual(
+    expect.objectContaining({
+      level: 'warn',
+      detail: expect.stringContaining('conflit en attente : x'),
+    }),
+  );
   expect(await check({ ...absent, push: true })).toContainEqual(
     expect.objectContaining({
       level: 'warn',
       detail: expect.stringContaining('distant origin absent'),
     }),
   );
-  expect(await check({ ...absent, push: true, origin: true })).toContainEqual(
+  expect(await check({ ...absent, origin: true })).toContainEqual(
     expect.objectContaining({
       level: 'warn',
       detail: expect.stringContaining('avance/retard inconnus'),

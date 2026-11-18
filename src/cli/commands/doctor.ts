@@ -410,7 +410,7 @@ export async function runChecks(p: Probes): Promise<Check[]> {
     if (sync) {
       if (sync.push && !sync.origin)
         reasons.push('distant origin absent alors que memory.git.push est activé');
-      if (sync.push && sync.origin) {
+      if (sync.origin) {
         if (sync.ahead === null || sync.behind === null)
           reasons.push('avance/retard inconnus : référence distante origin non disponible');
         else

@@ -20,8 +20,7 @@ export interface MemoryHealth {
 import type { WorkspaceQueue } from '../actions/queue.js';
 import type { EventStore } from '../events/store.js';
 import type { Embedder, VectorIndex } from './embed.js';
-import { type MemoryMirror, walkMarkdown } from './mirror.js';
-import type { MirrorSyncHealth } from './mirror.js';
+import { type MemoryMirror, type MirrorSyncHealth, walkMarkdown } from './mirror.js';
 import { isValidMemSlug } from './slug.js';
 import { MemoryStore, renderMarkdown } from './store.js';
 
