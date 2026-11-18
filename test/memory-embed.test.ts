@@ -1,4 +1,4 @@
-import { afterEach, expect, test } from 'vitest';
+import { afterEach, expect, test, vi } from 'vitest';
 import type { Embedder } from '../src/daemon/memory/embed.js';
 import { startTestDaemon, waitFor, type TestDaemon } from './helpers/daemon.js';
 
@@ -102,18 +102,19 @@ test('Embedder.ready() faux : recherche FTS5 seule, job en attente', async () =>
   expect(r.json()).toMatchObject({ mode: 'fts', hits: [{ slug: 'aid/plan/x' }] });
 });
 
-test('échec d’embedding : le job passe à failed après 3 tentatives, le put a déjà répondu', async () => {
+test('échec d’embedding : FTS seule, job pending sans tentative consommée', async () => {
   t = await startTestDaemon(undefined, {
     memory: { embedder: alwaysFails(), backoffMs: [5, 5], pollMs: 5 },
   });
   const r = await put('aid/plan/x', 'contenu');
   expect(r.statusCode).toBe(201); // répond avant que le worker n'ait rien tenté
-  await waitFor(() => jobState('aid/plan/x') === 'failed', 5000, 'job embed en échec');
+  await waitFor(() => jobState('aid/plan/x') === 'pending');
+  expect((await health()).vectors).toBe('off');
   const job = t.db
     .prepare('SELECT state, attempts FROM memory_jobs WHERE slug = ?')
     .get('aid/plan/x');
-  expect(job).toMatchObject({ state: 'failed', attempts: 3 });
-  expect((await health()).pendingJobs).toBe(0);
+  expect(job).toMatchObject({ state: 'pending', attempts: 0 });
+  expect((await health()).pendingJobs).toBe(1);
 });
 
 test('DM16 : rattrapage après démarrage indisponible, puis après une nouvelle panne', async () => {
@@ -164,4 +165,97 @@ test('DM16 : rattrapage après démarrage indisponible, puis après une nouvelle
   availability.ready = true;
   await waitFor(() => vectorCount() === 3);
   expect((await health()).vectors).toBe('ollama');
+});
+
+test('DM16 : panne entre deux ticks, job pending rattrapé au retour d’Ollama', async () => {
+  let available = true;
+  let probes = 0;
+  t = await startTestDaemon(undefined, {
+    memory: {
+      embedder: {
+        model: 'fake-bge',
+        async ready() {
+          probes++;
+          return available;
+        },
+        async embed() {
+          if (!available) throw new Error('panne entre deux ticks');
+          return [Float32Array.from([1, 0, 0])];
+        },
+      },
+      backoffMs: [],
+      pollMs: 5,
+      maintenanceScheduleMs: 1000,
+    },
+  });
+  expect((await health()).vectors).toBe('ollama');
+  available = false;
+  await put('aid/plan/panne', 'contenu');
+  await waitFor(() => jobState('aid/plan/panne') === 'pending');
+  expect((await health()).vectors).toBe('off');
+  expect(t.db.prepare('SELECT attempts FROM memory_jobs').get()).toEqual({ attempts: 0 });
+  expect(probes).toBe(1);
+  available = true;
+  await waitFor(() => vectorCount() === 1);
+  expect(jobState('aid/plan/panne')).toBe('done');
+  expect(t.db.prepare('SELECT count(*) AS n FROM memory_jobs').get()).toEqual({ n: 1 });
+});
+
+test('DM16 : ready bloqué est borné et ne bloque pas l’arrêt pendant un tick', async () => {
+  let probes = 0;
+  t = await startTestDaemon(undefined, {
+    memory: {
+      embedder: {
+        model: 'fake-bge',
+        ready() {
+          probes++;
+          return probes === 1 ? Promise.resolve(true) : new Promise<boolean>(() => {});
+        },
+        async embed() {
+          return [Float32Array.from([1, 0, 0])];
+        },
+      },
+      maintenanceScheduleMs: 20,
+    },
+  });
+  await waitFor(() => probes === 2);
+  const start = Date.now();
+  await t.d.stop();
+  expect(Date.now() - start).toBeLessThan(4500);
+}, 10000);
+
+test('DM16 : absence au démarrage journalisée, même si ready ne répond jamais', async () => {
+  const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+  try {
+    t = await startTestDaemon(undefined, {
+      memory: {
+        embedder: {
+          model: 'fake-bge',
+          ready: () => new Promise<boolean>(() => {}),
+          embed: async () => [],
+        },
+      },
+    });
+    expect((await health()).vectors).toBe('off');
+    expect(log).toHaveBeenCalledWith('ollama injoignable : recherche FTS5 seule');
+  } finally {
+    log.mockRestore();
+  }
+}, 10000);
+
+test('DM16 : un ancien job failed est rattrapé à un tick sans transition de disponibilité', async () => {
+  t = await startTestDaemon(undefined, {
+    memory: {
+      embedder: fakeEmbedder({ 'ancien\n\ncontenu': [1, 0, 0] }),
+      pollMs: 5,
+      maintenanceScheduleMs: 100,
+    },
+  });
+  await put('aid/plan/ancien', 'contenu');
+  await waitFor(() => jobState('aid/plan/ancien') === 'done');
+  t.db.prepare('DELETE FROM memory_vectors').run();
+  t.db.prepare("UPDATE memory_jobs SET state = 'failed'").run();
+  await waitFor(() => vectorCount() === 1);
+  expect(jobState('aid/plan/ancien')).toBe('done');
+  expect(t.db.prepare('SELECT count(*) AS n FROM memory_jobs').get()).toEqual({ n: 1 });
 });

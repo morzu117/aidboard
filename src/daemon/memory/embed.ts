@@ -138,6 +138,13 @@ export class VectorIndex {
     })();
   }
 
+  slugs(): string[] {
+    if (!this.hasTable()) return [];
+    return (this.db.prepare('SELECT slug FROM memory_vectors').all() as { slug: string }[]).map(
+      (page) => page.slug,
+    );
+  }
+
   remove(slug: string): void {
     if (this.hasTable()) this.db.prepare('DELETE FROM memory_vectors WHERE slug = ?').run(slug);
   }

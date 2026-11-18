@@ -196,3 +196,19 @@ test('découpage sans proposition : la page ne revient pas la nuit suivante', as
   expect(schedule()).toBe(0);
   expect(proposals.list()).toEqual([]);
 });
+
+test('DM16 : claim sans embeddings prend maintain sans consommer la tentative embed', () => {
+  const embed = jobs.enqueue('embed', 'lesson/test/a')!;
+  const maintain = jobs.enqueue('maintain', 'lesson/test/a')!;
+  expect(jobs.claim(undefined, false)).toMatchObject({ id: maintain, kind: 'maintain' });
+  expect(jobs.get(embed)).toMatchObject({ state: 'pending', attempts: 0 });
+});
+
+test('DM16 : enqueue reprend un échec sans doubler le job en attente', () => {
+  const id = jobs.enqueue('embed', 'lesson/test/a')!;
+  jobs.claim();
+  jobs.fail(id, 'panne', null);
+  expect(jobs.enqueue('embed', 'lesson/test/a')).toBe(id);
+  expect(jobs.enqueue('embed', 'lesson/test/a')).toBeNull();
+  expect(jobs.get(id)).toEqual({ state: 'pending', attempts: 0, error: null });
+});

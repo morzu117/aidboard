@@ -12,6 +12,7 @@ export interface WorkerDeps {
   backoffMs?: number[]; // une entrée par nouvelle tentative ; au-delà : échec
   pollMs?: number;
   embedReady?: () => boolean;
+  onEmbedUnavailable?: () => void;
   // 06.10 : traitement des jobs `maintain` ; absent, ils échouent proprement
   maintain?: (job: MemoryJob) => Promise<void>;
 }
@@ -62,7 +63,8 @@ export class MemoryWorker {
       const embedReady = !!(
         this.deps.embedder &&
         this.deps.vectors &&
-        (this.deps.embedReady?.() ?? (await this.deps.embedder.ready()))
+        // Sans planificateur injecté, la disponibilité est supposée acquise ; les erreurs suivent le retry.
+        (this.deps.embedReady?.() ?? true)
       );
       if (!this.running) break;
       const job = this.deps.jobs.claim(undefined, embedReady);
@@ -74,6 +76,11 @@ export class MemoryWorker {
         await this.run(job);
         this.deps.jobs.done(job.id);
       } catch (err) {
+        if (job.kind === 'embed' && this.deps.onEmbedUnavailable) {
+          this.deps.jobs.deferEmbedding(job.id);
+          this.deps.onEmbedUnavailable();
+          continue;
+        }
         const backoff = this.deps.backoffMs ?? DEFAULT_BACKOFF;
         const retry = job.attempts <= backoff.length ? (backoff[job.attempts - 1] ?? null) : null;
         const message = (err as Error).message;

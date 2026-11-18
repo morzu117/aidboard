@@ -163,6 +163,7 @@ export async function startDaemon(
       opts.memory?.chatModel ??
       (maintCfg.enabled ? ollamaChatModel(embCfg.url, maintCfg.model) : null);
     let hybridOn = false;
+    let availabilityChecked = false;
     const worker =
       (embedder && vectors) || chatModel
         ? new MemoryWorker({
@@ -171,6 +172,10 @@ export async function startDaemon(
             vectors: vectors ?? undefined,
             embedder: embedder ?? undefined,
             embedReady: () => hybridOn,
+            onEmbedUnavailable: () => {
+              hybridOn = false;
+              log('ollama injoignable : recherche FTS5 seule');
+            },
             log,
             backoffMs: opts.memory?.backoffMs,
             pollMs: opts.memory?.pollMs,
@@ -213,24 +218,32 @@ export async function startDaemon(
         maintenanceTick = (async () => {
           if (embedder && vectors) {
             const wasReady = hybridOn;
-            hybridOn = await embedder.ready();
-            if (hybridOn && !wasReady) {
+            // Trois secondes au plus, même si un Embedder injecté ne résout jamais ready().
+            let readyTimer: NodeJS.Timeout | undefined;
+            try {
+              hybridOn = await Promise.race([
+                Promise.resolve().then(() => embedder.ready()),
+                new Promise<boolean>((resolve) => {
+                  readyTimer = setTimeout(() => resolve(false), 3000);
+                }),
+              ]);
+            } catch {
+              hybridOn = false;
+            } finally {
+              clearTimeout(readyTimer);
+            }
+            if (hybridOn) {
               // Matérialiser avant enqueue : store.all() garde un curseur ouvert.
               const pages = [...memStore.all()];
-              const indexed = new Set(
-                vectors.meta()
-                  ? (
-                      opened.prepare('SELECT slug FROM memory_vectors').all() as { slug: string }[]
-                    ).map((page) => page.slug)
-                  : [],
-              );
+              const indexed = new Set(vectors.slugs());
               for (const page of pages) {
                 if (!indexed.has(page.slug)) jobs.enqueue('embed', page.slug);
               }
               worker.notify();
-            } else if (!hybridOn && wasReady) {
+            } else if (!availabilityChecked || wasReady) {
               log('ollama injoignable : recherche FTS5 seule');
             }
+            availabilityChecked = true;
           }
           const n = scheduleMaintenance(new Date(), {
             store: memStore,

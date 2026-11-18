@@ -23,6 +23,19 @@ export class MemoryJobs {
       )
       .get(kind, slug);
     if (pending) return null;
+    const failed = this.db
+      .prepare(
+        "SELECT id FROM memory_jobs WHERE kind = ? AND kind = 'embed' AND slug IS ? AND state = 'failed' LIMIT 1",
+      )
+      .get(kind, slug) as { id: string } | undefined;
+    if (failed) {
+      this.db
+        .prepare(
+          "UPDATE memory_jobs SET state = 'pending', attempts = 0, error = NULL, run_after = NULL, updated_at = ? WHERE id = ?",
+        )
+        .run(new Date().toISOString(), failed.id);
+      return failed.id;
+    }
     const id = `job_${ulid()}`;
     const now = new Date().toISOString();
     this.db
@@ -55,6 +68,15 @@ export class MemoryJobs {
         .run(now, job.id);
       return { ...job, attempts: job.attempts + 1 };
     })();
+  }
+
+  // Une panne de disponibilité ne consomme pas la tentative prise par claim.
+  deferEmbedding(id: string): void {
+    this.db
+      .prepare(
+        "UPDATE memory_jobs SET state = 'pending', attempts = attempts - 1, updated_at = ? WHERE id = ? AND kind = 'embed' AND state = 'running'",
+      )
+      .run(new Date().toISOString(), id);
   }
 
   done(id: string): void {
