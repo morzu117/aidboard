@@ -116,12 +116,13 @@ export class MemoryMirror {
     const branch = await this.exec(this.root, ['symbolic-ref', '--quiet', '--short', 'HEAD']);
     if (!branch.ok) return fail('branche du miroir absente');
     const remote = `refs/remotes/origin/${branch.stdout}`;
-    const before = await this.exec(this.root, ['rev-parse', '--verify', remote]);
+    const remoteBefore = await this.exec(this.root, ['rev-parse', '--verify', remote]);
     const fetched = await this.exec(this.root, ['fetch', '-q', 'origin'], 30_000);
     if (!fetched.ok) return fail(`git fetch a échoué : ${fetched.stderr}`);
     const after = await this.exec(this.root, ['rev-parse', '--verify', remote]);
     if (!after.ok) return true;
     if (await this.dirty()) return fail('fichiers non commités, tirage différé');
+    const headBefore = await this.exec(this.root, ['rev-parse', '--verify', 'HEAD']);
     const ff = await this.exec(this.root, ['merge', '--ff-only', remote]);
     if (!ff.ok) {
       // Garder le contenu exact du sommet local, même si plusieurs commits sont rejoués.
@@ -181,8 +182,8 @@ export class MemoryMirror {
     }
     const changed = await this.exec(
       this.root,
-      before.ok
-        ? ['diff', '--name-only', '--no-renames', '-z', before.stdout, after.stdout]
+      remoteBefore.ok && headBefore.ok
+        ? ['diff', '--name-only', '--no-renames', '-z', headBefore.stdout, 'HEAD']
         : ['ls-tree', '-r', '--name-only', '-z', after.stdout],
     );
     if (!changed.ok) return fail(`lecture des pages tirées : ${changed.stderr}`);

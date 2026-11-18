@@ -256,6 +256,22 @@ test('57.4 : des fichiers locaux non commités empêchent le tirage sans être �
   expect(b.mirror.conflicts).toEqual([]);
 });
 
+test('57.4 : un tirage différé relit les pages distantes après nettoyage', async () => {
+  const { a, b } = await pair();
+  await put(a, 'lesson/distante', 'distante');
+  await b.mirror.write('lesson/base', 'brouillon local');
+  await b.mirror.pull();
+  expect(b.logs.at(-1)).toContain('tirage différé');
+  expect(b.service.get('lesson/distante')).toBeUndefined();
+  expect(sh(b.mirror.root, 'rev-parse', 'origin/main')).toBe(
+    sh(a.mirror.root, 'rev-parse', 'HEAD'),
+  );
+
+  sh(b.mirror.root, 'restore', '--', 'lesson/base.md');
+  await b.mirror.pull();
+  expect(b.service.get('lesson/distante')?.body).toBe('distante');
+});
+
 test('57.4 : deux commits locaux rejoués, seul le commit en conflit est copié', async () => {
   const { a, b } = await pair();
   b.mirror.push = false;
@@ -293,6 +309,7 @@ test('57.4 : rebase sans conflit abandonné sans marqueur, puis nouvelle tentati
   reject = false;
   await b.mirror.pull();
   expect(sh(b.mirror.root, 'show', 'HEAD:lesson/distante.md')).toContain('distante');
+  expect(b.service.get('lesson/distante')?.body).toBe('distante');
 });
 
 test('57.4 : collisions de copies numérotées sans interrompre les autres slugs', async () => {
@@ -335,16 +352,18 @@ test('57.4 : marqueur illisible toléré', async () => {
   expect(b.mirror.conflicts).toEqual(['marqueur illisible']);
 });
 
-test('57.4 : relecture de la diff distante même si le rebase garde le contenu local', async () => {
+test('57.4 : relecture des pages changées quand le rebase garde le contenu local', async () => {
   const { a, b } = await pair();
   b.mirror.push = false;
   await put(b, 'lesson/base', 'identique');
   await put(b, 'lesson/locale', 'locale');
   await put(a, 'lesson/base', 'identique');
+  await put(a, 'lesson/distante', 'distante');
   b.written.length = 0;
   b.mirror.push = true;
   await b.mirror.pushIfConfigured();
-  expect(b.written).toEqual(['lesson/base']);
+  expect(b.written).toEqual(['lesson/distante']);
+  expect(b.service.get('lesson/base')?.body).toBe('identique');
   expect(b.service.get('lesson/locale')?.body).toBe('locale');
 });
 
@@ -361,9 +380,21 @@ test('57.4 : fetch borné à 30 secondes au démarrage et avant push', async () 
   await put(b, 'lesson/locale', 'locale');
   expect(timeouts).toEqual([30_000, 30_000]);
   expect(b.logs.filter((line) => line.includes('git fetch a échoué'))).toHaveLength(2);
-  const result = await git(b.mirror.root, ['-c', 'alias.attendre=!sleep 2', 'attendre'], 20);
-  expect(result.ok).toBe(false);
 });
+
+test.skipIf(process.platform === 'win32')(
+  '57.4 : git interrompt une commande trop longue',
+  async () => {
+    const { b } = await pair();
+    // Laisser 500 ms à Git pour lancer une commande qui attend 5 secondes.
+    const result = await git(
+      b.mirror.root,
+      ['-c', 'alias.attendre=!exec sleep 5', 'attendre'],
+      500,
+    );
+    expect(result).toMatchObject({ ok: false, code: null });
+  },
+);
 
 test.each(['detached', 'locale'])('57.5 : référence inconnue avec HEAD %s', async (head) => {
   const { b } = await pair();
