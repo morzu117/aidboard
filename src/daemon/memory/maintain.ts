@@ -7,7 +7,12 @@ import type {
   ProposalKind,
   ProposalState,
 } from '../../shared/memory.js';
-import { DEFAULT_DUPLICATE_DISTANCE, LESSON_NS } from '../../shared/memory.js';
+import {
+  DEFAULT_MAINTENANCE_MAX_PER_NIGHT,
+  DEFAULT_MAINTENANCE_SPLIT_LINES,
+  DEFAULT_DUPLICATE_DISTANCE,
+  LESSON_NS,
+} from '../../shared/memory.js';
 import type { Db } from '../db.js';
 import type { VectorIndex } from './embed.js';
 import type { MemoryJob, MemoryJobs } from './jobs.js';
@@ -93,6 +98,28 @@ export class MemoryProposals {
       .get(slug, kind);
   }
 
+  seen(page: MemoryPage, kind: ProposalKind, vocabulary: string): boolean {
+    return !!this.db
+      .prepare(
+        'SELECT 1 FROM memory_maintenance_seen WHERE slug = ? AND kind = ? AND revision = ? AND vocabulary = ?',
+      )
+      .get(page.slug, kind, page.revision, kind === 'tags' ? vocabulary : '');
+  }
+
+  recordSeen(page: MemoryPage, kind: ProposalKind, vocabulary: string): void {
+    this.db
+      .prepare(
+        'INSERT OR REPLACE INTO memory_maintenance_seen (slug, kind, revision, at, vocabulary) VALUES (?, ?, ?, ?, ?)',
+      )
+      .run(
+        page.slug,
+        kind,
+        page.revision,
+        new Date().toISOString(),
+        kind === 'tags' ? vocabulary : '',
+      );
+  }
+
   decide(id: string, state: 'applied' | 'rejected'): void {
     this.db
       .prepare('UPDATE memory_proposals SET state = ?, decided_at = ? WHERE id = ?')
@@ -149,7 +176,12 @@ const SplitPage = Type.Object(
   { additionalProperties: false },
 );
 const SplitPayload = Type.Object(
-  { pages: Type.Array(SplitPage, { minItems: 2, maxItems: 4 }) },
+  {
+    pages: Type.Union([
+      Type.Array(SplitPage, { minItems: 2, maxItems: 4 }),
+      Type.Array(SplitPage, { maxItems: 0 }),
+    ]),
+  },
   { additionalProperties: false },
 );
 
@@ -185,25 +217,24 @@ function lineCount(body: string): number {
 }
 
 function eligibleKind(
-  page: { slug: string; namespace: string; frontmatter: Record<string, unknown>; body: string },
+  page: MemoryPage,
   proposals: MemoryProposals,
-  splitLines = 40,
-  hasVocabulary = true,
+  splitLines = DEFAULT_MAINTENANCE_SPLIT_LINES,
+  tags: string[] = [],
 ): ProposalKind | null {
   if (page.namespace !== LESSON_NS) return null;
   const rejected = new Set(rejectedKinds(page.frontmatter));
+  const vocabulary = JSON.stringify(tags);
   for (const kind of PRIORITY) {
     if (rejected.has(kind) || proposals.pending(page.slug, kind)) continue;
-    if (kind === 'tags' && hasVocabulary) {
+    if (proposals.seen(page, kind, vocabulary)) continue;
+    if (kind === 'tags' && tags.length > 0) {
       const tags = page.frontmatter.tags;
       if (!Array.isArray(tags) || tags.length === 0) return 'tags';
     } else if (kind === 'duplicate') {
       if (page.namespace === LESSON_NS) return 'duplicate';
     } else if (kind === 'split') {
-      if (
-        page.namespace === LESSON_NS &&
-        (page.frontmatter.a_decouper === true || lineCount(page.body) > splitLines)
-      ) {
+      if (page.frontmatter.a_decouper === true || lineCount(page.body) > splitLines) {
         return 'split';
       }
     }
@@ -242,15 +273,16 @@ export function scheduleMaintenance(now: Date, deps: SchedulerDeps): number {
   start.setHours(hour!, minute!, 0, 0);
   if (start > now) start.setDate(start.getDate() - 1);
   const max =
-    (deps.maxPerNight ?? 20) - deps.jobs.countCreatedSince('maintain', start.toISOString());
-  const hasVocabulary = existingTags(deps.store, LESSON_NS).length > 0;
+    (deps.maxPerNight ?? DEFAULT_MAINTENANCE_MAX_PER_NIGHT) -
+    deps.jobs.countCreatedSince('maintain', start.toISOString());
+  const tags = existingTags(deps.store, LESSON_NS);
   // Matérialiser la liste avant d'enfiler : `jobs.enqueue` exécute d'autres requêtes sur la même
   // connexion, ce que better-sqlite3 refuse tant qu'un `.iterate()` est encore ouvert.
   const pages = [...deps.store.all()];
   let n = 0;
   for (const page of pages) {
     if (n >= max) break;
-    if (!eligibleKind(page, deps.proposals, deps.splitLines, hasVocabulary)) continue;
+    if (!eligibleKind(page, deps.proposals, deps.splitLines, tags)) continue;
     if (deps.jobs.enqueue('maintain', page.slug)) n++;
   }
   return n;
@@ -268,17 +300,17 @@ export interface MaintainDeps {
 
 const TAGS_PROMPT = `Tu proposes des tags pour une page de mémoire. Réponds uniquement en JSON de la forme {"tags": ["tag1", "tag2"]}, 1 à 5 tags courts, en minuscules, exclusivement parmi les tags existants donnés.`;
 const DUPLICATE_PROMPT = `Tu compares uniquement les deux leçons données. Un non est la réponse normale : réponds oui seulement si elles font doublon. Réponds uniquement en JSON de la forme {"doublon": true | false, "rationale": "<justification>"}.`;
-const SPLIT_PROMPT = `Tu découpes une leçon trop longue en pages atomiques. Réponds uniquement en JSON de la forme {"pages": [{"slug": "...", "title": "...", "frontmatter": {}, "body": "..."}]}, 2 à 4 pages.`;
+const SPLIT_PROMPT = `Tu découpes une leçon trop longue en pages atomiques. Réponds uniquement en JSON de la forme {"pages": [{"slug": "...", "title": "...", "frontmatter": {}, "body": "..."}]}, 2 à 4 pages, ou une liste vide si aucun découpage n’est utile.`;
 
 async function runTags(
   page: { slug: string; namespace: string; title: string; body: string },
   deps: MaintainDeps,
+  tags: string[],
 ): Promise<void> {
-  const tags = existingTags(deps.store, LESSON_NS);
   if (tags.length === 0) return;
   const content = await deps.model.chat(
     TAGS_PROMPT,
-    `Tags existants du namespace « ${page.namespace} » : ${tags.join(', ') || '(aucun)'}\n\nTitre : ${page.title}\n\n${page.body}`,
+    `Tags existants du namespace « ${page.namespace} » : ${tags.join(', ')}\n\nTitre : ${page.title}\n\n${page.body}`,
   );
   const payload = parseJson(content);
   if (!Value.Check(TagsPayload, payload)) throw new Error('proposition tags : forme JSON invalide');
@@ -329,6 +361,8 @@ async function runSplit(
   const payload = parseJson(content);
   if (!Value.Check(SplitPayload, payload))
     throw new Error('proposition split : forme JSON invalide');
+  // Une liste vide signifie que le modèle ne retient aucun découpage.
+  if (payload.pages.length === 0) return;
   for (const p of payload.pages) {
     assertSplitSlug(p.slug);
     p.frontmatter = splitFrontmatter(p.frontmatter, page.slug);
@@ -340,16 +374,16 @@ async function runSplit(
 export async function runMaintainJob(job: MemoryJob, deps: MaintainDeps): Promise<void> {
   const page = job.slug ? deps.store.get(job.slug) : undefined;
   if (!page) return;
-  const kind = eligibleKind(
-    page,
-    deps.proposals,
-    deps.splitLines,
-    existingTags(deps.store, LESSON_NS).length > 0,
-  );
+  const tags = existingTags(deps.store, LESSON_NS);
+  const kind = eligibleKind(page, deps.proposals, deps.splitLines, tags);
   if (!kind) return;
-  if (kind === 'tags') await runTags(page, deps);
+  if (kind === 'tags') await runTags(page, deps, tags);
   else if (kind === 'duplicate') await runDuplicate(page, deps);
   else await runSplit(page, deps);
+  if (!deps.proposals.pending(page.slug, kind)) {
+    // Le vocabulaire trié sérialisé détecte aussi un remplacement de tags à taille constante.
+    deps.proposals.recordSeen(page, kind, JSON.stringify(tags));
+  }
 }
 
 function assertSplitSlug(slug: string): void {

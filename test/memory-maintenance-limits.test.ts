@@ -88,6 +88,7 @@ test('DM15 : vocabulaire vide, aucun appel tags ; vocabulaire relu et tag inconn
   expect(model.chat).toHaveBeenCalledOnce();
   expect(proposals.list()).toEqual([]);
   expect(log).toHaveBeenCalledWith(expect.stringContaining('inconnu'));
+  store.put('lesson/test/a', 'nouvelle révision', { kind: 'append' }, 'test');
   model.chat.mockResolvedValueOnce('{"tags":["connu"]}');
   await run('lesson/test/a');
   expect(proposals.list()[0]?.payload).toEqual({ tags: ['connu'] });
@@ -116,4 +117,82 @@ test('DM15 : défauts et validation des limites de configuration', () => {
       expect(() => parseConfig(`memory:\n  maintenance:\n    ${key}: ${value}`)).toThrow(key);
     }
   }
+});
+
+test('sans proposition : persistance, nuit suivante, révision et suppression', async () => {
+  put('lesson/test/a', '---\nentretien_rejete: [duplicate]\n---\ncontenu');
+  put('lesson/test/vocabulaire', '---\ntags: [connu]\nentretien_rejete: [duplicate]\n---\ncontenu');
+  expect(schedule()).toBe(1);
+  const job = jobs.claim()!;
+  await runMaintainJob(job, { store, proposals, model, log });
+  jobs.done(job.id);
+  vi.setSystemTime(new Date(2026, 10, 18, 23));
+  expect(schedule({ proposals: new MemoryProposals(db) })).toBe(0);
+  store.put('lesson/test/a', 'ajout', { kind: 'append' }, 'test');
+  expect(schedule()).toBe(1);
+  await run('lesson/test/a');
+  expect(
+    db.prepare('SELECT revision FROM memory_maintenance_seen WHERE slug = ?').get('lesson/test/a'),
+  ).toEqual({ revision: 2 });
+  store.remove('lesson/test/a');
+  expect(
+    db.prepare('SELECT * FROM memory_maintenance_seen WHERE slug = ?').all('lesson/test/a'),
+  ).toEqual([]);
+});
+
+test('tags : changement de vocabulaire à taille constante réactive la page', async () => {
+  put('lesson/test/a', '---\nentretien_rejete: [duplicate]\n---\ncontenu');
+  put('lesson/test/vocabulaire', '---\ntags: [connu]\nentretien_rejete: [duplicate]\n---\ncontenu');
+  await run('lesson/test/a');
+  expect(schedule()).toBe(0);
+  store.put(
+    'lesson/test/vocabulaire',
+    '---\ntags: [inconnu]\nentretien_rejete: [duplicate]\n---\ncontenu',
+    { kind: 'force' },
+    'test',
+  );
+  expect(schedule()).toBe(1);
+  await run('lesson/test/a');
+  expect(proposals.list()[0]?.payload).toEqual({ tags: ['inconnu'] });
+});
+
+test('doublon sans candidat : le job terminé ne consomme plus le plafond', async () => {
+  put('lesson/test/a');
+  await run('lesson/test/a');
+  expect(schedule()).toBe(0);
+});
+
+test('runMaintainJob : splitLines réduit déclenche le découpage', async () => {
+  put('lesson/test/a', '---\ntags: [connu]\nentretien_rejete: [duplicate]\n---\nun\ndeux\ntrois');
+  const chat = vi.fn(async () =>
+    JSON.stringify({
+      pages: [
+        { slug: 'lesson/test/b', title: 'B', frontmatter: {}, body: 'B' },
+        { slug: 'lesson/test/c', title: 'C', frontmatter: {}, body: 'C' },
+      ],
+    }),
+  );
+  await run('lesson/test/a', { splitLines: 2, model: { chat } });
+  expect(chat).toHaveBeenCalledOnce();
+  expect(proposals.list()[0]?.kind).toBe('split');
+});
+
+test('échec du modèle : aucun résultat sans proposition mémorisé', async () => {
+  put('lesson/test/a');
+  put('lesson/test/vocabulaire', '---\ntags: [connu]\n---\ncontenu');
+  await expect(run('lesson/test/a', { model: { chat: async () => 'invalide' } })).rejects.toThrow(
+    'JSON invalide',
+  );
+  expect(db.prepare('SELECT * FROM memory_maintenance_seen').all()).toEqual([]);
+});
+
+test('découpage sans proposition : la page ne revient pas la nuit suivante', async () => {
+  put(
+    'lesson/test/a',
+    '---\ntags: [connu]\nentretien_rejete: [duplicate]\na_decouper: true\n---\ncontenu',
+  );
+  await run('lesson/test/a', { model: { chat: async () => '{"pages":[]}' } });
+  vi.setSystemTime(new Date(2026, 10, 18, 23));
+  expect(schedule()).toBe(0);
+  expect(proposals.list()).toEqual([]);
 });

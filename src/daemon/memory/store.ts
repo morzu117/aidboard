@@ -185,6 +185,20 @@ export class MemoryStore {
       );
   }
 
+  private invalidateDuplicateSeen(slug: string): void {
+    // DM14 : une partenaire modifiée ou supprimée rend la paire de nouveau examinable.
+    this.db
+      .prepare(
+        `
+      DELETE FROM memory_maintenance_seen WHERE kind = 'duplicate' AND slug IN (
+        SELECT slug_a FROM memory_duplicate_pairs WHERE slug_b = ?
+        UNION SELECT slug_b FROM memory_duplicate_pairs WHERE slug_a = ?
+      )
+    `,
+      )
+      .run(slug, slug);
+  }
+
   // Transaction synchrone : rien d'asynchrone ici, le fichier et le commit viennent après.
   put(slug: string, text: string, mode: PutMode, author: string, title?: string): MemoryPage {
     assertMemSlug(slug);
@@ -221,6 +235,7 @@ export class MemoryStore {
         body = parsed.body;
         t = title ?? parsed.title ?? slug.slice(slug.lastIndexOf('/') + 1);
       }
+      this.invalidateDuplicateSeen(slug);
       this.ftsDelete(existing);
       this.db
         .prepare(
@@ -236,8 +251,10 @@ export class MemoryStore {
     return this.db.transaction((): boolean => {
       const r = this.row(slug);
       if (!r) return false;
+      this.invalidateDuplicateSeen(slug);
       this.ftsDelete(r);
       this.db.prepare('DELETE FROM memory_pages WHERE slug = ?').run(slug);
+      this.db.prepare('DELETE FROM memory_maintenance_seen WHERE slug = ?').run(slug);
       this.db
         .prepare('DELETE FROM memory_duplicate_pairs WHERE slug_a = ? OR slug_b = ?')
         .run(slug, slug);

@@ -129,6 +129,8 @@ test('seuil inclusif et configurable', async () => {
   page('lesson/test/a', Math.PI / 2);
   await run();
   expect(chat).not.toHaveBeenCalled();
+  // 57.8 : une nouvelle révision réactive la page examinée sans proposition.
+  store.put(source, text, { kind: 'force' }, 'test');
   await run(source, vectors, 1);
   expect(chat).toHaveBeenCalledTimes(1);
 });

@@ -9,6 +9,8 @@ export const MEM_SLUG_RULE =
 export const LESSON_NS = 'lesson';
 
 export const DEFAULT_DUPLICATE_DISTANCE = 0.15;
+export const DEFAULT_MAINTENANCE_MAX_PER_NIGHT = 20;
+export const DEFAULT_MAINTENANCE_SPLIT_LINES = 40;
 
 export interface MemoryPage {
   slug: string;

@@ -21,7 +21,11 @@ import {
 } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import { parse, parseDocument } from 'yaml';
-import { DEFAULT_DUPLICATE_DISTANCE } from '../shared/memory.js';
+import {
+  DEFAULT_MAINTENANCE_MAX_PER_NIGHT,
+  DEFAULT_MAINTENANCE_SPLIT_LINES,
+  DEFAULT_DUPLICATE_DISTANCE,
+} from '../shared/memory.js';
 import type { AidPaths } from './paths.js';
 
 export interface AidConfig {
@@ -141,8 +145,8 @@ export const DEFAULT_CONFIG: AidConfig = {
       model: 'qwen3:8b',
       window: '02:00-06:00',
       duplicateDistance: DEFAULT_DUPLICATE_DISTANCE,
-      maxPerNight: 20,
-      splitLines: 40,
+      maxPerNight: DEFAULT_MAINTENANCE_MAX_PER_NIGHT,
+      splitLines: DEFAULT_MAINTENANCE_SPLIT_LINES,
     },
     git: { push: false },
   },

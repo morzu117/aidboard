@@ -334,3 +334,23 @@ test('split : annule la première création si le deuxième put échoue et reste
     removeSpy.mockRestore();
   }
 });
+
+test('daemon : maxPerNight à 1 reste respecté après plusieurs passages', async () => {
+  const memory = MEMORY_CFG({ enabled: true, window: '00:00-23:59' });
+  t = await startTestDaemon(undefined, {
+    config: { memory: { ...memory, maintenance: { ...memory.maintenance, maxPerNight: 1 } } },
+    memory: {
+      chatModel: fixedChatModel('{"tags":["connu"]}'),
+      maintenanceScheduleMs: 20,
+      pollMs: 10,
+    },
+  });
+  await put('lesson/test/a', 'contenu a');
+  await put('lesson/test/b', 'contenu b');
+  await waitFor(() => jobState('lesson/test/a') === 'done', 5000, 'premier entretien terminé');
+  await new Promise((resolve) => setTimeout(resolve, 100));
+  expect(
+    t.db.prepare("SELECT count(*) AS n FROM memory_jobs WHERE kind = 'maintain'").get(),
+  ).toEqual({ n: 1 });
+  expect(jobState('lesson/test/b')).toBeUndefined();
+});
