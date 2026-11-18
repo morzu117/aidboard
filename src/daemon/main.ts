@@ -114,6 +114,7 @@ export async function startDaemon(
     // tests : un Embedder/ChatModel déterministe, des délais courts, un rythme d'entretien rapide
     memory?: {
       embedder?: Embedder;
+      readyTimeoutMs?: number;
       backoffMs?: number[];
       pollMs?: number;
       chatModel?: ChatModel;
@@ -164,6 +165,21 @@ export async function startDaemon(
       (maintCfg.enabled ? ollamaChatModel(embCfg.url, maintCfg.model) : null);
     let hybridOn = false;
     let availabilityChecked = false;
+    const sonderEmbedder = async (): Promise<boolean> => {
+      let délai: NodeJS.Timeout | undefined;
+      try {
+        return await Promise.race([
+          Promise.resolve().then(() => embedder?.ready() ?? false),
+          new Promise<boolean>((resolve) => {
+            délai = setTimeout(() => resolve(false), opts.memory?.readyTimeoutMs ?? 3000);
+          }),
+        ]);
+      } catch {
+        return false;
+      } finally {
+        clearTimeout(délai);
+      }
+    };
     const worker =
       (embedder && vectors) || chatModel
         ? new MemoryWorker({
@@ -172,6 +188,7 @@ export async function startDaemon(
             vectors: vectors ?? undefined,
             embedder: embedder ?? undefined,
             embedReady: () => hybridOn,
+            probeEmbedReady: sonderEmbedder,
             onEmbedUnavailable: () => {
               hybridOn = false;
               log('ollama injoignable : recherche FTS5 seule');
@@ -217,29 +234,11 @@ export async function startDaemon(
         if (maintenanceTick) return maintenanceTick;
         maintenanceTick = (async () => {
           if (embedder && vectors) {
+            const ready = await sonderEmbedder();
             const wasReady = hybridOn;
-            // Trois secondes au plus, même si un Embedder injecté ne résout jamais ready().
-            let readyTimer: NodeJS.Timeout | undefined;
-            try {
-              hybridOn = await Promise.race([
-                Promise.resolve().then(() => embedder.ready()),
-                new Promise<boolean>((resolve) => {
-                  readyTimer = setTimeout(() => resolve(false), 3000);
-                }),
-              ]);
-            } catch {
-              hybridOn = false;
-            } finally {
-              clearTimeout(readyTimer);
-            }
+            hybridOn = ready;
             if (hybridOn) {
-              // Matérialiser avant enqueue : store.all() garde un curseur ouvert.
-              const pages = [...memStore.all()];
-              const indexed = new Set(vectors.slugs());
-              for (const page of pages) {
-                if (!indexed.has(page.slug)) jobs.enqueue('embed', page.slug);
-              }
-              worker.notify();
+              if (jobs.enqueueMissingEmbeddings(!wasReady) > 0) worker.notify();
             } else if (!availabilityChecked || wasReady) {
               log('ollama injoignable : recherche FTS5 seule');
             }
@@ -259,7 +258,6 @@ export async function startDaemon(
           if (n > 0) worker.notify();
         })()
           .catch((err: unknown) => {
-            hybridOn = false;
             log(`mémoire : planificateur : ${String(err)}`);
           })
           .finally(() => {

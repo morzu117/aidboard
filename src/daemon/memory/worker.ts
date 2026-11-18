@@ -12,6 +12,7 @@ export interface WorkerDeps {
   backoffMs?: number[]; // une entrée par nouvelle tentative ; au-delà : échec
   pollMs?: number;
   embedReady?: () => boolean;
+  probeEmbedReady?: () => Promise<boolean>;
   onEmbedUnavailable?: () => void;
   // 06.10 : traitement des jobs `maintain` ; absent, ils échouent proprement
   maintain?: (job: MemoryJob) => Promise<void>;
@@ -76,9 +77,13 @@ export class MemoryWorker {
         await this.run(job);
         this.deps.jobs.done(job.id);
       } catch (err) {
-        if (job.kind === 'embed' && this.deps.onEmbedUnavailable) {
+        if (
+          job.kind === 'embed' &&
+          this.deps.probeEmbedReady &&
+          !(await this.deps.probeEmbedReady())
+        ) {
           this.deps.jobs.deferEmbedding(job.id);
-          this.deps.onEmbedUnavailable();
+          this.deps.onEmbedUnavailable?.();
           continue;
         }
         const backoff = this.deps.backoffMs ?? DEFAULT_BACKOFF;

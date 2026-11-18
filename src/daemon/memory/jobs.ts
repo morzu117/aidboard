@@ -16,25 +16,29 @@ export class MemoryJobs {
   constructor(private readonly db: Db) {}
 
   // Un job en attente par (kind, slug) suffit : la page sera relue au moment de l'exécution.
-  enqueue(kind: JobKind, slug: string | null): string | null {
+  enqueue(kind: JobKind, slug: string | null, reprendreÉchec = false): string | null {
     const pending = this.db
       .prepare(
         "SELECT id FROM memory_jobs WHERE kind = ? AND slug IS ? AND state = 'pending' LIMIT 1",
       )
       .get(kind, slug);
     if (pending) return null;
-    const failed = this.db
-      .prepare(
-        "SELECT id FROM memory_jobs WHERE kind = ? AND kind = 'embed' AND slug IS ? AND state = 'failed' LIMIT 1",
-      )
-      .get(kind, slug) as { id: string } | undefined;
-    if (failed) {
-      this.db
+    if (kind === 'embed') {
+      const failed = this.db
         .prepare(
-          "UPDATE memory_jobs SET state = 'pending', attempts = 0, error = NULL, run_after = NULL, updated_at = ? WHERE id = ?",
+          "SELECT id FROM memory_jobs WHERE kind = 'embed' AND slug IS ? AND state = 'failed' LIMIT 1",
         )
-        .run(new Date().toISOString(), failed.id);
-      return failed.id;
+        .get(slug) as { id: string } | undefined;
+      if (failed) {
+        // Seule la reprise après indisponibilité réarme un embedding en échec.
+        if (!reprendreÉchec) return null;
+        this.db
+          .prepare(
+            "UPDATE memory_jobs SET state = 'pending', attempts = 0, error = NULL, run_after = NULL, updated_at = ? WHERE id = ?",
+          )
+          .run(new Date().toISOString(), failed.id);
+        return failed.id;
+      }
     }
     const id = `job_${ulid()}`;
     const now = new Date().toISOString();
@@ -44,6 +48,30 @@ export class MemoryJobs {
       )
       .run(id, kind, slug, now, now);
     return id;
+  }
+
+  enqueueMissingEmbeddings(reprendreÉchecs: boolean): number {
+    // La table vec0 n'existe qu'après le premier embedding valide.
+    const tableVecteurs = this.db
+      .prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'memory_vectors'")
+      .get();
+    const sansVecteur = tableVecteurs
+      ? 'AND NOT EXISTS (SELECT 1 FROM memory_vectors v WHERE v.slug = p.slug)'
+      : '';
+    const pages = this.db
+      .prepare(
+        `SELECT p.slug FROM memory_pages p
+         WHERE p.slug NOT IN (
+           SELECT slug FROM memory_jobs WHERE kind = 'embed' AND slug IS NOT NULL
+             AND (state IN ('pending', 'running') OR (state = 'failed' AND NOT ?))
+         ) ${sansVecteur}`,
+      )
+      .all(Number(reprendreÉchecs)) as { slug: string }[];
+    let enfilés = 0;
+    for (const { slug } of pages) {
+      if (this.enqueue('embed', slug, reprendreÉchecs)) enfilés++;
+    }
+    return enfilés;
   }
 
   countCreatedSince(kind: JobKind, since: string): number {
