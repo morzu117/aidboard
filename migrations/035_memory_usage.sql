@@ -5,3 +5,4 @@ CREATE TABLE memory_usage (
   role TEXT,
   at TEXT NOT NULL
 );
+CREATE INDEX memory_usage_slug ON memory_usage(slug);

@@ -137,14 +137,24 @@ export class MemoryStore {
     return r ? fromRow(r) : undefined;
   }
 
-  recordUsage(slugs: string[], op: 'search' | 'get'): void {
+  recordUsage(slugs: string[], op: 'search' | 'get', runId?: string): void {
     const at = new Date().toISOString();
-    // DM18 : runs n'a pas de colonne de rôle ; ne pas lui substituer le rôle d'un agent.
+    // Même règle que runWriteContext : le premier agent du run par created_at.
+    const role = runId
+      ? ((
+          this.db
+            .prepare(
+              `SELECT (SELECT role FROM agents a WHERE a.run_id = r.id ORDER BY a.created_at LIMIT 1) AS role
+               FROM runs r WHERE r.id = ?`,
+            )
+            .get(runId) as { role: string | null } | undefined
+        )?.role ?? null)
+      : null;
     const insert = this.db.prepare(
-      'INSERT INTO memory_usage (slug, op, role, at) VALUES (?, ?, NULL, ?)',
+      'INSERT INTO memory_usage (slug, op, role, at) VALUES (?, ?, ?, ?)',
     );
     this.db.transaction(() => {
-      for (const slug of slugs) insert.run(slug, op, at);
+      for (const slug of slugs) insert.run(slug, op, role, at);
     })();
   }
 

@@ -104,6 +104,18 @@ export function registerMemoryRoutes(app: FastifyInstance, deps: MemoryRouteDeps
     if (req.principal?.kind !== 'admin') throw new AidHttpError(403, 'réservé à l’administrateur');
   };
 
+  const recordUsage = (req: FastifyRequest, slugs: string[], op: 'get' | 'search') => {
+    try {
+      memory.store.recordUsage(
+        slugs,
+        op,
+        req.principal?.kind === 'run' ? req.principal.runId : undefined,
+      );
+    } catch (err) {
+      app.log.error({ err }, "mémoire : écriture du journal d'usage impossible");
+    }
+  };
+
   app.get('/api/memory/pages', async (req) => {
     const { prefix } = req.query as { prefix?: string };
     return { slugs: memory.list(prefix ?? '') };
@@ -112,7 +124,7 @@ export function registerMemoryRoutes(app: FastifyInstance, deps: MemoryRouteDeps
   app.get('/api/memory/pages/*', async (req) => {
     const page = memory.get(slugOf(req));
     if (!page) throw new AidHttpError(404, 'page absente');
-    memory.store.recordUsage([page.slug], 'get');
+    recordUsage(req, [page.slug], 'get');
     return page;
   });
 
@@ -147,7 +159,8 @@ export function registerMemoryRoutes(app: FastifyInstance, deps: MemoryRouteDeps
     if (!q.q) throw new AidHttpError(400, 'q est requis');
     const limit = Math.min(Math.max(Number.parseInt(q.limit ?? '10', 10) || 10, 1), 100);
     const result = await memory.search(q.q, q.scope && q.scope !== 'all' ? q.scope : 'all', limit);
-    memory.store.recordUsage(
+    recordUsage(
+      req,
       result.hits.map((hit) => hit.slug),
       'search',
     );
