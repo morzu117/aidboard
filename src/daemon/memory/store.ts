@@ -139,12 +139,12 @@ export class MemoryStore {
 
   recordUsage(slugs: string[], op: 'search' | 'get', runId?: string): void {
     const at = new Date().toISOString();
-    // Même règle que runWriteContext : le premier agent du run par created_at.
+    // Le jeton de run ne porte que runId (Principal) : le rôle du premier agent, comme dans runWriteContext, est approximatif en multi-agents.
     const role = runId
       ? ((
           this.db
             .prepare(
-              `SELECT (SELECT role FROM agents a WHERE a.run_id = r.id ORDER BY a.created_at LIMIT 1) AS role
+              `SELECT (SELECT role FROM agents a WHERE a.run_id = r.id ORDER BY a.created_at, a.id LIMIT 1) AS role
                FROM runs r WHERE r.id = ?`,
             )
             .get(runId) as { role: string | null } | undefined

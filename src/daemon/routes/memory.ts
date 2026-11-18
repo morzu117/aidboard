@@ -80,7 +80,7 @@ export function runWriteContext(db: Db, p: Principal, slug: string): WriteContex
   const run = db
     .prepare(
       `SELECT r.id AS run_id, t.id AS topic_id, w.id AS workspace_id, w.name AS workspace_name,
-              w.namespace, (SELECT role FROM agents a WHERE a.run_id = r.id ORDER BY a.created_at LIMIT 1) AS role
+              w.namespace, (SELECT role FROM agents a WHERE a.run_id = r.id ORDER BY a.created_at, a.id LIMIT 1) AS role
        FROM runs r JOIN topics t ON t.id = r.topic_id JOIN workspaces w ON w.id = t.workspace_id
        WHERE r.id = ?`,
     )

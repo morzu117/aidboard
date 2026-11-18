@@ -126,13 +126,15 @@ test('57.11 : premier agent du run, puis lectures admin sans rôle', async () =>
   t = await startTestDaemon();
   await put('aid/plan/a');
   seedTopic(t.db);
-  t.db.prepare("UPDATE agents SET role = 'dev' WHERE id = 'ag_1'").run();
+  t.db
+    .prepare("UPDATE agents SET role = 'dev', created_at = ? WHERE id = 'ag_1'")
+    .run('2026-01-01T00:00:00.000Z');
   t.db
     .prepare(
       `INSERT INTO agents (id, run_id, kind, role, transport, status, cwd, command, created_at, updated_at)
-     VALUES ('ag_2', 'run_1', 'shell', 'review', 'pty', 'exited', '/w/s', '[]', 't1', 't1')`,
+     VALUES ('ag_2', 'run_1', 'shell', 'review', 'pty', 'exited', '/w/s', '[]', ?, ?)`,
     )
-    .run();
+    .run('2026-01-01T00:00:01.000Z', '2026-01-01T00:00:01.000Z');
   const runHeaders = { ...t.headers, authorization: `Bearer ${issueRunToken(t.d.auth, 'run_1')}` };
   for (const headers of [runHeaders, t.headers]) {
     expect((await get('/api/memory/pages/aid/plan/a', headers)).statusCode).toBe(200);
@@ -145,6 +147,20 @@ test('57.11 : premier agent du run, puis lectures admin sans rôle', async () =>
   );
   expect(t.db.prepare("PRAGMA index_info('memory_usage_slug')").all()).toEqual([
     expect.objectContaining({ name: 'slug' }),
+  ]);
+});
+
+test('57.11 : les lectures d’un run sans agent sont journalisées sans rôle', async () => {
+  t = await startTestDaemon();
+  await put('aid/plan/a');
+  seedTopic(t.db);
+  t.db.prepare("DELETE FROM agents WHERE run_id = 'run_1'").run();
+  const runHeaders = { ...t.headers, authorization: `Bearer ${issueRunToken(t.d.auth, 'run_1')}` };
+  expect((await get('/api/memory/pages/aid/plan/a', runHeaders)).statusCode).toBe(200);
+  expect((await get('/api/memory/search?q=lecture', runHeaders)).json().hits).toHaveLength(1);
+  expect(rows()).toEqual([
+    { slug: 'aid/plan/a', op: 'get', role: null, at: expect.any(String) },
+    { slug: 'aid/plan/a', op: 'search', role: null, at: expect.any(String) },
   ]);
 });
 
