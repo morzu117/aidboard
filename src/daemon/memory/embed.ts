@@ -159,6 +159,12 @@ export class VectorIndex {
       .all(toBlob(vector), k) as Array<{ slug: string; distance: number }>;
   }
 
+  hasVector(slug: string): boolean {
+    return (
+      this.hasTable() && !!this.db.prepare('SELECT 1 FROM memory_vectors WHERE slug = ?').get(slug)
+    );
+  }
+
   duplicateCandidates(slug: string, distance: number): Array<{ slug: string; distance: number }> {
     if (!this.hasTable()) return [];
     // Filtrer lesson/ avant la limite évite que les pages cycliques masquent les trois voisins.

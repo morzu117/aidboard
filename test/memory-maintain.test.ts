@@ -161,8 +161,8 @@ test('désactivé : aucun job créé même dans la fenêtre', () => {
 
 test('page éligible, dans la fenêtre : un job par page, plafonné à maxPerNight', () => {
   const { store, jobs, proposals } = freshDb();
-  store.put('lesson/test/a', 'contenu a', { kind: 'create' }, 'test');
-  store.put('lesson/test/b', 'contenu b', { kind: 'create' }, 'test');
+  store.put('lesson/test/a', '---\na_decouper: true\n---\ncontenu a', { kind: 'create' }, 'test');
+  store.put('lesson/test/b', '---\na_decouper: true\n---\ncontenu b', { kind: 'create' }, 'test');
   const now = new Date('2026-01-01T03:00:00');
   const n = scheduleMaintenance(now, {
     store,
@@ -440,18 +440,26 @@ test('split : restaure la source après un échec du miroir et permet de réessa
 
 test('daemon : maxPerNight à 1 reste respecté après plusieurs passages', async () => {
   const memory = MEMORY_CFG({ enabled: true, window: '00:00-23:59' });
+  const passages = vi.fn(async () => false);
   t = await startTestDaemon(undefined, {
     config: { memory: { ...memory, maintenance: { ...memory.maintenance, maxPerNight: 1 } } },
     memory: {
+      embedder: { model: 'fake', ready: passages, embed: vi.fn() },
       chatModel: fixedChatModel('{"tags":["connu"]}'),
       maintenanceScheduleMs: 20,
       pollMs: 10,
     },
   });
+  await put(
+    'lesson/test/vocabulaire',
+    '---\ntags: [connu]\nentretien_rejete: [duplicate]\n---\nVocabulaire.',
+  );
   await put('lesson/test/a', 'contenu a');
   await put('lesson/test/b', 'contenu b');
   await waitFor(() => jobState('lesson/test/a') === 'done', 5000, 'premier entretien terminé');
-  await new Promise((resolve) => setTimeout(resolve, 100));
+  const passagesApresJob = passages.mock.calls.length;
+  await waitFor(() => passages.mock.calls.length >= passagesApresJob + 3);
+  expect(openProposals()).toMatchObject([{ kind: 'tags', slug: 'lesson/test/a' }]);
   expect(
     t.db.prepare("SELECT count(*) AS n FROM memory_jobs WHERE kind = 'maintain'").get(),
   ).toEqual({ n: 1 });

@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import { parseConfig } from '../src/daemon/config.js';
 import { openDb, type Db } from '../src/daemon/db.js';
+import { VectorIndex } from '../src/daemon/memory/embed.js';
 import { MemoryJobs } from '../src/daemon/memory/jobs.js';
 import {
   MemoryProposals,
@@ -60,7 +61,7 @@ test('DM15 : pages cycliques exclues au planning et à l’exécution', async ()
 });
 
 test('DM15 : le 21e job reste refusé après minuit, même après exécution et redémarrage', () => {
-  for (let i = 0; i < 21; i++) put(`lesson/test/p${i}`);
+  for (let i = 0; i < 21; i++) put(`lesson/test/p${i}`, '---\na_decouper: true\n---\ncontenu');
   expect(schedule()).toBe(20);
   db.prepare("UPDATE memory_jobs SET state = 'done'").run();
   vi.setSystemTime(new Date(2026, 10, 18, 1));
@@ -70,7 +71,7 @@ test('DM15 : le 21e job reste refusé après minuit, même après exécution et 
 });
 
 test('DM15 : plafond configurable et jobs embed non comptés', () => {
-  put('lesson/test/a');
+  put('lesson/test/a', '---\na_decouper: true\n---\ncontenu');
   jobs.enqueue('embed', 'lesson/test/a');
   expect(schedule({ maxPerNight: 1 })).toBe(1);
   expect(schedule({ maxPerNight: 1 })).toBe(0);
@@ -158,23 +159,54 @@ test('tags : changement de vocabulaire à taille constante réactive la page', a
 
 test('doublon sans candidat : le job terminé ne consomme plus le plafond', async () => {
   put('lesson/test/a');
-  await run('lesson/test/a');
-  expect(schedule()).toBe(0);
+  const vectors = VectorIndex.load(db, () => {})!;
+  vectors.ensureTable('fake', 2);
+  vectors.upsert('lesson/test/a', new Float32Array([1, 0]));
+  await run('lesson/test/a', { vectors });
+  expect(schedule({ vectors })).toBe(0);
 });
 
-test('runMaintainJob : splitLines réduit déclenche le découpage', async () => {
-  put('lesson/test/a', '---\ntags: [connu]\nentretien_rejete: [duplicate]\n---\nun\ndeux\ntrois');
-  const chat = vi.fn(async () =>
-    JSON.stringify({
-      pages: [
-        { slug: 'lesson/test/b', title: 'B', frontmatter: {}, body: 'B' },
-        { slug: 'lesson/test/c', title: 'C', frontmatter: {}, body: 'C' },
-      ],
-    }),
-  );
-  await run('lesson/test/a', { splitLines: 2, model: { chat } });
-  expect(chat).toHaveBeenCalledOnce();
-  expect(proposals.list()[0]?.kind).toBe('split');
+test.each([false, true])(
+  'une page longue sans vecteur atteint le découpage (index présent : %s)',
+  async (indexPresent) => {
+    const vectors = indexPresent ? VectorIndex.load(db, () => {})! : undefined;
+    vectors?.ensureTable('fake', 2);
+    const source = 'lesson/test/a';
+    put(source, '---\ntags: [connu]\n---\nun\ndeux\ntrois');
+    const chat = vi.fn(async () =>
+      JSON.stringify({
+        pages: [
+          { slug: 'lesson/test/b', title: 'B', frontmatter: {}, body: 'B' },
+          { slug: 'lesson/test/c', title: 'C', frontmatter: {}, body: 'C' },
+        ],
+      }),
+    );
+    expect(schedule({ vectors, splitLines: 2 })).toBe(1);
+    const job = jobs.claim()!;
+    expect(job.slug).toBe(source);
+    await runMaintainJob(job, { store, proposals, vectors, splitLines: 2, model: { chat }, log });
+    expect(chat).toHaveBeenCalledOnce();
+    expect(proposals.list()).toMatchObject([{ kind: 'split', slug: source }]);
+  },
+);
+
+test('sans vecteur : aucun job vide, puis doublon éligible dès que le vecteur arrive', async () => {
+  const source = 'lesson/test/a';
+  put(source);
+  const vectors = VectorIndex.load(db, () => {})!;
+  vectors.ensureTable('fake', 2);
+  const options = { vectors, maxPerNight: 1 };
+  expect(schedule(options)).toBe(0);
+  vi.setSystemTime(new Date(2026, 10, 17, 23, 1));
+  expect(schedule(options)).toBe(0);
+  expect(jobs.countCreatedSince('maintain', new Date(2026, 10, 17, 22).toISOString())).toBe(0);
+
+  vectors.upsert(source, new Float32Array([1, 0]));
+  expect(schedule(options)).toBe(1);
+  const job = jobs.claim()!;
+  expect(job.slug).toBe(source);
+  await runMaintainJob(job, { store, proposals, vectors, model, log });
+  expect(proposals.seen(store.get(source)!, 'duplicate', '0.15')).toBe(true);
 });
 
 test('échec du modèle : aucun résultat sans proposition mémorisé', async () => {
@@ -186,6 +218,22 @@ test('échec du modèle : aucun résultat sans proposition mémorisé', async ()
   expect(db.prepare('SELECT * FROM memory_maintenance_seen').all()).toEqual([]);
 });
 
+test.each([1, 5])('découpage : une réponse de %i page(s) est rejetée', async (nombre) => {
+  const source = 'lesson/test/a';
+  put(source, '---\nentretien_rejete: [duplicate]\na_decouper: true\n---\ncontenu');
+  const pages = Array.from({ length: nombre }, (_, i) => ({
+    slug: `lesson/test/partie-${i}`,
+    title: 'Partie',
+    frontmatter: {},
+    body: 'Contenu',
+  }));
+  await expect(
+    run(source, { model: { chat: async () => JSON.stringify({ pages }) } }),
+  ).rejects.toThrow('proposition split : forme JSON invalide');
+  expect(proposals.list()).toEqual([]);
+  expect(store.list('lesson/')).toEqual([source]);
+});
+
 test('découpage sans proposition : la page ne revient pas la nuit suivante', async () => {
   put(
     'lesson/test/a',
@@ -195,6 +243,7 @@ test('découpage sans proposition : la page ne revient pas la nuit suivante', as
   vi.setSystemTime(new Date(2026, 10, 18, 23));
   expect(schedule()).toBe(0);
   expect(proposals.list()).toEqual([]);
+  expect(store.list('lesson/')).toEqual(['lesson/test/a']);
 });
 
 test('DM16 : claim sans embeddings prend maintain sans consommer la tentative embed', () => {

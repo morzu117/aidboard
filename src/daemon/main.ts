@@ -246,12 +246,14 @@ export async function startDaemon(
             availabilityChecked = true;
           }
           const n = scheduleMaintenance(new Date(), {
+            vectors: vectors ?? undefined,
             store: memStore,
             jobs,
             proposals,
             enabled: !!chatModel && maintCfg.enabled,
             window: maintCfg.window,
             maxPerNight: maintCfg.maxPerNight,
+            duplicateDistance: maintCfg.duplicateDistance,
             splitLines: maintCfg.splitLines,
           });
           if (n > 0) worker.notify();

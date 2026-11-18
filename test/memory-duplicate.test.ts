@@ -6,7 +6,12 @@ import { parseConfig } from '../src/daemon/config.js';
 import { type Db, openDb } from '../src/daemon/db.js';
 import { VectorIndex } from '../src/daemon/memory/embed.js';
 import { MemoryJobs } from '../src/daemon/memory/jobs.js';
-import { type ChatModel, MemoryProposals, runMaintainJob } from '../src/daemon/memory/maintain.js';
+import {
+  type ChatModel,
+  MemoryProposals,
+  runMaintainJob,
+  scheduleMaintenance,
+} from '../src/daemon/memory/maintain.js';
 import { MemoryStore } from '../src/daemon/memory/store.js';
 import { startTestDaemon, waitFor } from './helpers/daemon.js';
 
@@ -104,12 +109,13 @@ test('oui : arrêt au premier oui et duplicateOf imposé par le candidat', async
   expect(pairs()[1]).toMatchObject({ verdict: 'oui' });
 });
 
-test('sans index, sans vecteur source ou sans candidat sous le seuil : aucun appel', async () => {
-  page(source);
-  page('lesson/test/loin', 1);
+test('sans index ou sans vecteur source : aucun examen jusqu’à l’arrivée du vecteur', async () => {
+  store.put(source, text, { kind: 'create' }, 'test');
+  page('lesson/test/a');
   await run();
-  vectors.remove(source);
-  await run();
+  expect(chat).not.toHaveBeenCalled();
+  expect(proposals.seen(store.get(source)!, 'duplicate', '0.15')).toBe(false);
+  vectors.upsert(source, new Float32Array([1, 0]));
   await runMaintainJob(
     { id: 'sans-index', kind: 'maintain', slug: source, attempts: 1 },
     {
@@ -122,15 +128,37 @@ test('sans index, sans vecteur source ou sans candidat sous le seuil : aucun app
   expect(chat).not.toHaveBeenCalled();
   expect(pairs()).toEqual([]);
   expect(proposals.list()).toEqual([]);
+  expect(proposals.seen(store.get(source)!, 'duplicate', '0.15')).toBe(false);
+  await run();
+  expect(chat).toHaveBeenCalledOnce();
+  expect(proposals.seen(store.get(source)!, 'duplicate', '0.15')).toBe(true);
 });
 
 test('seuil inclusif et configurable', async () => {
   page(source);
-  page('lesson/test/a', Math.PI / 2);
+  store.put(
+    'lesson/test/a',
+    '---\ntags: [test]\nentretien_rejete: [duplicate]\n---\nLeçon.',
+    { kind: 'create' },
+    'test',
+  );
+  vectors.upsert('lesson/test/a', new Float32Array([0, 1]));
   await run();
   expect(chat).not.toHaveBeenCalled();
-  // 57.8 : une nouvelle révision réactive la page examinée sans proposition.
-  store.put(source, text, { kind: 'force' }, 'test');
+  const jobs = new MemoryJobs(db);
+  const maintenant = new Date(2026, 10, 18, 23);
+  const planifier = (duplicateDistance: number) =>
+    scheduleMaintenance(maintenant, {
+      vectors,
+      store,
+      jobs,
+      proposals,
+      enabled: true,
+      window: '22:00-04:00',
+      duplicateDistance,
+    });
+  expect(planifier(0.15)).toBe(0);
+  expect(planifier(1)).toBe(1);
   await run(source, vectors, 1);
   expect(chat).toHaveBeenCalledTimes(1);
 });
@@ -160,6 +188,30 @@ test('paire persistante et symétrique, rejugée si une des deux révisions chan
     revision_b: 2,
   });
 });
+
+test.each(['réécriture', 'suppression'])(
+  'un partenaire jugé non rend la page éligible après sa %s',
+  async (action) => {
+    const partenaire = 'lesson/test/a';
+    page(source);
+    page(partenaire);
+    await run();
+    const pageSource = store.get(source)!;
+    expect(pairs()).toMatchObject([{ verdict: 'non' }]);
+    expect(proposals.seen(pageSource, 'duplicate', '0.15')).toBe(true);
+
+    if (action === 'réécriture') {
+      store.put(partenaire, `${text} Modifiée.`, { kind: 'force' }, 'test');
+    } else {
+      expect(store.remove(partenaire)).toBe(true);
+    }
+
+    expect(proposals.seen(pageSource, 'duplicate', '0.15')).toBe(false);
+    await run();
+    expect(chat).toHaveBeenCalledTimes(action === 'réécriture' ? 2 : 1);
+    expect(proposals.seen(pageSource, 'duplicate', '0.15')).toBe(true);
+  },
+);
 
 test.each([
   'pas du JSON',
