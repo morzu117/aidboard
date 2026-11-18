@@ -5,10 +5,12 @@ import { afterEach, expect, test, vi } from 'vitest';
 import { type Db, openDb } from '../src/daemon/db.js';
 import { MemoryJobs } from '../src/daemon/memory/jobs.js';
 import {
+  applyProposal,
   type ChatModel,
   MemoryProposals,
   scheduleMaintenance,
 } from '../src/daemon/memory/maintain.js';
+import { MemoryMirror } from '../src/daemon/memory/mirror.js';
 import { MemoryService } from '../src/daemon/memory/service.js';
 import { MemoryStore } from '../src/daemon/memory/store.js';
 import { startTestDaemon, waitFor, type TestDaemon } from './helpers/daemon.js';
@@ -319,9 +321,10 @@ test('split : annule la première création si le deuxième put échoue et reste
     const response = await apply(proposal.id);
     expect(response.statusCode).toBe(500);
     expect(response.json()).toEqual({ error: 'erreur interne' });
-    expect(removeSpy).toHaveBeenCalledExactlyOnceWith('lesson/test/premiere', {
-      author: 'maintenance',
-    });
+    expect(removeSpy).toHaveBeenCalledExactlyOnceWith(
+      'lesson/test/premiere',
+      expect.objectContaining({ author: 'maintenance' }),
+    );
     for (const { slug } of splitPages()) {
       expect(
         (await t.d.app.inject({ url: `/api/memory/pages/${slug}`, headers: t.headers })).statusCode,
@@ -333,6 +336,106 @@ test('split : annule la première création si le deuxième put échoue et reste
     putSpy.mockRestore();
     removeSpy.mockRestore();
   }
+});
+
+test.each(['avant insertion', 'après insertion', 'avec retrait en échec'] as const)(
+  'split : annule en ordre inverse après un troisième put en échec (%s)',
+  async (cas) => {
+    t = await startTestDaemon();
+    await put(splitSource, splitText);
+    const { memory } = t.d;
+    const pages = [
+      ...splitPages(),
+      { slug: 'lesson/test/troisieme', title: 'Troisième', frontmatter: {}, body: 'Suite.' },
+    ];
+    const propositions = new MemoryProposals(t.db);
+    const proposition = propositions.create('split', splitSource, { pages }, 'Découpage');
+    const erreur = new Error('échec du troisième put');
+    const ecritureOriginale = memory.put.bind(memory);
+    vi.spyOn(memory, 'put').mockImplementation(async (...args) => {
+      if (args[0] !== 'lesson/test/troisieme') return ecritureOriginale(...args);
+      if (cas === 'après insertion') await ecritureOriginale(...args);
+      throw erreur;
+    });
+    const retirer = vi.spyOn(memory, 'remove');
+    if (cas === 'avec retrait en échec') {
+      retirer.mockRejectedValueOnce(new Error('retrait impossible'));
+    }
+    const journal = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      await expect(applyProposal(proposition, memory)).rejects.toBe(erreur);
+      expect(retirer.mock.calls.map(([slug]) => slug)).toEqual([
+        ...(cas === 'après insertion' ? ['lesson/test/troisieme'] : []),
+        'lesson/test/seconde',
+        'lesson/test/premiere',
+      ]);
+      expect(memory.get('lesson/test/premiere')).toBeUndefined();
+      expect(memory.get('lesson/test/troisieme')).toBeUndefined();
+      if (cas === 'avec retrait en échec') {
+        expect(journal).toHaveBeenCalledExactlyOnceWith(
+          expect.stringContaining('lesson/test/seconde'),
+        );
+      } else {
+        expect(memory.get('lesson/test/seconde')).toBeUndefined();
+      }
+    } finally {
+      journal.mockRestore();
+    }
+  },
+);
+
+test('split : un échec sur la source laisse la proposition ouverte et réessayable', async () => {
+  t = await startTestDaemon();
+  await put(splitSource, splitText);
+  const { memory } = t.d;
+  const pages = splitPages();
+  const propositions = new MemoryProposals(t.db);
+  const proposition = propositions.create('split', splitSource, { pages }, 'Découpage');
+  const ecritureOriginale = memory.put.bind(memory);
+  const ecriture = vi.spyOn(memory, 'put').mockImplementation((...args) => {
+    if (args[0] === splitSource) return Promise.reject(new Error('réécriture impossible'));
+    return ecritureOriginale(...args);
+  });
+  try {
+    expect((await apply(proposition.id)).statusCode).toBe(500);
+    for (const { slug } of pages) expect(memory.get(slug)).toBeUndefined();
+    expect(propositions.get(proposition.id)?.state).toBe('open');
+  } finally {
+    ecriture.mockRestore();
+  }
+  expect((await apply(proposition.id)).statusCode).toBe(200);
+  expect(propositions.get(proposition.id)?.state).toBe('applied');
+});
+
+test('split : restaure la source après un échec du miroir et permet de réessayer', async () => {
+  t = await startTestDaemon();
+  await put(splitSource, splitText);
+  const { memory } = t.d;
+  const sourceOriginale = memory.get(splitSource)!;
+  const pages = splitPages();
+  const propositions = new MemoryProposals(t.db);
+  const proposition = propositions.create('split', splitSource, { pages }, 'Découpage');
+  const ecritureOriginale = MemoryMirror.prototype.write;
+  const ecriture = vi.spyOn(MemoryMirror.prototype, 'write').mockImplementation(function (
+    this: MemoryMirror,
+    ...args
+  ) {
+    if (args[0] === splitSource && memory.get(splitSource)?.frontmatter.remplacee_par) {
+      return Promise.reject(new Error('miroir de la source indisponible'));
+    }
+    return ecritureOriginale.apply(this, args);
+  });
+  try {
+    expect((await apply(proposition.id)).statusCode).toBe(500);
+    for (const { slug } of pages) expect(memory.get(slug)).toBeUndefined();
+    expect(memory.get(splitSource)?.frontmatter).toEqual(sourceOriginale.frontmatter);
+    expect(memory.get(splitSource)?.body).toBe(sourceOriginale.body);
+    expect(propositions.get(proposition.id)?.state).toBe('open');
+  } finally {
+    ecriture.mockRestore();
+  }
+  expect((await apply(proposition.id)).statusCode).toBe(200);
+  expect(propositions.get(proposition.id)?.state).toBe('applied');
 });
 
 test('daemon : maxPerNight à 1 reste respecté après plusieurs passages', async () => {

@@ -12,6 +12,7 @@ import {
   DEFAULT_MAINTENANCE_SPLIT_LINES,
   DEFAULT_DUPLICATE_DISTANCE,
   LESSON_NS,
+  RevisionConflict,
 } from '../../shared/memory.js';
 import type { Db } from '../db.js';
 import type { VectorIndex } from './embed.js';
@@ -437,23 +438,50 @@ export async function applyProposal(
       slugs.add(p.slug);
     }
     const created: string[] = [];
+    let creationEnCours: string | undefined;
     try {
       for (const p of pages) {
         const text = renderMarkdown({
           frontmatter: splitFrontmatter(p.frontmatter, proposal.slug),
           body: p.body,
         });
+        creationEnCours = p.slug;
         await memory.put(p.slug, text, { kind: 'create' }, MAINTENANCE_CTX, p.title);
         created.push(p.slug);
+        creationEnCours = undefined;
       }
+      const fm = { ...page.frontmatter, remplacee_par: created };
+      const text = renderMarkdown({ frontmatter: fm, body: page.body });
+      await memory.put(proposal.slug, text, { kind: 'force' }, MAINTENANCE_CTX);
     } catch (err) {
-      // Annuler les créations réussies de cette application avant de propager l'échec.
-      for (const slug of created) await memory.remove(slug, MAINTENANCE_CTX);
+      // Le put écrit en base avant le miroir, sauf si le slug a été pris entre-temps.
+      if (creationEnCours && !(err instanceof RevisionConflict) && memory.get(creationEnCours)) {
+        created.push(creationEnCours);
+      }
+      for (const slug of created.reverse()) {
+        try {
+          await memory.remove(slug, MAINTENANCE_CTX);
+        } catch (erreurRetrait) {
+          console.error(`découpage : échec du retrait de ${slug} : ${String(erreurRetrait)}`);
+        }
+      }
+      try {
+        const source = memory.get(proposal.slug);
+        // Seule notre réécriture pose remplacee_par : une écriture concurrente reste intacte.
+        if (
+          source &&
+          source.revision !== page.revision &&
+          'remplacee_par' in source.frontmatter &&
+          !('remplacee_par' in page.frontmatter)
+        ) {
+          const texteOriginal = renderMarkdown({ frontmatter: page.frontmatter, body: page.body });
+          await memory.put(proposal.slug, texteOriginal, { kind: 'force' }, MAINTENANCE_CTX);
+        }
+      } catch {
+        console.error(`découpage : échec de la restauration de ${proposal.slug}`);
+      }
       throw err;
     }
-    const fm = { ...page.frontmatter, remplacee_par: created };
-    const text = renderMarkdown({ frontmatter: fm, body: page.body });
-    await memory.put(proposal.slug, text, { kind: 'force' }, MAINTENANCE_CTX);
   }
 }
 
