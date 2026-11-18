@@ -231,6 +231,26 @@ test('échec de création : aucun oui enregistré, puis nouvelle tentative', asy
   create.mockRestore();
 });
 
+test('échec du verdict oui : annulation des deux écritures, puis une seule proposition', async () => {
+  page(source);
+  page('lesson/test/a');
+  chat.mockResolvedValue('{"doublon":true,"rationale":"même leçon"}');
+  const enregistrer = store.recordDuplicatePair.bind(store);
+  const verdict = vi.spyOn(store, 'recordDuplicatePair').mockImplementationOnce((...args) => {
+    expect(proposals.list()).toHaveLength(1);
+    enregistrer(...args);
+    throw new Error('enregistrement impossible');
+  });
+  await expect(run()).rejects.toThrow('enregistrement impossible');
+  expect(pairs()).toEqual([]);
+  expect(proposals.list()).toEqual([]);
+  verdict.mockRestore();
+  await run();
+  expect(chat).toHaveBeenCalledTimes(2);
+  expect(proposals.list()).toHaveLength(1);
+  expect(pairs()).toMatchObject([{ verdict: 'oui' }]);
+});
+
 test('vecteur orphelin : aucun candidat absent du store n’est jugé', async () => {
   page(source);
   vectors.upsert('lesson/test/absente', new Float32Array([1, 0]));
@@ -254,9 +274,15 @@ test('oui déjà jugé : relance symétrique et après décision sans seconde pr
   expect(pairs()).toHaveLength(1);
 });
 
+// 0.1 est le contrôle négatif : comme le défaut 0.15, il exclut le candidat.
 test.each([0.1, 0.3])('daemon : vecteurs et seuil %s transmis au job doublon', async (distance) => {
+  const vecteurCandidat = [0.8, 0.6];
+  const distanceCandidat = 1 - vecteurCandidat[0]! / Math.hypot(...vecteurCandidat);
+  const candidatRetenu = distance >= distanceCandidat;
   const embed = vi.fn(async (texts: string[]) =>
-    texts.map((content) => new Float32Array(content.includes('Candidate') ? [0.8, 0.6] : [1, 0])),
+    texts.map(
+      (content) => new Float32Array(content.includes('Candidate') ? vecteurCandidat : [1, 0]),
+    ),
   );
   const t = await startTestDaemon(join(home, 'daemon'), {
     config: {
@@ -307,11 +333,11 @@ test.each([0.1, 0.3])('daemon : vecteurs et seuil %s transmis au job doublon', a
           .state === 'done',
     );
     expect(embed).toHaveBeenCalled();
-    expect(chat).toHaveBeenCalledTimes(distance > 0.2 ? 1 : 0);
+    expect(chat).toHaveBeenCalledTimes(candidatRetenu ? 1 : 0);
     expect(t.db.prepare('SELECT * FROM memory_duplicate_pairs').all()).toHaveLength(
-      distance > 0.2 ? 1 : 0,
+      candidatRetenu ? 1 : 0,
     );
-    if (distance > 0.2) expect(chat.mock.calls[0]?.[1]).toContain('Candidat : lesson/test/a');
+    if (candidatRetenu) expect(chat.mock.calls[0]?.[1]).toContain('Candidat : lesson/test/a');
   } finally {
     await t.d.stop();
   }

@@ -195,6 +195,13 @@ export class MemoryStore {
       );
   }
 
+  recordDuplicateProposal(a: MemoryPage, b: MemoryPage, createProposal: () => void): void {
+    this.db.transaction(() => {
+      createProposal();
+      this.recordDuplicatePair(a, b, 'oui');
+    })();
+  }
+
   private invalidateDuplicateSeen(slug: string): void {
     // DM14 : une partenaire modifiée ou supprimée rend la paire de nouveau examinable.
     this.db

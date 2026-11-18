@@ -341,13 +341,14 @@ async function runDuplicate(page: MemoryPage, deps: MaintainDeps): Promise<void>
       throw new Error('proposition duplicate : forme JSON invalide');
     }
     if (payload.doublon) {
-      deps.proposals.create(
-        'duplicate',
-        page.slug,
-        { duplicateOf: candidate.slug, rationale: payload.rationale },
-        payload.rationale,
-      );
-      deps.store.recordDuplicatePair(page, candidate, 'oui');
+      deps.store.recordDuplicateProposal(page, candidate, () => {
+        deps.proposals.create(
+          'duplicate',
+          page.slug,
+          { duplicateOf: candidate.slug, rationale: payload.rationale },
+          payload.rationale,
+        );
+      });
       return;
     }
     deps.store.recordDuplicatePair(page, candidate, 'non');
