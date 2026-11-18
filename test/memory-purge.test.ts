@@ -1,8 +1,8 @@
 import { existsSync, readFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterEach, expect, test, vi } from 'vitest';
-import { MemoryMirror } from '../src/daemon/memory/mirror.js';
 import { runMem } from '../src/cli/commands/mem.js';
+import { MemoryMirror } from '../src/daemon/memory/mirror.js';
 import { resolvePaths } from '../src/daemon/paths.js';
 import { issueRunToken } from '../src/daemon/security.js';
 import { seedTopic, startTestDaemon, type TestDaemon } from './helpers/daemon.js';
@@ -172,7 +172,7 @@ test('DM17 : lesson ne figure ni dans les cycles ni dans les orphelines et reste
 
 test.each([
   ['task_alpha', false],
-  ['xAlpha', false],
+  ['alphaZ', false],
   ['Xalpha', false],
   ['alphaX', false],
   ['alpha_suffix', false],
@@ -198,20 +198,26 @@ test('DM17 : la route ne retourne que les pages retirées malgré une disparitio
   t = await startTestDaemon();
   await put('a/plan/alpha');
   await put('a/review/alpha');
-  await put('a/retro/nuit', 'alpha');
+  await put('a/review/beta');
+  await put('a/retro/nuit', 'alpha beta');
   const remove = MemoryMirror.prototype.remove;
-  vi.spyOn(MemoryMirror.prototype, 'remove').mockImplementationOnce(async function (
+  vi.spyOn(MemoryMirror.prototype, 'remove').mockImplementation(async function (
     this: MemoryMirror,
     slug,
   ) {
-    // Simuler une disparition externe après l'instantané et la première suppression.
-    t!.d.memory.store.remove('a/review/alpha');
-    rmSync(join(t!.home, 'memory/a/review/alpha.md'));
+    if (slug === 'a/plan/alpha') {
+      // Simuler des disparitions externes après l'instantané.
+      t!.d.memory.store.remove('a/review/alpha');
+      rmSync(join(t!.home, 'memory/a/review/alpha.md'));
+      t!.d.memory.store.remove('a/review/beta');
+      rmSync(join(t!.home, 'memory/a/review/beta.md'));
+    }
     await remove.call(this, slug);
   });
   const response = await purge({});
   expect(response.statusCode).toBe(200);
   expect(response.json().slugs).toEqual(['a/plan/alpha']);
+  expect(response.json().tasks).toEqual(['a/alpha']);
   expect(await slugs()).toEqual(['a/retro/nuit']);
 });
 
@@ -229,29 +235,34 @@ test('DM17 : les purges et les écritures partagent une file, instantané compri
     entered = resolve;
   });
   const remove = MemoryMirror.prototype.remove;
-  vi.spyOn(MemoryMirror.prototype, 'remove').mockImplementationOnce(async function (
+  vi.spyOn(MemoryMirror.prototype, 'remove').mockImplementation(async function (
     this: MemoryMirror,
     slug,
   ) {
-    entered();
-    await blocked;
+    if (slug === 'a/plan/alpha') {
+      entered();
+      await blocked;
+    }
     await remove.call(this, slug);
   });
   const memory = t.d.memory;
   const first = memory.purge({});
   await started;
-  const write = memory.put(
-    'a/review/alpha',
-    'nouvelle page',
-    { kind: 'force' },
-    { author: 'admin' },
-  );
+  let writeResolved = false;
+  const write = memory
+    .put('a/review/alpha', 'nouvelle page', { kind: 'force' }, { author: 'admin' })
+    .then(() => {
+      writeResolved = true;
+    });
   const second = memory.purge({});
   try {
-    await Promise.resolve();
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(writeResolved).toBe(false);
     expect(memory.get('a/review/alpha')?.body).toBe('contenu');
   } finally {
     release();
+    await Promise.allSettled([first, write, second]);
   }
   expect((await first).slugs).toEqual(['a/plan/alpha', 'a/review/alpha']);
   await write;

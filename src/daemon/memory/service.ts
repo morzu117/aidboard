@@ -101,16 +101,22 @@ export class MemoryService {
     }
     const dryRun = !!(options.dryRun || options.orphelines);
     const removed: string[] = [];
+    const removedTasks = new Set<string>();
     if (!dryRun) {
+      // Toute erreur de suppression interrompt la purge et remonte à l'appelant.
       for (const slug of slugs) {
-        if (await this.removeQueued(slug, { author: 'admin' })) removed.push(slug);
+        if (await this.removeQueued(slug, { author: 'admin' })) {
+          removed.push(slug);
+          const [namespace, , task] = slug.split('/');
+          removedTasks.add(`${namespace}/${task}`);
+        }
       }
     }
     // Les tâches sont qualifiées par namespace pour distinguer les homonymes.
     return {
       dryRun,
       orphelines: !!options.orphelines,
-      tasks: selected.sort(),
+      tasks: (dryRun ? selected : [...removedTasks]).sort(),
       slugs: (dryRun ? slugs : removed).sort(),
     };
   }
