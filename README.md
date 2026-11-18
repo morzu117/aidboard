@@ -24,6 +24,8 @@ de plus sur Windows : le runtime WebView2 est déjà présent par défaut depuis
 
 ## Installation et lancement
 
+**Pour installer, mettre à jour ou désinstaller A-I-D, suis [docs/INSTALLATION.md](docs/INSTALLATION.md)**, un guide par système (macOS, Windows, Linux). La suite de cette section détaille les deux produits.
+
 Deux produits, publiés ensemble sur la [page des releases](https://github.com/morzu117/aidboard/releases) :
 
 - **AID Board**, l'app de bureau (`.dmg` macOS, `.AppImage`/`.deb` Linux, `.msi` Windows). À la

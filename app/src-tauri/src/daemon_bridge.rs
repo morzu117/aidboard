@@ -5,9 +5,9 @@
 // est servie par le daemon, pas par Tauri, donc hors de portée de l'IPC Tauri (qui ne s'injecte que
 // dans l'origine interne de l'app).
 //
-// Toute la résolution se fait dans un shell de login (zsh sur macOS/Linux, bash dans WSL2 sous
-// Windows) : c'est lui qui connaît le PATH de l'utilisateur (mise, ~/.local/bin…), et c'est là que
-// vivent `aid`, `curl` et `sh` dans tous les cas — sous Windows, le daemon n'existe que dans WSL2.
+// Toute la résolution se fait dans un shell de login (zsh sur macOS, bash ou zsh selon le shell
+// de l'utilisateur sous Linux, bash dans WSL2 sous Windows). Il connaît le PATH de l'utilisateur
+// (mise, ~/.local/bin…) ainsi que `aid`, `curl` et `sh` — sous Windows, le daemon vit dans WSL2.
 
 use std::io::{BufRead, BufReader, Write};
 use std::net::{TcpListener, TcpStream};
@@ -104,13 +104,47 @@ fn accord_cycle(code: Option<i32>, demander: &dyn Fn() -> bool) -> bool {
     code == Some(3) && demander()
 }
 
-// Le shell de login de la plateforme : `-i -l` pour que zsh lise ~/.zshrc (c'est là que mise et
-// les PATH utilisateur sont posés) ; dans WSL2, bash interactif lit aussi ~/.bashrc.
+#[cfg(any(not(target_os = "windows"), test))]
+fn choisir_shell(macos: bool, shell_env: Option<&str>, existe: &dyn Fn(&str) -> bool) -> Option<String> {
+    if macos {
+        return Some("/bin/zsh".into());
+    }
+    if let Some(shell) = shell_env {
+        if shell.starts_with('/')
+            && matches!(shell.rsplit('/').next(), Some("bash" | "zsh"))
+            && existe(shell)
+        {
+            return Some(shell.into());
+        }
+    }
+    ["/bin/bash", "/bin/zsh"]
+        .into_iter()
+        .find(|shell| existe(shell))
+        .map(String::from)
+}
+
+// zsh sur macOS, bash ou zsh selon le shell de l'utilisateur sous Linux.
+// `-i -l` conserve le démarrage interactif et les profils de login du shell.
 #[cfg(not(target_os = "windows"))]
-fn login_shell(script: &str) -> Command {
-    let mut c = Command::new("/bin/zsh");
+fn login_shell(script: &str) -> Result<Command, String> {
+    let shell_env = std::env::var("SHELL").ok();
+    let shell = choisir_shell(
+        cfg!(target_os = "macos"),
+        shell_env.as_deref(),
+        &|chemin| std::path::Path::new(chemin).is_file(),
+    )
+    .ok_or_else(|| "Ni bash ni zsh trouvé : installe bash, puis relance AID.".to_string())?;
+    let mut c = Command::new(shell);
     c.args(["-i", "-l", "-c", script]);
-    c
+    Ok(c)
+}
+
+#[cfg(not(target_os = "windows"))]
+use self::login_shell as commande_login;
+
+#[cfg(target_os = "windows")]
+fn commande_login(script: &str) -> Result<Command, String> {
+    Ok(login_shell(script))
 }
 
 // Le démarrage du shell peut écrire sur stdout ; stderr reste distinct (job control).
@@ -164,7 +198,7 @@ const WHERE: &str = " (dans WSL2)";
 
 /// Le binaire AID Server à lancer, ou None s'il n'y en a aucun (DR11).
 pub fn resolve_server() -> Option<String> {
-    let out = login_shell(RESOLVE_SCRIPT).output().ok()?;
+    let out = commande_login(RESOLVE_SCRIPT).ok()?.output().ok()?;
     if !out.status.success() {
         return None;
     }
@@ -177,7 +211,7 @@ pub fn resolve_server() -> Option<String> {
 
 /// Installe AID Server par l'installeur officiel (`curl … | sh`), comme le ferait un humain.
 pub fn bootstrap_server() -> Result<(), String> {
-    let status = login_shell(&bootstrap_script())
+    let status = commande_login(&bootstrap_script())?
         .status()
         .map_err(|e| e.to_string())?;
     if !status.success() {
@@ -210,13 +244,13 @@ pub fn spawn_cycle(on_state: &dyn Fn(&str), demander: &dyn Fn() -> bool) -> Resu
     };
     log::info!("AID Server : {bin}");
     on_state("Démarrage d'AID Server…");
-    let mut status = login_shell(&cycle_shell_command(&bin, false))
+    let mut status = commande_login(&cycle_shell_command(&bin, false))?
         .status()
         .map_err(|e| e.to_string())?;
     if status.code() == Some(3) {
         if accord_cycle(status.code(), demander) {
             on_state("Mise à jour d'AID Server…");
-            status = login_shell(&cycle_shell_command(&bin, true))
+            status = commande_login(&cycle_shell_command(&bin, true))?
                 .status()
                 .map_err(|e| e.to_string())?;
         } else {
@@ -315,6 +349,51 @@ fn handle_restart_request(mut stream: TcpStream) {
 #[cfg(test)]
 mod tests_wsl {
     use super::*;
+
+    #[test]
+    fn shell_macos() {
+        assert_eq!(
+            choisir_shell(true, None, &|_| false).as_deref(),
+            Some("/bin/zsh")
+        );
+    }
+
+    #[test]
+    fn shell_utilisateur_linux() {
+        assert_eq!(
+            choisir_shell(false, Some("/usr/bin/zsh"), &|_| true).as_deref(),
+            Some("/usr/bin/zsh")
+        );
+    }
+
+    #[test]
+    fn shell_fish_ignore() {
+        assert_eq!(
+            choisir_shell(false, Some("/bin/fish"), &|_| true).as_deref(),
+            Some("/bin/bash")
+        );
+    }
+
+    #[test]
+    fn shell_repli_zsh() {
+        assert_eq!(
+            choisir_shell(false, None, &|chemin| chemin == "/bin/zsh").as_deref(),
+            Some("/bin/zsh")
+        );
+    }
+
+    #[test]
+    fn shell_absent() {
+        assert_eq!(choisir_shell(false, None, &|_| false).as_deref(), None);
+    }
+
+    #[test]
+    fn shell_relatif_refuse() {
+        assert_eq!(
+            choisir_shell(false, Some("bin/bash"), &|_| true).as_deref(),
+            Some("/bin/bash")
+        );
+    }
 
     #[test]
     fn choix_du_dialogue() {
