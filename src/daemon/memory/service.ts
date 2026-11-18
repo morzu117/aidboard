@@ -65,7 +65,11 @@ export class MemoryService {
     return this.deps.store.list(prefix);
   }
 
-  async purge(options: { dryRun?: boolean; orphelines?: boolean }) {
+  purge(options: { dryRun?: boolean; orphelines?: boolean }) {
+    return this.deps.queue.run(QUEUE_KEY, () => this.purgeQueued(options));
+  }
+
+  private async purgeQueued(options: { dryRun?: boolean; orphelines?: boolean }) {
     // Matérialiser les pages ferme le curseur SQLite avant toute suppression.
     const pages = [...this.deps.store.all()];
     const tasks = new Map<string, { namespace: string; task: string; slugs: string[] }>();
@@ -73,7 +77,7 @@ export class MemoryService {
       const match = /^([^/]+)\/(?:plan|dev-handoff|review)\/([^/]+)$/.exec(page.slug);
       if (!match) continue;
       const [, namespace, task] = match;
-      if (!namespace || !task) continue;
+      if (!namespace || !task || namespace === LESSON_NS) continue;
       const key = `${namespace}/${task}`;
       const entry = tasks.get(key) ?? { namespace, task, slugs: [] as string[] };
       entry.slugs.push(page.slug);
@@ -83,7 +87,7 @@ export class MemoryService {
     const slugs: string[] = [];
     for (const [key, entry] of tasks) {
       const escaped = entry.task.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      const citation = new RegExp(`(^|[^a-z0-9-])${escaped}([^a-z0-9-]|$)`);
+      const citation = new RegExp(`(^|[^A-Za-z0-9_-])${escaped}([^A-Za-z0-9_-]|$)`);
       // Une citation peut figurer dans le corps ou le frontmatter de la rétro.
       const closed = pages.some(
         (page) =>
@@ -97,15 +101,18 @@ export class MemoryService {
       }
     }
     const dryRun = !!(options.dryRun || options.orphelines);
+    const removed: string[] = [];
     if (!dryRun) {
-      for (const slug of slugs) await this.remove(slug, { author: 'admin' });
+      for (const slug of slugs) {
+        if (await this.removeQueued(slug, { author: 'admin' })) removed.push(slug);
+      }
     }
     // Les tâches sont qualifiées par namespace pour distinguer les homonymes.
     return {
       dryRun,
       orphelines: !!options.orphelines,
       tasks: selected.sort(),
-      slugs: slugs.sort(),
+      slugs: (dryRun ? slugs : removed).sort(),
     };
   }
 
@@ -192,24 +199,27 @@ export class MemoryService {
   }
 
   remove(slug: string, ctx: WriteContext): Promise<boolean> {
-    return this.deps.queue.run(QUEUE_KEY, async () => {
-      const { store, mirror, events } = this.deps;
-      const page = store.get(slug);
-      if (!page) return false;
-      store.remove(slug);
-      this.deps.onRemove?.(slug);
-      await mirror.remove(slug);
-      mirror.scheduleCommit(`mem: ${slug} supprimée`);
-      events.append({
-        source: 'daemon',
-        type: 'memory.page',
-        ...(ctx.workspaceId && { workspaceId: ctx.workspaceId }),
-        ...(ctx.topicId && { topicId: ctx.topicId }),
-        ...(ctx.runId && { runId: ctx.runId }),
-        data: { slug, revision: page.revision, author: ctx.author, op: 'rm' },
-      });
-      return true;
+    return this.deps.queue.run(QUEUE_KEY, () => this.removeQueued(slug, ctx));
+  }
+
+  // La purge détient déjà la file des écritures : ne pas l'enfiler à nouveau.
+  private async removeQueued(slug: string, ctx: WriteContext): Promise<boolean> {
+    const { store, mirror, events } = this.deps;
+    const page = store.get(slug);
+    if (!page) return false;
+    store.remove(slug);
+    this.deps.onRemove?.(slug);
+    await mirror.remove(slug);
+    mirror.scheduleCommit(`mem: ${slug} supprimée`);
+    events.append({
+      source: 'daemon',
+      type: 'memory.page',
+      ...(ctx.workspaceId && { workspaceId: ctx.workspaceId }),
+      ...(ctx.topicId && { topicId: ctx.topicId }),
+      ...(ctx.runId && { runId: ctx.runId }),
+      data: { slug, revision: page.revision, author: ctx.author, op: 'rm' },
     });
+    return true;
   }
 
   // DM12 : seuls les fichiers touchés par le tirage sont relus, sans réécrire le miroir.
