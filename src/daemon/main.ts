@@ -219,7 +219,7 @@ export async function startDaemon(
       ...(embedder && vectors && { hybrid: { index: vectors, embedder, enabled: () => hybridOn } }),
       onWrite: (slug) => {
         if (!embedder || !vectors) return;
-        jobs.enqueue('embed', slug);
+        jobs.enqueue('embed', slug, true);
         worker?.notify();
       },
       onRemove: (slug) => vectors?.remove(slug),
@@ -238,7 +238,8 @@ export async function startDaemon(
             const wasReady = hybridOn;
             hybridOn = ready;
             if (hybridOn) {
-              if (jobs.enqueueMissingEmbeddings(!wasReady) > 0) worker.notify();
+              const enqueued = jobs.enqueueMissingEmbeddings(!wasReady);
+              if (enqueued > 0 || !wasReady) worker.notify();
             } else if (!availabilityChecked || wasReady) {
               log('ollama injoignable : recherche FTS5 seule');
             }

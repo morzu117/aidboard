@@ -83,7 +83,7 @@ export class MemoryService {
       tasks.set(key, entry);
     }
     const selected: string[] = [];
-    const slugs: string[] = [];
+    const selectedSlugs = new Map<string, string>();
     for (const [key, entry] of tasks) {
       const escaped = entry.task.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       const citation = new RegExp(`(^|[^A-Za-z0-9_-])${escaped}([^A-Za-z0-9_-]|$)`);
@@ -96,7 +96,7 @@ export class MemoryService {
       );
       if (closed === !options.orphelines) {
         selected.push(key);
-        slugs.push(...entry.slugs);
+        for (const slug of entry.slugs) selectedSlugs.set(slug, key);
       }
     }
     const dryRun = !!(options.dryRun || options.orphelines);
@@ -104,11 +104,10 @@ export class MemoryService {
     const removedTasks = new Set<string>();
     if (!dryRun) {
       // Toute erreur de suppression interrompt la purge et remonte à l'appelant.
-      for (const slug of slugs) {
+      for (const [slug, taskKey] of selectedSlugs) {
         if (await this.removeQueued(slug, { author: 'admin' })) {
           removed.push(slug);
-          const [namespace, , task] = slug.split('/');
-          removedTasks.add(`${namespace}/${task}`);
+          removedTasks.add(taskKey);
         }
       }
     }
@@ -117,7 +116,7 @@ export class MemoryService {
       dryRun,
       orphelines: !!options.orphelines,
       tasks: (dryRun ? selected : [...removedTasks]).sort(),
-      slugs: (dryRun ? slugs : removed).sort(),
+      slugs: (dryRun ? [...selectedSlugs.keys()] : removed).sort(),
     };
   }
 

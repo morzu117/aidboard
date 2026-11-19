@@ -234,6 +234,26 @@ test.each([
   expect(pairs()).toHaveLength(1);
 });
 
+test('une réécriture du candidat pendant le jugement laisse la source éligible', async () => {
+  const candidate = 'lesson/test/candidat';
+  page(source);
+  page(candidate);
+  chat.mockImplementationOnce(async () => {
+    store.put(candidate, text + '\nNouvelle révision.', { kind: 'force' }, 'test');
+    return '{"doublon":false,"rationale":"distinctes"}';
+  });
+
+  await run();
+  expect(pairs()).toEqual([]);
+  expect(proposals.seen(store.get(source)!, 'duplicate', '0.15')).toBe(false);
+
+  await run();
+  expect(chat).toHaveBeenCalledTimes(2);
+  expect(chat.mock.lastCall?.[1]).toContain('Nouvelle révision.');
+  expect(pairs()).toHaveLength(1);
+  expect(proposals.seen(store.get(source)!, 'duplicate', '0.15')).toBe(true);
+});
+
 test('duplicateDistance : défaut, bornes et valeurs invalides', () => {
   expect(parseConfig('').memory.maintenance.duplicateDistance).toBe(0.15);
   for (const distance of ['0.01', '2']) {

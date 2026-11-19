@@ -30,7 +30,7 @@ export class MemoryJobs {
         )
         .get(slug) as { id: string } | undefined;
       if (failed) {
-        // Seule la reprise après indisponibilité réarme un embedding en échec.
+        // Une réécriture ou une reprise après indisponibilité réarme un embedding en échec.
         if (!reprendreÉchec) return null;
         this.db
           .prepare(

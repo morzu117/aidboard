@@ -354,17 +354,20 @@ test('57.4 : marqueur illisible toléré', async () => {
 
 test('57.4 : relecture des pages changées quand le rebase garde le contenu local', async () => {
   const { a, b } = await pair();
+  await put(a, 'lesson/locale', 'version de base');
+  await b.mirror.pull();
   b.mirror.push = false;
-  await put(b, 'lesson/base', 'identique');
-  await put(b, 'lesson/locale', 'locale');
-  await put(a, 'lesson/base', 'identique');
+  // Le rebase ignore le commit commun et rejoue la révision propre à b.
+  await put(a, 'lesson/locale', 'version distante');
+  await put(b, 'lesson/locale', 'version distante');
+  await put(b, 'lesson/locale', 'version locale');
   await put(a, 'lesson/distante', 'distante');
   b.written.length = 0;
   b.mirror.push = true;
   await b.mirror.pushIfConfigured();
   expect(b.written).toEqual(['lesson/distante']);
-  expect(b.service.get('lesson/base')?.body).toBe('identique');
-  expect(b.service.get('lesson/locale')?.body).toBe('locale');
+  expect(b.service.get('lesson/locale')?.body).toBe('version locale');
+  expect(sh(b.mirror.root, 'show', 'HEAD:lesson/locale.md')).toContain('version locale');
 });
 
 test('57.4 : fetch borné à 30 secondes au démarrage et avant push', async () => {

@@ -1,3 +1,4 @@
+import { isDeepStrictEqual } from 'node:util';
 import { Type } from '@sinclair/typebox';
 import { Value } from '@sinclair/typebox/value';
 import { monotonicFactory } from 'ulid';
@@ -339,7 +340,11 @@ async function runTags(
   return true;
 }
 
-async function runDuplicate(page: MemoryPage, deps: MaintainDeps): Promise<boolean> {
+async function runDuplicate(
+  page: MemoryPage,
+  deps: MaintainDeps,
+  candidatesRead: MemoryPage[],
+): Promise<boolean> {
   if (!deps.vectors?.hasVector(page.slug)) return false;
   const candidates = deps.vectors.duplicateCandidates(
     page.slug,
@@ -347,7 +352,9 @@ async function runDuplicate(page: MemoryPage, deps: MaintainDeps): Promise<boole
   );
   for (const hit of candidates) {
     const candidate = deps.store.get(hit.slug);
-    if (!candidate || deps.store.duplicatePairJudged(page, candidate)) continue;
+    if (!candidate) continue;
+    candidatesRead.push(candidate);
+    if (deps.store.duplicatePairJudged(page, candidate)) continue;
     const content = await deps.model.chat(
       DUPLICATE_PROMPT,
       `Leçon : ${page.slug}\nTitre : ${page.title}\n\n${page.body}\n\nCandidat : ${candidate.slug}\nTitre : ${candidate.title}\n\n${candidate.body}`,
@@ -355,6 +362,12 @@ async function runDuplicate(page: MemoryPage, deps: MaintainDeps): Promise<boole
     const payload = parseJson(content);
     if (!Value.Check(DuplicatePayload, payload)) {
       throw new Error('proposition duplicate : forme JSON invalide');
+    }
+    if (
+      deps.store.get(page.slug)?.revision !== page.revision ||
+      deps.store.get(candidate.slug)?.revision !== candidate.revision
+    ) {
+      return false;
     }
     if (payload.doublon) {
       deps.store.recordDuplicateProposal(page, candidate, () => {
@@ -398,11 +411,19 @@ export async function runMaintainJob(job: MemoryJob, deps: MaintainDeps): Promis
   const distance = deps.duplicateDistance ?? DEFAULT_DUPLICATE_DISTANCE;
   const kind = eligibleKind(page, deps.proposals, deps.splitLines, tags, distance, deps.vectors);
   if (!kind) return;
+  const candidatesRead: MemoryPage[] = [];
   let examined: boolean;
   if (kind === 'tags') examined = await runTags(page, deps, tags);
-  else if (kind === 'duplicate') examined = await runDuplicate(page, deps);
+  else if (kind === 'duplicate') examined = await runDuplicate(page, deps, candidatesRead);
   else examined = await runSplit(page, deps);
-  if (examined && !deps.proposals.pending(page.slug, kind)) {
+  if (
+    examined &&
+    !deps.proposals.pending(page.slug, kind) &&
+    deps.store.get(page.slug)?.revision === page.revision &&
+    candidatesRead.every(
+      (candidate) => deps.store.get(candidate.slug)?.revision === candidate.revision,
+    )
+  ) {
     deps.proposals.recordSeen(page, kind, seenKey(kind, tags, distance));
   }
 }
@@ -478,7 +499,7 @@ export async function applyProposal(
       if (creationEnCours && !(err instanceof RevisionConflict) && memory.get(creationEnCours)) {
         created.push(creationEnCours);
       }
-      for (const slug of created.reverse()) {
+      for (const slug of [...created].reverse()) {
         try {
           await memory.remove(slug, MAINTENANCE_CTX);
         } catch (erreurRetrait) {
@@ -487,18 +508,24 @@ export async function applyProposal(
       }
       try {
         const source = memory.get(proposal.slug);
-        // Seule notre réécriture pose remplacee_par : une écriture concurrente reste intacte.
+        // La liste identifie le découpage à annuler. La révision protège les écritures après cette lecture.
         if (
           source &&
           source.revision !== page.revision &&
-          'remplacee_par' in source.frontmatter &&
-          !('remplacee_par' in page.frontmatter)
+          isDeepStrictEqual(source.frontmatter.remplacee_par, created)
         ) {
           const texteOriginal = renderMarkdown({ frontmatter: page.frontmatter, body: page.body });
-          await memory.put(proposal.slug, texteOriginal, { kind: 'force' }, MAINTENANCE_CTX);
+          await memory.put(
+            proposal.slug,
+            texteOriginal,
+            { kind: 'replace', expectedRevision: source.revision },
+            MAINTENANCE_CTX,
+          );
         }
-      } catch {
-        console.error(`découpage : échec de la restauration de ${proposal.slug}`);
+      } catch (erreurRestauration) {
+        console.error(
+          `découpage : échec de la restauration de ${proposal.slug} : ${String(erreurRestauration)}`,
+        );
       }
       throw err;
     }
