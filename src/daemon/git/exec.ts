@@ -43,13 +43,14 @@ function estLecture(args: string[]): boolean {
 }
 
 // Jamais de shell : execFile avec un tableau d'arguments. Ne lève pas, rend le code de sortie.
-export function git(cwd: string, args: string[]): Promise<GitResult> {
+export function git(cwd: string, args: string[], timeout?: number): Promise<GitResult> {
   return new Promise((resolve) => {
     execFile(
       'git',
       args,
       {
         cwd,
+        timeout,
         env: { ...process.env, ...(estLecture(args) ? GIT_ENV_LECTURE : GIT_ENV) },
         maxBuffer: 16 * 1024 * 1024,
       },

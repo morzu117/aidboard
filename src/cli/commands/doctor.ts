@@ -406,6 +406,25 @@ export async function runChecks(p: Probes): Promise<Check[]> {
       .join(', ');
     const label = `mémoire : ${total} page${total === 1 ? '' : 's'}${detail ? ` (${detail})` : ''}`;
     const reasons: string[] = [];
+    const sync = mem.mirrorSync;
+    if (sync) {
+      if (sync.push && !sync.origin)
+        reasons.push('distant origin absent alors que memory.git.push est activé');
+      if (sync.origin) {
+        if (sync.ahead === null || sync.behind === null)
+          reasons.push('avance/retard inconnus : référence distante origin non disponible');
+        else
+          add(
+            sync.ahead > 0 || sync.behind > 0 ? 'warn' : 'ok',
+            `miroir mémoire : ${sync.ahead} commit(s) en avance, ${sync.behind} en retard`,
+            'par rapport à la dernière référence origin récupérée',
+          );
+      }
+      if (sync.conflicts.length > 0)
+        reasons.push(
+          `conflit en attente : ${sync.conflicts.join(', ')} ; résolution manuelle requise`,
+        );
+    }
     if (mem.mirrorDirty) reasons.push('miroir non commité : aid mem reindex');
     if (mem.failedJobs > 0) {
       reasons.push(

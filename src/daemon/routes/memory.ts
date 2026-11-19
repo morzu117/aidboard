@@ -32,6 +32,11 @@ const ExportBody = Type.Object(
   { additionalProperties: false },
 );
 
+const PurgeBody = Type.Object(
+  { dryRun: Type.Optional(Type.Boolean()), orphelines: Type.Optional(Type.Boolean()) },
+  { additionalProperties: false },
+);
+
 export interface MemoryRouteDeps {
   db: Db;
   memory: MemoryService;
@@ -75,7 +80,7 @@ export function runWriteContext(db: Db, p: Principal, slug: string): WriteContex
   const run = db
     .prepare(
       `SELECT r.id AS run_id, t.id AS topic_id, w.id AS workspace_id, w.name AS workspace_name,
-              w.namespace, (SELECT role FROM agents a WHERE a.run_id = r.id ORDER BY a.created_at LIMIT 1) AS role
+              w.namespace, (SELECT role FROM agents a WHERE a.run_id = r.id ORDER BY a.created_at, a.id LIMIT 1) AS role
        FROM runs r JOIN topics t ON t.id = r.topic_id JOIN workspaces w ON w.id = t.workspace_id
        WHERE r.id = ?`,
     )
@@ -99,6 +104,18 @@ export function registerMemoryRoutes(app: FastifyInstance, deps: MemoryRouteDeps
     if (req.principal?.kind !== 'admin') throw new AidHttpError(403, 'réservé à l’administrateur');
   };
 
+  const recordUsage = (req: FastifyRequest, slugs: string[], op: 'get' | 'search') => {
+    try {
+      memory.store.recordUsage(
+        slugs,
+        op,
+        req.principal?.kind === 'run' ? req.principal.runId : undefined,
+      );
+    } catch (err) {
+      app.log.error({ err }, "mémoire : écriture du journal d'usage impossible");
+    }
+  };
+
   app.get('/api/memory/pages', async (req) => {
     const { prefix } = req.query as { prefix?: string };
     return { slugs: memory.list(prefix ?? '') };
@@ -107,6 +124,7 @@ export function registerMemoryRoutes(app: FastifyInstance, deps: MemoryRouteDeps
   app.get('/api/memory/pages/*', async (req) => {
     const page = memory.get(slugOf(req));
     if (!page) throw new AidHttpError(404, 'page absente');
+    recordUsage(req, [page.slug], 'get');
     return page;
   });
 
@@ -140,7 +158,19 @@ export function registerMemoryRoutes(app: FastifyInstance, deps: MemoryRouteDeps
     const q = req.query as { q?: string; scope?: string; limit?: string };
     if (!q.q) throw new AidHttpError(400, 'q est requis');
     const limit = Math.min(Math.max(Number.parseInt(q.limit ?? '10', 10) || 10, 1), 100);
-    return memory.search(q.q, q.scope && q.scope !== 'all' ? q.scope : 'all', limit);
+    const result = await memory.search(q.q, q.scope && q.scope !== 'all' ? q.scope : 'all', limit);
+    recordUsage(
+      req,
+      result.hits.map((hit) => hit.slug),
+      'search',
+    );
+    return result;
+  });
+
+  app.get('/api/memory/usage', async (req) => {
+    // Le bilan local suit les autres routes de diagnostic, réservées à l'administrateur.
+    adminOnly(req);
+    return { pages: memory.store.usage() };
   });
 
   app.get('/api/memory/health', async (req) => {
@@ -151,6 +181,11 @@ export function registerMemoryRoutes(app: FastifyInstance, deps: MemoryRouteDeps
   app.post('/api/memory/reindex', async (req) => {
     adminOnly(req);
     return memory.reindex();
+  });
+
+  app.post('/api/memory/purge', { schema: { body: PurgeBody } }, async (req) => {
+    adminOnly(req);
+    return memory.purge(req.body as Static<typeof PurgeBody>);
   });
 
   app.post('/api/memory/export', { schema: { body: ExportBody } }, async (req) => {

@@ -1,4 +1,4 @@
-import { afterEach, expect, test } from 'vitest';
+import { afterEach, expect, test, vi } from 'vitest';
 import type { Embedder } from '../src/daemon/memory/embed.js';
 import { startTestDaemon, waitFor, type TestDaemon } from './helpers/daemon.js';
 
@@ -52,18 +52,6 @@ function fakeEmbedder(vectors: Record<string, number[]>, opts: { ready?: boolean
   };
 }
 
-function alwaysFails(): Embedder {
-  return {
-    model: 'fake-bge',
-    async ready() {
-      return true;
-    },
-    async embed() {
-      throw new Error('embedding en échec (test)');
-    },
-  };
-}
-
 test('put enfile un job d’embedding, le worker le passe à done, memory_vectors a une ligne', async () => {
   const embedder = fakeEmbedder({ 'felin\n\nLe chat dort sur le canapé.': [1, 0, 0] });
   t = await startTestDaemon(undefined, { memory: { embedder, pollMs: 5 } });
@@ -91,26 +79,197 @@ test('recherche hybride : une page sans mot commun avec la requête remonte par 
   expect(slugs[0]).toBe('aid/plan/felin');
 });
 
-test('Embedder.ready() faux : recherche FTS5 seule, jamais de job', async () => {
+test('Embedder.ready() faux : recherche FTS5 seule, job en attente', async () => {
   const embedder = fakeEmbedder({}, { ready: false });
   t = await startTestDaemon(undefined, { memory: { embedder, pollMs: 5 } });
   await put('aid/plan/x', 'un mot rare : zythum');
   expect((await health()).vectors).toBe('off');
-  expect((await health()).pendingJobs).toBe(0);
+  expect((await health()).pendingJobs).toBe(1);
+  expect(t.db.prepare('SELECT attempts FROM memory_jobs').get()).toEqual({ attempts: 0 });
   const r = await search('zythum');
   expect(r.json()).toMatchObject({ mode: 'fts', hits: [{ slug: 'aid/plan/x' }] });
 });
 
-test('échec d’embedding : le job passe à failed après 3 tentatives, le put a déjà répondu', async () => {
-  t = await startTestDaemon(undefined, {
-    memory: { embedder: alwaysFails(), backoffMs: [5, 5], pollMs: 5 },
+test('DM16 : un contenu rejeté épuise ses tentatives sans désactiver la recherche hybride', async () => {
+  const ready = vi.fn(async () => true);
+  const embed = vi.fn(async () => {
+    throw new Error('contenu rejeté');
   });
-  const r = await put('aid/plan/x', 'contenu');
-  expect(r.statusCode).toBe(201); // répond avant que le worker n'ait rien tenté
-  await waitFor(() => jobState('aid/plan/x') === 'failed', 5000, 'job embed en échec');
-  const job = t.db
-    .prepare('SELECT state, attempts FROM memory_jobs WHERE slug = ?')
-    .get('aid/plan/x');
-  expect(job).toMatchObject({ state: 'failed', attempts: 3 });
-  expect((await health()).pendingJobs).toBe(0);
+  t = await startTestDaemon(undefined, {
+    memory: {
+      embedder: { model: 'fake-bge', ready, embed },
+      backoffMs: [5, 5],
+      pollMs: 5,
+      maintenanceScheduleMs: 20,
+      readyTimeoutMs: 50,
+    },
+  });
+  expect((await put('aid/plan/x', 'contenu')).statusCode).toBe(201);
+  await waitFor(() => jobState('aid/plan/x') === 'failed');
+  const sondes = ready.mock.calls.length;
+  await waitFor(() => ready.mock.calls.length > sondes + 1);
+  expect((await health()).vectors).toBe('ollama');
+  expect(embed).toHaveBeenCalledTimes(3);
+  expect(t.db.prepare('SELECT state, attempts, error FROM memory_jobs').all()).toEqual([
+    { state: 'failed', attempts: 3, error: 'contenu rejeté' },
+  ]);
+});
+
+test('DM16 : rattrapage après démarrage indisponible, puis après une nouvelle panne', async () => {
+  const availability = { ready: false };
+  let probes = 0;
+  const fake = fakeEmbedder(
+    {
+      'x\n\ncontenu': [1, 0, 0],
+      'ancienne\n\ncontenu': [0, 1, 0],
+      'y\n\ncontenu': [0, 0, 1],
+    },
+    availability,
+  );
+  t = await startTestDaemon(undefined, {
+    memory: {
+      embedder: {
+        ...fake,
+        ready: async () => {
+          probes++;
+          return availability.ready;
+        },
+      },
+      pollMs: 5,
+      maintenanceScheduleMs: 20,
+    },
+  });
+  await put('aid/plan/x', 'contenu');
+  await put('aid/plan/ancienne', 'contenu');
+  // Simule une page importée avant la file persistante, sans job à reprendre.
+  t.db.prepare('DELETE FROM memory_jobs WHERE slug = ?').run('aid/plan/ancienne');
+  const before = probes;
+  await waitFor(() => probes > before + 1);
+  expect(jobState('aid/plan/x')).toBe('pending');
+  expect(vectorCount()).toBe(0);
+  availability.ready = true;
+  await waitFor(() => vectorCount() === 2);
+  expect(t.db.prepare('SELECT count(*) AS n FROM memory_jobs').get()).toEqual({ n: 2 });
+  const recovered = probes;
+  availability.ready = false;
+  await waitFor(() => probes > recovered + 1);
+  expect((await health()).vectors).toBe('off');
+  await put('aid/plan/y', 'contenu');
+  const down = probes;
+  await waitFor(() => probes > down + 1);
+  expect(
+    t.db.prepare('SELECT state, attempts FROM memory_jobs WHERE slug = ?').get('aid/plan/y'),
+  ).toEqual({ state: 'pending', attempts: 0 });
+  availability.ready = true;
+  await waitFor(() => vectorCount() === 3);
+  expect((await health()).vectors).toBe('ollama');
+});
+
+test('DM16 : panne entre deux ticks, job pending rattrapé au retour d’Ollama', async () => {
+  let available = true;
+  let échecEmbedding = false;
+  let sondéAprèsÉchec = false;
+  t = await startTestDaemon(undefined, {
+    memory: {
+      embedder: {
+        model: 'fake-bge',
+        async ready() {
+          if (échecEmbedding) sondéAprèsÉchec = true;
+          return available;
+        },
+        async embed() {
+          if (!échecEmbedding) {
+            échecEmbedding = true;
+            available = false;
+            throw new Error('panne entre deux ticks');
+          }
+          return [Float32Array.from([1, 0, 0])];
+        },
+      },
+      backoffMs: [],
+      pollMs: 5,
+      maintenanceScheduleMs: 1000,
+      readyTimeoutMs: 50,
+    },
+  });
+  expect((await health()).vectors).toBe('ollama');
+  await put('aid/plan/panne', 'contenu');
+  await waitFor(() => sondéAprèsÉchec && jobState('aid/plan/panne') === 'pending');
+  expect((await health()).vectors).toBe('off');
+  expect(t.db.prepare('SELECT attempts FROM memory_jobs').get()).toEqual({ attempts: 0 });
+  available = true;
+  await waitFor(() => vectorCount() === 1);
+  expect(jobState('aid/plan/panne')).toBe('done');
+  expect(t.db.prepare('SELECT count(*) AS n FROM memory_jobs').get()).toEqual({ n: 1 });
+});
+
+test('DM16 : ready bloqué est borné et ne bloque pas l’arrêt pendant un tick', async () => {
+  let probes = 0;
+  t = await startTestDaemon(undefined, {
+    memory: {
+      embedder: {
+        model: 'fake-bge',
+        ready() {
+          probes++;
+          return probes === 1 ? Promise.resolve(true) : new Promise<boolean>(() => {});
+        },
+        async embed() {
+          return [Float32Array.from([1, 0, 0])];
+        },
+      },
+      maintenanceScheduleMs: 20,
+      readyTimeoutMs: 50,
+    },
+  });
+  await waitFor(() => probes >= 2);
+  await t.d.stop();
+});
+
+test('DM16 : absence au démarrage journalisée, même si ready ne répond jamais', async () => {
+  const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+  try {
+    t = await startTestDaemon(undefined, {
+      memory: {
+        embedder: {
+          model: 'fake-bge',
+          ready: () => new Promise<boolean>(() => {}),
+          embed: async () => [],
+        },
+        readyTimeoutMs: 50,
+      },
+    });
+    expect((await health()).vectors).toBe('off');
+    expect(log).toHaveBeenCalledWith('ollama injoignable : recherche FTS5 seule');
+  } finally {
+    log.mockRestore();
+  }
+});
+
+test('DM16 : un ancien job failed est rattrapé au retour de la disponibilité', async () => {
+  const disponibilité = { ready: true };
+  const fake = fakeEmbedder({ 'ancien\n\ncontenu': [1, 0, 0] }, disponibilité);
+  const ready = vi.fn(fake.ready);
+  t = await startTestDaemon(undefined, {
+    memory: {
+      embedder: { ...fake, ready },
+      pollMs: 5,
+      maintenanceScheduleMs: 20,
+      readyTimeoutMs: 50,
+    },
+  });
+  await put('aid/plan/ancien', 'contenu');
+  await waitFor(() => jobState('aid/plan/ancien') === 'done');
+  t.db.prepare('DELETE FROM memory_vectors').run();
+  t.db.prepare("UPDATE memory_jobs SET state = 'failed'").run();
+  const sondes = ready.mock.calls.length;
+  await waitFor(() => ready.mock.calls.length > sondes + 1);
+  expect(jobState('aid/plan/ancien')).toBe('failed');
+  disponibilité.ready = false;
+  const sondesAvantPanne = ready.mock.calls.length;
+  await waitFor(() => ready.mock.calls.length > sondesAvantPanne + 1);
+  expect((await health()).vectors).toBe('off');
+  disponibilité.ready = true;
+  await waitFor(() => vectorCount() === 1);
+  expect(jobState('aid/plan/ancien')).toBe('done');
+  expect(t.db.prepare('SELECT count(*) AS n FROM memory_jobs').get()).toEqual({ n: 1 });
 });

@@ -1,11 +1,24 @@
 import { Type } from '@sinclair/typebox';
 import { Value } from '@sinclair/typebox/value';
 import { monotonicFactory } from 'ulid';
-import type { MemoryProposal, ProposalKind, ProposalState } from '../../shared/memory.js';
-import { LESSON_NS } from '../../shared/memory.js';
+import type {
+  MemoryPage,
+  MemoryProposal,
+  ProposalKind,
+  ProposalState,
+} from '../../shared/memory.js';
+import {
+  DEFAULT_MAINTENANCE_MAX_PER_NIGHT,
+  DEFAULT_MAINTENANCE_SPLIT_LINES,
+  DEFAULT_DUPLICATE_DISTANCE,
+  LESSON_NS,
+  RevisionConflict,
+} from '../../shared/memory.js';
 import type { Db } from '../db.js';
+import type { VectorIndex } from './embed.js';
 import type { MemoryJob, MemoryJobs } from './jobs.js';
 import type { MemoryService, WriteContext } from './service.js';
+import { isValidMemSlug } from './slug.js';
 import { renderMarkdown } from './store.js';
 import type { MemoryStore } from './store.js';
 
@@ -86,6 +99,22 @@ export class MemoryProposals {
       .get(slug, kind);
   }
 
+  seen(page: MemoryPage, kind: ProposalKind, key: string): boolean {
+    return !!this.db
+      .prepare(
+        'SELECT 1 FROM memory_maintenance_seen WHERE slug = ? AND kind = ? AND revision = ? AND vocabulary = ?',
+      )
+      .get(page.slug, kind, page.revision, key);
+  }
+
+  recordSeen(page: MemoryPage, kind: ProposalKind, key: string): void {
+    this.db
+      .prepare(
+        'INSERT OR REPLACE INTO memory_maintenance_seen (slug, kind, revision, at, vocabulary) VALUES (?, ?, ?, ?, ?)',
+      )
+      .run(page.slug, kind, page.revision, new Date().toISOString(), key);
+  }
+
   decide(id: string, state: 'applied' | 'rejected'): void {
     this.db
       .prepare('UPDATE memory_proposals SET state = ?, decided_at = ? WHERE id = ?')
@@ -129,7 +158,7 @@ const TagsPayload = Type.Object(
   { additionalProperties: false },
 );
 const DuplicatePayload = Type.Object(
-  { duplicateOf: Type.String({ minLength: 1 }), rationale: Type.String({ minLength: 1 }) },
+  { doublon: Type.Boolean(), rationale: Type.String({ minLength: 1 }) },
   { additionalProperties: false },
 );
 const SplitPage = Type.Object(
@@ -142,7 +171,12 @@ const SplitPage = Type.Object(
   { additionalProperties: false },
 );
 const SplitPayload = Type.Object(
-  { pages: Type.Array(SplitPage, { minItems: 2, maxItems: 4 }) },
+  {
+    pages: Type.Union([
+      Type.Array(SplitPage, { minItems: 2, maxItems: 4 }),
+      Type.Array(SplitPage, { maxItems: 0 }),
+    ]),
+  },
   { additionalProperties: false },
 );
 
@@ -177,23 +211,33 @@ function lineCount(body: string): number {
   return body.split('\n').filter((l) => l.trim() !== '').length;
 }
 
+// La colonne vocabulary conserve l’empreinte propre à chaque tâche.
+function seenKey(kind: ProposalKind, tags: string[], duplicateDistance: number): string {
+  if (kind === 'tags') return JSON.stringify(tags);
+  if (kind === 'duplicate') return String(duplicateDistance);
+  return '';
+}
+
 function eligibleKind(
-  page: { slug: string; namespace: string; frontmatter: Record<string, unknown>; body: string },
+  page: MemoryPage,
   proposals: MemoryProposals,
+  splitLines = DEFAULT_MAINTENANCE_SPLIT_LINES,
+  tags: string[],
+  duplicateDistance = DEFAULT_DUPLICATE_DISTANCE,
+  vectors?: VectorIndex,
 ): ProposalKind | null {
+  if (page.namespace !== LESSON_NS) return null;
   const rejected = new Set(rejectedKinds(page.frontmatter));
   for (const kind of PRIORITY) {
     if (rejected.has(kind) || proposals.pending(page.slug, kind)) continue;
-    if (kind === 'tags') {
-      const tags = page.frontmatter.tags;
-      if (!Array.isArray(tags) || tags.length === 0) return 'tags';
+    if (proposals.seen(page, kind, seenKey(kind, tags, duplicateDistance))) continue;
+    if (kind === 'tags' && tags.length > 0) {
+      const pageTags = page.frontmatter.tags;
+      if (!Array.isArray(pageTags) || pageTags.length === 0) return 'tags';
     } else if (kind === 'duplicate') {
-      if (page.namespace === LESSON_NS) return 'duplicate';
+      if (vectors?.hasVector(page.slug)) return 'duplicate';
     } else if (kind === 'split') {
-      if (
-        page.namespace === LESSON_NS &&
-        (page.frontmatter.a_decouper === true || lineCount(page.body) > 15)
-      ) {
+      if (page.frontmatter.a_decouper === true || lineCount(page.body) > splitLines) {
         return 'split';
       }
     }
@@ -214,87 +258,167 @@ function inWindow(now: Date, window: string): boolean {
 }
 
 export interface SchedulerDeps {
+  vectors?: VectorIndex;
   store: MemoryStore;
   jobs: MemoryJobs;
   proposals: MemoryProposals;
   enabled: boolean;
   window: string;
   maxPerNight?: number;
+  duplicateDistance?: number;
+  splitLines?: number;
 }
 
 // Un job `maintain` par page éligible, au plus `maxPerNight`, seulement dans la fenêtre et si activé.
 export function scheduleMaintenance(now: Date, deps: SchedulerDeps): number {
   if (!deps.enabled || !inWindow(now, deps.window)) return 0;
-  const max = deps.maxPerNight ?? 20;
+  // La fenêtre suit l'heure locale du planificateur, y compris après minuit.
+  const [hour, minute] = deps.window.split('-')[0]!.split(':').map(Number);
+  const start = new Date(now);
+  start.setHours(hour!, minute!, 0, 0);
+  if (start > now) start.setDate(start.getDate() - 1);
+  const max =
+    (deps.maxPerNight ?? DEFAULT_MAINTENANCE_MAX_PER_NIGHT) -
+    deps.jobs.countCreatedSince('maintain', start.toISOString());
+  const tags = existingTags(deps.store, LESSON_NS);
   // Matérialiser la liste avant d'enfiler : `jobs.enqueue` exécute d'autres requêtes sur la même
   // connexion, ce que better-sqlite3 refuse tant qu'un `.iterate()` est encore ouvert.
   const pages = [...deps.store.all()];
   let n = 0;
   for (const page of pages) {
     if (n >= max) break;
-    if (!eligibleKind(page, deps.proposals)) continue;
+    if (
+      !eligibleKind(
+        page,
+        deps.proposals,
+        deps.splitLines,
+        tags,
+        deps.duplicateDistance,
+        deps.vectors,
+      )
+    ) {
+      continue;
+    }
     if (deps.jobs.enqueue('maintain', page.slug)) n++;
   }
   return n;
 }
 
 export interface MaintainDeps {
+  vectors?: VectorIndex;
+  duplicateDistance?: number;
+  splitLines?: number;
   store: MemoryStore;
   proposals: MemoryProposals;
   model: ChatModel;
   log: (line: string) => void;
 }
 
-const TAGS_PROMPT = `Tu proposes des tags pour une page de mémoire. Réponds uniquement en JSON de la forme {"tags": ["tag1", "tag2"]}, 1 à 5 tags courts, en minuscules, de préférence parmi les tags existants donnés.`;
-const DUPLICATE_PROMPT = `Tu compares une nouvelle leçon aux leçons les plus proches. Réponds uniquement en JSON de la forme {"duplicateOf": "<slug>", "rationale": "<justification>"}.`;
-const SPLIT_PROMPT = `Tu découpes une leçon trop longue en pages atomiques. Réponds uniquement en JSON de la forme {"pages": [{"slug": "...", "title": "...", "frontmatter": {}, "body": "..."}]}, 2 à 4 pages.`;
+const TAGS_PROMPT = `Tu proposes des tags pour une page de mémoire. Réponds uniquement en JSON de la forme {"tags": ["tag1", "tag2"]}, 1 à 5 tags courts, en minuscules, exclusivement parmi les tags existants donnés.`;
+const DUPLICATE_PROMPT = `Tu compares uniquement les deux leçons données. Un non est la réponse normale : réponds oui seulement si elles font doublon. Réponds uniquement en JSON de la forme {"doublon": true | false, "rationale": "<justification>"}.`;
+const SPLIT_PROMPT = `Tu découpes une leçon trop longue en pages atomiques. Réponds uniquement en JSON de la forme {"pages": [{"slug": "...", "title": "...", "frontmatter": {}, "body": "..."}]}, 2 à 4 pages, ou une liste vide si aucun découpage n’est utile.`;
 
 async function runTags(
   page: { slug: string; namespace: string; title: string; body: string },
   deps: MaintainDeps,
-): Promise<void> {
-  const tags = existingTags(deps.store, page.namespace);
+  tags: string[],
+): Promise<boolean> {
+  if (tags.length === 0) return false;
   const content = await deps.model.chat(
     TAGS_PROMPT,
-    `Tags existants du namespace « ${page.namespace} » : ${tags.join(', ') || '(aucun)'}\n\nTitre : ${page.title}\n\n${page.body}`,
+    `Tags existants du namespace « ${page.namespace} » : ${tags.join(', ')}\n\nTitre : ${page.title}\n\n${page.body}`,
   );
   const payload = parseJson(content);
   if (!Value.Check(TagsPayload, payload)) throw new Error('proposition tags : forme JSON invalide');
+  const refused = payload.tags.filter((tag) => !tags.includes(tag));
+  if (refused.length > 0) {
+    for (const tag of refused) deps.log(`proposition tags refusée : tag hors vocabulaire : ${tag}`);
+    return true;
+  }
   deps.proposals.create('tags', page.slug, payload, `${payload.tags.length} tag(s) proposé(s)`);
+  return true;
 }
 
-async function runDuplicate(
-  page: { slug: string; namespace: string; title: string; body: string },
-  deps: MaintainDeps,
-): Promise<void> {
-  const content = await deps.model.chat(DUPLICATE_PROMPT, `Titre : ${page.title}\n\n${page.body}`);
-  const payload = parseJson(content);
-  if (!Value.Check(DuplicatePayload, payload)) {
-    throw new Error('proposition duplicate : forme JSON invalide');
+async function runDuplicate(page: MemoryPage, deps: MaintainDeps): Promise<boolean> {
+  if (!deps.vectors?.hasVector(page.slug)) return false;
+  const candidates = deps.vectors.duplicateCandidates(
+    page.slug,
+    deps.duplicateDistance ?? DEFAULT_DUPLICATE_DISTANCE,
+  );
+  for (const hit of candidates) {
+    const candidate = deps.store.get(hit.slug);
+    if (!candidate || deps.store.duplicatePairJudged(page, candidate)) continue;
+    const content = await deps.model.chat(
+      DUPLICATE_PROMPT,
+      `Leçon : ${page.slug}\nTitre : ${page.title}\n\n${page.body}\n\nCandidat : ${candidate.slug}\nTitre : ${candidate.title}\n\n${candidate.body}`,
+    );
+    const payload = parseJson(content);
+    if (!Value.Check(DuplicatePayload, payload)) {
+      throw new Error('proposition duplicate : forme JSON invalide');
+    }
+    if (payload.doublon) {
+      deps.store.recordDuplicateProposal(page, candidate, () => {
+        deps.proposals.create(
+          'duplicate',
+          page.slug,
+          { duplicateOf: candidate.slug, rationale: payload.rationale },
+          payload.rationale,
+        );
+      });
+      return true;
+    }
+    deps.store.recordDuplicatePair(page, candidate, 'non');
   }
-  deps.proposals.create('duplicate', page.slug, payload, payload.rationale);
+  return true;
 }
 
 async function runSplit(
   page: { slug: string; namespace: string; title: string; body: string },
   deps: MaintainDeps,
-): Promise<void> {
+): Promise<boolean> {
   const content = await deps.model.chat(SPLIT_PROMPT, `Titre : ${page.title}\n\n${page.body}`);
   const payload = parseJson(content);
   if (!Value.Check(SplitPayload, payload))
     throw new Error('proposition split : forme JSON invalide');
+  // Une liste vide signifie que le modèle ne retient aucun découpage.
+  if (payload.pages.length === 0) return true;
+  for (const p of payload.pages) {
+    assertSplitSlug(p.slug);
+    p.frontmatter = splitFrontmatter(p.frontmatter, page.slug);
+  }
   deps.proposals.create('split', page.slug, payload, `découpage en ${payload.pages.length} pages`);
+  return true;
 }
 
 // Point d'entrée appelé par le worker pour un job `kind: 'maintain'`.
 export async function runMaintainJob(job: MemoryJob, deps: MaintainDeps): Promise<void> {
   const page = job.slug ? deps.store.get(job.slug) : undefined;
   if (!page) return;
-  const kind = eligibleKind(page, deps.proposals);
+  const tags = existingTags(deps.store, LESSON_NS);
+  const distance = deps.duplicateDistance ?? DEFAULT_DUPLICATE_DISTANCE;
+  const kind = eligibleKind(page, deps.proposals, deps.splitLines, tags, distance, deps.vectors);
   if (!kind) return;
-  if (kind === 'tags') await runTags(page, deps);
-  else if (kind === 'duplicate') await runDuplicate(page, deps);
-  else await runSplit(page, deps);
+  let examined: boolean;
+  if (kind === 'tags') examined = await runTags(page, deps, tags);
+  else if (kind === 'duplicate') examined = await runDuplicate(page, deps);
+  else examined = await runSplit(page, deps);
+  if (examined && !deps.proposals.pending(page.slug, kind)) {
+    deps.proposals.recordSeen(page, kind, seenKey(kind, tags, distance));
+  }
+}
+
+function assertSplitSlug(slug: string): void {
+  if (!isValidMemSlug(slug) || !slug.startsWith(`${LESSON_NS}/`)) {
+    throw new Error('proposition split : slug invalide ou hors de lesson/');
+  }
+}
+
+function splitFrontmatter(fm: Record<string, unknown>, source: string): Record<string, unknown> {
+  return {
+    ...(Object.hasOwn(fm, 'tags') && { tags: fm.tags }),
+    ...(Object.hasOwn(fm, 'title') && { title: fm.title }),
+    issu_de: source,
+  };
 }
 
 const MAINTENANCE_CTX: WriteContext = { author: 'maintenance' };
@@ -325,15 +449,59 @@ export async function applyProposal(
         body: string;
       }>;
     };
-    const created: string[] = [];
+    const slugs = new Set<string>();
     for (const p of pages) {
-      const text = renderMarkdown({ frontmatter: p.frontmatter, body: p.body });
-      await memory.put(p.slug, text, { kind: 'force' }, MAINTENANCE_CTX, p.title);
-      created.push(p.slug);
+      assertSplitSlug(p.slug);
+      if (slugs.has(p.slug) || memory.get(p.slug)) {
+        throw new Error(`proposition split : slug déjà pris : ${p.slug}`);
+      }
+      slugs.add(p.slug);
     }
-    const fm = { ...page.frontmatter, remplacee_par: created };
-    const text = renderMarkdown({ frontmatter: fm, body: page.body });
-    await memory.put(proposal.slug, text, { kind: 'force' }, MAINTENANCE_CTX);
+    const created: string[] = [];
+    let creationEnCours: string | undefined;
+    try {
+      for (const p of pages) {
+        const text = renderMarkdown({
+          frontmatter: splitFrontmatter(p.frontmatter, proposal.slug),
+          body: p.body,
+        });
+        creationEnCours = p.slug;
+        await memory.put(p.slug, text, { kind: 'create' }, MAINTENANCE_CTX, p.title);
+        created.push(p.slug);
+        creationEnCours = undefined;
+      }
+      const fm = { ...page.frontmatter, remplacee_par: created };
+      const text = renderMarkdown({ frontmatter: fm, body: page.body });
+      await memory.put(proposal.slug, text, { kind: 'force' }, MAINTENANCE_CTX);
+    } catch (err) {
+      // Le put écrit en base avant le miroir, sauf si le slug a été pris entre-temps.
+      if (creationEnCours && !(err instanceof RevisionConflict) && memory.get(creationEnCours)) {
+        created.push(creationEnCours);
+      }
+      for (const slug of created.reverse()) {
+        try {
+          await memory.remove(slug, MAINTENANCE_CTX);
+        } catch (erreurRetrait) {
+          console.error(`découpage : échec du retrait de ${slug} : ${String(erreurRetrait)}`);
+        }
+      }
+      try {
+        const source = memory.get(proposal.slug);
+        // Seule notre réécriture pose remplacee_par : une écriture concurrente reste intacte.
+        if (
+          source &&
+          source.revision !== page.revision &&
+          'remplacee_par' in source.frontmatter &&
+          !('remplacee_par' in page.frontmatter)
+        ) {
+          const texteOriginal = renderMarkdown({ frontmatter: page.frontmatter, body: page.body });
+          await memory.put(proposal.slug, texteOriginal, { kind: 'force' }, MAINTENANCE_CTX);
+        }
+      } catch {
+        console.error(`découpage : échec de la restauration de ${proposal.slug}`);
+      }
+      throw err;
+    }
   }
 }
 

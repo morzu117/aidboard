@@ -21,6 +21,11 @@ import {
 } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import { parse, parseDocument } from 'yaml';
+import {
+  DEFAULT_MAINTENANCE_MAX_PER_NIGHT,
+  DEFAULT_MAINTENANCE_SPLIT_LINES,
+  DEFAULT_DUPLICATE_DISTANCE,
+} from '../shared/memory.js';
 import type { AidPaths } from './paths.js';
 
 export interface AidConfig {
@@ -72,7 +77,15 @@ export interface SwairmConfig {
 
 export interface MemoryConfig {
   embeddings: { provider: 'off' | 'ollama'; model: string; url: string };
-  maintenance: { enabled: boolean; model: string; window: string };
+  // Facultatif pour les configurations injectées ; le job applique aussi le défaut de 0.15.
+  maintenance: {
+    enabled: boolean;
+    model: string;
+    window: string;
+    duplicateDistance?: number;
+    maxPerNight?: number;
+    splitLines?: number;
+  };
   git: { push: boolean };
 }
 
@@ -127,7 +140,14 @@ export const DEFAULT_CONFIG: AidConfig = {
   terminal: { scrollback: 5000, logMaxBytes: 50 * 1024 * 1024, logRetentionDays: 30 },
   memory: {
     embeddings: { provider: 'ollama', model: 'bge-m3', url: 'http://127.0.0.1:11434' },
-    maintenance: { enabled: false, model: 'qwen3:8b', window: '02:00-06:00' },
+    maintenance: {
+      enabled: false,
+      model: 'qwen3:8b',
+      window: '02:00-06:00',
+      duplicateDistance: DEFAULT_DUPLICATE_DISTANCE,
+      maxPerNight: DEFAULT_MAINTENANCE_MAX_PER_NIGHT,
+      splitLines: DEFAULT_MAINTENANCE_SPLIT_LINES,
+    },
     git: { push: false },
   },
   structural: { engine: 'codegraph', bin: 'codegraph', timeoutMs: 60_000, exclude: [] },
@@ -320,7 +340,29 @@ function parseMemory(raw: unknown, cfg: MemoryConfig): void {
   const m = raw.maintenance;
   if (m !== undefined) {
     if (!isRecord(m)) throw new ConfigError('config.yaml : memory.maintenance doit être un objet');
-    rejectUnknown(m, ['enabled', 'model', 'window'], 'memory.maintenance.');
+    rejectUnknown(
+      m,
+      ['enabled', 'model', 'window', 'duplicateDistance', 'maxPerNight', 'splitLines'],
+      'memory.maintenance.',
+    );
+    // Les deux limites sont des entiers strictement positifs, comme les autres limites de config.
+    for (const key of ['maxPerNight', 'splitLines'] as const) {
+      if (m[key] !== undefined)
+        cfg.maintenance[key] = positiveInt(m[key], `memory.maintenance.${key}`);
+    }
+    if (m.duplicateDistance !== undefined) {
+      const distance = m.duplicateDistance;
+      if (
+        typeof distance !== 'number' ||
+        !Number.isFinite(distance) ||
+        distance <= 0 ||
+        distance > 2
+      )
+        throw new ConfigError(
+          'config.yaml : memory.maintenance.duplicateDistance doit être dans ]0, 2]',
+        );
+      cfg.maintenance.duplicateDistance = distance;
+    }
     if (m.enabled !== undefined)
       cfg.maintenance.enabled = bool(m.enabled, 'memory.maintenance.enabled');
     if (m.model !== undefined) cfg.maintenance.model = str(m.model, 'memory.maintenance.model');
@@ -673,6 +715,9 @@ const DEFAULT_FILE = `# Configuration d'A-I-D. Tout est facultatif : ce sont les
 #     enabled: false         # propositions (tags, doublons, découpage) par un modèle local, jamais appliquées sans clic
 #     model: qwen3:8b
 #     window: "02:00-06:00"
+#     duplicateDistance: ${DEFAULT_DUPLICATE_DISTANCE} # distance cosinus maximale des candidats doublons (]0, 2])
+#     maxPerNight: 20        # jobs créés depuis le début de la fenêtre courante
+#     splitLines: 40         # découpage au-delà de ce nombre de lignes non vides
 #   git:
 #     push: false            # true : git push de ~/.aid/memory après chaque commit, si un remote origin existe
 # structural:

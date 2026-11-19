@@ -108,6 +108,8 @@ Les chiffres de l'analyse du 16 novembre sur un miroir de 431 pages (76 leçons,
 - Le seuil de découpage passe de 15 à 40 lignes non vides, réglable (`memory.maintenance.splitLines`). Le drapeau `a_decouper: true` reste prioritaire.
 - Les tags sont pris dans un vocabulaire fermé : les tags déjà présents dans `lesson/`. Un tag hors vocabulaire fait échouer la proposition. Le vocabulaire s'étend à la main.
 
+**Complément (décision de l'orchestrateur, 2026-11-18).** La table locale `memory_maintenance_seen` (slug, kind, revision, clé) reste hors miroir. Une tâche terminée sans proposition n'est pas reprise tant que la révision de la page, le vocabulaire (tags), le seuil (duplicate) ou un partenaire jugé n'a pas changé. Le modèle de découpage peut répondre par une liste vide (« rien à découper »).
+
 ### DM16. Les vecteurs se rattrapent
 
 - La disponibilité d'Ollama est revérifiée à chaque passage du planificateur, plus seulement au démarrage.

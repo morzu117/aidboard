@@ -15,11 +15,12 @@ export interface MemoryHealth {
   pendingJobs: number;
   failedJobs: number;
   mirrorDirty: boolean;
+  mirrorSync: MirrorSyncHealth;
 }
 import type { WorkspaceQueue } from '../actions/queue.js';
 import type { EventStore } from '../events/store.js';
 import type { Embedder, VectorIndex } from './embed.js';
-import { type MemoryMirror, walkMarkdown } from './mirror.js';
+import { type MemoryMirror, type MirrorSyncHealth, walkMarkdown } from './mirror.js';
 import { isValidMemSlug } from './slug.js';
 import { MemoryStore, renderMarkdown } from './store.js';
 
@@ -61,6 +62,63 @@ export class MemoryService {
 
   list(prefix: string): string[] {
     return this.deps.store.list(prefix);
+  }
+
+  purge(options: { dryRun?: boolean; orphelines?: boolean }) {
+    return this.deps.queue.run(QUEUE_KEY, () => this.purgeQueued(options));
+  }
+
+  private async purgeQueued(options: { dryRun?: boolean; orphelines?: boolean }) {
+    // Matérialiser les pages ferme le curseur SQLite avant toute suppression.
+    const pages = [...this.deps.store.all()];
+    const tasks = new Map<string, { namespace: string; task: string; slugs: string[] }>();
+    for (const page of pages) {
+      const match = /^([^/]+)\/(?:plan|dev-handoff|review)\/([^/]+)$/.exec(page.slug);
+      if (!match) continue;
+      const [, namespace, task] = match;
+      if (!namespace || !task || namespace === LESSON_NS) continue;
+      const key = `${namespace}/${task}`;
+      const entry = tasks.get(key) ?? { namespace, task, slugs: [] as string[] };
+      entry.slugs.push(page.slug);
+      tasks.set(key, entry);
+    }
+    const selected: string[] = [];
+    const slugs: string[] = [];
+    for (const [key, entry] of tasks) {
+      const escaped = entry.task.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const citation = new RegExp(`(^|[^A-Za-z0-9_-])${escaped}([^A-Za-z0-9_-]|$)`);
+      // Une citation peut figurer dans le corps ou le frontmatter de la rétro.
+      const closed = pages.some(
+        (page) =>
+          page.slug.startsWith(`${entry.namespace}/retro/`) &&
+          page.slug.split('/').length === 3 &&
+          citation.test(renderMarkdown(page)),
+      );
+      if (closed === !options.orphelines) {
+        selected.push(key);
+        slugs.push(...entry.slugs);
+      }
+    }
+    const dryRun = !!(options.dryRun || options.orphelines);
+    const removed: string[] = [];
+    const removedTasks = new Set<string>();
+    if (!dryRun) {
+      // Toute erreur de suppression interrompt la purge et remonte à l'appelant.
+      for (const slug of slugs) {
+        if (await this.removeQueued(slug, { author: 'admin' })) {
+          removed.push(slug);
+          const [namespace, , task] = slug.split('/');
+          removedTasks.add(`${namespace}/${task}`);
+        }
+      }
+    }
+    // Les tâches sont qualifiées par namespace pour distinguer les homonymes.
+    return {
+      dryRun,
+      orphelines: !!options.orphelines,
+      tasks: (dryRun ? selected : [...removedTasks]).sort(),
+      slugs: (dryRun ? slugs : removed).sort(),
+    };
   }
 
   // FTS d'abord ; si les vecteurs répondent, fusion RRF des deux classements (DM5).
@@ -115,6 +173,7 @@ export class MemoryService {
       pendingJobs: jobs.pending,
       failedJobs: jobs.failed,
       mirrorDirty: await this.deps.mirror.dirty(),
+      mirrorSync: await this.deps.mirror.syncHealth(),
     };
   }
 
@@ -145,23 +204,49 @@ export class MemoryService {
   }
 
   remove(slug: string, ctx: WriteContext): Promise<boolean> {
+    return this.deps.queue.run(QUEUE_KEY, () => this.removeQueued(slug, ctx));
+  }
+
+  // La purge détient déjà la file des écritures : ne pas l'enfiler à nouveau.
+  private async removeQueued(slug: string, ctx: WriteContext): Promise<boolean> {
+    const { store, mirror, events } = this.deps;
+    const page = store.get(slug);
+    if (!page) return false;
+    store.remove(slug);
+    this.deps.onRemove?.(slug);
+    await mirror.remove(slug);
+    mirror.scheduleCommit(`mem: ${slug} supprimée`);
+    events.append({
+      source: 'daemon',
+      type: 'memory.page',
+      ...(ctx.workspaceId && { workspaceId: ctx.workspaceId }),
+      ...(ctx.topicId && { topicId: ctx.topicId }),
+      ...(ctx.runId && { runId: ctx.runId }),
+      data: { slug, revision: page.revision, author: ctx.author, op: 'rm' },
+    });
+    return true;
+  }
+
+  // DM12 : seuls les fichiers touchés par le tirage sont relus, sans réécrire le miroir.
+  synchronizeMirror(action: () => Promise<void>): Promise<void> {
     return this.deps.queue.run(QUEUE_KEY, async () => {
-      const { store, mirror, events } = this.deps;
-      const page = store.get(slug);
-      if (!page) return false;
-      store.remove(slug);
-      this.deps.onRemove?.(slug);
-      await mirror.remove(slug);
-      mirror.scheduleCommit(`mem: ${slug} supprimée`);
-      events.append({
-        source: 'daemon',
-        type: 'memory.page',
-        ...(ctx.workspaceId && { workspaceId: ctx.workspaceId }),
-        ...(ctx.topicId && { topicId: ctx.topicId }),
-        ...(ctx.runId && { runId: ctx.runId }),
-        data: { slug, revision: page.revision, author: ctx.author, op: 'rm' },
-      });
-      return true;
+      const { store, mirror } = this.deps;
+      await action();
+      for (const slug of mirror.pulledSlugs) {
+        let text: string;
+        try {
+          text = readFileSync(mirror.pathOf(slug), 'utf8');
+        } catch (err) {
+          if ((err as NodeJS.ErrnoException).code !== 'ENOENT') throw err;
+          store.remove(slug);
+          this.deps.onRemove?.(slug);
+          mirror.pulledSlugs.delete(slug);
+          continue;
+        }
+        store.put(slug, text, { kind: 'force' }, 'mirror');
+        this.deps.onWrite?.(slug);
+        mirror.pulledSlugs.delete(slug);
+      }
     });
   }
 

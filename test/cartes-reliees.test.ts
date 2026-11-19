@@ -151,7 +151,7 @@ async function contexte(reel = false, rebranche = false) {
 
 test('032 : version, idempotence, deux unicités et cascade', async () => {
   const c = await contexte();
-  expect(c.db.pragma('user_version', { simple: true })).toBe(33);
+  expect(c.db.pragma('user_version', { simple: true })).toBe(36);
   migrate(c.db);
   const id = await c.service.creer(cibles, null);
   const membre = c.depot.obtenir(id).membres[0]!;

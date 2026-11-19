@@ -1,4 +1,5 @@
 import * as sqliteVec from 'sqlite-vec';
+import { LESSON_NS } from '../../shared/memory.js';
 import type { Db } from '../db.js';
 
 export interface Embedder {
@@ -137,6 +138,13 @@ export class VectorIndex {
     })();
   }
 
+  slugs(): string[] {
+    if (!this.hasTable()) return [];
+    return (this.db.prepare('SELECT slug FROM memory_vectors').all() as { slug: string }[]).map(
+      (page) => page.slug,
+    );
+  }
+
   remove(slug: string): void {
     if (this.hasTable()) this.db.prepare('DELETE FROM memory_vectors WHERE slug = ?').run(slug);
   }
@@ -149,6 +157,28 @@ export class VectorIndex {
         'SELECT slug, distance FROM memory_vectors WHERE embedding MATCH ? AND k = ? ORDER BY distance',
       )
       .all(toBlob(vector), k) as Array<{ slug: string; distance: number }>;
+  }
+
+  hasVector(slug: string): boolean {
+    return (
+      this.hasTable() && !!this.db.prepare('SELECT 1 FROM memory_vectors WHERE slug = ?').get(slug)
+    );
+  }
+
+  duplicateCandidates(slug: string, distance: number): Array<{ slug: string; distance: number }> {
+    if (!this.hasTable()) return [];
+    // Filtrer lesson/ avant la limite évite que les pages cycliques masquent les trois voisins.
+    // À distance égale, le slug départage les candidats pour un ordre stable.
+    return this.db
+      .prepare(
+        `SELECT v.slug, vec_distance_cosine(v.embedding, origin.embedding) AS distance
+         FROM memory_vectors v JOIN memory_pages p ON p.slug = v.slug
+         CROSS JOIN memory_vectors origin
+         WHERE origin.slug = ? AND v.slug != origin.slug AND p.namespace = ?
+           AND vec_distance_cosine(v.embedding, origin.embedding) <= ?
+         ORDER BY distance, v.slug LIMIT 3`,
+      )
+      .all(slug, LESSON_NS, distance) as Array<{ slug: string; distance: number }>;
   }
 
   count(): number {

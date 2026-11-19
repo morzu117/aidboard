@@ -137,6 +137,85 @@ export class MemoryStore {
     return r ? fromRow(r) : undefined;
   }
 
+  recordUsage(slugs: string[], op: 'search' | 'get', runId?: string): void {
+    const at = new Date().toISOString();
+    // Le jeton de run ne porte que runId (Principal) : le rôle du premier agent, comme dans runWriteContext, est approximatif en multi-agents.
+    const role = runId
+      ? ((
+          this.db
+            .prepare(
+              `SELECT (SELECT role FROM agents a WHERE a.run_id = r.id ORDER BY a.created_at, a.id LIMIT 1) AS role
+               FROM runs r WHERE r.id = ?`,
+            )
+            .get(runId) as { role: string | null } | undefined
+        )?.role ?? null)
+      : null;
+    const insert = this.db.prepare(
+      'INSERT INTO memory_usage (slug, op, role, at) VALUES (?, ?, ?, ?)',
+    );
+    this.db.transaction(() => {
+      for (const slug of slugs) insert.run(slug, op, role, at);
+    })();
+  }
+
+  usage(): Array<{ slug: string; reads: number; lastReadAt: string }> {
+    // Seules les pages lues figurent au bilan ; le slug départage les nombres égaux.
+    return this.db
+      .prepare(
+        `SELECT slug, COUNT(*) AS reads, MAX(at) AS lastReadAt FROM memory_usage
+         GROUP BY slug ORDER BY reads DESC, slug ASC`,
+      )
+      .all() as Array<{ slug: string; reads: number; lastReadAt: string }>;
+  }
+
+  duplicatePairJudged(a: MemoryPage, b: MemoryPage): boolean {
+    const [first, second] = a.slug < b.slug ? [a, b] : [b, a];
+    return !!this.db
+      .prepare(
+        `SELECT 1 FROM memory_duplicate_pairs
+         WHERE slug_a = ? AND slug_b = ? AND revision_a = ? AND revision_b = ?`,
+      )
+      .get(first.slug, second.slug, first.revision, second.revision);
+  }
+
+  recordDuplicatePair(a: MemoryPage, b: MemoryPage, verdict: 'oui' | 'non'): void {
+    const [first, second] = a.slug < b.slug ? [a, b] : [b, a];
+    this.db
+      .prepare(
+        `INSERT OR REPLACE INTO memory_duplicate_pairs
+         (slug_a, slug_b, revision_a, revision_b, verdict, judged_at) VALUES (?, ?, ?, ?, ?, ?)`,
+      )
+      .run(
+        first.slug,
+        second.slug,
+        first.revision,
+        second.revision,
+        verdict,
+        new Date().toISOString(),
+      );
+  }
+
+  recordDuplicateProposal(a: MemoryPage, b: MemoryPage, createProposal: () => void): void {
+    this.db.transaction(() => {
+      createProposal();
+      this.recordDuplicatePair(a, b, 'oui');
+    })();
+  }
+
+  private invalidateDuplicateSeen(slug: string): void {
+    // DM14 : une partenaire modifiée ou supprimée rend la paire de nouveau examinable.
+    this.db
+      .prepare(
+        `
+      DELETE FROM memory_maintenance_seen WHERE kind = 'duplicate' AND slug IN (
+        SELECT slug_a FROM memory_duplicate_pairs WHERE slug_b = ?
+        UNION SELECT slug_b FROM memory_duplicate_pairs WHERE slug_a = ?
+      )
+    `,
+      )
+      .run(slug, slug);
+  }
+
   // Transaction synchrone : rien d'asynchrone ici, le fichier et le commit viennent après.
   put(slug: string, text: string, mode: PutMode, author: string, title?: string): MemoryPage {
     assertMemSlug(slug);
@@ -173,6 +252,7 @@ export class MemoryStore {
         body = parsed.body;
         t = title ?? parsed.title ?? slug.slice(slug.lastIndexOf('/') + 1);
       }
+      this.invalidateDuplicateSeen(slug);
       this.ftsDelete(existing);
       this.db
         .prepare(
@@ -188,8 +268,13 @@ export class MemoryStore {
     return this.db.transaction((): boolean => {
       const r = this.row(slug);
       if (!r) return false;
+      this.invalidateDuplicateSeen(slug);
       this.ftsDelete(r);
       this.db.prepare('DELETE FROM memory_pages WHERE slug = ?').run(slug);
+      this.db.prepare('DELETE FROM memory_maintenance_seen WHERE slug = ?').run(slug);
+      this.db
+        .prepare('DELETE FROM memory_duplicate_pairs WHERE slug_a = ? OR slug_b = ?')
+        .run(slug, slug);
       return true;
     })();
   }

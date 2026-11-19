@@ -1,14 +1,17 @@
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, expect, test } from 'vitest';
+import { afterEach, expect, test, vi } from 'vitest';
 import { type Db, openDb } from '../src/daemon/db.js';
 import { MemoryJobs } from '../src/daemon/memory/jobs.js';
 import {
+  applyProposal,
   type ChatModel,
   MemoryProposals,
   scheduleMaintenance,
 } from '../src/daemon/memory/maintain.js';
+import { MemoryMirror } from '../src/daemon/memory/mirror.js';
+import { MemoryService } from '../src/daemon/memory/service.js';
 import { MemoryStore } from '../src/daemon/memory/store.js';
 import { startTestDaemon, waitFor, type TestDaemon } from './helpers/daemon.js';
 
@@ -78,14 +81,15 @@ test('page sans tags : une proposition « tags » ouverte, la page ne change pas
     config: { memory: MEMORY_CFG({ enabled: true, window: '00:00-23:59' }) },
     memory: { chatModel: fixedChatModel('{"tags":["chat","sommeil"]}'), maintenanceScheduleMs: 20 },
   });
-  expect((await put('aid/plan/felin', 'Le chat dort sur le canapé.')).statusCode).toBe(201);
-  await waitFor(() => jobState('aid/plan/felin') === 'done', 5000, 'job maintain terminé');
+  await put('lesson/test/vocabulaire', '---\ntags: [chat, sommeil]\n---\nVocabulaire.');
+  expect((await put('lesson/test/felin', 'Le chat dort sur le canapé.')).statusCode).toBe(201);
+  await waitFor(() => jobState('lesson/test/felin') === 'done', 5000, 'job maintain terminé');
 
   const open = openProposals();
   expect(open).toHaveLength(1);
-  expect(open[0]).toMatchObject({ kind: 'tags', slug: 'aid/plan/felin' });
+  expect(open[0]).toMatchObject({ kind: 'tags', slug: 'lesson/test/felin' });
 
-  const page = await getPage('aid/plan/felin');
+  const page = await getPage('lesson/test/felin');
   expect(page.revision).toBe(1);
   expect(page.frontmatter.tags).toBeUndefined();
 });
@@ -95,15 +99,16 @@ test('apply : les tags sont écrits, la révision augmente', async () => {
     config: { memory: MEMORY_CFG({ enabled: true, window: '00:00-23:59' }) },
     memory: { chatModel: fixedChatModel('{"tags":["chat","sommeil"]}'), maintenanceScheduleMs: 20 },
   });
-  await put('aid/plan/felin', 'Le chat dort sur le canapé.');
-  await waitFor(() => jobState('aid/plan/felin') === 'done', 5000, 'job maintain terminé');
+  await put('lesson/test/vocabulaire', '---\ntags: [chat, sommeil]\n---\nVocabulaire.');
+  await put('lesson/test/felin', 'Le chat dort sur le canapé.');
+  await waitFor(() => jobState('lesson/test/felin') === 'done', 5000, 'job maintain terminé');
   const [proposal] = openProposals();
 
   const res = await apply(proposal!.id);
   expect(res.statusCode).toBe(200);
   expect(res.json()).toMatchObject({ state: 'applied' });
 
-  const page = await getPage('aid/plan/felin');
+  const page = await getPage('lesson/test/felin');
   expect(page.revision).toBe(2);
   expect(page.frontmatter.tags).toEqual(['chat', 'sommeil']);
 });
@@ -117,8 +122,9 @@ test('réponse JSON invalide : le job échoue, aucune proposition n’est créé
       backoffMs: [],
     },
   });
-  await put('aid/plan/x', 'contenu quelconque');
-  await waitFor(() => jobState('aid/plan/x') === 'failed', 5000, 'job maintain en échec');
+  await put('lesson/test/vocabulaire', '---\ntags: [chat, sommeil]\n---\nVocabulaire.');
+  await put('lesson/test/x', 'contenu quelconque');
+  await waitFor(() => jobState('lesson/test/x') === 'failed', 5000, 'job maintain en échec');
   expect(openProposals()).toEqual([]);
 });
 
@@ -155,8 +161,8 @@ test('désactivé : aucun job créé même dans la fenêtre', () => {
 
 test('page éligible, dans la fenêtre : un job par page, plafonné à maxPerNight', () => {
   const { store, jobs, proposals } = freshDb();
-  store.put('aid/plan/a', 'contenu a', { kind: 'create' }, 'test');
-  store.put('aid/plan/b', 'contenu b', { kind: 'create' }, 'test');
+  store.put('lesson/test/a', '---\na_decouper: true\n---\ncontenu a', { kind: 'create' }, 'test');
+  store.put('lesson/test/b', '---\na_decouper: true\n---\ncontenu b', { kind: 'create' }, 'test');
   const now = new Date('2026-01-01T03:00:00');
   const n = scheduleMaintenance(now, {
     store,
@@ -170,4 +176,292 @@ test('page éligible, dans la fenêtre : un job par page, plafonné à maxPerNig
   expect(db.prepare("SELECT count(*) AS c FROM memory_jobs WHERE kind = 'maintain'").get()).toEqual(
     { c: 1 },
   );
+});
+
+const splitSource = 'lesson/test/source';
+const splitText =
+  '---\ntags: [test]\nentretien_rejete: [duplicate]\na_decouper: true\n---\nLeçon à découper.';
+const splitPages = (secondSlug = 'lesson/test/seconde') => [
+  {
+    slug: 'lesson/test/premiere',
+    title: 'Première',
+    frontmatter: {
+      tags: ['test'],
+      title: 'Titre modèle',
+      issu_de: 'origine-falsifiee',
+      remplacee_par: ['intrus'],
+      entretien_rejete: ['split'],
+    },
+    body: 'Première leçon.',
+  },
+  { slug: secondSlug, title: 'Seconde', frontmatter: {}, body: 'Seconde leçon.' },
+];
+
+test('split : crée les pages, filtre le frontmatter et impose leur origine', async () => {
+  t = await startTestDaemon(undefined, {
+    config: { memory: MEMORY_CFG({ enabled: true, window: '00:00-23:59' }) },
+    memory: {
+      chatModel: fixedChatModel(JSON.stringify({ pages: splitPages() })),
+      maintenanceScheduleMs: 20,
+    },
+  });
+  await put(splitSource, splitText);
+  await waitFor(() => jobState(splitSource) === 'done', 5000, 'découpage proposé');
+  const [proposal] = new MemoryProposals(t.db).list('open');
+  const payload = proposal!.payload as { pages: Array<{ frontmatter: unknown }> };
+  expect(payload.pages[0]!.frontmatter).toEqual({
+    tags: ['test'],
+    title: 'Titre modèle',
+    issu_de: splitSource,
+  });
+  expect((await apply(proposal!.id)).statusCode).toBe(200);
+  expect((await getPage('lesson/test/premiere')).frontmatter).toEqual({
+    tags: ['test'],
+    title: 'Première',
+    issu_de: splitSource,
+  });
+  expect((await getPage('lesson/test/seconde')).frontmatter).toEqual({
+    title: 'Seconde',
+    issu_de: splitSource,
+  });
+  expect((await getPage(splitSource)).frontmatter.remplacee_par).toEqual([
+    'lesson/test/premiere',
+    'lesson/test/seconde',
+  ]);
+});
+
+test.each(['aid/plan/intrus', 'lesson/../intrus'])(
+  'split : refuse le slug %s avant de créer une proposition',
+  async (slug) => {
+    t = await startTestDaemon(undefined, {
+      config: { memory: MEMORY_CFG({ enabled: true, window: '00:00-23:59' }) },
+      memory: {
+        chatModel: fixedChatModel(JSON.stringify({ pages: splitPages(slug) })),
+        maintenanceScheduleMs: 20,
+        backoffMs: [],
+      },
+    });
+    await put(splitSource, splitText);
+    await waitFor(() => jobState(splitSource) === 'failed', 5000, 'découpage refusé');
+    expect(openProposals()).toEqual([]);
+    expect((await getPage(splitSource)).revision).toBe(1);
+  },
+);
+
+test.each(['occupé', 'répété', 'hors lesson', 'invalide'])(
+  'split : slug %s en deuxième position, aucune écriture partielle',
+  async (cas) => {
+    t = await startTestDaemon();
+    await put(splitSource, splitText);
+    const secondSlug =
+      cas === 'répété'
+        ? 'lesson/test/premiere'
+        : cas === 'hors lesson'
+          ? 'aid/plan/intrus'
+          : cas === 'invalide'
+            ? 'lesson/../intrus'
+            : 'lesson/test/seconde';
+    if (cas === 'occupé') await put(secondSlug, 'Contenu à préserver.');
+    const sourceBefore = await getPage(splitSource);
+    const existingBefore = cas === 'occupé' ? await getPage(secondSlug) : undefined;
+    const proposal = new MemoryProposals(t.db).create(
+      'split',
+      splitSource,
+      { pages: splitPages(secondSlug) },
+      'Découpage',
+    );
+    expect((await apply(proposal.id)).statusCode).toBeGreaterThanOrEqual(400);
+    expect(
+      (await t.d.app.inject({ url: '/api/memory/pages/lesson/test/premiere', headers: t.headers }))
+        .statusCode,
+    ).toBe(404);
+    expect(await getPage(splitSource)).toEqual(sourceBefore);
+    if (existingBefore) expect(await getPage(secondSlug)).toEqual(existingBefore);
+    expect(openProposals().map((p) => p.id)).toContain(proposal.id);
+  },
+);
+
+test('split : filtre aussi une proposition créée directement sans filtrage préalable', async () => {
+  t = await startTestDaemon();
+  await put(splitSource, splitText);
+  const proposals = new MemoryProposals(t.db);
+  const proposal = proposals.create('split', splitSource, { pages: splitPages() }, 'Découpage');
+
+  expect((await apply(proposal.id)).statusCode).toBe(200);
+  expect((await getPage('lesson/test/premiere')).frontmatter).toEqual({
+    tags: ['test'],
+    title: 'Première',
+    issu_de: splitSource,
+  });
+  expect((await getPage('lesson/test/seconde')).frontmatter).toEqual({
+    title: 'Seconde',
+    issu_de: splitSource,
+  });
+  expect(proposals.get(proposal.id)?.state).toBe('applied');
+});
+
+test('split : annule la première création si le deuxième put échoue et reste ouverte', async () => {
+  t = await startTestDaemon();
+  await put(splitSource, splitText);
+  const sourceBefore = await getPage(splitSource);
+  const proposals = new MemoryProposals(t.db);
+  const proposal = proposals.create('split', splitSource, { pages: splitPages() }, 'Découpage');
+  const originalPut = MemoryService.prototype.put;
+  const putSpy = vi.spyOn(MemoryService.prototype, 'put').mockImplementation(function (
+    this: MemoryService,
+    ...args: Parameters<MemoryService['put']>
+  ) {
+    if (args[0] === 'lesson/test/seconde' && args[2].kind === 'create') {
+      return Promise.reject(new Error('échec simulé du deuxième put'));
+    }
+    return originalPut.apply(this, args);
+  });
+  const removeSpy = vi.spyOn(MemoryService.prototype, 'remove');
+  try {
+    const response = await apply(proposal.id);
+    expect(response.statusCode).toBe(500);
+    expect(response.json()).toEqual({ error: 'erreur interne' });
+    expect(removeSpy).toHaveBeenCalledExactlyOnceWith(
+      'lesson/test/premiere',
+      expect.objectContaining({ author: 'maintenance' }),
+    );
+    for (const { slug } of splitPages()) {
+      expect(
+        (await t.d.app.inject({ url: `/api/memory/pages/${slug}`, headers: t.headers })).statusCode,
+      ).toBe(404);
+    }
+    expect(await getPage(splitSource)).toEqual(sourceBefore);
+    expect(proposals.get(proposal.id)?.state).toBe('open');
+  } finally {
+    putSpy.mockRestore();
+    removeSpy.mockRestore();
+  }
+});
+
+test.each(['avant insertion', 'après insertion', 'avec retrait en échec'] as const)(
+  'split : annule en ordre inverse après un troisième put en échec (%s)',
+  async (cas) => {
+    t = await startTestDaemon();
+    await put(splitSource, splitText);
+    const { memory } = t.d;
+    const pages = [
+      ...splitPages(),
+      { slug: 'lesson/test/troisieme', title: 'Troisième', frontmatter: {}, body: 'Suite.' },
+    ];
+    const propositions = new MemoryProposals(t.db);
+    const proposition = propositions.create('split', splitSource, { pages }, 'Découpage');
+    const erreur = new Error('échec du troisième put');
+    const ecritureOriginale = memory.put.bind(memory);
+    vi.spyOn(memory, 'put').mockImplementation(async (...args) => {
+      if (args[0] !== 'lesson/test/troisieme') return ecritureOriginale(...args);
+      if (cas === 'après insertion') await ecritureOriginale(...args);
+      throw erreur;
+    });
+    const retirer = vi.spyOn(memory, 'remove');
+    if (cas === 'avec retrait en échec') {
+      retirer.mockRejectedValueOnce(new Error('retrait impossible'));
+    }
+    const journal = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      await expect(applyProposal(proposition, memory)).rejects.toBe(erreur);
+      expect(retirer.mock.calls.map(([slug]) => slug)).toEqual([
+        ...(cas === 'après insertion' ? ['lesson/test/troisieme'] : []),
+        'lesson/test/seconde',
+        'lesson/test/premiere',
+      ]);
+      expect(memory.get('lesson/test/premiere')).toBeUndefined();
+      expect(memory.get('lesson/test/troisieme')).toBeUndefined();
+      if (cas === 'avec retrait en échec') {
+        expect(journal).toHaveBeenCalledExactlyOnceWith(
+          expect.stringContaining('lesson/test/seconde'),
+        );
+      } else {
+        expect(memory.get('lesson/test/seconde')).toBeUndefined();
+      }
+    } finally {
+      journal.mockRestore();
+    }
+  },
+);
+
+test('split : un échec sur la source laisse la proposition ouverte et réessayable', async () => {
+  t = await startTestDaemon();
+  await put(splitSource, splitText);
+  const { memory } = t.d;
+  const pages = splitPages();
+  const propositions = new MemoryProposals(t.db);
+  const proposition = propositions.create('split', splitSource, { pages }, 'Découpage');
+  const ecritureOriginale = memory.put.bind(memory);
+  const ecriture = vi.spyOn(memory, 'put').mockImplementation((...args) => {
+    if (args[0] === splitSource) return Promise.reject(new Error('réécriture impossible'));
+    return ecritureOriginale(...args);
+  });
+  try {
+    expect((await apply(proposition.id)).statusCode).toBe(500);
+    for (const { slug } of pages) expect(memory.get(slug)).toBeUndefined();
+    expect(propositions.get(proposition.id)?.state).toBe('open');
+  } finally {
+    ecriture.mockRestore();
+  }
+  expect((await apply(proposition.id)).statusCode).toBe(200);
+  expect(propositions.get(proposition.id)?.state).toBe('applied');
+});
+
+test('split : restaure la source après un échec du miroir et permet de réessayer', async () => {
+  t = await startTestDaemon();
+  await put(splitSource, splitText);
+  const { memory } = t.d;
+  const sourceOriginale = memory.get(splitSource)!;
+  const pages = splitPages();
+  const propositions = new MemoryProposals(t.db);
+  const proposition = propositions.create('split', splitSource, { pages }, 'Découpage');
+  const ecritureOriginale = MemoryMirror.prototype.write;
+  const ecriture = vi.spyOn(MemoryMirror.prototype, 'write').mockImplementation(function (
+    this: MemoryMirror,
+    ...args
+  ) {
+    if (args[0] === splitSource && memory.get(splitSource)?.frontmatter.remplacee_par) {
+      return Promise.reject(new Error('miroir de la source indisponible'));
+    }
+    return ecritureOriginale.apply(this, args);
+  });
+  try {
+    expect((await apply(proposition.id)).statusCode).toBe(500);
+    for (const { slug } of pages) expect(memory.get(slug)).toBeUndefined();
+    expect(memory.get(splitSource)?.frontmatter).toEqual(sourceOriginale.frontmatter);
+    expect(memory.get(splitSource)?.body).toBe(sourceOriginale.body);
+    expect(propositions.get(proposition.id)?.state).toBe('open');
+  } finally {
+    ecriture.mockRestore();
+  }
+  expect((await apply(proposition.id)).statusCode).toBe(200);
+  expect(propositions.get(proposition.id)?.state).toBe('applied');
+});
+
+test('daemon : maxPerNight à 1 reste respecté après plusieurs passages', async () => {
+  const memory = MEMORY_CFG({ enabled: true, window: '00:00-23:59' });
+  const passages = vi.fn(async () => false);
+  t = await startTestDaemon(undefined, {
+    config: { memory: { ...memory, maintenance: { ...memory.maintenance, maxPerNight: 1 } } },
+    memory: {
+      embedder: { model: 'fake', ready: passages, embed: vi.fn() },
+      chatModel: fixedChatModel('{"tags":["connu"]}'),
+      maintenanceScheduleMs: 20,
+      pollMs: 10,
+    },
+  });
+  await put(
+    'lesson/test/vocabulaire',
+    '---\ntags: [connu]\nentretien_rejete: [duplicate]\n---\nVocabulaire.',
+  );
+  await put('lesson/test/a', 'contenu a');
+  await put('lesson/test/b', 'contenu b');
+  await waitFor(() => jobState('lesson/test/a') === 'done', 5000, 'premier entretien terminé');
+  const passagesApresJob = passages.mock.calls.length;
+  await waitFor(() => passages.mock.calls.length >= passagesApresJob + 3);
+  expect(openProposals()).toMatchObject([{ kind: 'tags', slug: 'lesson/test/a' }]);
+  expect(
+    t.db.prepare("SELECT count(*) AS n FROM memory_jobs WHERE kind = 'maintain'").get(),
+  ).toEqual({ n: 1 });
+  expect(jobState('lesson/test/b')).toBeUndefined();
 });

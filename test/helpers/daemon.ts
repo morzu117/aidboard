@@ -42,6 +42,7 @@ export async function startTestDaemon(
     onRoute?: (r: { method: string | string[]; url: string }) => void;
     memory?: {
       embedder?: Embedder;
+      readyTimeoutMs?: number;
       backoffMs?: number[];
       pollMs?: number;
       chatModel?: ChatModel;

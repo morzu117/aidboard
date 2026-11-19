@@ -16,13 +16,30 @@ export class MemoryJobs {
   constructor(private readonly db: Db) {}
 
   // Un job en attente par (kind, slug) suffit : la page sera relue au moment de l'exécution.
-  enqueue(kind: JobKind, slug: string | null): string | null {
+  enqueue(kind: JobKind, slug: string | null, reprendreÉchec = false): string | null {
     const pending = this.db
       .prepare(
         "SELECT id FROM memory_jobs WHERE kind = ? AND slug IS ? AND state = 'pending' LIMIT 1",
       )
       .get(kind, slug);
     if (pending) return null;
+    if (kind === 'embed') {
+      const failed = this.db
+        .prepare(
+          "SELECT id FROM memory_jobs WHERE kind = 'embed' AND slug IS ? AND state = 'failed' LIMIT 1",
+        )
+        .get(slug) as { id: string } | undefined;
+      if (failed) {
+        // Seule la reprise après indisponibilité réarme un embedding en échec.
+        if (!reprendreÉchec) return null;
+        this.db
+          .prepare(
+            "UPDATE memory_jobs SET state = 'pending', attempts = 0, error = NULL, run_after = NULL, updated_at = ? WHERE id = ?",
+          )
+          .run(new Date().toISOString(), failed.id);
+        return failed.id;
+      }
+    }
     const id = `job_${ulid()}`;
     const now = new Date().toISOString();
     this.db
@@ -33,13 +50,44 @@ export class MemoryJobs {
     return id;
   }
 
-  claim(now = new Date().toISOString()): MemoryJob | undefined {
+  enqueueMissingEmbeddings(reprendreÉchecs: boolean): number {
+    // La table vec0 n'existe qu'après le premier embedding valide.
+    const tableVecteurs = this.db
+      .prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'memory_vectors'")
+      .get();
+    const sansVecteur = tableVecteurs
+      ? 'AND NOT EXISTS (SELECT 1 FROM memory_vectors v WHERE v.slug = p.slug)'
+      : '';
+    const pages = this.db
+      .prepare(
+        `SELECT p.slug FROM memory_pages p
+         WHERE p.slug NOT IN (
+           SELECT slug FROM memory_jobs WHERE kind = 'embed' AND slug IS NOT NULL
+             AND (state IN ('pending', 'running') OR (state = 'failed' AND NOT ?))
+         ) ${sansVecteur}`,
+      )
+      .all(Number(reprendreÉchecs)) as { slug: string }[];
+    let enfilés = 0;
+    for (const { slug } of pages) {
+      if (this.enqueue('embed', slug, reprendreÉchecs)) enfilés++;
+    }
+    return enfilés;
+  }
+
+  countCreatedSince(kind: JobKind, since: string): number {
+    const row = this.db
+      .prepare('SELECT count(*) AS n FROM memory_jobs WHERE kind = ? AND created_at >= ?')
+      .get(kind, since) as { n: number };
+    return row.n;
+  }
+
+  claim(now = new Date().toISOString(), embedReady = true): MemoryJob | undefined {
     return this.db.transaction((): MemoryJob | undefined => {
       const job = this.db
         .prepare(
-          "SELECT id, kind, slug, attempts FROM memory_jobs WHERE state = 'pending' AND (run_after IS NULL OR run_after <= ?) ORDER BY created_at LIMIT 1",
+          "SELECT id, kind, slug, attempts FROM memory_jobs WHERE state = 'pending' AND (run_after IS NULL OR run_after <= ?) AND (kind != 'embed' OR ?) ORDER BY created_at LIMIT 1",
         )
-        .get(now) as MemoryJob | undefined;
+        .get(now, Number(embedReady)) as MemoryJob | undefined;
       if (!job) return undefined;
       this.db
         .prepare(
@@ -48,6 +96,15 @@ export class MemoryJobs {
         .run(now, job.id);
       return { ...job, attempts: job.attempts + 1 };
     })();
+  }
+
+  // Une panne de disponibilité ne consomme pas la tentative prise par claim.
+  deferEmbedding(id: string): void {
+    this.db
+      .prepare(
+        "UPDATE memory_jobs SET state = 'pending', attempts = attempts - 1, updated_at = ? WHERE id = ? AND kind = 'embed' AND state = 'running'",
+      )
+      .run(new Date().toISOString(), id);
   }
 
   done(id: string): void {

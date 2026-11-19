@@ -100,7 +100,14 @@ test('le fichier par défaut créé est lisible et ne change rien', () => {
 test('memory : les défauts', () => {
   expect(DEFAULT_CONFIG.memory).toEqual({
     embeddings: { provider: 'ollama', model: 'bge-m3', url: 'http://127.0.0.1:11434' },
-    maintenance: { enabled: false, model: 'qwen3:8b', window: '02:00-06:00' },
+    maintenance: {
+      enabled: false,
+      model: 'qwen3:8b',
+      window: '02:00-06:00',
+      duplicateDistance: 0.15,
+      maxPerNight: 20,
+      splitLines: 40,
+    },
     git: { push: false },
   });
 });
