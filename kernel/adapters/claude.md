@@ -35,7 +35,7 @@ rm -f /tmp/rev.txt
 |---|---|
 | `-p` | one-shot programmatique |
 | `--tools ""` | aucun outil intégré : un seul tour, garde-fou anti-exploration |
-| `--strict-mcp-config --mcp-config '{"mcpServers":{}}'` | aucun serveur MCP : sans lui, les schémas d'outils MCP de l'opérateur (gbrain, codegraph…) entrent dans le contexte et font exploser le budget avant le premier mot (mesuré : 0,58 $ pour un « PONG », contre 0,04 $) |
+| `--strict-mcp-config --mcp-config '{"mcpServers":{}}'` | aucun serveur MCP : sans lui, les schémas d'outils MCP de l'opérateur (aid, codegraph…) entrent dans le contexte et font exploser le budget avant le premier mot (mesuré : 0,58 $ pour un « PONG », contre 0,04 $) |
 | `--model <MODEL>` | `claude-sonnet-5` pour une review standard (~0,07 $ pour un commit de taille courante) ; `claude-opus-5` sur un diff transverse |
 | `--output-format json` | enveloppe JSON ; les findings sont dans le champ `result`, le coût dans `total_cost_usd` |
 | `--max-budget-usd` | garde-fou budget (`guardrails.max_price` du manifeste) — dépassé, `subtype` vaut `error_max_budget_usd` et `result` est nul : relancer avec un diff plus court, pas un budget plus haut |

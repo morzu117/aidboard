@@ -33,7 +33,7 @@ capabilities: # [hérité]
   #
   # Deux formes acceptées :
   #   structural_index: codegraph              # juste l'adaptateur
-  #   memory: {adapter: gbrain, source: …}     # adaptateur + ses options
+  #   memory: {adapter: aid, source: …}     # adaptateur + ses options
   #
   # Une capacité à null n'apparaît pas dans le bloc rendu.
 

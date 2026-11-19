@@ -80,6 +80,8 @@ Les chiffres de l'analyse du 16 novembre sur un miroir de 431 pages (76 leçons,
 - `CLAUDE.md` et `AGENTS.md` sont re-rendus par `/sync`, jamais édités à la main. Leur section `memory` devient celle de `kernel/adapters/aid.md`.
 - `kernel/adapters/gbrain.md` est supprimé. Un test de garde refuse le mot `gbrain` dans le dépôt hors `docs/chantiers/`, `kernel/CHANGELOG.md` et `brief.md`.
 
+**Complément (décision de l'orchestrateur, 2026-11-19) :** chemins admis : `docs/chantiers/`, `docs/recette-chantier-*.md`, `design/`, `kernel/CHANGELOG.md`, `brief.md` et `test/sans-gbrain.test.ts`. La garde cherche `gbrain` en minuscules, avec une comparaison sensible à la casse : un nom de variable d'environnement en majuscules n'est pas une prescription d'outil.
+
 ### DM12. Un miroir, un distant, et il tire
 
 - Quand `memory.git.push` est vrai et qu'un `origin` existe, le miroir **tire avant de pousser** et **au démarrage** : `fetch`, puis avance rapide.

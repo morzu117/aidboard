@@ -1,8 +1,8 @@
-<!-- agentkit:start 0.7.1 -->
+<!-- agentkit:start 0.9.1 -->
 
 ## Chaîne agent — aidboard
 
-Rendu depuis agent-kernel 0.7.1. Ne pas éditer à la main :
+Rendu depuis agent-kernel 0.9.1. Ne pas éditer à la main :
 toute modification est écrasée au prochain `/sync`. Pour changer ce bloc,
 modifier le noyau ou `agent.yml`.
 
@@ -11,16 +11,16 @@ modifier le noyau ou `agent.yml`.
 Pour une question donnée, il y a **exactement un** premier point d'entrée.
 Interroger deux sources « au cas où » double le coût au lieu de le diviser.
 
-| La question porte sur | Premier appel | Interdit |
-|---|---|---|
-| Ce que le code fait, où c'est défini, qui appelle quoi, impact d'un changement | `codegraph_explore` | grep, lecture de fichier, sous-agent d'exploration |
-| Pourquoi une décision, ce qui a été tenté, l'état d'un cycle | `gbrain search` | relire l'historique git |
-| Comment on travaille, quelle phase fait quoi | ce bloc | tout appel |
-| Rien ne répond | lecture directe | — |
+| La question porte sur                                                          | Premier appel                            | Interdit                                           |
+| ------------------------------------------------------------------------------ | ---------------------------------------- | -------------------------------------------------- |
+| Ce que le code fait, où c'est défini, qui appelle quoi, impact d'un changement | `index_explore` | grep, lecture de fichier, sous-agent d'exploration |
+| Pourquoi une décision, ce qui a été tenté, l'état d'un cycle                   | `aid mem search`           | relire l'historique git                            |
+| Comment on travaille, quelle phase fait quoi                                   | ce bloc                                  | tout appel                                         |
+| Rien ne répond                                                                 | lecture directe                          | —                                                  |
 
 **Deux règles à ne pas violer :**
 
-Le source rendu par `codegraph_explore` est **déjà lu**.
+Le source rendu par `index_explore` est **déjà lu**.
 Ne pas le re-vérifier au grep.
 
 **Ne jamais déléguer l'exploration du code à un sous-agent.** L'index n'aide
@@ -68,8 +68,8 @@ en mémoire avant la fin de la phase.
 | plan | la demande, `lesson/` pertinents, l'index structurel | `aid/plan/<task>` |
 | dev | `aid/plan/<task>`, l'index structurel | `aid/dev-handoff/<task>` |
 | review | `aid/plan/<task>`, `aid/dev-handoff/<task>`, le diff, l'index structurel | `aid/review/<task>` |
-| triage | `aid/review/<task>` | rien — elle route |
-| retro | les trois pages du cycle | `aid/retro/<cycle>`, et zéro ou plusieurs `lesson/<domaine>/<slug>` |
+| triage | `aid/review/<task>` | rien. Elle route |
+| retro | les trois pages du cycle | `aid/retro/<cycle>`, et **zéro ou plusieurs** `lesson/<domaine>/<slug>` |
 
 Les agents ne s'échangent rien latéralement — ils se coordonnent par les
 pages mémoire, par git et par le document de plan. L'orchestrateur lance les
@@ -153,7 +153,7 @@ aid — pages cycliques du projet
   aid/review/<task>
   aid/retro/<cycle>
 
-lessons — espace partagé, transverse
+lesson — espace partagé, transverse
   lesson/<domaine>/<slug>
 ```
 
@@ -168,7 +168,7 @@ retro y écrit.
 
 ### Capacités
 
-#### `structural_index` — `index_*` (serveur MCP `aid`)
+#### `structural_index` — codegraph
 
 **Appel**
 
@@ -219,50 +219,71 @@ texte, `isError` « index indisponible : lecture directe » — lire le fichier 
 plutôt qu'insister. `index_status` porte `stale` et le nombre de fichiers en retard quand
 l'index n'a pas rattrapé une écriture récente.
 
-#### `memory` — gbrain
+#### `memory` — aid
 
 **Appel**
 
 ```bash
-gbrain search "<termes>" --source <source>          # recherche par mots-clés
-gbrain query "<question>" --source <source>         # recherche hybride
-gbrain put <slug> --content "…" --source <source> --force   # écrire une page
-echo "<contenu>" | gbrain put <slug> --source <source> --force
+aid mem get <slug>                                   # lire une page
+echo "<contenu>" | aid mem put <slug> --append       # compléter une page de phase
+echo "<contenu>" | aid mem put <slug>                # créer (refus si elle existe)
+aid mem search "<termes>" --scope <namespace>        # <namespace> + lesson/
+aid mem search "<termes>" --scope all                # tous projets
+aid mem list <namespace>/plan/                       # énumérer
 ```
 
-**`--force` n'est pas optionnel.** Depuis gbrain 0.52, remplacer une page
-existante exige sa révision (`--expected-revision`) ou `--force` ; sans l'un
-ni l'autre, `put` et `capture` ne savent que créer, et la mise à jour d'une
-page de plan ou de handoff échoue en `revision_conflict`. Les phases
-réécrivent leur page en entier : `--force` est le bon contrat.
+MCP : `aid mcp` expose `memory_get`, `memory_put`, `memory_search`,
+`memory_list` ; l'agent principal l'utilise quand il est déclaré, les agents
+sans MCP utilisent le CLI. Les deux appellent le même daemon ; **n'utiliser
+qu'un seul des deux dans une même phase**.
 
-**Mais une page de phase se complète, elle ne se remplace pas.** Une même
-tâche connaît plusieurs lancements de la même phase — re-dev après review,
-point du plan livré par un second agent. `--force` écrase sans rien
-demander : le lancement suivant efface alors le handoff du précédent, et la
-review compare le diff à un compte rendu amputé (constaté le 2026-09-24,
-cycle `site-commercialisation`). Avant d'écrire, lire la page
-(`gbrain get <slug> --source <source>`) ; si elle existe, la réécrire
-**en entier, en ajoutant sa section à la fin**, titrée du lancement
-(`## Re-dev 1/2`, `## Point 5`…). Ne jamais retirer une section écrite par
-un autre lancement.
+| Code | Signification                                                                       |
+| ---- | ----------------------------------------------------------------------------------- |
+| 0    | Succès                                                                              |
+| 2    | Conflit de révision (`put` sans option sur une page existante)                      |
+| 3    | Page absente (`get`, `rm`)                                                          |
+| 4    | Daemon injoignable                                                                  |
+| 5    | Écriture interdite (hors du namespace du workspace, ou `lesson/` hors rôle `retro`) |
 
-**Le slug est en `/`, jamais en `:`.** gbrain 0.52 refuse tout slug hors
-`[lettres chiffres . _ -]` séparés par `/` (`invalid_params`).
+**Par phase**
 
-Avant d'écrire, chercher : une page existante sur le même sujet se met à jour
-plutôt que de se dupliquer.
+| Phase  | Lit                                                                                    | Écrit                                                                             |
+| ------ | -------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| plan   | `aid mem search "<domaine>" --scope <namespace>` (leçons), puis `get` des pages citées | `put <namespace>/plan/<task>` (`--append` si elle existe)                         |
+| dev    | `get <namespace>/plan/<task>`                                                          | `put <namespace>/dev-handoff/<task> --append`                                     |
+| review | `get` plan et dev-handoff                                                              | `put <namespace>/review/<task> --append`                                          |
+| retro  | `get` des trois pages                                                                  | `put <namespace>/retro/<cycle>` ; zéro ou plusieurs `put lesson/<domaine>/<slug>` |
 
 **Contraintes**
 
-**Rien de dérivable du code.** C'est la règle qui détermine si la mémoire
-reste utile ou pourrit. Voir `policy/routing.md`.
+**Une page de phase se complète, elle ne se remplace pas.** Une même tâche
+connaît plusieurs lancements de la même phase — re-dev après review, point du
+plan livré par un second agent. Sans option, `aid mem put` sur une page
+existante refuse (`revision_conflict`) : c'est voulu. `--append` est le geste
+normal, il ajoute le contenu à la fin, atomiquement, sans toucher à ce qu'un
+lancement précédent a écrit. `--force` est réservé à l'humain — un agent qui
+l'utilise réécrit le travail d'un autre lancement sans rien demander
+(incident constaté sous l'ancien adaptateur mémoire le 2026-09-24, cycle `site-commercialisation` :
+un `--force` avait effacé le handoff du lancement précédent).
 
-**Écriture aux frontières de phase seulement.** Pas d'écriture opportuniste
-en cours de travail — ça produit du volume sans validation.
+**Rien de dérivable du code.** Voir `policy/routing.md`.
 
-**`lesson/` en rétro uniquement.** Aucune autre phase ne touche à l'espace
-transverse.
+**Écriture aux frontières de phase seulement.** Pas d'écriture opportuniste en
+cours de travail — ça produit du volume sans validation.
+
+**`lesson/` en rétro uniquement**, et au format atomique de
+`policy/namespace.md` : une affirmation, un frontmatter, quinze lignes au
+plus.
+
+**Scope à l'appel.** `--scope <namespace>` est le défaut d'une phase : il
+cherche dans `<namespace>` et dans `lesson/`. `--scope all` se justifie dans
+le handoff — il coûte plus et ramène du bruit.
+
+**Repli déclaré.** Code 4 (daemon injoignable) : lire
+`~/.aid/memory/<slug>.md` directement, pas de recherche, le dire dans le
+handoff. Ne jamais écrire ce fichier à la main : une écriture hors daemon
+n'est pas indexée et sera écrasée au prochain `aid mem reindex` si elle n'est
+pas commitée.
 
 #### `dev_agent` — claude-dev
 
@@ -275,24 +296,24 @@ des dollars qui se font manger au passage du shell.
 claude -p "$(cat /tmp/brief.txt)" --permission-mode bypassPermissions --strict-mcp-config --mcp-config .mcp.json --model <MODEL> --max-budget-usd <BUDGET> --output-format json --no-session-persistence < /dev/null
 ```
 
-| Flag | Rôle |
-|---|---|
-| `-p` | one-shot programmatique ; `claude` lit `CLAUDE.md` du projet nativement (le bloc rendu) |
-| `--permission-mode bypassPermissions` | miroir du `--dangerously-bypass-approvals-and-sandbox` de Codex : aucun prompt en mode `-p`, sinon chaque `Bash` est refusé et le dev rend un travail à moitié |
+| Flag                                         | Rôle                                                                                                                                                              |
+| -------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `-p`                                         | one-shot programmatique ; `claude` lit `CLAUDE.md` du projet nativement (le bloc rendu)                                                                           |
+| `--permission-mode bypassPermissions`        | miroir du `--dangerously-bypass-approvals-and-sandbox` de Codex : aucun prompt en mode `-p`, sinon chaque `Bash` est refusé et le dev rend un travail à moitié    |
 | `--strict-mcp-config --mcp-config .mcp.json` | seuls les serveurs MCP du **projet** (l'index structurel) ; sans lui les ~150 outils MCP de l'opérateur entrent dans chaque tour (mesuré : 0,58 $ le tour à vide) |
-| `--model <MODEL>` | `models.trivial` / `standard` / `complex` du manifeste |
-| `--max-budget-usd <BUDGET>` | garde-fou budget : trivial 2, standard 8, complexe 15 (dépassé ⇒ `subtype: error_max_budget_usd`, travail partiel commité ou non — relire `git status`) |
-| `--output-format json` | `result` = compte rendu final du dev, `total_cost_usd` = coût réel |
-| `--no-session-persistence` | rien dans `~/.claude` |
+| `--model <MODEL>`                            | `models.trivial` / `standard` / `complex` du manifeste                                                                                                            |
+| `--max-budget-usd <BUDGET>`                  | garde-fou budget : trivial 2, standard 8, complexe 15 (dépassé ⇒ `subtype: error_max_budget_usd`, travail partiel commité ou non — relire `git status`)           |
+| `--output-format json`                       | `result` = compte rendu final du dev, `total_cost_usd` = coût réel                                                                                                |
+| `--no-session-persistence`                   | rien dans `~/.claude`                                                                                                                                             |
 
 **Le `< /dev/null` n'est pas optionnel** : stdin fermé, comme pour Codex.
 **Pas de `--bare`** : il saute le trousseau, le CLI répond « Not logged in ».
 
 **Par phase**
 
-| Phase | Usage |
-|---|---|
-| dev | l'intégralité de la phase |
+| Phase | Usage                     |
+| ----- | ------------------------- |
+| dev   | l'intégralité de la phase |
 
 **Contraintes**
 
@@ -323,7 +344,7 @@ rm -f /tmp/rev.txt
 |---|---|
 | `-p` | one-shot programmatique |
 | `--tools ""` | aucun outil intégré : un seul tour, garde-fou anti-exploration |
-| `--strict-mcp-config --mcp-config '{"mcpServers":{}}'` | aucun serveur MCP : sans lui, les schémas d'outils MCP de l'opérateur (gbrain, codegraph…) entrent dans le contexte et font exploser le budget avant le premier mot (mesuré : 0,58 $ pour un « PONG », contre 0,04 $) |
+| `--strict-mcp-config --mcp-config '{"mcpServers":{}}'` | aucun serveur MCP : sans lui, les schémas d'outils MCP de l'opérateur (aid, codegraph…) entrent dans le contexte et font exploser le budget avant le premier mot (mesuré : 0,58 $ pour un « PONG », contre 0,04 $) |
 | `--model <MODEL>` | `claude-sonnet-5` pour une review standard (~0,07 $ pour un commit de taille courante) ; `claude-opus-5` sur un diff transverse |
 | `--output-format json` | enveloppe JSON ; les findings sont dans le champ `result`, le coût dans `total_cost_usd` |
 | `--max-budget-usd` | garde-fou budget (`guardrails.max_price` du manifeste) — dépassé, `subtype` vaut `error_max_budget_usd` et `result` est nul : relancer avec un diff plus court, pas un budget plus haut |
