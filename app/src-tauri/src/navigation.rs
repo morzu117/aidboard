@@ -15,12 +15,9 @@ fn decider(adresse: &str, origine: Option<&Url>, nouvelle_fenetre: bool) -> Deci
     };
     // La coquille embarquée n'est jamais une destination de navigateur externe, qu'elle
     // soit visée par une navigation dans la fenêtre ou par une demande de nouvelle fenêtre.
-    if matches!(
-        url.as_str(),
-        "tauri://localhost/index.html"
-            | "http://tauri.localhost/index.html"
-            | "https://tauri.localhost/index.html"
-    ) {
+    // L'hôte seul suffit : le chemin varie selon la plateforme et le moment (vu en pratique
+    // "http://tauri.localhost/", sans "/index.html", pas "https").
+    if url.scheme() == "tauri" || url.host_str() == Some("tauri.localhost") {
         return if nouvelle_fenetre {
             Decision::Refuser
         } else {
@@ -105,6 +102,8 @@ mod tests {
             "tauri://localhost/index.html",
             "http://tauri.localhost/index.html",
             "https://tauri.localhost/index.html",
+            "http://tauri.localhost/",
+            "https://tauri.localhost/assets/index-abc123.js",
         ] {
             assert_eq!(decider(adresse, None, false), Decision::Rester);
             assert_eq!(decider(adresse, None, true), Decision::Refuser);

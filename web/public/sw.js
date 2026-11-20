@@ -34,6 +34,11 @@ self.addEventListener('fetch', (event) => {
   if (path.startsWith('/api/') || path.startsWith('/ws/') || path === '/auth') return;
   // chantier 31 (D176) : l'appairage d'un appareil, jamais mis en cache non plus
   if (path.startsWith('/appairage/')) return;
+  // L'échange du token contre le cookie de session passe par une redirection ; interceptée ici,
+  // elle revit le même souci que WKWebView avec un eval(location.replace(...)) (cf. lib.rs) :
+  // le cookie posé par le daemon ne s'attache pas de façon fiable à la navigation. Laisser le
+  // navigateur faire cette requête lui-même, sans passer par ce fetch().
+  if (request.mode === 'navigate' && new URL(request.url).searchParams.has('token')) return;
 
   const cacheKey = request.mode === 'navigate' ? '/' : request;
   event.respondWith(
