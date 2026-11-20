@@ -37,8 +37,6 @@ export interface BarreMesh {
   tailscaleManage: boolean;
   /** un connect/disconnect est parti et son résultat n'est pas encore arrivé par `mesh.state` */
   enCours: boolean;
-  /** chantier 25 (D99) : la barre ne bascule plus rien, la bascule est dans Réglages */
-  onToggle?: () => void;
   /** D99 bis : dernière lecture de `monitor status` */
   checkedAt?: string | null;
 }

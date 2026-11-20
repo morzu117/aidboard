@@ -975,6 +975,7 @@ export function Nav({ screen }: { screen: EcranId }) {
                                     ref={renommageRef}
                                     className="barre-gauche-renommage"
                                     data-node={n(`sujet-${t.id}.renommer`)}
+                                    maxLength={256}
                                     value={renommage!.valeur}
                                     onChange={(e) =>
                                       setRenommage({

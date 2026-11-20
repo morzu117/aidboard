@@ -93,6 +93,7 @@ export interface Livraison {
   lecturePr: { enCours: boolean; echec: string | null };
   git: LivraisonGit | null;
   erreurGit: string | null;
+  erreurRevue: string | null;
   test: ActionRun | null;
   /** La page `review` du sujet ; undefined tant qu'elle n'est pas lue. */
   page: MemoryPage | null | undefined;
@@ -113,6 +114,7 @@ export function useLivraison(topic: Topic, namespace: string): Livraison {
   // `pour` : le commit de revue demandé avec cette lecture, pour ne pas lire la fraîcheur d'une autre
   const [git, setGit] = useState<{ g: LivraisonGit; pour: string | null } | null>(null);
   const [erreurGit, setErreurGit] = useState<string | null>(null);
+  const [erreurRevue, setErreurRevue] = useState<string | null>(null);
   const [page, setPage] = useState<MemoryPage | null | undefined>(undefined);
   const [version, setVersion] = useState(0);
   const lisible = !topic.worktreeMissing && topic.state !== 'archived';
@@ -125,8 +127,16 @@ export function useLivraison(topic: Topic, namespace: string): Livraison {
   useEffect(() => {
     let vivant = true;
     fetchSubjectMemory(call, namespace, topic.slug).then(
-      (pages) => vivant && setPage(pages.review ?? null),
-      () => vivant && setPage(null),
+      (pages) => {
+        if (!vivant) return;
+        setPage(pages.review ?? null);
+        setErreurRevue(null);
+      },
+      (err: unknown) => {
+        if (!vivant) return;
+        setPage(undefined);
+        setErreurRevue(message(err));
+      },
     );
     return () => {
       vivant = false;
@@ -137,7 +147,7 @@ export function useLivraison(topic: Topic, namespace: string): Livraison {
   const revue = source?.commit && SHA.test(source.commit) ? source.commit : null;
 
   useEffect(() => {
-    if (!lisible || page === undefined) return;
+    if (!lisible || (page === undefined && erreurRevue === null)) return;
     let vivant = true;
     fetchLivraison(call, topic.id, revue ?? undefined).then(
       (g) => {
@@ -150,7 +160,7 @@ export function useLivraison(topic: Topic, namespace: string): Livraison {
     return () => {
       vivant = false;
     };
-  }, [call, topic.id, revue, lisible, page, version]);
+  }, [call, topic.id, revue, lisible, page, version, erreurRevue]);
 
   const verif = git && git.pour === revue ? (git.g.revue ?? null) : null;
   const enLecture = lisible && (page === undefined || (revue !== null && verif === null));
@@ -159,10 +169,11 @@ export function useLivraison(topic: Topic, namespace: string): Livraison {
     lecturePr: { enCours: lecture.enCours, echec: lecture.echec },
     git: git?.g ?? null,
     erreurGit,
+    erreurRevue,
     test: dernierTest(state?.actions ?? [], topic.id),
     page,
     source,
-    fraicheur: enLecture ? null : fraicheurRevue(source, verif),
+    fraicheur: erreurRevue !== null || enLecture ? null : fraicheurRevue(source, verif),
     relire: () => setVersion((v) => v + 1),
   };
 }

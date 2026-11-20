@@ -274,7 +274,6 @@ function Mesh() {
       aTraiter,
       tailscaleManage: mesh.tailscaleManage,
       enCours,
-      onToggle: () => {},
     });
   const age = mesh && ageLecture(mesh.state, checkedAt);
   return (

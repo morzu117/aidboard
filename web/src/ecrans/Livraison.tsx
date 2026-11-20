@@ -78,17 +78,19 @@ function Ecran({ topic }: { topic: Topic }) {
     !topic.worktreeMissing &&
     !fusionne &&
     (l.lecturePr.enCours || (!l.git && !l.erreurGit) || l.fraicheur === null);
+  const raisonRevue = l.erreurRevue === null ? null : 'La revue n’a pas pu être lue.';
   const blocage = topic.worktreeMissing
     ? 'le worktree du sujet manque.'
-    : enLecture
-      ? null
-      : blocageMerge({
-          fusionne,
-          aPr: topic.prNumber !== null,
-          pr: l.pr,
-          teteLocale: l.git?.head ?? null,
-          fraicheur: l.fraicheur ?? { etat: 'aucune' },
-        });
+    : (raisonRevue ??
+      (enLecture
+        ? null
+        : blocageMerge({
+            fusionne,
+            aPr: topic.prNumber !== null,
+            pr: l.pr,
+            teteLocale: l.git?.head ?? null,
+            fraicheur: l.fraicheur ?? { etat: 'aucune' },
+          })));
   const merge = useActionSuivie(topic.id);
   // D128 : fini, dans un sens ou dans l'autre, l'écran relit ; refusé, le refus reste sous le bouton
   const mergeFini =
@@ -129,7 +131,7 @@ function Ecran({ topic }: { topic: Topic }) {
           </p>
         </div>
         <div className="livraison-actions" data-node="livraison.actions">
-          {topic.prNumber !== null && !topic.worktreeMissing && (
+          {((topic.prNumber !== null && !topic.worktreeMissing) || raisonRevue) && (
             <button
               className="bouton bouton--fantome"
               type="button"
@@ -137,7 +139,11 @@ function Ecran({ topic }: { topic: Topic }) {
               disabled={l.lecturePr.enCours}
               onClick={l.relire}
             >
-              {l.lecturePr.enCours ? 'Lecture de la PR…' : 'Relire la PR'}
+              {topic.prNumber === null || topic.worktreeMissing
+                ? 'Relire la revue'
+                : l.lecturePr.enCours
+                  ? 'Lecture de la PR…'
+                  : 'Relire la PR'}
             </button>
           )}
           {merge.confirmation.attente ??
@@ -196,6 +202,11 @@ function Ecran({ topic }: { topic: Topic }) {
           {l.lecturePr.echec}
         </Bandeau>
       )}
+      {raisonRevue && (
+        <Bandeau ton="rouge" constat={raisonRevue} node="livraison.lecture-revue">
+          {l.erreurRevue}
+        </Bandeau>
+      )}
       {l.erreurGit && (
         <Bandeau ton="rouge" constat="Le dépôt n’a pas pu être lu" node="livraison.lecture-git">
           {l.erreurGit}
@@ -205,7 +216,7 @@ function Ecran({ topic }: { topic: Topic }) {
 
       <div className="livraison-tuiles">
         <TuileControles compte={compte} tete={tete} />
-        <TuileRevue fraicheur={l.fraicheur} />
+        <TuileRevue fraicheur={l.fraicheur} raisonRevue={raisonRevue} />
         <TuileAutorisation fusionne={fusionne} enCours={merge.enCours} tete={tete} />
       </div>
 
@@ -214,6 +225,7 @@ function Ecran({ topic }: { topic: Topic }) {
           <Fichiers topicId={topic.id} base={base} git={l.git} />
           <AvisRevue
             topicId={topic.id}
+            raisonRevue={raisonRevue}
             page={l.page}
             source={l.source}
             fraicheur={l.fraicheur}
@@ -225,6 +237,7 @@ function Ecran({ topic }: { topic: Topic }) {
                 pageRevue={memorySlug(namespace, 'review', topic.slug)}
                 mergeBase={l.git?.mergeBase ?? null}
                 tete={tete}
+                raisonRevue={raisonRevue}
                 obsolete={l.fraicheur?.etat === 'obsolete'}
               />
             )}
@@ -313,12 +326,25 @@ function TuileControles({ compte, tete }: { compte: Compte; tete: string | null 
 }
 
 /** Q2, D126 : la fraîcheur de la revue ; ambre si elle ne porte pas sur la tête. */
-function TuileRevue({ fraicheur }: { fraicheur: Fraicheur | null }) {
-  const { titre, note } = fraicheur
-    ? libelleFraicheur(fraicheur)
-    : { titre: 'Lecture…', note: 'La revue est en cours de lecture' };
-  const ton =
-    fraicheur?.etat === 'obsolete' ? 'ambre' : fraicheur?.etat === 'a-jour' ? 'ok' : 'neutre';
+function TuileRevue({
+  fraicheur,
+  raisonRevue,
+}: {
+  fraicheur: Fraicheur | null;
+  raisonRevue: string | null;
+}) {
+  const { titre, note } = raisonRevue
+    ? { titre: 'Lecture impossible', note: raisonRevue }
+    : fraicheur
+      ? libelleFraicheur(fraicheur)
+      : { titre: 'Lecture…', note: 'La revue est en cours de lecture' };
+  const ton = raisonRevue
+    ? 'rouge'
+    : fraicheur?.etat === 'obsolete'
+      ? 'ambre'
+      : fraicheur?.etat === 'a-jour'
+        ? 'ok'
+        : 'neutre';
   return (
     <div
       className={`livraison-tuile livraison-tuile--${ton}`}
@@ -455,6 +481,7 @@ function Controles({
 /** D131 : ce que la revue dit, ce qu'elle a examiné et ce qu'elle n'a pas examiné. */
 function AvisRevue({
   topicId,
+  raisonRevue,
   page,
   source,
   fraicheur,
@@ -462,6 +489,7 @@ function AvisRevue({
   children,
 }: {
   topicId: string;
+  raisonRevue: string | null;
   page: MemoryPage | null | undefined;
   source: SourceRevue | null;
   fraicheur: Fraicheur | null;
@@ -479,7 +507,7 @@ function AvisRevue({
           {court(tete)}.
         </p>
       )}
-      {page === undefined ? (
+      {raisonRevue ? null : page === undefined ? (
         <p className="texte-discret">Lecture de la mémoire…</p>
       ) : avis ? (
         <>
@@ -528,12 +556,14 @@ function RelancerRevue({
   mergeBase,
   tete,
   obsolete,
+  raisonRevue,
 }: {
   topic: Topic;
   pageRevue: string;
   mergeBase: string | null;
   tete: string | null;
   obsolete: boolean;
+  raisonRevue: string | null;
 }) {
   const { state, call } = useAid();
   const navigate = useNavigate();
@@ -541,13 +571,14 @@ function RelancerRevue({
   const [envoi, setEnvoi] = useState(false);
   const [erreur, setErreur] = useState<string | null>(null);
   const raison =
-    state?.agentTransport === 'pty'
+    raisonRevue ??
+    (state?.agentTransport === 'pty'
       ? 'Les agents sont lancés en terminal : la revue ne peut être relancée qu’en mode flux.'
       : topic.worktreeMissing
         ? 'Le worktree du sujet manque.'
         : !tete || !mergeBase
           ? `Rien à relire tant que origin/${topic.base} et la tête ne sont pas connus.`
-          : null;
+          : null);
   const relancer = async () => {
     if (!tete || !mergeBase) return;
     setEnvoi(true);

@@ -58,6 +58,8 @@ Abréviations : `T` = `src/daemon/routes/topics.ts`, `G` = `scripts/git/`, `PC` 
 | **D134** | **Livrer** sur l'accueil : sujet avec `prNumber`, non fusionné, sans décision qui attend ; lien vers l'écran. Il passe après Trancher et avant Relire. | `coque-v1.md`, action de ligne. |
 | **D135** | `diff.ouvrir-fichier` accepte `depuis` : la révision « avant » devient `depuis` au lieu de `hash^`. L'écran envoie `{ hash: head, depuis: mergeBase, path }`. | Q5. Une ligne modifiée, D32 tenu. |
 
+**Révision — 2026-11-20, D123.** Sous confirmation, la tête doit être un SHA de 40 caractères hexadécimaux, fourni par `head` ou issu de la dernière PR rafraîchie. Sans tête valide, la demande est refusée avec 409 (« tête de la PR inconnue »).
+
 ## 5. Points
 
 Chaque point est un commit, gate vert. Les lignes existantes modifiées sont comptées dans le message de commit. Les styles nouveaux vont dans `web/src/styles/livraison.css` (nouveau), jamais dans `maquette.css`.

@@ -395,6 +395,35 @@ test('D126 : pendant la lecture, la tuile Revue ne conclut rien', async () => {
   );
   await waitFor(() => expect(node('livraison.tuile-revue.valeur')?.textContent).toBe('Obsolète'));
 });
+test('une panne de la mémoire bloque les actions de revue jusqu’à une relecture réussie', async () => {
+  const revue = pageRevue('Avis disponible.', { commit: TETE });
+  const route = 'GET /api/memory/pages/aid/review/s';
+  let enPanne = true;
+  const h = ouvrir(avecPr, {
+    ...revue,
+    ...avecRevue(TETE, {}),
+    [route]: () => (enPanne ? json(503, { error: 'Mémoire indisponible' })() : revue[route]!()),
+  });
+  await arrive(h, [lecture({})]);
+  expect((await attendre('livraison.lecture-revue')).textContent).toContain('Mémoire indisponible');
+  expect(screen.queryByText(/Aucune revue/)).toBeNull();
+  expect((node('livraison.autoriser') as HTMLButtonElement).disabled).toBe(true);
+  expect(node('livraison.autoriser.blocage')?.textContent).toContain(
+    'La revue n’a pas pu être lue.',
+  );
+  expect((node('livraison.relancer-revue.bouton') as HTMLButtonElement).disabled).toBe(true);
+  expect(node('livraison.relancer-revue.raison')?.textContent).toContain(
+    'La revue n’a pas pu être lue.',
+  );
+
+  enPanne = false;
+  fireEvent.click(node('livraison.relire')!);
+  await waitFor(() => expect(node('livraison.tuile-revue.valeur')?.textContent).toBe('À jour'));
+  expect(node('livraison.lecture-revue')).toBeNull();
+  expect((node('livraison.autoriser') as HTMLButtonElement).disabled).toBe(false);
+  expect((node('livraison.relancer-revue.bouton') as HTMLButtonElement).disabled).toBe(false);
+});
+
 test('D126 : à jour, sans tête connue, absente de la branche', async () => {
   ouvrir(topic(), { ...pageRevue('Rien à redire.', { commit: TETE }), ...avecRevue(TETE, {}) });
   await waitFor(() => expect(node('livraison.tuile-revue.valeur')?.textContent).toBe('À jour'));
