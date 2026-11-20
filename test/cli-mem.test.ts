@@ -1,5 +1,6 @@
 import { execFile } from 'node:child_process';
 import { existsSync, mkdtempSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
+import Database from 'better-sqlite3';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -192,6 +193,69 @@ describe.skipIf(!built)('aid mem en sous-processus', () => {
       env: { AID_HOME: other, AID_URL: `http://127.0.0.1:${port}`, AID_TOKEN: 'faux' },
     });
     expect(bad.code).toBe(1);
+  });
+
+  test('proposals : texte, JSON brut et filtre par état', async () => {
+    const base = {
+      kind: 'tags',
+      payload: { tags: ['test'] },
+      rationale: 'Justification\nsur deux lignes',
+      createdAt: '2026-01-01T00:00:00.000Z',
+    };
+    const proposals = [
+      { ...base, id: 'prop_00000001', slug: 'lesson/test/ouverte', state: 'open', decidedAt: null },
+      {
+        ...base,
+        id: 'prop_00000002',
+        slug: 'lesson/test/appliquee',
+        state: 'applied',
+        decidedAt: base.createdAt,
+      },
+      {
+        ...base,
+        id: 'prop_00000003',
+        slug: 'lesson/test/rejetee',
+        state: 'rejected',
+        decidedAt: base.createdAt,
+      },
+    ];
+    const db = new Database(join(home, 'state.db'));
+    try {
+      const insert = db.prepare(
+        'INSERT INTO memory_proposals (id, kind, slug, payload, rationale, state, created_at, decided_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+      );
+      for (const p of proposals) {
+        insert.run(
+          p.id,
+          p.kind,
+          p.slug,
+          JSON.stringify(p.payload),
+          p.rationale,
+          p.state,
+          p.createdAt,
+          p.decidedAt,
+        );
+      }
+    } finally {
+      db.close();
+    }
+    const texte = await mem(['proposals']);
+    expect(texte.code, texte.err).toBe(0);
+    expect(texte.out.trimEnd()).toBe(
+      '00000001  tags  lesson/test/ouverte  Justification sur deux lignes',
+    );
+    for (const p of proposals) {
+      const r = await mem(['proposals', '--state', p.state, '--json']);
+      expect(r.code, r.err).toBe(0);
+      expect(JSON.parse(r.out)).toEqual([p]);
+    }
+    expect(JSON.parse((await mem(['proposals', '--json'])).out)).toEqual([proposals[0]]);
+    expect((await mem(['proposals', '--state', 'absent'])).code).toBe(1);
+  });
+
+  test('proposals sans daemon renvoie 4', async () => {
+    const other = mkdtempSync(join(tmpdir(), 'aid-cli-mem-vide-'));
+    expect((await run(['mem', 'proposals'], { env: { AID_HOME: other } })).code).toBe(4);
   });
 
   test('sans daemon : code 4 et le conseil de lancer aid ; aide : usage', async () => {

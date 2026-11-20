@@ -148,6 +148,8 @@ export function setup(
         JSON.stringify(url.includes('carte=') ? null : { groupes: [], suivant: null }),
         { status: 200 },
       );
+    if (method === 'GET' && url === '/api/memory/proposals?state=open')
+      return json(200, { proposals: [] })();
     if (url.startsWith('/api/fs/dirs'))
       return new Response(JSON.stringify(listing()), { status: 200 });
     return new Response('{}', { status: 200 });

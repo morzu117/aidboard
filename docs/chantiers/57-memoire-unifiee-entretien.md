@@ -10,6 +10,8 @@
 | Validation | Gate vert à chaque point. Les gestes machine du 57.3 et l'activation du 57.12 se font sur place, par Julien ou avec son accord explicite. |
 | Rayon d'impact | **Non établi.** L'index structurel (`index_*`) ne répondait pas dans la session qui a écrit ce plan : les fichiers ont été lus directement. À établir par `index_impact` sur `MemoryMirror`, `scheduleMaintenance`, `runMaintainJob` et `applyProposal` avant le 57.4. |
 
+**Révision — 2026-11-20** — Les propositions des leçons sont visibles dans la Boîte, où elles peuvent être décidées, et listées par `aid mem proposals`.
+
 ## 1. Pourquoi
 
 La mémoire est la seule couche de la chaîne censée s'accumuler. Aujourd'hui elle ne le peut pas, pour trois raisons.
@@ -193,12 +195,12 @@ Migration `memory_usage`, écriture dans `search` et `get`, `aid mem usage`.
 
 ### 57.12 L'activation et la recette
 
-`docs/recette-chantier-57-memoire.md`. Sur une machine où Ollama répond : `memory.maintenance.enabled: true`, une nuit, puis relecture des propositions. Le chantier n'est pas clos avant cette nuit.
+Suivre la [fiche de recette](../recette-chantier-57-memoire.md) sur la tour de Julien. AID Server et Ollama tournent dans Ubuntu sous WSL2 (décision du 2026-11-20). Activer `memory.maintenance.enabled: true` pour une nuit. Le matin, lister les propositions avec `aid mem proposals`, puis les relire et les décider dans la section « Entretien de la mémoire » de la Boîte. Le chantier n'est pas clos avant cette nuit.
 
 ## 6. Pièges
 
 - **`AID_HOME` temporaire dans tout test**, jamais le vrai `~/.aid`. Jamais de vrai Ollama dans un test : `memory.embeddings.provider: off` explicite, ou un faux `Embedder` (piège déjà rencontré au 10.5).
-- **Ollama depuis WSL** : il est injoignable sur ce poste. S'il tourne côté Windows, `127.0.0.1` ne l'atteint pas depuis WSL. À régler avant le 57.12, hors code.
+- **Ollama depuis WSL** : Julien a décidé le 2026-11-20 d'installer Ollama dans Ubuntu sous WSL2 sur la tour. AID Server y accède sur `http://127.0.0.1:11434`. Vérifier la réponse depuis WSL avant d'activer l'entretien.
 - **`store.all()` garde un curseur ouvert** : matérialiser la liste avant d'enfiler des jobs (commentaire existant dans `scheduleMaintenance`).
 - **Le miroir fait foi, pas la base.** Après un tirage, c'est la base qui se met à jour depuis les fichiers, jamais l'inverse.
 - **Ne pas lancer `reindex` pour rattraper les vecteurs** : il vide la base et la relit en entier.

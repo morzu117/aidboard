@@ -1,7 +1,7 @@
 import { parseArgs } from 'node:util';
 import type { AidPaths } from '../../daemon/paths.js';
 import { renderMarkdown } from '../../daemon/memory/store.js';
-import type { MemoryPage, SearchHit, SearchMode } from '../../shared/memory.js';
+import type { MemoryPage, MemoryProposal, SearchHit, SearchMode } from '../../shared/memory.js';
 import { callDaemon, DaemonUnreachable, resolveTarget } from '../client.js';
 
 // Codes de sortie du contrat `aid mem` (chantier 06) : 0 ok, 1 usage ou refus simple,
@@ -13,6 +13,7 @@ export const MEM_HELP = `aid mem : la mémoire des agents (pages markdown, reche
                                                       contenu sur stdin ; existante sans option = refus
   aid mem search "<termes>" [--scope <ns>|all] [--limit N] [--json]
   aid mem list <prefix> [--json]
+  aid mem proposals [--state open|applied|rejected] [--json]
   aid mem usage [--json]                              lectures par page et dernière lecture
   aid mem rm <slug>
   aid mem purge [--dry-run] [--orphelines]              pages cycliques closes ; orphelines = liste seule
@@ -88,6 +89,23 @@ export async function runMem(
         return await put(call, positionals[0], values, io);
       case 'search':
         return await search(call, positionals[0], values, io);
+      case 'proposals': {
+        const state = values.state ?? 'open';
+        if (state !== 'open' && state !== 'applied' && state !== 'rejected') {
+          io.err('--state attend open, applied ou rejected');
+          return 1;
+        }
+        const { status, json } = await call('GET', `/api/memory/proposals?state=${state}`);
+        if (status !== 200) return fail(status, json, io);
+        const proposals = json.proposals as MemoryProposal[];
+        if (values.json) io.out(JSON.stringify(proposals));
+        else {
+          for (const p of proposals) {
+            io.out(`${p.id.slice(-8)}  ${p.kind}  ${p.slug}  ${p.rationale.replace(/\s+/g, ' ')}`);
+          }
+        }
+        return 0;
+      }
       case 'usage': {
         const { status, json } = await call('GET', '/api/memory/usage');
         if (status !== 200) return fail(status, json, io);
@@ -147,6 +165,7 @@ const OPTIONS = {
   append: { type: 'boolean' },
   'expected-revision': { type: 'string' },
   force: { type: 'boolean' },
+  state: { type: 'string' },
   scope: { type: 'string' },
   limit: { type: 'string' },
   json: { type: 'boolean' },
