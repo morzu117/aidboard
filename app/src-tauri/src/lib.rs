@@ -58,7 +58,13 @@ fn check_board_update(app: &tauri::AppHandle) {
     }
     match tauri::async_runtime::block_on(update.download_and_install(|_, _| {}, || {})) {
         // Windows : l'installateur relance lui-même l'app ; macOS et Linux : à nous.
-        Ok(()) => app.restart(),
+        // Appeler app.restart() ici aussi sur Windows fait collisionner les deux relances
+        // (fenêtre blanche, navigateur système ouvert sur tauri.localhost au lancement suivant).
+        Ok(()) => {
+            if !cfg!(target_os = "windows") {
+                app.restart();
+            }
+        }
         Err(e) => log::warn!("mise à jour d'AID Board échouée (signature, réseau…) : {e}"),
     }
 }

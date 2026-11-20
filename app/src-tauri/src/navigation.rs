@@ -13,18 +13,25 @@ fn decider(adresse: &str, origine: Option<&Url>, nouvelle_fenetre: bool) -> Deci
     let Ok(url) = Url::parse(adresse) else {
         return Decision::Refuser;
     };
+    // La coquille embarquée n'est jamais une destination de navigateur externe, qu'elle
+    // soit visée par une navigation dans la fenêtre ou par une demande de nouvelle fenêtre.
+    if matches!(
+        url.as_str(),
+        "tauri://localhost/index.html"
+            | "http://tauri.localhost/index.html"
+            | "https://tauri.localhost/index.html"
+    ) {
+        return if nouvelle_fenetre {
+            Decision::Refuser
+        } else {
+            Decision::Rester
+        };
+    }
     if !nouvelle_fenetre {
         if let Some(origine) = origine {
             if url.origin() == origine.origin() {
                 return Decision::Rester;
             }
-        } else if matches!(
-            url.as_str(),
-            "tauri://localhost/index.html"
-                | "http://tauri.localhost/index.html"
-                | "https://tauri.localhost/index.html"
-        ) {
-            return Decision::Rester;
         }
     }
     match url.scheme() {
@@ -100,7 +107,7 @@ mod tests {
             "https://tauri.localhost/index.html",
         ] {
             assert_eq!(decider(adresse, None, false), Decision::Rester);
-            assert_ne!(decider(adresse, None, true), Decision::Rester);
+            assert_eq!(decider(adresse, None, true), Decision::Refuser);
         }
         assert_eq!(
             decider("file:///tmp/index.html", None, false),
