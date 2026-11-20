@@ -46,7 +46,7 @@ existante refuse (`revision_conflict`) : c'est voulu. `--append` est le geste
 normal, il ajoute le contenu à la fin, atomiquement, sans toucher à ce qu'un
 lancement précédent a écrit. `--force` est réservé à l'humain — un agent qui
 l'utilise réécrit le travail d'un autre lancement sans rien demander
-(incident constaté sous gbrain le 2026-09-24, cycle `site-commercialisation` :
+(incident constaté sous l'ancien adaptateur mémoire le 2026-09-24, cycle `site-commercialisation` :
 un `--force` avait effacé le handoff du lancement précédent).
 
 **Rien de dérivable du code.** Voir `policy/routing.md`.

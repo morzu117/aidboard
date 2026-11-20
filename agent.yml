@@ -1,15 +1,15 @@
-# Manifeste projet — résolu par /sync depuis ~/.agent-kernel
+# Manifeste projet — résolu par /sync depuis kernel/
 #
 # Ne contient que les écarts. Tout le reste est détecté du repo ou hérité de
 # defaults.yml du noyau :
 #
 #   name, languages      package.json, tsconfig.json
-#   memory.source        .gbrain-source, sinon = namespace
+#   memory.source        = namespace
 #   commands             scripts npm de package.json
 #   capabilities, models, guardrails, phases    defaults.yml
 
 kernel:
-  version: "0.7.1"
+  version: "0.9.1"
 
 project:
   namespace: aid           # le brief l'impose ; détecté, ce serait « aidboard »
