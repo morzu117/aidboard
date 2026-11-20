@@ -153,7 +153,9 @@ const PlacementPatchBody = Type.Object(
     pinned: Type.Optional(Type.Boolean()),
     archived: Type.Optional(Type.Boolean()),
     hidden: Type.Optional(Type.Boolean()),
-    displayName: Type.Optional(Type.Union([Type.String({ minLength: 1 }), Type.Null()])),
+    displayName: Type.Optional(
+      Type.Union([Type.String({ minLength: 1, maxLength: 256 }), Type.Null()]),
+    ),
   },
   { additionalProperties: false },
 );

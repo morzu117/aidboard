@@ -516,7 +516,7 @@ export async function fileAtRevision(
   rev: string,
   path: string,
 ): Promise<string | null> {
-  const r = await git(worktree, ['show', `${rev}:${path}`]);
+  const r = await git(worktree, ['show', '--end-of-options', `${rev}:${path}`, '--']);
   return r.ok ? r.stdout : null;
 }
 

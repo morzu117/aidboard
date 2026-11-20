@@ -59,10 +59,13 @@
 /* D117 : le chip Profil, agent · modèle · machine */
 .composer-profil {
   display: inline-flex;
+  flex-wrap: wrap;
+  max-width: 100%;
   align-items: center;
   gap: var(--sp-1);
 }
 .composer-profil-part {
+  white-space: nowrap;
   color: var(--text-3);
   font-size: var(--fs-s);
 }

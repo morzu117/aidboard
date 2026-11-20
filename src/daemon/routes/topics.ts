@@ -459,6 +459,8 @@ export function registerTopicRoutes(app: FastifyInstance, deps: TopicRouteDeps):
       if (!existsSync(topic.worktree)) throw new AidHttpError(409, 'worktree introuvable');
       const body = (req.body ?? {}) as { hash?: string; path?: string; depuis?: string };
       if (!body.hash || !body.path) throw new AidHttpError(422, 'hash et chemin requis');
+      if (typeof body.hash !== 'string' || !/^[0-9a-f]{4,40}$/i.test(body.hash))
+        throw new AidHttpError(422, 'révision « hash » invalide');
       // Chantier 27 (D135) : « avant » à une révision donnée (la base commune de la livraison)
       if (body.depuis !== undefined && !/^[0-9a-f]{4,40}$/i.test(body.depuis))
         throw new AidHttpError(422, 'révision « depuis » invalide');

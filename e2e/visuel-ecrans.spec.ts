@@ -54,6 +54,9 @@ async function capturer(page: Page, nom: string) {
 
 /** Refus réel du daemon : session retirée le temps de la requête, puis restaurée pour réessayer. */
 async function verifierRefus(page: Page, bouton: Locator, chemin: string, erreur: Locator) {
+  // R5 : l'écran doit avoir fini ses lectures avant que la session soit retirée, sinon elles
+  // partent sans cookie et le bouton n'est jamais rendu (vu en CI sur un runner chargé).
+  await expect(bouton).toBeVisible();
   const contexte = page.context();
   const cookies = await contexte.cookies();
   await contexte.clearCookies();
