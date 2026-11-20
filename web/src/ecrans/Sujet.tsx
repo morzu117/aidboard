@@ -452,6 +452,7 @@ function Contenu({
                 className="titre-ecran sujet-titre-champ"
                 data-node="1-3.entete.titre.champ"
                 aria-label="Nom affiché du sujet"
+                maxLength={256}
                 autoFocus
                 value={renomme}
                 onChange={(e) => setRenomme(e.target.value)}

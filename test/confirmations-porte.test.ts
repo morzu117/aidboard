@@ -454,6 +454,16 @@ for (const reason of [undefined, 'timeout'] as const) {
     expect(runScript).toHaveBeenCalledTimes(1);
   });
 }
+test('D123 : merge sous confirmation sans head ni PR rafraîchie, refus avant la demande', async () => {
+  const t = await preparer('merge');
+  t.db.prepare("DELETE FROM actions WHERE id = 'pr'").run();
+  const r = await t.demander();
+  expect(r.statusCode).toBe(409);
+  expect(r.json().error).toBe('tête de la PR inconnue : rafraîchis la PR');
+  expect(t.db.prepare('SELECT 1 FROM pda_demandes').get()).toBeUndefined();
+  expect(runScript).not.toHaveBeenCalled();
+});
+
 test('merge : message refusé sous confirmation, tête obligatoire et relecture du nettoyage', async () => {
   const t = await preparer('merge');
   expect((await t.demander({ message: 'personnalisé' })).statusCode).toBe(422);

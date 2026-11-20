@@ -860,15 +860,21 @@ body {
 }
 .composer-barre {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: var(--sp-2);
 }
 .composer-reglages {
   position: relative;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: var(--sp-2);
   min-width: 0;
+}
+.composer-reglages > *,
+.composer-profil > * {
+  flex-shrink: 0;
 }
 .composer-chip {
   background: var(--surface-2);

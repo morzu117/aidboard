@@ -169,4 +169,42 @@ test.describe.serial('écran Sujet (chantier 26)', () => {
     await verifierEcranGarde(page, 'sujet-fichiers-compositeur', node(page, '3-4.index'));
     await verifierEcranGarde(page, 'sujet-compositeur', page.locator('.composer'));
   });
+
+  test('la barre du compositeur conserve ses libellés quand la place manque', async () => {
+    await page.setViewportSize({ width: 1280, height: 720 });
+    await expect(node(page, `${DN}.mode`)).toBeVisible();
+    await expect(node(page, `${DN}.modele`)).toHaveText('Par défaut');
+    // Laisse le compositeur au-dessus de 640 px, puis contraint seulement sa barre.
+    await page.locator('.panneau-contexte').evaluate((el) => {
+      el.style.flex = '0 0 240px';
+    });
+    const largeur = await page.locator('.composer').evaluate((el) => {
+      const style = getComputedStyle(el);
+      return el.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
+    });
+    expect(largeur).toBeGreaterThan(640);
+    const barre = page.locator('.composer-barre');
+    await barre.evaluate((el) => {
+      el.style.maxInlineSize = '270px';
+    });
+    const mesures = await barre.evaluate((el) => {
+      const droite = el.getBoundingClientRect().right;
+      return [...el.querySelectorAll<HTMLElement>('.composer-chip, .composer-profil-part')].map(
+        (controle) => ({
+          texte: controle.textContent?.trim(),
+          deborde:
+            controle.scrollWidth > controle.clientWidth ||
+            controle.getBoundingClientRect().right > droite + 1,
+          ecrase:
+            controle.getBoundingClientRect().height >
+            1.5 * parseFloat(getComputedStyle(controle).lineHeight) +
+              parseFloat(getComputedStyle(controle).paddingTop) +
+              parseFloat(getComputedStyle(controle).paddingBottom) +
+              2,
+        }),
+      );
+    });
+    expect(mesures.length).toBeGreaterThanOrEqual(4);
+    expect(mesures.filter(({ deborde, ecrase }) => deborde || ecrase)).toEqual([]);
+  });
 });

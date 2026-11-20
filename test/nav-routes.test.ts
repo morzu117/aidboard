@@ -121,6 +121,12 @@ test('changer de groupe met le sujet en dernier rang du groupe cible ; placement
 
   const displayed = await patch(`/api/nav/placements/${t1}`, { displayName: 'Mon nom' });
   expect(displayed.json<NavPlacement>().displayName).toBe('Mon nom');
+  expect(
+    (await patch(`/api/nav/placements/${t1}`, { displayName: 'x'.repeat(256) })).statusCode,
+  ).toBe(200);
+  expect(
+    (await patch(`/api/nav/placements/${t1}`, { displayName: 'x'.repeat(257) })).statusCode,
+  ).toBe(400);
   const cleared = await patch(`/api/nav/placements/${t1}`, { displayName: null });
   expect(cleared.json<NavPlacement>().displayName).toBeNull();
 });

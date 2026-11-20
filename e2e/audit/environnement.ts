@@ -1,6 +1,15 @@
 import { execFileSync, spawn, type ChildProcess } from 'node:child_process';
 import { once } from 'node:events';
-import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  closeSync,
+  copyFileSync,
+  mkdirSync,
+  mkdtempSync,
+  openSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { createServer } from 'node:net';
 import type { Duplex } from 'node:stream';
 import { tmpdir } from 'node:os';
@@ -13,6 +22,8 @@ import { preparerMeshes } from '../helpers-multi-mesh.js';
 import { appairerHost, demarrerHost, ORIGINE_APPAREIL } from '../host-helpers.js';
 import type { Observation } from './classement.js';
 import { appartientAuDaemonAudit } from './identite-processus.js';
+import { runningDaemon } from '../../src/cli/daemonInfo.js';
+import type { AidPaths } from '../../src/daemon/paths.js';
 import { NOM_E2E, ouvrirServeLocal } from '../serve-local.js';
 
 export const PORT_AUDIT = Number(process.env.AID_E2E_PORT ?? 4871) + 40;
@@ -121,21 +132,50 @@ export async function preparerAudit(
     }
     if (!(await attendre())) throw new Error('Ports du daemon audit encore occupés');
   };
-  const redemarrer = () => {
+  const redemarrer = async () => {
     // Reprendre la configuration sauvegardée, sans que demarrerHost ne la réécrive.
-    execFileSync(process.execPath, [CLI], {
-      env: {
-        ...process.env,
-        ...env,
-        AID_HOME: home,
-        AID_NO_BROWSER: '1',
-        SHELL: '/bin/sh',
-        PATH: chemin,
-      },
-      timeout: 40_000,
-      stdio: 'ignore',
-    });
-    return (JSON.parse(readFileSync(join(home, 'daemon.json'), 'utf8')) as { token: string }).token;
+    // R5 : la sortie va dans un fichier, pas dans un tube que le daemon détaché garderait
+    // ouvert, pour qu'un échec dise pourquoi.
+    const journal = join(home, 'redemarrage.log');
+    const sortie = openSync(journal, 'w');
+    const chemins = { daemonJson: join(home, 'daemon.json') } as AidPaths;
+    try {
+      execFileSync(process.execPath, [CLI], {
+        env: {
+          ...process.env,
+          ...env,
+          AID_HOME: home,
+          AID_NO_BROWSER: '1',
+          SHELL: '/bin/sh',
+          PATH: chemin,
+        },
+        timeout: 90_000,
+        stdio: ['ignore', sortie, sortie],
+      });
+    } catch (erreur) {
+      // La CLI renonce après 10 s, mais le daemon détaché continue de démarrer : sur un
+      // runner chargé, il répond souvent juste après. On lui laisse 60 s de plus.
+      let info = null;
+      for (let fin = Date.now() + 60_000; !info && Date.now() < fin;) {
+        await new Promise((r) => setTimeout(r, 250));
+        info = await runningDaemon(chemins);
+      }
+      if (!info) {
+        const lire = (nom: string) => {
+          try {
+            return readFileSync(join(home, nom), 'utf8').slice(-2000);
+          } catch {
+            return '(illisible)';
+          }
+        };
+        throw new Error(
+          `redémarrage du daemon audit en échec : ${(erreur as Error).message}\n${lire('redemarrage.log')}\n--- daemon.log ---\n${lire('daemon.log')}`,
+        );
+      }
+    } finally {
+      closeSync(sortie);
+    }
+    return (JSON.parse(readFileSync(chemins.daemonJson, 'utf8')) as { token: string }).token;
   };
   const fermer = async () => {
     // Un contexte déjà fermé ou un frontal défaillant ne doit retenir aucun autre port.
@@ -402,7 +442,7 @@ export async function preparerAudit(
         rmSync(join(home, `state.db${suffixe}`), { force: true });
       copyFileSync(sauvegarde, join(home, 'state.db'));
       for (const [nom, contenu] of fichiersInitiaux) writeFileSync(join(home, nom), contenu);
-      const token = redemarrer();
+      const token = await redemarrer();
       for (const [i, contexte] of contextes.entries()) {
         await contexte.clearCookies();
         await contexte.addCookies(cookiesInitiaux[i]!);
@@ -603,7 +643,7 @@ export async function preparerAudit(
         } catch {
           /* Déjà arrêté. */
         }
-        const token = redemarrer();
+        const token = await redemarrer();
         await mac.request.get(`${origine}/?token=${token}`);
         return false;
       },

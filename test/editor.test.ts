@@ -9,7 +9,9 @@ import {
 } from 'node:fs';
 import { delimiter, join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { afterEach, expect, test } from 'vitest';
+import { afterEach, expect, test, vi } from 'vitest';
+import * as gitExec from '../src/daemon/git/exec.js';
+import { fileAtRevision } from '../src/daemon/git/inspect.js';
 import {
   defaultEditor,
   diffCommand,
@@ -205,6 +207,36 @@ test('diff.ouvrir-fichier : hash ou chemin manquant (422), chemin hors du worktr
     (await postAction(c, topicId, 'diff.ouvrir-fichier', { hash, path: '../../etc/passwd' }))
       .statusCode,
   ).toBe(422);
+});
+
+test('diff.ouvrir-fichier refuse les révisions invalides avant toute lecture Git', async () => {
+  c = await setupWorkspace({ editor: ['code', '{path}'] });
+  const { topicId } = await makeTopic(c);
+  const git = vi.spyOn(gitExec, 'git');
+  try {
+    for (const hash of ['--output=x', 'pas-un-sha']) {
+      const r = await postAction(c, topicId, 'diff.ouvrir-fichier', { hash, path: 'a.txt' });
+      expect(r.statusCode).toBe(422);
+      expect(r.json().error).toBe('révision « hash » invalide');
+    }
+    expect(git).not.toHaveBeenCalled();
+  } finally {
+    git.mockRestore();
+  }
+});
+
+test('fileAtRevision traite une révision commençant par un tiret comme un opérande', async () => {
+  c = await setupWorkspace();
+  const { wt } = await makeTopic(c);
+  const git = vi.spyOn(gitExec, 'git');
+  try {
+    expect(await fileAtRevision(wt, '-inconnue', 'a.txt')).toBeNull();
+    expect(git).toHaveBeenCalledWith(wt, ['show', '--end-of-options', '-inconnue:a.txt', '--']);
+    const resultat = await git.mock.results[0]?.value;
+    expect(resultat.stderr).toContain('bad revision');
+  } finally {
+    git.mockRestore();
+  }
 });
 
 test('D135 : diff.ouvrir-fichier avec « depuis », avant pris à cette révision', async () => {

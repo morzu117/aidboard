@@ -178,34 +178,40 @@ test('56.5 D03 D04 D05 : Machines, formulaire PDA, actions après défilement, r
     // Les champs sont séparés de leur titre, les cases de leur texte et le relais du bloc PDA.
     for (const viewport of [{ width: 1280, height: 800 }, TELEPHONE]) {
       await page.setViewportSize(viewport);
-      for (const champ of ['relais']) {
-        const titre = (await node(page, `machines.pda.${champ}-titre`).boundingBox())!;
-        const boite = (await node(page, `machines.pda.${champ}`).boundingBox())!;
-        expect(boite.y - (titre.y + titre.height)).toBeGreaterThanOrEqual(7);
-      }
-      const activation = (await node(page, 'machines.pda.activation-libelle').boundingBox())!;
-      const titre = (await node(page, 'machines.pda.relais-titre').boundingBox())!;
-      expect(titre.y - (activation.y + activation.height)).toBeGreaterThanOrEqual(11);
+      const ecartVertical = async (dessus: string, dessous: string) => {
+        const [haut, bas] = await Promise.all([
+          node(page, dessus).boundingBox(),
+          node(page, dessous).boundingBox(),
+        ]);
+        return haut && bas ? bas.y - (haut.y + haut.height) : -Infinity;
+      };
+      await expect
+        .poll(() => ecartVertical('machines.pda.relais-titre', 'machines.pda.relais'))
+        .toBeGreaterThanOrEqual(7);
+      await expect
+        .poll(() => ecartVertical('machines.pda.activation-libelle', 'machines.pda.relais-titre'))
+        .toBeGreaterThanOrEqual(11);
       for (const id of [
         'host.push-libelle',
         'host.code-libelle',
         'machines.pda.activation-libelle',
       ]) {
-        const geometrie = await node(page, id).evaluate((label) => {
-          const champ = label.querySelector('input')!.getBoundingClientRect();
-          const texte = Array.from(label.childNodes).find(
-            (n) => n.nodeType === Node.TEXT_NODE && n.textContent?.trim(),
-          )!;
-          const selection = document.createRange();
-          selection.selectNode(texte);
-          const r = selection.getBoundingClientRect();
-          return {
-            espace: r.left - champ.right,
-            chevaucheVertical: r.top < champ.bottom && champ.top < r.bottom,
-          };
-        });
-        expect(geometrie.espace).toBeGreaterThanOrEqual(7);
-        expect(geometrie.chevaucheVertical).toBe(true);
+        const geometrie = () =>
+          node(page, id).evaluate((label) => {
+            const champ = label.querySelector('input')!.getBoundingClientRect();
+            const texte = Array.from(label.childNodes).find(
+              (n) => n.nodeType === Node.TEXT_NODE && n.textContent?.trim(),
+            )!;
+            const selection = document.createRange();
+            selection.selectNode(texte);
+            const r = selection.getBoundingClientRect();
+            return {
+              espace: r.left - champ.right,
+              chevaucheVertical: r.top < champ.bottom && champ.top < r.bottom,
+            };
+          });
+        await expect.poll(async () => (await geometrie()).espace).toBeGreaterThanOrEqual(7);
+        await expect.poll(async () => (await geometrie()).chevaucheVertical).toBe(true);
       }
     }
     await page.setViewportSize(TELEPHONE);
