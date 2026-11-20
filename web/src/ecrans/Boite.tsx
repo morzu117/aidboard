@@ -3,6 +3,7 @@ import { useMeshes } from '../data/meshes.js';
 import { instantaneMesh } from '../data/meshLecture.js';
 import { PropositionAidVue, usePropositionsAid } from '../ui/PropositionsAid.js';
 import { PropositionSwairmVue, usePropositionsSwairm } from '../ui/PropositionsSwairm.js';
+import { EntretienMemoire } from '../ui/EntretienMemoire.js';
 import { EcrireAuMesh } from '../ui/EcrireAuMesh.js';
 import { type ReactNode, useState } from 'react';
 import { Link, useNavigate } from 'react-router';
@@ -542,7 +543,7 @@ function Contenu() {
   const [resultatDeplacement, setResultatDeplacement] = useState('');
   const propositionsAid = usePropositionsAid();
   const propositionsSwairm = usePropositionsSwairm();
-  const { state, daemon, retry } = useAid();
+  const { state, daemon, retry, appareil } = useAid();
   const { openNewTopic } = useLayout();
   const [filtre, setFiltre] = useState<string | null>(null);
   const [nature, setNature] = useState<Nature | 'tout'>('tout');
@@ -765,6 +766,7 @@ function Contenu() {
     return (
       <main className="page">
         {entete(sousTitre, filtres)}
+        {!appareil && <EntretienMemoire />}
         <section className="vide" data-node="1-2.vide">
           <p className="vide-message" data-node="1-2.vide.message">
             Rien à traiter : aucun agent n’attend ta réponse.
@@ -835,6 +837,7 @@ function Contenu() {
           <div className="liste" data-node="1-2.liste">
             {section('decision')}
             {section('relire')}
+            {!appareil && <EntretienMemoire />}
           </div>
         )}
         {droite && (

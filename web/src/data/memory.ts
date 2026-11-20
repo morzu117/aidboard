@@ -1,4 +1,4 @@
-import type { MemoryPage, MemoryProposal } from '../../../src/shared/memory.js';
+import type { MemoryPage, MemoryProposal, ProposalKind } from '../../../src/shared/memory.js';
 
 export const MEMORY_KINDS = ['plan', 'dev-handoff', 'review', 'retro'] as const;
 export type MemoryKind = (typeof MEMORY_KINDS)[number];
@@ -8,6 +8,12 @@ export const MEMORY_KIND_LABELS: Record<MemoryKind, string> = {
   'dev-handoff': 'Passation dev',
   review: 'Revue',
   retro: 'Rétro',
+};
+
+export const PROPOSAL_KIND_LABELS: Record<ProposalKind, string> = {
+  tags: 'Tags',
+  duplicate: 'Doublon',
+  split: 'Découpage',
 };
 
 export type Call = <T>(
@@ -60,6 +66,14 @@ export async function fetchOpenProposals(
   return proposals.filter((p) =>
     MEMORY_KINDS.some((kind) => p.slug === memorySlug(namespace, kind, topicSlug)),
   );
+}
+
+export async function fetchOpenLessonProposals(call: Call): Promise<MemoryProposal[]> {
+  const { proposals } = await call<{ proposals: MemoryProposal[] }>(
+    'GET',
+    '/api/memory/proposals?state=open',
+  );
+  return proposals.filter((p) => p.slug.startsWith('lesson/'));
 }
 
 export function applyProposal(call: Call, id: string): Promise<{ id: string; state: string }> {

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import type { MemoryPage, MemoryProposal, ProposalKind } from '../../../src/shared/memory.js';
+import type { MemoryPage, MemoryProposal } from '../../../src/shared/memory.js';
 import { AidApiError } from '../data/api.js';
 import {
   applyProposal,
@@ -8,16 +8,11 @@ import {
   MEMORY_KIND_LABELS,
   MEMORY_KINDS,
   type MemoryKind,
+  PROPOSAL_KIND_LABELS,
   rejectProposal,
 } from '../data/memory.js';
 import { useAid } from '../data/useAidState.js';
 import { depuis } from './depuis.js';
-
-const PROPOSAL_KIND_LABELS: Record<ProposalKind, string> = {
-  tags: 'Tags',
-  duplicate: 'Doublon',
-  split: 'Découpage',
-};
 
 function Propositions({ namespace, topicSlug }: { namespace: string; topicSlug: string }) {
   const { state, call } = useAid();
