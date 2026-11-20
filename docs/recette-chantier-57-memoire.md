@@ -3,7 +3,7 @@
 Dans le relevé, consigner la forme des observations et les comptages. Omettre
 les noms d’hôtes, les chemins personnels, les contenus de pages et les jetons.
 
-La fiche gbrain dédiée est indiquée au [§57.3 du plan](chantiers/57-memoire-unifiee-entretien.md#573-gbrain-hors-du-poste-windows-dm10).
+Le retrait de gbrain (57.3) a sa propre fiche : [recette-chantier-57-gbrain-windows.md](recette-chantier-57-gbrain-windows.md).
 
 ## Couverture automatique
 
