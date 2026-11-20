@@ -2,7 +2,7 @@
 
 Implémentation : SWAIRM, ruche d'agents pilotée depuis GitHub. L'Overmind
 (daemon) orchestre ; les drones (`claude -p` en worktree) codent ; la Reine
-juge ; le creep (gbrain) mémorise. Un projet qui se développe par la ruche
+juge ; le creep mémorise via la capacité `memory` (`aid mem`). Un projet qui se développe par la ruche
 déclare `dev_agent: swairm` et `review_agent: swairm` dans son manifeste :
 les deux capacités viennent ensemble, avec l'orchestration — la ruche ne se
 découpe pas.
@@ -29,7 +29,7 @@ le commit, sans câblage.
 | Reine (`max_rounds`)              | `review_agent`, cap de re-dev compris |
 | labels et commandes d'issue       | phase triage                          |
 | assimilation (learning au creep)  | phase retro                           |
-| creep (`gbrain`, `brain_source`)  | capacité `memory`, lue au triage      |
+| creep (`aid mem`, `brain_source`) | capacité `memory`, lue au triage      |
 
 ## Appel
 
@@ -76,7 +76,7 @@ coupe tout. L'index lui-même se reconstruit en `provision`
 dégradation du bloc s'applique, et le drone la déclare.
 
 **Le creep pointe sur la source du projet.** `creep.brain_source` du
-`swairm.yml` = le contenu de `.gbrain-source`. Un creep qui pointe ailleurs
+`swairm.yml` = `project.namespace` dans `agent.yml`. Un creep qui pointe ailleurs
 fait puiser au triage la connaissance d'un autre projet.
 
 **Les learnings restent dans la source du projet.** L'assimilation ne sait

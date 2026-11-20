@@ -22,14 +22,14 @@ champ manquant : c'est un champ à résoudre.
 
 ### Détection
 
-| Champ                             | Détecté depuis                                                                                          |
-| --------------------------------- | ------------------------------------------------------------------------------------------------------- |
-| `project.name`                    | `[project] name` de `pyproject.toml`, `name` de `package.json`, sinon le nom du dossier                 |
-| `project.namespace`               | slug de `project.name`                                                                                  |
-| `project.languages`               | présence de `pyproject.toml`, `package.json`, `tsconfig.json`, `Cargo.toml`, `go.mod`                   |
-| `capabilities.memory.source`      | `project.namespace`. Un `.gbrain-source` présent n'est plus lu : le signaler et proposer sa suppression |
-| `commands.test` / `commands.lint` | scripts de `package.json` ; `[tool.pytest]` / `[tool.ruff]` de `pyproject.toml`                         |
-| `gates`                           | une entrée par couche testable détectée                                                                 |
+| Champ                             | Détecté depuis                                                                          |
+| --------------------------------- | --------------------------------------------------------------------------------------- |
+| `project.name`                    | `[project] name` de `pyproject.toml`, `name` de `package.json`, sinon le nom du dossier |
+| `project.namespace`               | slug de `project.name`                                                                  |
+| `project.languages`               | présence de `pyproject.toml`, `package.json`, `tsconfig.json`, `Cargo.toml`, `go.mod`   |
+| `capabilities.memory.source`      | `project.namespace`                                                                     |
+| `commands.test` / `commands.lint` | scripts de `package.json` ; `[tool.pytest]` / `[tool.ruff]` de `pyproject.toml`         |
+| `gates`                           | une entrée par couche testable détectée                                                 |
 
 **Un `AGENTS.md` ou `CLAUDE.md` déjà présent dans le repo est ta meilleure
 source pour les gates.** S'il en documente un, reprends-le **verbatim** : il
@@ -90,9 +90,9 @@ en `--version`.
 Pour `memory`, la commande est `aid --version`. Un daemon arrêté n'empêche pas le
 rendu : c'est un repli déclaré à l'exécution (`adapters/aid.md`, « Repli »).
 
-Si le manifeste déclare `adapter: gbrain`, avertis : cet adaptateur est déprécié
-depuis 0.9.0 et retiré en 1.0 ; la migration est décrite dans
-`~/.agent-kernel/CHANGELOG.md`. Rends quand même, avec `adapters/gbrain.md`.
+Si le manifeste déclare un adaptateur mémoire retiré, listé dans
+`~/.agent-kernel/CHANGELOG.md`, refuse le rendu et affiche : « Adaptateur
+mémoire retiré. Applique la migration décrite dans le CHANGELOG du noyau. »
 
 **Si elle manque, arrête-toi.** Ne rends pas le bloc. Une capacité déclarée
 mais absente est pire que `null` : la table de routage interdit le grep et

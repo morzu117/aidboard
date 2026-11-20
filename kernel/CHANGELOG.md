@@ -7,6 +7,15 @@ ajoute rien. Format : chaque version majeure du noyau décrit sa
 **migration**, que `/sync` applique avant de rendre le bloc ; les mineures
 et patchs n'en ont pas, sauf mention contraire.
 
+## Retrait de l'adaptateur mémoire historique (chantier 57.2)
+
+L'adaptateur `gbrain` est retiré. Pour migrer, remplace sa déclaration
+`capabilities.memory` par celle de l'adaptateur `aid`, ou supprime cette
+surcharge pour hériter de `aid`. La source par défaut est le namespace du
+projet. Relance ensuite `/sync`.
+
+L’adaptateur CodeGraph décrit désormais la surface `index_*` du daemon, reportée dans le noyau depuis le chantier 08.7.
+
 ## [Fusion — agent-kernel → aidboard, 2026-10-17]
 
 Toute version `kernel.version` antérieure à cette entrée (par exemple
