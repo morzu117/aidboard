@@ -53,6 +53,8 @@
   "1-2.filtres.workspace-*",
   "1-2.filtres.workspace-tous",
   "1-2.liste.element-*",
+  "1-2.liste.groupe-entretien-memoire.proposition-*.appliquer",
+  "1-2.liste.groupe-entretien-memoire.proposition-*.rejeter",
   "1-2.mesh.dm-*",
   "1-2.volet.ouvrir-nav",
   "1-3.actions.editeur",

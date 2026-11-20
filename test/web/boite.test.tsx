@@ -4,6 +4,8 @@ import userEvent from '@testing-library/user-event';
 import { Route, Routes, useLocation } from 'react-router';
 import { afterEach, expect, test, vi } from 'vitest';
 import type { Agent, MeshDm, MeshState } from '../../src/shared/model.js';
+import type { MemoryProposal } from '../../src/shared/memory.js';
+import * as aid from '../../web/src/data/useAidState.js';
 import { Boite } from '../../web/src/ecrans/Boite.js';
 import { Sujet } from '../../web/src/ecrans/Sujet.js';
 import { agent, json, setup, snapshot, topic, ws } from './helpers.js';
@@ -461,4 +463,92 @@ test('avatar du DM : anneau selon son propre mesh et nom accessible conservé', 
   expect(article.textContent).toContain('peer-a');
   expect(article.querySelector('.avatar-cell--locale')?.getAttribute('aria-hidden')).toBe('true');
   expect(h.calls.filter((c) => c.url === '/api/avatars')).toHaveLength(1);
+});
+
+const listeEntretien = '/api/memory/proposals?state=open';
+const titreEntretien = 'Entretien de la mémoire';
+const lecon: MemoryProposal = {
+  id: 'prop_tags',
+  slug: 'lesson/test/tri',
+  kind: 'tags',
+  payload: { tags: ['tri', 'fichiers'] },
+  rationale: 'Rapprocher les leçons sur le tri.',
+  state: 'open',
+  createdAt: 't',
+  decidedAt: null,
+};
+const sujet = { ...lecon, id: 'prop_sujet', slug: 'projet/plan/tri' };
+
+test('la Boîte masque l’entretien sans proposition de leçon', async () => {
+  const h = setup(<Boite />, snapshot(), '/', {
+    [`GET ${listeEntretien}`]: json(200, { proposals: [sujet] }),
+  });
+  await waitFor(() => expect(h.calls.some((c) => c.url === listeEntretien)).toBe(true));
+  expect(screen.queryByRole('region', { name: titreEntretien })).toBeNull();
+});
+
+test.each([
+  ['Appliquer', 'apply'],
+  ['Rejeter', 'reject'],
+])('%s décide seulement la proposition de leçon et relit la liste', async (label, decision) => {
+  let proposals = [lecon, sujet];
+  const route = `/api/memory/proposals/${lecon.id}/${decision}`;
+  const h = setup(<Boite />, snapshot(), '/', {
+    [`GET ${listeEntretien}`]: () => json(200, { proposals })(),
+    [`POST ${route}`]: () => {
+      proposals = [sujet];
+      return json(200, { id: lecon.id })();
+    },
+  });
+  await screen.findByRole('region', { name: titreEntretien });
+  expect(screen.getByText(lecon.slug)).not.toBeNull();
+  expect(screen.getByText(lecon.rationale)).not.toBeNull();
+  expect(screen.getByText('tri, fichiers')).not.toBeNull();
+  expect(screen.queryByText(sujet.slug)).toBeNull();
+  expect(h.calls.some((c) => c.method === 'POST' && c.url.startsWith('/api/memory/'))).toBe(false);
+  await userEvent.click(screen.getByRole('button', { name: label }));
+  await waitFor(() => expect(h.calls.filter((c) => c.url === listeEntretien)).toHaveLength(2));
+  expect(h.calls).toContainEqual({ method: 'POST', url: route, body: undefined });
+  expect(screen.queryByRole('region', { name: titreEntretien })).toBeNull();
+});
+
+test('le conflit 409 reste visible quand la proposition a été décidée ailleurs', async () => {
+  let proposals = [lecon];
+  const h = setup(<Boite />, snapshot(), '/', {
+    [`GET ${listeEntretien}`]: () => json(200, { proposals })(),
+    [`POST /api/memory/proposals/${lecon.id}/apply`]: () => {
+      proposals = [];
+      return json(409, { error: 'Proposition déjà décidée' })();
+    },
+  });
+  await userEvent.click(await screen.findByRole('button', { name: 'Appliquer' }));
+  expect((await screen.findByText(/Proposition déjà décidée/)).getAttribute('role')).toBe('alert');
+  expect(h.calls.filter((c) => c.url === listeEntretien)).toHaveLength(2);
+  expect(screen.queryByRole('button', { name: 'Appliquer' })).toBeNull();
+});
+
+test('une erreur de lecture est visible dans la section Entretien', async () => {
+  setup(<Boite />, snapshot(), '/', {
+    [`GET ${listeEntretien}`]: json(500, { error: 'Erreur du serveur' }),
+  });
+  expect((await screen.findByRole('region', { name: titreEntretien })).textContent).toContain(
+    'Lecture des propositions impossible. Erreur du serveur',
+  );
+});
+
+test('la Boîte en mode appareil ne lit aucune proposition de mémoire', async () => {
+  const useAid = aid.useAid;
+  const espion = vi.spyOn(aid, 'useAid').mockImplementation(() => {
+    const vue = useAid();
+    return { ...vue, appareil: {} as NonNullable<typeof vue.appareil> };
+  });
+  try {
+    const h = setup(<Boite />, snapshot());
+    await screen.findByText('Rien à traiter : aucun agent n’attend ta réponse.');
+    expect(h.calls.some((c) => c.url.startsWith('/api/memory/proposals'))).toBe(false);
+    expect(screen.queryByRole('region', { name: titreEntretien })).toBeNull();
+  } finally {
+    cleanup();
+    espion.mockRestore();
+  }
 });
