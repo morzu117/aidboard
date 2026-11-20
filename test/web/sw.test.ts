@@ -54,6 +54,12 @@ test('32.2 : les chemins sensibles échappent au service worker', () => {
   }
 });
 
+test("D303 : la navigation d'échange du token échappe au service worker", () => {
+  expect(coque(200, true, 'navigate', '/?token=abc123').respondWith).not.toHaveBeenCalled();
+  // Une navigation sans token reste interceptée comme avant.
+  expect(coque(200, true, 'navigate', '/').respondWith).toHaveBeenCalled();
+});
+
 test('32.8 : le manifeste et les icônes suivent le cache statique, en 200 seulement', async () => {
   for (const chemin of ['/manifest.webmanifest', '/icons/icon-256.png', '/icons/icon-512.png']) {
     for (const statut of [200, 404, 502]) {
