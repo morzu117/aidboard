@@ -151,7 +151,7 @@ Ce point modifie le manifeste et les blocs rendus : c'est demandé par ce plan, 
 
 ### 57.3 gbrain hors du poste Windows (DM10)
 
-Geste machine, sans commit de code. Un compte rendu `docs/recette-chantier-57-gbrain-windows.md` en garde la trace, sans contenu de page ni chemin privé.
+Geste machine, sans commit de code. Le compte rendu [`docs/recette-chantier-57-gbrain-windows.md`](../recette-chantier-57-gbrain-windows.md) en garde la trace, sans contenu de page ni chemin privé : la fiche est prête, on la remplit sur place.
 
 1. Export complet de `~/.gbrain` sous `~/.aid/backups/gbrain-<date>/`.
 2. Triage par source, avec un fichier `TRIAGE.md` par source dans la sauvegarde.
