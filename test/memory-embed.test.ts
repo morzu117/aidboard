@@ -115,6 +115,32 @@ test('DM16 : un contenu rejeté épuise ses tentatives sans désactiver la reche
   ]);
 });
 
+test('DM16 : une nouvelle révision réarme un embedding en échec', async () => {
+  const disponibilité = { ready: true };
+  const embedder = fakeEmbedder({ 'x\n\ncontenu corrigé': [1, 0, 0] }, disponibilité);
+  const slug = 'aid/plan/x';
+  t = await startTestDaemon(undefined, {
+    memory: { embedder, backoffMs: [], maintenanceScheduleMs: 20 },
+  });
+  expect((await put(slug, 'contenu rejeté')).statusCode).toBe(201);
+  await waitFor(() => jobState(slug) === 'failed');
+
+  disponibilité.ready = false;
+  await vi.waitFor(async () => expect((await health()).vectors).toBe('off'));
+  await t.d.memory.put(
+    slug,
+    'contenu corrigé',
+    { kind: 'replace', expectedRevision: 1 },
+    { author: 'admin' },
+  );
+  expect(jobState(slug)).toBe('pending');
+  expect(t.d.memory.get(slug)?.revision).toBe(2);
+
+  disponibilité.ready = true;
+  await waitFor(() => jobState(slug) === 'done');
+  expect(t.db.prepare('SELECT slug FROM memory_vectors').all()).toEqual([{ slug }]);
+});
+
 test('DM16 : rattrapage après démarrage indisponible, puis après une nouvelle panne', async () => {
   const availability = { ready: false };
   let probes = 0;
@@ -187,7 +213,7 @@ test('DM16 : panne entre deux ticks, job pending rattrapé au retour d’Ollama'
         },
       },
       backoffMs: [],
-      pollMs: 5,
+      pollMs: 60_000,
       maintenanceScheduleMs: 1000,
       readyTimeoutMs: 50,
     },

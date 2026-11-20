@@ -96,6 +96,7 @@ test('DM17 : citation entière, même namespace, tous les cycles et aucune autre
   expect(await slugs()).toEqual(before);
   const removed = await purge({});
   expect(removed.json().slugs).toEqual(expected);
+  expect(removed.json().tasks).toEqual(preview.json().tasks);
   expect(await slugs()).toEqual(before.filter((slug) => !expected.includes(slug)));
   for (const slug of expected) expect(existsSync(join(t.home, 'memory', `${slug}.md`))).toBe(false);
   expect((await purge({})).json().slugs).toEqual([]);
@@ -200,6 +201,11 @@ test('DM17 : la route ne retourne que les pages retirées malgré une disparitio
   await put('a/review/alpha');
   await put('a/review/beta');
   await put('a/retro/nuit', 'alpha beta');
+  expect(
+    [...t.d.memory.store.all()]
+      .filter(({ slug }) => !slug.includes('/retro/'))
+      .map(({ slug }) => slug),
+  ).toEqual(['a/plan/alpha', 'a/review/alpha', 'a/review/beta']);
   const remove = MemoryMirror.prototype.remove;
   vi.spyOn(MemoryMirror.prototype, 'remove').mockImplementation(async function (
     this: MemoryMirror,
@@ -239,7 +245,7 @@ test('DM17 : les purges et les écritures partagent une file, instantané compri
     this: MemoryMirror,
     slug,
   ) {
-    if (slug === 'a/plan/alpha') {
+    if (slug === 'a/plan/alpha' || slug === 'a/review/alpha') {
       entered();
       await blocked;
     }

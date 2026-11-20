@@ -3,6 +3,7 @@ import { afterEach, expect, test, vi } from 'vitest';
 import { runMem } from '../src/cli/commands/mem.js';
 import { MemoryStore } from '../src/daemon/memory/store.js';
 import { resolvePaths } from '../src/daemon/paths.js';
+import { runWriteContext } from '../src/daemon/routes/memory.js';
 import { issueRunToken } from '../src/daemon/security.js';
 import { seedTopic, startTestDaemon, type TestDaemon } from './helpers/daemon.js';
 
@@ -134,20 +135,37 @@ test('57.11 : premier agent du run, puis lectures admin sans rôle', async () =>
       `INSERT INTO agents (id, run_id, kind, role, transport, status, cwd, command, created_at, updated_at)
      VALUES ('ag_2', 'run_1', 'shell', 'review', 'pty', 'exited', '/w/s', '[]', ?, ?)`,
     )
-    .run('2026-01-01T00:00:01.000Z', '2026-01-01T00:00:01.000Z');
+    .run('2025-12-31T23:59:59.000Z', '2026-01-01T00:00:01.000Z');
   const runHeaders = { ...t.headers, authorization: `Bearer ${issueRunToken(t.d.auth, 'run_1')}` };
   for (const headers of [runHeaders, t.headers]) {
     expect((await get('/api/memory/pages/aid/plan/a', headers)).statusCode).toBe(200);
     expect((await get('/api/memory/search?q=lecture', headers)).json().hits).toHaveLength(1);
   }
   expect(rows()).toEqual(
-    ['dev', null].flatMap((role) =>
+    ['review', null].flatMap((role) =>
       ['get', 'search'].map((op) => ({ slug: 'aid/plan/a', op, role, at: expect.any(String) })),
     ),
   );
   expect(t.db.prepare("PRAGMA index_info('memory_usage_slug')").all()).toEqual([
     expect.objectContaining({ name: 'slug' }),
   ]);
+});
+
+test('57.11 : à date égale, l’identifiant départage le rôle de lecture et d’écriture', async () => {
+  t = await startTestDaemon();
+  await put('aid/plan/a');
+  seedTopic(t.db);
+  t.db.exec(`UPDATE agents SET role = 'dev' WHERE id = 'ag_1';
+    INSERT INTO agents (id, run_id, kind, role, transport, status, cwd, command, created_at, updated_at)
+    SELECT 'ag_0', run_id, kind, 'retro', transport, status, cwd, command, created_at, updated_at
+    FROM agents WHERE id = 'ag_1';`);
+
+  new MemoryStore(t.db).recordUsage(['aid/plan/a'], 'get', 'run_1');
+  expect(rows()).toEqual([expect.objectContaining({ role: 'retro' })]);
+  // Seul le rôle retro donne accès en écriture à lesson/ hors du namespace du run.
+  expect(runWriteContext(t.db, { kind: 'run', runId: 'run_1' }, 'lesson/test')).toMatchObject({
+    author: 'run:run_1',
+  });
 });
 
 test('57.11 : les lectures d’un run sans agent sont journalisées sans rôle', async () => {

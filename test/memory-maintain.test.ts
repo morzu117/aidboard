@@ -13,6 +13,7 @@ import {
 import { MemoryMirror } from '../src/daemon/memory/mirror.js';
 import { MemoryService } from '../src/daemon/memory/service.js';
 import { MemoryStore } from '../src/daemon/memory/store.js';
+import { RevisionConflict } from '../src/shared/memory.js';
 import { startTestDaemon, waitFor, type TestDaemon } from './helpers/daemon.js';
 
 // Config mémoire complète : `startDaemon` fusionne `memory` au premier niveau (pas de fusion
@@ -407,9 +408,12 @@ test('split : un échec sur la source laisse la proposition ouverte et réessaya
   expect(propositions.get(proposition.id)?.state).toBe('applied');
 });
 
-test('split : restaure la source après un échec du miroir et permet de réessayer', async () => {
+test.each([
+  splitText,
+  splitText.replace('tags: [test]', 'tags: [test]\nremplacee_par: [lesson/test/ancien]'),
+])('split : restaure la source après un échec du miroir (%j)', async (original) => {
   t = await startTestDaemon();
-  await put(splitSource, splitText);
+  await put(splitSource, original);
   const { memory } = t.d;
   const sourceOriginale = memory.get(splitSource)!;
   const pages = splitPages();
@@ -420,7 +424,12 @@ test('split : restaure la source après un échec du miroir et permet de réessa
     this: MemoryMirror,
     ...args
   ) {
-    if (args[0] === splitSource && memory.get(splitSource)?.frontmatter.remplacee_par) {
+    const replacements = memory.get(splitSource)?.frontmatter.remplacee_par;
+    if (
+      args[0] === splitSource &&
+      Array.isArray(replacements) &&
+      replacements.includes(pages[0]!.slug)
+    ) {
       return Promise.reject(new Error('miroir de la source indisponible'));
     }
     return ecritureOriginale.apply(this, args);
@@ -436,6 +445,74 @@ test('split : restaure la source après un échec du miroir et permet de réessa
   }
   expect((await apply(proposition.id)).statusCode).toBe(200);
   expect(propositions.get(proposition.id)?.state).toBe('applied');
+});
+
+test('split : un conflit de restauration préserve l’écriture concurrente et l’erreur initiale', async () => {
+  t = await startTestDaemon();
+  await put(splitSource, splitText);
+  const { memory } = t.d;
+  const pages = splitPages();
+  const proposition = new MemoryProposals(t.db).create(
+    'split',
+    splitSource,
+    { pages },
+    'Découpage',
+  );
+  const originalPut = memory.put.bind(memory);
+  const error = new Error('miroir de la source indisponible');
+  const write = vi.spyOn(memory, 'put').mockImplementation(async (...args) => {
+    if (args[0] === splitSource && args[2].kind === 'replace') {
+      await originalPut(
+        splitSource,
+        'texte concurrent',
+        { kind: 'force' },
+        { author: 'run:tiers' },
+      );
+    }
+    const result = await originalPut(...args);
+    if (args[0] === splitSource && args[2].kind === 'force') throw error;
+    return result;
+  });
+  const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+  try {
+    await expect(applyProposal(proposition, memory)).rejects.toBe(error);
+    expect(memory.get(splitSource)?.body).toBe('texte concurrent');
+    expect(log).toHaveBeenCalledWith(
+      expect.stringContaining(`${splitSource} : Error: revision_conflict`),
+    );
+    for (const { slug } of pages) expect(memory.get(slug)).toBeUndefined();
+  } finally {
+    write.mockRestore();
+    log.mockRestore();
+  }
+});
+
+test('split : un conflit de création conserve la page créée par un tiers', async () => {
+  t = await startTestDaemon();
+  await put(splitSource, splitText);
+  const { memory } = t.d;
+  const pages = splitPages();
+  const concurrentSlug = pages[1]!.slug;
+  const proposition = new MemoryProposals(t.db).create(
+    'split',
+    splitSource,
+    { pages },
+    'Découpage',
+  );
+  const originalPut = memory.put.bind(memory);
+  const write = vi.spyOn(memory, 'put').mockImplementation(async (...args) => {
+    if (args[0] === concurrentSlug && args[2].kind === 'create') {
+      await originalPut(concurrentSlug, 'page tierce', { kind: 'create' }, { author: 'run:tiers' });
+    }
+    return originalPut(...args);
+  });
+  try {
+    await expect(applyProposal(proposition, memory)).rejects.toBeInstanceOf(RevisionConflict);
+    expect(memory.get(concurrentSlug)?.body).toBe('page tierce');
+    expect(memory.get(pages[0]!.slug)).toBeUndefined();
+  } finally {
+    write.mockRestore();
+  }
 });
 
 test('daemon : maxPerNight à 1 reste respecté après plusieurs passages', async () => {

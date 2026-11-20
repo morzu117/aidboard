@@ -104,6 +104,13 @@ test('57.5 : doctor signale le distant absent, les écarts et les conflits mémo
       }),
     );
   }
+  expect(await check({ ...absent, push: true, origin: true })).not.toContainEqual(
+    expect.objectContaining({ detail: expect.stringContaining('distant origin absent') }),
+  );
+  for (const push of [false, true]) {
+    const nominal = await check({ push, origin: true, ahead: 0, behind: 0, conflicts: [] });
+    expect(nominal.filter((c) => c.level !== 'ok')).toEqual([]);
+  }
   expect(await check({ ...absent, conflicts: ['lesson/base.md'] })).toContainEqual(
     expect.objectContaining({
       level: 'warn',
