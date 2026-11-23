@@ -2,7 +2,7 @@
 
 | Champ | Valeur |
 |---|---|
-| État | **Révision 1, 14 novembre 2026.** Relu par le lab (DM 98234) : le plan tient, avec quatre changements dans D334, faits ici. Code de 33.2 relu par le lab (DM 98327) : un bloquant et cinq points facultatifs, repris en 33.2 bis. Choix de Julien du 14 novembre : le jeton de cell de `swarph join` (#1582) suffit, le chantier n'attend plus le flux SSO de l'émetteur. Julien a tranché Q1 à Q3 le 14 novembre (les recos). Le lab a répondu à L1 à L4 (DM 98234). |
+| État | **Révision 2, 23 novembre 2026 : clos tel quel**, sur le choix de Julien, après la réponse du lab sur la forme du #20 (DM 103351, point 33.8). **Révision 1, 14 novembre 2026.** Relu par le lab (DM 98234) : le plan tient, avec quatre changements dans D334, faits ici. Code de 33.2 relu par le lab (DM 98327) : un bloquant et cinq points facultatifs, repris en 33.2 bis. Choix de Julien du 14 novembre : le jeton de cell de `swarph join` (#1582) suffit, le chantier n'attend plus le flux SSO de l'émetteur. Julien a tranché Q1 à Q3 le 14 novembre (les recos). Le lab a répondu à L1 à L4 (DM 98234). |
 | Emplacement final | `docs/chantiers/33-rejoindre-mesh.md` sur `main` |
 | Base | `main` (6346fee) |
 | Organisation | Comme au 41. cell-gestion gère le chantier ; Codex CLI écrit le code et les tests de chaque point ; cell-gestion relit, lance le gate, commite et ouvre la PR. |
@@ -49,6 +49,7 @@ Ce que ça change par rapport au programme :
 - L'approbation elle-même : A-I-D n'exécute jamais `swarph mesh approve`, et ne touche jamais un jeton opérateur.
 - Les réponses de ratification : ce sont les mots de la cell, pas ceux d'A-I-D.
 - Le lancement du monitor et du sidecar de la nouvelle cell.
+- Le mode proxy (#20) : un poste où plusieurs cells partagent la machine ou l'utilisateur, et où le jeton appartient au compte du proxy. Voir 33.8.
 
 ## 4. Décisions
 
@@ -180,6 +181,22 @@ Rien de bloquant. Quatre points facultatifs, tous retenus :
 
 Le chantier 55 est mergé avant le 33 : `config-rejoindre.ts` écrit donc `config.yaml` par `ecrireConfig` (D337), un temporaire puis un renommage, au lieu d'un `writeFileSync` sur place. Les droits du fichier existant sont gardés, un nouveau fichier reste en 0600, et un lien cassé est refusé sans rien écrire.
 
+### 33.8 La clôture après le #20 (DM 103351, 23 novembre 2026)
+
+Le 16 novembre, le lab avait dit qu'après la phase P6 du #20 le jeton appartiendrait au compte du proxy, et que le 33 devrait le lui remettre. Le pilote du #20 est accepté depuis le 21 novembre. La forme donnée par le lab :
+
+- **Avec un proxy**, le jeton ne va jamais dans le compte de la cell. Il est dans un dossier du compte dédié au proxy, en 0600 dans un dossier en 0700, et la cell ne parle au gateway que par la socket du proxy. Le poser est une **étape root**, hors du compte de la cell : `swarph join` lancé par la cell ne doit pas le poser lui-même.
+- **Sans proxy**, sur un Mac, ou sur un Linux ou un WSL à un seul utilisateur : le chemin actuel reste le bon, `~/.config/swarph/<cell>.peer_token` en 0600. C'est ce que fait le 33. L'isolation par un proxy ne sert que quand plusieurs cells partagent une machine ou un utilisateur.
+
+**Choix de Julien, le 23 novembre 2026 : le 33 est clos tel quel.** Ses postes sont à un seul utilisateur, et aucun n'a de proxy. Le mode proxy passe hors périmètre (§3). Il ferait un nouveau chantier, sur son oui, le jour où un poste partagé devra rejoindre un mesh depuis A-I-D. Ce chantier devrait alors :
+
+- reconnaître le mode proxy, et ne pas lancer `swarph join` sous le compte de la cell ;
+- laisser l'étape root à l'opérateur, et montrer la commande à copier ;
+- vérifier sans lire le jeton : fichier régulier, non vide, en 0600, au compte du proxy, dans un dossier en 0700 ; la cell ne peut ni le lire ni ouvrir la socket du gateway ; `whoami` par le proxy rend le nom de la cell ; un DM aller-retour arrive en jeton par pair ; aucun jeton ne reste côté cell (config, profil, environnement) ;
+- demander swarph-cli 0.85.0 ou plus pour le proxy, et l'extra `[mcp]` côté cell.
+
+Le risque de Q1 reste écrit dans la fiche de recette : sans proxy, tout agent lancé sous le même utilisateur peut lire le jeton.
+
 ## 7. Pièges
 
 - Les exemples n'utilisent que des noms neutres et des adresses d'exemple (`aid-e2e.ts.net`, `192.0.2.x`, `peer-a`). Aucun vrai gateway, hôte du tailnet ni jeton dans le dépôt.
@@ -192,3 +209,4 @@ Le chantier 55 est mergé avant le 33 : `config-rejoindre.ts` écrit donc `confi
 - Les refus, expirations et erreurs ont chacun leur message, et ne laissent aucune entrée de config.
 - Aucun contenu de jeton ne sort du fichier de swarph.
 - Le lab a relu le plan et le code de 33.2 et 33.3.
+- Fait. Clos le 23 novembre 2026, sans le mode proxy (33.8). La recette réelle de Julien reste à faire.
