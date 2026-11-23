@@ -1,7 +1,7 @@
 import { parse, stringify } from 'yaml';
 import {
   LESSON_NS,
-  type LinkType,
+  type LinkNeighbor,
   type MemoryPage,
   type PutMode,
   RevisionConflict,
@@ -12,7 +12,6 @@ import { deriveMemoryLinks } from './liens.js';
 import { assertMemSlug, namespaceOf } from './slug.js';
 
 type Frontmatter = Record<string, unknown>;
-type LinkNeighbor = { slug: string; type: LinkType; existe: boolean };
 type LinkRow = Omit<LinkNeighbor, 'existe'> & { existe: number };
 type Log = (line: string) => void;
 
@@ -287,6 +286,7 @@ export class MemoryStore {
     author: string,
     title?: string,
     log?: Log,
+    preserveContent = false,
   ): MemoryPage {
     assertMemSlug(slug);
     const parsed = parseMarkdown(text);
@@ -321,8 +321,10 @@ export class MemoryStore {
         t = title ?? existing.title;
       } else {
         fm = { ...parsed.frontmatter, ...(title && { title }) };
-        body = parsed.body;
-        t = title ?? parsed.title ?? slug.slice(slug.lastIndexOf('/') + 1);
+        body = preserveContent ? existing.body : parsed.body;
+        t = preserveContent
+          ? existing.title
+          : (title ?? parsed.title ?? slug.slice(slug.lastIndexOf('/') + 1));
       }
       this.invalidateDuplicateSeen(slug);
       this.ftsDelete(existing);

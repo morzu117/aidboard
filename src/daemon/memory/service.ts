@@ -2,8 +2,11 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import {
   LESSON_NS,
+  type MemoryDecision,
+  type MemoryLinks,
   type MemoryPage,
   type PutMode,
+  RevisionConflict,
   type SearchHit,
   type SearchResult,
 } from '../../shared/memory.js';
@@ -20,10 +23,17 @@ export interface MemoryHealth {
   mirrorSync: MirrorSyncHealth;
 }
 import type { WorkspaceQueue } from '../actions/queue.js';
+import { AidHttpError } from '../errors.js';
 import type { EventStore } from '../events/store.js';
 import type { Embedder, VectorIndex } from './embed.js';
 import { type MemoryMirror, type MirrorSyncHealth, walkMarkdown } from './mirror.js';
-import { isValidMemSlug } from './slug.js';
+import {
+  InvalidMemSlug,
+  isValidMemSlug,
+  isValidNamespace,
+  NAMESPACE_RE,
+  namespaceOf,
+} from './slug.js';
 import { MemoryStore, renderMarkdown } from './store.js';
 
 const QUEUE_KEY = 'memory';
@@ -34,6 +44,31 @@ export interface WriteContext {
   topicId?: string;
   runId?: string;
   agentId?: string;
+}
+
+export interface MemoryWriteContext extends WriteContext {
+  scope?: { namespace: string; role: string | null };
+}
+
+export function assertMemoryWriteNamespace(ctx: MemoryWriteContext, namespace: string): void {
+  const scope = ctx.scope;
+  if (
+    !scope ||
+    namespace === scope.namespace ||
+    (namespace === LESSON_NS && scope.role === 'retro')
+  ) {
+    return;
+  }
+  throw new AidHttpError(403, 'forbidden', { namespace, allowed: scope.namespace });
+}
+
+interface DecisionInput {
+  namespace: string;
+  slug: string;
+  title: string;
+  raison: string;
+  texte?: string;
+  remplace: string[];
 }
 
 export interface MemoryServiceDeps {
@@ -79,6 +114,13 @@ export class MemoryService {
 
   get(slug: string): MemoryPage | undefined {
     return this.deps.store.get(slug);
+  }
+
+  links(slug: string): MemoryLinks | undefined {
+    const page = this.get(slug);
+    const { sortants, entrants } = this.deps.store.links(slug);
+    if (!page && sortants.length === 0 && entrants.length === 0) return undefined;
+    return { slug, closed: page?.closed ?? false, sortants, entrants };
   }
 
   list(prefix: string): string[] {
@@ -305,36 +347,180 @@ export class MemoryService {
   }
 
   put(slug: string, text: string, mode: PutMode, ctx: WriteContext, title?: string) {
-    return this.deps.queue.run(QUEUE_KEY, async (): Promise<MemoryPage> => {
-      const { store, mirror, events } = this.deps;
-      const before = store.get(slug);
-      const page = store.put(
+    return this.deps.queue.run(QUEUE_KEY, () => this.putQueued(slug, text, mode, ctx, title));
+  }
+
+  private async putQueued(
+    slug: string,
+    text: string,
+    mode: PutMode,
+    ctx: WriteContext,
+    title?: string,
+    options?: { onStored?: (page: MemoryPage) => void; preserveContent?: boolean },
+  ): Promise<MemoryPage> {
+    const { store, mirror, events } = this.deps;
+    const before = store.get(slug);
+    const page = store.put(
+      slug,
+      text,
+      mode,
+      ctx.author,
+      title,
+      ctx.author === 'import' ? this.deps.log : undefined,
+      options?.preserveContent,
+    );
+    // Le miroir peut échouer après la transaction SQLite.
+    options?.onStored?.(page);
+    await mirror.write(slug, renderMarkdown(page));
+    mirror.scheduleCommit(`mem: ${slug} r${page.revision}`);
+    events.append({
+      source: 'daemon',
+      type: 'memory.page',
+      ...(ctx.workspaceId && { workspaceId: ctx.workspaceId }),
+      ...(ctx.topicId && { topicId: ctx.topicId }),
+      ...(ctx.runId && { runId: ctx.runId }),
+      ...(ctx.agentId && { agentId: ctx.agentId }),
+      data: {
         slug,
-        text,
-        mode,
-        ctx.author,
+        revision: page.revision,
+        author: ctx.author,
+        op: before && mode.kind === 'append' ? 'append' : 'put',
+      },
+    });
+    this.deps.onWrite?.(slug);
+    return page;
+  }
+
+  decide(input: DecisionInput, ctx: MemoryWriteContext): Promise<MemoryDecision> {
+    return this.deps.queue.run(QUEUE_KEY, () => this.decideQueued(input, ctx));
+  }
+
+  private async decideQueued(
+    input: DecisionInput,
+    ctx: MemoryWriteContext,
+  ): Promise<MemoryDecision> {
+    const { store, events } = this.deps;
+    const { namespace, title, raison, texte, remplace } = input;
+    const slug = `${namespace}/decision/${input.slug}`;
+    if (!isValidNamespace(namespace) || namespace === LESSON_NS) {
+      throw new AidHttpError(400, 'namespace de projet attendu', { namespace });
+    }
+    if (!NAMESPACE_RE.test(input.slug) || !isValidMemSlug(slug)) {
+      throw new AidHttpError(400, 'slug de décision invalide : un seul segment attendu', { slug });
+    }
+    assertMemoryWriteNamespace(ctx, namespace);
+    if (new Set(remplace).size !== remplace.length) {
+      throw new AidHttpError(400, 'doublon dans remplace');
+    }
+    if (remplace.includes(slug)) {
+      throw new AidHttpError(400, 'une décision ne peut pas se remplacer elle-même', { slug });
+    }
+    const existing = store.get(slug);
+    if (existing) throw new RevisionConflict(slug, existing.revision);
+
+    const originals = remplace.map((target) => {
+      if (!isValidMemSlug(target)) throw new AidHttpError(400, new InvalidMemSlug(target).message);
+      const page = store.get(target);
+      if (!page) throw new AidHttpError(404, 'page absente', { slug: target });
+      if (page.closed) throw new AidHttpError(409, 'deja_close', { slug: target });
+      assertMemoryWriteNamespace(ctx, namespaceOf(target));
+      return page;
+    });
+
+    const day = new Date().toISOString().slice(0, 10);
+    const decision = renderMarkdown({
+      frontmatter: {
+        type: 'decision',
+        valide_depuis: day,
+        raison,
         title,
-        ctx.author === 'import' ? this.deps.log : undefined,
-      );
-      await mirror.write(slug, renderMarkdown(page));
-      mirror.scheduleCommit(`mem: ${slug} r${page.revision}`);
+        ...(remplace.length > 0 && { liens: { remplace } }),
+      },
+      body: texte
+        ? `# ${title}
+
+${texte}`
+        : `# ${title}`,
+    });
+    let created: MemoryPage | undefined;
+    const closed: Array<{ original: MemoryPage; revision: number }> = [];
+    try {
+      const page = await this.putQueued(slug, decision, { kind: 'create' }, ctx, title, {
+        onStored: (saved) => {
+          created = saved;
+        },
+      });
+      for (const original of originals) {
+        const current = store.get(original.slug);
+        if (!current || current.revision !== original.revision) {
+          throw new RevisionConflict(original.slug, current?.revision ?? 0);
+        }
+        const old = current.frontmatter.remplacee_par;
+        const previous = Array.isArray(old) ? old : typeof old === 'string' ? [old] : [];
+        const text = renderMarkdown({
+          frontmatter: {
+            ...current.frontmatter,
+            close_le: day,
+            remplacee_par: previous.includes(slug) ? previous : [...previous, slug],
+          },
+          body: current.body,
+        });
+        await this.putQueued(
+          original.slug,
+          text,
+          { kind: 'replace', expectedRevision: original.revision },
+          ctx,
+          undefined,
+          {
+            preserveContent: true,
+            onStored: (saved) => closed.push({ original, revision: saved.revision }),
+          },
+        );
+      }
+      const fermees = closed.map(({ original }) => original.slug);
       events.append({
         source: 'daemon',
-        type: 'memory.page',
+        type: 'memory.decision',
         ...(ctx.workspaceId && { workspaceId: ctx.workspaceId }),
         ...(ctx.topicId && { topicId: ctx.topicId }),
         ...(ctx.runId && { runId: ctx.runId }),
         ...(ctx.agentId && { agentId: ctx.agentId }),
-        data: {
-          slug,
-          revision: page.revision,
-          author: ctx.author,
-          op: before && mode.kind === 'append' ? 'append' : 'put',
-        },
+        data: { slug, fermees, author: ctx.author },
       });
-      this.deps.onWrite?.(slug);
-      return page;
-    });
+      return { slug, revision: page.revision, fermees };
+    } catch (error) {
+      const log = this.deps.log ?? console.error;
+      for (const { original, revision } of closed.reverse()) {
+        try {
+          const current = store.get(original.slug);
+          if (!current || current.revision !== revision) {
+            throw new RevisionConflict(original.slug, current?.revision ?? 0);
+          }
+          await this.putQueued(
+            original.slug,
+            renderMarkdown(original),
+            { kind: 'replace', expectedRevision: current.revision },
+            ctx,
+            undefined,
+            { preserveContent: true },
+          );
+        } catch (restoreError) {
+          log(`décision : échec de la restauration de ${original.slug} : ${String(restoreError)}`);
+        }
+      }
+      if (created) {
+        try {
+          const current = store.get(slug);
+          if (current && current.revision !== created.revision) {
+            throw new RevisionConflict(slug, current.revision);
+          }
+          await this.removeQueued(slug, ctx);
+        } catch (removeError) {
+          log(`décision : échec du retrait de ${slug} : ${String(removeError)}`);
+        }
+      }
+      throw error;
+    }
   }
 
   remove(slug: string, ctx: WriteContext): Promise<boolean> {

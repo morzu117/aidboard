@@ -205,6 +205,15 @@ Les tests couvrent :
 - un run qui veut fermer une leçon hors rétro ;
 - la purge qui épargne `decision/`.
 
+- _Révision 60.4._ Fait :
+  - `MemoryService.decide`, dans une seule entrée de la file, avec toutes les vérifications avant la première écriture et l'annulation dans la base et dans le miroir ;
+  - la règle d'écriture extraite (`assertMemoryWriteNamespace`) et partagée avec `put` ;
+  - `POST /api/memory/decisions` et `GET /api/memory/links/*` ;
+  - `memory_decide` et `memory_links` ;
+  - `aid mem decide` et `aid mem links`, avec le code 6.
+
+  Gate 4 677.
+
 ### 60.5 L'entretien et le noyau (DM24)
 
 Les exclusions de l'entretien, `close_le` posé par les applications, et les textes du noyau re-rendus. Les tests de l'entretien vérifient qu'aucune proposition ne vise une page close.

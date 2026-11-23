@@ -1,16 +1,24 @@
 import { parseArgs } from 'node:util';
 import type { AidPaths } from '../../daemon/paths.js';
 import { renderMarkdown } from '../../daemon/memory/store.js';
-import type { MemoryPage, MemoryProposal, SearchResult } from '../../shared/memory.js';
+import type {
+  MemoryDecision,
+  MemoryLinks,
+  MemoryPage,
+  MemoryProposal,
+  SearchResult,
+} from '../../shared/memory.js';
 import { callDaemon, DaemonUnreachable, resolveTarget } from '../client.js';
 
 // Codes de sortie du contrat `aid mem` (chantier 06) : 0 ok, 1 usage ou refus simple,
-// 2 conflit de révision, 3 page absente, 4 daemon injoignable, 5 interdit.
+// 2 conflit de révision, 3 page absente, 4 daemon injoignable, 5 interdit, 6 déjà close.
 export const MEM_HELP = `aid mem : la mémoire des agents (pages markdown, recherche)
 
   aid mem get <slug>                                  la page sur stdout
   aid mem put <slug> [--title T] [--append | --expected-revision N | --force]
                                                       contenu sur stdin ; existante sans option = refus
+  aid mem decide <slug> --title T --raison R [--remplace <slug>]… [--namespace ns] [--json]
+  aid mem links <slug> [--json]
   aid mem search "<termes>" [--scope <ns>|all] [--limit N] [--closes] [--json]
   aid mem list <prefix> [--json]
   aid mem proposals [--state open|applied|rejected] [--json]
@@ -21,11 +29,12 @@ export const MEM_HELP = `aid mem : la mémoire des agents (pages markdown, reche
   aid mem import --dir <dir> [--namespace <ns>]
   aid mem reindex                                     reconstruit l'index depuis ~/.aid/memory
 
-Codes : 0 ok · 1 usage · 2 revision_conflict · 3 absente · 4 daemon injoignable · 5 interdit
+Codes : 0 ok · 1 usage · 2 revision_conflict · 3 absente · 4 daemon injoignable · 5 interdit · 6 déjà close
 `;
 
 export interface MemIo {
   stdin: () => Promise<string>;
+  stdinIsTTY?: boolean;
   out: (s: string) => void;
   err: (s: string) => void;
   env?: NodeJS.ProcessEnv;
@@ -41,7 +50,12 @@ function readAllStdin(): Promise<string> {
   });
 }
 
-const defaultIo: MemIo = { stdin: readAllStdin, out: console.log, err: console.error };
+const defaultIo: MemIo = {
+  stdin: readAllStdin,
+  stdinIsTTY: process.stdin.isTTY,
+  out: console.log,
+  err: console.error,
+};
 
 function codeOf(status: number): number {
   if (status === 409) return 2;
@@ -94,6 +108,10 @@ export async function runMem(
         return await get(call, positionals[0], io);
       case 'put':
         return await put(call, positionals[0], values, io);
+      case 'decide':
+        return await decide(call, positionals[0], values, io);
+      case 'links':
+        return await links(call, positionals[0], values, io);
       case 'search':
         return await search(call, positionals[0], values, io);
       case 'proposals': {
@@ -179,6 +197,8 @@ const OPTIONS = {
   json: { type: 'boolean' },
   dir: { type: 'string' },
   namespace: { type: 'string' },
+  raison: { type: 'string' },
+  remplace: { type: 'string', multiple: true },
 } as const;
 
 type Values = {
@@ -192,6 +212,8 @@ type Values = {
   json?: boolean;
   dir?: string;
   namespace?: string;
+  raison?: string;
+  remplace?: string[];
 };
 type Call = (
   method: 'GET' | 'PUT' | 'POST' | 'DELETE',
@@ -201,10 +223,15 @@ type Call = (
 
 function fail(status: number, json: Record<string, unknown>, io: MemIo): number {
   const error = String(json.error ?? `réponse ${status}`);
+  if (status === 409 && error === 'deja_close') {
+    io.err(`deja_close : ${String(json.slug)}`);
+    return 6;
+  }
   if (status === 409) io.err(`revision_conflict r${String(json.revision)}`);
   else if (status === 403 && json.namespace !== undefined) {
     io.err(`interdit : namespace ${String(json.namespace)} (autorisé : ${String(json.allowed)})`);
-  } else io.err(error);
+  } else if (status === 404 && json.slug) io.err(`${error} : ${String(json.slug)}`);
+  else io.err(error);
   return codeOf(status);
 }
 
@@ -250,6 +277,58 @@ async function put(call: Call, slug: string | undefined, v: Values, io: MemIo): 
   const { status, json } = await call('PUT', `/api/memory/pages/${slug}`, body);
   if (status !== 200 && status !== 201) return fail(status, json, io);
   io.out(JSON.stringify({ slug: json.slug, revision: json.revision }));
+  return 0;
+}
+
+async function decide(call: Call, slug: string | undefined, v: Values, io: MemIo): Promise<number> {
+  if (!needSlug(slug, io)) return 1;
+  const { title, raison, remplace, namespace } = v;
+  if (!title || !raison) {
+    io.err('--title et --raison sont requis');
+    return 1;
+  }
+  const texte = io.stdinIsTTY ? '' : await io.stdin();
+  const { status, json } = await call('POST', '/api/memory/decisions', {
+    slug,
+    title,
+    raison,
+    texte,
+    remplace,
+    namespace,
+  });
+  if (status !== 201) return fail(status, json, io);
+  const decision = json as unknown as MemoryDecision;
+  if (v.json) io.out(JSON.stringify(decision));
+  else {
+    io.out(
+      [
+        `Décision créée : ${decision.slug}`,
+        ...decision.fermees.map((page) => `Page fermée : ${page}`),
+      ].join('\n'),
+    );
+  }
+  return 0;
+}
+
+async function links(call: Call, slug: string | undefined, v: Values, io: MemIo): Promise<number> {
+  if (!needSlug(slug, io)) return 1;
+  const { status, json } = await call('GET', `/api/memory/links/${slug}`);
+  if (status !== 200) return fail(status, json, io);
+  const page = json as unknown as MemoryLinks;
+  if (v.json) io.out(JSON.stringify(page));
+  else {
+    const line = (link: MemoryLinks['sortants'][number]) =>
+      `${link.type}  ${link.slug}${link.existe ? '' : ' (absente)'}`;
+    io.out(
+      [
+        ...(page.closed ? ['close'] : []),
+        'Sortants :',
+        ...page.sortants.map(line),
+        'Entrants :',
+        ...page.entrants.map(line),
+      ].join('\n'),
+    );
+  }
   return 0;
 }
 

@@ -1,11 +1,15 @@
 import { type Static, Type } from '@sinclair/typebox';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
-import { LESSON_NS, MEM_SLUG_RULE, type PutMode, RevisionConflict } from '../../shared/memory.js';
+import { MEM_SLUG_RULE, type PutMode, RevisionConflict } from '../../shared/memory.js';
 import type { Db } from '../db.js';
 import { AidHttpError } from '../errors.js';
 import { deriveMemoryLinks } from '../memory/liens.js';
 import { applyProposal, type MemoryProposals, rejectProposal } from '../memory/maintain.js';
-import type { MemoryService, WriteContext } from '../memory/service.js';
+import {
+  assertMemoryWriteNamespace,
+  type MemoryService,
+  type MemoryWriteContext,
+} from '../memory/service.js';
 import { InvalidMemSlug, isValidMemSlug, isValidNamespace, namespaceOf } from '../memory/slug.js';
 import { parseMarkdown } from '../memory/store.js';
 import type { Principal } from '../security.js';
@@ -21,6 +25,18 @@ const PutBody = Type.Object(
     ),
     expectedRevision: Type.Optional(Type.Integer({ minimum: 1 })),
     title: Type.Optional(Type.String({ minLength: 1, maxLength: 200 })),
+  },
+  { additionalProperties: false },
+);
+
+const DecisionBody = Type.Object(
+  {
+    slug: Type.String({ minLength: 1 }),
+    title: Type.String({ minLength: 1 }),
+    raison: Type.String({ minLength: 1 }),
+    texte: Type.Optional(Type.String()),
+    remplace: Type.Optional(Type.Array(Type.String())),
+    namespace: Type.Optional(Type.String()),
   },
   { additionalProperties: false },
 );
@@ -77,7 +93,7 @@ function putMode(body: Static<typeof PutBody>): PutMode {
 }
 
 // Ce qu'un token de run peut écrire : le namespace de son workspace ; `lesson/` si l'agent est en rétro.
-export function runWriteContext(db: Db, p: Principal, slug: string): WriteContext {
+function principalWriteContext(db: Db, p: Principal): MemoryWriteContext {
   if (p.kind === 'admin') return { author: 'admin' };
   const run = db
     .prepare(
@@ -88,16 +104,19 @@ export function runWriteContext(db: Db, p: Principal, slug: string): WriteContex
     )
     .get(p.runId) as RunRow | undefined;
   if (!run) throw new AidHttpError(403, 'run inconnu');
-  const ns = namespaceOf(slug);
-  const own = run.namespace ?? run.workspace_name;
-  const allowed = ns === own || (ns === LESSON_NS && run.role === 'retro');
-  if (!allowed) throw new AidHttpError(403, 'forbidden', { namespace: ns, allowed: own });
   return {
     author: `run:${run.run_id}`,
     workspaceId: run.workspace_id,
     topicId: run.topic_id,
     runId: run.run_id,
+    scope: { namespace: run.namespace ?? run.workspace_name, role: run.role },
   };
+}
+
+export function runWriteContext(db: Db, p: Principal, slug: string): MemoryWriteContext {
+  const ctx = principalWriteContext(db, p);
+  assertMemoryWriteNamespace(ctx, namespaceOf(slug));
+  return ctx;
 }
 
 export function registerMemoryRoutes(app: FastifyInstance, deps: MemoryRouteDeps): void {
@@ -128,6 +147,40 @@ export function registerMemoryRoutes(app: FastifyInstance, deps: MemoryRouteDeps
     if (!page) throw new AidHttpError(404, 'page absente');
     recordUsage(req, [page.slug], 'get');
     return page;
+  });
+
+  app.get('/api/memory/links/*', async (req) => {
+    const slug = slugOf(req);
+    const links = memory.links(slug);
+    if (!links) throw new AidHttpError(404, 'page absente', { slug });
+    return links;
+  });
+
+  app.post('/api/memory/decisions', { schema: { body: DecisionBody } }, async (req, reply) => {
+    const {
+      namespace: requested,
+      remplace = [],
+      ...input
+    } = req.body as Static<typeof DecisionBody>;
+    const ctx = principalWriteContext(db, req.principal!);
+    const own = ctx.scope?.namespace;
+    if (own !== undefined && requested !== undefined && requested !== own) {
+      throw new AidHttpError(403, 'forbidden', { namespace: requested, allowed: own });
+    }
+    const namespace = own ?? requested;
+    if (namespace === undefined) throw new AidHttpError(400, 'namespace est requis');
+    try {
+      const decision = await memory.decide({ ...input, namespace, remplace }, ctx);
+      return reply.code(201).send(decision);
+    } catch (err) {
+      if (err instanceof RevisionConflict) {
+        throw new AidHttpError(409, 'revision_conflict', {
+          slug: err.slug,
+          revision: err.revision,
+        });
+      }
+      throw err;
+    }
   });
 
   app.put('/api/memory/pages/*', { schema: { body: PutBody } }, async (req, reply) => {

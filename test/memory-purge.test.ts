@@ -144,6 +144,22 @@ test('DM17 : CLI aperçu, orphelines et purge ; historique git conservé', async
   }
 });
 
+test('aid mem purge conserve une décision portant le même slug que la tâche purgée', async () => {
+  t = await startTestDaemon();
+  await put('projet/plan/alpha');
+  await put('projet/retro/nuit', 'alpha');
+  const { slug } = await t.d.memory.decide(
+    { namespace: 'projet', slug: 'alpha', title: 'Choix', raison: 'Motif', remplace: [] },
+    { author: 'admin' },
+  );
+  expect(await cli([])).toEqual({
+    code: 0,
+    err: [],
+    out: ['projet/plan/alpha', '1 page(s) purgée(s)'],
+  });
+  expect(await slugs()).toEqual([slug, 'projet/retro/nuit']);
+});
+
 test('DM17 : route réservée admin et corps invalide refusé sans suppression', async () => {
   t = await startTestDaemon();
   await put('a/plan/close');

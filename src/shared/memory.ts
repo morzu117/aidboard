@@ -15,6 +15,25 @@ export const DEFAULT_MAINTENANCE_SPLIT_LINES = 40;
 export const LINK_TYPES = ['precise', 'contredit', 'remplace', 'issu_de', 'cite'] as const;
 export type LinkType = (typeof LINK_TYPES)[number];
 
+export interface LinkNeighbor {
+  slug: string;
+  type: LinkType;
+  existe: boolean;
+}
+
+export interface MemoryLinks {
+  slug: string;
+  closed: boolean;
+  sortants: LinkNeighbor[];
+  entrants: LinkNeighbor[];
+}
+
+export interface MemoryDecision {
+  slug: string;
+  revision: number;
+  fermees: string[];
+}
+
 export interface MemoryPage {
   closed: boolean;
   slug: string;

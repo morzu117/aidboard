@@ -40,6 +40,7 @@ export const EVENT_TYPES = [
   'task.status',
   'instructions.updated',
   'memory.page',
+  'memory.decision',
   'mesh.dm',
   'mesh.state',
 ] as const;
