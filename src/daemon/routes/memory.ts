@@ -159,10 +159,15 @@ export function registerMemoryRoutes(app: FastifyInstance, deps: MemoryRouteDeps
   });
 
   app.get('/api/memory/search', async (req) => {
-    const q = req.query as { q?: string; scope?: string; limit?: string };
+    const q = req.query as { q?: string; scope?: string; limit?: string; closes?: string };
     if (!q.q) throw new AidHttpError(400, 'q est requis');
     const limit = Math.min(Math.max(Number.parseInt(q.limit ?? '10', 10) || 10, 1), 100);
-    const result = await memory.search(q.q, q.scope && q.scope !== 'all' ? q.scope : 'all', limit);
+    if (q.closes !== undefined && q.closes !== '1' && q.closes !== 'true') {
+      throw new AidHttpError(400, 'closes doit valoir 1 ou true');
+    }
+    const result = await memory.search(q.q, q.scope && q.scope !== 'all' ? q.scope : 'all', limit, {
+      closes: q.closes !== undefined,
+    });
     recordUsage(
       req,
       result.hits.map((hit) => hit.slug),

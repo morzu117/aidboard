@@ -185,6 +185,14 @@ Les tests couvrent :
 - `hits` inchangé pour un client qui ignore `voisins` ;
 - le journal d'usage sans les voisines.
 
+- _Révision 60.3._ Fait :
+  - le filtre des pages closes, en FTS (dans le SQL) et en vecteurs (`closedSlugs`, en une requête) ;
+  - les remplaçantes, qui reprennent le rang de la page close, dans le scope demandé ;
+  - `voisins`, et `SearchResult` dans `shared` ;
+  - `closes` dans la route, le CLI et le MCP.
+
+  Ma reprise : la lecture FTS élargie, qui garde le rang des pages closes, est bornée à quatre fois la fenêtre au lieu d'être sans limite. Gate 4 667.
+
 ### 60.4 `decide` et `links` (DM22, DM23)
 
 La route, le service, l'annulation, l'événement, les deux outils MCP et les deux commandes.

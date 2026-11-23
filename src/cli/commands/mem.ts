@@ -1,7 +1,7 @@
 import { parseArgs } from 'node:util';
 import type { AidPaths } from '../../daemon/paths.js';
 import { renderMarkdown } from '../../daemon/memory/store.js';
-import type { MemoryPage, MemoryProposal, SearchHit, SearchMode } from '../../shared/memory.js';
+import type { MemoryPage, MemoryProposal, SearchResult } from '../../shared/memory.js';
 import { callDaemon, DaemonUnreachable, resolveTarget } from '../client.js';
 
 // Codes de sortie du contrat `aid mem` (chantier 06) : 0 ok, 1 usage ou refus simple,
@@ -11,7 +11,7 @@ export const MEM_HELP = `aid mem : la mémoire des agents (pages markdown, reche
   aid mem get <slug>                                  la page sur stdout
   aid mem put <slug> [--title T] [--append | --expected-revision N | --force]
                                                       contenu sur stdin ; existante sans option = refus
-  aid mem search "<termes>" [--scope <ns>|all] [--limit N] [--json]
+  aid mem search "<termes>" [--scope <ns>|all] [--limit N] [--closes] [--json]
   aid mem list <prefix> [--json]
   aid mem proposals [--state open|applied|rejected] [--json]
   aid mem usage [--json]                              lectures par page et dernière lecture
@@ -50,13 +50,20 @@ function codeOf(status: number): number {
   return 1;
 }
 
-function formatHits(mode: SearchMode, hits: SearchHit[]): string[] {
+function formatHits({ mode, hits, voisins }: SearchResult): string[] {
   const lines = [`mode : ${mode}`];
   for (const h of hits) {
-    lines.push(`${h.score.toFixed(3)}  ${h.slug}  ${h.title}`);
+    const via = h.via?.type === 'remplace' ? ` (remplace ${h.via.slug})` : '';
+    lines.push(`${h.score.toFixed(3)}  ${h.slug}  ${h.title}${via}`);
     if (h.snippet) lines.push(`    ${h.snippet}`);
   }
   if (hits.length === 0) lines.push('aucun résultat');
+  if (voisins?.length) {
+    lines.push('Voisines :');
+    for (const { slug, via } of voisins) {
+      if (via) lines.push(`  ${slug}  ${via.type}  ${via.slug}`);
+    }
+  }
   return lines;
 }
 
@@ -168,6 +175,7 @@ const OPTIONS = {
   state: { type: 'string' },
   scope: { type: 'string' },
   limit: { type: 'string' },
+  closes: { type: 'boolean' },
   json: { type: 'boolean' },
   dir: { type: 'string' },
   namespace: { type: 'string' },
@@ -180,6 +188,7 @@ type Values = {
   force?: boolean;
   scope?: string;
   limit?: string;
+  closes?: boolean;
   json?: boolean;
   dir?: string;
   namespace?: string;
@@ -252,10 +261,11 @@ async function search(call: Call, q: string | undefined, v: Values, io: MemIo): 
   const params = new URLSearchParams({ q });
   if (v.scope) params.set('scope', v.scope);
   if (v.limit) params.set('limit', v.limit);
+  if (v.closes) params.set('closes', '1');
   const { status, json } = await call('GET', `/api/memory/search?${params}`);
   if (status !== 200) return fail(status, json, io);
   if (v.json) io.out(JSON.stringify(json));
-  else for (const l of formatHits(json.mode as SearchMode, json.hits as SearchHit[])) io.out(l);
+  else for (const l of formatHits(json as unknown as SearchResult)) io.out(l);
   return 0;
 }
 

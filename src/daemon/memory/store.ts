@@ -362,8 +362,17 @@ export class MemoryStore {
     ).map((r) => r.slug);
   }
 
+  closedSlugs(slugs: string[]): Set<string> {
+    const rows = this.db
+      .prepare(
+        'SELECT slug FROM memory_pages WHERE closed = 1 AND slug IN (SELECT value FROM json_each(?))',
+      )
+      .all(JSON.stringify(slugs)) as { slug: string }[];
+    return new Set(rows.map(({ slug }) => slug));
+  }
+
   // scope <ns> = ce namespace et les leçons ; 'all' = tout.
-  searchFts(q: string, scope: string | 'all', limit: number): SearchHit[] {
+  searchFts(q: string, scope: string | 'all', limit: number, { closes = false } = {}): SearchHit[] {
     const match = ftsQuery(q);
     if (!match) return [];
     const rows = this.db
@@ -371,9 +380,10 @@ export class MemoryStore {
         `SELECT p.slug, p.title, p.body, bm25(memory_fts, 0, 4.0, 1.0, 2.0) AS rank
          FROM memory_fts JOIN memory_pages p ON p.rowid = memory_fts.rowid
          WHERE memory_fts MATCH ? AND (? = 'all' OR p.namespace IN (?, ?))
+           AND (p.closed = 0 OR ?)
          ORDER BY rank LIMIT ?`,
       )
-      .all(match, scope, scope, LESSON_NS, limit) as {
+      .all(match, scope, scope, LESSON_NS, Number(closes), limit) as {
       slug: string;
       title: string;
       body: string;

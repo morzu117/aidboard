@@ -299,3 +299,75 @@ test('DM16 : un ancien job failed est rattrapé au retour de la disponibilité',
   expect(jobState('aid/plan/ancien')).toBe('done');
   expect(t.db.prepare('SELECT count(*) AS n FROM memory_jobs').get()).toEqual({ n: 1 });
 });
+
+test.each([false, true])(
+  '60.3 : pages closes sur les deux sources (hybride : %s)',
+  async (hybrid) => {
+    const embedder = fakeEmbedder(
+      {
+        'archive\n\nun quartz': [1, 0, 0],
+        quartz: [1, 0, 0],
+        minéral: [1, 0, 0],
+      },
+      { ready: hybrid },
+    );
+    t = await startTestDaemon(undefined, { memory: { embedder, pollMs: 5 } });
+    const slug = 'aid/page/archive';
+    expect((await put(slug, '---\nclose_le: 2020-01-01\n---\nun quartz')).statusCode).toBe(201);
+    if (hybrid) await waitFor(() => vectorCount() === 1);
+    expect(t.d.memory.store.searchFts('quartz', 'all', 1)).toEqual([]);
+    expect(t.d.memory.store.searchFts('quartz', 'all', 1, { closes: true })).toMatchObject([
+      { slug },
+    ]);
+    for (const q of hybrid ? ['quartz', 'minéral'] : ['quartz']) {
+      const mode = hybrid ? 'hybrid' : 'fts';
+      expect((await search(q)).json()).toEqual({ mode, hits: [], voisins: [] });
+      const included = await t.d.app.inject({
+        url: `/api/memory/search?${new URLSearchParams({ q, closes: 'true' })}`,
+        headers: t.headers,
+      });
+      expect(included.json()).toMatchObject({ mode, hits: [{ slug }], voisins: [] });
+    }
+  },
+);
+
+test('60.3 : les vecteurs élargissent la fenêtre après avoir trouvé des pages closes', async () => {
+  const embedder = fakeEmbedder({
+    'a\n\nancienne': [1, 0, 0],
+    'b\n\nancienne': [0.9, 0.1, 0],
+    'c\n\nactuelle': [0, 1, 0],
+    minéral: [1, 0, 0],
+  });
+  t = await startTestDaemon(undefined, { memory: { embedder, pollMs: 5 } });
+  await put('aid/page/a', '---\nclose_le: 2020-01-01\n---\nancienne');
+  await put('aid/page/b', '---\nclose_le: 2020-01-01\n---\nancienne');
+  await put('aid/page/c', 'actuelle');
+  await waitFor(() => vectorCount() === 3);
+  const r = await t.d.app.inject({
+    url: '/api/memory/search?q=minéral&limit=1',
+    headers: t.headers,
+  });
+  expect(r.json()).toMatchObject({ mode: 'hybrid', hits: [{ slug: 'aid/page/c' }] });
+});
+
+test('60.3 : une correspondance vectorielle close transmet son rang à sa remplaçante', async () => {
+  const embedder = fakeEmbedder({
+    'a\n\nancienne': [1, 0, 0],
+    'b\n\nactuelle': [0, 1, 0],
+    minéral: [1, 0, 0],
+  });
+  t = await startTestDaemon(undefined, { memory: { embedder, pollMs: 5 } });
+  await put('aid/page/a', '---\nremplacee_par: aid/page/b\n---\nancienne');
+  await put('aid/page/b', 'actuelle');
+  await waitFor(() => vectorCount() === 2);
+  expect((await search('minéral')).json()).toMatchObject({
+    mode: 'hybrid',
+    hits: [
+      {
+        slug: 'aid/page/b',
+        score: 0.016393,
+        via: { slug: 'aid/page/a', type: 'remplace' },
+      },
+    ],
+  });
+});

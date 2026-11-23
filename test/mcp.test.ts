@@ -132,6 +132,24 @@ describe.skipIf(!built)('aid mcp en sous-processus', () => {
       mode: 'fts',
       hits: [{ slug: 'aid/plan/alpha' }],
     });
+
+    t.d.memory.store.put(
+      'aid/page/archive',
+      '---\nclose_le: 2020-01-01\n---\nun quartz',
+      { kind: 'create' },
+      'admin',
+    );
+    for (const closes of [false, true]) {
+      const result = await c.callTool({
+        name: 'memory_search',
+        arguments: { query: 'quartz', closes },
+      });
+      expect(result.isError).toBeFalsy();
+      expect(JSON.parse(text(result))).toMatchObject({
+        hits: closes ? [{ slug: 'aid/page/archive' }] : [],
+        voisins: [],
+      });
+    }
   }, 30_000);
 
   test('daemon injoignable : erreur d’outil, le serveur MCP survit', async () => {

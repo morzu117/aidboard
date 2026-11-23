@@ -33,9 +33,16 @@ export interface SearchHit {
   title: string;
   snippet: string;
   score: number;
+  via?: { slug: string; type: LinkType; sens?: 'sortant' | 'entrant' };
 }
 
 export type SearchMode = 'fts' | 'hybrid';
+
+export interface SearchResult {
+  mode: SearchMode;
+  hits: SearchHit[];
+  voisins: SearchHit[];
+}
 
 export type PutMode =
   | { kind: 'create' }
