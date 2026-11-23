@@ -83,6 +83,13 @@ describe.skipIf(!built)('aid mcp en sous-processus', () => {
     ]);
     expect(tools.tools.find((x) => x.name === 'memory_put')?.description).toContain('se complète');
 
+    const invalid = await c.callTool({
+      name: 'memory_put',
+      arguments: { slug: 'aid/page/a', text: '---\nliens:\n  inconnu: [aid/page/b]\n---\nA' },
+    });
+    expect(invalid.isError).toBe(true);
+    expect(text(invalid)).toBe('liens.inconnu : type de lien inconnu');
+
     const put = await c.callTool({
       name: 'memory_put',
       arguments: { slug: 'aid/plan/alpha', text: '# Alpha\n\nun plan', title: 'Alpha' },

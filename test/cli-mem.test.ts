@@ -97,6 +97,12 @@ describe.skipIf(!built)('aid mem en sous-processus', () => {
     expect(existsSync(join(home, 'memory', 'aid', 'plan', 'alpha.md'))).toBe(true);
   });
 
+  test('put invalide : code 1 et erreur de validation du daemon', async () => {
+    const r = await mem(['put', 'aid/page/a'], '---\nliens:\n  inconnu: [aid/page/b]\n---\nA');
+    expect(r.code).toBe(1);
+    expect(r.err.trim()).toBe('liens.inconnu : type de lien inconnu');
+  });
+
   test('put sur une page existante sans option : code 2 et revision_conflict r1', async () => {
     const r = await mem(['put', 'aid/plan/alpha'], 'écrase ?');
     expect(r.code).toBe(2);

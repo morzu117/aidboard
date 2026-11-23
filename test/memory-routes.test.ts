@@ -129,11 +129,15 @@ test('reindex, export, import et health : admin seulement', async () => {
     expect(r.statusCode, url).toBe(403);
   }
   expect((await t.d.app.inject({ url: '/api/memory/health', headers: h })).statusCode).toBe(403);
-  await put('aid/plan/x', { text: 'x' });
+  await put('aid/plan/x', {
+    text: '---\nclose_le: 2026-01-01\n---\n[[lesson/l/y]] [[aid/plan/absente]]',
+  });
   await put('lesson/l/y', { text: 'y' });
   const health = await t.d.app.inject({ url: '/api/memory/health', headers: t.headers });
   expect(health.json()).toMatchObject({
     pages: { aid: 1, lesson: 1 },
+    closed: 1,
+    links: { total: 2, pendants: 1 },
     fts: true,
     vectors: 'off',
     pendingJobs: 0,
@@ -145,7 +149,7 @@ test('reindex, export, import et health : admin seulement', async () => {
     headers: t.headers,
   });
   expect(re.json()).toEqual({ pages: 2 });
-  expect((await get('aid/plan/x')).json().author).toBe('reindex');
+  expect((await get('aid/plan/x')).json()).toMatchObject({ author: 'reindex', closed: true });
 });
 
 test('l’événement memory.page arrive sur /ws/events', async () => {
@@ -166,4 +170,13 @@ test('l’événement memory.page arrive sur /ws/events', async () => {
   const e = await waitFor(() => got.find((x) => x.type === 'memory.page'), 5000, 'memory.page');
   expect(e.data).toEqual({ slug: 'aid/plan/x', revision: 1, author: 'admin', op: 'put' });
   ws.close();
+});
+
+test('PUT refuse un type de lien inconnu avant toute écriture', async () => {
+  t = await startTestDaemon();
+  const slug = 'aid/page/a';
+  const response = await put(slug, { text: '---\nliens:\n  inconnu: [aid/page/b]\n---\nA' });
+  expect(response.statusCode).toBe(400);
+  expect(response.json()).toEqual({ error: 'liens.inconnu : type de lien inconnu' });
+  expect((await get(slug)).statusCode).toBe(404);
 });

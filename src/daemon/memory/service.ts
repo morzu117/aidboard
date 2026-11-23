@@ -10,6 +10,8 @@ import {
 
 export interface MemoryHealth {
   pages: Record<string, number>;
+  closed: number;
+  links: { total: number; pendants: number };
   fts: true;
   vectors: 'ollama' | 'off';
   pendingJobs: number;
@@ -167,6 +169,7 @@ export class MemoryService {
     const jobs = this.deps.store.jobCounts();
     return {
       pages: this.deps.store.countByNamespace(),
+      ...this.deps.store.derivedCounts(),
       fts: true,
       vectors: this.deps.hybrid?.enabled() ? 'ollama' : 'off',
       pendingJobs: jobs.pending,
@@ -180,7 +183,14 @@ export class MemoryService {
     return this.deps.queue.run(QUEUE_KEY, async (): Promise<MemoryPage> => {
       const { store, mirror, events } = this.deps;
       const before = store.get(slug);
-      const page = store.put(slug, text, mode, ctx.author, title);
+      const page = store.put(
+        slug,
+        text,
+        mode,
+        ctx.author,
+        title,
+        ctx.author === 'import' ? this.deps.log : undefined,
+      );
       await mirror.write(slug, renderMarkdown(page));
       mirror.scheduleCommit(`mem: ${slug} r${page.revision}`);
       events.append({
@@ -242,7 +252,7 @@ export class MemoryService {
           mirror.pulledSlugs.delete(slug);
           continue;
         }
-        store.put(slug, text, { kind: 'force' }, 'mirror');
+        store.put(slug, text, { kind: 'force' }, 'mirror', undefined, this.deps.log);
         this.deps.onWrite?.(slug);
         mirror.pulledSlugs.delete(slug);
       }
@@ -258,7 +268,7 @@ export class MemoryService {
       let pages = 0;
       for await (const f of mirror.readAll()) {
         try {
-          store.put(f.slug, f.text, { kind: 'create' }, 'reindex');
+          store.put(f.slug, f.text, { kind: 'create' }, 'reindex', undefined, this.deps.log);
           pages++;
           this.deps.onWrite?.(f.slug);
         } catch (err) {

@@ -12,7 +12,11 @@ export const DEFAULT_DUPLICATE_DISTANCE = 0.15;
 export const DEFAULT_MAINTENANCE_MAX_PER_NIGHT = 20;
 export const DEFAULT_MAINTENANCE_SPLIT_LINES = 40;
 
+export const LINK_TYPES = ['precise', 'contredit', 'remplace', 'issu_de', 'cite'] as const;
+export type LinkType = (typeof LINK_TYPES)[number];
+
 export interface MemoryPage {
+  closed: boolean;
   slug: string;
   namespace: string;
   title: string;

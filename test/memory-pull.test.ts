@@ -60,6 +60,7 @@ async function machine(home: string, exec: GitExec = git) {
     store: new MemoryStore(db),
     events: new EventStore(db),
     queue: new WorkspaceQueue(),
+    log: (line) => logs.push(line),
     onWrite: (slug) => written.push(slug),
     onRemove: (slug) => removed.push(slug),
   });
@@ -418,4 +419,21 @@ test('57.5 : la sortie de git symbolic-ref est normalisée', async () => {
     return args[0] === 'symbolic-ref' ? { ...result, stdout: result.stdout + '\n' } : result;
   });
   expect(await b.mirror.syncHealth()).toMatchObject({ ahead: 0, behind: 0 });
+});
+
+test('le miroir conserve une page fautive et journalise chaque erreur', async () => {
+  const home = mkdtempSync(join(tmpdir(), 'aid-pull-'));
+  homes.push(home);
+  const { mirror, service, logs } = await machine(home);
+  const slug = 'aid/page/a';
+  await service.synchronizeMirror(async () => {
+    await mirror.write(slug, '---\nliens:\n  inconnu: [aid/page/b]\n---\n[[aid/page/c]]');
+    logs.length = 0;
+    mirror.pulledSlugs.add(slug);
+  });
+  expect(service.get(slug)).toMatchObject({ author: 'mirror', closed: false });
+  expect(service.store.links(slug).sortants).toEqual([
+    { slug: 'aid/page/c', type: 'cite', existe: false },
+  ]);
+  expect(logs).toEqual(['mémoire : aid/page/a : liens.inconnu : type de lien inconnu']);
 });

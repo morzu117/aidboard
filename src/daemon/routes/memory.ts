@@ -3,9 +3,11 @@ import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { LESSON_NS, MEM_SLUG_RULE, type PutMode, RevisionConflict } from '../../shared/memory.js';
 import type { Db } from '../db.js';
 import { AidHttpError } from '../errors.js';
+import { deriveMemoryLinks } from '../memory/liens.js';
 import { applyProposal, type MemoryProposals, rejectProposal } from '../memory/maintain.js';
 import type { MemoryService, WriteContext } from '../memory/service.js';
 import { InvalidMemSlug, isValidMemSlug, isValidNamespace, namespaceOf } from '../memory/slug.js';
+import { parseMarkdown } from '../memory/store.js';
 import type { Principal } from '../security.js';
 
 const PutBody = Type.Object(
@@ -133,6 +135,8 @@ export function registerMemoryRoutes(app: FastifyInstance, deps: MemoryRouteDeps
     const body = req.body as Static<typeof PutBody>;
     const ctx = runWriteContext(db, req.principal!, slug);
     try {
+      const { erreurs } = deriveMemoryLinks({ slug, ...parseMarkdown(body.text) }, new Date());
+      if (erreurs.length > 0) throw new AidHttpError(400, erreurs.join('\n'));
       const page = await memory.put(slug, body.text, putMode(body), ctx, body.title);
       return reply.code(page.revision === 1 ? 201 : 200).send({ slug, revision: page.revision });
     } catch (err) {

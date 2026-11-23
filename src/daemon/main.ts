@@ -151,6 +151,7 @@ export async function startDaemon(
     mirror.push = config.memory.git.push;
     await mirror.init();
     const memStore = new MemoryStore(opened);
+    memStore.rebuildDerived(log);
     const jobs = new MemoryJobs(opened);
     jobs.resetRunning();
     const proposals = new MemoryProposals(opened);

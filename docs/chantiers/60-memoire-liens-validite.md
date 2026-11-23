@@ -90,7 +90,7 @@ La note abandonne le graphe bi-temporel (Graphiti, Neo4j), surdimensionné pour 
 
 ### DM21. La table dérivée et la recherche
 
-- `memory_links (from_slug, to_slug, type)`, clé primaire sur les trois, index sur `to_slug`. Elle est dérivée et jamais écrite à la main.
+- `memory_links (from_slug, to_slug, type, declared_by)`, clé primaire sur les quatre, index sur `to_slug` et `declared_by`. Elle est dérivée et jamais écrite à la main. `declared_by` est la page dont le frontmatter ou le corps porte le lien : une clé héritée (`remplacee_par` sur A) donne une arête X→A déclarée par A. Une lecture compte chaque arête une fois, quelle que soit la page qui la déclare.
 - Elle est recalculée pour une page à chaque `put` et vidée à chaque `remove`, dans la même transaction que la page. `clear()` la vide.
 - Au démarrage du daemon, colonne `closed` et table sont recalculées pour toutes les pages, en une transaction (quelques centaines de pages).
 - Migration `037_memory_links.sql` : la colonne `closed INTEGER NOT NULL DEFAULT 0` et la table. Elle ne contient aucun remplissage : le recalcul du démarrage s'en charge.
@@ -164,6 +164,15 @@ Les tests couvrent :
 - la colonne `closed` après un `put`, un `remove` et un `reindex` ;
 - un lien pendant ;
 - un démarrage sur une base du 57 sans la table.
+
+- _Révision 60.2._ Fait :
+  - `src/daemon/memory/liens.ts` (`deriveMemoryLinks`), sur le lexer de `marked`, déjà une dépendance ;
+  - la migration 037, avec `declared_by` ajouté à la table ;
+  - le recalcul dans `put`, `remove`, `clear` et au démarrage (`rebuildDerived`) ;
+  - le refus 400 dans la route seule, l'import et le miroir ne faisant que journaliser ;
+  - `closed` sur `MemoryPage`, et les compteurs de santé.
+
+  Les dates sans décalage sont lues en UTC. Ma reprise : une page qui se cite elle-même dans son corps n'est pas refusée, la citation est ignorée.
 
 ### 60.3 La recherche (DM21)
 
