@@ -4,6 +4,10 @@
 en 0600 appartenant à l’utilisateur. Tout agent lancé sous le même utilisateur
 peut le lire. Le mode `auto` ne change pas.
 
+**Poste sans proxy seulement (33.8).** Cette recette vaut pour un Mac, ou un
+Linux ou un WSL à un seul utilisateur, sans proxy swarph : le jeton reste dans
+`~/.config/swarph`. Un poste partagé avec un proxy (#20) est hors du 33.
+
 Cocher après observation sur une instance de recette. Ne recopier aucune
 identité, adresse ni jeton réel dans le compte rendu. Les exemples utilisent
 `peer-a`, `peer-b`, `principal`, `perso` et `https://aid-e2e.ts.net`.
