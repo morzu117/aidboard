@@ -43,7 +43,8 @@ function projectStatus(tx: Db, e: AidEvent, d: Record<string, unknown>): void {
     'UPDATE agents SET status = ?, status_reason = ?, status_message = ?, status_source = ?, status_at = ?, status_detail = ?, pending = ?, updated_at = ? WHERE id = ?',
   ).run(
     status,
-    status === 'needs_input' || (status === 'idle' && d.reason === 'question')
+    status === 'needs_input' ||
+      (status === 'idle' && (d.reason === 'question' || d.reason === 'background'))
       ? clip(d.reason, 32)
       : null,
     clip(d.message, 500),

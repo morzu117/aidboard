@@ -15,7 +15,15 @@ export type ConversationEvent =
   | { type: 'tool_start'; toolId: string; name: string; input: unknown }
   | { type: 'tool_end'; toolId: string; output: string; isError: boolean }
   | { type: 'request'; request: PendingRequest }
-  | { type: 'turn_end'; ok: boolean; costUsd?: number; durationMs?: number; error?: string }
+  | {
+      type: 'turn_end';
+      ok: boolean;
+      costUsd?: number;
+      durationMs?: number;
+      error?: string;
+      /** Tâches de fond encore en cours à la fin du tour (claude : `Bash` en arrière-plan, sous-agent…) ; l'agent reprendra seul. */
+      background?: number;
+    }
   | { type: 'exit'; code: number | null; signal: NodeJS.Signals | null; message?: string }
   // Chantier 17 (D75) : le lien avec un agent distant ; l'agent, lui, continue sur le serveur.
   // `sessionFound` faux : la session tmux avait disparu, l'agent a été relancé par reprise de session.

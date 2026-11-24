@@ -90,7 +90,7 @@ export const MODES: Record<'claude' | 'codex', ModeOption[]> = {
 };
 
 export const CLAUDE_MODELS: ModelOption[] = [
-  { id: 'fable', label: 'Fable 5.1', efforts: CLAUDE_EFFORTS },
+  { id: 'fable', label: 'Fable 5.2', efforts: CLAUDE_EFFORTS },
   { id: 'opus', label: 'Opus 5.5', efforts: CLAUDE_EFFORTS },
   { id: 'sonnet', label: 'Sonnet 5.5', efforts: CLAUDE_EFFORTS },
   { id: 'haiku', label: 'Haiku 5.5', efforts: CLAUDE_EFFORTS },

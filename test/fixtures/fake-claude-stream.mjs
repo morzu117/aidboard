@@ -484,6 +484,72 @@ async function handleTurn(text) {
     return;
   }
 
+  // Constat du 2026-11-24 (claude 2.1.308) : un `Bash` en arrière-plan annonce sa tâche (`task_started`), le tour
+  // finit, puis `task_notification` et claude reprend seul, sans message reçu. « tache de fond tuee » : la tâche passe
+  // `killed` par `task_updated`, sans notification. FAKE_CLAUDE_TASK_MS règle le délai avant la notification.
+  if (text === 'tache de fond' || text === 'tache de fond tuee') {
+    const taskId = `task-${++reqCounter}`;
+    const toolUseId = `tool-${reqCounter}`;
+    emit({
+      type: 'assistant',
+      message: {
+        role: 'assistant',
+        content: [{ type: 'tool_use', id: toolUseId, name: 'Bash', input: { command: 'codex' } }],
+      },
+    });
+    emit({
+      type: 'system',
+      subtype: 'task_started',
+      task_id: taskId,
+      tool_use_id: toolUseId,
+      description: 'codex',
+      task_type: 'local_bash',
+    });
+    emit({
+      type: 'user',
+      message: {
+        role: 'user',
+        content: [
+          {
+            type: 'tool_result',
+            tool_use_id: toolUseId,
+            content: `Command running in background with ID: ${taskId}.`,
+          },
+        ],
+      },
+    });
+    if (text === 'tache de fond tuee')
+      emit({
+        type: 'system',
+        subtype: 'task_updated',
+        task_id: taskId,
+        patch: { status: 'killed' },
+      });
+    emit({
+      type: 'assistant',
+      message: { role: 'assistant', content: [{ type: 'text', text: 'codex lancé' }] },
+    });
+    emit({ type: 'result', subtype: 'success', session_id: sessionId });
+    if (text === 'tache de fond tuee') return;
+    await new Promise((resolve) =>
+      setTimeout(resolve, Number(process.env.FAKE_CLAUDE_TASK_MS ?? 300)),
+    );
+    emit({
+      type: 'system',
+      subtype: 'task_notification',
+      task_id: taskId,
+      tool_use_id: toolUseId,
+      status: 'completed',
+    });
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    emit({
+      type: 'assistant',
+      message: { role: 'assistant', content: [{ type: 'text', text: 'codex a fini' }] },
+    });
+    emit({ type: 'result', subtype: 'success', session_id: sessionId });
+    return;
+  }
+
   emit({
     type: 'assistant',
     message: { role: 'assistant', content: [{ type: 'text', text: `echo: ${text}` }] },
