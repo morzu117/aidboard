@@ -106,6 +106,21 @@ Ce document, et une ligne dans `docs/chantiers/README.md`.
   - le répertoire de travail vide.
 - **Les vecteurs de Swairm.** `tests/test_swairm_ask.py` et `tests/test_ask_runner.py` sont repris en TypeScript pour le gabarit et l'accord, afin que le format reste identique.
 
+- _Révision 66.2._ Fait, dans `src/daemon/avis/` :
+  - `prompt.ts`, le gabarit v1 et le découpage. Seule la première ligne change : « A-I-D avis… » ;
+  - `lecture.ts`, la lecture et l'accord ;
+  - `fournisseurs.ts`, les trois adaptateurs. Les clés Anthropic, OpenAI et Mistral sont retirées de l'environnement, en plus de `env.strip` ;
+  - `demande.ts`, 3 avis en parallèle au plus, avec une archive relue par le parseur existant.
+
+  Écarts avec Swairm :
+  - le modèle s'écrit `<fournisseur>:<modele>` ;
+  - un CLI absent donne `brut: "CLI absent"` ;
+  - vibe garde son modèle configuré (`modele_servi: null`), faute de sélecteur documenté.
+
+  **Le filtre de la question** (`nettoyage.verifier` de Swairm) n'est pas porté ici. Il va dans la route, au point 66.3, avec `nettoyer` et `hotesPrives` d'A-I-D.
+
+  31 tests. Gate 4 715.
+
 ### 66.3 La route, le CLI et la table (DM47, DM48)
 
 - `POST /api/swairm/ask` passe au lanceur interne, et l'écran ne change pas.
