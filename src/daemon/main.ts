@@ -1,3 +1,4 @@
+import { sonderBwrap } from './isolation/sonde.js';
 import { MeshRegistry } from './mesh/registre.js';
 import { ServiceCommandant } from './commandant/service.js';
 import { notifierCommandant } from './push/commandant.js';
@@ -92,6 +93,7 @@ export async function startDaemon(
     config?: Partial<AidConfig>;
     logger?: boolean;
     codegraphBin?: string;
+    sondeBwrap?: Parameters<typeof sonderBwrap>[0];
     structuralEngine?: IndexEngine;
     onStopRequested?: () => void;
     onUpdateRequested?: () => void;
@@ -133,6 +135,7 @@ export async function startDaemon(
       config.meshes = {
         principal: { ...config.mesh, home: config.mesh.home ?? process.env.HOME ?? homedir() },
       };
+    const bwrap = config.agents.isolation === 'bwrap' ? sonderBwrap(opts.sondeBwrap) : undefined;
     purgeOldLogs(paths, config.terminal.logRetentionDays);
     const opened = openDb(paths.db);
     db = opened;
@@ -278,6 +281,7 @@ export async function startDaemon(
     let livePort = config.port;
     const auth = createAuthState(loadSessionToken(paths.sessionSecret));
     const agents = new AgentManager({
+      bwrapBin: bwrap?.bin,
       store,
       db: opened,
       paths,
@@ -437,6 +441,7 @@ export async function startDaemon(
       },
     };
     const app = await buildServer({
+      bwrapVersion: bwrap?.version,
       commandant,
       clePda: fournisseurPda,
       pda,

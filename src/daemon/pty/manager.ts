@@ -1,3 +1,5 @@
+import { execFileSync } from 'node:child_process';
+import { envelopper, profilPour, spawnChildIsole } from '../isolation/lanceur.js';
 import { envSwarph } from '../mesh/env.js';
 import type { MeshRegistry } from '../mesh/registre.js';
 import {
@@ -47,6 +49,7 @@ import { homedir } from 'node:os';
 import { poseUneQuestion } from '../../shared/question.js';
 import { REMOTE_CONTROL, type RemoteControlState } from '../../shared/agentSettings.js';
 
+const fsIsolation = { existsSync, statSync };
 const ulid = monotonicFactory();
 /** D70 : bornes des pièces jointes d'un message. */
 const ATTACHMENTS_MAX = 5;
@@ -77,6 +80,7 @@ export interface LiveAgent {
   exit: { exitCode: number | null; signal: number | null; reason: string } | null;
   stopReason?: StopReason;
   kind: SpawnKind;
+  isole?: boolean;
   mesh?: string;
   /** dernière sortie du terminal (ms) : le silence fonde l'estimation */
   lastOutputAt: number;
@@ -96,6 +100,7 @@ export interface LiveStream {
   runId: string;
   workspaceId: string;
   kind: SpawnKind;
+  isole?: boolean;
   driver: ConversationDriver;
   exited: boolean;
   exit: { exitCode: number | null; signal: NodeJS.Signals | null; reason: string } | null;
@@ -116,6 +121,7 @@ export interface ManagerDeps {
   db: Db;
   paths: AidPaths;
   config: AidConfig;
+  bwrapBin?: string;
   meshes?: () => MeshRegistry;
   auth: AuthState;
   port: () => number;
@@ -261,6 +267,24 @@ export class AgentManager {
     return [...this.live.values()].filter((a) => !a.exited);
   }
 
+  private isolationPour(kind: SpawnKind, worktree: string, agentId: string) {
+    const { config, paths, bwrapBin } = this.deps;
+    if (config.agents.isolation !== 'bwrap' || (kind !== 'claude' && kind !== 'codex'))
+      return undefined;
+    if (!bwrapBin) throw new AidHttpError(422, 'isolation demandée mais bubblewrap indisponible');
+    try {
+      const profil = profilPour(
+        { worktree, home: process.env.HOME ?? homedir(), paths, agentId },
+        (bin, args) =>
+          execFileSync(bin, args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }),
+        fsIsolation,
+      );
+      return { bwrapBin, profil };
+    } catch (err) {
+      throw new AidHttpError(422, (err as Error).message);
+    }
+  }
+
   spawn(o: { topicId: string; kind: SpawnKind; mesh?: string }): Agent {
     if (
       this.deps.config.agents.transport === 'stream' &&
@@ -334,9 +358,14 @@ export class AgentManager {
         ...hookEnv(),
       },
     );
+    const isolation = this.isolationPour(o.kind, topic.worktree, agentId);
     let pty: IPty;
     try {
-      pty = getPty().spawn(file, args, {
+      if (isolation) mkdirSync(isolation.profil.piecesJointes, { recursive: true, mode: 0o700 });
+      const lancement = isolation
+        ? envelopper(isolation.bwrapBin, isolation.profil, { pty: true }, fsIsolation, file, args)
+        : { file, args };
+      pty = getPty().spawn(lancement.file, lancement.args, {
         name: 'xterm-256color',
         ...INITIAL,
         cwd: topic.worktree,
@@ -360,6 +389,7 @@ export class AgentManager {
       exited: false,
       exit: null,
       kind: o.kind,
+      ...(isolation && { isole: true }),
       ...(configMesh && { mesh: nomMesh }),
       lastOutputAt: Date.now(),
       hooked: false,
@@ -436,6 +466,7 @@ export class AgentManager {
       kind: o.kind,
       role: 'free',
       transport: 'pty',
+      ...(live.isole && { isole: true }),
       status: 'starting',
       cwd: topic.worktree,
       command,
@@ -480,6 +511,7 @@ export class AgentManager {
       AID_AGENT: o.agentId,
       AID_SPOOL: paths.spool,
     });
+    const isolation = this.isolationPour(o.kind, o.topic.worktree, o.agentId);
     // D70 : le dossier existe avant le lancement, `--add-dir` le désigne à claude
     const attachmentsDir = join(paths.attachments, o.agentId);
     mkdirSync(attachmentsDir, { recursive: true, mode: 0o700 });
@@ -491,6 +523,9 @@ export class AgentManager {
       resume: o.resume,
       settings: o.settings,
       attachmentsDir,
+      ...(isolation && {
+        spawnChild: spawnChildIsole(isolation.bwrapBin, isolation.profil, fsIsolation),
+      }),
     };
     const driver: ConversationDriver =
       o.kind === 'claude' ? new ClaudeDriver(driverOpts) : new CodexDriver(driverOpts);
@@ -505,6 +540,7 @@ export class AgentManager {
       workspaceId: o.topic.workspace_id,
       kind: o.kind,
       driver,
+      ...(isolation && { isole: true }),
       exited: false,
       exit: null,
       seq: o.seq,
@@ -538,7 +574,7 @@ export class AgentManager {
     const agentId = `ag_${ulid()}`;
     const sessionId = o.kind === 'claude' ? randomUUID() : '';
     const settings = this.defaultSettings(o.kind);
-    const { command } = this.createStream({
+    const { stream, command } = this.createStream({
       agentId,
       topic,
       runId: run.id,
@@ -591,6 +627,7 @@ export class AgentManager {
       kind: o.kind,
       role: 'free',
       transport: 'stream',
+      ...(stream.isole && { isole: true }),
       status: 'starting',
       cwd: topic.worktree,
       command,

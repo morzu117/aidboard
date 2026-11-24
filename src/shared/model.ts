@@ -122,6 +122,7 @@ export interface Run {
 }
 
 export interface Agent {
+  isole?: boolean;
   id: string;
   runId: string;
   kind: AgentKind;

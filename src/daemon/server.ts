@@ -75,6 +75,7 @@ import { registerEventSocket } from './ws/events.js';
 import { registerPtySocket } from './ws/pty.js';
 
 export interface ServerDeps {
+  bwrapVersion?: string;
   config: AidConfig;
   auth: AuthState;
   db: Db;
@@ -209,6 +210,8 @@ export async function buildServer(deps: ServerDeps): Promise<FastifyInstance> {
     !!deps.config.swairm.bin,
     deps.config.agents.transport,
     deps.meshes,
+    deps.bwrapVersion,
+    deps.agents,
   );
   registerRejoindreRoutes(app, { config: deps.config, paths: deps.paths });
   registerMeshRoutes(app, {

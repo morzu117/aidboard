@@ -129,6 +129,15 @@ Les tests utilisent un faux `bwrap`, qui écrit son argv et lance la commande. U
 - `.git/hooks` est en lecture seule ;
 - `~/.ssh` est vide.
 
+- _Révision 65.3._ Fait :
+  - `lanceur.ts` : `profilPour`, `envelopper` et `spawnChildIsole` ;
+  - dans `manager.ts`, les `claude` et `codex` locaux sont enveloppés, en PTY comme en stream. Un profil impossible renvoie une 422 sans lancement, et la commande enregistrée reste celle de l'agent ;
+  - `isole` sur l'agent ;
+  - la sonde au démarrage (`sonde.ts`) : refus hors Linux, sans bwrap, ou sur une sonde en échec ;
+  - `bwrapVersion` dans `/api/state`.
+
+  14 tests. Le test d'intégration est sauté sur le VPS, faute de bwrap : il est à lancer sur la tour. Gate 4 709.
+
 ### 65.4 La visibilité, le noyau et la fiche (DM46)
 
 - La ligne d'`aid doctor`, la marque sur la carte, la phrase du noyau et le changelog.

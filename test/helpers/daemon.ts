@@ -31,6 +31,7 @@ export async function startTestDaemon(
   home = mkdtempSync(join(tmpdir(), 'aid-d-')),
   extra: {
     codegraphBin?: string;
+    sondeBwrap?: NonNullable<Parameters<typeof startDaemon>[0]>['sondeBwrap'];
     structuralEngine?: IndexEngine;
     config?: TestConfig;
     /** Transport distant : faux ssh par défaut, HOME distant = le AID_HOME temporaire. */
@@ -58,6 +59,7 @@ export async function startTestDaemon(
   const d = await startDaemon({
     home,
     codegraphBin: extra.codegraphBin,
+    sondeBwrap: extra.sondeBwrap,
     // Piège du chantier 08 : jamais le vrai codegraph en test. Depuis 08.6, /api/state
     // interroge le moteur pour chaque sujet (DS7) ; un test qui ne précise ni l'un ni
     // l'autre hériterait sinon du moteur réel de config.structural (installé sur ce poste).
