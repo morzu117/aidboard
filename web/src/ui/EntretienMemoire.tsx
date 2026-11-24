@@ -18,6 +18,10 @@ function apercu({ kind, payload }: MemoryProposal): string {
       return (payload as { duplicateOf: string }).duplicateOf;
     case 'split':
       return (payload as { pages: { title: string }[] }).pages.map((page) => page.title).join(', ');
+    case 'retro':
+      return (payload as { lecons: { slug: string }[] }).lecons
+        .map((lecon) => lecon.slug)
+        .join(', ');
   }
 }
 

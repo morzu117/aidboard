@@ -51,11 +51,11 @@ La note du 17 novembre (§9.2) le dit : « la mémoire dépend de la discipline 
 - **Rejeter** laisse la proposition à l'état `rejected`, et rien n'est écrit dans les pages. Une proposition `retro` rejetée compte comme existante : elle ne revient pas pour ce cycle.
 - Le modèle peut répondre « aucune leçon », et c'est la réponse normale d'un petit cycle. Une leçon qui reprend une leçon existante, trouvée par les vecteurs sous le seuil de doublon, est écartée avant la proposition.
 
-### DM27. Quand : au merge, puis la nuit pour le rattrapage
+### DM27. Quand : la nuit, le dernier cycle mergé d'abord
 
-- **Au merge.** L'`afterSuccess` de `topic.merge` enfile un job `retro` pour le sujet, si `<ns>/retro/<slug>` n'existe pas et qu'aucune proposition `retro` n'est ouverte. Le job tourne dans la fenêtre de l'entretien, comme les autres, et il est compté dans `maxPerNight`.
-- **Le rattrapage.** Chaque nuit, dans la fenêtre et sous le même plafond, les sujets `merged` ou `archived` qui n'ont ni rétro ni proposition `retro` sont pris du plus récent au plus ancien.
-- Un sujet sans aucune page de cycle n'a pas de récit, et un récit refusé par le filtre ne part pas. Dans les deux cas, le sujet est noté une fois dans `memory_maintenance_seen` (le genre `retro`, la raison, et la classe d'un refus), puis il n'est plus repris.
+- **Pas de crochet au merge.** Le worker traite un job dès qu'il est enfilé. Un job posé au merge tournerait donc tout de suite, hors de la fenêtre de l'entretien, et en concurrence avec la machine de travail. C'est la passe de nuit qui enfile les jobs.
+- **La passe de nuit.** Elle tourne dans la fenêtre et sous le plafond `maxPerNight`, qu'elle partage avec les jobs `maintain`. Elle prend les sujets `merged` ou `archived` qui n'ont ni rétro, ni proposition `retro`, ni note `seen`. Le dernier mergé passe en premier : un sujet mergé dans la journée reçoit sa proposition la nuit qui suit, et les cycles passés sont rattrapés ensuite. Les jobs `retro` sont enfilés avant les jobs `maintain`.
+- Un sujet sans aucune page de cycle n'a pas de récit. Un récit refusé par le filtre ne part pas. Dans les deux cas, le sujet est noté une fois dans `memory_maintenance_seen`, avec le genre `retro`, la raison, et la classe s'il s'agit d'un refus. Il n'est plus repris ensuite.
 - L'entretien éteint (`memory.maintenance.enabled: false`) ne crée aucun job `retro`. Le compteur reste visible (DM28).
 
 ### DM28. La rétro manquante se voit, elle ne bloque pas
@@ -102,16 +102,26 @@ Les tests couvrent :
 - un échec au milieu, rendu à l'identique ;
 - le rejet qui ne revient pas.
 
-### 61.4 Les déclencheurs (DM27)
+- _Révision 61.3._ Fait :
+  - la migration 038, qui ajoute `retro` aux trois contraintes ;
+  - `src/daemon/memory/retro.ts` et `runRetroJob`, où le frontmatter est posé par le code et les tags filtrés au vocabulaire ;
+  - l'écart des doublons, par slug et par la voisine vectorielle `lesson/` ouverte la plus proche (`nearestOpenLesson`) quand les vecteurs sont là ;
+  - l'application avec `lecons` à garder, tout ou rien, et le rejet sans écriture ;
+  - les décisions sur une même proposition, sérialisées ;
+  - la clé `memory.maintenance.hotesPrives` ;
+  - dans l'interface, seulement le libellé « Rétro » ; l'écran vient au 61.5.
 
-L'`afterSuccess` du merge, le rattrapage de nuit et le plafond partagé.
+  Gate 4 712.
+
+### 61.4 La passe de nuit (DM27)
+
+L'enfilage des jobs `retro` dans `scheduleMaintenance`, avec le plafond partagé.
 
 Les tests couvrent :
-- un merge qui enfile un job ;
-- un merge d'un sujet qui a déjà sa rétro, qui n'enfile rien ;
-- le rattrapage par ordre ;
-- le plafond ;
-- l'entretien éteint.
+- l'ordre, du dernier mergé au plus ancien ;
+- les sujets écartés : ceux qui ont déjà une rétro, une proposition ou une note `seen`, et ceux qui ne sont ni mergés ni archivés ;
+- le plafond partagé avec `maintain` ;
+- l'entretien éteint, ou une heure hors de la fenêtre.
 
 ### 61.5 La vue et la santé (DM28)
 

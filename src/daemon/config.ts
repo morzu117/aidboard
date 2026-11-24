@@ -85,6 +85,7 @@ export interface MemoryConfig {
     duplicateDistance?: number;
     maxPerNight?: number;
     splitLines?: number;
+    hotesPrives?: string[];
   };
   git: { push: boolean };
 }
@@ -342,13 +343,24 @@ function parseMemory(raw: unknown, cfg: MemoryConfig): void {
     if (!isRecord(m)) throw new ConfigError('config.yaml : memory.maintenance doit être un objet');
     rejectUnknown(
       m,
-      ['enabled', 'model', 'window', 'duplicateDistance', 'maxPerNight', 'splitLines'],
+      [
+        'enabled',
+        'model',
+        'window',
+        'duplicateDistance',
+        'maxPerNight',
+        'splitLines',
+        'hotesPrives',
+      ],
       'memory.maintenance.',
     );
     // Les deux limites sont des entiers strictement positifs, comme les autres limites de config.
     for (const key of ['maxPerNight', 'splitLines'] as const) {
       if (m[key] !== undefined)
         cfg.maintenance[key] = positiveInt(m[key], `memory.maintenance.${key}`);
+    }
+    if (m.hotesPrives !== undefined) {
+      cfg.maintenance.hotesPrives = stringList(m.hotesPrives, 'memory.maintenance.hotesPrives');
     }
     if (m.duplicateDistance !== undefined) {
       const distance = m.duplicateDistance;
@@ -718,6 +730,7 @@ const DEFAULT_FILE = `# Configuration d'A-I-D. Tout est facultatif : ce sont les
 #     duplicateDistance: ${DEFAULT_DUPLICATE_DISTANCE} # distance cosinus maximale des candidats doublons (]0, 2])
 #     maxPerNight: 20        # jobs créés depuis le début de la fenêtre courante
 #     splitLines: 40         # découpage au-delà de ce nombre de lignes non vides
+#     hotesPrives: []       # hôtes dont la présence bloque l'envoi d'un récit au modèle
 #   git:
 #     push: false            # true : git push de ~/.aid/memory après chaque commit, si un remote origin existe
 # structural:

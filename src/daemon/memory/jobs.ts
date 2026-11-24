@@ -3,7 +3,8 @@ import type { Db } from '../db.js';
 
 const ulid = monotonicFactory();
 
-export type JobKind = 'embed' | 'maintain';
+// Pour un job `retro`, le champ slug porte l'id du sujet.
+export type JobKind = 'embed' | 'maintain' | 'retro';
 export interface MemoryJob {
   id: string;
   kind: JobKind;

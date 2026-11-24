@@ -182,6 +182,19 @@ export class VectorIndex {
       .all(slug, LESSON_NS, distance) as Array<{ slug: string; distance: number }>;
   }
 
+  nearestOpenLesson(vector: Float32Array): { slug: string; distance: number } | undefined {
+    const meta = this.meta();
+    if (!meta || !this.hasTable() || vector.length !== meta.dimension) return undefined;
+    return this.db
+      .prepare(
+        `SELECT v.slug, vec_distance_cosine(v.embedding, ?) AS distance
+         FROM memory_vectors v JOIN memory_pages p ON p.slug = v.slug
+         WHERE p.namespace = ? AND p.closed = 0
+         ORDER BY distance NULLS LAST, v.slug LIMIT 1`,
+      )
+      .get(toBlob(vector), LESSON_NS) as { slug: string; distance: number } | undefined;
+  }
+
   count(): number {
     if (!this.hasTable()) return 0;
     return (this.db.prepare('SELECT count(*) AS c FROM memory_vectors').get() as { c: number }).c;

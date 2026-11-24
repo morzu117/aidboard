@@ -1,6 +1,7 @@
 import { type Static, Type } from '@sinclair/typebox';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { MEM_SLUG_RULE, type PutMode, RevisionConflict } from '../../shared/memory.js';
+import { WorkspaceQueue } from '../actions/queue.js';
 import type { Db } from '../db.js';
 import { AidHttpError } from '../errors.js';
 import { deriveMemoryLinks } from '../memory/liens.js';
@@ -52,6 +53,11 @@ const ExportBody = Type.Object(
 
 const PurgeBody = Type.Object(
   { dryRun: Type.Optional(Type.Boolean()), orphelines: Type.Optional(Type.Boolean()) },
+  { additionalProperties: false },
+);
+
+const ApplyProposalBody = Type.Object(
+  { lecons: Type.Optional(Type.Array(Type.String())) },
   { additionalProperties: false },
 );
 
@@ -121,6 +127,7 @@ export function runWriteContext(db: Db, p: Principal, slug: string): MemoryWrite
 
 export function registerMemoryRoutes(app: FastifyInstance, deps: MemoryRouteDeps): void {
   const { db, memory, proposals } = deps;
+  const proposalDecisions = new WorkspaceQueue();
   const adminOnly = (req: FastifyRequest) => {
     if (req.principal?.kind !== 'admin') throw new AidHttpError(403, 'réservé à l’administrateur');
   };
@@ -272,27 +279,41 @@ export function registerMemoryRoutes(app: FastifyInstance, deps: MemoryRouteDeps
     return { proposals: proposals.list(state) };
   });
 
-  app.post('/api/memory/proposals/:id/apply', async (req) => {
-    adminOnly(req);
-    if (!proposals) throw new AidHttpError(404, 'entretien non disponible');
-    const { id } = req.params as { id: string };
-    const proposal = proposals.get(id);
-    if (!proposal) throw new AidHttpError(404, 'proposition absente');
-    if (proposal.state !== 'open') throw new AidHttpError(409, 'proposition déjà décidée');
-    await applyProposal(proposal, memory);
-    proposals.decide(id, 'applied');
-    return { id, state: 'applied' };
-  });
+  app.post(
+    '/api/memory/proposals/:id/apply',
+    {
+      schema: { body: ApplyProposalBody },
+      async preValidation(req) {
+        if (req.body === undefined) req.body = {};
+      },
+    },
+    async (req) => {
+      adminOnly(req);
+      if (!proposals) throw new AidHttpError(404, 'entretien non disponible');
+      const { id } = req.params as { id: string };
+      return proposalDecisions.run(id, async () => {
+        const proposal = proposals.get(id);
+        if (!proposal) throw new AidHttpError(404, 'proposition absente');
+        if (proposal.state !== 'open') throw new AidHttpError(409, 'proposition déjà décidée');
+        const { lecons } = req.body as Static<typeof ApplyProposalBody>;
+        const payload = await applyProposal(proposal, memory, lecons);
+        proposals.decide(id, 'applied', payload ?? undefined);
+        return { id, state: 'applied' };
+      });
+    },
+  );
 
   app.post('/api/memory/proposals/:id/reject', async (req) => {
     adminOnly(req);
     if (!proposals) throw new AidHttpError(404, 'entretien non disponible');
     const { id } = req.params as { id: string };
-    const proposal = proposals.get(id);
-    if (!proposal) throw new AidHttpError(404, 'proposition absente');
-    if (proposal.state !== 'open') throw new AidHttpError(409, 'proposition déjà décidée');
-    await rejectProposal(proposal, memory);
-    proposals.decide(id, 'rejected');
-    return { id, state: 'rejected' };
+    return proposalDecisions.run(id, async () => {
+      const proposal = proposals.get(id);
+      if (!proposal) throw new AidHttpError(404, 'proposition absente');
+      if (proposal.state !== 'open') throw new AidHttpError(409, 'proposition déjà décidée');
+      await rejectProposal(proposal, memory);
+      proposals.decide(id, 'rejected');
+      return { id, state: 'rejected' };
+    });
   });
 }

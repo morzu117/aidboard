@@ -14,6 +14,7 @@ export const PROPOSAL_KIND_LABELS: Record<ProposalKind, string> = {
   tags: 'Tags',
   duplicate: 'Doublon',
   split: 'Découpage',
+  retro: 'Rétro',
 };
 
 export type Call = <T>(
