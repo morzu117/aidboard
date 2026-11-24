@@ -149,6 +149,14 @@ Les tests utilisent un faux `bwrap`, qui écrit son argv et lance la commande. U
   - le jeton d'abonnement se rafraîchit, la session survit au lendemain ;
   - la reprise fonctionne.
 
+- _Révision 65.4._ Fait :
+  - la ligne « Isolation » d'`aid doctor` (`bwrapVersion` vaut `off` quand l'isolation est éteinte) ;
+  - la marque « isolé » sur l'onglet de l'agent ;
+  - « Sous isolation » dans `kernel/policy/orchestration.md`, et le changelog ;
+  - la fiche, avec neuf contrôles et les risques connus.
+
+  Gate 4 713 au second passage. Au premier, `appareil.test.tsx` (D176) a dépassé son délai de 5 s sous charge ; il passe trois fois sur trois en isolé.
+
 ## 5. Pièges
 
 - **Ne jamais retomber en silence.** Un daemon réglé en `bwrap` qui lancerait un agent non isolé parce que bwrap manque est pire qu'un daemon en `off` : on croit être protégé.

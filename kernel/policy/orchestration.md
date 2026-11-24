@@ -36,6 +36,16 @@ résumé, diff, proposition de livraison.
 Tout se passe sur une branche dédiée. Jamais de poussée sur la branche
 principale sans aval humain.
 
+## Sous isolation
+
+Quand A-I-D lance un agent dans bubblewrap, les écritures hors du worktree
+et du `.git` du dépôt échouent, sauf dans les emplacements prévus pour la
+session et ses outils. Les hooks et la configuration Git, ainsi que les
+réglages de Claude Code, sont en lecture seule. Les identités de poussée
+sont cachées, donc `git push` et `gh` échouent. Ces échecs sont normaux.
+L'agent respecte ces restrictions et commite son travail. L'orchestrateur
+pousse. Si un accès lui manque, l'agent le nomme dans sa page de sortie.
+
 ## Le gate
 
 Quatre vérifications, toutes obligatoires, dans cet ordre :

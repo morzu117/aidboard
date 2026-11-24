@@ -441,7 +441,7 @@ export async function startDaemon(
       },
     };
     const app = await buildServer({
-      bwrapVersion: bwrap?.version,
+      bwrapVersion: bwrap?.version ?? 'off',
       commandant,
       clePda: fournisseurPda,
       pda,

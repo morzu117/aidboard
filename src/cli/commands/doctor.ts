@@ -66,6 +66,7 @@ export interface Probes {
   loadSqlite(): Promise<string | null>;
   homeMode(): number | null; // null = ~/.aid absent
   port(): Promise<{ port: number; state: 'aid' | 'libre' | 'occupe' }>;
+  bwrapVersion?(): Promise<string | undefined>;
   /** chantier 30 (D162) : le second port, celui des artefacts ; `aid` = ouvert par le daemon */
   artefactsPort(): Promise<{ port: number; state: 'aid' | 'libre' | 'occupe'; raison?: string }>;
   claudeHooks(): boolean; // les hooks d'A-I-D sont-ils dans la configuration de Claude Code ?
@@ -220,6 +221,13 @@ export async function runChecks(p: Probes): Promise<Check[]> {
       detail: 'par autre chose qu’A-I-D : changer `port` dans ~/.aid/config.yaml',
     },
   );
+
+  const bwrapVersion = await p.bwrapVersion?.();
+  if (bwrapVersion !== undefined) {
+    const isolation =
+      bwrapVersion === 'off' ? 'off' : `bwrap ${bwrapVersion.replace(/^bubblewrap\s+/, '')}`;
+    add('ok', `Isolation : ${isolation}`);
+  }
 
   const artefacts = await p.artefactsPort();
   verify(
@@ -492,6 +500,16 @@ export function realProbes(paths: AidPaths): Probes {
         s.once('error', () => resolve({ port, state: 'occupe' }));
         s.listen(port, '127.0.0.1', () => s.close(() => resolve({ port, state: 'libre' })));
       });
+    },
+    async bwrapVersion() {
+      const info = await runningDaemon(paths);
+      if (!info) return undefined;
+      try {
+        const { status, json } = await daemonFetch(info, 'GET', '/api/state');
+        if (status === 200 && typeof json.bwrapVersion === 'string') return json.bwrapVersion;
+      } catch {
+        return undefined;
+      }
     },
     async artefactsPort() {
       const port = portArtefacts(loadConfig(paths));

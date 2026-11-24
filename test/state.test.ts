@@ -107,6 +107,7 @@ test('base vide : instantané vide, lastEventId nul', async () => {
     runs: [],
     agents: [],
     actions: [],
+    bwrapVersion: 'off',
     agentTransport: 'stream',
     meshes: {},
   });

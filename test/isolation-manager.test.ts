@@ -96,7 +96,7 @@ exec "$@"
       const state = await t.d.app.inject({ url: '/api/state', headers: t.headers });
       expect(state.statusCode).toBe(200);
       expect(state.json<StateSnapshot>().bwrapVersion).toBe(
-        cas.isolation === 'bwrap' ? 'bubblewrap test' : undefined,
+        cas.isolation === 'bwrap' ? 'bubblewrap test' : 'off',
       );
       expect(state.json<StateSnapshot>().agents.find(({ id }) => id === agent.id)?.isole).toBe(
         cas.isole,
