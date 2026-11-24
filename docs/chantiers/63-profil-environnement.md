@@ -147,7 +147,7 @@ Les tests couvrent :
 
 - _Révision 63.4._ DM35 est révisé avant le point : `outils` est écrit dans le manifeste. Fait :
   - le schéma ;
-  - dans `/sync`, la détection proposée et l'emplacement `{{outils.block}}`, avant les gates. Un outil `requis: false` y est marqué « (facultatif ») ;
+  - dans `/sync`, la détection proposée et l'emplacement `{{outils.block}}`, avant les gates. Un outil `requis: false` y est marqué « (facultatif) ») ;
   - l'étape 0 des rôles plan et dev, et le squelette d'un projet neuf ;
   - le changelog ;
   - le profil d'aidboard : la plage de Node quitte `stack` ;
