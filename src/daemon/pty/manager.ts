@@ -106,6 +106,8 @@ export interface LiveStream {
   queued: PendingRequest[];
   /** dernier texte de l'agent dans le tour en cours : s'il pose une question, le tour se termine en attente d'une réponse. */
   lastAssistantText?: string;
+  /** un tour est en cours : ouvert par un message envoyé, ou par claude seul à la fin d'une tâche de fond. */
+  turn?: boolean;
   subscribe(cb: (ev: ConversationEvent) => void): () => void;
 }
 
@@ -691,6 +693,22 @@ export class AgentManager {
       // pilote remplacé par une relance sous le même agentId (A.6) : l'ancien n'écrit plus rien (review A.6)
       if (this.streams.get(stream.id) !== stream) return;
       if (ev.type !== 'thinking') this.recordStreamEvent(stream, ev);
+      // claude reprend seul à la notification d'une tâche de fond : un tour sans message envoyé, l'agent travaille
+      if (
+        !stream.turn &&
+        (ev.type === 'tool_start' || (ev.type === 'message' && ev.role === 'assistant'))
+      ) {
+        stream.turn = true;
+        this.deps.store.append({
+          source: 'daemon',
+          type: 'agent.status',
+          workspaceId: stream.workspaceId,
+          topicId: stream.topicId,
+          runId: stream.runId,
+          agentId: stream.id,
+          data: { status: 'working' },
+        });
+      }
       switch (ev.type) {
         case 'session':
           this.deps.db
@@ -746,6 +764,7 @@ export class AgentManager {
           // le statut reste `idle` (le composer reste ouvert) ; la raison `question` le fait lire « Attend une réponse »
           const question = ev.ok && poseUneQuestion(stream.lastAssistantText ?? '');
           stream.lastAssistantText = undefined;
+          stream.turn = false;
           this.deps.store.append({
             source: 'daemon',
             type: 'agent.status',
@@ -757,6 +776,8 @@ export class AgentManager {
               status: 'idle',
               ...(ev.ok ? {} : { message: ev.error }),
               ...(question && { reason: 'question' }),
+              // des tâches de fond tournent encore (codex lancé en arrière-plan…) : pas « À relire »
+              ...(!question && ev.background && { reason: 'background' }),
             },
           });
           break;
@@ -1140,6 +1161,7 @@ export class AgentManager {
       agentId,
       data: { status: 'working' },
     });
+    s.turn = true;
     s.driver.send(text, files);
   }
 
