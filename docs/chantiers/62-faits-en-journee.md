@@ -93,6 +93,15 @@ Les tests couvrent :
 - le plafond ;
 - la capture éteinte.
 
+- _Révision 62.2._ Fait :
+  - `memory.capture` (`enabled`, `delayMinutes`, `maxPerDay`) ;
+  - la migration 039 ;
+  - `MemoryJobs.enqueueAfter`, qui repousse le délai d'un job en attente ;
+  - `src/daemon/memory/capture.ts`, abonné aux événements, qui ne réagit qu'aux écritures d'un run sur `dev-handoff` ou `review`, avec un plafond du jour qui laisse passer les reports ;
+  - le worker passe les jobs `faits` à `deps.faits`.
+
+  Gate 4 748.
+
 ### 62.3 Le job et l'écriture (DM31, DM32)
 
 Les tests couvrent :

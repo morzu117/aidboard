@@ -336,7 +336,7 @@ test('038 conserve les lignes de 037, y compris les dates, le délai et le vocab
     const rows = () => tables.map((name) => db.prepare(`SELECT * FROM ${name}`).all());
     const before = rows();
     migrate(db, migrations);
-    expect(db.pragma('user_version', { simple: true })).toBe(38);
+    expect(db.pragma('user_version', { simple: true })).toBe(39);
     expect(rows()).toEqual(before);
     expect(
       db

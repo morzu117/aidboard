@@ -25,6 +25,8 @@ import { replaySpool } from './events/spool.js';
 import { EventStore } from './events/store.js';
 import { WorkspaceQueue } from './actions/queue.js';
 import { type Embedder, ollamaEmbedder, VectorIndex } from './memory/embed.js';
+import type { StoredEvent } from '../shared/events.js';
+import { onMemoryEvent } from './memory/capture.js';
 import { MemoryJobs } from './memory/jobs.js';
 import {
   type ChatModel,
@@ -538,6 +540,9 @@ export async function startDaemon(
     });
     signalerPda = declencheurPush.signaler;
     await pda.synchroniser();
+    const observerCapture = (event: StoredEvent) =>
+      onMemoryEvent(event, { config: config.memory.capture, jobs, log });
+    store.on('event', observerCapture);
     return {
       app,
       port,
@@ -555,6 +560,7 @@ export async function startDaemon(
         await commandant.arreter();
         await basculePda;
         await filePda?.arreter();
+        store.off('event', observerCapture);
         await declencheurPush.arreter();
         await meshes.arreter();
         await agents.stopAll('daemon_stop', 5000);
