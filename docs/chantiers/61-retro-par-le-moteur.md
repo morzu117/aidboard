@@ -48,14 +48,14 @@ La note du 17 novembre (§9.2) le dit : « la mémoire dépend de la discipline 
 - Les slugs de leçon sont vérifiés à la création de la proposition (`lesson/<domaine>/<slug>`, libres). Un slug pris fait échouer l'application sans écriture partielle.
 - **Appliquer** écrit la rétro, puis les leçons, en création seule, avec l'auteur `maintenance`. En cas d'échec, tout est annulé, comme le découpage.
 - **Appliquer sans les leçons.** Le payload garde la liste, et l'écran permet de décocher une leçon avant d'appliquer. Une rétro peut donc être acceptée sans ses leçons.
-- **Rejeter** pose `entretien_rejete: [retro]` sur une page témoin du cycle, sa page `plan` ou sinon sa `review`. La proposition ne revient pas.
+- **Rejeter** laisse la proposition à l'état `rejected`, et rien n'est écrit dans les pages. Une proposition `retro` rejetée compte comme existante : elle ne revient pas pour ce cycle.
 - Le modèle peut répondre « aucune leçon », et c'est la réponse normale d'un petit cycle. Une leçon qui reprend une leçon existante, trouvée par les vecteurs sous le seuil de doublon, est écartée avant la proposition.
 
 ### DM27. Quand : au merge, puis la nuit pour le rattrapage
 
 - **Au merge.** L'`afterSuccess` de `topic.merge` enfile un job `retro` pour le sujet, si `<ns>/retro/<slug>` n'existe pas et qu'aucune proposition `retro` n'est ouverte. Le job tourne dans la fenêtre de l'entretien, comme les autres, et il est compté dans `maxPerNight`.
 - **Le rattrapage.** Chaque nuit, dans la fenêtre et sous le même plafond, les sujets `merged` ou `archived` qui n'ont ni rétro ni proposition `retro` sont pris du plus récent au plus ancien.
-- Un sujet sans aucune page de cycle n'a pas de récit : il est ignoré et noté une fois.
+- Un sujet sans aucune page de cycle n'a pas de récit, et un récit refusé par le filtre ne part pas. Dans les deux cas, le sujet est noté une fois dans `memory_maintenance_seen` (le genre `retro`, la raison, et la classe d'un refus), puis il n'est plus repris.
 - L'entretien éteint (`memory.maintenance.enabled: false`) ne crée aucun job `retro`. Le compteur reste visible (DM28).
 
 ### DM28. La rétro manquante se voit, elle ne bloque pas
@@ -86,6 +86,8 @@ Les tests couvrent :
 - un événement `agent.tool` avec un faux jeton, qui n'entre jamais dans le récit ;
 - un récit refusé par `nettoyer` ;
 - la borne de taille.
+
+- _Révision 61.2._ Fait : `src/daemon/memory/recit.ts`, avec `assembleCycleRecit`, qui lit en liste blanche `action.finished`, `agent.resumed` et `topic.state`, borne à 12 000 caractères et passe le récit par `nettoyer` avec les hôtes privés, et `loadCycleInput`. Gate 4 688.
 
 ### 61.3 La proposition `retro` (DM26)
 
