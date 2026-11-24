@@ -61,6 +61,13 @@ Fait :
   - un gate rouge, qui refuse la poussée.
 - Une ligne pour activer le hook, dans la section du README qui parle du développement.
 
+- _Révision 64.2._ Fait :
+  - `ci.yml` : `pull_request` et `workflow_dispatch` seulement ;
+  - `.githooks/pre-push`, en POSIX `sh`. Il ignore `main` et les suppressions. Il prend la base sur `origin/main` pour une nouvelle branche, et lance le gate une seule fois, quel que soit le nombre de refs ;
+  - deux lignes dans le README.
+
+  Sept tests, sur de vrais dépôts temporaires avec un faux `npm`. Gate 4 691.
+
 ### 64.3 La protection (DM40)
 
 C'est le réglage GitHub, après le oui de Julien. Il est relu par `gh api repos/<dépôt>/branches/main/protection`.
