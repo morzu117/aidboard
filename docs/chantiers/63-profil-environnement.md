@@ -48,13 +48,14 @@ La grille du §9.1 donne l'état d'A-I-D :
   - `version` : une plage semver, facultative. Sans elle, seule la présence de l'outil est vérifiée.
   - `verifier` : la commande qui donne la version, en argv sans shell. Par défaut, c'est `<nom> --version`.
   - `requis` : `true` par défaut. Un outil non requis donne un avertissement, jamais un échec.
-- `/sync` détecte les valeurs par défaut à partir du dépôt :
+- `aid env check` ne lit que le manifeste. Rien n'est déduit au moment du contrôle : ce qu'on vérifie est ce qui est écrit. `outils` est donc, comme `stack`, un fait **écrit** dans `agent.yml`. *(Cette décision révise la version 0 de ce plan, qui le voulait détecté et non écrit.)*
+- `/sync` le **propose rempli**, à partir du dépôt :
   - `engines` de `package.json` ;
   - les outils de `mise.toml` ;
   - `packageManager` ;
   - `git` toujours.
 
-  Le manifeste ne contient que les écarts, comme pour les autres clés.
+  Il l'écrit après validation explicite, comme toute écriture du manifeste.
 - `kernel/manifest.schema.yml` décrit la section.
 
 ### DM36. `aid env check`
@@ -143,6 +144,16 @@ Les tests couvrent :
 - Les rôles `plan` et `dev` ajoutent l'étape d'amorçage, et le changelog est mis à jour.
 - Le `agent.yml` d'aidboard déclare son profil, et ses blocs sont re-rendus.
 - La fiche `docs/recette-chantier-63-profil-environnement.md` se fait sur la tour et sur le VPS. On y lance `aid env check` sur aidboard, puis on rompt un outil (un `PATH` sans `mise`, par exemple) pour voir l'arrêt.
+
+- _Révision 63.4._ DM35 est révisé avant le point : `outils` est écrit dans le manifeste. Fait :
+  - le schéma ;
+  - dans `/sync`, la détection proposée et l'emplacement `{{outils.block}}`, avant les gates. Un outil `requis: false` y est marqué « (facultatif ») ;
+  - l'étape 0 des rôles plan et dev, et le squelette d'un projet neuf ;
+  - le changelog ;
+  - le profil d'aidboard : la plage de Node quitte `stack` ;
+  - la fiche, avec sept contrôles.
+
+  Gate 4 731. Sur le VPS, `aid env check` rend `node`, `npm`, `git` et `mise` en ✓, avec le code 0.
 
 ## 5. Pièges
 

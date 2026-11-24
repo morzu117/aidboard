@@ -13,6 +13,7 @@ describe('aid env check', () => {
 
   beforeEach(() => {
     root = mkdtempSync(join(tmpdir(), 'aid-env-'));
+    vi.stubEnv('AID_HOME', join(root, 'aid-home'));
     vi.stubEnv('PATH', root);
     vi.spyOn(console, 'log').mockImplementation(() => undefined);
     vi.spyOn(console, 'error').mockImplementation(() => undefined);
@@ -22,6 +23,20 @@ describe('aid env check', () => {
     vi.restoreAllMocks();
     vi.unstubAllEnvs();
     rmSync(root, { recursive: true, force: true });
+  });
+
+  it('vérifie le profil du manifeste aidboard avec des exécutables simulés', async () => {
+    executable('node', 'echo v22.12.0');
+    executable('npm', 'echo 10.9.0');
+    executable('git', 'echo git version 2.43.0');
+    executable('mise', 'echo mise 2026.1.0');
+    expect(await runEnv(['check'])).toBe(0);
+    expect(vi.mocked(console.log).mock.calls).toEqual([
+      ['✓ node 22.12.0 (attendu >=22.12 <25)'],
+      ['✓ npm 10.9.0'],
+      ['✓ git 2.43.0'],
+      ['✓ mise 2026.1.0'],
+    ]);
   });
 
   it('rend les quatre états en JSON dans l’ordre du manifeste puis ajoute git', async () => {

@@ -7,6 +7,13 @@ ajoute rien. Format : chaque version majeure du noyau décrit sa
 **migration**, que `/sync` applique avant de rendre le bloc ; les mineures
 et patchs n'en ont pas, sauf mention contraire.
 
+## Profil d'environnement (chantier 63)
+
+Changement mineur, sans migration. Le manifeste déclare les outils et leurs
+plages de versions dans `outils`. `/sync` propose ce profil et le rend près
+des gates. Les rôles plan et dev exécutent `aid env check` à l'étape 0.
+Pour un projet sans `outils`, seul `git` est vérifié comme auparavant.
+
 ## Liens typés, pages closes et décisions (chantier 60)
 
 Changement mineur, sans migration. La politique mémoire décrit la fermeture,
