@@ -19,6 +19,7 @@ import type { Db } from '../db.js';
 import { AidHttpError } from '../errors.js';
 import type { VectorIndex } from './embed.js';
 import type { MemoryJob, MemoryJobs } from './jobs.js';
+import { CYCLES_TERMINES, PLAFOND_ECHECS_RETRO, RETRO_MANQUANTE } from './retro-queries.js';
 import type { RetroPayload } from './retro.js';
 import type { MemoryService, WriteContext } from './service.js';
 import { isValidMemSlug } from './slug.js';
@@ -278,49 +279,28 @@ function inWindow(now: Date, window: string): boolean {
   return s <= e ? cur >= s && cur < e : cur >= s || cur < e;
 }
 
-export const RETRO_MAX_FAILED_NIGHTS = 3;
+export { RETRO_MAX_FAILED_NIGHTS } from './retro-queries.js';
 
-export function retroCandidates(
-  db: Db,
-  proposals: MemoryProposals,
-  store: MemoryStore,
-  limit: number,
-): string[] {
-  const select = db.prepare(
-    `SELECT t.id, t.slug, COALESCE(w.namespace, w.name) AS namespace,
+export function retroCandidates(db: Db, limit: number): string[] {
+  const rows = db
+    .prepare(
+      `SELECT t.id,
             (SELECT max(e.ts) FROM events e INDEXED BY events_topic
              WHERE e.topic_id = t.id AND e.type = 'topic.state'
                AND json_extract(e.data, '$.state') = 'merged') AS merged_at
-     FROM topics t JOIN workspaces w ON w.id = t.workspace_id
-     WHERE t.state IN ('merged', 'archived')
+     ${CYCLES_TERMINES}
+       AND ${RETRO_MANQUANTE}
        AND NOT EXISTS (
          SELECT 1 FROM memory_jobs j WHERE j.slug = t.id AND j.kind = 'retro'
            AND j.state IN ('pending', 'running')
        )
-       -- Un sujet dont la rétro a échoué trois nuits n'est plus repris.
-       AND (SELECT count(*) FROM memory_jobs j WHERE j.slug = t.id AND j.kind = 'retro'
-              AND j.state = 'failed') < ?
+       AND NOT (${PLAFOND_ECHECS_RETRO})
      ORDER BY merged_at DESC, (merged_at IS NULL AND t.state = 'merged') DESC,
               t.created_at DESC, t.id
-     LIMIT ? OFFSET ?`,
-  );
-  const candidates: string[] = [];
-  const pageSize = 64;
-  for (let offset = 0; candidates.length < limit; offset += pageSize) {
-    const rows = select.all(RETRO_MAX_FAILED_NIGHTS, pageSize, offset) as {
-      id: string;
-      slug: string;
-      namespace: string;
-    }[];
-    for (const { id, slug, namespace } of rows) {
-      const target = `${namespace}/retro/${slug}`;
-      if (store.get(target) || proposals.hasRetro(target) || proposals.retroSeen(target)) continue;
-      candidates.push(id);
-      if (candidates.length === limit) return candidates;
-    }
-    if (rows.length < pageSize) break;
-  }
-  return candidates;
+     LIMIT ?`,
+    )
+    .all(limit) as { id: string }[];
+  return rows.map(({ id }) => id);
 }
 
 export interface SchedulerDeps {
@@ -349,7 +329,7 @@ export function scheduleMaintenance(now: Date, deps: SchedulerDeps): number {
     deps.jobs.countCreatedSince(['maintain', 'retro'], start.toISOString());
   if (max <= 0) return 0;
   let n = 0;
-  for (const id of retroCandidates(deps.db, deps.proposals, deps.store, max)) {
+  for (const id of retroCandidates(deps.db, max)) {
     if (deps.jobs.enqueue('retro', id)) n++;
   }
   if (n >= max) return n;

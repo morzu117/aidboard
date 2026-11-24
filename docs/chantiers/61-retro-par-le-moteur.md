@@ -134,6 +134,14 @@ Les tests couvrent :
 
 La proposition `retro` dans la Boîte, avec les leçons à cocher, et `retros` dans la santé et dans `aid doctor`. Un e2e clique « Appliquer » avec une leçon décochée, et clique « Rejeter », aux deux formats.
 
+- _Révision 61.5._ Fait :
+  - `retros { manquantes, proposees, abandonnees }` dans la santé, avec des prédicats SQL partagés avec la passe de nuit (`retro-queries.ts`). Un sujet abandonné (note `seen`, ou plafond d'échecs) ne compte plus comme manquant ;
+  - la ligne « Rétros » d'`aid doctor`, en avertissement s'il reste des rétros à écrire à la main ;
+  - la carte de la Boîte : les sources, la rétro en texte, les leçons cochées par défaut et dépliables ;
+  - l'e2e, qui applique avec une leçon décochée et rejette, à 390 et 1 280 px.
+
+  Gate 4 723, `gate:e2e` 191.
+
 ### 61.6 Le noyau et la fiche de recette
 
 - `kernel/policy/phases.md` dit que le daemon rédige la rétro si personne ne l'a fait.

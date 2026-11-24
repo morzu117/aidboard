@@ -8,6 +8,7 @@ import type { Embedder } from '../src/daemon/memory/embed.js';
 import { MemoryJobs } from '../src/daemon/memory/jobs.js';
 import {
   MemoryProposals,
+  RETRO_MAX_FAILED_NIGHTS,
   retroCandidates,
   scheduleMaintenance,
 } from '../src/daemon/memory/maintain.js';
@@ -381,7 +382,7 @@ function etat(id: string, state: string, ts: string) {
 const file = () => t.db.prepare('SELECT kind, slug FROM memory_jobs ORDER BY id').all();
 
 test('la nuit enfile les rétros par date de merge, puis les cycles archivés sans merge', async () => {
-  const { proposals } = await setup([]);
+  await setup([]);
   sujet('recent');
   sujet('milieu', 'merged', '2026-01-02T00:00:00.000Z');
   sujet('archive-recent', 'archived', '2026-01-05T00:00:00.000Z');
@@ -393,7 +394,7 @@ test('la nuit enfile les rétros par date de merge, puis les cycles archivés sa
   etat(topicId, 'merged', '2026-01-03T00:00:00.000Z');
   etat(topicId, 'merged', '2026-01-02T00:00:00.000Z');
   etat(topicId, 'archived', '2026-01-06T00:00:00.000Z');
-  expect(retroCandidates(t.db, proposals, t.d.memory.store, 2)).toEqual(['recent', 'milieu']);
+  expect(retroCandidates(t.db, 2)).toEqual(['recent', 'milieu']);
   expect(planifier()).toBe(5);
   expect(file()).toEqual(
     ['recent', 'milieu', topicId, 'archive-recent', 'archive-ancien'].map((slug) => ({
@@ -403,7 +404,7 @@ test('la nuit enfile les rétros par date de merge, puis les cycles archivés sa
   );
 });
 
-test('la sélection exclut page, rejet, note seen et jobs actifs, puis poursuit à la page suivante', async () => {
+test('la sélection exclut page, rejet, note seen et jobs actifs, sur plus de 64 sujets', async () => {
   const { proposals } = await setup([]);
   t.db.prepare("UPDATE workspaces SET namespace = NULL WHERE id = 'ws_exemple'").run();
   await put(retroSlug);
@@ -421,11 +422,11 @@ test('la sélection exclut page, rejet, note seen et jobs actifs, puis poursuit 
     proposals.recordSeen({ slug: `exemple/retro/${id}`, revision: 0 }, 'retro', 'vide');
   }
   sujet('eligible');
-  expect(retroCandidates(t.db, proposals, t.d.memory.store, 10)).toEqual(['eligible']);
+  expect(retroCandidates(t.db, 10)).toEqual(['eligible']);
 });
 
 test("un sujet dont la rétro a échoué trois nuits n'est plus repris", async () => {
-  const { proposals } = await setup([]);
+  await setup([]);
   sujet('deux-echecs');
   sujet('trois-echecs');
   const echec = t.db.prepare(
@@ -434,7 +435,7 @@ test("un sujet dont la rétro a échoué trois nuits n'est plus repris", async (
   const now = new Date().toISOString();
   for (let i = 0; i < 2; i++) echec.run(`job_a${i}`, 'deux-echecs', now, now);
   for (let i = 0; i < 3; i++) echec.run(`job_b${i}`, 'trois-echecs', now, now);
-  const candidats = retroCandidates(t.db, proposals, t.d.memory.store, 10);
+  const candidats = retroCandidates(t.db, 10);
   expect(candidats).toContain('deux-echecs');
   expect(candidats).not.toContain('trois-echecs');
 });
@@ -505,4 +506,33 @@ test('le worker traite la rétro enfilée par la passe de nuit une seule fois', 
   expect(chat).toHaveBeenCalledOnce();
   expect(planifier()).toBe(0);
   expect(file()).toEqual([{ kind: 'retro', slug: topicId }]);
+});
+
+test('la santé compte les rétros manquantes, ouvertes et à écrire à la main', async () => {
+  const { proposals } = await setup([]);
+  sujet('propose', 'archived');
+  sujet('rejete');
+  sujet('ecrit');
+  sujet('vu');
+  sujet('actif', 'active');
+
+  proposals.create('retro', 'exemple/retro/propose', {}, 'test');
+  const rejet = proposals.create('retro', 'exemple/retro/rejete', {}, 'test');
+  proposals.decide(rejet.id, 'rejected');
+  await put('exemple/retro/ecrit');
+  proposals.recordSeen({ slug: 'exemple/retro/vu', revision: 0 }, 'retro', 'vide');
+
+  const retros = async () => (await t.d.memory.health()).retros;
+  expect(await retros()).toEqual({ manquantes: 1, proposees: 1, abandonnees: 1 });
+
+  const echec = t.db.prepare(
+    "INSERT INTO memory_jobs (id, kind, slug, state, attempts, created_at, updated_at) VALUES (?, 'retro', ?, 'failed', 3, ?, ?)",
+  );
+  const now = new Date().toISOString();
+  for (let i = 0; i < RETRO_MAX_FAILED_NIGHTS; i++) {
+    echec.run(`echec-${i}`, topicId, now, now);
+    echec.run(`echec-vu-${i}`, 'vu', now, now);
+  }
+  // Le sujet au plafond d'échecs passe de « manquante » à « à écrire à la main ».
+  expect(await retros()).toEqual({ manquantes: 0, proposees: 1, abandonnees: 2 });
 });
