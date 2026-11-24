@@ -164,6 +164,8 @@ export class ClaudeDriver implements ConversationDriver {
   /** D87-D89 : l'état du remote-control de ce process, et les `control_response` attendus par leur `request_id`. */
   private remote: RemoteControlState = { status: 'off' };
   private controlWaiters = new Map<string, (response: Record<string, unknown>) => void>();
+  /** Tâches de fond annoncées par `system/task_started` et pas encore finies (`task_notification`, claude 2.1.308). */
+  private tasks = new Set<string>();
 
   constructor(opts: ConversationDriverOptions) {
     this.opts = opts;
@@ -276,6 +278,12 @@ export class ClaudeDriver implements ConversationDriver {
       this.handleControlResponse(o);
     } else if (o.type === 'system' && o.subtype === 'bridge_state') {
       this.readBridgeState(o);
+    } else if (o.type === 'system' && o.subtype === 'task_started') {
+      if (typeof o.task_id === 'string') this.tasks.add(o.task_id);
+    } else if (o.type === 'system' && o.subtype === 'task_notification') {
+      if (typeof o.task_id === 'string') this.tasks.delete(o.task_id);
+    } else if (o.type === 'system' && o.subtype === 'task_updated') {
+      this.readTaskUpdate(o);
     } else if (o.type === 'result') {
       this.handleResult(o);
     }
@@ -338,6 +346,14 @@ export class ClaudeDriver implements ConversationDriver {
 
   remoteControlState(): RemoteControlState {
     return this.remote;
+  }
+
+  /** Une tâche passée dans un état final sans `task_notification` ne doit pas rester comptée en cours. */
+  private readTaskUpdate(o: Record<string, unknown>): void {
+    const patch = o.patch as Record<string, unknown> | undefined;
+    if (typeof o.task_id !== 'string' || typeof patch?.status !== 'string') return;
+    if (['completed', 'failed', 'killed', 'stopped', 'cancelled'].includes(patch.status))
+      this.tasks.delete(o.task_id);
   }
 
   /** D88 : le `control_request` `remote_control` de claude 2.1.308, sans relancer le process. */
@@ -490,6 +506,7 @@ export class ClaudeDriver implements ConversationDriver {
       costUsd: typeof o.total_cost_usd === 'number' ? o.total_cost_usd : undefined,
       durationMs: typeof o.duration_ms === 'number' ? o.duration_ms : undefined,
       error: ok ? undefined : (turnError ?? String(o.subtype ?? 'erreur')),
+      ...(this.tasks.size > 0 && { background: this.tasks.size }),
     });
     this.cancelPendingPermissions();
   }

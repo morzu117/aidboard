@@ -643,3 +643,23 @@ test('remote-control : une control_response inattendue est ignorée, la demande 
   expect(d.remoteControlState()).toEqual({ status: 'connecting' });
   expect(events.some((e) => e.type === 'exit')).toBe(false);
 });
+
+test('tâche de fond (constat du 2026-11-24) : la fin du tour la compte, la notification la retire, claude reprend seul', async () => {
+  const { driver: d, events } = start({ sessionId: randomUUID() });
+
+  d.send('tache de fond');
+  await waitFor(() => turnEnds(events).length === 1, 5000, 'fin du tour qui lance la tâche');
+  expect(turnEnds(events)[0]).toMatchObject({ ok: true, background: 1 });
+
+  await waitFor(() => turnEnds(events).length === 2, 5000, 'tour repris seul');
+  expect(events).toContainEqual({ type: 'message', role: 'assistant', text: 'codex a fini' });
+  expect(turnEnds(events)[1]!.background).toBeUndefined();
+});
+
+test('tâche de fond passée killed par task_updated, sans notification : plus comptée', async () => {
+  const { driver: d, events } = start({ sessionId: randomUUID() });
+
+  d.send('tache de fond tuee');
+  await waitFor(() => turnEnds(events).length === 1, 5000, 'fin du tour');
+  expect(turnEnds(events)[0]!.background).toBeUndefined();
+});

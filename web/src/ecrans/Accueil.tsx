@@ -373,7 +373,7 @@ function etatAgent(agents: Agent[]): string {
   const a = mostUrgent(agents);
   if (!a) return 'aucun agent';
   if (!isAlive(a) || a.pausedAt) return 'arrêté';
-  return a.status === 'idle' ? 'libre' : 'au travail';
+  return a.status === 'idle' && a.statusReason !== 'background' ? 'libre' : 'au travail';
 }
 
 const accentInsensible = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
