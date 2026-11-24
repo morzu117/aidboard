@@ -27,6 +27,8 @@ Chaque leçon suit la forme atomique de `policy/namespace.md` : une affirmation,
 frontmatter, quinze lignes. Si la rétro a appris trois choses, elle écrit trois pages.
 Avant d'écrire, `aid mem search` sur le domaine : une leçon voisine se complète
 (`--append`) ou se corrige, elle ne se duplique pas.
+Une leçon qui en précise ou en contredit une autre le déclare dans `liens`.
+Une leçon périmée se ferme, elle ne se supprime pas.
 
 Le test de promotion : cette phrase serait-elle utile à quelqu'un qui
 travaille sur un autre projet, dans six mois ? Si tu hésites, elle reste dans

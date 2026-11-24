@@ -218,6 +218,13 @@ Les tests couvrent :
 
 Les exclusions de l'entretien, `close_le` posé par les applications, et les textes du noyau re-rendus. Les tests de l'entretien vérifient qu'aucune proposition ne vise une page close.
 
+- _Révision 60.5._ Fait :
+  - l'entretien écarte les pages closes, comme sources et comme voisines d'un doublon ;
+  - appliquer un doublon ou un découpage pose `close_le` (UTC) ;
+  - `apply` répond 409 « page close » sur une source fermée entre-temps, `reject` reste possible ;
+  - les écritures de l'application passent sous contrôle de révision au lieu de `force` ;
+  - la politique, l'adaptateur, les rôles plan, review et retro, et le changelog du noyau, avec les blocs de `CLAUDE.md` et `AGENTS.md` re-rendus.
+
 ### 60.6 La fiche de recette
 
 `docs/recette-chantier-60-memoire-liens.md`, sur une instance de recette avec des pages d'exemple neutres :
@@ -227,6 +234,8 @@ Les exclusions de l'entretien, `close_le` posé par les applications, et les tex
 - voir les voisines ;
 - vérifier que le miroir garde chaque fichier ;
 - recalculer après un `reindex`.
+
+- _Révision 60.6._ Fait : la fiche, ses étapes a à g vérifiées sur une instance temporaire. Gate 4 680, `gate:e2e` 189.
 
 ## 6. Pièges
 

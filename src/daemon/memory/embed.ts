@@ -175,6 +175,7 @@ export class VectorIndex {
          FROM memory_vectors v JOIN memory_pages p ON p.slug = v.slug
          CROSS JOIN memory_vectors origin
          WHERE origin.slug = ? AND v.slug != origin.slug AND p.namespace = ?
+           AND p.closed = 0
            AND vec_distance_cosine(v.embedding, origin.embedding) <= ?
          ORDER BY distance, v.slug LIMIT 3`,
       )

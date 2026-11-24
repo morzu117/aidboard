@@ -26,6 +26,7 @@ précisément quoi reprendre.
 (`bug|design|test-gap|nit|scope-creep`), fichier:ligne, problème, action. La
 catégorie n'est pas décorative : c'est elle qui pilote le triage. Une review
 en prose est une review à refaire.
+Si un finding contredit une décision, cite sa page de décision.
 
 ## Ne fais pas
 

@@ -109,6 +109,27 @@ test('oui : arrêt au premier oui et duplicateOf imposé par le candidat', async
   expect(pairs()[1]).toMatchObject({ verdict: 'oui' });
 });
 
+test('une page close ne prend pas la place d’une voisine ouverte dans les trois candidates', async () => {
+  page(source);
+  const closed = 'lesson/test/close';
+  store.put(closed, '---\nclose_le: 2026-01-01\n---\nLeçon.', { kind: 'create' }, 'test');
+  vectors.upsert(closed, new Float32Array([1, 0]));
+  page('lesson/test/a', 0.1);
+  page('lesson/test/b', 0.2);
+  const open = 'lesson/test/c';
+  page(open, 0.3);
+
+  expect(vectors.duplicateCandidates(source, 0.15).map(({ slug }) => slug)).toEqual([
+    'lesson/test/a',
+    'lesson/test/b',
+    open,
+  ]);
+  await run();
+  expect(chat).toHaveBeenCalledTimes(3);
+  expect(chat.mock.calls[2]?.[1]).toContain(`Candidat : ${open}\n`);
+  expect(proposals.list()).toEqual([]);
+});
+
 test('sans index ou sans vecteur source : aucun examen jusqu’à l’arrivée du vecteur', async () => {
   store.put(source, text, { kind: 'create' }, 'test');
   page('lesson/test/a');

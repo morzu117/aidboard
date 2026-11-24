@@ -230,10 +230,14 @@ echo "<contenu>" | aid mem put <slug>                # créer (refus si elle exi
 aid mem search "<termes>" --scope <namespace>        # <namespace> + lesson/
 aid mem search "<termes>" --scope all                # tous projets
 aid mem list <namespace>/plan/                       # énumérer
+aid mem decide <slug> --title T --raison R [--remplace <slug>]… [--namespace ns]
+aid mem links <slug>                                 # liens entrants et sortants
+aid mem search "<termes>" --scope <namespace> --closes # inclure les pages closes
 ```
 
 MCP : `aid mcp` expose `memory_get`, `memory_put`, `memory_search`,
-`memory_list` ; l'agent principal l'utilise quand il est déclaré, les agents
+`memory_list`, `memory_decide` et `memory_links`. `memory_search` rend aussi
+les pages liées dans `voisins`. L'agent principal l'utilise quand il est déclaré, les agents
 sans MCP utilisent le CLI. Les deux appellent le même daemon ; **n'utiliser
 qu'un seul des deux dans une même phase**.
 
@@ -244,6 +248,7 @@ qu'un seul des deux dans une même phase**.
 | 3    | Page absente (`get`, `rm`)                                                          |
 | 4    | Daemon injoignable                                                                  |
 | 5    | Écriture interdite (hors du namespace du workspace, ou `lesson/` hors rôle `retro`) |
+| 6    | Page déjà close (`decide`)                                                          |
 
 **Par phase**
 

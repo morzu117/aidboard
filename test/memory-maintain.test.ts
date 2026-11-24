@@ -1,4 +1,4 @@
-import { mkdtempSync } from 'node:fs';
+import { mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, expect, test, vi } from 'vitest';
@@ -8,6 +8,7 @@ import {
   applyProposal,
   type ChatModel,
   MemoryProposals,
+  runMaintainJob,
   scheduleMaintenance,
 } from '../src/daemon/memory/maintain.js';
 import { MemoryMirror } from '../src/daemon/memory/mirror.js';
@@ -179,6 +180,81 @@ test('page éligible, dans la fenêtre : un job par page, plafonné à maxPerNig
   );
 });
 
+test('page close : ni job nocturne ni proposition depuis un job déjà en file', async () => {
+  const { store, jobs, proposals } = freshDb();
+  const slug = 'lesson/test/close';
+  store.put(
+    slug,
+    '---\nclose_le: 2026-01-01\na_decouper: true\n---\nLeçon.',
+    { kind: 'create' },
+    'test',
+  );
+  expect(
+    scheduleMaintenance(new Date('2026-01-01T03:00:00'), {
+      store,
+      jobs,
+      proposals,
+      enabled: true,
+      window: '02:00-06:00',
+    }),
+  ).toBe(0);
+  jobs.enqueue('maintain', slug);
+  const chat = vi.fn<ChatModel['chat']>();
+  await runMaintainJob(jobs.claim()!, { store, proposals, model: { chat }, log: () => {} });
+  expect(chat).not.toHaveBeenCalled();
+  expect(proposals.list()).toEqual([]);
+});
+
+test('apply duplicate : ferme la source avec la date UTC et conserve la cible ouverte', async () => {
+  t = await startTestDaemon();
+  const source = 'lesson/test/source';
+  const cible = 'lesson/test/cible';
+  await put(source, 'Leçon source.');
+  await put(cible, 'Leçon cible.');
+  const proposal = new MemoryProposals(t.db).create(
+    'duplicate',
+    source,
+    { duplicateOf: cible },
+    'Doublon',
+  );
+  const jour = new Date().toISOString().slice(0, 10);
+  expect((await apply(proposal.id)).statusCode).toBe(200);
+  expect(await getPage(source)).toMatchObject({
+    closed: true,
+    frontmatter: { doublon_de: cible, close_le: jour },
+  });
+  expect(await getPage(cible)).toMatchObject({ closed: false });
+});
+
+test('apply refuse une proposition ouverte après fermeture de la page et reject reste possible', async () => {
+  t = await startTestDaemon();
+  const slug = 'lesson/test/source';
+  await put(slug, 'Leçon source.');
+  const propositions = new MemoryProposals(t.db);
+  const proposal = propositions.create('tags', slug, { tags: ['test'] }, 'Tags');
+  await t.d.memory.put(
+    slug,
+    '---\nclose_le: 2026-01-01\n---\nLeçon source.',
+    { kind: 'force' },
+    { author: 'test' },
+  );
+  const avant = await getPage(slug);
+  const refus = await apply(proposal.id);
+  expect(refus.statusCode).toBe(409);
+  expect(refus.json()).toMatchObject({ error: 'page close' });
+  expect(await getPage(slug)).toEqual(avant);
+  expect(propositions.get(proposal.id)?.state).toBe('open');
+
+  const rejet = await t.d.app.inject({
+    method: 'POST',
+    url: `/api/memory/proposals/${proposal.id}/reject`,
+    headers: t.headers,
+  });
+  expect(rejet.statusCode).toBe(200);
+  expect(propositions.get(proposal.id)?.state).toBe('rejected');
+  expect(await getPage(slug)).toMatchObject({ closed: true });
+});
+
 const splitSource = 'lesson/test/source';
 const splitText =
   '---\ntags: [test]\nentretien_rejete: [duplicate]\na_decouper: true\n---\nLeçon à découper.';
@@ -215,6 +291,7 @@ test('split : crée les pages, filtre le frontmatter et impose leur origine', as
     title: 'Titre modèle',
     issu_de: splitSource,
   });
+  const jour = new Date().toISOString().slice(0, 10);
   expect((await apply(proposal!.id)).statusCode).toBe(200);
   expect((await getPage('lesson/test/premiere')).frontmatter).toEqual({
     tags: ['test'],
@@ -229,6 +306,10 @@ test('split : crée les pages, filtre le frontmatter et impose leur origine', as
     'lesson/test/premiere',
     'lesson/test/seconde',
   ]);
+  expect(await getPage(splitSource)).toMatchObject({
+    closed: true,
+    frontmatter: { close_le: jour },
+  });
 });
 
 test.each(['aid/plan/intrus', 'lesson/../intrus'])(
@@ -408,14 +489,13 @@ test('split : un échec sur la source laisse la proposition ouverte et réessaya
   expect(propositions.get(proposition.id)?.state).toBe('applied');
 });
 
-test.each([
-  splitText,
-  splitText.replace('tags: [test]', 'tags: [test]\nremplacee_par: [lesson/test/ancien]'),
-])('split : restaure la source après un échec du miroir (%j)', async (original) => {
+test('split : restaure la source après un échec du miroir', async () => {
   t = await startTestDaemon();
-  await put(splitSource, original);
+  await put(splitSource, splitText);
   const { memory } = t.d;
   const sourceOriginale = memory.get(splitSource)!;
+  const fichier = join(t.home, 'memory', `${splitSource}.md`);
+  const miroirOriginal = readFileSync(fichier, 'utf8');
   const pages = splitPages();
   const propositions = new MemoryProposals(t.db);
   const proposition = propositions.create('split', splitSource, { pages }, 'Découpage');
@@ -439,6 +519,8 @@ test.each([
     for (const { slug } of pages) expect(memory.get(slug)).toBeUndefined();
     expect(memory.get(splitSource)?.frontmatter).toEqual(sourceOriginale.frontmatter);
     expect(memory.get(splitSource)?.body).toBe(sourceOriginale.body);
+    expect(memory.get(splitSource)?.closed).toBe(false);
+    expect(readFileSync(fichier, 'utf8')).toBe(miroirOriginal);
     expect(propositions.get(proposition.id)?.state).toBe('open');
   } finally {
     ecriture.mockRestore();
@@ -461,7 +543,7 @@ test('split : un conflit de restauration préserve l’écriture concurrente et 
   const originalPut = memory.put.bind(memory);
   const error = new Error('miroir de la source indisponible');
   const write = vi.spyOn(memory, 'put').mockImplementation(async (...args) => {
-    if (args[0] === splitSource && args[2].kind === 'replace') {
+    if (args[0] === splitSource && args[2].kind === 'replace' && args[2].expectedRevision > 1) {
       await originalPut(
         splitSource,
         'texte concurrent',
@@ -470,7 +552,7 @@ test('split : un conflit de restauration préserve l’écriture concurrente et 
       );
     }
     const result = await originalPut(...args);
-    if (args[0] === splitSource && args[2].kind === 'force') throw error;
+    if (args[0] === splitSource) throw error;
     return result;
   });
   const log = vi.spyOn(console, 'error').mockImplementation(() => {});
