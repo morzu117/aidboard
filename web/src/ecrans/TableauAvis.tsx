@@ -80,7 +80,7 @@ export function TableauAvis({ resultat }: { resultat: AskResult<Ask> }) {
                       </td>
                     );
                   })}
-                  <td>{accord(ligne.n)}</td>
+                  <td style={{ whiteSpace: 'nowrap' }}>{accord(ligne.n)}</td>
                 </tr>
               ))}
             </tbody>

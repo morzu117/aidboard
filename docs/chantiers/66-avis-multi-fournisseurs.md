@@ -150,6 +150,20 @@ Ce document, et une ligne dans `docs/chantiers/README.md`.
 
   Fait : la règle du challenge dans le rôle plan, avec les codes 0, 4, 3 et 2, et l'adaptateur `kernel/adapters/avis.md`. `sync.md` dit que `routage` est hérité. Le changelog est à jour, et la fiche a neuf contrôles. Aucun bloc rendu ne change : le rôle plan et les adaptateurs n'y sont pas. Gate 4 721.
 
+### 66.5 Les e2e
+
+L'e2e complet du point 66.4 a montré 5 échecs, tous dus au passage du binaire `swairm` au service interne :
+- trois sont les modes de `swairm-ask.spec.ts` ;
+- deux (`audit-essai.spec.ts` et `visuel-ecrans.spec.ts`) attendaient une demande archivée que fournissait le faux swairm.
+
+- _Révision 66.5._ Fait :
+  - un faux `claude` d'avis (`test/fixtures/fake-avis/`), dans le PATH du seul daemon de `swairm-ask.spec.ts` ;
+  - le mode `refus` passe par le filtre : il vérifie qu'aucune archive n'est écrite ;
+  - une demande archivée est déposée dans `<AID_HOME>/avis/` par `e2e/audit/environnement.ts` ;
+  - le faux swairm garde `--version` et `cell`, et `test/fixtures/swairm/ask-aucun.json` est retiré.
+
+  Un défaut d'écran est corrigé par cell-gestion : dans `TableauAvis.tsx`, la cellule d'accord ne revient plus à la ligne. Avec les en-têtes plus longs (`claude:sonnet — echec`), « insuffisant » se coupait, et la garde visuelle le refusait. Gate 4 721.
+
 ## 5. Pièges
 
 - **Un avis n'a pas d'outil.** Un `codex exec` sans `--sandbox read-only` dans un répertoire vide pourrait écrire ou lancer des commandes. Le test vérifie l'argv exact.

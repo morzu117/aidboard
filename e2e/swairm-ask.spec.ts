@@ -1,5 +1,13 @@
 import { execFileSync } from 'node:child_process';
-import { cpSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { delimiter, join } from 'node:path';
 import { expect, test } from './test.js';
@@ -25,47 +33,13 @@ test.afterEach(() => {
 
 // Un daemon par mode : le faux CLI lit son mode dans son environnement au lancement.
 for (const [indice, mode] of ['ok', 'refus', 'aucun'].entries()) {
-  test(`demande d’avis sur le faux swairm : ${mode}`, async ({ browser }) => {
+  test(`demande d’avis via le service interne : ${mode}`, async ({ browser }) => {
     const dossier = realpathSync(mkdtempSync(join(tmpdir(), 'aid-e2e-ask-')));
     const port = Number(process.env.AID_E2E_PORT ?? 4871) + 20 + indice;
-    cpSync(join(fixtures, 'fake-swairm.sh'), join(dossier, 'fake-swairm.sh'));
-    cpSync(join(fixtures, 'swairm'), join(dossier, 'swairm'), { recursive: true });
-    // Étendre seulement la copie locale : l'ordre reçu est unanime puis partagé.
-    const resultat = JSON.parse(readFileSync(join(dossier, 'swairm/ask-ok.json'), 'utf8'));
-    resultat.question = question;
-    resultat.sous_questions.push({ n: 2, texte: 'Faut-il livrer maintenant ?' });
-    resultat.avis[0].reponses.push({ n: 2, verdict: 'oui', justification: 'Oui.' });
-    resultat.avis.push({
-      ...resultat.avis[0],
-      i: 2,
-      modele_demande: 'opus',
-      modele_servi: 'opus',
-      reponses: [
-        resultat.avis[0].reponses[0],
-        { n: 2, verdict: 'non', justification: 'Attendre.' },
-      ],
-    });
-    resultat.accord = [
-      { n: 1, accord: 'unanime', verdict: 'oui', compte: { oui: 2 } },
-      { n: 2, accord: 'partage', verdict: null, compte: { oui: 1, non: 1 } },
-    ];
-    resultat.cout_total_usd = 0.08;
-    for (const nom of ['ask-ok.json', `show-${resultat.id}.json`]) {
-      writeFileSync(join(dossier, 'swairm', nom), JSON.stringify(resultat));
-    }
-    writeFileSync(
-      join(dossier, 'swairm/asks.json'),
-      JSON.stringify({
-        format: 'swairm-asks/1',
-        demandes: [
-          { id: resultat.id, genere_a: resultat.genere_a, question, n: 2, accord: resultat.accord },
-        ],
-        erreurs: [],
-      }),
-    );
+    const journal = join(dossier, 'avis-cli.log');
     writeFileSync(
       join(dossier, 'config.yaml'),
-      `port: ${port}\nswairm:\n  bin: ${join(dossier, 'fake-swairm.sh')}\nagents:\n  transport: pty\n`,
+      `port: ${port}\nswairm:\n  bin: ${join(fixtures, 'fake-swairm.sh')}\nagents:\n  transport: pty\n`,
       { mode: 0o600 },
     );
     const env = {
@@ -73,9 +47,9 @@ for (const [indice, mode] of ['ok', 'refus', 'aucun'].entries()) {
       AID_HOME: dossier,
       AID_NO_BROWSER: '1',
       SHELL: '/bin/sh',
-      PATH: `${join(fixtures, 'bin')}${delimiter}${process.env.PATH}`,
-      FAKE_SWAIRM_ASK_MODE: mode,
-      FAKE_SWAIRM_ASK_COPY: join(dossier, 'question'),
+      PATH: `${join(fixtures, 'fake-avis')}${delimiter}${process.env.PATH}`,
+      FAKE_AVIS_MODE: mode === 'ok' ? 'partage' : mode === 'aucun' ? 'aucun' : 'ok',
+      FAKE_AVIS_LOG: journal,
     };
     daemon = { dossier, env };
     const contexte = await browser.newContext();
@@ -95,7 +69,9 @@ for (const [indice, mode] of ['ok', 'refus', 'aucun'].entries()) {
       await expect(boite.getByRole('button', { name: 'Envoyer' })).toBeDisabled();
       await boite.getByRole('combobox', { name: 'N', exact: true }).selectOption('2');
       await expect(boite).toContainText('Coût maximal : 1.00 USD');
-      await boite.getByRole('textbox', { name: 'Question', exact: true }).fill(question);
+      await boite
+        .getByRole('textbox', { name: 'Question', exact: true })
+        .fill(mode === 'refus' ? 'Clé factice : sk-ant-cle-factice-pour-tests' : question);
       await boite.getByRole('button', { name: 'Envoyer' }).click();
       const tableau = boite.getByRole('region', { name: 'Tableau des avis' });
       if (mode === 'ok') {
@@ -103,7 +79,8 @@ for (const [indice, mode] of ['ok', 'refus', 'aucun'].entries()) {
           '2. Faut-il livrer maintenant ?',
           '1. Faut-il vérifier les tests ?',
         ]);
-        expect(readFileSync(join(dossier, 'question'), 'utf8')).toBe(question);
+        await expect(tableau.getByText(question, { exact: true })).toBeVisible();
+        await expect(tableau.locator('tbody td:last-child')).toHaveText(['partage', 'unanime']);
         await expect(tableau).toContainText('Coût total : 0.08 USD');
         await boite.getByRole('button', { name: 'Fermer', exact: true }).click();
         const liste = page.getByRole('region', { name: 'Demandes d’avis' }).getByRole('list');
@@ -118,6 +95,13 @@ for (const [indice, mode] of ['ok', 'refus', 'aucun'].entries()) {
         await expect(tableau.getByRole('status')).toHaveText(
           mode === 'refus' ? 'Question refusée : ressemble à une clé API' : 'Aucun avis valide',
         );
+        if (mode === 'refus') {
+          const archives = join(dossier, 'avis');
+          expect(existsSync(archives) ? readdirSync(archives) : []).toEqual([]);
+          expect(existsSync(journal)).toBe(false);
+        } else {
+          await expect(tableau.getByRole('columnheader', { name: /— echec$/ })).toHaveCount(2);
+        }
       }
     } finally {
       await contexte.close();
