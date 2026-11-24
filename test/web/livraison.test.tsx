@@ -278,6 +278,7 @@ const pageRevue = (body: string, frontmatter: Record<string, unknown> = {}) => (
     title: 'Revue',
     frontmatter,
     body,
+    closed: false,
     revision: 1,
     author: 'codex',
     createdAt: 't',

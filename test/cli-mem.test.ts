@@ -5,6 +5,8 @@ import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, test } from 'vitest';
+import { runMem } from '../src/cli/commands/mem.js';
+import { resolvePaths } from '../src/daemon/paths.js';
 import { waitFor } from './helpers/daemon.js';
 
 const CLI = join(import.meta.dirname, '../dist/cli/aid.js');
@@ -95,6 +97,12 @@ describe.skipIf(!built)('aid mem en sous-processus', () => {
     expect(g.code).toBe(0);
     expect(g.out).toBe('---\ntitle: Alpha\n---\n\n## Plan\n\n- point 1\n');
     expect(existsSync(join(home, 'memory', 'aid', 'plan', 'alpha.md'))).toBe(true);
+  });
+
+  test('put invalide : code 1 et erreur de validation du daemon', async () => {
+    const r = await mem(['put', 'aid/page/a'], '---\nliens:\n  inconnu: [aid/page/b]\n---\nA');
+    expect(r.code).toBe(1);
+    expect(r.err.trim()).toBe('liens.inconnu : type de lien inconnu');
   });
 
   test('put sur une page existante sans option : code 2 et revision_conflict r1', async () => {
@@ -251,6 +259,84 @@ describe.skipIf(!built)('aid mem en sous-processus', () => {
     }
     expect(JSON.parse((await mem(['proposals', '--json'])).out)).toEqual([proposals[0]]);
     expect((await mem(['proposals', '--state', 'absent'])).code).toBe(1);
+  });
+
+  test('decide lit stdin et links affiche le graphe en texte et en JSON', async () => {
+    const first = 'projet/plan/avant';
+    const second = 'projet/review/avant';
+    const target = 'projet/decision/choix';
+    expect((await mem(['put', first], '# Avant\n\n[[projet/plan/absente]]')).code).toBe(0);
+    expect((await mem(['put', second], '# Revue')).code).toBe(0);
+    const args = ['--namespace', 'projet', '--title', 'Choix', '--raison', 'Motif'];
+    const output = await mem(
+      ['decide', 'choix', ...args, '--remplace', first, '--remplace', second],
+      'Détail sur stdin\n',
+    );
+    expect(output.code, output.err).toBe(0);
+    expect(output.out.trim().split('\n')).toEqual([
+      `Décision créée : ${target}`,
+      `Page fermée : ${first}`,
+      `Page fermée : ${second}`,
+    ]);
+    const page = await mem(['get', target]);
+    expect(page.out).toContain('# Choix\n\nDétail sur stdin');
+    const links = await mem(['links', first]);
+    expect(links.code, links.err).toBe(0);
+    expect(links.out.trim().split('\n')).toEqual([
+      'close',
+      'Sortants :',
+      'cite  projet/plan/absente (absente)',
+      'Entrants :',
+      `remplace  ${target}`,
+    ]);
+    const linksJson = await mem(['links', target, '--json']);
+    expect(linksJson.code, linksJson.err).toBe(0);
+    expect(JSON.parse(linksJson.out)).toEqual({
+      slug: target,
+      closed: false,
+      sortants: [first, second].map((slug) => ({ slug, type: 'remplace', existe: true })),
+      entrants: [],
+    });
+    const newDecision = await mem(['decide', 'suivant', ...args, '--json']);
+    expect(newDecision.code, newDecision.err).toBe(0);
+    expect(JSON.parse(newDecision.out)).toEqual({
+      slug: 'projet/decision/suivant',
+      revision: 1,
+      fermees: [],
+    });
+    const closed = await mem(['decide', 'autre', ...args, '--remplace', first]);
+    expect(closed.code).toBe(6);
+    expect(closed.err).toContain(`deja_close : ${first}`);
+    expect((await mem(['decide', 'choix', ...args])).code).toBe(2);
+    expect((await mem(['decide', 'autre', '--title', 'Choix'])).code).toBe(1);
+    expect((await mem(['links', 'projet/plan/inconnue'])).code).toBe(3);
+  }, 20_000);
+
+  test('decide sur un TTY crée la page sans attendre stdin', async () => {
+    const args = [
+      'decide',
+      'terminal',
+      '--namespace',
+      'projet',
+      '--title',
+      'Choix',
+      '--raison',
+      'Motif',
+    ];
+    const out: string[] = [];
+    const err: string[] = [];
+    const code = await runMem(args, resolvePaths(home), {
+      stdin: async () => {
+        throw new Error('stdin ne doit pas être lu sur un TTY');
+      },
+      stdinIsTTY: true,
+      out: (line) => out.push(line),
+      err: (line) => err.push(line),
+      env: {},
+    });
+    expect(code, err.join('\n')).toBe(0);
+    expect(out).toEqual(['Décision créée : projet/decision/terminal']);
+    expect((await mem(['get', 'projet/decision/terminal'])).out).toMatch(/\n# Choix\n$/);
   });
 
   test('proposals sans daemon renvoie 4', async () => {

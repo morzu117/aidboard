@@ -4,7 +4,8 @@ import { join } from 'node:path';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { afterEach, describe, expect, test } from 'vitest';
-import { startTestDaemon, type TestDaemon } from './helpers/daemon.js';
+import { issueRunToken } from '../src/daemon/security.js';
+import { seedTopic, startTestDaemon, type TestDaemon } from './helpers/daemon.js';
 
 const CLI = join(import.meta.dirname, '../dist/cli/aid.js');
 const built = existsSync(CLI);
@@ -55,7 +56,7 @@ async function connect(env: Record<string, string>): Promise<Client> {
   const transport = new StdioClientTransport({
     command: process.execPath,
     args: [CLI, 'mcp'],
-    env: { ...(process.env as Record<string, string>), AID_HOME: home, ...env },
+    env: { ...(process.env as Record<string, string>), AID_HOME: home, AID_RUN: '', ...env },
     stderr: 'pipe',
   });
   client = new Client({ name: 'test', version: '1' });
@@ -67,7 +68,7 @@ type Result = { content: Array<{ type: string; text: string }>; isError?: boolea
 const text = (r: unknown) => (r as Result).content[0]!.text;
 
 describe.skipIf(!built)('aid mcp en sous-processus', () => {
-  test('tools/list rend sous « aid » les quatre memory_* et les six index_* ; put, get, list, search, conflit', async () => {
+  test('tools/list rend sous « aid » les outils mémoire et index ; put, get, list, search, conflit', async () => {
     t = await startTestDaemon();
     const c = await connect({
       AID_URL: `http://127.0.0.1:${t.d.port}`,
@@ -76,12 +77,21 @@ describe.skipIf(!built)('aid mcp en sous-processus', () => {
     const tools = await c.listTools();
     expect(tools.tools.map((x) => x.name).sort()).toEqual([
       ...INDEX_TOOLS,
+      'memory_decide',
       'memory_get',
+      'memory_links',
       'memory_list',
       'memory_put',
       'memory_search',
     ]);
     expect(tools.tools.find((x) => x.name === 'memory_put')?.description).toContain('se complète');
+
+    const invalid = await c.callTool({
+      name: 'memory_put',
+      arguments: { slug: 'aid/page/a', text: '---\nliens:\n  inconnu: [aid/page/b]\n---\nA' },
+    });
+    expect(invalid.isError).toBe(true);
+    expect(text(invalid)).toBe('liens.inconnu : type de lien inconnu');
 
     const put = await c.callTool({
       name: 'memory_put',
@@ -125,14 +135,94 @@ describe.skipIf(!built)('aid mcp en sous-processus', () => {
       mode: 'fts',
       hits: [{ slug: 'aid/plan/alpha' }],
     });
+
+    t.d.memory.store.put(
+      'aid/page/archive',
+      '---\nclose_le: 2020-01-01\n---\nun quartz',
+      { kind: 'create' },
+      'admin',
+    );
+    for (const closes of [false, true]) {
+      const result = await c.callTool({
+        name: 'memory_search',
+        arguments: { query: 'quartz', closes },
+      });
+      expect(result.isError).toBeFalsy();
+      expect(JSON.parse(text(result))).toMatchObject({
+        hits: closes ? [{ slug: 'aid/page/archive' }] : [],
+        voisins: [],
+      });
+    }
   }, 30_000);
+
+  test('memory_decide et memory_links renvoient du JSON et identifient les refus', async () => {
+    t = await startTestDaemon();
+    const c = await connect({
+      AID_URL: `http://127.0.0.1:${t.d.port}`,
+      AID_TOKEN: t.d.auth.adminToken,
+    });
+    const old = 'projet/plan/avant';
+    await t.d.memory.put(old, '# Avant', { kind: 'create' }, { author: 'admin' });
+    const args = {
+      namespace: 'projet',
+      slug: 'choix',
+      title: 'Choix',
+      raison: 'Motif',
+      texte: 'Détail',
+      remplace: [old],
+    };
+    const decided = await c.callTool({ name: 'memory_decide', arguments: args });
+    expect(decided.isError).toBeFalsy();
+    const slug = 'projet/decision/choix';
+    expect(JSON.parse(text(decided))).toEqual({ slug, revision: 1, fermees: [old] });
+    expect(t.d.memory.get(slug)?.body).toBe('# Choix\n\nDétail');
+    const linked = await c.callTool({ name: 'memory_links', arguments: { slug: old } });
+    expect(JSON.parse(text(linked))).toEqual({
+      slug: old,
+      closed: true,
+      sortants: [],
+      entrants: [{ slug, type: 'remplace', existe: true }],
+    });
+    const closed = await c.callTool({
+      name: 'memory_decide',
+      arguments: { ...args, slug: 'suivant' },
+    });
+    expect(closed.isError).toBe(true);
+    expect(text(closed)).toBe(`deja_close : ${old}`);
+    const absent = await c.callTool({
+      name: 'memory_links',
+      arguments: { slug: 'projet/plan/absente' },
+    });
+    expect(absent.isError).toBe(true);
+    expect(text(absent)).toBe('page absente : projet/plan/absente');
+  });
+
+  test('memory_decide en run laisse le token déterminer le namespace', async () => {
+    t = await startTestDaemon();
+    seedTopic(t.db);
+    const c = await connect({
+      AID_URL: `http://127.0.0.1:${t.d.port}`,
+      AID_TOKEN: issueRunToken(t.d.auth, 'run_1'),
+      AID_RUN: 'run_1',
+    });
+    const result = await c.callTool({
+      name: 'memory_decide',
+      arguments: { namespace: 'autre', slug: 'choix', title: 'Choix', raison: 'Motif' },
+    });
+    expect(result.isError).toBeFalsy();
+    expect(JSON.parse(text(result))).toEqual({
+      slug: 'a/decision/choix',
+      revision: 1,
+      fermees: [],
+    });
+  });
 
   test('daemon injoignable : erreur d’outil, le serveur MCP survit', async () => {
     const c = await connect({ AID_URL: 'http://127.0.0.1:1', AID_TOKEN: 'x' });
     const r = await c.callTool({ name: 'memory_get', arguments: { slug: 'aid/plan/x' } });
     expect(r.isError).toBe(true);
     expect(text(r)).toContain('daemon injoignable');
-    expect((await c.listTools()).tools).toHaveLength(10);
+    expect((await c.listTools()).tools).toHaveLength(12);
   }, 30_000);
 
   test('index_status sur faux binaire : admin sans sujet retombe sur le premier workspace', async () => {

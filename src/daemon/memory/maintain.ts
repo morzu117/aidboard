@@ -16,6 +16,7 @@ import {
   RevisionConflict,
 } from '../../shared/memory.js';
 import type { Db } from '../db.js';
+import { AidHttpError } from '../errors.js';
 import type { VectorIndex } from './embed.js';
 import type { MemoryJob, MemoryJobs } from './jobs.js';
 import type { MemoryService, WriteContext } from './service.js';
@@ -227,7 +228,7 @@ function eligibleKind(
   duplicateDistance = DEFAULT_DUPLICATE_DISTANCE,
   vectors?: VectorIndex,
 ): ProposalKind | null {
-  if (page.namespace !== LESSON_NS) return null;
+  if (page.namespace !== LESSON_NS || page.closed) return null;
   const rejected = new Set(rejectedKinds(page.frontmatter));
   for (const kind of PRIORITY) {
     if (rejected.has(kind) || proposals.pending(page.slug, kind)) continue;
@@ -336,6 +337,7 @@ async function runTags(
     for (const tag of refused) deps.log(`proposition tags refusée : tag hors vocabulaire : ${tag}`);
     return true;
   }
+  if (deps.store.get(page.slug)?.closed) return false;
   deps.proposals.create('tags', page.slug, payload, `${payload.tags.length} tag(s) proposé(s)`);
   return true;
 }
@@ -352,7 +354,7 @@ async function runDuplicate(
   );
   for (const hit of candidates) {
     const candidate = deps.store.get(hit.slug);
-    if (!candidate) continue;
+    if (!candidate || candidate.closed) continue;
     candidatesRead.push(candidate);
     if (deps.store.duplicatePairJudged(page, candidate)) continue;
     const content = await deps.model.chat(
@@ -399,6 +401,7 @@ async function runSplit(
     assertSplitSlug(p.slug);
     p.frontmatter = splitFrontmatter(p.frontmatter, page.slug);
   }
+  if (deps.store.get(page.slug)?.closed) return false;
   deps.proposals.create('split', page.slug, payload, `découpage en ${payload.pages.length} pages`);
   return true;
 }
@@ -451,16 +454,19 @@ export async function applyProposal(
 ): Promise<void> {
   const page = memory.get(proposal.slug);
   if (!page) throw new Error('page absente');
+  if (page.closed) throw new AidHttpError(409, 'page close');
+  const mode = { kind: 'replace', expectedRevision: page.revision } as const;
+  const close_le = new Date().toISOString().slice(0, 10);
   if (proposal.kind === 'tags') {
     const { tags } = proposal.payload as { tags: string[] };
     const fm = { ...page.frontmatter, tags };
     const text = renderMarkdown({ frontmatter: fm, body: page.body });
-    await memory.put(proposal.slug, text, { kind: 'force' }, MAINTENANCE_CTX);
+    await memory.put(proposal.slug, text, mode, MAINTENANCE_CTX);
   } else if (proposal.kind === 'duplicate') {
     const { duplicateOf } = proposal.payload as { duplicateOf: string };
-    const fm = { ...page.frontmatter, doublon_de: duplicateOf };
+    const fm = { ...page.frontmatter, doublon_de: duplicateOf, close_le };
     const text = renderMarkdown({ frontmatter: fm, body: page.body });
-    await memory.put(proposal.slug, text, { kind: 'force' }, MAINTENANCE_CTX);
+    await memory.put(proposal.slug, text, mode, MAINTENANCE_CTX);
   } else {
     const { pages } = proposal.payload as {
       pages: Array<{
@@ -491,9 +497,9 @@ export async function applyProposal(
         created.push(p.slug);
         creationEnCours = undefined;
       }
-      const fm = { ...page.frontmatter, remplacee_par: created };
+      const fm = { ...page.frontmatter, remplacee_par: created, close_le };
       const text = renderMarkdown({ frontmatter: fm, body: page.body });
-      await memory.put(proposal.slug, text, { kind: 'force' }, MAINTENANCE_CTX);
+      await memory.put(proposal.slug, text, mode, MAINTENANCE_CTX);
     } catch (err) {
       // Le put écrit en base avant le miroir, sauf si le slug a été pris entre-temps.
       if (creationEnCours && !(err instanceof RevisionConflict) && memory.get(creationEnCours)) {
@@ -511,6 +517,7 @@ export async function applyProposal(
         // La liste identifie le découpage à annuler. La révision protège les écritures après cette lecture.
         if (
           source &&
+          !(err instanceof RevisionConflict) &&
           source.revision !== page.revision &&
           isDeepStrictEqual(source.frontmatter.remplacee_par, created)
         ) {

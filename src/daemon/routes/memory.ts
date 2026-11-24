@@ -1,11 +1,17 @@
 import { type Static, Type } from '@sinclair/typebox';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
-import { LESSON_NS, MEM_SLUG_RULE, type PutMode, RevisionConflict } from '../../shared/memory.js';
+import { MEM_SLUG_RULE, type PutMode, RevisionConflict } from '../../shared/memory.js';
 import type { Db } from '../db.js';
 import { AidHttpError } from '../errors.js';
+import { deriveMemoryLinks } from '../memory/liens.js';
 import { applyProposal, type MemoryProposals, rejectProposal } from '../memory/maintain.js';
-import type { MemoryService, WriteContext } from '../memory/service.js';
+import {
+  assertMemoryWriteNamespace,
+  type MemoryService,
+  type MemoryWriteContext,
+} from '../memory/service.js';
 import { InvalidMemSlug, isValidMemSlug, isValidNamespace, namespaceOf } from '../memory/slug.js';
+import { parseMarkdown } from '../memory/store.js';
 import type { Principal } from '../security.js';
 
 const PutBody = Type.Object(
@@ -19,6 +25,18 @@ const PutBody = Type.Object(
     ),
     expectedRevision: Type.Optional(Type.Integer({ minimum: 1 })),
     title: Type.Optional(Type.String({ minLength: 1, maxLength: 200 })),
+  },
+  { additionalProperties: false },
+);
+
+const DecisionBody = Type.Object(
+  {
+    slug: Type.String({ minLength: 1 }),
+    title: Type.String({ minLength: 1 }),
+    raison: Type.String({ minLength: 1 }),
+    texte: Type.Optional(Type.String()),
+    remplace: Type.Optional(Type.Array(Type.String())),
+    namespace: Type.Optional(Type.String()),
   },
   { additionalProperties: false },
 );
@@ -75,7 +93,7 @@ function putMode(body: Static<typeof PutBody>): PutMode {
 }
 
 // Ce qu'un token de run peut écrire : le namespace de son workspace ; `lesson/` si l'agent est en rétro.
-export function runWriteContext(db: Db, p: Principal, slug: string): WriteContext {
+function principalWriteContext(db: Db, p: Principal): MemoryWriteContext {
   if (p.kind === 'admin') return { author: 'admin' };
   const run = db
     .prepare(
@@ -86,16 +104,19 @@ export function runWriteContext(db: Db, p: Principal, slug: string): WriteContex
     )
     .get(p.runId) as RunRow | undefined;
   if (!run) throw new AidHttpError(403, 'run inconnu');
-  const ns = namespaceOf(slug);
-  const own = run.namespace ?? run.workspace_name;
-  const allowed = ns === own || (ns === LESSON_NS && run.role === 'retro');
-  if (!allowed) throw new AidHttpError(403, 'forbidden', { namespace: ns, allowed: own });
   return {
     author: `run:${run.run_id}`,
     workspaceId: run.workspace_id,
     topicId: run.topic_id,
     runId: run.run_id,
+    scope: { namespace: run.namespace ?? run.workspace_name, role: run.role },
   };
+}
+
+export function runWriteContext(db: Db, p: Principal, slug: string): MemoryWriteContext {
+  const ctx = principalWriteContext(db, p);
+  assertMemoryWriteNamespace(ctx, namespaceOf(slug));
+  return ctx;
 }
 
 export function registerMemoryRoutes(app: FastifyInstance, deps: MemoryRouteDeps): void {
@@ -128,11 +149,47 @@ export function registerMemoryRoutes(app: FastifyInstance, deps: MemoryRouteDeps
     return page;
   });
 
+  app.get('/api/memory/links/*', async (req) => {
+    const slug = slugOf(req);
+    const links = memory.links(slug);
+    if (!links) throw new AidHttpError(404, 'page absente', { slug });
+    return links;
+  });
+
+  app.post('/api/memory/decisions', { schema: { body: DecisionBody } }, async (req, reply) => {
+    const {
+      namespace: requested,
+      remplace = [],
+      ...input
+    } = req.body as Static<typeof DecisionBody>;
+    const ctx = principalWriteContext(db, req.principal!);
+    const own = ctx.scope?.namespace;
+    if (own !== undefined && requested !== undefined && requested !== own) {
+      throw new AidHttpError(403, 'forbidden', { namespace: requested, allowed: own });
+    }
+    const namespace = own ?? requested;
+    if (namespace === undefined) throw new AidHttpError(400, 'namespace est requis');
+    try {
+      const decision = await memory.decide({ ...input, namespace, remplace }, ctx);
+      return reply.code(201).send(decision);
+    } catch (err) {
+      if (err instanceof RevisionConflict) {
+        throw new AidHttpError(409, 'revision_conflict', {
+          slug: err.slug,
+          revision: err.revision,
+        });
+      }
+      throw err;
+    }
+  });
+
   app.put('/api/memory/pages/*', { schema: { body: PutBody } }, async (req, reply) => {
     const slug = slugOf(req);
     const body = req.body as Static<typeof PutBody>;
     const ctx = runWriteContext(db, req.principal!, slug);
     try {
+      const { erreurs } = deriveMemoryLinks({ slug, ...parseMarkdown(body.text) }, new Date());
+      if (erreurs.length > 0) throw new AidHttpError(400, erreurs.join('\n'));
       const page = await memory.put(slug, body.text, putMode(body), ctx, body.title);
       return reply.code(page.revision === 1 ? 201 : 200).send({ slug, revision: page.revision });
     } catch (err) {
@@ -155,10 +212,15 @@ export function registerMemoryRoutes(app: FastifyInstance, deps: MemoryRouteDeps
   });
 
   app.get('/api/memory/search', async (req) => {
-    const q = req.query as { q?: string; scope?: string; limit?: string };
+    const q = req.query as { q?: string; scope?: string; limit?: string; closes?: string };
     if (!q.q) throw new AidHttpError(400, 'q est requis');
     const limit = Math.min(Math.max(Number.parseInt(q.limit ?? '10', 10) || 10, 1), 100);
-    const result = await memory.search(q.q, q.scope && q.scope !== 'all' ? q.scope : 'all', limit);
+    if (q.closes !== undefined && q.closes !== '1' && q.closes !== 'true') {
+      throw new AidHttpError(400, 'closes doit valoir 1 ou true');
+    }
+    const result = await memory.search(q.q, q.scope && q.scope !== 'all' ? q.scope : 'all', limit, {
+      closes: q.closes !== undefined,
+    });
     recordUsage(
       req,
       result.hits.map((hit) => hit.slug),

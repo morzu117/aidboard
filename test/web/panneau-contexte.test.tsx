@@ -32,6 +32,7 @@ const pageMemoire = (slug: string, body: string) => ({
   title: slug,
   frontmatter: {},
   body,
+  closed: false,
   revision: 1,
   author: 'x',
   createdAt: 't',

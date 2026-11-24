@@ -72,6 +72,41 @@ la structure du code est une page à supprimer.
 dans l'espace transverse. Ça évite l'accumulation de leçons non validées par
 l'usage.
 
+## Validité et fermeture
+
+`valide_depuis` indique le début de validité. `close_le` date la fermeture.
+Les deux acceptent un jour `AAAA-MM-JJ` ou un instant ISO 8601.
+
+```yaml
+valide_depuis: 2026-01-01
+close_le: 2026-02-01
+```
+
+**On ferme, on ne supprime pas.** Une page close sort de la recherche par
+défaut et reste lisible. Elle conserve la trace d'un choix passé.
+
+## Liens
+
+`liens` associe chaque type déclaré à une liste de slugs cibles.
+
+```yaml
+liens:
+  precise: [lesson/exemple/regle]
+```
+
+- `precise` : la page précise la cible.
+- `contredit` : les deux pages se contredisent. Le lien se lit dans les deux sens.
+- `remplace` : la page succède à la cible. Le lien ne ferme pas la cible.
+- `issu_de` : la page provient de la cible.
+
+Les `[[slug]]` du corps sont lus comme des liens `cite`.
+
+## Décisions
+
+Une décision durable vit sous `<namespace>/decision/<slug>`. Écris-la avec
+`aid mem decide` ou `memory_decide` quand un choix engage la suite du
+projet ou en remplace un autre. La purge des pages cycliques l'épargne.
+
 ## Amorçage
 
 Ne pas pré-remplir rétroactivement. Une mémoire pré-écrite est de la

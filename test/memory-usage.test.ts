@@ -207,3 +207,111 @@ test('57.11 : un échec du journal est logué sans casser get ni search', async 
     log.mockRestore();
   }
 });
+
+test('60.3 : les remplacements suivent les chaînes et découpages, en ignorant les boucles', async () => {
+  t = await startTestDaemon();
+  const store = t.d.memory.store;
+  const page = (slug: string, text: string) => store.put(slug, text, { kind: 'create' }, 'admin');
+  page('aid/page/a', '---\nremplacee_par: aid/page/b\n---\nquartz');
+  page(
+    'aid/page/b',
+    '---\nremplacee_par: [aid/page/e, aid/page/c, aid/page/absente]\n---\narchive',
+  );
+  page('aid/page/c', 'actuelle');
+  page('aid/page/e', 'actuelle');
+  page('aid/page/x', '---\nremplacee_par: aid/page/y\n---\nambre');
+  page('aid/page/y', '---\nremplacee_par: aid/page/x\n---\narchive');
+  const via = { slug: 'aid/page/a', type: 'remplace' };
+  expect((await get('/api/memory/search?q=quartz')).json()).toMatchObject({
+    hits: [
+      { slug: 'aid/page/c', via },
+      { slug: 'aid/page/e', via },
+    ],
+    voisins: [],
+  });
+  expect((await get('/api/memory/search?q=quartz&limit=1')).json().hits).toHaveLength(1);
+  expect((await get('/api/memory/search?q=ambre')).json().hits).toEqual([]);
+});
+
+test('60.3 : voisines ordonnées, filtrées et absentes du journal d’usage', async () => {
+  t = await startTestDaemon();
+  const store = t.d.memory.store;
+  const page = (slug: string, text: string) =>
+    store.put(`aid/page/${slug}`, text, { kind: 'create' }, 'admin');
+  page(
+    'a',
+    '---\nliens:\n  precise: [aid/page/b, aid/page/p, aid/page/close]\n  issu_de: [aid/page/d]\n---\nquartz [[aid/page/absence]] [[aid/page/e]] [[aid/page/f]] [[aid/page/g]]',
+  );
+  page('b', 'quartz');
+  page('z', '---\nliens:\n  contredit: [aid/page/a]\n---\ncontradiction');
+  page('close', '---\nclose_le: 2020-01-01\n---\narchive');
+  for (const slug of ['p', 'd', 'e', 'f', 'g']) page(slug, 'contenu de la voisine');
+  const result = (await get('/api/memory/search?q=quartz')).json();
+  const via = (type: string, sens = 'sortant') => ({ slug: 'aid/page/a', type, sens });
+  expect(result.voisins).toMatchObject([
+    { slug: 'aid/page/z', via: via('contredit', 'entrant'), score: 0, snippet: 'contradiction' },
+    { slug: 'aid/page/p', via: via('precise') },
+    { slug: 'aid/page/d', via: via('issu_de') },
+    { slug: 'aid/page/e', via: via('cite') },
+    { slug: 'aid/page/f', via: via('cite') },
+  ]);
+  expect(rows()).toMatchObject(
+    result.hits.map(({ slug }: { slug: string }) => ({ slug, op: 'search' })),
+  );
+  const included = (await get('/api/memory/search?q=quartz&closes=1')).json();
+  expect(included.voisins[1]).toMatchObject({ slug: 'aid/page/close', via: via('precise') });
+});
+
+test('60.3 : contrat FTS sans liens et validation stricte de closes', async () => {
+  t = await startTestDaemon();
+  await put('aid/plan/a');
+  await put('aid/plan/b');
+  const hits = t.d.memory.store.searchFts('lecture', 'all', 10);
+  expect(hits).toHaveLength(2);
+  expect((await get('/api/memory/search?q=lecture')).json()).toEqual({
+    mode: 'fts',
+    hits,
+    voisins: [],
+  });
+  for (const value of ['', '0', 'false', 'oui', '1&closes=true']) {
+    expect((await get(`/api/memory/search?q=lecture&closes=${value}`)).statusCode).toBe(400);
+  }
+});
+
+test('60.3 : CLI avec remplacement, voisines et JSON de l’API', async () => {
+  t = await startTestDaemon();
+  const store = t.d.memory.store;
+  store.put(
+    'aid/page/a',
+    '---\nremplacee_par: aid/page/b\n---\nquartz',
+    { kind: 'create' },
+    'admin',
+  );
+  store.put('aid/page/b', 'actuelle [[aid/page/c]]', { kind: 'create' }, 'admin');
+  store.put('aid/page/c', 'voisine', { kind: 'create' }, 'admin');
+  async function searchCli(...args: string[]) {
+    const out: string[] = [];
+    const code = await runMem(['search', 'quartz', ...args], resolvePaths(t!.home), {
+      stdin: async () => '',
+      out: (s) => out.push(s),
+      err: (s) => {
+        throw new Error(s);
+      },
+      env: {},
+    });
+    expect(code).toBe(0);
+    return out;
+  }
+  expect(await searchCli()).toEqual([
+    'mode : fts',
+    expect.stringContaining('aid/page/b  b (remplace aid/page/a)'),
+    '    actuelle [[aid/page/c]]',
+    'Voisines :',
+    '  aid/page/c  cite  aid/page/b',
+  ]);
+  for (const options of [[], ['--closes']]) {
+    const [output] = await searchCli('--json', ...options);
+    const expected = await get(`/api/memory/search?q=quartz${options.length ? '&closes=1' : ''}`);
+    expect(JSON.parse(output!)).toEqual(expected.json());
+  }
+});

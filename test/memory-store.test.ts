@@ -1,9 +1,9 @@
-import { mkdtempSync } from 'node:fs';
+import { copyFileSync, mkdtempSync, readdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, expect, test } from 'vitest';
 import { RevisionConflict } from '../src/shared/memory.js';
-import { type Db, openDb } from '../src/daemon/db.js';
+import { type Db, findMigrationsDir, migrate, openDb } from '../src/daemon/db.js';
 import { isValidMemSlug, namespaceOf } from '../src/daemon/memory/slug.js';
 import {
   ftsQuery,
@@ -185,4 +185,72 @@ test('reindex : tout vider puis rejouer all() sérialisé redonne la même reche
   for (const d of dump) s.put(d.slug, d.text, { kind: 'create' }, 'reindex');
   expect(s.searchFts('wal', 'all', 10)).toEqual(before);
   expect(s.get('aid/plan/a')?.frontmatter).toEqual({ tags: ['x'] });
+});
+
+test('recalcule la fermeture à chaque écriture et retire les liens de la page déclarante', () => {
+  const s = fresh();
+  const slug = 'aid/page/a';
+  const replacement = 'aid/page/b';
+  const target = 'aid/page/c';
+  const pending = { slug: target, type: 'cite', existe: false };
+  const closedPage = '---\nclose_le: 2026-01-01\nremplacee_par: aid/page/b\n---\n[[aid/page/c]]';
+  expect(s.put(slug, closedPage, { kind: 'create' }, 'admin').closed).toBe(true);
+  expect(s.get(slug)?.closed).toBe(true);
+  expect(s.links(slug)).toEqual({
+    sortants: [pending],
+    entrants: [{ slug: replacement, type: 'remplace', existe: false }],
+  });
+  expect(s.links(replacement).sortants).toEqual([{ slug, type: 'remplace', existe: true }]);
+  s.put(replacement, '---\nliens:\n  remplace: [aid/page/a]\n---\nB', { kind: 'create' }, 'admin');
+  expect(s.links(slug).entrants).toEqual([{ slug: replacement, type: 'remplace', existe: true }]);
+  expect(s.derivedCounts()).toEqual({ closed: 1, links: { total: 2, pendants: 1 } });
+
+  expect(s.put(slug, 'A', { kind: 'force' }, 'admin').closed).toBe(false);
+  expect(s.links(slug).sortants).toEqual([]);
+  expect(s.links(replacement).sortants).toEqual([{ slug, type: 'remplace', existe: true }]);
+  s.remove(replacement);
+  expect(s.links(slug).entrants).toEqual([]);
+  expect(s.derivedCounts()).toEqual({ closed: 0, links: { total: 0, pendants: 0 } });
+
+  s.put(slug, closedPage, { kind: 'force' }, 'admin');
+  s.put(slug, '---\nclose_le: 2026-01-01\n---\nA', { kind: 'force' }, 'admin');
+  expect(s.links(replacement).sortants).toEqual([]);
+  s.remove(slug);
+  expect(s.get(slug)).toBeUndefined();
+  expect(s.derivedCounts()).toEqual({ closed: 0, links: { total: 0, pendants: 0 } });
+});
+
+test('la migration 037 laisse les pages anciennes au recalcul transactionnel', () => {
+  const migrations = findMigrationsDir();
+  const previous = mkdtempSync(join(tmpdir(), 'aid-mem-migrations-'));
+  let legacyDb: Db | undefined;
+  try {
+    for (const file of readdirSync(migrations).filter((file) => file < '037')) {
+      copyFileSync(join(migrations, file), join(previous, file));
+    }
+    legacyDb = openDb(join(previous, 'state.db'), previous);
+    legacyDb
+      .prepare(
+        `INSERT INTO memory_pages
+       (slug, namespace, title, frontmatter, body, revision, author, created_at, updated_at)
+       VALUES ('aid/page/a', 'aid', 'A', ?, '[[aid/page/c]]', 1, 'admin', 't', 't')`,
+      )
+      .run(JSON.stringify({ doublon_de: 'aid/page/b' }));
+    migrate(legacyDb);
+    const s = new MemoryStore(legacyDb);
+    expect(s.get('aid/page/a')?.closed).toBe(false);
+    expect(s.links('aid/page/a')).toEqual({ sortants: [], entrants: [] });
+    s.rebuildDerived();
+    s.rebuildDerived();
+    expect(s.get('aid/page/a')).toMatchObject({ closed: true, revision: 1, updatedAt: 't' });
+    expect(s.links('aid/page/a')).toEqual({
+      sortants: [{ slug: 'aid/page/c', type: 'cite', existe: false }],
+      entrants: [{ slug: 'aid/page/b', type: 'remplace', existe: false }],
+    });
+    s.clear();
+    expect(s.derivedCounts()).toEqual({ closed: 0, links: { total: 0, pendants: 0 } });
+  } finally {
+    legacyDb?.close();
+    rmSync(previous, { recursive: true, force: true });
+  }
 });

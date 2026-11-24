@@ -1,18 +1,23 @@
 import { parse, stringify } from 'yaml';
 import {
   LESSON_NS,
+  type LinkNeighbor,
   type MemoryPage,
   type PutMode,
   RevisionConflict,
   type SearchHit,
 } from '../../shared/memory.js';
 import type { Db } from '../db.js';
+import { deriveMemoryLinks } from './liens.js';
 import { assertMemSlug, namespaceOf } from './slug.js';
 
 type Frontmatter = Record<string, unknown>;
+type LinkRow = Omit<LinkNeighbor, 'existe'> & { existe: number };
+type Log = (line: string) => void;
 
 interface Row {
   rowid: number;
+  closed: number;
   slug: string;
   namespace: string;
   title: string;
@@ -71,6 +76,7 @@ function tagsOf(fm: Frontmatter): string {
 function fromRow(r: Row): MemoryPage {
   return {
     slug: r.slug,
+    closed: r.closed === 1,
     namespace: r.namespace,
     title: r.title,
     frontmatter: JSON.parse(r.frontmatter) as Frontmatter,
@@ -135,6 +141,62 @@ export class MemoryStore {
   get(slug: string): MemoryPage | undefined {
     const r = this.row(slug);
     return r ? fromRow(r) : undefined;
+  }
+
+  private deleteDeclaredLinks(slug: string): void {
+    this.db.prepare('DELETE FROM memory_links WHERE declared_by = ?').run(slug);
+  }
+
+  private writeDerived(
+    page: Pick<MemoryPage, 'slug' | 'frontmatter' | 'body'>,
+    now: Date,
+    log?: Log,
+  ) {
+    const { slug } = page;
+    const { closed, liens, erreurs } = deriveMemoryLinks(page, now);
+    this.db.prepare('UPDATE memory_pages SET closed = ? WHERE slug = ?').run(Number(closed), slug);
+    const insert = this.db.prepare(
+      'INSERT OR IGNORE INTO memory_links (from_slug, to_slug, type, declared_by) VALUES (?, ?, ?, ?)',
+    );
+    for (const { from, to, type } of liens) insert.run(from, to, type, slug);
+    for (const erreur of erreurs) log?.(`mémoire : ${slug} : ${erreur}`);
+  }
+
+  rebuildDerived(log?: Log): void {
+    const now = new Date();
+    this.db.transaction(() => {
+      const pages = [...this.all()];
+      this.db.prepare('DELETE FROM memory_links').run();
+      for (const page of pages) this.writeDerived(page, now, log);
+    })();
+  }
+
+  links(slug: string): { sortants: LinkNeighbor[]; entrants: LinkNeighbor[] } {
+    const read = (source: 'from_slug' | 'to_slug', target: 'from_slug' | 'to_slug') => {
+      const rows = this.db
+        .prepare(
+          `SELECT DISTINCT l.${target} AS slug, l.type, p.slug IS NOT NULL AS existe
+         FROM memory_links l LEFT JOIN memory_pages p ON p.slug = l.${target}
+         WHERE l.${source} = ? ORDER BY slug, l.type`,
+        )
+        .all(slug) as LinkRow[];
+      return rows.map((row) => ({ ...row, existe: row.existe === 1 }));
+    };
+    return { sortants: read('from_slug', 'to_slug'), entrants: read('to_slug', 'from_slug') };
+  }
+
+  derivedCounts(): { closed: number; links: { total: number; pendants: number } } {
+    const { closed } = this.db
+      .prepare('SELECT count(*) AS closed FROM memory_pages WHERE closed = 1')
+      .get() as { closed: number };
+    const links = this.db
+      .prepare(
+        `SELECT count(*) AS total, count(*) - count(p.slug) AS pendants
+       FROM (SELECT DISTINCT from_slug, to_slug, type FROM memory_links) l
+       LEFT JOIN memory_pages p ON p.slug = l.to_slug`,
+      )
+      .get() as { total: number; pendants: number };
+    return { closed, links };
   }
 
   recordUsage(slugs: string[], op: 'search' | 'get', runId?: string): void {
@@ -217,10 +279,19 @@ export class MemoryStore {
   }
 
   // Transaction synchrone : rien d'asynchrone ici, le fichier et le commit viennent après.
-  put(slug: string, text: string, mode: PutMode, author: string, title?: string): MemoryPage {
+  put(
+    slug: string,
+    text: string,
+    mode: PutMode,
+    author: string,
+    title?: string,
+    log?: Log,
+    preserveContent = false,
+  ): MemoryPage {
     assertMemSlug(slug);
     const parsed = parseMarkdown(text);
-    const now = new Date().toISOString();
+    const at = new Date();
+    const now = at.toISOString();
     return this.db.transaction((): MemoryPage => {
       const existing = this.row(slug);
       if (!existing) {
@@ -231,6 +302,7 @@ export class MemoryStore {
             'INSERT INTO memory_pages (slug, namespace, title, frontmatter, body, revision, author, created_at, updated_at) VALUES (?, ?, ?, ?, ?, 1, ?, ?, ?)',
           )
           .run(slug, namespaceOf(slug), t, JSON.stringify(fm), parsed.body, author, now, now);
+        this.writeDerived({ slug, frontmatter: fm, body: parsed.body }, at, log);
         const r = this.row(slug)!;
         this.ftsInsert(r.rowid, slug, t, parsed.body, tagsOf(fm));
         return fromRow(r);
@@ -249,8 +321,10 @@ export class MemoryStore {
         t = title ?? existing.title;
       } else {
         fm = { ...parsed.frontmatter, ...(title && { title }) };
-        body = parsed.body;
-        t = title ?? parsed.title ?? slug.slice(slug.lastIndexOf('/') + 1);
+        body = preserveContent ? existing.body : parsed.body;
+        t = preserveContent
+          ? existing.title
+          : (title ?? parsed.title ?? slug.slice(slug.lastIndexOf('/') + 1));
       }
       this.invalidateDuplicateSeen(slug);
       this.ftsDelete(existing);
@@ -259,6 +333,8 @@ export class MemoryStore {
           'UPDATE memory_pages SET title = ?, frontmatter = ?, body = ?, revision = revision + 1, author = ?, updated_at = ? WHERE slug = ?',
         )
         .run(t, JSON.stringify(fm), body, author, now, slug);
+      this.deleteDeclaredLinks(slug);
+      this.writeDerived({ slug, frontmatter: fm, body }, at, log);
       this.ftsInsert(existing.rowid, slug, t, body, tagsOf(fm));
       return fromRow(this.row(slug)!);
     })();
@@ -270,6 +346,7 @@ export class MemoryStore {
       if (!r) return false;
       this.invalidateDuplicateSeen(slug);
       this.ftsDelete(r);
+      this.deleteDeclaredLinks(slug);
       this.db.prepare('DELETE FROM memory_pages WHERE slug = ?').run(slug);
       this.db.prepare('DELETE FROM memory_maintenance_seen WHERE slug = ?').run(slug);
       this.db
@@ -287,8 +364,17 @@ export class MemoryStore {
     ).map((r) => r.slug);
   }
 
+  closedSlugs(slugs: string[]): Set<string> {
+    const rows = this.db
+      .prepare(
+        'SELECT slug FROM memory_pages WHERE closed = 1 AND slug IN (SELECT value FROM json_each(?))',
+      )
+      .all(JSON.stringify(slugs)) as { slug: string }[];
+    return new Set(rows.map(({ slug }) => slug));
+  }
+
   // scope <ns> = ce namespace et les leçons ; 'all' = tout.
-  searchFts(q: string, scope: string | 'all', limit: number): SearchHit[] {
+  searchFts(q: string, scope: string | 'all', limit: number, { closes = false } = {}): SearchHit[] {
     const match = ftsQuery(q);
     if (!match) return [];
     const rows = this.db
@@ -296,9 +382,10 @@ export class MemoryStore {
         `SELECT p.slug, p.title, p.body, bm25(memory_fts, 0, 4.0, 1.0, 2.0) AS rank
          FROM memory_fts JOIN memory_pages p ON p.rowid = memory_fts.rowid
          WHERE memory_fts MATCH ? AND (? = 'all' OR p.namespace IN (?, ?))
+           AND (p.closed = 0 OR ?)
          ORDER BY rank LIMIT ?`,
       )
-      .all(match, scope, scope, LESSON_NS, limit) as {
+      .all(match, scope, scope, LESSON_NS, Number(closes), limit) as {
       slug: string;
       title: string;
       body: string;
@@ -342,6 +429,7 @@ export class MemoryStore {
   // Pour reindex : vide pages et index d'un coup.
   clear(): void {
     this.db.transaction(() => {
+      this.db.prepare('DELETE FROM memory_links').run();
       this.db.prepare('DELETE FROM memory_pages').run();
       this.db.prepare("INSERT INTO memory_fts (memory_fts) VALUES ('delete-all')").run();
     })();

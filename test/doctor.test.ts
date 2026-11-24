@@ -52,6 +52,8 @@ test('57.5 : doctor signale le distant absent, les écarts et les conflits mémo
       ...good,
       memoryHealth: async () => ({
         pages: {},
+        closed: 0,
+        links: { total: 0, pendants: 0 },
         fts: true,
         vectors: 'off',
         pendingJobs: 0,
@@ -238,6 +240,8 @@ test('mémoire : N pages par namespace, triées, aucune anomalie → ✓', async
     ...good,
     memoryHealth: async () => ({
       pages: { aid: 1, lesson: 1 },
+      closed: 0,
+      links: { total: 0, pendants: 0 },
       fts: true,
       vectors: 'off',
       pendingJobs: 0,
@@ -254,6 +258,8 @@ test('mémoire : miroir non commité ou jobs en échec → ⚠ avec la commande 
     ...good,
     memoryHealth: async () => ({
       pages: { aid: 1 },
+      closed: 0,
+      links: { total: 0, pendants: 0 },
       fts: true,
       vectors: 'ollama',
       pendingJobs: 0,
@@ -270,6 +276,8 @@ test('mémoire : miroir non commité ou jobs en échec → ⚠ avec la commande 
     ...good,
     memoryHealth: async () => ({
       pages: { aid: 1 },
+      closed: 0,
+      links: { total: 0, pendants: 0 },
       fts: true,
       vectors: 'ollama',
       pendingJobs: 0,

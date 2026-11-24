@@ -115,6 +115,7 @@ test('chantier 27 (D131) : ?onglet=review présélectionne l’onglet Revue, dep
       title: 'Revue',
       frontmatter: {},
       body: 'Avis.',
+      closed: false,
       revision: 1,
       author: 'codex',
       createdAt: 't',

@@ -10,11 +10,13 @@ La demande. Les pages `lesson/` du domaine concerné. L'index structurel.
 
 1. Cherche dans la mémoire transverse ce qui a déjà été appris sur ce
    domaine. Une contrainte connue et réapprise est un cycle perdu.
+   Lis aussi les `voisins` de la recherche.
 2. Interroge l'index structurel pour situer le changement : où ça vit, qui
    en dépend, quel est le rayon d'impact.
 3. Formule l'intention. Nomme les options écartées et pourquoi — c'est la
    partie qui n'est pas dérivable du code et qui justifie l'existence de la
    page.
+   Enregistre par `decide` un choix d'architecture qui engage la suite du projet.
 
 ## Sortie
 

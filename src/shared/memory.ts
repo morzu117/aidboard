@@ -12,7 +12,30 @@ export const DEFAULT_DUPLICATE_DISTANCE = 0.15;
 export const DEFAULT_MAINTENANCE_MAX_PER_NIGHT = 20;
 export const DEFAULT_MAINTENANCE_SPLIT_LINES = 40;
 
+export const LINK_TYPES = ['precise', 'contredit', 'remplace', 'issu_de', 'cite'] as const;
+export type LinkType = (typeof LINK_TYPES)[number];
+
+export interface LinkNeighbor {
+  slug: string;
+  type: LinkType;
+  existe: boolean;
+}
+
+export interface MemoryLinks {
+  slug: string;
+  closed: boolean;
+  sortants: LinkNeighbor[];
+  entrants: LinkNeighbor[];
+}
+
+export interface MemoryDecision {
+  slug: string;
+  revision: number;
+  fermees: string[];
+}
+
 export interface MemoryPage {
+  closed: boolean;
   slug: string;
   namespace: string;
   title: string;
@@ -29,9 +52,16 @@ export interface SearchHit {
   title: string;
   snippet: string;
   score: number;
+  via?: { slug: string; type: LinkType; sens?: 'sortant' | 'entrant' };
 }
 
 export type SearchMode = 'fts' | 'hybrid';
+
+export interface SearchResult {
+  mode: SearchMode;
+  hits: SearchHit[];
+  voisins: SearchHit[];
+}
 
 export type PutMode =
   | { kind: 'create' }

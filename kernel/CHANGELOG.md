@@ -7,6 +7,12 @@ ajoute rien. Format : chaque version majeure du noyau décrit sa
 **migration**, que `/sync` applique avant de rendre le bloc ; les mineures
 et patchs n'en ont pas, sauf mention contraire.
 
+## Liens typés, pages closes et décisions (chantier 60)
+
+Changement mineur, sans migration. La politique mémoire décrit la fermeture,
+les liens et les décisions durables. L'adaptateur et les rôles reprennent
+les commandes et les usages correspondants.
+
 ## Retrait de l'adaptateur mémoire historique (chantier 57.2)
 
 L'adaptateur `gbrain` est retiré. Pour migrer, remplace sa déclaration
