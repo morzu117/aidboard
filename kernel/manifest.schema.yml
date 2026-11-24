@@ -65,6 +65,14 @@ models: # [hérité]
   standard: string
   complex: string
 
+routage: # [hérité]
+  niveaux:
+    leger: { fournisseur: claude | codex | vibe, modele: string }
+    standard: { fournisseur: claude | codex | vibe, modele: string }
+    fort: { fournisseur: claude | codex | vibe, modele: string }
+  # Un avis par fournisseur. Codex et Vibe utilisent leur modèle par défaut au niveau fort.
+  challenge: [claude | codex | vibe]
+
 stack: # [fusionné]
   # Le seul champ vraiment manuel : des faits en prose qu'aucune inspection
   # ne donne. /sync le propose rempli depuis ce qu'il a lu du repo.

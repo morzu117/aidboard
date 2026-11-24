@@ -127,6 +127,15 @@ Ce document, et une ligne dans `docs/chantiers/README.md`.
 - `aid avis`.
 - `routage` dans `defaults.yml` et dans le schéma. La lecture garde `models.*` en repli.
 
+- _Révision 66.3._ Fait :
+  - `src/daemon/avis/service.ts` remplace `SwairmAsk`. Ce dernier est supprimé avec son test, et `/api/swairm/ask*` ne lance plus le binaire `swairm` ;
+  - le filtre `nettoyer` passe sur la question et les sous-questions avant tout lancement. Un refus ne rend que la classe ; l'écran et le CLI ajoutent « question refusée » ;
+  - la validation accepte les noms historiques et `<fournisseur>:<modele>`, où `defaut` laisse le CLI choisir ;
+  - `routage` dans `defaults.yml` et le schéma, avec la table du code (`src/shared/routage.ts`) alignée par un test ;
+  - `aid avis`, avec `--challenge` et les codes 0, 4, 3 et 2.
+
+  Gate 4 721 : la garde des noms veut l'index à jour quand un fichier est supprimé.
+
 ### 66.4 Le noyau et la fiche (DM49)
 
 - `kernel/roles/plan.md` : la règle du challenge.

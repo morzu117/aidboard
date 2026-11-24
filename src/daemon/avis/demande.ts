@@ -19,13 +19,14 @@ export interface DemandeAvis {
   delaiMs: number;
 }
 
-async function relire(fichier: string): Promise<Ask> {
+export async function relire(fichier: string): Promise<Ask> {
   const demande = parseAsk(JSON.parse(await readFile(fichier, 'utf8')));
   if (!demande || basename(fichier) !== `${demande.id}.json`) throw new Error('Demande illisible.');
   return demande;
 }
 
-async function archiver(dossier: string, demande: Ask): Promise<Ask> {
+async function archiver(dossier: string, demande: Ask, signal?: AbortSignal): Promise<Ask> {
+  signal?.throwIfAborted();
   await mkdir(dossier, { recursive: true, mode: 0o700 });
   await chmod(dossier, 0o700);
   const temporaire = await mkdtemp(join(dossier, '.ask-'));
@@ -43,6 +44,7 @@ async function archiver(dossier: string, demande: Ask): Promise<Ask> {
         await fichier.close();
       }
       try {
+        signal?.throwIfAborted();
         await link(source, cible);
       } catch (err) {
         if ((err as NodeJS.ErrnoException).code === 'EEXIST') continue;
@@ -87,7 +89,7 @@ export async function lancerAvis(
   let prochain = 0;
   await Promise.all(
     Array.from({ length: Math.min(3, appels.length) }, async () => {
-      while (prochain < appels.length) {
+      while (!deps.signal?.aborted && prochain < appels.length) {
         const index = prochain++;
         const appel = appels[index]!;
         const { texte, detail, ...brut } = await lancerFournisseur(
@@ -107,7 +109,7 @@ export async function lancerAvis(
       }
     }),
   );
-  return archiver(deps.dossier, {
+  const archive: Ask = {
     format: 'swairm-ask/1',
     id: '',
     genere_a: new Date().toISOString(),
@@ -122,7 +124,8 @@ export async function lancerAvis(
       ),
     ),
     cout_total_usd: avis.reduce((total, a) => total + (a.cout_usd ?? 0), 0),
-  });
+  };
+  return archiver(deps.dossier, archive, deps.signal);
 }
 
 export async function liste(dossier: string): Promise<Asks> {

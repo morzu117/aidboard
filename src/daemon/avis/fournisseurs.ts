@@ -3,9 +3,10 @@ import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { MODELES_ASK } from '../../shared/swairm-ask.js';
+import type { Fournisseur } from '../../shared/routage.js';
 import { lireObjet, objet } from './lecture.js';
 
-export type Fournisseur = 'claude' | 'codex' | 'vibe';
+export type { Fournisseur } from '../../shared/routage.js';
 export interface OptionsAvis {
   prompt: string;
   modele: string;
@@ -15,6 +16,7 @@ export interface OptionsAvis {
 export interface EnvironnementAvis {
   env?: NodeJS.ProcessEnv;
   strip?: readonly string[];
+  signal?: AbortSignal;
 }
 export interface AvisBrut {
   modele_demande: string;
@@ -26,19 +28,30 @@ export interface AvisBrut {
   detail?: 'CLI absent';
 }
 
-export function validerAvis(fournisseur: Fournisseur, options: OptionsAvis): void {
-  const { modele, budgetUsd, delaiMs } = options;
+export function validerModele(
+  fournisseur: string,
+  modele: string,
+): asserts fournisseur is Fournisseur {
   if (fournisseur !== 'claude' && fournisseur !== 'codex' && fournisseur !== 'vibe')
     throw new RangeError('Fournisseur inconnu.');
   if (typeof modele !== 'string') throw new RangeError('Modèle invalide.');
-  if (!Number.isFinite(budgetUsd) || !(budgetUsd > 0 && budgetUsd <= 2))
-    throw new RangeError('Budget attendu entre 0 et 2 USD, hors zéro.');
-  if (!Number.isFinite(delaiMs) || !(delaiMs > 0 && delaiMs <= 2_147_483_647))
-    throw new RangeError('Délai invalide.');
   if (fournisseur === 'claude' && !MODELES_ASK.some((m) => m === modele))
     throw new RangeError('Modèle attendu : sonnet, opus ou haiku.');
-  if (fournisseur === 'codex' && !/^[A-Za-z0-9._:-]{1,64}$/.test(modele))
-    throw new RangeError('Modèle Codex invalide.');
+  if (!/^[A-Za-z0-9._:-]{1,64}$/.test(modele))
+    throw new RangeError(fournisseur === 'codex' ? 'Modèle Codex invalide.' : 'Modèle invalide.');
+}
+
+export function validerBudget(budgetUsd: number): void {
+  if (!Number.isFinite(budgetUsd) || !(budgetUsd > 0 && budgetUsd <= 2))
+    throw new RangeError('Budget attendu entre 0 et 2 USD, hors zéro.');
+}
+
+export function validerAvis(fournisseur: Fournisseur, options: OptionsAvis): void {
+  const { modele, budgetUsd, delaiMs } = options;
+  validerModele(fournisseur, modele);
+  validerBudget(budgetUsd);
+  if (!Number.isFinite(delaiMs) || !(delaiMs > 0 && delaiMs <= 2_147_483_647))
+    throw new RangeError('Délai invalide.');
 }
 
 const mesure = (v: unknown): number | null =>
@@ -126,8 +139,7 @@ function argumentsAvis(fournisseur: Fournisseur, options: OptionsAvis, fichier: 
         '--sandbox',
         'read-only',
         '--skip-git-repo-check',
-        '-m',
-        modele,
+        ...(modele === 'defaut' ? [] : ['-m', modele]),
         '-o',
         fichier,
         '-',
@@ -161,7 +173,9 @@ function executer(
   fichier: string,
   cwd: string,
   env: NodeJS.ProcessEnv,
+  signal?: AbortSignal,
 ): Promise<Sortie> {
+  signal?.throwIfAborted();
   return new Promise((resolve) => {
     const groupe = process.platform !== 'win32';
     const enfant = spawn(fournisseur, argumentsAvis(fournisseur, options, fichier), {
@@ -173,14 +187,18 @@ function executer(
     const sortie: Buffer[] = [];
     let delai = false;
     let erreur: string | undefined;
-    const minuterie = setTimeout(() => {
-      delai = true;
+    const arreter = () => {
       try {
         if (groupe && enfant.pid !== undefined) process.kill(-enfant.pid, 'SIGKILL');
         else enfant.kill('SIGKILL');
       } catch {
         enfant.kill('SIGKILL');
       }
+    };
+    signal?.addEventListener('abort', arreter, { once: true });
+    const minuterie = setTimeout(() => {
+      delai = true;
+      arreter();
     }, options.delaiMs);
     enfant.stdout?.on('data', (chunk: Buffer) => sortie.push(chunk));
     enfant.on('error', (err: NodeJS.ErrnoException) => {
@@ -188,6 +206,7 @@ function executer(
     });
     enfant.on('close', (code) => {
       clearTimeout(minuterie);
+      signal?.removeEventListener('abort', arreter);
       resolve({ stdout: Buffer.concat(sortie).toString('utf8'), code, delai, erreur });
     });
     enfant.stdin?.on('error', () => {
@@ -205,7 +224,7 @@ export async function lancerFournisseur(
   validerAvis(fournisseur, options);
   const brut: AvisBrut = {
     modele_demande: `${fournisseur}:${options.modele}`,
-    modele_servi: fournisseur === 'codex' ? options.modele : null,
+    modele_servi: fournisseur === 'codex' && options.modele !== 'defaut' ? options.modele : null,
     cout_usd: null,
     duree_s: null,
     texte: '',
@@ -216,6 +235,8 @@ export async function lancerFournisseur(
     'ANTHROPIC_API_KEY',
     'ANTHROPIC_AUTH_TOKEN',
     'ANTHROPIC_BASE_URL',
+    'CLAUDE_CODE_OAUTH_TOKEN',
+    'GH_TOKEN',
     'OPENAI_API_KEY',
     'MISTRAL_API_KEY',
     ...(deps.strip ?? []),
@@ -226,7 +247,14 @@ export async function lancerFournisseur(
   try {
     cwd = await mkdtemp(join(tmpdir(), 'aid-avis-'));
     const fichier = join(cwd, 'avis.txt');
-    const { stdout, code, delai, erreur } = await executer(fournisseur, options, fichier, cwd, env);
+    const { stdout, code, delai, erreur } = await executer(
+      fournisseur,
+      options,
+      fichier,
+      cwd,
+      env,
+      deps.signal,
+    );
     if (delai) return { ...brut, etat: 'delai' };
     if (erreur === 'ENOENT') return { ...brut, detail: 'CLI absent' };
     if (erreur) return brut;

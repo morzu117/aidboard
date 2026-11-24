@@ -4,6 +4,7 @@ import { basename, join } from 'node:path';
 import { afterEach, beforeEach, expect, test } from 'vitest';
 import { lancerAvis, liste, type DemandeAvis } from '../src/daemon/avis/demande.js';
 import { lancerFournisseur } from '../src/daemon/avis/fournisseurs.js';
+import { AskOccupe, ServiceAvis, validerDemande } from '../src/daemon/avis/service.js';
 import { construirePrompt } from '../src/daemon/avis/prompt.js';
 import { parseAsk } from '../src/shared/swairm-ask.js';
 
@@ -44,6 +45,8 @@ beforeEach(async () => {
     OPENAI_API_KEY: 'faux',
     MISTRAL_API_KEY: 'faux',
     CLE_PROJET: 'faux',
+    CLAUDE_CODE_OAUTH_TOKEN: 'faux',
+    GH_TOKEN: 'faux',
     REPONSE: reponse,
     ENVELOPPE: enveloppe,
     VIBE_JSON: JSON.stringify([{ role: 'assistant', content: reponse }]),
@@ -169,7 +172,7 @@ test('trois fournisseurs isolés, argv exact, archive privée relisible', async 
     const environnement = await lireTrace(fournisseur + '.env');
     expect(environnement).toContain('AID_HOME=' + racine);
     expect(environnement).not.toMatch(
-      /^(?:ANTHROPIC_API_KEY|ANTHROPIC_AUTH_TOKEN|ANTHROPIC_BASE_URL|OPENAI_API_KEY|MISTRAL_API_KEY|CLE_PROJET)=/m,
+      /^(?:ANTHROPIC_API_KEY|ANTHROPIC_AUTH_TOKEN|ANTHROPIC_BASE_URL|OPENAI_API_KEY|MISTRAL_API_KEY|CLE_PROJET|CLAUDE_CODE_OAUTH_TOKEN|GH_TOKEN)=/m,
     );
   }
   expect(cwds.size).toBe(3);
@@ -277,3 +280,88 @@ printf '%s' "$REPONSE" > "$fichier"
     modeles.map((modele) => [modele, 'ok']),
   );
 });
+
+test('Codex omet -m pour defaut et laisse le modèle servi inconnu', async () => {
+  const avis = await lancerFournisseur(
+    'codex',
+    { prompt: question, modele: 'defaut', budgetUsd: 0.5, delaiMs: 5000 },
+    { env },
+  );
+  expect(avis).toMatchObject({
+    modele_demande: 'codex:defaut',
+    modele_servi: null,
+    etat: 'ok',
+  });
+  const cwd = await readFile(join(racine, 'codex.cwd'), 'utf8');
+  const argv = await readFile(join(racine, 'codex.argv'), 'utf8');
+  expect(argv.split('\0').slice(0, -1)).toEqual([
+    'exec',
+    '--sandbox',
+    'read-only',
+    '--skip-git-repo-check',
+    '-o',
+    join(cwd, 'avis.txt'),
+    '-',
+  ]);
+});
+
+const demandeService = { question, n: 3, modeles: ['sonnet', 'codex:defaut'] };
+
+test('le service distribue et archive les avis en tourniquet', async () => {
+  const service = new ServiceAvis(racine, { env });
+  const resultat = await service.demander(demandeService);
+  expect(resultat.ok).toBe(true);
+  if (!resultat.ok) throw new Error('Demande échouée.');
+  expect(resultat.data.avis.map((avis) => avis.modele_demande)).toEqual([
+    'claude:sonnet',
+    'codex:defaut',
+    'claude:sonnet',
+  ]);
+  expect(await service.relire(resultat.data.id)).toMatchObject({ ok: true, data: resultat.data });
+});
+
+test('le service refuse une seconde demande et annule les avis actifs et en attente', async () => {
+  const service = new ServiceAvis(racine, { env: { ...env, MODE: 'delai' } });
+  const attente = service.demander({ ...demandeService, n: 5, modeles: ['sonnet'] });
+  const trace = join(racine, 'claude.pid');
+  let pid = 0;
+  for (let i = 0; i < 200 && !pid; i++) {
+    pid = Number(await readFile(trace, 'utf8').catch(() => ''));
+    if (!pid) await new Promise((r) => setTimeout(r, 10));
+  }
+  expect(pid).toBeGreaterThan(0);
+  await expect(service.demander(demandeService)).rejects.toBeInstanceOf(AskOccupe);
+  service.annuler();
+  expect(await attente).toMatchObject({ ok: false, kind: 'annule' });
+  expect(() => process.kill(pid, 0)).toThrow(/ESRCH/);
+  expect(service.etat().enCours).toBe(false);
+  await expect(access(join(racine, 'avis'))).rejects.toMatchObject({ code: 'ENOENT' });
+});
+
+test.each([
+  { question: 'Vérifier le service interne.example.com ?' },
+  { sousQuestions: [{ n: 1, texte: 'Vérifier le service interne.example.com ?' }] },
+])('le filtre arrête tout lancement et masque le texte de la demande %#', async (diff) => {
+  const service = new ServiceAvis(racine, { env, hotesPrives: ['interne.example.com'] });
+  expect(await service.demander({ ...demandeService, ...diff })).toMatchObject({
+    ok: false,
+    kind: 'refusee',
+    message: 'hôte privé',
+  });
+  for (const nom of ['claude.argv', 'codex.argv', 'avis'])
+    await expect(access(join(racine, nom))).rejects.toMatchObject({ code: 'ENOENT' });
+});
+
+test.each(['sonnet', 'opus', 'haiku', 'claude:opus', 'codex:defaut', 'vibe:defaut'])(
+  'valide %s',
+  (modele) => {
+    expect(() => validerDemande({ ...demandeService, modeles: [modele] })).not.toThrow();
+  },
+);
+
+test.each(['claude:gpt', 'inconnu:defaut', 'codex:avec espace', 'vibe:', 'vibe:a/b'])(
+  'refuse %s',
+  (modele) => {
+    expect(() => validerDemande({ ...demandeService, modeles: [modele] })).toThrow(RangeError);
+  },
+);
