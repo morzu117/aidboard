@@ -231,6 +231,9 @@ test.each(['vide', 'refus:hôte privé'])(
     expect(chat).not.toHaveBeenCalled();
     expect(proposals.list()).toEqual([]);
     expect(logs.mock.calls.flat().join('\n')).not.toContain(prive);
+    expect(logs.mock.calls.flat().join('\n')).toContain(
+      `rétro de ${retroSlug} non proposée : ${raison}`,
+    );
     for (const table of [
       'memory_pages',
       'memory_proposals',

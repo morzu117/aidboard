@@ -75,6 +75,9 @@ C'est la seule phase autorisée à écrire dans l'espace transverse. Une leçon
 n'est promue que si elle est vraie hors de ce projet. Dans le doute, elle
 reste dans la rétro.
 
+La rétro par un agent reste la règle. Si un cycle mergé n'a pas de rétro, le daemon en propose une la nuit, à partir des pages du cycle et avec le modèle local.
+Aucune page n'est écrite sans décision de l'admin.
+
 Sortie : les pages de cycle sont purgeables.
 
 ## Cycle de vie

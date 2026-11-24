@@ -210,6 +210,7 @@ export async function startDaemon(
                     duplicateDistance: maintCfg.duplicateDistance,
                     vectors: vectors ?? undefined,
                     embedder: hybridOn ? (embedder ?? undefined) : undefined,
+                    log,
                   })
               : undefined,
             maintain: chatModel

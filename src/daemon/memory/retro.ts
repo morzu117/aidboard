@@ -58,6 +58,7 @@ interface RetroDeps {
   duplicateDistance?: number;
   vectors?: Partial<Pick<VectorIndex, 'meta' | 'nearestOpenLesson'>>;
   embedder?: Embedder;
+  log?: (line: string) => void;
 }
 
 function validBody(body: string): boolean {
@@ -96,6 +97,8 @@ export async function runRetroJob(job: MemoryJob, deps: RetroDeps): Promise<void
     const raison = result.raison === 'vide' ? 'vide' : `refus:${result.classe}`;
     // La page cible n'existe pas encore et n'a donc aucune révision.
     proposals.recordSeen({ slug, revision: 0 }, 'retro', raison);
+    // La classe seule : le récit refusé n'est jamais journalisé.
+    deps.log?.(`rétro de ${slug} non proposée : ${raison}`);
     return;
   }
 

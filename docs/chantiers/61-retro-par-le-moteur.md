@@ -148,6 +148,13 @@ La proposition `retro` dans la Boîte, avec les leçons à cocher, et `retros` d
 - `kernel/roles/retro.md` dit qu'une rétro écrite par un agent passe avant celle du moteur.
 - La fiche `docs/recette-chantier-61-retro-moteur.md` se fait sur la tour, avec Ollama : un vrai cycle mergé, puis la proposition du matin.
 
+- _Révision 61.6._ Fait :
+  - `phases.md` décrit le filet de nuit, `retro.md` fixe le slug du sujet, et le changelog est à jour. Les blocs rendus sont inchangés, faute de partie touchée ;
+  - une ligne de journal « rétro de … non proposée : <raison> » donne la classe d'un refus, jamais le texte ;
+  - la fiche de recette contient huit contrôles.
+
+  Gate 4 723.
+
 ## 5. Pièges
 
 - **Le récit n'est pas un journal.** Il ne contient que des pages déjà écrites en mémoire et des faits structurés. Y ajouter « juste un extrait » de terminal fait entrer des secrets dans un fichier poussé vers le miroir.
