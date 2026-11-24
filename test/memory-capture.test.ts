@@ -171,6 +171,7 @@ test.each([true, false])(
 
 test('le PUT authentifié par un token de run déclenche la capture du daemon', async () => {
   const t = await startTestDaemon(join(home, 'daemon'), {
+    memory: { chatModel: { chat: async () => '{"faits":[]}' } },
     config: {
       memory: {
         ...DEFAULT_CONFIG.memory,

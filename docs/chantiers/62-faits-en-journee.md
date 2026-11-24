@@ -112,6 +112,15 @@ Les tests couvrent :
 - un corps refusé par le filtre, où rien n'est écrit et où le texte n'est ni en base ni dans le journal ;
 - une réponse invalide, que le job réessaie.
 
+- _Révision 62.3._ Fait :
+  - `src/daemon/memory/faits.ts` avec `runFaitsJob`. Il relit la source à sa révision courante, garde sa fin (12 000 caractères au plus) et la filtre avant le modèle ;
+  - le frontmatter est posé par le code. Les faits sont écrits un à un, en `create`, et un conflit n'écarte que le fait concerné ;
+  - au plus 10 faits par tâche ;
+  - `EventStore.latestMemoryPageContext` reporte le sujet et le run de la source sur les faits ;
+  - une capture allumée sans modèle n'enfile rien et le journalise une fois.
+
+  Gate 4 763.
+
 ### 62.4 La lecture (DM33)
 
 Les points couverts sont :
