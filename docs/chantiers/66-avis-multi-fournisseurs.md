@@ -143,6 +143,13 @@ Ce document, et une ligne dans `docs/chantiers/README.md`.
 - L'adaptateur `kernel/adapters/avis.md`, et le changelog.
 - La fiche `docs/recette-chantier-66-avis-multi-fournisseurs.md`, sur la tour. Elle établit les flags exacts de `vibe` et de `codex`, lance un challenge réel sur une question factice, et vérifie l'écran.
 
+- _Révision 66.4 de DM47._ `models` reste la configuration des agents.
+  `routage` sert aux avis et à la future boucle. Il est hérité de
+  `defaults.yml` et un projet ne le surcharge que s'il s'en écarte.
+  `/sync` ne migre pas `models`.
+
+  Fait : la règle du challenge dans le rôle plan, avec les codes 0, 4, 3 et 2, et l'adaptateur `kernel/adapters/avis.md`. `sync.md` dit que `routage` est hérité. Le changelog est à jour, et la fiche a neuf contrôles. Aucun bloc rendu ne change : le rôle plan et les adaptateurs n'y sont pas. Gate 4 721.
+
 ## 5. Pièges
 
 - **Un avis n'a pas d'outil.** Un `codex exec` sans `--sandbox read-only` dans un répertoire vide pourrait écrire ou lancer des commandes. Le test vérifie l'argv exact.

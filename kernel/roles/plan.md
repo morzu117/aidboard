@@ -18,6 +18,18 @@ La demande. Les pages `lesson/` du domaine concerné. L'index structurel.
    page.
    Enregistre par `decide` un choix d'architecture qui engage la suite du projet.
 
+   Avant un `decide` d'architecture, de découpage ou de choix de composant,
+   lance `aid avis --challenge "<question>"` avec une `--sous-question` par option.
+   Ajoute `--json` pour obtenir l’identifiant de la demande et ses accords.
+   - Code 0 (`unanime` ou `majorite`) : décide selon le verdict et cite
+     l'identifiant de la demande dans les sources du `decide`.
+   - Code 4 (`partage` ou `insuffisant`) : ne décide pas. Pose la question
+     à l'humain avec le tableau d'accord et arrête-toi.
+   - Code 3 (aucun avis) ou 2 (refus) : signale le résultat dans ta page
+     de sortie et pose la question à l'humain.
+
+   Réserve le challenge à ces choix structurants. Ne le lance jamais à chaque étape.
+
 ## Sortie
 
 Une page `<namespace>/plan/<task>` contenant :
