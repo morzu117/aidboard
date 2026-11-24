@@ -22,3 +22,10 @@ test('la pause l’emporte, et la question passe devant un autre agent à relire
   expect(mostUrgent([aRelire, question])?.id).toBe('b');
   expect(topicView([aRelire, question]).label).toBe('Attend une réponse');
 });
+
+test('un tour fini avec une tâche de fond en cours se lit « En cours · arrière-plan », pas « À relire »', () => {
+  const a = idle({ statusReason: 'background' });
+  expect(agentView(a)).toEqual({ label: 'En cours · arrière-plan', tone: 'cours' });
+  expect(agentView(a, 'boite')).toEqual({ label: 'En cours · arrière-plan', tone: 'cours' });
+  expect(topicView([a]).tone).toBe('cours');
+});

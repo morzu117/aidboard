@@ -35,6 +35,9 @@ export function agentView(a: Agent, where: 'carte' | 'boite' = 'carte'): StatusV
     case 'idle':
       // le tour s'est fini sur une question posée à l'opérateur (le daemon l'a lue dans le dernier message)
       if (a.statusReason === 'question') return { label: 'Attend une réponse', tone: 'attente' };
+      // le tour est fini mais une tâche de fond tourne encore (codex lancé par claude…) : il reprendra seul
+      if (a.statusReason === 'background')
+        return { label: 'En cours · arrière-plan', tone: 'cours' };
       if (where === 'carte') return { label: 'À relire', tone: 'relire', estimated };
       return estimated
         ? { label: 'Inactif', tone: 'relire', estimated }

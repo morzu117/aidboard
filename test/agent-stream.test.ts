@@ -709,3 +709,39 @@ test('D148 : reprendre un agent du terminal est refusé, un agent inconnu est un
   expect(r.json().error).toBe('reprise réservée aux agents conversationnels');
   expect((await reprendre('ag_inconnu')).statusCode).toBe(404);
 });
+
+test('tâche de fond : idle raison background à la fin du tour, working quand claude reprend seul, puis idle', async () => {
+  const { agent } = await spawnStream('claude');
+  await waitFor(() => row(agent.id).session_id === agent.sessionId, 5000, 'session claude');
+  const reason = () =>
+    (
+      c!.t.db.prepare('SELECT status_reason AS r FROM agents WHERE id = ?').get(agent.id) as {
+        r: string | null;
+      }
+    ).r;
+  // la suite des statuts émis, dans l'ordre : le tour repris seul est trop bref pour un relevé périodique
+  const statuts = () =>
+    (
+      c!.t.db
+        .prepare(
+          "SELECT data FROM events WHERE agent_id = ? AND type = 'agent.status' ORDER BY seq",
+        )
+        .all(agent.id) as Array<{ data: string }>
+    ).map((e) => {
+      const d = JSON.parse(e.data) as { status: string; reason?: string };
+      return `${d.status}/${d.reason ?? ''}`;
+    });
+
+  c!.t.d.agents.input(agent.id, 'tache de fond');
+  await waitFor(() => reason() === 'background', 5000, 'fin du tour avec la tâche en cours');
+  expect(row(agent.id).status).toBe('idle');
+
+  await waitFor(
+    () => messages(agent.id, 'turn_end').length === 2 && row(agent.id).status === 'idle',
+    5000,
+    'tour repris seul',
+  );
+  expect(reason()).toBeNull();
+  // entre les deux, le tour repris sans message envoyé a remis l'agent au travail
+  expect(statuts().slice(-4)).toEqual(['working/', 'idle/background', 'working/', 'idle/']);
+});
