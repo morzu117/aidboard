@@ -123,6 +123,13 @@ Les tests couvrent :
 - le plafond partagé avec `maintain` ;
 - l'entretien éteint, ou une heure hors de la fenêtre.
 
+- _Révision 61.4._ Fait :
+  - `retroCandidates`, paginée, qui prend le dernier sujet mergé d'abord, puis les archivés sans merge ;
+  - le plafond `maxPerNight` partagé avec `maintain`, les rétros passant en premier ;
+  - un sujet dont la rétro a échoué trois nuits (`RETRO_MAX_FAILED_NIGHTS`) n'est plus repris : sans cette borne, une réponse toujours invalide aurait pris une place chaque nuit sans fin.
+
+  Gate 4 720.
+
 ### 61.5 La vue et la santé (DM28)
 
 La proposition `retro` dans la Boîte, avec les leçons à cocher, et `retros` dans la santé et dans `aid doctor`. Un e2e clique « Appliquer » avec une leçon décochée, et clique « Rejeter », aux deux formats.

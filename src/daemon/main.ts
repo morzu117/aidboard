@@ -262,6 +262,7 @@ export async function startDaemon(
             availabilityChecked = true;
           }
           const n = scheduleMaintenance(new Date(), {
+            db: opened,
             vectors: vectors ?? undefined,
             store: memStore,
             jobs,

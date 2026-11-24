@@ -278,7 +278,53 @@ function inWindow(now: Date, window: string): boolean {
   return s <= e ? cur >= s && cur < e : cur >= s || cur < e;
 }
 
+export const RETRO_MAX_FAILED_NIGHTS = 3;
+
+export function retroCandidates(
+  db: Db,
+  proposals: MemoryProposals,
+  store: MemoryStore,
+  limit: number,
+): string[] {
+  const select = db.prepare(
+    `SELECT t.id, t.slug, COALESCE(w.namespace, w.name) AS namespace,
+            (SELECT max(e.ts) FROM events e INDEXED BY events_topic
+             WHERE e.topic_id = t.id AND e.type = 'topic.state'
+               AND json_extract(e.data, '$.state') = 'merged') AS merged_at
+     FROM topics t JOIN workspaces w ON w.id = t.workspace_id
+     WHERE t.state IN ('merged', 'archived')
+       AND NOT EXISTS (
+         SELECT 1 FROM memory_jobs j WHERE j.slug = t.id AND j.kind = 'retro'
+           AND j.state IN ('pending', 'running')
+       )
+       -- Un sujet dont la rétro a échoué trois nuits n'est plus repris.
+       AND (SELECT count(*) FROM memory_jobs j WHERE j.slug = t.id AND j.kind = 'retro'
+              AND j.state = 'failed') < ?
+     ORDER BY merged_at DESC, (merged_at IS NULL AND t.state = 'merged') DESC,
+              t.created_at DESC, t.id
+     LIMIT ? OFFSET ?`,
+  );
+  const candidates: string[] = [];
+  const pageSize = 64;
+  for (let offset = 0; candidates.length < limit; offset += pageSize) {
+    const rows = select.all(RETRO_MAX_FAILED_NIGHTS, pageSize, offset) as {
+      id: string;
+      slug: string;
+      namespace: string;
+    }[];
+    for (const { id, slug, namespace } of rows) {
+      const target = `${namespace}/retro/${slug}`;
+      if (store.get(target) || proposals.hasRetro(target) || proposals.retroSeen(target)) continue;
+      candidates.push(id);
+      if (candidates.length === limit) return candidates;
+    }
+    if (rows.length < pageSize) break;
+  }
+  return candidates;
+}
+
 export interface SchedulerDeps {
+  db: Db;
   vectors?: VectorIndex;
   store: MemoryStore;
   jobs: MemoryJobs;
@@ -290,7 +336,7 @@ export interface SchedulerDeps {
   splitLines?: number;
 }
 
-// Un job `maintain` par page éligible, au plus `maxPerNight`, seulement dans la fenêtre et si activé.
+// Le plafond de la fenêtre est partagé, avec priorité aux jobs `retro`.
 export function scheduleMaintenance(now: Date, deps: SchedulerDeps): number {
   if (!deps.enabled || !inWindow(now, deps.window)) return 0;
   // La fenêtre suit l'heure locale du planificateur, y compris après minuit.
@@ -300,12 +346,17 @@ export function scheduleMaintenance(now: Date, deps: SchedulerDeps): number {
   if (start > now) start.setDate(start.getDate() - 1);
   const max =
     (deps.maxPerNight ?? DEFAULT_MAINTENANCE_MAX_PER_NIGHT) -
-    deps.jobs.countCreatedSince('maintain', start.toISOString());
+    deps.jobs.countCreatedSince(['maintain', 'retro'], start.toISOString());
+  if (max <= 0) return 0;
+  let n = 0;
+  for (const id of retroCandidates(deps.db, deps.proposals, deps.store, max)) {
+    if (deps.jobs.enqueue('retro', id)) n++;
+  }
+  if (n >= max) return n;
   const tags = existingTags(deps.store, LESSON_NS);
   // Matérialiser la liste avant d'enfiler : `jobs.enqueue` exécute d'autres requêtes sur la même
   // connexion, ce que better-sqlite3 refuse tant qu'un `.iterate()` est encore ouvert.
   const pages = [...deps.store.all()];
-  let n = 0;
   for (const page of pages) {
     if (n >= max) break;
     if (

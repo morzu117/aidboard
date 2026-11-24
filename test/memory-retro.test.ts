@@ -6,7 +6,11 @@ import { loadConfig } from '../src/daemon/config.js';
 import { findMigrationsDir, migrate, openDb } from '../src/daemon/db.js';
 import type { Embedder } from '../src/daemon/memory/embed.js';
 import { MemoryJobs } from '../src/daemon/memory/jobs.js';
-import { MemoryProposals } from '../src/daemon/memory/maintain.js';
+import {
+  MemoryProposals,
+  retroCandidates,
+  scheduleMaintenance,
+} from '../src/daemon/memory/maintain.js';
 import type { RetroPayload } from '../src/daemon/memory/retro.js';
 import { parseMarkdown } from '../src/daemon/memory/store.js';
 import { resolvePaths } from '../src/daemon/paths.js';
@@ -341,4 +345,164 @@ test('038 conserve les lignes de 037, y compris les dates, le délai et le vocab
   } finally {
     db.close();
   }
+});
+
+const nuit = new Date(2026, 0, 7, 3);
+const planifier = (maxPerNight = 10, enabled = true, now = nuit) =>
+  scheduleMaintenance(now, {
+    db: t.db,
+    store: t.d.memory.store,
+    jobs: new MemoryJobs(t.db),
+    proposals: new MemoryProposals(t.db),
+    window: '22:00-06:00',
+    maxPerNight,
+    enabled,
+  });
+
+function sujet(id: string, state = 'merged', createdAt = '2026-01-01T00:00:00.000Z') {
+  t.db
+    .prepare(
+      `INSERT INTO topics (id, workspace_id, slug, title, type, branch, base, worktree, state,
+                           index_state, created_at, updated_at)
+       VALUES (?, 'ws_exemple', ?, 'Cycle exemple', 'feat', ?, 'main', ?, ?, 'disabled', ?, ?)`,
+    )
+    .run(id, id, `feat/${id}`, aidHome, state, createdAt, createdAt);
+}
+
+function etat(id: string, state: string, ts: string) {
+  t.db
+    .prepare(
+      `INSERT INTO events (id, v, ts, source, topic_id, type, data)
+       VALUES (?, 1, ?, 'test', ?, 'topic.state', ?)`,
+    )
+    .run(`${id}-${ts}`, ts, id, JSON.stringify({ state }));
+}
+
+const file = () => t.db.prepare('SELECT kind, slug FROM memory_jobs ORDER BY id').all();
+
+test('la nuit enfile les rétros par date de merge, puis les cycles archivés sans merge', async () => {
+  const { proposals } = await setup([]);
+  sujet('recent');
+  sujet('milieu', 'merged', '2026-01-02T00:00:00.000Z');
+  sujet('archive-recent', 'archived', '2026-01-05T00:00:00.000Z');
+  sujet('archive-ancien', 'archived');
+  sujet('actif', 'active');
+  etat('recent', 'merged', '2026-01-01T00:00:00.000Z');
+  etat('recent', 'merged', '2026-01-05T00:00:00.000Z');
+  etat('milieu', 'merged', '2026-01-04T00:00:00.000Z');
+  etat(topicId, 'merged', '2026-01-03T00:00:00.000Z');
+  etat(topicId, 'merged', '2026-01-02T00:00:00.000Z');
+  etat(topicId, 'archived', '2026-01-06T00:00:00.000Z');
+  expect(retroCandidates(t.db, proposals, t.d.memory.store, 2)).toEqual(['recent', 'milieu']);
+  expect(planifier()).toBe(5);
+  expect(file()).toEqual(
+    ['recent', 'milieu', topicId, 'archive-recent', 'archive-ancien'].map((slug) => ({
+      kind: 'retro',
+      slug,
+    })),
+  );
+});
+
+test('la sélection exclut page, rejet, note seen et jobs actifs, puis poursuit à la page suivante', async () => {
+  const { proposals } = await setup([]);
+  t.db.prepare("UPDATE workspaces SET namespace = NULL WHERE id = 'ws_exemple'").run();
+  await put(retroSlug);
+  for (const id of ['rejet', 'vu', 'attente', 'encours']) sujet(id);
+  const rejet = proposals.create('retro', 'exemple/retro/rejet', {}, 'test');
+  proposals.decide(rejet.id, 'rejected');
+  proposals.recordSeen({ slug: 'exemple/retro/vu', revision: 0 }, 'retro', 'vide');
+  const jobs = new MemoryJobs(t.db);
+  jobs.enqueue('retro', 'encours');
+  expect(jobs.claim()).toMatchObject({ slug: 'encours' });
+  jobs.enqueue('retro', 'attente');
+  for (let i = 0; i < 64; i++) {
+    const id = `vu-${i}`;
+    sujet(id, 'merged', '2026-01-02T00:00:00.000Z');
+    proposals.recordSeen({ slug: `exemple/retro/${id}`, revision: 0 }, 'retro', 'vide');
+  }
+  sujet('eligible');
+  expect(retroCandidates(t.db, proposals, t.d.memory.store, 10)).toEqual(['eligible']);
+});
+
+test("un sujet dont la rétro a échoué trois nuits n'est plus repris", async () => {
+  const { proposals } = await setup([]);
+  sujet('deux-echecs');
+  sujet('trois-echecs');
+  const echec = t.db.prepare(
+    "INSERT INTO memory_jobs (id, kind, slug, state, attempts, created_at, updated_at) VALUES (?, 'retro', ?, 'failed', 3, ?, ?)",
+  );
+  const now = new Date().toISOString();
+  for (let i = 0; i < 2; i++) echec.run(`job_a${i}`, 'deux-echecs', now, now);
+  for (let i = 0; i < 3; i++) echec.run(`job_b${i}`, 'trois-echecs', now, now);
+  const candidats = retroCandidates(t.db, proposals, t.d.memory.store, 10);
+  expect(candidats).toContain('deux-echecs');
+  expect(candidats).not.toContain('trois-echecs');
+});
+
+test('deux jobs maintain déjà créés la nuit laissent une place pour une rétro', async () => {
+  await setup([]);
+  sujet('autre');
+  const jobs = new MemoryJobs(t.db);
+  jobs.enqueue('maintain', 'lesson/test/a');
+  jobs.enqueue('maintain', 'lesson/test/b');
+  t.db
+    .prepare("UPDATE memory_jobs SET created_at = ? WHERE kind = 'maintain'")
+    .run(new Date(2026, 0, 6, 23).toISOString());
+  expect(planifier(3)).toBe(1);
+  expect(file()).toHaveLength(3);
+  expect(file()).toContainEqual({ kind: 'retro', slug: 'autre' });
+  t.db
+    .prepare("UPDATE memory_jobs SET created_at = ? WHERE kind = 'retro'")
+    .run(new Date(2026, 0, 7, 2).toISOString());
+  expect(planifier(3)).toBe(0);
+});
+
+test('la rétro épuise le budget avant une leçon éligible', async () => {
+  await setup([]);
+  for (const id of ['a', 'b', 'c']) sujet(id);
+  await put('lesson/test/tags', '---\ntags: [validation]\n---\nVocabulaire.');
+  await put('lesson/test/a-tagger');
+  expect(planifier(2)).toBe(2);
+  expect(file()).toEqual([
+    { kind: 'retro', slug: 'a' },
+    { kind: 'retro', slug: 'b' },
+  ]);
+});
+
+test('le total inclut les deux genres quand il reste du budget pour une leçon', async () => {
+  await setup([]);
+  await put('lesson/test/tags', '---\ntags: [validation]\n---\nVocabulaire.');
+  await put('lesson/test/a-tagger');
+  expect(planifier(2)).toBe(2);
+  expect(file()).toEqual([
+    { kind: 'retro', slug: topicId },
+    { kind: 'maintain', slug: 'lesson/test/a-tagger' },
+  ]);
+});
+
+test('entretien éteint ou hors fenêtre, aucun job retro', async () => {
+  await setup([]);
+  expect(planifier(10, false)).toBe(0);
+  expect(planifier(10, true, new Date(2026, 0, 7, 12))).toBe(0);
+  expect(file()).toEqual([]);
+});
+
+test('le worker traite la rétro enfilée par la passe de nuit une seule fois', async () => {
+  const { chat, proposals } = await setup([]);
+  const reviewSlug = 'exemple/review/cycle';
+  await put(planSlug);
+  await put(reviewSlug);
+  expect(planifier()).toBe(1);
+  await waitFor(() =>
+    t.db.prepare("SELECT 1 FROM memory_jobs WHERE kind = 'retro' AND state = 'done'").get(),
+  );
+  const [proposal] = proposals.list('open');
+  expect(proposal).toMatchObject({
+    kind: 'retro',
+    slug: retroSlug,
+    payload: { sources: { pages: [planSlug, reviewSlug] } },
+  });
+  expect(chat).toHaveBeenCalledOnce();
+  expect(planifier()).toBe(0);
+  expect(file()).toEqual([{ kind: 'retro', slug: topicId }]);
 });
