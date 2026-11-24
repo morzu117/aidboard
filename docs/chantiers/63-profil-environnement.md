@@ -81,12 +81,13 @@ La grille du §9.1 donne l'état d'A-I-D :
 
 ### DM38. La cell déclare ce qu'elle a
 
-- `GET /api/host/environnement` rend l'environnement de la machine du daemon, mis en cache 10 minutes :
+- `GET /api/machines/local`, la route de l'écran Machines du chantier 29, gagne un champ `environnement`. Il n'y a pas de nouvelle route, et les droits restent ceux de la route. Le champ contient :
   - `os` et `arch` ;
-  - une liste fixe d'outils courants : `node`, `npm`, `git`, `mise`, `docker`, `python3`, `cargo`, `ollama`, chacun avec sa version ou `absent` ;
-  - les modèles Ollama présents, si Ollama répond. Seuls leurs noms sont rendus, jamais leur chemin.
-- La route est lisible par l'admin et par un token de run, et jamais par le port des appareils.
-- `aid doctor` montre une ligne « Environnement », avec l'OS et les outils présents.
+  - une liste fixe d'outils courants, chacun avec sa version, ou `null` s'il est absent : `node`, `npm`, `git`, `mise`, `docker`, `python3`, `cargo`, `ollama`. La liste est fermée, dans le code : jamais une saisie, jamais le manifeste ;
+  - les modèles Ollama présents, si l'API locale d'Ollama répond (l'URL est celle de `memory.embeddings.url`). On ne rend que leurs noms, jamais leurs chemins.
+- Le calcul se fait à l'appel, et reste en cache 10 minutes. Rien ne tourne en fond (D160).
+- `aid doctor` montre une ligne « Environnement » avec l'OS et les outils présents.
+- L'écran Machines n'est pas touché dans ce chantier.
 
 ## 4. Points
 
@@ -126,6 +127,14 @@ Les tests couvrent :
 - un faux `PATH` ;
 - Ollama absent, et Ollama simulé avec deux modèles ;
 - le refus sur le port des appareils.
+
+- _Révision 63.3._ DM38 est révisé avant le point : le champ `environnement` va dans `GET /api/machines/local`, et il n'y a pas de nouvelle route.
+
+  Fait :
+  - `src/daemon/machines/environnement.ts` : huit outils lancés sans shell, avec un délai de 3 s. Il lit aussi les noms des modèles Ollama, et WSL par `/proc/version`. Le cache dure 10 minutes, et deux appels simultanés partagent un seul calcul ;
+  - la ligne « Environnement » d'`aid doctor`, en information, omise sur un daemon ancien.
+
+  Un outil qui sort en erreur vaut `null`, même s'il a écrit une version. Gate 4 730.
 
 ### 63.4 Le noyau, `/sync` et la fiche (DM35, DM37)
 

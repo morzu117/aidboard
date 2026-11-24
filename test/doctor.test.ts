@@ -1,4 +1,4 @@
-import { expect, test } from 'vitest';
+import { expect, test, vi } from 'vitest';
 import { chmodSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
@@ -15,6 +15,9 @@ import {
 import { resolvePaths } from '../src/daemon/paths.js';
 import type { EtatModeHost } from '../src/shared/host.js';
 import type { IndexStatus } from '../src/shared/structural.js';
+
+import * as daemonInfo from '../src/cli/daemonInfo.js';
+import type { Environnement } from '../src/shared/model.js';
 
 const good: Probes = {
   nodeVersion: 'v22.23.3',
@@ -677,4 +680,44 @@ test('WSL : diagnostic de version, repli navigateur et chemins Linux', async () 
     level: 'warn',
     detail: expect.stringContaining('ouverture automatique indisponible'),
   });
+});
+
+test.each([
+  [['a', 'b', 'c'], ' · Ollama : 3 modèles'],
+  [null, ''],
+] as const)('63.3 : doctor affiche la mesure de la cell (%j)', async (modeles, suffixe) => {
+  const environnement: Environnement = {
+    os: 'linux',
+    arch: 'x64',
+    wsl: true,
+    outils: { node: '22.12.0', git: '2.43.0', cargo: null },
+    modelesOllama: modeles === null ? null : [...modeles],
+    mesureA: '2026-11-24T00:00:00.000Z',
+  };
+  const lignes = await runDoctorLines({ ...good, environnement: async () => environnement });
+  expect(lignes).toContain(
+    `  ✓ Environnement : linux x64 (WSL) · node 22.12.0, git 2.43.0${suffixe}`,
+  );
+});
+
+test('63.3 : doctor omet la ligne si le daemon ne livre pas la mesure', async () => {
+  const daemon = vi.spyOn(daemonInfo, 'runningDaemon').mockResolvedValue({
+    pid: 1,
+    port: 4870,
+    token: 'test',
+    startedAt: '',
+  });
+  const requete = vi.spyOn(daemonInfo, 'daemonFetch').mockResolvedValue({ status: 200, json: {} });
+  try {
+    const { environnement } = realProbes(resolvePaths('/nonexistent/aid-home'));
+    const lignes = await runDoctorLines({ ...good, environnement });
+    expect(requete).toHaveBeenCalledWith(expect.any(Object), 'GET', '/api/machines/local');
+    expect(lignes.some((ligne) => ligne.includes('Environnement'))).toBe(false);
+
+    requete.mockRejectedValue(new Error('daemon arrêté'));
+    expect(await environnement?.()).toBeNull();
+  } finally {
+    requete.mockRestore();
+    daemon.mockRestore();
+  }
 });

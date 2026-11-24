@@ -4,6 +4,7 @@ import type { AidConfig } from '../config.js';
 import type { Db } from '../db.js';
 import { AidHttpError } from '../errors.js';
 import { MachineDiagnostics } from '../machines/diagnostic.js';
+import { creerSondeEnvironnement } from '../machines/environnement.js';
 import { codexHome, fournisseurs } from '../machines/fournisseurs.js';
 import { memoireLocale } from '../machines/memoire.js';
 import { agentsDisponibles } from '../pty/disponibles.js';
@@ -22,15 +23,19 @@ export interface MachineRouteDeps {
 
 // Chantier 29 : l'écran Machines. Lecture seule ; rien ne tourne en fond (D160).
 export function registerMachineRoutes(app: FastifyInstance, deps: MachineRouteDeps): void {
+  const mesurerEnvironnement = creerSondeEnvironnement(deps.config.memory.embeddings.url);
+
   // D154 : le diagnostic du Mac, recalculé à chaque appel : `--version` (3 s au plus) et la mémoire
   app.get('/api/machines/local', async (): Promise<MachineLocale> => {
-    const [{ agents }, octets] = await Promise.all([
+    const [{ agents }, octets, environnement] = await Promise.all([
       agentsDisponibles(deps.agents.codexModels()),
       memoireLocale(),
+      mesurerEnvironnement(),
     ]);
     const mesureA = new Date().toISOString();
     return {
       agents,
+      environnement,
       transport: deps.config.agents.transport,
       memoire: octets === null ? null : { octets, mesureA },
       mesureA,
