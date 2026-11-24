@@ -1,9 +1,8 @@
 import { mkdtempSync, realpathSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import type { AidConfig } from '../../src/daemon/config.js';
 import type { IndexEngine } from '../../src/shared/structural.js';
-import { startTestDaemon, waitFor, type TestDaemon } from './daemon.js';
+import { startTestDaemon, waitFor, type TestConfig, type TestDaemon } from './daemon.js';
 import { makeOriginAndClone } from './git.js';
 
 export const FAKE_CODEGRAPH = join(import.meta.dirname, '../fixtures/fake-codegraph.sh');
@@ -22,7 +21,7 @@ export async function setupWorkspace(
     engine?: IndexEngine;
     editor?: string[];
     local?: boolean;
-    config?: Partial<AidConfig>;
+    config?: TestConfig;
   } = {},
 ): Promise<Ctx> {
   const t = await startTestDaemon(undefined, {

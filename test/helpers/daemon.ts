@@ -2,7 +2,7 @@ import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { type DaemonHandle, startDaemon } from '../../src/daemon/main.js';
-import type { AidConfig } from '../../src/daemon/config.js';
+import { DEFAULT_CONFIG, type AidConfig } from '../../src/daemon/config.js';
 import type { Db } from '../../src/daemon/db.js';
 import type { EventStore } from '../../src/daemon/events/store.js';
 import type { Embedder } from '../../src/daemon/memory/embed.js';
@@ -22,13 +22,17 @@ export interface TestDaemon {
   store: EventStore;
 }
 
+export type TestConfig = Omit<Partial<AidConfig>, 'agents'> & {
+  agents?: Partial<AidConfig['agents']>;
+};
+
 // Vrai daemon, AID_HOME temporaire, port éphémère, authentifié en Bearer.
 export async function startTestDaemon(
   home = mkdtempSync(join(tmpdir(), 'aid-d-')),
   extra: {
     codegraphBin?: string;
     structuralEngine?: IndexEngine;
-    config?: Partial<AidConfig>;
+    config?: TestConfig;
     /** Transport distant : faux ssh par défaut, HOME distant = le AID_HOME temporaire. */
     remote?: TransportOptions;
     /** Chantier 17 (R.4) : faux agents lancés sur le faux serveur. */
@@ -50,6 +54,7 @@ export async function startTestDaemon(
     };
   } = {},
 ): Promise<TestDaemon> {
+  const { agents, ...config } = extra.config ?? {};
   const d = await startDaemon({
     home,
     codegraphBin: extra.codegraphBin,
@@ -69,7 +74,8 @@ export async function startTestDaemon(
         maintenance: { enabled: false, model: 'qwen3:8b', window: '02:00-06:00' },
         git: { push: false },
       },
-      ...extra.config,
+      ...config,
+      ...(agents && { agents: { ...DEFAULT_CONFIG.agents, ...agents } }),
     },
     checkUpdates: false,
     remote: extra.remote ?? {

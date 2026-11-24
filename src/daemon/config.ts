@@ -49,6 +49,7 @@ export interface AidConfig {
 /** Bascule progressive D63 : `stream` passe `claude`/`codex` par pilote structuré plutôt que PTY. */
 export interface AgentsConfig {
   transport: 'pty' | 'stream';
+  isolation: 'off' | 'bwrap';
 }
 
 /** Chantier 30 (D162) : le second port, réservé aux artefacts. `null` = port du daemon + 10. */
@@ -132,7 +133,7 @@ export const DEFAULT_CONFIG: AidConfig = {
   meshes: {},
   swairm: { bin: '' },
   github: { bin: '' },
-  agents: { transport: 'stream' },
+  agents: { transport: 'stream', isolation: 'off' },
   host: '127.0.0.1',
   port: 4870,
   editor: [],
@@ -570,12 +571,18 @@ function parseSwairm(raw: unknown, cfg: SwairmConfig): void {
 
 function parseAgents(raw: unknown, cfg: AgentsConfig): void {
   if (!isRecord(raw)) throw new ConfigError('config.yaml : agents doit être un objet');
-  rejectUnknown(raw, ['transport'], 'agents.');
+  rejectUnknown(raw, ['transport', 'isolation'], 'agents.');
   if (raw.transport !== undefined) {
     if (raw.transport !== 'pty' && raw.transport !== 'stream') {
       throw new ConfigError("config.yaml : agents.transport vaut 'pty' ou 'stream'");
     }
     cfg.transport = raw.transport;
+  }
+  if (raw.isolation !== undefined) {
+    if (raw.isolation !== 'off' && raw.isolation !== 'bwrap') {
+      throw new ConfigError("config.yaml : agents.isolation vaut 'off' ou 'bwrap'");
+    }
+    cfg.isolation = raw.isolation;
   }
 }
 
@@ -741,6 +748,7 @@ const DEFAULT_FILE = `# Configuration d'A-I-D. Tout est facultatif : ce sont les
 #   bin: ""                # vide = gh dans le PATH ; sinon chemin du binaire GitHub CLI
 # agents:
 #   transport: stream      # stream = claude/codex par pilote structuré (D63, défaut) ; pty = terminal
+#   isolation: off         # off = désactivée (défaut) ; bwrap = isolation bubblewrap sous Linux
 # modeHost:                # chantier 31 : le cockpit sur ton tailnet, jamais sur internet
 #   actif: false           # s'active depuis Machines, sur le Mac seulement
 #   port: 4890             # vide = port + 20 ; Tailscale Serve y envoie les appareils

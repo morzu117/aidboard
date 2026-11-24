@@ -109,6 +109,14 @@ Les tests portent sur l'argv seul :
 - `AID_HOME` caché et ses deux exceptions ;
 - les identités de poussée cachées.
 
+- _Révision 65.2._ Fait :
+  - `agents.isolation: off | bwrap`, à `off` par défaut ;
+  - `src/daemon/isolation/bwrap.ts`, avec `argvBwrap` pur et `gitCommunDe` sans repli. L'ordre est le suivant : la base, les zones cachées, les zones inscriptibles, puis les recouvrements en lecture seule ;
+  - un worktree sous `AID_HOME` est remonté après le tmpfs ;
+  - un chemin absent n'est jamais monté.
+
+  Gate 4 695.
+
 ### 65.3 Le lancement (DM45)
 
 - Le branchement en `stream` et en `pty`.
