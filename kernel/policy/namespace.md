@@ -11,6 +11,7 @@ discipline de nommage, un projet pollue la recherche des autres.
 <namespace>/plan/<task>
 <namespace>/dev-handoff/<task>
 <namespace>/review/<task>
+<namespace>/fait/<task>.<slug>
 <namespace>/retro/<cycle>
 ```
 
@@ -18,6 +19,10 @@ discipline de nommage, un projet pollue la recherche des autres.
 stable sur toute la durée du cycle — il fait le lien entre les quatre pages.
 
 Ces pages se purgent une fois la rétro faite.
+
+Le daemon écrit un fait candidat à partir d'un dev-handoff ou d'une review.
+Marqué `statut: candidat`, ce fait n'est pas établi et se vérifie avant usage.
+La purge du cycle l'emporte. Seule la rétro peut le promouvoir en leçon.
 
 ### Transverse — délibérément sans projet
 

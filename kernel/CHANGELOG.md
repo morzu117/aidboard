@@ -7,6 +7,11 @@ ajoute rien. Format : chaque version majeure du noyau décrit sa
 **migration**, que `/sync` applique avant de rendre le bloc ; les mineures
 et patchs n'en ont pas, sauf mention contraire.
 
+## Faits candidats en journée (chantier 62)
+
+Changement mineur, sans migration. La politique mémoire décrit les faits
+candidats, leur signalement à la recherche et leur promotion par la rétro.
+
 ## Rétro proposée par le moteur (chantier 61)
 
 Changement mineur, sans migration. Le daemon propose la nuit une rétro pour

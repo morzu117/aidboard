@@ -144,6 +144,14 @@ Ce point couvre :
 - le changelog du noyau ;
 - `docs/recette-chantier-62-faits-en-journee.md`, à faire sur la tour avec Ollama : un vrai handoff, puis un fait candidat lisible par un second agent cinq minutes plus tard.
 
+- _Révision 62.5._ Fait :
+  - `faits { candidats, aujourdhui, plafond }` dans la santé ;
+  - la ligne « Faits candidats » d'`aid doctor`, en avertissement au plafond, et « capture éteinte » quand la capture est arrêtée ;
+  - dans le noyau : la politique (`<ns>/fait/<task>.<slug>`, `statut: candidat`), l'adaptateur, le rôle retro et le changelog, avec les blocs re-rendus ;
+  - la fiche, avec huit contrôles.
+
+  Gate 4 772.
+
 ## 5. Pièges
 
 - **Un fait candidat n'est pas une leçon.** S'il glisse vers `lesson/` sans décision, la mémoire transverse se remplit de bruit.

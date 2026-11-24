@@ -242,6 +242,7 @@ export async function startDaemon(
           })
         : null;
     const memory = new MemoryService({
+      capture: { config: config.memory.capture, jobs },
       store: memStore,
       mirror,
       events: store,

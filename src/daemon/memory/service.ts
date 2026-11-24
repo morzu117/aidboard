@@ -22,11 +22,14 @@ export interface MemoryHealth {
   mirrorDirty: boolean;
   mirrorSync: MirrorSyncHealth;
   retros: { manquantes: number; proposees: number; abandonnees: number };
+  faits: { candidats: number; aujourdhui: number; plafond: number };
 }
 import type { WorkspaceQueue } from '../actions/queue.js';
+import type { MemoryConfig } from '../config.js';
 import { AidHttpError } from '../errors.js';
 import type { EventStore } from '../events/store.js';
 import type { Embedder, VectorIndex } from './embed.js';
+import type { MemoryJobs } from './jobs.js';
 import { type MemoryMirror, type MirrorSyncHealth, walkMarkdown } from './mirror.js';
 import {
   InvalidMemSlug,
@@ -77,6 +80,7 @@ export interface MemoryServiceDeps {
   mirror: MemoryMirror;
   events: EventStore;
   queue: WorkspaceQueue;
+  capture?: { config: MemoryConfig['capture']; jobs: MemoryJobs };
   log?: (line: string) => void;
   onWrite?: (slug: string) => void; // enfile un job d'embedding
   onRemove?: (slug: string) => void;
@@ -342,11 +346,19 @@ export class MemoryService {
   }
 
   async health(): Promise<MemoryHealth> {
+    const { capture } = this.deps;
+    const midnight = new Date();
+    midnight.setHours(0, 0, 0, 0);
     const jobs = this.deps.store.jobCounts();
     return {
       pages: this.deps.store.countByNamespace(),
       ...this.deps.store.derivedCounts(),
       retros: this.deps.store.retroCounts(),
+      faits: {
+        candidats: this.deps.store.countCandidates(),
+        aujourdhui: capture?.jobs.countCreatedSince('faits', midnight.toISOString()) ?? 0,
+        plafond: capture?.config.enabled ? capture.config.maxPerDay : 0,
+      },
       fts: true,
       vectors: this.deps.hybrid?.enabled() ? 'ollama' : 'off',
       pendingJobs: jobs.pending,

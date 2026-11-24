@@ -245,3 +245,56 @@ test('039 conserve les jobs de 038, leur délai et leur index', () => {
     previous.close();
   }
 });
+
+test.each([
+  { enabled: true, plafond: 4 },
+  { enabled: false, plafond: 0 },
+])('santé des faits avec capture enabled=$enabled', async ({ enabled, plafond }) => {
+  const t = await startTestDaemon(join(home, 'daemon'), {
+    memory: { chatModel: { chat: async () => '{"faits":[]}' } },
+    config: {
+      memory: {
+        ...DEFAULT_CONFIG.memory,
+        embeddings: { ...DEFAULT_CONFIG.memory.embeddings, provider: 'off' },
+        capture: { ...capture, enabled, maxPerDay: 4 },
+      },
+    },
+  });
+  try {
+    const store = t.d.memory.store;
+    store.put(
+      'exemple/fait/tache.un',
+      '---\nstatut: candidat\n---\nUn',
+      { kind: 'create' },
+      'maintenance',
+    );
+    store.put('exemple/fait/tache.deux', 'Deux', { kind: 'create' }, 'admin');
+    store.put(
+      'autre/review/tache',
+      '---\nstatut: candidat\n---\nTrois',
+      { kind: 'create' },
+      'admin',
+    );
+
+    vi.setSystemTime(new Date(2026, 0, 8, 12));
+    const midnight = new Date(2026, 0, 8);
+    const insert = t.db.prepare(
+      "INSERT INTO memory_jobs (id, kind, slug, state, created_at, updated_at) VALUES (?, ?, ?, 'done', ?, ?)",
+    );
+    const yesterday = new Date(midnight.getTime() - 1).toISOString();
+    const today = midnight.toISOString();
+    insert.run('veille', 'faits', slug, yesterday, yesterday);
+    insert.run('jour', 'faits', slug, today, today);
+    insert.run('autre', 'embed', slug, today, today);
+
+    const reply = await t.d.app.inject({
+      method: 'GET',
+      url: '/api/memory/health',
+      headers: t.headers,
+    });
+    expect(reply.statusCode).toBe(200);
+    expect(reply.json().faits).toEqual({ candidats: 2, aujourdhui: 1, plafond });
+  } finally {
+    await t.d.stop();
+  }
+});
