@@ -109,6 +109,15 @@ Les tests couvrent :
 
 Les tests passent par de faux exécutables dans un `PATH` temporaire, jamais par les vrais outils.
 
+- _Révision 63.2._ Fait :
+  - `src/shared/outils.ts`, le schéma ;
+  - `src/shared/plage-version.ts`, les plages sans dépendance : `>=`, `>`, `<=`, `<`, `=`, préfixe, `^`, `~`, ET par espace, OU par `||` ;
+  - `src/cli/commands/env.ts`, la commande `aid env check`, avec les codes 0, 7 et 2.
+
+  `git` est ajouté d'office. `git: { requis: false }` le retire du contrôle. Un délai dépassé vaut `absent` (« délai dépassé »).
+
+  35 tests. Gate 4 719. Sur le VPS, `aid env check` dans aidboard rend `✓ git 2.47.3`, puisque le manifeste n'a pas encore d'`outils`.
+
 ### 63.3 L'environnement de la cell (DM38)
 
 La route, le cache, les droits et la ligne d'`aid doctor`.
