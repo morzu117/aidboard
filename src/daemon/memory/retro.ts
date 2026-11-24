@@ -10,7 +10,7 @@ import { assembleCycleRecit, loadCycleInput } from './recit.js';
 import { isValidMemSlug } from './slug.js';
 import { type MemoryStore, renderMarkdown } from './store.js';
 
-const RETRO_PROMPT = `Écris une rétro de 15 lignes au plus : ce qui a marché, ce qui a coincé et ce qui reste. Propose zéro à trois leçons durables, chacune une seule affirmation en 15 lignes au plus. Aucune leçon est une réponse normale. Ne recopie jamais un secret ni un chemin. Réponds uniquement en JSON : {"retro":{"title":"…","body":"…"},"lecons":[{"slug":"…","title":"…","domaine":"…","tags":[],"entites":[],"body":"…"}]}. Slug et domaine sont chacun un seul segment en minuscules.`;
+const RETRO_PROMPT = `Écris une rétro de 15 lignes au plus : ce qui a marché, ce qui a coincé et ce qui reste. Propose zéro à trois leçons durables, chacune une seule affirmation en 15 lignes au plus. Aucune leçon est une réponse normale. Les pages marquées « (candidat) » contiennent des faits extraits pendant le cycle, dont seuls ceux qui sont vrais hors de ce projet peuvent être proposés comme leçons. Ne recopie jamais un secret ni un chemin. Réponds uniquement en JSON : {"retro":{"title":"…","body":"…"},"lecons":[{"slug":"…","title":"…","domaine":"…","tags":[],"entites":[],"body":"…"}]}. Slug et domaine sont chacun un seul segment en minuscules.`;
 
 const Segment = Type.String({ pattern: '^[a-z0-9][a-z0-9._-]*$' });
 const Body = Type.String({ minLength: 1 });

@@ -9,6 +9,7 @@ import { EventStore } from '../src/daemon/events/store.js';
 import { finDeSource, runFaitsJob } from '../src/daemon/memory/faits.js';
 import { MemoryJobs } from '../src/daemon/memory/jobs.js';
 import { MemoryMirror } from '../src/daemon/memory/mirror.js';
+import { loadCycleInput } from '../src/daemon/memory/recit.js';
 import { MemoryService } from '../src/daemon/memory/service.js';
 import { MemoryStore } from '../src/daemon/memory/store.js';
 import { MemoryWorker } from '../src/daemon/memory/worker.js';
@@ -271,4 +272,18 @@ test('une source longue est coupée à sa fin, sur une fin de ligne', () => {
   expect(coupe.endsWith('ligne 2999')).toBe(true);
   expect(coupe.split('\n')[1]).toMatch(/^ligne \d+$/);
   expect(finDeSource('court', 1000)).toBe('court');
+});
+
+test('62.4 : le récit charge un fait extrait du handoff d’un run du sujet', async () => {
+  seedTopic(db);
+  const handoff = 'a/dev-handoff/s';
+  await memory.put(handoff, 'Corps source.', create, context);
+  chat.mockResolvedValue(JSON.stringify({ faits: [fact('regle')] }));
+  expect(await run({ ...job, slug: handoff })).toBe(1);
+
+  const cycle = loadCycleInput({ db, memory, store: events }, context.topicId);
+  expect(cycle?.pages).toMatchObject([
+    { slug: handoff },
+    { slug: 'a/fait/s.regle', frontmatter: { statut: 'candidat' } },
+  ]);
 });

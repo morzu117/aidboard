@@ -128,6 +128,13 @@ Les points couverts sont :
 - les faits dans le récit de la rétro, et le prompt de la rétro ;
 - la purge.
 
+- _Révision 62.4._ Fait :
+  - `candidat: true` dans les résultats et les voisines de la recherche, « (candidat) » dans le CLI, et une phrase dans la description MCP ;
+  - le récit de la rétro range les faits après la review et les marque, et le prompt de la rétro dit lesquels proposer comme leçons ;
+  - la purge rattache `<ns>/fait/<task>.<slug>` à sa tâche, avant le dernier point.
+
+  Gate 4 767.
+
 ### 62.5 La santé, le noyau et la fiche (DM34)
 
 Ce point couvre :

@@ -68,14 +68,15 @@ function formatHits({ mode, hits, voisins }: SearchResult): string[] {
   const lines = [`mode : ${mode}`];
   for (const h of hits) {
     const via = h.via?.type === 'remplace' ? ` (remplace ${h.via.slug})` : '';
-    lines.push(`${h.score.toFixed(3)}  ${h.slug}  ${h.title}${via}`);
+    const candidat = h.candidat ? ' (candidat)' : '';
+    lines.push(`${h.score.toFixed(3)}  ${h.slug}${candidat}  ${h.title}${via}`);
     if (h.snippet) lines.push(`    ${h.snippet}`);
   }
   if (hits.length === 0) lines.push('aucun résultat');
   if (voisins?.length) {
     lines.push('Voisines :');
-    for (const { slug, via } of voisins) {
-      if (via) lines.push(`  ${slug}  ${via.type}  ${via.slug}`);
+    for (const { slug, via, candidat } of voisins) {
+      if (via) lines.push(`  ${slug}${candidat ? ' (candidat)' : ''}  ${via.type}  ${via.slug}`);
     }
   }
   return lines;

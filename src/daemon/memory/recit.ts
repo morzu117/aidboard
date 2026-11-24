@@ -42,10 +42,11 @@ export function assembleCycleRecit(
     ? MAX_CHARS
     : Math.max(0, Math.min(MAX_CHARS, Math.floor(maxChars)));
   const phases = phaseSlugs(namespace, topic.slug);
-  const rang = (slug: string) => (phases.includes(slug) ? phases.indexOf(slug) : phases.length);
-  const ordonnees = [...pages].sort(
-    (a, b) => rang(a.slug) - rang(b.slug) || a.slug.localeCompare(b.slug),
-  );
+  const rang = (page: MemoryPage) => {
+    const phase = phases.indexOf(page.slug);
+    return phase >= 0 ? phase : phases.length + Number(page.frontmatter.statut !== 'candidat');
+  };
+  const ordonnees = [...pages].sort((a, b) => rang(a) - rang(b) || a.slug.localeCompare(b.slug));
 
   const actions: string[] = [];
   let reprises = 0;
@@ -88,7 +89,8 @@ export function assembleCycleRecit(
   let restant = budget - entete.length;
   const sections: { page: MemoryPage; titre: string }[] = [];
   for (const page of ordonnees) {
-    const titre = `\n\n## ${page.slug}${page.closed ? ' (close)' : ''}\n\n`;
+    const candidat = page.frontmatter.statut === 'candidat' ? ' (candidat)' : '';
+    const titre = `\n\n## ${page.slug}${candidat}${page.closed ? ' (close)' : ''}\n\n`;
     if (titre.length + COUPE.length > restant) break;
     sections.push({ page, titre });
     restant -= titre.length + COUPE.length;
