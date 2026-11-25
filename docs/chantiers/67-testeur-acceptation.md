@@ -79,7 +79,7 @@ Le risque 3 du §14 dit aussi ce qu'il faut mesurer : pour une interface ou un p
    - un commit **non marqué**, postérieur au premier commit marqué du même point, modifie, renomme ou supprime un fichier d'acceptation.
 
    Il nomme chaque fichier et chaque commit en faute.
-2. **`aid acceptation preuve`.** Pour chaque point couvert, il lance les fichiers d'acceptation deux fois, dans des worktrees temporaires :
+2. **`aid acceptation preuve`.** Sa sortie JSON suit le DM55. Pour chaque point couvert, il lance les fichiers d'acceptation deux fois, dans des worktrees temporaires :
    - au commit marqué : ils doivent **échouer** ;
    - à `HEAD` : ils doivent **passer**.
 
@@ -87,6 +87,19 @@ Le risque 3 du §14 dit aussi ce qu'il faut mesurer : pour une interface ou un p
 3. **`aid acceptation couverture --plan <fichier>`.** La mesure du DM52.
 
 Le gate du noyau (`orchestration.md`) gagne le contrôle 5 quand la phase est active : `verifier` et `preuve` passent, et `couverture` n'a aucun point manquant. Un échec de `verifier` est un dépassement de périmètre : il remonte à l'humain, comme le contrôle 3.
+
+### DM55. La sortie de `preuve` suit la forme de preuve du comité #1737
+
+- Le comité a ratifié une forme d'objet de preuve, qui n'est pas encore imposée par la passerelle (lab, DM 105739). `aid acceptation preuve --json` la suit, pour qu'une preuve d'A-I-D puisse servir telle quelle le jour où la passerelle l'exigera.
+- Les clés rendues :
+  - `schema_version` (1), `repo` (`owner/name`), `head` (la tête) et `base` (le commit marqué), en sha complet ;
+  - `outcome` : `pass`, `fail` ou `cannot_evaluate` ;
+  - `commands` : chaque commande réellement lancée, avec son `argv`, son code de sortie et la tête où elle a tourné ;
+  - `not_checked` : ce qui n'a pas été vérifié, par exemple un point sans commande de lancement ; la liste peut être vide ;
+  - `suites` : `head` et `base`, chacune avec `passed`, `failed` et les identifiants des tests ; `pass_to_fail` doit rester vide ;
+  - une extension facultative, `fail_to_pass` : les tests rouges au commit marqué et verts à la tête. C'est le fait que ce chantier prouve. Il n'existe pas encore dans la forme du comité, et nous le proposons comme extension, sans détourner `pass_to_fail`.
+- `relationship` n'est jamais rendue par A-I-D : c'est la passerelle qui la calcule.
+- Une preuve sans toutes les clés obligatoires n'en est pas une. Le texte autour ne remplace pas une clé manquante.
 
 ## 4. Points
 
@@ -115,7 +128,7 @@ La commande, la lecture des trailers, les chemins du manifeste, la sortie JSON. 
 
 ### 67.4 `aid acceptation preuve` (DM54.2)
 
-Les deux lancements, les worktrees temporaires et leur nettoyage, le test vert dès le commit marqué, une commande absente du manifeste. Les tests utilisent un dépôt temporaire avec un faux lanceur, sans vitest ni playwright réels.
+Les deux lancements, la sortie JSON du DM55, les worktrees temporaires et leur nettoyage, le test vert dès le commit marqué, une commande absente du manifeste. Les tests utilisent un dépôt temporaire avec un faux lanceur, sans vitest ni playwright réels.
 
 ### 67.5 `aid acceptation couverture` (DM52, DM54.3)
 
