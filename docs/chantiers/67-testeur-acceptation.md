@@ -61,7 +61,7 @@ Le risque 3 du §14 dit aussi ce qu'il faut mesurer : pour une interface ou un p
 - Un point est **couvert** s'il a au moins un commit `Acceptation:` sur la branche.
 - Un point est **non testable à l'avance** si la section du plan porte une ligne `- _Acceptation._ Non testable à l'avance : <raison>.` Une raison est obligatoire. Les raisons attendues : un pas de configuration sur une vraie machine, un rendu à juger à l'œil, de la documentation seule.
 - Un point ni couvert ni justifié est **manquant**, et c'est une erreur.
-- La mesure rend : le nombre de points, couverts, non testables (avec les raisons), manquants, et la part couverte. Elle va dans la note de révision du dernier point, puis dans la rétro.
+- La mesure rend : le nombre de points, couverts, non testables (avec les raisons), manquants, et la part couverte. La raison est le texte qui suit « : », tel qu'il est écrit, point final compris. Quand aucun point n'est testable, `part` vaut 1 : il n'y a rien à couvrir. Elle va dans la note de révision du dernier point, puis dans la rétro.
 
 ### DM53. Ce chantier se teste lui-même, à partir du 67.3
 
@@ -169,6 +169,8 @@ Les deux lancements, la sortie JSON du DM55, les worktrees temporaires et leur n
 ### 67.5 `aid acceptation couverture` (DM52, DM54.3, DM56)
 
 La lecture des titres de points, des lignes « Non testable à l'avance » et des commits marqués. Les tests portent sur un plan d'exemple : un point couvert, un point justifié, un point manquant, une raison vide, le point `.1` exclu.
+
+- _Acceptation._ Couvert par `test/acceptation-couverture.test.ts` (edd90bb), cinq cas écrits par le testeur depuis le plan seul : les deux formes de titre ; le point `.1` exclu ; le point couvert par un trailer ; le point justifié et sa raison ; le point manquant, et la raison vide qui ne justifie rien ; les compteurs et la part parmi les points testables ; les codes 0, 1 et 2, dont `--plan` absent ; la sortie texte, une ligne par point, et `--json`. Échec attendu au commit marqué : l'import de `src/acceptation/couverture.js`, absent, et deux cas de la CLI sur le code de sortie (2 au lieu de 1 et de 0). Le testeur a signalé deux ambiguïtés du plan sans les trancher : la forme de la raison et la part sans point testable. La cell de gestion les a tranchées dans le DM52.
 
 ### 67.6 Le gate, la fiche de recette et la mesure
 
