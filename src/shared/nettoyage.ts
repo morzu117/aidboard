@@ -119,6 +119,11 @@ const affectation = new RegExp(
   '\\b([a-z0-9_]*(?:token|secret|key|pass|cred|auth|private)[a-z0-9_]*)\\b(\\s*[:=]\\s*)([\'\\"]?)(?!\\[REDACTED)([A-Za-z0-9/+=\\-_]{16,})\\3',
   'ig',
 );
+// DM58 : détecte les clés à segment final sensible sans modifier les refus historiques.
+const affectationCleSecrete =
+  /(?<![\p{L}\p{N}_'"-])(['"]?)((?:[\p{L}\p{N}_-]*[_-])?(?:password|passwd|pwd|passphrase|secret|token|key|credentials?))\1[^\S\r\n]*[:=][^\S\r\n]*(?:"((?:[^"\\\r\n]|\\[^\r\n])*)"|'((?:[^'\\\r\n]|\\[^\r\n])*)'|(<[^<>\r\n]+>|[^\s'"\x60,;&)\]}]+))/giu;
+const reference = /^(?:\{|\$(?:\{|[\p{L}_])|%\()/u;
+const modesCredentials = ['omit', 'include', 'same-origin'];
 const isole = new RegExp(
   '(?<![A-Za-z0-9/+\\-_/.])([A-Za-z0-9/+\\-_]{24,}=*)(?![A-Za-z0-9/+\\-_/.])',
   'g',
@@ -239,6 +244,21 @@ export function nettoyer(
       !hexadecimal.test(valeur) &&
       !uuid.test(valeur) &&
       entropie(valeur) >= 3.6
+    )
+      return refus('ressemble à une clé API');
+  }
+  for (const [, , cle, double, simple, sansGuillemets] of controle.matchAll(
+    affectationCleSecrete,
+  )) {
+    const valeur = (double ?? simple ?? sansGuillemets)!;
+    const valeurNormalisee = valeur.toLowerCase();
+    if (
+      Array.from(valeur).length >= 4 &&
+      !reference.test(valeur) &&
+      !(cle!.toLowerCase() === 'credentials' && modesCredentials.includes(valeurNormalisee)) &&
+      !exemples.includes(valeurNormalisee) &&
+      valeurNormalisee !== 'changeme' &&
+      !/^<[^<>]+>$/.test(valeur)
     )
       return refus('ressemble à une clé API');
   }
