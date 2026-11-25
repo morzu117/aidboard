@@ -7,6 +7,11 @@ ajoute rien. Format : chaque version majeure du noyau décrit sa
 **migration**, que `/sync` applique avant de rendre le bloc ; les mineures
 et patchs n'en ont pas, sauf mention contraire.
 
+## Phase d'acceptation (chantier 67)
+
+Changement mineur, sans migration. La phase facultative écrit les tests
+avant le dev et ajoute un contrôle au gate.
+
 ## Liens typés, pages closes et décisions (chantier 60)
 
 Changement mineur, sans migration. La politique mémoire décrit la fermeture,
