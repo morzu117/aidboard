@@ -144,7 +144,7 @@ Ce document, et une ligne dans `README.md`.
 - Le `agent.yml` d'A-I-D déclare la phase, et ses chemins et commandes.
 - Les tests existants du noyau (le rendu de `/sync`, le schéma) couvrent la phase déclarée et la phase absente.
 
-_Acceptation._ Ce point est écrit sans testeur : l'outil n'existe pas encore (DM53).
+_Acceptation._ Non testable à l'avance : le point est écrit avant que le testeur et ses outils existent (DM53). Le texte du noyau est vérifié par les tests de `test/kernel.test.ts`.
 - _Révision 67.2._ Deux passes. La première montait `kernel.version` à 0.10.0, une version qui n'existe pas : depuis la fusion, la version du noyau est celle d'aidboard (`kernel/commands/sync.md` §2). La reprise remet 0.9.1. `CLAUDE.md` et `AGENTS.md` seront rendus de nouveau par `/sync` après la prochaine release. Gate 4 687.
 
 ### 67.3 `aid acceptation verifier` (DM51, DM54.1, DM56)
