@@ -140,6 +140,8 @@ La commande, la lecture des trailers, les chemins du manifeste, la sortie JSON. 
 - un re-dev du testeur, marqué ;
 - aucune base ou aucun commit marqué.
 
+- _Acceptation._ Couvert par `test/acceptation-verifier.test.ts` (1534b4b), seize cas écrits par le testeur depuis le plan seul : commit marqué propre ; `hors_chemins` ; `modifie_par_dev`, `renomme_par_dev` et `supprime_par_dev` ; re-dev marqué sans faute ; aucun commit marqué ; chemins par défaut, sans `agent.yml` ou sans la clé, et chemins déclarés ; codes de sortie 0, 1 et 2 (sous-commande inconnue, `--base` absent, ref introuvable, hors d'un dépôt) ; `--json`. Échec attendu au commit marqué : l'import de `src/acceptation/verifier.js`, absent. Les nouveaux modules ne peuvent pas échouer sur une assertion avant d'exister.
+
 ### 67.4 `aid acceptation preuve` (DM54.2, DM55, DM56)
 
 Les deux lancements, la sortie JSON du DM55, les worktrees temporaires et leur nettoyage, le test vert dès le commit marqué, une commande absente du manifeste. Les tests utilisent un dépôt temporaire avec un faux lanceur, sans vitest ni playwright réels.
