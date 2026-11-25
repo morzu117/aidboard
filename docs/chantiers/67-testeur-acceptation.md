@@ -111,9 +111,25 @@ Le testeur écrit avant le code. Il lui faut donc des noms fixés par le plan, e
 - **Le manifeste.** `acceptation.chemins` et `acceptation.lancer` sont lus dans `agent.yml`, à la racine du dépôt. Sans `agent.yml` ou sans `acceptation.chemins`, les chemins sont `test/` et `e2e/`.
 - **Le cœur de chaque contrôle**, une fonction pure côté résultat, testable sans la CLI, dans `src/acceptation/` :
   - `verifierAcceptation({ depot, base, chemins }): Promise<RapportVerifier>`, dans `verifier.ts`. `RapportVerifier` vaut `{ ok: boolean; points: Record<string, { commits: string[]; fichiers: string[] }>; fautes: { commit: string; fichier: string; raison: 'hors_chemins' | 'modifie_par_dev' | 'renomme_par_dev' | 'supprime_par_dev' }[] }`. Les commits sont des sha complets. Sans commit marqué, `ok` vaut `true` et `points` est vide.
-  - `prouverAcceptation({ depot, base, chemins, lancer }): Promise<PreuveD5>`, dans `preuve.ts`, avec la forme du DM55.
+  - `prouverAcceptation({ depot, base, chemins, lancer }): Promise<PreuveD5[]>`, dans `preuve.ts`, avec la forme du DM55 et les règles du DM57. `lancer` est un objet `{ [chemin]: commande }`.
   - `mesurerCouverture({ depot, base, plan }): Promise<RapportCouverture>`, dans `couverture.ts`. `RapportCouverture` vaut `{ points: { point: string; etat: 'couvert' | 'non_testable' | 'manquant'; raison?: string }[]; total: number; couverts: number; nonTestables: number; manquants: number; part: number }`. `part` est la part couverte parmi les points testables, entre 0 et 1.
 - Le trailer se lit avec `git log --format=%(trailers:key=Acceptation,valueonly)`. Sa valeur est le point, sans espace autour.
+
+### DM57. Comment `preuve` lance les tests
+
+Le DM54.2 et le DM55 disent ce que `preuve` prouve. Voici comment, pour que le testeur et le dev partent des mêmes règles.
+
+- **Une preuve par point.** `prouverAcceptation` rend une liste de `PreuveD5`, une par point couvert, dans l'ordre des points. Pour un point, `base` est son **premier** commit marqué, et ses fichiers d'acceptation sont ceux de ce commit. `head` est `HEAD`.
+- **Le grain est le fichier.** Chaque fichier d'acceptation est lancé seul, une fois à `base` et une fois à `head`. Il passe si sa commande rend 0. Les `ids` des suites sont les chemins des fichiers.
+- **La commande.** Le fichier prend la commande de `acceptation.lancer` dont le chemin est le préfixe de son chemin. La chaîne est découpée sur les espaces, sans shell, et `{fichiers}` est remplacé par le chemin du fichier, en un seul argument. Un fichier sans commande va dans `not_checked`.
+- **Les worktrees.** Chaque lancement a lieu dans un worktree détaché et temporaire (`git worktree add --detach`), sous le dossier temporaire du système. Si le dépôt a un `node_modules` à sa racine, le worktree reçoit un lien symbolique vers lui. Le worktree est retiré, même en cas d'échec ou de délai dépassé. Une commande a dix minutes au plus, sinon elle compte comme un échec et sa durée dépassée est notée.
+- **Le résultat d'un point.**
+  - `pass` : chaque fichier échoue à `base` et passe à `head`. Ils vont tous dans `fail_to_pass`.
+  - `fail` : un fichier passe déjà à `base` (il ne prouve rien), ou échoue encore à `head`. `pass_to_fail` reçoit un fichier qui passait à `base` et échoue à `head`.
+  - `cannot_evaluate` : au moins un fichier sans commande, et aucun autre échec.
+- **`repo`** vient de l'URL du remote `origin`, réduite à `owner/name`. Sans remote `origin`, c'est une erreur d'environnement (code 2).
+- **Le code de sortie.** 0 si chaque point est `pass`. 1 si un point est `fail` ou `cannot_evaluate`. 2 pour une erreur d'usage ou d'environnement. Sans point couvert, la liste est vide et le code est 0.
+- **La sortie.** Avec `--json`, l'objet `{ "preuves": [...] }`. Sans `--json`, une ligne par point : le point, son résultat, et les fichiers en faute.
 
 ## 4. Points
 
@@ -143,7 +159,7 @@ La commande, la lecture des trailers, les chemins du manifeste, la sortie JSON. 
 - _Acceptation._ Couvert par `test/acceptation-verifier.test.ts` (1534b4b), seize cas écrits par le testeur depuis le plan seul : commit marqué propre ; `hors_chemins` ; `modifie_par_dev`, `renomme_par_dev` et `supprime_par_dev` ; re-dev marqué sans faute ; aucun commit marqué ; chemins par défaut, sans `agent.yml` ou sans la clé, et chemins déclarés ; codes de sortie 0, 1 et 2 (sous-commande inconnue, `--base` absent, ref introuvable, hors d'un dépôt) ; `--json`. Échec attendu au commit marqué : l'import de `src/acceptation/verifier.js`, absent. Les nouveaux modules ne peuvent pas échouer sur une assertion avant d'exister.
 - _Révision 67.3._ Premier point passé par le testeur : une session testeur, puis une session dev distincte. Les seize tests d'acceptation passent, et leur fichier est identique à 1534b4b. Le dev n'a signalé aucun test faux, et n'a ajouté aucun test. Gate 4 703.
 
-### 67.4 `aid acceptation preuve` (DM54.2, DM55, DM56)
+### 67.4 `aid acceptation preuve` (DM54.2, DM55, DM56, DM57)
 
 Les deux lancements, la sortie JSON du DM55, les worktrees temporaires et leur nettoyage, le test vert dès le commit marqué, une commande absente du manifeste. Les tests utilisent un dépôt temporaire avec un faux lanceur, sans vitest ni playwright réels.
 
