@@ -126,7 +126,7 @@ Le DM54.2 et le DM55 disent ce que `preuve` prouve. Voici comment, pour que le t
 - **Le résultat d'un point.**
   - `pass` : chaque fichier échoue à `base` et passe à `head`. Ils vont tous dans `fail_to_pass`.
   - `fail` : un fichier passe déjà à `base` (il ne prouve rien), ou échoue encore à `head`. `pass_to_fail` reçoit un fichier qui passait à `base` et échoue à `head`.
-  - `cannot_evaluate` : au moins un fichier sans commande, ou dont un des deux lancements n'a pas rendu de code (délai dépassé, arrêt par un signal), et aucun autre échec. Un tel fichier va dans `not_checked`, jamais dans `fail_to_pass` : un lancement bloqué au commit marqué ne prouve pas que le test y était rouge.
+  - `cannot_evaluate` : au moins un fichier sans commande, ou dont un des deux lancements n'a pas rendu de code (délai dépassé, arrêt par un signal), et aucun autre échec. Un tel fichier va dans `not_checked`, jamais dans `fail_to_pass` : un lancement bloqué au commit marqué ne prouve pas que le test y était rouge. Les `suites` comptent les lancements tels qu'ils ont eu lieu : un lancement sans code y compte comme `failed`, et le même fichier figure aussi dans `not_checked`. C'est `outcome` et `not_checked` qui disent ce que la preuve établit.
 - **`repo`** vient de l'URL du remote `origin`, réduite à `owner/name`. Sans remote `origin`, c'est une erreur d'environnement (code 2).
 - **Le code de sortie.** 0 si chaque point est `pass`. 1 si un point est `fail` ou `cannot_evaluate`. 2 pour une erreur d'usage ou d'environnement. Sans point couvert, la liste est vide et le code est 0.
 - **La sortie.** Avec `--json`, l'objet `{ "preuves": [...] }`. Sans `--json`, une ligne par point : le point, son résultat, et les fichiers en faute.
