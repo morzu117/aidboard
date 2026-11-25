@@ -179,6 +179,8 @@ La lecture des titres de points, des lignes « Non testable à l'avance » et de
 - La fiche `docs/recette-chantier-67-testeur-acceptation.md` : un vrai chantier suivant, passé par le testeur, et sa mesure de couverture.
 - La note de révision rend la mesure du chantier 67 lui-même (DM53).
 
+- _Acceptation._ Couvert par `test/acceptation-doctor.test.ts` (aef03b6), six cas écrits par le testeur depuis le plan seul. Quand le projet déclare la phase, `aid doctor` avertit en citant `acceptation.lancer` si la clé est absente ou vide, et en nommant un chemin de `acceptation.chemins` resté sans commande. Il n'avertit pas quand chaque chemin a sa commande, ni quand la phase n'est pas déclarée, avec ou sans bloc `acceptation`. Le code de sortie reste 0 dans les six cas. Échec attendu au commit marqué : les trois cas d'avertissement, sur une assertion, car aucun avertissement n'est émis. C'est le premier point où chaque test rouge échoue sur le comportement et non sur un import. La fiche de recette et la mesure sont de la documentation, écrite par la cell de gestion.
+
 ## 5. Pièges
 
 - **Le testeur qui lit le code du dev.** Avant le dev, il n'y en a pas. Le brief du testeur ne cite jamais une branche de dev, ni un worktree de dev.
