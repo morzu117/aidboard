@@ -141,6 +141,7 @@ La commande, la lecture des trailers, les chemins du manifeste, la sortie JSON. 
 - aucune base ou aucun commit marqué.
 
 - _Acceptation._ Couvert par `test/acceptation-verifier.test.ts` (1534b4b), seize cas écrits par le testeur depuis le plan seul : commit marqué propre ; `hors_chemins` ; `modifie_par_dev`, `renomme_par_dev` et `supprime_par_dev` ; re-dev marqué sans faute ; aucun commit marqué ; chemins par défaut, sans `agent.yml` ou sans la clé, et chemins déclarés ; codes de sortie 0, 1 et 2 (sous-commande inconnue, `--base` absent, ref introuvable, hors d'un dépôt) ; `--json`. Échec attendu au commit marqué : l'import de `src/acceptation/verifier.js`, absent. Les nouveaux modules ne peuvent pas échouer sur une assertion avant d'exister.
+- _Révision 67.3._ Premier point passé par le testeur : une session testeur, puis une session dev distincte. Les seize tests d'acceptation passent, et leur fichier est identique à 1534b4b. Le dev n'a signalé aucun test faux, et n'a ajouté aucun test. Gate 4 703.
 
 ### 67.4 `aid acceptation preuve` (DM54.2, DM55, DM56)
 
