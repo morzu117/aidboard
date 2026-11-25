@@ -163,6 +163,8 @@ La commande, la lecture des trailers, les chemins du manifeste, la sortie JSON. 
 
 Les deux lancements, la sortie JSON du DM55, les worktrees temporaires et leur nettoyage, le test vert dès le commit marqué, une commande absente du manifeste. Les tests utilisent un dépôt temporaire avec un faux lanceur, sans vitest ni playwright réels.
 
+- _Acceptation._ Couvert par `test/acceptation-preuve.test.ts` (9fea6d3), dix cas écrits par le testeur depuis le plan seul, avec un faux lanceur : rouge puis vert et `fail_to_pass` ; vert dès le commit marqué ; rouge persistant ; `pass_to_fail` ; `not_checked` et `cannot_evaluate`, et `fail` qui l'emporte ; une preuve par point, dans l'ordre des points, avec son premier commit marqué et ses seuls fichiers ; les clés du DM55, les sha complets, `repo`, `commands`, les suites et l'absence de `relationship` ; un chemin avec des espaces passé en un seul argument, sans shell ; le worktree détaché, son lien `node_modules`, et son retrait après un succès comme après un échec ; `--json` ; les codes 0, 1 et 2, dont l'absence d'`origin` ; la liste vide sans point couvert. Échec attendu au commit marqué : l'import de `src/acceptation/preuve.js`, absent, et huit cas de la CLI sur le code de sortie (2 au lieu de 0 ou 1). Non testé à l'avance : le délai de dix minutes, que l'interface publique ne permet ni de régler ni de simuler sans une vraie attente.
+
 ### 67.5 `aid acceptation couverture` (DM52, DM54.3, DM56)
 
 La lecture des titres de points, des lignes « Non testable à l'avance » et des commits marqués. Les tests portent sur un plan d'exemple : un point couvert, un point justifié, un point manquant, une raison vide, le point `.1` exclu.
