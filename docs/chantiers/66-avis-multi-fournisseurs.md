@@ -164,6 +164,19 @@ L'e2e complet du point 66.4 a montré 5 échecs, tous dus au passage du binaire 
 
   Un défaut d'écran est corrigé par cell-gestion : dans `TableauAvis.tsx`, la cellule d'accord ne revient plus à la ligne. Avec les en-têtes plus longs (`claude:sonnet — echec`), « insuffisant » se coupait, et la garde visuelle le refusait. Gate 4 721.
 
+### 66.6 La revue du lab
+
+Le lab a relu la PR au head 79470af, en lisant le code. Ce point corrige ce qu'il demande avant le merge, et les défauts bas qui coûtent peu. Les trous de `nettoyage.ts`, déjà présents avant ce chantier, vont dans un chantier à part.
+
+- **L'environnement des CLI (haut).** Chaque fournisseur reçoit un environnement en liste blanche : `PATH`, `HOME`, `LANG`, `LC_*`, `TERM`, `TMPDIR`, `XDG_*`, et la variable de configuration propre à sa CLI (par exemple `CODEX_HOME`). Rien d'autre ne passe, ni jeton, ni URL de base, ni secret du daemon.
+- **codex sans outil.** codex est lancé sans shell ni serveur MCP, si ses options le permettent, comme claude. Sinon, le plan le dit : « codex peut lire le disque en lecture seule », et la cell de gestion le remonte à Julien.
+- **Les hôtes privés.** `nettoyer` reçoit une liste d'hôtes privés lue dans la configuration du daemon, et refuse par défaut les suffixes `.internal`, `.local`, `.lan`, `.corp`, `.home.arpa` et `.cluster.local`, en plus de `.ts.net`.
+- **Une réponse vide n'est pas un avis.** Un avis sans aucun verdict valide est `invalide`, et `resultatAvis` ne le compte pas comme `ok`.
+- **Le lancement qui ne se ferme pas.** Le lanceur se résout à la sortie du processus, avec un délai de grâce, même si un petit-enfant garde la sortie ouverte. Le service se libère toujours.
+- **La question par stdin.** claude et vibe reçoivent la question par l'entrée standard quand leur CLI le permet, comme codex, et la question et ses sous-questions ont une taille plafonnée.
+- **Les échecs nommés.** Sans `--json`, `aid avis` dit si la CLI manque, a dépassé le délai, ou a échoué. La sortie d'une CLI est bornée.
+- **Hors de ce point.** Les options réelles de vibe, à établir sur la tour, restent un défaut connu.
+
 ## 5. Pièges
 
 - **Un avis n'a pas d'outil.** Un `codex exec` sans `--sandbox read-only` dans un répertoire vide pourrait écrire ou lancer des commandes. Le test vérifie l'argv exact.
