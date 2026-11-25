@@ -101,6 +101,20 @@ Le gate du noyau (`orchestration.md`) gagne le contrôle 5 quand la phase est ac
 - `relationship` n'est jamais rendue par A-I-D : c'est la passerelle qui la calcule.
 - Une preuve sans toutes les clés obligatoires n'en est pas une. Le texte autour ne remplace pas une clé manquante.
 
+### DM56. L'interface que le testeur et le dev partagent
+
+Le testeur écrit avant le code. Il lui faut donc des noms fixés par le plan, et le dev doit les respecter.
+
+- **La commande.** `aid acceptation <verifier|preuve|couverture> --base <ref> [--plan <fichier>] [--json]`, dans le dépôt courant, sans daemon. `src/cli/aid.ts` l'aiguille avant l'analyse stricte des options, comme `kernel`, vers `runAcceptation(args: string[], opts?: { cwd?: string; out?: (ligne: string) => void; err?: (ligne: string) => void }): Promise<number>` dans `src/cli/commands/acceptation.ts`.
+- **Les codes de sortie.** 0 si le contrôle passe. 1 s'il échoue. 2 pour une erreur d'usage ou d'environnement : sous-commande inconnue, `--base` absent, ref introuvable, dossier hors d'un dépôt git, `--plan` absent pour `couverture`.
+- **La sortie.** Sans `--json`, une ligne par faute ou par point, en français. Avec `--json`, un seul objet JSON sur la sortie standard, et rien d'autre.
+- **Le manifeste.** `acceptation.chemins` et `acceptation.lancer` sont lus dans `agent.yml`, à la racine du dépôt. Sans `agent.yml` ou sans `acceptation.chemins`, les chemins sont `test/` et `e2e/`.
+- **Le cœur de chaque contrôle**, une fonction pure côté résultat, testable sans la CLI, dans `src/acceptation/` :
+  - `verifierAcceptation({ depot, base, chemins }): Promise<RapportVerifier>`, dans `verifier.ts`. `RapportVerifier` vaut `{ ok: boolean; points: Record<string, { commits: string[]; fichiers: string[] }>; fautes: { commit: string; fichier: string; raison: 'hors_chemins' | 'modifie_par_dev' | 'renomme_par_dev' | 'supprime_par_dev' }[] }`. Les commits sont des sha complets. Sans commit marqué, `ok` vaut `true` et `points` est vide.
+  - `prouverAcceptation({ depot, base, chemins, lancer }): Promise<PreuveD5>`, dans `preuve.ts`, avec la forme du DM55.
+  - `mesurerCouverture({ depot, base, plan }): Promise<RapportCouverture>`, dans `couverture.ts`. `RapportCouverture` vaut `{ points: { point: string; etat: 'couvert' | 'non_testable' | 'manquant'; raison?: string }[]; total: number; couverts: number; nonTestables: number; manquants: number; part: number }`. `part` est la part couverte parmi les points testables, entre 0 et 1.
+- Le trailer se lit avec `git log --format=%(trailers:key=Acceptation,valueonly)`. Sa valeur est le point, sans espace autour.
+
 ## 4. Points
 
 ### 67.1 Le plan
@@ -117,7 +131,7 @@ Ce document, et une ligne dans `README.md`.
 _Acceptation._ Ce point est écrit sans testeur : l'outil n'existe pas encore (DM53).
 - _Révision 67.2._ Deux passes. La première montait `kernel.version` à 0.10.0, une version qui n'existe pas : depuis la fusion, la version du noyau est celle d'aidboard (`kernel/commands/sync.md` §2). La reprise remet 0.9.1. `CLAUDE.md` et `AGENTS.md` seront rendus de nouveau par `/sync` après la prochaine release. Gate 4 687.
 
-### 67.3 `aid acceptation verifier` (DM51, DM54.1)
+### 67.3 `aid acceptation verifier` (DM51, DM54.1, DM56)
 
 La commande, la lecture des trailers, les chemins du manifeste, la sortie JSON. Les tests travaillent sur des dépôts git temporaires :
 - un commit marqué propre ;
@@ -126,11 +140,11 @@ La commande, la lecture des trailers, les chemins du manifeste, la sortie JSON. 
 - un re-dev du testeur, marqué ;
 - aucune base ou aucun commit marqué.
 
-### 67.4 `aid acceptation preuve` (DM54.2)
+### 67.4 `aid acceptation preuve` (DM54.2, DM55, DM56)
 
 Les deux lancements, la sortie JSON du DM55, les worktrees temporaires et leur nettoyage, le test vert dès le commit marqué, une commande absente du manifeste. Les tests utilisent un dépôt temporaire avec un faux lanceur, sans vitest ni playwright réels.
 
-### 67.5 `aid acceptation couverture` (DM52, DM54.3)
+### 67.5 `aid acceptation couverture` (DM52, DM54.3, DM56)
 
 La lecture des titres de points, des lignes « Non testable à l'avance » et des commits marqués. Les tests portent sur un plan d'exemple : un point couvert, un point justifié, un point manquant, une raison vide, le point `.1` exclu.
 
