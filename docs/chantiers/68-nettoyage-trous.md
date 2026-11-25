@@ -17,7 +17,7 @@ En relisant la PR #211, le lab a trouvé six familles de textes qui passent alor
 
 ## 2. Cible et hors-périmètre
 
-**Cible.** Les motifs et les exemptions de `nettoyer`, et leurs tests.
+**Cible.** Les motifs et les exemptions de `nettoyer`, et leurs tests, y compris les familles ajoutées par le lab à la lecture du plan (DM62).
 
 **Hors-périmètre.**
 - Les appelants de `nettoyer`, et ce qu'ils lui passent (les hôtes privés par défaut du service d'avis sont dans le 66.6).
@@ -28,8 +28,10 @@ En relisant la PR #211, le lab a trouvé six familles de textes qui passent alor
 
 ### DM58. Les affectations de secret
 
-- Une clé dont le dernier segment, séparé par `_` ou `-`, est `password`, `passwd`, `pwd`, `secret`, `token` ou `key` est une **clé de secret**, quelle que soit la casse et quel que soit son préfixe : `DB_PASSWORD`, `POSTGRES_PASSWORD`, `SECRET_KEY` et `api_token` le sont.
-- `<clé de secret> = <valeur>` ou `<clé de secret>: <valeur>` est refusé dès que la valeur a quatre caractères ou plus et n'est pas une valeur d'exemple.
+- **Jamais plus permissif.** Ce chantier ne rend `nettoyer` plus permissif nulle part : un texte que la base refuse reste refusé. Les exemptions ci-dessous ne valent que pour les refus nouveaux. Ainsi `password=test` et `password: <mot-de-passe>`, refusés aujourd'hui, le restent.
+- Une clé dont le dernier segment, séparé par `_` ou `-`, est `password`, `passwd`, `pwd`, `passphrase`, `secret`, `token`, `key`, `credential` ou `credentials` est une **clé de secret**, quelle que soit la casse et quel que soit son préfixe : `DB_PASSWORD`, `POSTGRES_PASSWORD`, `SECRET_KEY`, `api_token`, `access_token`, `refresh_token`, `client_secret` et `private_key` le sont.
+- La clé peut être entre guillemets, comme en JSON, YAML ou TOML : `"password": "hunter2"`, `'secret': '…'`, `"api_key" = "…"`.
+- `<clé de secret> = <valeur>` ou `<clé de secret>: <valeur>`, la valeur avec ou sans guillemets, est refusé dès que la valeur a quatre caractères ou plus et n'est pas une valeur d'exemple.
 - Une valeur hexadécimale n'est plus exemptée derrière une clé de secret. Elle le reste ailleurs : un sha de commit cité seul, ou derrière `commit`, `head` ou `base`, passe.
 - Une **valeur d'exemple** est une valeur **égale** à un mot de la liste d'exemples (`example`, `test`, `none`, `true`, `changeme`…), à la casse et aux guillemets près, ou une valeur entre chevrons comme `<mot-de-passe>`. Une valeur qui **contient** l'un de ces mots n'est plus exemptée pour autant.
 
@@ -39,6 +41,15 @@ En relisant la PR #211, le lab a trouvé six familles de textes qui passent alor
 - **Les clés privées.** Un en-tête `-----BEGIN … PRIVATE KEY…-----` suffit au refus, avec ou sans pied, et quelle que soit la suite du titre : `BEGIN PGP PRIVATE KEY BLOCK` est refusé.
 - **Les caractères invisibles.** Tous les caractères de format Unicode (`\p{Cf}`, dont U+00AD) sont retirés avant le contrôle, et pas seulement la liste actuelle.
 - **Les adresses collées à un mot.** `host:10.0.0.5`, `ip=192.168.1.2` et `[fd00::1]` sont refusés : le candidat d'adresse est pris sans le préfixe qui le colle.
+
+### DM62. Les autres porteurs de secret
+
+Relevés par le lab à la lecture du plan.
+
+- **Les en-têtes.** `Authorization:` suivi de `Basic`, `Token` ou de tout autre schéma et d'une valeur, `Cookie:` et `Set-Cookie:` avec une valeur sont refusés, comme `Bearer` aujourd'hui.
+- **Les paramètres d'URL.** Un paramètre de requête dont le nom est une clé de secret (DM58), ou `sig`, `signature`, `X-Amz-Signature` ou `X-Amz-Credential`, est refusé dès qu'il a une valeur : `?access_token=…`, `&sig=…`.
+- **Les URL de webhook.** Une URL dont le chemin est lui-même le secret est refusée : les webhooks Slack (`hooks.slack.com/services/…`) et Discord (`…/api/webhooks/<id>/<jeton>`).
+- **Les préfixes connus.** `ya29.` (OAuth Google), `AGE-SECRET-KEY-1`, `dop_v1_`, `SG.` suivi de deux segments, `xapp-`, et le jeton de bot Telegram (`<8 à 10 chiffres>:AA<33 caractères>`), avec une longueur minimale qui exclut les mots courants. `sk_test_` et `rk_test_` aussi, comme `sk_live_`.
 
 ### DM60. Les faux positifs se mesurent
 
@@ -64,17 +75,21 @@ Ce document, et une ligne dans `README.md`.
 
 ### 68.2 Les affectations de secret (DM58)
 
-Les clés de secret à préfixe, la valeur hexadécimale derrière une clé de secret, la valeur d'exemple égale et non contenue. Les tests ajoutent aussi les cas qui doivent continuer de passer : un sha de commit seul, `commit=<sha>`, `password: <mot-de-passe>`, `token = example`.
+Les clés de secret à préfixe, les nouveaux derniers segments, la clé entre guillemets, la valeur hexadécimale derrière une clé de secret, la valeur d'exemple égale et non contenue. Les tests ajoutent les cas qui doivent continuer de passer (un sha de commit seul, `commit=<sha>`, `DB_PASSWORD=example`, `token = example`) et ceux que la base refuse et qui doivent rester refusés (`password=test`, `password: <mot-de-passe>`).
 
 ### 68.3 Les formes qui passent à côté (DM59)
 
 Les URL avec un utilisateur vide ou un mot de passe à `/`, l'en-tête PGP et l'en-tête sans pied, U+00AD et les autres caractères de format, les adresses collées à un mot. Les tests ajoutent les cas qui doivent continuer de passer : `https://example.com/a:b@c` sans identifiants, une adresse publique de documentation (`192.0.2.1`), une heure `10:00:00`.
 
-### 68.4 La mesure des faux positifs (DM60)
+### 68.4 Les autres porteurs de secret (DM62)
+
+Les en-têtes, les paramètres d'URL, les URL de webhook, les préfixes connus. Les tests ajoutent les cas qui doivent continuer de passer : `Authorization:` seul dans une phrase, `https://example.com/?page=2`, une URL Discord sans webhook, le mot `SG.` dans une phrase.
+
+### 68.5 La mesure des faux positifs (DM60)
 
 La mesure sur le corpus, à la base et à la tête, et sa conclusion dans la note de révision.
 
-- _Acceptation._ Non testable à l'avance : c'est une mesure sur le corpus du dépôt, qui n'existe qu'une fois le code des 68.2 et 68.3 écrit.
+- _Acceptation._ Non testable à l'avance : c'est une mesure sur le corpus du dépôt, qui n'existe qu'une fois le code des 68.2 à 68.4 écrit.
 
 ## 5. Pièges
 
@@ -84,5 +99,5 @@ La mesure sur le corpus, à la base et à la tête, et sa conclusion dans la not
 
 ## 6. Fini quand
 
-- 68.2 à 68.4 sont mergés, avec la CI verte, la relecture du lab et le oui de Julien.
+- 68.2 à 68.5 sont mergés, avec la CI verte, la relecture du lab et le oui de Julien.
 - La mesure des faux positifs est écrite.
