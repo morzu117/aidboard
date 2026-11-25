@@ -11,7 +11,10 @@ function montant(cout: number | null): string {
 function afficher(data: Ask): void {
   for (const avis of data.avis) {
     const [fournisseur, ...modele] = avis.modele_demande.split(':');
-    console.log(`${fournisseur}\t${modele.join(':')}\t${avis.etat}\t${montant(avis.cout_usd)}`);
+    let etat: string = avis.etat;
+    if (avis.etat === 'delai') etat = 'Délai dépassé';
+    if (avis.etat === 'echec') etat = avis.brut === 'CLI absent' ? 'CLI absent' : 'Échec du CLI';
+    console.log(`${fournisseur}\t${modele.join(':')}\t${etat}\t${montant(avis.cout_usd)}`);
   }
   console.log('n\taccord\tverdict\tcompte');
   for (const accord of data.accord) {

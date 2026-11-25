@@ -48,7 +48,7 @@ test('verdict invalide et numéro manquant', () => {
   expect(lu.etat).toBe('invalide');
   expect(lu.reponses.map((r) => r.verdict)).toEqual(['invalide', 'manquant']);
   expect(lireReponse('{"reponses":[]}', decouper('Question'))).toEqual({
-    etat: 'ok',
+    etat: 'invalide',
     reponses: [{ n: 1, verdict: 'manquant', justification: '' }],
   });
 });

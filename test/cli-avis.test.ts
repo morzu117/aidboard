@@ -174,3 +174,17 @@ test('contrats : champs inconnus ignorés, limites et formes inattendues', () =>
   ])
     expect(parseAsks(valeur)).toBeNull();
 });
+
+test.each([
+  ['echec', 'CLI absent', 'CLI absent'],
+  ['delai', null, 'Délai dépassé'],
+  ['echec', null, 'Échec du CLI'],
+])('la sortie texte nomme l’échec %s (%s)', async (etat, brut, message) => {
+  repondre({
+    ok: false,
+    kind: 'aucun-avis',
+    data: { ...donnees, avis: [{ ...donnees.avis[0], etat, brut, cout_usd: null }] },
+  });
+  expect(await lancer()).toBe(3);
+  expect(console.log).toHaveBeenCalledWith(`claude\tsonnet\t${message}\tinconnu`);
+});

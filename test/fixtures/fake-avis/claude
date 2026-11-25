@@ -4,7 +4,6 @@ set -eu
 modele=
 while [ "$#" -gt 0 ]; do
   case "$1" in
-    -p) shift ;; # Le prompt est l'argument suivant.
     --model) modele="$2"; break ;;
   esac
   shift
@@ -14,9 +13,10 @@ case "$modele" in
   *) exit 2 ;;
 esac
 
-printf '%s\n' "$modele" >>"${FAKE_AVIS_LOG:-/dev/null}"
+/bin/cat > /dev/null
+printf '%s\n' "$modele" >>"$CLAUDE_CONFIG_DIR/avis-cli.log"
 verdict=oui
-case "${FAKE_AVIS_MODE:-ok}" in
+case "$(/bin/cat "$CLAUDE_CONFIG_DIR/avis-mode")" in
   ok) ;;
   partage)
     if [ "$modele" = opus ]; then

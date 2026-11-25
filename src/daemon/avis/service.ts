@@ -8,6 +8,9 @@ import { decouper, type SousQuestion } from './prompt.js';
 
 const BUDGET_ASK_USD = 0.5;
 const DELAI_AVIS_MS = 600000;
+const TAILLE_QUESTION_MAX = 20_000;
+const SUFFIXE_PRIVE =
+  /(?<=[a-z0-9_-]\.)(?:internal|local|lan|corp|home\.arpa|cluster\.local)(?![a-z0-9_-]|\.[a-z0-9_-])/gi;
 
 interface DemandeAsk {
   question: string;
@@ -39,7 +42,6 @@ export function validerDemande(v: unknown): asserts v is DemandeAsk {
     !d ||
     typeof d.question !== 'string' ||
     !d.question.trim() ||
-    d.question.length > 20000 ||
     !Number.isInteger(d.n) ||
     d.n < 1 ||
     d.n > 5 ||
@@ -97,17 +99,24 @@ export class ServiceAvis {
   async demander(d: unknown): Promise<AskResult<Ask>> {
     if (this.courant) throw new AskOccupe('demande déjà en cours');
     validerDemande(d);
-    const filtrer = (texte: string) =>
-      nettoyer(texte, { hotesPrives: this.deps.hotesPrives ?? [] });
+    const filtrer = (texte: string) => {
+      // Nettoyer traite aussi ses entrées comme des noms exacts, par exemple « local ».
+      const controle = texte.normalize('NFKC').replace(/[\u200b-\u200f\u2060\ufeff]/g, '');
+      const suffixes = Array.from(controle.matchAll(SUFFIXE_PRIVE), ([suffixe]) => suffixe);
+      return nettoyer(texte, { hotesPrives: [...suffixes, ...(this.deps.hotesPrives ?? [])] });
+    };
     const refus = (classe: string): AskResult<Ask> => ({
       ok: false,
       kind: 'refusee',
       message: classe,
       readAt: new Date().toISOString(),
     });
+    if (d.question.length > TAILLE_QUESTION_MAX) return refus('question trop longue');
     const question = filtrer(d.question);
     if (!question.ok) return refus(question.classe);
     const sousQuestions = d.sousQuestions?.length ? d.sousQuestions : decouper(d.question);
+    if (sousQuestions.reduce((taille, { texte }) => taille + texte.length, 0) > TAILLE_QUESTION_MAX)
+      return refus('sous-questions trop longues');
     for (const { texte } of sousQuestions) {
       const resultat = filtrer(texte);
       if (!resultat.ok) return refus(resultat.classe);

@@ -31,16 +31,21 @@ test.afterEach(() => {
   }
 });
 
-// Un daemon par mode : le faux CLI lit son mode dans son environnement au lancement.
-for (const [indice, mode] of ['ok', 'refus', 'aucun'].entries()) {
+// Un daemon par mode : le faux CLI lit son mode dans son dossier de configuration.
+for (const [indice, mode] of ['ok', 'refus', 'hôte privé', 'aucun'].entries()) {
   test(`demande d’avis via le service interne : ${mode}`, async ({ browser }) => {
     const dossier = realpathSync(mkdtempSync(join(tmpdir(), 'aid-e2e-ask-')));
     const port = Number(process.env.AID_E2E_PORT ?? 4871) + 20 + indice;
     const journal = join(dossier, 'avis-cli.log');
+    const refus = mode === 'refus' || mode === 'hôte privé';
     writeFileSync(
       join(dossier, 'config.yaml'),
-      `port: ${port}\nswairm:\n  bin: ${join(fixtures, 'fake-swairm.sh')}\nagents:\n  transport: pty\n`,
+      `port: ${port}\nswairm:\n  bin: ${join(fixtures, 'fake-swairm.sh')}\nagents:\n  transport: pty\nhotesPrives: [example.com]\n`,
       { mode: 0o600 },
+    );
+    writeFileSync(
+      join(dossier, 'avis-mode'),
+      mode === 'ok' ? 'partage' : mode === 'aucun' ? 'aucun' : 'ok',
     );
     const env = {
       ...process.env,
@@ -48,8 +53,7 @@ for (const [indice, mode] of ['ok', 'refus', 'aucun'].entries()) {
       AID_NO_BROWSER: '1',
       SHELL: '/bin/sh',
       PATH: `${join(fixtures, 'fake-avis')}${delimiter}${process.env.PATH}`,
-      FAKE_AVIS_MODE: mode === 'ok' ? 'partage' : mode === 'aucun' ? 'aucun' : 'ok',
-      FAKE_AVIS_LOG: journal,
+      CLAUDE_CONFIG_DIR: dossier,
     };
     daemon = { dossier, env };
     const contexte = await browser.newContext();
@@ -71,7 +75,13 @@ for (const [indice, mode] of ['ok', 'refus', 'aucun'].entries()) {
       await expect(boite).toContainText('Coût maximal : 1.00 USD');
       await boite
         .getByRole('textbox', { name: 'Question', exact: true })
-        .fill(mode === 'refus' ? 'Clé factice : sk-ant-cle-factice-pour-tests' : question);
+        .fill(
+          mode === 'hôte privé'
+            ? 'Faut-il vérifier example.com ?'
+            : mode === 'refus'
+              ? 'Clé factice : sk-ant-cle-factice-pour-tests'
+              : question,
+        );
       await boite.getByRole('button', { name: 'Envoyer' }).click();
       const tableau = boite.getByRole('region', { name: 'Tableau des avis' });
       if (mode === 'ok') {
@@ -93,9 +103,13 @@ for (const [indice, mode] of ['ok', 'refus', 'aucun'].entries()) {
         await expect(archive).toContainText('opus — ok');
       } else {
         await expect(tableau.getByRole('status')).toHaveText(
-          mode === 'refus' ? 'Question refusée : ressemble à une clé API' : 'Aucun avis valide',
+          mode === 'hôte privé'
+            ? 'Question refusée : hôte privé'
+            : mode === 'refus'
+              ? 'Question refusée : ressemble à une clé API'
+              : 'Aucun avis valide',
         );
-        if (mode === 'refus') {
+        if (refus) {
           const archives = join(dossier, 'avis');
           expect(existsSync(archives) ? readdirSync(archives) : []).toEqual([]);
           expect(existsSync(journal)).toBe(false);

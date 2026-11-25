@@ -117,7 +117,6 @@ function argumentsAvis(fournisseur: Fournisseur, options: OptionsAvis, fichier: 
     case 'claude':
       return [
         '-p',
-        prompt,
         '--tools',
         '',
         '--setting-sources',
@@ -160,6 +159,10 @@ function argumentsAvis(fournisseur: Fournisseur, options: OptionsAvis, fichier: 
   }
 }
 
+const GRACE_SORTIE_MS = 100;
+const STDOUT_MAX = 4 * 1024 * 1024;
+const VARIABLES_COMMUNES = new Set(['PATH', 'HOME', 'LANG', 'TERM', 'TMPDIR']);
+
 interface Sortie {
   stdout: string;
   code: number | null;
@@ -182,9 +185,10 @@ function executer(
       cwd,
       env,
       detached: groupe,
-      stdio: [fournisseur === 'codex' ? 'pipe' : 'ignore', 'pipe', 'ignore'],
+      stdio: [fournisseur === 'vibe' ? 'ignore' : 'pipe', 'pipe', 'ignore'],
     });
     const sortie: Buffer[] = [];
+    let octets = 0;
     let delai = false;
     let erreur: string | undefined;
     const arreter = () => {
@@ -200,14 +204,35 @@ function executer(
       delai = true;
       arreter();
     }, options.delaiMs);
-    enfant.stdout?.on('data', (chunk: Buffer) => sortie.push(chunk));
+    enfant.stdout?.on('data', (bloc: Buffer) => {
+      if (erreur) return;
+      octets += bloc.length;
+      if (octets > STDOUT_MAX) {
+        erreur = 'stdout';
+        arreter();
+        return;
+      }
+      sortie.push(bloc);
+    });
     enfant.on('error', (err: NodeJS.ErrnoException) => {
       erreur = err.code ?? 'spawn';
     });
-    enfant.on('close', (code) => {
+    let grace: ReturnType<typeof setTimeout> | undefined;
+    const terminer = (code: number | null) => {
       clearTimeout(minuterie);
+      clearTimeout(grace);
       signal?.removeEventListener('abort', arreter);
       resolve({ stdout: Buffer.concat(sortie).toString('utf8'), code, delai, erreur });
+    };
+    enfant.once('close', terminer);
+    enfant.once('exit', (code) => {
+      clearTimeout(minuterie);
+      grace = setTimeout(() => {
+        enfant.removeListener('close', terminer);
+        enfant.stdin?.destroy();
+        enfant.stdout?.destroy();
+        terminer(code);
+      }, GRACE_SORTIE_MS);
     });
     enfant.stdin?.on('error', () => {
       // La fermeture anticipée de stdin est traitée via le résultat du CLI.
@@ -224,24 +249,24 @@ export async function lancerFournisseur(
   validerAvis(fournisseur, options);
   const brut: AvisBrut = {
     modele_demande: `${fournisseur}:${options.modele}`,
-    modele_servi: fournisseur === 'codex' && options.modele !== 'defaut' ? options.modele : null,
+    modele_servi: null,
     cout_usd: null,
     duree_s: null,
     texte: '',
     etat: 'echec',
   };
-  const env = { ...(deps.env ?? process.env) };
-  for (const cle of [
-    'ANTHROPIC_API_KEY',
-    'ANTHROPIC_AUTH_TOKEN',
-    'ANTHROPIC_BASE_URL',
-    'CLAUDE_CODE_OAUTH_TOKEN',
-    'GH_TOKEN',
-    'OPENAI_API_KEY',
-    'MISTRAL_API_KEY',
-    ...(deps.strip ?? []),
-  ])
-    delete env[cle];
+  const configCli =
+    fournisseur === 'codex' ? 'CODEX_HOME' : fournisseur === 'claude' ? 'CLAUDE_CONFIG_DIR' : null;
+  const env = Object.fromEntries(
+    Object.entries(deps.env ?? process.env).filter(
+      ([cle]) =>
+        (cle === configCli ||
+          VARIABLES_COMMUNES.has(cle) ||
+          cle.startsWith('LC_') ||
+          cle.startsWith('XDG_')) &&
+        !deps.strip?.includes(cle),
+    ),
+  );
 
   let cwd: string | undefined;
   try {

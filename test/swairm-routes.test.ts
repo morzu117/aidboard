@@ -37,16 +37,15 @@ async function demarrer(mode = 'ok') {
   writeFileSync(
     join(bin, 'claude'),
     `#!/bin/sh
-printf '%s' "$PWD" > "$TRACE_AVIS"
-if [ "$MODE_AVIS" = lent ]; then exec /bin/sleep 60; fi
+/bin/cat > /dev/null
+printf '%s' "$PWD" > "$HOME/lance"
+if [ '${mode}' = lent ]; then exec /bin/sleep 60; fi
 printf '%s' '${enveloppe}'
 `,
     { mode: 0o700 },
   );
   vi.stubEnv('HOME', dossier);
   vi.stubEnv('PATH', bin);
-  vi.stubEnv('TRACE_AVIS', lance);
-  vi.stubEnv('MODE_AVIS', mode);
   vi.stubEnv('FAKE_SWAIRM_LOG', log);
   t = await startTestDaemon(join(dossier, 'aid'), {
     config: { swairm: { bin: join(import.meta.dirname, 'fixtures/fake-swairm.sh') } },

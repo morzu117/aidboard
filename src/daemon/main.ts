@@ -442,6 +442,7 @@ export async function startDaemon(
       webRoot,
       modeHost,
       onRoute: opts.onRoute,
+      hotesPrives: config.hotesPrives,
       config,
       auth,
       db: opened,

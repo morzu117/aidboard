@@ -176,6 +176,7 @@ Le lab a relu la PR au head 79470af, en lisant le code. Ce point corrige ce qu'i
 - **La question par stdin.** claude et vibe reçoivent la question par l'entrée standard quand leur CLI le permet, comme codex, et la question et ses sous-questions ont une taille plafonnée.
 - **Les échecs nommés.** Sans `--json`, `aid avis` dit si la CLI manque, a dépassé le délai, ou a échoué. La sortie d'une CLI est bornée.
 - **Hors de ce point.** Les options réelles de vibe, à établir sur la tour, restent un défaut connu.
+- _Révision 66.6._ Une passe Codex. Les constats 1 (sauf les outils de codex), 2, 4, 5, 6, 7 et le plafond du 8 sont corrigés, chacun avec un test rouge avant le correctif : dix-huit cas Vitest et un cas Playwright (l'hôte privé refusé par le daemon, sans lancement ni archive). Pour codex, l'aide documente `--ignore-user-config` (sans les serveurs MCP de l'utilisateur) et `--disable <feature>`, mais aucune option qui coupe tous ses outils d'un coup, comme `--tools ""` pour claude : `codex features list` en compte plusieurs dizaines. Décision remontée à Julien. Gate 4 739, e2e d'avis 5 sur 5.
 
 ## 5. Pièges
 

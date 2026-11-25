@@ -55,7 +55,11 @@ export function lireReponse(
   const reponses = sousQuestions.map(
     ({ n }): Reponse => cases.get(n) ?? { n, verdict: 'manquant', justification: '' },
   );
-  return { etat: reponses.some((r) => r.verdict === 'invalide') ? 'invalide' : 'ok', reponses };
+  const valide = reponses.some((r) => estVerdict(r.verdict));
+  return {
+    etat: valide && !reponses.some((r) => r.verdict === 'invalide') ? 'ok' : 'invalide',
+    reponses,
+  };
 }
 
 export function accord(n: number, votes: Iterable<string>): AccordAsk {
