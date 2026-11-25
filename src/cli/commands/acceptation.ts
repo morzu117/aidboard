@@ -1,7 +1,8 @@
 import { readFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
 import { parse } from 'yaml';
+import { mesurerCouverture } from '../../acceptation/couverture.js';
 import { produirePreuves } from '../../acceptation/preuve.js';
 import { racineDepot, verifierAcceptation } from '../../acceptation/verifier.js';
 
@@ -61,7 +62,29 @@ export async function runAcceptation(
   try {
     const [commande, ...options] = args;
     if (commande === 'couverture') {
-      throw new Error(`acceptation ${commande} n’est pas encore disponible`);
+      const { values } = parseArgs({
+        args: options,
+        options: { base: { type: 'string' }, plan: { type: 'string' }, json: { type: 'boolean' } },
+      });
+      if (!values.base) throw new Error('L’option --base est obligatoire');
+      if (!values.plan) throw new Error('L’option --plan est obligatoire pour couverture');
+
+      const cwd = opts?.cwd ?? process.cwd();
+      const depot = await racineDepot(cwd);
+      const rapport = await mesurerCouverture({
+        depot,
+        base: values.base,
+        plan: resolve(cwd, values.plan),
+      });
+      if (values.json) {
+        out(JSON.stringify(rapport));
+      } else {
+        for (const { point, etat, raison } of rapport.points) {
+          const detail = etat === 'non_testable' ? `non testable à l’avance : ${raison}` : etat;
+          out(`Point ${point} — ${detail}`);
+        }
+      }
+      return rapport.manquants === 0 ? 0 : 1;
     }
     if (commande !== 'verifier' && commande !== 'preuve') {
       throw new Error('Sous-commande d’acceptation inconnue');

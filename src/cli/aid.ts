@@ -19,7 +19,7 @@ const HELP = `aidboard ${readVersion()} : cockpit local des agents de code
   aid emit        publie un événement d'agent (appelé par les hooks ; sans effet hors A-I-D)
   aid hooks       état des hooks Claude Code ; install | uninstall modifient ~/.claude/settings.json
   aid kernel install [--check]   matérialise le noyau multi-agents dans ~/.agent-kernel
-  aid acceptation <verifier|preuve> --base <ref> [--json]   contrôle les tests d’acceptation
+  aid acceptation <verifier|preuve|couverture> --base <ref> [--plan <fichier>] [--json]   contrôle les tests d’acceptation
   aid mem …       la mémoire des agents : get, put, search, list, rm, export, import, reindex
   aid mcp         serveur MCP « aid » (stdio) : mémoire et index structurel pour un agent
   aid server      status | install [version] | use <version> : l'installation AID Server (~/.aid/server)
