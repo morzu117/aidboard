@@ -162,6 +162,10 @@ export async function produirePreuves(
       preuve.commands.push(avant, apres);
       noter(preuve.suites.base, fichier, avant);
       noter(preuve.suites.head, fichier, apres);
+      if (avant.exit === null || apres.exit === null) {
+        preuve.not_checked.push(fichier);
+        continue;
+      }
       if (avant.exit === 0 || apres.exit !== 0) fautes.push(fichier);
       if (avant.exit === 0 && apres.exit !== 0) preuve.pass_to_fail.push(fichier);
       if (avant.exit !== 0 && apres.exit === 0) preuve.fail_to_pass!.push(fichier);
