@@ -25,7 +25,7 @@ interface Commit {
   changements: Changement[];
 }
 
-async function git(depot: string, args: string[]): Promise<string> {
+export async function git(depot: string, args: string[]): Promise<string> {
   const { stdout } = await executer('git', args, {
     cwd: depot,
     encoding: 'utf8',
@@ -38,7 +38,7 @@ export async function racineDepot(depot: string): Promise<string> {
   return (await git(depot, ['rev-parse', '--show-toplevel'])).replace(/\n$/, '');
 }
 
-async function lireCommits(depot: string, base: string): Promise<Commit[]> {
+export async function lireCommits(depot: string, base: string, head = 'HEAD'): Promise<Commit[]> {
   const shaBase = (
     await git(depot, ['rev-parse', '--verify', '--end-of-options', base + '^{commit}'])
   ).trim();
@@ -51,7 +51,7 @@ async function lireCommits(depot: string, base: string): Promise<Commit[]> {
     '-z',
     '-M',
     '--format=%x00%H%x00%(trailers:key=Acceptation,valueonly)',
-    shaBase + '..HEAD',
+    shaBase + '..' + head,
     '--',
   ]);
 

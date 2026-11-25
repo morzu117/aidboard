@@ -2,24 +2,47 @@ import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { parseArgs } from 'node:util';
 import { parse } from 'yaml';
+import { produirePreuves } from '../../acceptation/preuve.js';
 import { racineDepot, verifierAcceptation } from '../../acceptation/verifier.js';
 
-async function lireChemins(depot: string): Promise<string[]> {
+async function lireAcceptation(depot: string) {
   let contenu: string;
   try {
     contenu = await readFile(join(depot, 'agent.yml'), 'utf8');
   } catch (erreur) {
-    if ((erreur as NodeJS.ErrnoException).code === 'ENOENT') return ['test/', 'e2e/'];
+    if ((erreur as NodeJS.ErrnoException).code === 'ENOENT') return undefined;
     throw erreur;
   }
-  const manifeste = parse(contenu) as { acceptation?: { chemins?: unknown } } | null;
-  const chemins = manifeste?.acceptation?.chemins;
+  const manifeste = parse(contenu) as {
+    acceptation?: { chemins?: unknown; lancer?: unknown };
+  } | null;
+  return manifeste?.acceptation;
+}
+
+function lireChemins(chemins: unknown): string[] {
   if (chemins === undefined) return ['test/', 'e2e/'];
   if (!Array.isArray(chemins) || !chemins.every((chemin) => typeof chemin === 'string' && chemin)) {
     throw new Error('acceptation.chemins doit contenir une liste de chemins');
   }
   return chemins;
 }
+
+function lireLanceurs(lancer: unknown): Record<string, string> {
+  if (lancer === undefined) return {};
+  if (
+    typeof lancer !== 'object' ||
+    lancer === null ||
+    Array.isArray(lancer) ||
+    !Object.entries(lancer).every(
+      ([chemin, commande]) => chemin && typeof commande === 'string' && commande.trim(),
+    )
+  ) {
+    throw new Error('acceptation.lancer doit associer des chemins à des commandes');
+  }
+  return lancer as Record<string, string>;
+}
+
+const resultats = { pass: 'réussi', fail: 'échec', cannot_evaluate: 'non évaluable' };
 
 const raisons = {
   hors_chemins: 'fichier hors des chemins d’acceptation',
@@ -37,10 +60,12 @@ export async function runAcceptation(
 
   try {
     const [commande, ...options] = args;
-    if (commande === 'preuve' || commande === 'couverture') {
+    if (commande === 'couverture') {
       throw new Error(`acceptation ${commande} n’est pas encore disponible`);
     }
-    if (commande !== 'verifier') throw new Error('Sous-commande d’acceptation inconnue');
+    if (commande !== 'verifier' && commande !== 'preuve') {
+      throw new Error('Sous-commande d’acceptation inconnue');
+    }
 
     const { values } = parseArgs({
       args: options,
@@ -49,7 +74,22 @@ export async function runAcceptation(
     if (!values.base) throw new Error('L’option --base est obligatoire');
 
     const depot = await racineDepot(opts?.cwd ?? process.cwd());
-    const chemins = await lireChemins(depot);
+    const acceptation = await lireAcceptation(depot);
+    const chemins = lireChemins(acceptation?.chemins);
+    if (commande === 'preuve') {
+      const lancer = lireLanceurs(acceptation?.lancer);
+      const rapports = await produirePreuves({ depot, base: values.base, chemins, lancer });
+      if (values.json) {
+        out(JSON.stringify({ preuves: rapports.map(({ preuve }) => preuve) }));
+      } else {
+        for (const { point, preuve, fautes } of rapports) {
+          const fichiers = [...fautes, ...preuve.not_checked];
+          const detail = fichiers.length ? ` — ${fichiers.join(', ')}` : '';
+          out(`Point ${point} — ${resultats[preuve.outcome]}${detail}`);
+        }
+      }
+      return rapports.every(({ preuve }) => preuve.outcome === 'pass') ? 0 : 1;
+    }
     const rapport = await verifierAcceptation({ depot, base: values.base, chemins });
     if (values.json) {
       out(JSON.stringify(rapport));
