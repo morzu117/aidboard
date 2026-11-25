@@ -84,6 +84,8 @@ Les clés de secret à préfixe, les nouveaux derniers segments, la clé entre g
 
 Les URL avec un utilisateur vide ou un mot de passe à `/`, l'en-tête PGP et l'en-tête sans pied, U+00AD et les autres caractères de format, les adresses collées à un mot. Les tests ajoutent les cas qui doivent continuer de passer : `https://example.com/a:b@c` sans identifiants, une adresse publique de documentation (`192.0.2.1`), une heure `10:00:00`.
 
+- _Acceptation._ Couvert par `test/shared/nettoyage-formes.test.ts` (21a45e1), vingt-deux cas écrits par le testeur depuis le plan seul. Refusés comme secret : les URL à utilisateur vide, ou dont le mot de passe contient `/`, `:`, `%40` ou `%3A` ; les blocs PGP avec et sans pied ; l'en-tête OpenSSH seul ; un jeton fabriqué, intact ou coupé par U+00AD, U+2063 ou U+180E. Refusés comme adresse privée : `host:10.0.0.5`, `ip=192.168.1.2`, `[fd00::1]`, `addr=172.16.0.9:8080`. Qui passent : une URL sans identifiants dont le chemin contient `:` et `@`, deux adresses de documentation, une heure, un en-tête de clé publique, un texte français avec une césure. Échec attendu au commit marqué : neuf cas, sur une assertion. Les sept refus existants et les six textes qui passent sont déjà verts.
+
 ### 68.4 Les autres porteurs de secret (DM62)
 
 Les en-têtes, les paramètres d'URL, les URL de webhook, les préfixes connus. Les tests ajoutent les cas qui doivent continuer de passer : `Authorization:` seul dans une phrase, `https://example.com/?page=2`, une URL Discord sans webhook, le mot `SG.` dans une phrase.
