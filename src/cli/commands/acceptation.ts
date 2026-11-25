@@ -6,7 +6,7 @@ import { mesurerCouverture } from '../../acceptation/couverture.js';
 import { produirePreuves } from '../../acceptation/preuve.js';
 import { racineDepot, verifierAcceptation } from '../../acceptation/verifier.js';
 
-async function lireAcceptation(depot: string) {
+export async function lireManifesteAcceptation(depot: string) {
   let contenu: string;
   try {
     contenu = await readFile(join(depot, 'agent.yml'), 'utf8');
@@ -14,13 +14,13 @@ async function lireAcceptation(depot: string) {
     if ((erreur as NodeJS.ErrnoException).code === 'ENOENT') return undefined;
     throw erreur;
   }
-  const manifeste = parse(contenu) as {
+  return parse(contenu) as {
+    phases?: unknown;
     acceptation?: { chemins?: unknown; lancer?: unknown };
   } | null;
-  return manifeste?.acceptation;
 }
 
-function lireChemins(chemins: unknown): string[] {
+export function lireChemins(chemins: unknown): string[] {
   if (chemins === undefined) return ['test/', 'e2e/'];
   if (!Array.isArray(chemins) || !chemins.every((chemin) => typeof chemin === 'string' && chemin)) {
     throw new Error('acceptation.chemins doit contenir une liste de chemins');
@@ -28,7 +28,7 @@ function lireChemins(chemins: unknown): string[] {
   return chemins;
 }
 
-function lireLanceurs(lancer: unknown): Record<string, string> {
+export function lireLanceurs(lancer: unknown): Record<string, string> {
   if (lancer === undefined) return {};
   if (
     typeof lancer !== 'object' ||
@@ -97,7 +97,7 @@ export async function runAcceptation(
     if (!values.base) throw new Error('L’option --base est obligatoire');
 
     const depot = await racineDepot(opts?.cwd ?? process.cwd());
-    const acceptation = await lireAcceptation(depot);
+    const acceptation = (await lireManifesteAcceptation(depot))?.acceptation;
     const chemins = lireChemins(acceptation?.chemins);
     if (commande === 'preuve') {
       const lancer = lireLanceurs(acceptation?.lancer);
