@@ -276,6 +276,12 @@ Le scénario vérifie aussi deux refus : un second GO sur le même sujet, et le 
 
 Les règles de DM68, avec un test négatif chacune. Le testeur écrit d'abord les tests, à partir de DM68 seul, puis le dev les fait passer.
 
+- _Acceptation._ Couvert par `test/boucle/relecture-*.test.ts` (d78e8b1), écrits par le testeur depuis DM68 seul, avec deux précisions du lab (DM 106879) :
+  - un tour de revue sans texte final échoue tout de suite ;
+  - un lien du home qui en sort n'est pas ouvert.
+
+  Un test négatif par règle, sans aucune fonction publique nouvelle. Neuf cas passent déjà au commit marqué, et trente-neuf échouent sur leur assertion. Les tests du parcours nominal et du conducteur fournissent désormais la revue comme réponse finale : 27 lignes existantes remplacées, dans des tests de ce chantier.
+
 ## 5. Réponses de Julien (26 novembre)
 
 - **Q1. Les permissions sur le Mac, sans isolation : le mode `auto`, vérifié après coup.** Les sessions d'acceptation et de dev enchaînent sans demander. Le daemon vérifie ensuite le worktree, les tests d'acceptation, la branche et l'empreinte de l'environnement (DM67). Le plan et la revue restent en lecture seule. C'est une règle vérifiée après coup, pas une barrière : pendant l'étape, l'agent garde l'accès au home.
