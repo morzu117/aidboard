@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { delimiter, join } from 'node:path';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
@@ -12,6 +12,9 @@ let daemon: TestDaemon;
 
 beforeEach(async () => {
   dossier = mkdtempSync(join(tmpdir(), 'aid-boucle-routes-'));
+  const home = join(dossier, 'home');
+  mkdirSync(home);
+  vi.stubEnv('HOME', home);
   const { clone } = makeOriginAndClone(dossier, { name: 'depot-fictif' });
   commitFile(clone, 'agent.yml', 'phases: [plan, dev, review]\n', 'Manifeste');
   sh(clone, 'push', '-q', 'origin', 'main');

@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
@@ -97,6 +97,9 @@ beforeEach(() => {
   heure = 1_000;
   issueGate = 'pass';
   dossier = mkdtempSync(join(tmpdir(), 'aid-boucle-service-'));
+  const home = join(dossier, 'home');
+  mkdirSync(home);
+  vi.stubEnv('HOME', home);
   const { clone } = makeOriginAndClone(dossier, { name: 'depot-fictif' });
   commitFile(
     clone,
@@ -122,6 +125,7 @@ boucle: { delais: { plan: 1 } }
 afterEach(() => {
   db?.close();
   vi.restoreAllMocks();
+  vi.unstubAllEnvs();
   if (dossier) rmSync(dossier, { recursive: true, force: true });
 });
 

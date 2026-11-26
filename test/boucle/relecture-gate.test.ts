@@ -42,10 +42,10 @@ function preparerPreuve(instructionsAvant = 'process.exit(1);', instructions = '
   commitFile(depot, 'note.md', 'Note fictive.');
 }
 
-function avecPreuve(delaiMs = 2_000) {
+function avecPreuve(delaiMs = 2_000, tete = sh(depot, 'rev-parse', 'HEAD')) {
   return lancerGate({
     depot,
-    tete: sh(depot, 'rev-parse', 'HEAD'),
+    tete,
     commande: 'exit 0',
     delaiMs,
     acceptation: { base, chemins: ['test/'], lancer: { 'test/': 'node {fichiers}' } },
@@ -93,8 +93,12 @@ process.exit(resultat.status ?? 1);
     );
 
     // Le témoin relève les arguments et la présence d’une variable fictive, sans exécuter de hook.
+    const tete = sh(depot, 'rev-parse', 'HEAD');
     vi.stubEnv('PATH', [bin, process.env.PATH].join(delimiter));
-    expect(await avecPreuve()).toMatchObject({ issue: 'pass', fichiersAcceptation: [fichier] });
+    expect(await avecPreuve(undefined, tete)).toMatchObject({
+      issue: 'pass',
+      fichiersAcceptation: [fichier],
+    });
 
     const appels = readFileSync(journal, 'utf8')
       .trim()
