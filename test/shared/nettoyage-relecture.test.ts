@@ -26,7 +26,8 @@ it.each([
 });
 
 it.each([
-  ['mention de l’en-tête préfixé Authorization', '> Authorization: est requis'],
+  ['en-tête préfixé Authorization sans valeur', '> Authorization:'],
+  ['en-tête préfixé Set-Cookie sans valeur', '< Set-Cookie:'],
   ['mot keyboard', 'keyboard: azerty'],
   ['mot monkey', 'monkey: banane'],
   ['référence dans apiToken', 'apiToken: ${API_TOKEN}'],
