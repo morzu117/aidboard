@@ -6,7 +6,7 @@
 | Emplacement final | `docs/chantiers/66-avis-multi-fournisseurs.md` sur `main` |
 | Base | `main` |
 | Organisation | Comme au 63 : cell-gestion gère le chantier, Codex CLI écrit le code et les tests, cell-gestion relit, lance le gate, commite et ouvre la PR. |
-| Validation | Le gate est vert à chaque point, puis `gate:e2e`. La recette se fait sur la tour, où sont les trois CLI. Le merge se fait sur le oui de Julien, CI verte. |
+| Validation | Le gate est vert à chaque point, puis `gate:e2e`. Pas de recette manuelle : les flags sont vérifiés en CI (66.7). Le merge se fait sur le oui de Julien, CI verte. |
 
 ## 1. Pourquoi
 
@@ -52,7 +52,7 @@ routage:
 
 - Elle remplace `models.trivial`, `models.standard` et `models.complex`. Ceux-ci restent lus, avec un avertissement de `/sync`, jusqu'à la migration du noyau : un projet qui les surcharge garde sa valeur.
 - Un projet surcharge la section dans son `agent.yml`, comme le reste. Le schéma du manifeste la décrit.
-- Un modèle se nomme comme le CLI l'accepte : `--model` pour claude, `-m` pour codex, `--agent` ou `--model` pour vibe, selon ce que la recette établira.
+- Un modèle se nomme comme le CLI l'accepte : `--model` pour claude, `-m` pour codex, `--agent` ou `--model` pour vibe, selon ce que le job `contrat-cli` établit (66.7).
 
 ### DM48. `aid avis`, le lanceur dans le daemon
 
@@ -141,7 +141,7 @@ Ce document, et une ligne dans `docs/chantiers/README.md`.
 - `kernel/roles/plan.md` : la règle du challenge.
 - `kernel/commands/sync.md` : la migration de `models` vers `routage`.
 - L'adaptateur `kernel/adapters/avis.md`, et le changelog.
-- La fiche `docs/recette-chantier-66-avis-multi-fournisseurs.md`, sur la tour. Elle établit les flags exacts de `vibe` et de `codex`, lance un challenge réel sur une question factice, et vérifie l'écran.
+- La fiche de recette, remplacée au 66.7 par le job `contrat-cli` et la marque « non vérifié ».
 
 - _Révision 66.4 de DM47._ `models` reste la configuration des agents.
   `routage` sert aux avis et à la future boucle. Il est hérité de
@@ -175,19 +175,28 @@ Le lab a relu la PR au head 79470af, en lisant le code. Ce point corrige ce qu'i
 - **Le lancement qui ne se ferme pas.** Le lanceur se résout à la sortie du processus, avec un délai de grâce, même si un petit-enfant garde la sortie ouverte. Le service se libère toujours.
 - **La question par stdin.** claude et vibe reçoivent la question par l'entrée standard quand leur CLI le permet, comme codex, et la question et ses sous-questions ont une taille plafonnée.
 - **Les échecs nommés.** Sans `--json`, `aid avis` dit si la CLI manque, a dépassé le délai, ou a échoué. La sortie d'une CLI est bornée.
-- **Hors de ce point.** Les options réelles de vibe, à établir sur la tour, restent un défaut connu.
+- **Hors de ce point.** Les options réelles de vibe sont vérifiées en CI au 66.7.
 - _Révision 66.6._ Une passe Codex. Les constats 1 (sauf les outils de codex), 2, 4, 5, 6, 7 et le plafond du 8 sont corrigés, chacun avec un test rouge avant le correctif : dix-huit cas Vitest et un cas Playwright (l'hôte privé refusé par le daemon, sans lancement ni archive). Pour codex, l'aide documente `--ignore-user-config` (sans les serveurs MCP de l'utilisateur) et `--disable <feature>`, mais aucune option qui coupe tous ses outils d'un coup, comme `--tools ""` pour claude : `codex features list` en compte plusieurs dizaines. Décision remontée à Julien. Gate 4 739, e2e d'avis 5 sur 5.
 
 - _Révision 66.6, suite._ Une passe Codex, après le choix de Julien de garder codex et de le durcir. L'argv de codex gagne `--ignore-user-config`, un `--disable` par fonctionnalité d'exécution, de navigation ou de service relevée dans `codex features list`, et `web_search="disabled"`. Le dossier de travail est vide, testé. Les limites sont écrites plus haut. Gate 4 737 hors les deux échecs connus du bac à sable Codex, e2e d'avis 5 sur 5.
+
+### 66.7 Les flags des CLI vérifiés en CI, à la place de la recette
+
+Julien ne fait plus de recette manuelle (26 novembre) : « les tests front, back et les tests e2e et scénarisés d'interface doivent le couvrir ». La fiche de la tour est remplacée par deux choses.
+
+- **Un job de CI, `contrat-cli`.** Il installe des versions épinglées de `codex` et de `vibe`, sans compte ni secret, et lit leur aide (`--help` de chaque sous-commande utilisée). Un test lit l'argv que construit `fournisseurs.ts` pour chaque fournisseur, et vérifie que chaque option figure dans l'aide de la version épinglée. Une option absente fait échouer le job. Il en va de même d'une option dont l'aide dit qu'elle attend une valeur, quand l'argv n'en donne pas. Hors de ce job, le test est sauté. L'adaptateur s'aligne sur ce que le job établit.
+- **vibe reste « non vérifié »** tant qu'aucun avis réel n'a abouti. Le daemon garde, par fournisseur, la date du premier avis réel qui rend une réponse lisible. L'écran d'avis et `aid avis` marquent « non vérifié » un fournisseur qui n'a pas de date, sans le bloquer. Un e2e montre la marque, puis son retrait après un avis réussi d'un faux binaire.
+
+Ce que la CI ne vérifie pas, faute de compte : une vraie réponse de chaque fournisseur. La marque « non vérifié » rend cette limite visible.
 
 ## 5. Pièges
 
 - **Un avis n'a pas d'outil.** Un `codex exec` sans `--sandbox read-only` dans un répertoire vide pourrait écrire ou lancer des commandes. Le test vérifie l'argv exact.
 - **Le texte d'une question ne passe dans aucun journal**, comme dans Swairm (« Aucun texte de question ou de réponse ne passe dans les journaux »).
-- **Les flags de `vibe`** ne sont pas vérifiables sur le serveur, où `vibe` n'est pas installé. La fiche les établit sur la tour, et l'adaptateur s'aligne si besoin, dans un commit de recette.
+- **Les flags de `vibe`** ne sont pas vérifiables sur le serveur, où `vibe` n'est pas installé. Le job `contrat-cli` les vérifie sur la version épinglée (66.7).
 
 ## 6. Fini quand
 
-- `aid avis --challenge "<question>"` rend sur la tour trois avis, de trois fournisseurs, et un tableau d'accord.
+- `aid avis --challenge "<question>"` rend trois avis, de trois fournisseurs, et un tableau d'accord, dans l'e2e avec de faux binaires ; les flags passent le job `contrat-cli`.
 - L'écran d'avis d'A-I-D marche sans le binaire `swairm`.
 - Le rôle plan sait challenger une décision structurante et remonter un désaccord.
