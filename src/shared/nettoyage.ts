@@ -56,8 +56,23 @@ const motifs = [
   { source: '\\bnpm_[A-Za-z0-9_-]{16,}\\b', flags: '' },
   { source: '\\bglpat-[A-Za-z0-9_-]{16,}\\b', flags: '' },
   { source: '\\bpypi-[A-Za-z0-9_-]{16,}\\b', flags: '' },
-  { source: '\\bsk_live_[A-Za-z0-9_-]{16,}\\b', flags: '' },
-  { source: '\\brk_live_[A-Za-z0-9_-]{16,}\\b', flags: '' },
+  { source: '\\bsk_(?:live|test)_[A-Za-z0-9_-]{16,}\\b', flags: '' },
+  { source: '\\brk_(?:live|test)_[A-Za-z0-9_-]{16,}\\b', flags: '' },
+  { source: '\\bya29\\.[A-Za-z0-9_-]{16,}', flags: '' },
+  { source: '\\bAGE-SECRET-KEY-1[023456789ACDEFGHJKLMNPQRSTUVWXYZ]{58}', flags: '' },
+  { source: '\\bdop_v1_[a-f0-9]{64}', flags: '' },
+  { source: '\\bSG\\.[A-Za-z0-9_-]{22}\\.[A-Za-z0-9_-]{43}', flags: '' },
+  { source: '\\bxapp-\\d+-[A-Za-z0-9]+-\\d+-[A-Za-z0-9]{16,}', flags: '' },
+  { source: '\\b\\d{8,10}:AA[A-Za-z0-9_-]{33}', flags: '' },
+  {
+    source: '\\bhttps?://hooks\\.slack\\.com/services/[A-Za-z0-9]+/[A-Za-z0-9]+/[A-Za-z0-9]+',
+    flags: 'i',
+  },
+  {
+    source:
+      '\\bhttps?://(?:[a-z0-9-]+\\.)?discord(?:app)?\\.com/api(?:/v\\d+)?/webhooks/\\d+/[A-Za-z0-9_-]+',
+    flags: 'i',
+  },
   {
     source: '-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----.*?-----END [A-Z0-9 ]*PRIVATE KEY-----',
     flags: 's',
@@ -120,10 +135,21 @@ const affectation = new RegExp(
   'ig',
 );
 // DM58 : détecte les clés à segment final sensible sans modifier les refus historiques.
-const affectationCleSecrete =
-  /(?<![\p{L}\p{N}_'"-])(['"]?)((?:[\p{L}\p{N}_-]*[_-])?(?:password|passwd|pwd|passphrase|secret|token|key|credentials?))\1[^\S\r\n]*[:=][^\S\r\n]*(?:"((?:[^"\\\r\n]|\\[^\r\n])*)"|'((?:[^'\\\r\n]|\\[^\r\n])*)'|(<[^<>\r\n]+>|[^\s'"\x60,;&)\]}]+))/giu;
+const nomCleSecrete = String.raw`(?:[\p{L}\p{N}_-]*[_-])?(?:password|passwd|pwd|passphrase|secret|token|key|credentials?)`;
+const parametreSecret = new RegExp(
+  String.raw`[?&](?:${nomCleSecrete}|sig(?:nature)?|X-Amz-(?:Signature|Credential))=[^\s&#'"\x60<>]`,
+  'iu',
+);
+const affectationCleSecrete = new RegExp(
+  String.raw`(?<![\p{L}\p{N}_'"-])(['"]?)(${nomCleSecrete})\1[^\S\r\n]*[:=][^\S\r\n]*(?:"((?:[^"\\\r\n]|\\[^\r\n])*)"|'((?:[^'\\\r\n]|\\[^\r\n])*)'|(<[^<>\r\n]+>|[^\s'"\x60,;&)\]}]+))`,
+  'giu',
+);
 const reference = /^(?:\{|\$(?:\{|[\p{L}_])|%\()/u;
 const modesCredentials = ['omit', 'include', 'same-origin'];
+// Un champ HTTP commence la ligne ou une chaîne citée. Une référence shell seule
+// à la place de l’identifiant d’autorisation ne contient pas sa valeur.
+const enteteSecret =
+  /(?:^|['"\x60])[ \t]*(?:Authorization:[ \t]*[!#$%&'*+.^_\x60|~0-9a-z-]+[ \t]+(?!\$(?:[a-z_][a-z0-9_]*|\{[a-z_][a-z0-9_]*\})[ \t]*(?:['"\x60]|$))|(?:Set-)?Cookie:[ \t]*)[^\s'"\x60]/im;
 const isole = new RegExp(
   '(?<![A-Za-z0-9/+\\-_/.])([A-Za-z0-9/+\\-_]{24,}=*)(?![A-Za-z0-9/+\\-_/.])',
   'g',
@@ -248,6 +274,8 @@ export function nettoyer(
 function controler(controle: string, hotesPrives: string[]): ReturnType<typeof nettoyer> {
   const refus = (classe: string) => ({ ok: false as const, classe });
   if (motifs.some((motif) => motif.test(controle))) return refus('ressemble à une clé API');
+  if (enteteSecret.test(controle) || parametreSecret.test(controle))
+    return refus('ressemble à une clé API');
   for (const m of controle.matchAll(affectation)) {
     const valeur = m[4]!;
     if (
