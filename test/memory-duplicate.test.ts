@@ -170,6 +170,7 @@ test('seuil inclusif et configurable', async () => {
   const maintenant = new Date(2026, 10, 18, 23);
   const planifier = (duplicateDistance: number) =>
     scheduleMaintenance(maintenant, {
+      db,
       vectors,
       store,
       jobs,

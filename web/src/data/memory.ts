@@ -14,6 +14,7 @@ export const PROPOSAL_KIND_LABELS: Record<ProposalKind, string> = {
   tags: 'Tags',
   duplicate: 'Doublon',
   split: 'Découpage',
+  retro: 'Rétro',
 };
 
 export type Call = <T>(
@@ -68,16 +69,20 @@ export async function fetchOpenProposals(
   );
 }
 
-export async function fetchOpenLessonProposals(call: Call): Promise<MemoryProposal[]> {
+export async function fetchOpenMaintenanceProposals(call: Call): Promise<MemoryProposal[]> {
   const { proposals } = await call<{ proposals: MemoryProposal[] }>(
     'GET',
     '/api/memory/proposals?state=open',
   );
-  return proposals.filter((p) => p.slug.startsWith('lesson/'));
+  return proposals.filter((p) => p.kind === 'retro' || p.slug.startsWith('lesson/'));
 }
 
-export function applyProposal(call: Call, id: string): Promise<{ id: string; state: string }> {
-  return call('POST', `/api/memory/proposals/${id}/apply`);
+export function applyProposal(
+  call: Call,
+  id: string,
+  body?: { lecons: string[] },
+): Promise<{ id: string; state: string }> {
+  return call('POST', `/api/memory/proposals/${id}/apply`, body);
 }
 
 export function rejectProposal(call: Call, id: string): Promise<{ id: string; state: string }> {

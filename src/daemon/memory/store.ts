@@ -1,4 +1,5 @@
-import { parse, stringify } from 'yaml';
+import { stringify } from 'yaml';
+import { parseMarkdown } from '../../shared/memory-markdown.js';
 import {
   LESSON_NS,
   type LinkNeighbor,
@@ -9,6 +10,7 @@ import {
 } from '../../shared/memory.js';
 import type { Db } from '../db.js';
 import { deriveMemoryLinks } from './liens.js';
+import { compterRetros } from './retro-queries.js';
 import { assertMemSlug, namespaceOf } from './slug.js';
 
 type Frontmatter = Record<string, unknown>;
@@ -29,35 +31,7 @@ interface Row {
   updated_at: string;
 }
 
-function isRecord(v: unknown): v is Frontmatter {
-  return typeof v === 'object' && v !== null && !Array.isArray(v);
-}
-
-const FRONTMATTER_RE = /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/;
-
-// Une page = frontmatter YAML facultatif puis corps. Le titre vient du frontmatter, sinon du premier « # ».
-export function parseMarkdown(text: string): {
-  frontmatter: Frontmatter;
-  body: string;
-  title: string | undefined;
-} {
-  let frontmatter: Frontmatter = {};
-  let body = text;
-  const m = FRONTMATTER_RE.exec(text);
-  if (m) {
-    const doc: unknown = m[1]!.trim() === '' ? {} : parse(m[1]!);
-    if (doc !== null && doc !== undefined && !isRecord(doc)) {
-      throw new Error('frontmatter : un objet YAML est attendu');
-    }
-    frontmatter = (doc as Frontmatter | null | undefined) ?? {};
-    body = text.slice(m[0].length);
-  }
-  body = body.replace(/^\s*\n/, '').replace(/\s+$/, '');
-  const fmTitle = frontmatter.title;
-  const heading = /^#\s+(.+?)\s*$/m.exec(body)?.[1];
-  const title = typeof fmTitle === 'string' && fmTitle.trim() ? fmTitle.trim() : heading;
-  return { frontmatter, body, title };
-}
+export { parseMarkdown } from '../../shared/memory-markdown.js';
 
 export function renderMarkdown(p: Pick<MemoryPage, 'frontmatter' | 'body'>): string {
   const body = p.body.replace(/\s+$/, '');
@@ -183,6 +157,10 @@ export class MemoryStore {
       return rows.map((row) => ({ ...row, existe: row.existe === 1 }));
     };
     return { sortants: read('from_slug', 'to_slug'), entrants: read('to_slug', 'from_slug') };
+  }
+
+  retroCounts() {
+    return compterRetros(this.db);
   }
 
   derivedCounts(): { closed: number; links: { total: number; pendants: number } } {

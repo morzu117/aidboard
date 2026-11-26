@@ -434,6 +434,13 @@ export async function runChecks(p: Probes): Promise<Check[]> {
       );
     }
     verify(reasons.length === 0, label, { level: 'warn', label, detail: reasons.join(' ; ') });
+    if (mem.retros) {
+      const { manquantes, proposees, abandonnees } = mem.retros;
+      add(
+        abandonnees > 0 ? 'warn' : 'ok',
+        `Rétros : ${manquantes} manquantes, ${proposees} proposées, ${abandonnees} à écrire à la main`,
+      );
+    }
   }
   return c;
 }

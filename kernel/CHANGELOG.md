@@ -12,6 +12,11 @@ et patchs n'en ont pas, sauf mention contraire.
 Changement mineur, sans migration. Le noyau documente la nouvelle section
 `routage` et ajoute l'adaptateur `avis` et la règle du challenge dans le rôle plan.
 
+## Rétro proposée par le moteur (chantier 61)
+
+Changement mineur, sans migration. Le daemon propose la nuit une rétro pour
+les cycles mergés qui en sont dépourvus. Le rôle retro précise le slug attendu.
+
 ## Phase d'acceptation (chantier 67)
 
 Changement mineur, sans migration. La phase facultative écrit les tests
