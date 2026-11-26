@@ -235,6 +235,8 @@ aid mem links <slug>                                 # liens entrants et sortant
 aid mem search "<termes>" --scope <namespace> --closes # inclure les pages closes
 ```
 
+Dans `memory_search`, un résultat marqué `candidat: true` se vérifie avant usage.
+
 MCP : `aid mcp` expose `memory_get`, `memory_put`, `memory_search`,
 `memory_list`, `memory_decide` et `memory_links`. `memory_search` rend aussi
 les pages liées dans `voisins`. L'agent principal l'utilise quand il est déclaré, les agents

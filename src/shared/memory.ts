@@ -52,6 +52,7 @@ export interface SearchHit {
   title: string;
   snippet: string;
   score: number;
+  candidat?: true;
   via?: { slug: string; type: LinkType; sens?: 'sortant' | 'entrant' };
 }
 

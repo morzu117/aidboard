@@ -187,3 +187,25 @@ test.each(['espace', null])('charge les pages du sujet avec le namespace %s', (n
     rmSync(aidHome, { recursive: true, force: true });
   }
 });
+
+test('62.4 : le récit marque les faits candidats et les place après les phases', () => {
+  const fait = {
+    ...page('fait'),
+    slug: 'exemple/fait/cycle.regle',
+    frontmatter: { statut: 'candidat' },
+  };
+  const resultat = assembleCycleRecit({
+    topic,
+    namespace,
+    pages: [page('annexe'), page('review'), fait, page('dev-handoff'), page('plan')],
+    events: [],
+  });
+  if (!resultat.ok) throw new Error('Récit attendu');
+  expect(resultat.recit.match(/^## .+$/gm)).toEqual([
+    '## exemple/plan/cycle',
+    '## exemple/dev-handoff/cycle',
+    '## exemple/review/cycle',
+    '## exemple/fait/cycle.regle (candidat)',
+    '## exemple/annexe/cycle',
+  ]);
+});

@@ -108,6 +108,7 @@ test('memory : les défauts', () => {
       maxPerNight: 20,
       splitLines: 40,
     },
+    capture: { enabled: false, delayMinutes: 5, maxPerDay: 30 },
     git: { push: false },
   });
 });

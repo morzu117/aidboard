@@ -87,6 +87,7 @@ export interface MemoryConfig {
     splitLines?: number;
     hotesPrives?: string[];
   };
+  capture: { enabled: boolean; delayMinutes: number; maxPerDay: number };
   git: { push: boolean };
 }
 
@@ -149,6 +150,7 @@ export const DEFAULT_CONFIG: AidConfig = {
       maxPerNight: DEFAULT_MAINTENANCE_MAX_PER_NIGHT,
       splitLines: DEFAULT_MAINTENANCE_SPLIT_LINES,
     },
+    capture: { enabled: false, delayMinutes: 5, maxPerDay: 30 },
     git: { push: false },
   },
   structural: { engine: 'codegraph', bin: 'codegraph', timeoutMs: 60_000, exclude: [] },
@@ -324,7 +326,7 @@ function bool(v: unknown, name: string): boolean {
 
 function parseMemory(raw: unknown, cfg: MemoryConfig): void {
   if (!isRecord(raw)) throw new ConfigError('config.yaml : memory doit être un objet');
-  rejectUnknown(raw, ['embeddings', 'maintenance', 'git'], 'memory.');
+  rejectUnknown(raw, ['embeddings', 'maintenance', 'capture', 'git'], 'memory.');
   const e = raw.embeddings;
   if (e !== undefined) {
     if (!isRecord(e)) throw new ConfigError('config.yaml : memory.embeddings doit être un objet');
@@ -384,6 +386,15 @@ function parseMemory(raw: unknown, cfg: MemoryConfig): void {
         throw new ConfigError('config.yaml : memory.maintenance.window attend "HH:MM-HH:MM"');
       }
       cfg.maintenance.window = w;
+    }
+  }
+  const c = raw.capture;
+  if (c !== undefined) {
+    if (!isRecord(c)) throw new ConfigError('config.yaml : memory.capture doit être un objet');
+    rejectUnknown(c, ['enabled', 'delayMinutes', 'maxPerDay'], 'memory.capture.');
+    if (c.enabled !== undefined) cfg.capture.enabled = bool(c.enabled, 'memory.capture.enabled');
+    for (const key of ['delayMinutes', 'maxPerDay'] as const) {
+      if (c[key] !== undefined) cfg.capture[key] = positiveInt(c[key], `memory.capture.${key}`);
     }
   }
   const g = raw.git;
@@ -731,6 +742,10 @@ const DEFAULT_FILE = `# Configuration d'A-I-D. Tout est facultatif : ce sont les
 #     maxPerNight: 20        # jobs créés depuis le début de la fenêtre courante
 #     splitLines: 40         # découpage au-delà de ce nombre de lignes non vides
 #     hotesPrives: []       # hôtes dont la présence bloque l'envoi d'un récit au modèle
+#   capture:
+#     enabled: false         # extraction de faits après un handoff ou une review
+#     delayMinutes: 5        # délai après la dernière écriture
+#     maxPerDay: 30          # jobs créés depuis minuit, heure locale
 #   git:
 #     push: false            # true : git push de ~/.aid/memory après chaque commit, si un remote origin existe
 # structural:

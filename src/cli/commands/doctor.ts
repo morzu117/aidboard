@@ -434,6 +434,15 @@ export async function runChecks(p: Probes): Promise<Check[]> {
       );
     }
     verify(reasons.length === 0, label, { level: 'warn', label, detail: reasons.join(' ; ') });
+    if (mem.faits) {
+      const { candidats, aujourdhui, plafond } = mem.faits;
+      add(
+        plafond > 0 && aujourdhui >= plafond ? 'warn' : 'ok',
+        plafond === 0
+          ? 'Faits candidats : capture éteinte'
+          : `Faits candidats : ${candidats} en mémoire, ${aujourdhui} extraits aujourd'hui sur ${plafond}`,
+      );
+    }
     if (mem.retros) {
       const { manquantes, proposees, abandonnees } = mem.retros;
       add(

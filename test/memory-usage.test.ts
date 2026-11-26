@@ -315,3 +315,53 @@ test('60.3 : CLI avec remplacement, voisines et JSON de l’API', async () => {
     expect(JSON.parse(output!)).toEqual(expected.json());
   }
 });
+
+test('62.4 : la recherche et le CLI marquent les faits candidats', async () => {
+  t = await startTestDaemon();
+  const store = t.d.memory.store;
+  const ordinary = 'aid/plan/tache';
+  const candidate = 'aid/fait/tache.regle';
+  store.put(ordinary, 'quartz', { kind: 'create' }, 'admin');
+  store.put(
+    candidate,
+    '---\nstatut: candidat\nliens: { issu_de: [aid/plan/tache] }\n---\nquartz',
+    { kind: 'create' },
+    'maintenance',
+  );
+
+  const response = (await get('/api/memory/search?q=quartz')).json();
+  expect(response.hits).toHaveLength(2);
+  expect(response.hits.find(({ slug }: { slug: string }) => slug === ordinary)).not.toHaveProperty(
+    'candidat',
+  );
+  expect(response.hits).toContainEqual(
+    expect.objectContaining({ slug: candidate, candidat: true }),
+  );
+
+  // La page ordinaire est cherchée par son propre terme pour en isoler le voisin.
+  store.put(ordinary, 'feldspath', { kind: 'append' }, 'admin');
+  const neighbors = (await get('/api/memory/search?q=feldspath')).json();
+  expect(neighbors.voisins).toMatchObject([{ slug: candidate, candidat: true }]);
+
+  async function searchCli(query: string, ...args: string[]) {
+    const out: string[] = [];
+    const code = await runMem(['search', query, ...args], resolvePaths(t!.home), {
+      stdin: async () => '',
+      out: (s) => out.push(s),
+      err: (s) => {
+        throw new Error(s);
+      },
+      env: {},
+    });
+    expect(code).toBe(0);
+    return out;
+  }
+  expect(await searchCli('quartz')).toContainEqual(
+    expect.stringContaining(`${candidate} (candidat)  `),
+  );
+  expect(await searchCli('feldspath')).toContain(`  ${candidate} (candidat)  issu_de  ${ordinary}`);
+  for (const query of ['quartz', 'feldspath']) {
+    const [output] = await searchCli(query, '--json');
+    expect(JSON.parse(output!)).toEqual((await get(`/api/memory/search?q=${query}`)).json());
+  }
+});

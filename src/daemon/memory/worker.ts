@@ -17,6 +17,7 @@ export interface WorkerDeps {
   // 06.10 : traitement des jobs `maintain` ; absent, ils échouent proprement
   maintain?: (job: MemoryJob) => Promise<void>;
   retro?: (job: MemoryJob) => Promise<void>;
+  faits?: (job: MemoryJob) => Promise<void>;
 }
 
 const DEFAULT_BACKOFF = [10_000, 60_000, 300_000];
@@ -100,6 +101,10 @@ export class MemoryWorker {
   }
 
   private async run(job: MemoryJob): Promise<void> {
+    if (job.kind === 'faits') {
+      if (!this.deps.faits) throw new Error('extraction de faits non disponible');
+      return this.deps.faits(job);
+    }
     if (job.kind === 'retro') {
       if (!this.deps.retro) throw new Error('rétro non disponible');
       return this.deps.retro(job);

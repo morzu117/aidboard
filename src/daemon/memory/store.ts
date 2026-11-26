@@ -377,6 +377,15 @@ export class MemoryStore {
     }));
   }
 
+  countCandidates(): number {
+    const row = this.db
+      .prepare(
+        "SELECT count(*) AS n FROM memory_pages WHERE json_extract(frontmatter, '$.statut') = 'candidat'",
+      )
+      .get() as { n: number };
+    return row.n;
+  }
+
   countByNamespace(): Record<string, number> {
     const out: Record<string, number> = {};
     for (const r of this.db

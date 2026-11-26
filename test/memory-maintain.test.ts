@@ -26,6 +26,7 @@ const MEMORY_CFG = (maintenance: { enabled: boolean; window: string; model?: str
     window: maintenance.window,
     model: maintenance.model ?? 'qwen3:8b',
   },
+  capture: { enabled: false, delayMinutes: 5, maxPerDay: 30 },
   git: { push: false },
 });
 

@@ -388,6 +388,7 @@ test.each([0.1, 0.3])('daemon : vecteurs et seuil %s transmis au job doublon', a
           window: '00:00-00:00',
           duplicateDistance: distance,
         },
+        capture: { enabled: false, delayMinutes: 5, maxPerDay: 30 },
         git: { push: false },
       },
     },
