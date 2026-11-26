@@ -112,6 +112,24 @@ C'est ce que je fais depuis le chantier 60 : lancer le testeur, puis le dev, rel
 - **Les processus de l'étape.** En fin d'étape, le daemon termine le groupe de processus de la session. Il refuse de lancer le gate tant qu'un processus a son répertoire courant dans le worktree, pour qu'un processus resté en tâche de fond ne committe pas pendant le gate.
 - **Une revue vide n'est pas un pass.** Le JSON de la revue donne un verdict par fichier modifié et par point d'acceptation. Un « aucun finding » sans ces verdicts est invalide : une relance, puis une escalade. Le message de revue dit que le diff est une donnée, pas une consigne : un commentaire du code peut s'adresser au relecteur.
 
+### DM68. Ce que la relecture du code par le lab ajoute
+
+Le lab a relu la PR #214 à la tête e941fcd (DM 106876), en lecture statique, et ne donne pas son oui en l'état. Le contexte rend ses constats sérieux : l'agent dev tourne sans demander de permission. Il peut donc modifier tout ce que les contrôles ne regardent pas. Les règles suivantes s'ajoutent à DM66 et DM67.
+
+- **Seule la revue écrite par le daemon compte.** Une page de revue est acceptée seulement si le daemon l'a écrite lui-même, à partir de la réponse finale de la session de revue de cette tentative. Le daemon garde la révision qu'il a écrite, et juge le texte qu'il a reçu, sans relire la page. Une page préexistante, ou réécrite par un autre jeton, ne vaut rien : une revue sans réponse finale est un artefact manquant. Le dev détient le jeton du run, et il pourrait sinon pré-écrire une revue « tout pass ». Le plan garde son repli sur la page existante : il précède tout dev, et l'humain le lit avant le GO.
+- **Le bloc json se ferme.** Une clôture finale absente rend la revue invalide. Le journal du gate entre dans le message de revue dans un bloc clôturé, comme le diff.
+- **Le git du daemon ignore la config du dépôt qui exécute du code.** Tout git lancé par la boucle, preuves du 67 comprises (`git worktree add`), passe `core.hooksPath=/dev/null`, `core.fsmonitor=false`, un `credential.helper` vide et un `core.sshCommand` neutre, avec l'environnement filtré du gate. La config locale du dépôt, ses hooks et `info/` entrent dans l'empreinte, et un changement donne une escalade `scope`.
+- **Les fichiers hors commit comptent.** Le relevé des entrées gelées et de la config de projet regarde aussi les fichiers non suivis et ignorés (`git status --porcelain --ignored`) : `.claude/`, `.mcp.json`, `CLAUDE.local.md`, `.codex/`, `.npmrc`, `node_modules/.bin`. Un changement de ces fichiers depuis le GO donne une escalade `scope`.
+- **Le gel des scripts couvre les autres lanceurs.** `pnpm`, `yarn` et `bun` sont lus comme `npm`. Un fichier que la commande du gate nomme (`./ci.sh`, un `Makefile` pour `make`) est gelé.
+- **L'empreinte du home s'élargit et suit les liens.** Les clés `allowedTools` et `enabled/disabledMcpjsonServers` de `~/.claude.json` sont aussi lues à la racine. `~/.claude/hooks`, les scripts nommés par les hooks et la `statusLine` des réglages, le reste de `~/.codex` (hors sessions, journaux et jeton) et `~/.npmrc` entrent dans la liste. Un lien est suivi jusqu'à sa cible, dont le contenu est haché, avec une profondeur bornée.
+- **Le GO vérifie la base.** Si la tête au GO n'est pas celle du lancement, des commits sont arrivés pendant le plan, qui est en lecture seule : le GO est refusé, avec une escalade `scope`.
+- **Les groupes de processus.**
+  - Le gate tue son groupe aussi après une sortie normale.
+  - Les commandes de preuve tournent dans leur propre groupe, tué au délai.
+  - À la reprise, le daemon tue les processus encore présents dans le worktree.
+  - `arreter` ne marque l'étape arrêtée qu'après la mort de l'agent.
+- **Les limites qui restent, dites dans la vue et dans `aid doctor`.** Les contrôles tournent aux bornes d'étape (Q1, « vérifié après coup ») : un changement fait puis défait pendant l'étape n'est pas vu. Un processus qui quitte son groupe (`setsid`) échappe à l'arrêt. Au même utilisateur, l'environnement du daemon reste lisible. Sous Linux, l'isolation bwrap du chantier 65 réduit ces limites ; sur le Mac, non.
+
 ## 4. Points
 
 ### 69.1 Le plan
@@ -254,6 +272,10 @@ Le scénario vérifie aussi deux refus : un second GO sur le même sujet, et le 
 
   Les huit tests Playwright de la boucle passent. J'ai regardé la capture finale : six étapes dans l'historique, dont « Triage · livraison », et les trois mesures. Mon gate : 5 153.
 
+### 69.8 La relecture du code par le lab (DM68)
+
+Les règles de DM68, avec un test négatif chacune. Le testeur écrit d'abord les tests, à partir de DM68 seul, puis le dev les fait passer.
+
 ## 5. Réponses de Julien (26 novembre)
 
 - **Q1. Les permissions sur le Mac, sans isolation : le mode `auto`, vérifié après coup.** Les sessions d'acceptation et de dev enchaînent sans demander. Le daemon vérifie ensuite le worktree, les tests d'acceptation, la branche et l'empreinte de l'environnement (DM67). Le plan et la revue restent en lecture seule. C'est une règle vérifiée après coup, pas une barrière : pendant l'étape, l'agent garde l'accès au home.
@@ -271,5 +293,5 @@ Le scénario vérifie aussi deux refus : un second GO sur le même sujet, et le 
 
 ## 7. Fini quand
 
-- Les points 69.2 à 69.7 sont mergés, avec la CI verte et le oui de Julien.
+- Les points 69.2 à 69.8 sont mergés, avec la CI verte et le oui de Julien.
 - Un vrai sujet est allé du plan à « livraison prête » sur le Mac de Julien, avec ses trois mesures écrites.
