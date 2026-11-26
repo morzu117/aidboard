@@ -248,6 +248,11 @@ Le scénario vérifie aussi deux refus : un second GO sur le même sujet, et le 
   Le parcours nominal atteint « livraison prête », avec ses trois mesures justes. Mais il reste rouge : le triage s'exécute sans apparaître dans la vue ni dans l'historique, alors que §2 et le 69.7 demandent de montrer chaque étape.
 
   Le testeur a relu les trente-quatre captures aux deux tailles.
+- _Révision 69.7._ Une passe Codex et une reprise.
+  - La passe a ajouté la tentative de triage, puis elle s'est arrêtée, comme le veut la règle : le test du 69.6 figeait un historique sans triage. Le plan tranche, et le testeur a mis à jour son assertion au commit `0c6a316`, marqué `Acceptation: 69.7`, avec trois cas de machine pour les routes.
+  - La passe avait aussi ajouté une migration 041. La reprise l'a retirée et corrige la 040 du chantier, encore inédite.
+
+  Les huit tests Playwright de la boucle passent. J'ai regardé la capture finale : six étapes dans l'historique, dont « Triage · livraison », et les trois mesures. Mon gate : 5 153.
 
 ## 5. Réponses de Julien (26 novembre)
 

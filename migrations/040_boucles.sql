@@ -18,7 +18,7 @@ CREATE UNIQUE INDEX boucles_sujet_actif
 CREATE TABLE boucle_etapes (
   boucle_id TEXT NOT NULL REFERENCES boucles(id) ON DELETE CASCADE,
   position INTEGER NOT NULL,
-  type TEXT NOT NULL CHECK (type IN ('plan', 'acceptation', 'dev', 'gate', 'revue')),
+  type TEXT NOT NULL CHECK (type IN ('plan', 'acceptation', 'dev', 'gate', 'revue', 'triage')),
   tentative INTEGER NOT NULL CHECK (tentative >= 1),
   donnees TEXT NOT NULL CHECK (json_valid(donnees)),
   CHECK (length(json_extract(donnees, '$.teteDepart')) = 40),

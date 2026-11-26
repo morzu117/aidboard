@@ -457,7 +457,8 @@ export class ServiceBoucle {
       const contexte = await this.contexte(boucle, sujet);
       const etape = boucle.etat.etapes.at(-1)!;
       if (action.type === 'lancer_etape' || action.type === 'lancer_gate') {
-        etape.echeance = etape.debut + contexte.reglages.delais[etape.type] * 60_000;
+        const type = action.type === 'lancer_gate' ? 'gate' : action.etape;
+        etape.echeance = etape.debut + contexte.reglages.delais[type] * 60_000;
         if (action.type === 'lancer_etape') {
           const page =
             action.etape === 'dev' ? 'dev-handoff' : action.etape === 'revue' ? 'review' : 'plan';

@@ -3,7 +3,7 @@ type EtapeAgent = Exclude<Etape, 'gate'>;
 export type Issue = 'pass' | 'fail' | 'cannot_evaluate' | 'skipped' | 'delai_depasse';
 
 export interface Tentative {
-  type: Etape;
+  type: Etape | 'triage';
   tentative: number;
   agentId: string | null;
   debut: number;
@@ -15,6 +15,8 @@ export interface Tentative {
   teteDepart?: string;
   teteArrivee?: string;
   preuve?: { codeSortie?: number; comptes?: Record<string, number> };
+  categories?: string[];
+  route?: 'dev' | 'humain' | 'livraison';
 }
 
 interface ResultatEtape {
@@ -86,7 +88,9 @@ export function transition(
   }
 
   function arreter(): ActionBoucle[] {
-    return tentative ? [{ type: 'arreter_etape', etape: tentative.type }] : [];
+    return tentative && tentative.type !== 'triage'
+      ? [{ type: 'arreter_etape', etape: tentative.type }]
+      : [];
   }
 
   function escalader(raison: string, etatDepart = etat, actions: ActionBoucle[] = []) {
@@ -211,19 +215,47 @@ export function transition(
     },
     triage_termine: () => {
       if (evenement.type !== 'triage_termine' || etat.phase !== 'triage') return inchange;
-      if (evenement.categories.length === 0) return modifier({ phase: 'livraison_prete' });
+      const categories = evenement.categories;
+      function consigner(route: NonNullable<Tentative['route']>): EtatBoucle {
+        const numero =
+          (etat.etapes.findLast((etape) => etape.type === 'triage')?.tentative ?? 0) + 1;
+        const tete = etat.revue?.tete ?? etat.tete;
+        return {
+          ...etat,
+          etapes: [
+            ...etat.etapes,
+            {
+              type: 'triage',
+              tentative: numero,
+              agentId: null,
+              debut: maintenant,
+              echeance: null,
+              issue: 'pass',
+              fin: maintenant,
+              teteDepart: tete,
+              teteArrivee: tete,
+              categories: [...categories],
+              route,
+            },
+          ],
+        };
+      }
+      if (categories.length === 0) {
+        return modifier({ phase: 'livraison_prete', etapes: consigner('livraison').etapes });
+      }
       if (
         evenement.categories.every((categorie) => ['bug', 'test-gap', 'nit'].includes(categorie))
       ) {
-        return relancer('dev');
+        return relancer('dev', consigner(etat.redevs >= etat.redevCap ? 'humain' : 'dev'));
       }
-      return escalader('finding');
+      return escalader('finding', consigner('humain'));
     },
     tests_modifies: () => {
       if (!etat.acceptation || etat.phase !== 'dev') return inchange;
       return relancer('acceptation', { ...etat, etapes: clore('skipped') }, arreter());
     },
     artefact_manquant: () => {
+      if (tentative?.type === 'triage') return inchange;
       if (!tentative || tentative.type === 'gate') return inchange;
       if (tentative.relance) {
         return escalader('ambiguity', { ...etat, etapes: clore('cannot_evaluate') });

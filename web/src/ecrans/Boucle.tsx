@@ -180,6 +180,7 @@ export function Boucle({ sujetId }: { sujetId: string }) {
                   return (
                     <li key={`${etape.type}-${etape.tentative}`}>
                       {LIBELLES[etape.type]} · tentative {etape.tentative} · {etape.issue}{' '}
+                      {etape.route && <>· {etape.route} </>}
                       {tete && <code title={tete}>{tete.slice(0, 12)}</code>}
                     </li>
                   );

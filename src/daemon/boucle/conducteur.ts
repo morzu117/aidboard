@@ -187,6 +187,7 @@ export async function artefactPresent(
     case 'revue':
       return (await terminerRevue(contexte, deps))[0].type === 'revue_terminee';
     case 'gate':
+    case 'triage':
       return false;
   }
 }
