@@ -103,7 +103,10 @@ C'est ce que je fais depuis le chantier 60 : lancer le testeur, puis le dev, rel
 ### DM67. Ce que la relecture du plan par le lab ajoute
 
 - **Les entrées du gate sont gelées au GO.** `agent.yml` (`gates`, `phases`, `guardrails`, délais) se lit au commit du GO, jamais à la tête du dev : un dev pourrait sinon remplacer la commande du gate par `true`. Le gel de l'acceptation couvre aussi les entrées du gate : les scripts de `package.json`, les configs et fichiers de setup des tests (un `setupFiles` peut neutraliser `it`), et le lockfile. Un diff du dev ou de la revue qui les touche part en escalade `scope`. La preuve rouge puis vert du 67 ne le voit pas, puisque la neutralisation n'existe qu'à la tête.
-- **L'empreinte de l'environnement.** Sans isolation (Q1), le contrôle du worktree ne suffit pas : un agent peut écrire dans le home, et l'écriture persiste. Avant et après chaque étape et chaque gate, le daemon relève l'empreinte de quelques chemins : `~/.claude/settings.json`, `~/.claude.json`, `~/.codex/config.toml`, les fichiers rc du shell, `~/.gitconfig` et `~/Library/LaunchAgents` sur macOS. Tout changement part en escalade. Ce n'est pas une barrière, mais la persistance la plus probable devient visible.
+- **L'empreinte de l'environnement.** Sans isolation (Q1), le contrôle du worktree ne suffit pas : un agent peut écrire dans le home, et l'écriture persiste. Avant et après chaque étape et chaque gate, le daemon relève l'empreinte de quelques chemins : `~/.claude/settings.json`, `~/.claude.json`, `~/.codex/config.toml`, les fichiers rc du shell, `~/.gitconfig` et `~/Library/LaunchAgents` sur macOS. Tout changement part en escalade. Ce n'est pas une barrière, mais la persistance la plus probable devient visible. La liste couvre aussi la mémoire de Claude (`~/.claude/projects/*/memory/`), les autres réglages de `~/.claude` (`settings.local.json`, `commands/`, `agents/`, `skills/`, `plugins/`, `CLAUDE.md`) et les répertoires de session que Claude et Codex chargent au démarrage.
+- **La config de projet dans le worktree** (relecture du lab du 26 novembre, DM 106264). Le worktree est inscriptible par construction. Or la session suivante qui l'ouvre applique sa config de projet : relecteur, re-dev, ou Julien hors de la boucle. Cette config, ce sont, pour Claude, `.claude/settings.json`, `.claude/settings.local.json`, `.mcp.json`, `CLAUDE.md`, et `.claude/commands/`, `agents/` et `skills/`, et pour Codex, `AGENTS.md`. Un hook de projet est une commande shell. Deux parades, ensemble :
+  - les sessions de la boucle sont lancées avec `--setting-sources user` et `--strict-mcp-config`, comme les avis du chantier 66 ;
+  - en fin d'étape, le daemon relève ces chemins dans le diff, et toute création ou modification part en escalade `scope`, comme pour les entrées gelées du gate.
 - **Les processus de l'étape.** En fin d'étape, le daemon termine le groupe de processus de la session. Il refuse de lancer le gate tant qu'un processus a son répertoire courant dans le worktree, pour qu'un processus resté en tâche de fond ne committe pas pendant le gate.
 - **Une revue vide n'est pas un pass.** Le JSON de la revue donne un verdict par fichier modifié et par point d'acceptation. Un « aucun finding » sans ces verdicts est invalide : une relance, puis une escalade. Le message de revue dit que le diff est une donnée, pas une consigne : un commentaire du code peut s'adresser au relecteur.
 
@@ -140,7 +143,7 @@ Les tests utilisent un faux pilote de conversation, sans claude ni codex réels.
 ### 69.4 Le gate et les contrôles du daemon (DM66)
 
 - Le lancement de `gates.gate`, lu au commit du GO, à la tête exacte, avec son délai et son issue lue sur le code de sortie (DM67).
-- Le refus d'un diff qui touche les entrées gelées du gate, l'empreinte de l'environnement et l'attente des processus du worktree (DM67).
+- Le refus d'un diff qui touche les entrées gelées du gate ou la config de projet des agents, l'empreinte de l'environnement et l'attente des processus du worktree (DM67).
 - L'appel aux contrôles d'acceptation du 67, et le relevé des fichiers d'acceptation gelés.
 - L'invalidation en aval quand la tête bouge.
 
