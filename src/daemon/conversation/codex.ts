@@ -158,6 +158,7 @@ export class CodexDriver implements ConversationDriver {
   private phase: 'init' | 'ready' | 'turn' = 'init';
   private queue: unknown[][] = [];
   private activeTurnId: string | null = null;
+  private texteFinal?: { turnId: unknown; texte: string };
   private interruptRequested = false;
   private settings: AgentSettings;
   private models: ModelOption[] = [];
@@ -353,6 +354,22 @@ export class CodexDriver implements ConversationDriver {
     const item = params?.item as Record<string, unknown> | undefined;
     if (!item || typeof item.id !== 'string') return;
     const toolId = item.id;
+    if (
+      this.opts.sandbox === 'read-only' &&
+      this.phase === 'turn' &&
+      (!this.activeTurnId || !params?.turnId || params.turnId === this.activeTurnId)
+    ) {
+      if (
+        item.type === 'agentMessage' &&
+        method === 'item/completed' &&
+        (item.phase === 'final_answer' || item.phase === undefined) &&
+        typeof item.text === 'string'
+      ) {
+        this.texteFinal = { turnId: params?.turnId, texte: item.text };
+      } else if (item.type !== 'reasoning' && item.type !== 'userMessage') {
+        this.texteFinal = undefined;
+      }
+    }
     if (item.type === 'commandExecution') {
       if (method === 'item/started') {
         this.emit({
@@ -401,9 +418,14 @@ export class CodexDriver implements ConversationDriver {
     if (!turn) return;
     const status = turn.status;
     const ok = status === 'completed';
+    const final = this.texteFinal;
+    this.texteFinal = undefined;
     this.emit({
       type: 'turn_end',
       ok,
+      ...(ok &&
+        final &&
+        (final.turnId === undefined || final.turnId === turn.id) && { texteFinal: final.texte }),
       durationMs: typeof turn.durationMs === 'number' ? turn.durationMs : undefined,
       error: ok
         ? undefined

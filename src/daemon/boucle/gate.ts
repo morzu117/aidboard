@@ -6,6 +6,7 @@ import { StringDecoder } from 'node:string_decoder';
 import { setTimeout as attendre } from 'node:timers/promises';
 import { produirePreuves } from '../../acceptation/preuve.js';
 import { verifierAcceptation } from '../../acceptation/verifier.js';
+import { environnementGate, gitBoucle } from './git.js';
 import { gitSujet, processusDansWorktree } from './controles.js';
 
 interface OptionsGate {
@@ -60,30 +61,6 @@ async function attendreWorktree(
 async function lireTete(depot: string): Promise<string | undefined> {
   const resultat = await gitSujet(depot, ['rev-parse', '--verify', '--end-of-options', 'HEAD']);
   return resultat.ok ? resultat.stdout : undefined;
-}
-
-const variablesGate = new Set([
-  'PATH',
-  'HOME',
-  'USER',
-  'LOGNAME',
-  'SHELL',
-  'LANG',
-  'LANGUAGE',
-  'TERM',
-  'TZ',
-  'CI',
-]);
-
-function environnementGate(temporaire: string): NodeJS.ProcessEnv {
-  return {
-    ...Object.fromEntries(
-      Object.entries(process.env).filter(
-        ([nom]) => variablesGate.has(nom) || nom.startsWith('LC_'),
-      ),
-    ),
-    TMPDIR: temporaire,
-  };
 }
 
 function executerCommande(
@@ -175,6 +152,7 @@ function executerCommande(
     enfant.on('exit', () => {
       sorti = true;
       if (expire && !terminee) forcerArret();
+      else signaler('SIGKILL');
     });
     enfant.on('close', (code) => finir(expire ? null : code));
   });
@@ -223,21 +201,20 @@ export async function lancerGate({
     if (codeSortie !== 0) return resultat('fail');
     if (!acceptation) return resultat('pass');
 
-    const {
-      base,
-      chemins,
-      lancer,
-      verifier = verifierAcceptation,
-      produire = produirePreuves,
-    } = acceptation;
-    const verification = await verifier({ depot, base, chemins });
+    const { base, chemins, lancer, verifier, produire } = acceptation;
+    const verification = verifier
+      ? await verifier({ depot, base, chemins })
+      : await verifierAcceptation({ depot, base, chemins, lireGit: gitBoucle });
     if ((await lireTete(depot)) !== tete) return resultat('cannot_evaluate');
     fichiersAcceptation = [
       ...new Set(Object.values(verification.points).flatMap(({ fichiers }) => fichiers)),
     ];
     if (!verification.ok) return resultat('fail');
 
-    const preuves = await produire({ depot, base, chemins, lancer }, delaiMs, env, signal);
+    const options = { depot, base, chemins, lancer };
+    const preuves = produire
+      ? await produire(options, delaiMs, env, signal)
+      : await produirePreuves(options, delaiMs, env, signal, gitBoucle);
     if (
       (await lireTete(depot)) !== tete ||
       !preuves.length ||

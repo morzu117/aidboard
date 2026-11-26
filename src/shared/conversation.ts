@@ -18,6 +18,7 @@ export type ConversationEvent =
   | {
       type: 'turn_end';
       ok: boolean;
+      texteFinal?: string;
       costUsd?: number;
       durationMs?: number;
       error?: string;

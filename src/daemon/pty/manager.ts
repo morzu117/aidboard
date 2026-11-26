@@ -187,7 +187,7 @@ export class AgentManager {
   /** D71 : dernier catalogue annoncé par un pilote codex, gardé après sa sortie. */
   private codexCatalog: ModelOption[] = [];
   // à part de `LiveStream` (interface publique, D62) : `recordStreamEvent` et `inputStream` en ont besoin hors du closure de `spawnStream`.
-  private groupesBoucle = new Map<string, number>();
+  private groupesBoucle = new Map<string, { pid: number; sortie: Promise<void> }>();
   private streamSubscribers = new Map<string, Set<(ev: ConversationEvent) => void>>();
   private readonly ticker: NodeJS.Timeout;
 
@@ -521,7 +521,10 @@ export class AgentManager {
           const enfant = spawnProcess(bin, args, { ...opts, detached: true });
           const pid = enfant.pid;
           if (pid) {
-            this.groupesBoucle.set(o.agentId, pid);
+            const sortie = new Promise<void>((resoudre) => {
+              enfant.once('exit', () => resoudre());
+            });
+            this.groupesBoucle.set(o.agentId, { pid, sortie });
             enfant.kill = (signal = 'SIGTERM') => {
               try {
                 return process.kill(-pid, signal);
@@ -587,14 +590,16 @@ export class AgentManager {
 
   async arreterBoucle(agentId: string) {
     await this.stop(agentId, 'user');
-    const pid = this.groupesBoucle.get(agentId);
-    this.groupesBoucle.delete(agentId);
-    if (!pid) return;
+    const groupe = this.groupesBoucle.get(agentId);
+    if (!groupe) return;
+    const { pid, sortie } = groupe;
     try {
       process.kill(-pid, 'SIGKILL');
     } catch (erreur) {
       if ((erreur as NodeJS.ErrnoException).code !== 'ESRCH') throw erreur;
     }
+    await sortie;
+    this.groupesBoucle.delete(agentId);
   }
 
   private spawnStream(o: {

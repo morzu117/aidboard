@@ -49,7 +49,7 @@ function extraireBlocJson(texte: string): string | undefined {
       debutJson = ligne.index + bordure.length;
     }
   }
-  return debutJson === undefined ? bloc : undefined;
+  return cloture === undefined ? bloc : undefined;
 }
 
 function estObjet(valeur: unknown): valeur is Record<string, unknown> {

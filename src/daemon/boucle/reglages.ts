@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { parse } from 'yaml';
 import { packageRoot } from '../../cli/version.js';
-import { git } from '../git/exec.js';
+import { gitBoucle } from './git.js';
 
 type GenreAgent = 'claude' | 'codex';
 export type RoleEtape = 'plan' | 'acceptation' | 'dev' | 'review';
@@ -40,12 +40,8 @@ export async function lireReglagesBoucle(
   commit: string,
   revueParDefaut?: GenreAgent,
 ): Promise<ReglagesBoucle> {
-  const resultat = await git(depot, ['show', '--end-of-options', `${commit}:agent.yml`]);
-  if (!resultat.ok) {
-    throw new Error(`Impossible de lire agent.yml au commit du GO : ${resultat.stderr}`);
-  }
-
-  const projet = (parse(resultat.stdout) as Manifeste | null) ?? {};
+  const contenu = await gitBoucle(depot, ['show', '--end-of-options', `${commit}:agent.yml`]);
+  const projet = (parse(contenu) as Manifeste | null) ?? {};
   const defauts = parse(await readFile(join(packageRoot(), 'kernel/defaults.yml'), 'utf8')) as {
     phases: string[];
     guardrails: { redev_cap: number };

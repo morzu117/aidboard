@@ -16,6 +16,7 @@ export interface Tentative {
   teteArrivee?: string;
   preuve?: { codeSortie?: number; comptes?: Record<string, number> };
   categories?: string[];
+  revisionRevue?: number;
   route?: 'dev' | 'humain' | 'livraison';
 }
 

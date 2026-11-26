@@ -1,4 +1,4 @@
-import { execFile } from 'node:child_process';
+import { execFile, spawn } from 'node:child_process';
 import { lstat, mkdtemp, rm, symlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -41,8 +41,8 @@ interface OptionsPreuve {
   lancer: Record<string, string>;
 }
 
-async function nomDepot(depot: string): Promise<string> {
-  const origine = (await git(depot, ['remote', 'get-url', 'origin'])).trim();
+async function nomDepot(depot: string, lireGit: typeof git): Promise<string> {
+  const origine = (await lireGit(depot, ['remote', 'get-url', 'origin'])).trim();
   const chemin = origine.includes('://')
     ? new URL(origine).pathname
     : origine.replace(/^[^/]+:/, '');
@@ -55,6 +55,53 @@ async function nomDepot(depot: string): Promise<string> {
   return segments.slice(-2).join('/');
 }
 
+function lancerEnGroupe(
+  dossier: string,
+  head: string,
+  argv: string[],
+  delai: number,
+  env?: NodeJS.ProcessEnv,
+  signal?: AbortSignal,
+): Promise<Commande> {
+  return new Promise((resoudre, rejeter) => {
+    const [programme, ...args] = argv;
+    const enfant = spawn(programme!, args, { cwd: dossier, env, detached: true, stdio: 'ignore' });
+    let expire = false;
+    function tuer() {
+      if (!enfant.pid) return;
+      try {
+        process.kill(-enfant.pid, 'SIGKILL');
+      } catch (erreur) {
+        if ((erreur as NodeJS.ErrnoException).code !== 'ESRCH') rejeter(erreur);
+      }
+    }
+    const minuteur = setTimeout(() => {
+      expire = true;
+      tuer();
+    }, delai);
+    function nettoyer() {
+      clearTimeout(minuteur);
+      signal?.removeEventListener('abort', tuer);
+    }
+    signal?.addEventListener('abort', tuer, { once: true });
+    if (signal?.aborted) tuer();
+    enfant.once('error', (erreur) => {
+      nettoyer();
+      rejeter(erreur);
+    });
+    enfant.once('exit', (code) => {
+      nettoyer();
+      tuer();
+      resoudre({
+        argv,
+        head,
+        exit: expire || signal?.aborted ? null : code,
+        ...(expire && { delai_depasse: true as const }),
+      });
+    });
+  });
+}
+
 async function lancerDansWorktree(
   depot: string,
   head: string,
@@ -62,12 +109,13 @@ async function lancerDansWorktree(
   delai: number,
   env?: NodeJS.ProcessEnv,
   signal?: AbortSignal,
+  lireGit = git,
 ): Promise<Commande> {
   signal?.throwIfAborted();
   const dossier = await mkdtemp(join(tmpdir(), 'aid-preuve-worktree-'));
   let ajoute = false;
   try {
-    await git(depot, ['worktree', 'add', '--detach', dossier, head]);
+    await lireGit(depot, ['worktree', 'add', '--detach', dossier, head]);
     ajoute = true;
     const modules = join(depot, 'node_modules');
     const dependances = await lstat(modules).catch((erreur: NodeJS.ErrnoException) => {
@@ -77,6 +125,7 @@ async function lancerDansWorktree(
 
     const [programme, ...args] = argv;
     try {
+      if (lireGit !== git) return await lancerEnGroupe(dossier, head, argv, delai, env, signal);
       await executer(programme!, args, {
         cwd: dossier,
         timeout: delai,
@@ -97,12 +146,12 @@ async function lancerDansWorktree(
     }
   } finally {
     try {
-      if (ajoute) await git(depot, ['worktree', 'remove', '--force', dossier]);
+      if (ajoute) await lireGit(depot, ['worktree', 'remove', '--force', dossier]);
     } finally {
       try {
         await rm(dossier, { recursive: true, force: true });
       } finally {
-        await git(depot, ['worktree', 'prune']);
+        await lireGit(depot, ['worktree', 'prune']);
       }
     }
   }
@@ -119,17 +168,18 @@ export async function produirePreuves(
   delai = delaiDixMinutes,
   env?: NodeJS.ProcessEnv,
   signal?: AbortSignal,
+  lireGit = git,
 ): Promise<{ point: string; preuve: PreuveD5; fautes: string[] }[]> {
-  depot = await racineDepot(depot);
-  const head = (await git(depot, ['rev-parse', 'HEAD'])).trim();
-  const commits = await lireCommits(depot, base, head);
+  depot = await racineDepot(depot, lireGit);
+  const head = (await lireGit(depot, ['rev-parse', 'HEAD'])).trim();
+  const commits = await lireCommits(depot, base, head, lireGit);
   const points = new Map<string, (typeof commits)[number]>();
   for (const commit of commits) {
     for (const point of commit.points) {
       if (!points.has(point)) points.set(point, commit);
     }
   }
-  const repo = await nomDepot(depot);
+  const repo = await nomDepot(depot, lireGit);
   const prefixes = chemins.map((chemin) => chemin.replace(/\/+$/, '') + '/');
   const commandes = Object.entries(lancer).sort(([a], [b]) => b.length - a.length);
   const rapports = [];
@@ -168,8 +218,8 @@ export async function produirePreuves(
         .trim()
         .split(/\s+/)
         .map((arg) => (arg === '{fichiers}' ? fichier : arg));
-      const avant = await lancerDansWorktree(depot, commit.sha, argv, delai, env, signal);
-      const apres = await lancerDansWorktree(depot, head, argv, delai, env, signal);
+      const avant = await lancerDansWorktree(depot, commit.sha, argv, delai, env, signal, lireGit);
+      const apres = await lancerDansWorktree(depot, head, argv, delai, env, signal, lireGit);
       preuve.commands.push(avant, apres);
       noter(preuve.suites.base, fichier, avant);
       noter(preuve.suites.head, fichier, apres);

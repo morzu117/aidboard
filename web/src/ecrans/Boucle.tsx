@@ -1,3 +1,4 @@
+import { limitesBoucle } from '../../../src/shared/limites-boucle.js';
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import type { ServiceBoucle } from '../../../src/daemon/boucle/service.js';
 import { useAidClient } from '../data/useAidState.js';
@@ -79,6 +80,7 @@ export function Boucle({ sujetId }: { sujetId: string }) {
 
   return (
     <section className="sujet-boucle" aria-label="Boucle">
+      <p>{limitesBoucle}</p>
       {erreur && (
         <p role="alert" className="bandeau-erreur">
           {erreur}

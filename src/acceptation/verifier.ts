@@ -34,15 +34,20 @@ export async function git(depot: string, args: string[]): Promise<string> {
   return stdout;
 }
 
-export async function racineDepot(depot: string): Promise<string> {
-  return (await git(depot, ['rev-parse', '--show-toplevel'])).replace(/\n$/, '');
+export async function racineDepot(depot: string, lireGit = git): Promise<string> {
+  return (await lireGit(depot, ['rev-parse', '--show-toplevel'])).replace(/\n$/, '');
 }
 
-export async function lireCommits(depot: string, base: string, head = 'HEAD'): Promise<Commit[]> {
+export async function lireCommits(
+  depot: string,
+  base: string,
+  head = 'HEAD',
+  lireGit = git,
+): Promise<Commit[]> {
   const shaBase = (
-    await git(depot, ['rev-parse', '--verify', '--end-of-options', base + '^{commit}'])
+    await lireGit(depot, ['rev-parse', '--verify', '--end-of-options', base + '^{commit}'])
   ).trim();
-  const journal = await git(depot, [
+  const journal = await lireGit(depot, [
     'log',
     '--reverse',
     '--topo-order',
@@ -83,12 +88,14 @@ export async function verifierAcceptation({
   depot,
   base,
   chemins,
+  lireGit = git,
 }: {
   depot: string;
   base: string;
   chemins: readonly string[];
+  lireGit?: typeof git;
 }): Promise<RapportVerifier> {
-  const commits = await lireCommits(depot, base);
+  const commits = await lireCommits(depot, base, 'HEAD', lireGit);
   const prefixes = chemins.map((chemin) => chemin.replace(/\/+$/, '') + '/');
   const points = new Map<string, { commits: string[]; fichiers: Set<string>; premier: number }>();
   const fautesParCommit = commits.map(() => [] as RapportVerifier['fautes']);

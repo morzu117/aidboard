@@ -330,14 +330,20 @@ export async function startDaemon(
           const lectureSeule = role === 'plan' || role === 'review';
           let texteFinal: string | null | undefined;
           agents.observerBoucle(agent.id, (evenement) => {
-            if (lectureSeule && evenement.type === 'message' && evenement.role === 'assistant') {
+            if (role === 'plan' && evenement.type === 'message' && evenement.role === 'assistant') {
               texteFinal =
                 Buffer.byteLength(evenement.text) <= TAILLE_MAX_REPONSE_BOUCLE
                   ? evenement.text
                   : null;
             }
             if (lectureSeule && evenement.type === 'turn_end') {
-              const texte = evenement.ok ? texteFinal : null;
+              const reponse = evenement.texteFinal ?? (role === 'plan' ? texteFinal : undefined);
+              const texte =
+                !evenement.ok ||
+                (typeof reponse === 'string' &&
+                  Buffer.byteLength(reponse) > TAILLE_MAX_REPONSE_BOUCLE)
+                  ? null
+                  : reponse;
               texteFinal = undefined;
               void boucle
                 .traiterEvenementAgent(agent.id, { type: 'turn_end', texteFinal: texte })

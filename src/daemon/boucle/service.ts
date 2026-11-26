@@ -7,18 +7,23 @@ import type { Db } from '../db.js';
 import { AidHttpError } from '../errors.js';
 import type { MemoryPage } from '../../shared/memory.js';
 import type { MemoryService } from '../memory/service.js';
-import { artefactPresent, executer, terminerRevue } from './conducteur.js';
+import { artefactPresent, executer } from './conducteur.js';
 import {
   comparerEmpreintes,
+  constatsEmpreinteHome,
   empreinteEnvironnement,
   entreesGelees,
   gitSujet,
+  processusDansWorktree,
+  empreinteDepot,
+  empreinteMetadonnees,
   type EmpreinteEnvironnement,
 } from './controles.js';
 import * as depotBoucle from './depot.js';
 import { transition, type EtatBoucle, type EvenementBoucle } from './etat.js';
 import { lancerGate, type ResultatGate } from './gate.js';
 import { lireReglagesBoucle, type ReglagesBoucle } from './reglages.js';
+import { gitBoucle } from './git.js';
 import { lireRevue } from './revue.js';
 
 type DependancesConducteur = Parameters<typeof executer>[2];
@@ -45,6 +50,8 @@ interface EtatService extends EtatBoucle {
   reglages?: ReglagesBoucle;
   optionsAcceptation?: NonNullable<Parameters<typeof lancerGate>[0]['acceptation']>;
   revisionAttendue?: number;
+  empreinteGo?: EmpreinteEnvironnement;
+  metadonneesGit?: EmpreinteEnvironnement;
   plan?: string;
   namespace?: string;
   interventions?: number;
@@ -256,6 +263,7 @@ export class ServiceBoucle {
           redevs: 0,
           tete,
           empreintePlan: null,
+          metadonneesGit: await empreinteMetadonnees(sujet.worktree),
           gate: null,
           revue: null,
           namespace: manifeste.project?.namespace ?? 'aid',
@@ -283,13 +291,27 @@ export class ServiceBoucle {
       const sujet = this.sujet(sujetId);
       const page = this.pageMemoire(boucle.etat, sujet, 'plan');
       if (!page?.body.trim() || page.closed) throw new AidHttpError(409, 'Le plan est absent');
+      const changementsGit = await this.verifierMetadonnees(boucle, sujet);
+      if (changementsGit.length) {
+        await this.escalader(boucle, 'scope', changementsGit);
+        throw new AidHttpError(409, 'Les réglages git ont changé avant le GO');
+      }
       const tete = await this.git(sujet, 'rev-parse', 'HEAD');
+      if (tete !== (boucle.etat.go ?? boucle.etat.etapes[0]?.teteDepart ?? boucle.etat.tete)) {
+        await this.escalader(boucle, 'scope', ['La tête a changé avant le GO']);
+        throw new AidHttpError(409, 'La tête a changé avant le GO');
+      }
+      const metadonneesGit =
+        boucle.etat.metadonneesGit ?? (await empreinteMetadonnees(sujet.worktree));
+      const empreinteGo = await empreinteDepot(sujet.worktree, tete);
       const reglages = await this.reglages(sujet, tete);
       const manifeste = reglages.phases.includes('acceptation')
         ? await this.manifeste(sujet, tete)
         : undefined;
       Object.assign(boucle.etat, {
         go: tete,
+        empreinteGo,
+        metadonneesGit,
         reglages,
         optionsAcceptation: manifeste
           ? {
@@ -339,12 +361,24 @@ export class ServiceBoucle {
 
   private async appliquer(boucle: Boucle, sujet: Sujet, evenement: EvenementBoucle) {
     const avant = boucle.etat;
+    const precedente = avant.etapes.at(-1);
+    const ancienAgent = precedente?.agentId ?? undefined;
+    if (
+      evenement.type === 'arreter' &&
+      ancienAgent &&
+      precedente?.issue === null &&
+      precedente.type === avant.phase
+    ) {
+      await this.deps.agents.arreter(ancienAgent);
+    }
     const { etat, actions } = transition(avant, evenement, this.maintenant());
     if (etat === avant) return;
     boucle.etat = etat;
     this.sauver(boucle);
-    for (const action of actions)
-      await this.conduire(boucle, sujet, action, avant.etapes.at(-1)?.agentId ?? undefined);
+    for (const action of actions) {
+      if (evenement.type === 'arreter' && action.type === 'arreter_etape') continue;
+      await this.conduire(boucle, sujet, action, ancienAgent);
+    }
   }
 
   private async escalader(boucle: Boucle, raison: string, constats?: string[]) {
@@ -460,11 +494,15 @@ export class ServiceBoucle {
         const type = action.type === 'lancer_gate' ? 'gate' : action.etape;
         etape.echeance = etape.debut + contexte.reglages.delais[type] * 60_000;
         if (action.type === 'lancer_etape') {
-          const page =
-            action.etape === 'dev' ? 'dev-handoff' : action.etape === 'revue' ? 'review' : 'plan';
-          boucle.etat.revisionAttendue = this.pageMemoire(boucle.etat, sujet, page)?.revision;
-          if (action.etape === 'plan' || action.etape === 'acceptation')
-            boucle.etat.empreinte = await empreinteEnvironnement(homedir());
+          const page = action.etape === 'dev' ? 'dev-handoff' : 'plan';
+          if (action.etape !== 'revue')
+            boucle.etat.revisionAttendue = this.pageMemoire(boucle.etat, sujet, page)?.revision;
+          if (action.etape === 'plan' || action.etape === 'acceptation') {
+            const empreinte = await empreinteEnvironnement(homedir());
+            const constats = constatsEmpreinteHome(empreinte);
+            if (constats.length) return await this.escalader(boucle, 'scope', constats);
+            boucle.etat.empreinte = empreinte;
+          }
         }
         this.sauver(boucle);
       }
@@ -489,6 +527,7 @@ export class ServiceBoucle {
         lancerGate: this.deps.lancerGate,
         gate: {
           lireEmpreinte: async () => boucle.etat.empreinte,
+          verifierDepot: () => this.verifierDepot(boucle, sujet),
           consignerEmpreinte: async (empreinte) => {
             boucle.etat.empreinte = empreinte;
             this.sauver(boucle);
@@ -528,6 +567,20 @@ export class ServiceBoucle {
     } finally {
       if (action.type === 'lancer_gate') this.gates.delete(sujet.id);
     }
+  }
+
+  private async verifierMetadonnees(boucle: Boucle, sujet: Sujet) {
+    const { metadonneesGit } = boucle.etat;
+    return metadonneesGit
+      ? comparerEmpreintes(metadonneesGit, await empreinteMetadonnees(sujet.worktree))
+      : [];
+  }
+
+  private async verifierDepot(boucle: Boucle, sujet: Sujet) {
+    const changements = await this.verifierMetadonnees(boucle, sujet);
+    const { go, empreinteGo } = boucle.etat;
+    if (changements.length || !go || !empreinteGo) return changements;
+    return comparerEmpreintes(empreinteGo, await empreinteDepot(sujet.worktree, go));
   }
 
   private async planChange(boucle: Boucle, sujet: Sujet) {
@@ -605,7 +658,7 @@ export class ServiceBoucle {
   ) {
     const role = type === 'plan' ? 'plan' : 'review';
     const precedente = this.pageMemoire(boucle.etat, sujet, role);
-    await this.deps.memory.put(
+    return this.deps.memory.put(
       `${boucle.etat.namespace ?? 'aid'}/${role}/${sujet.slug}`,
       texte,
       precedente ? { kind: 'replace', expectedRevision: precedente.revision } : { kind: 'create' },
@@ -619,21 +672,33 @@ export class ServiceBoucle {
     etape: EtatBoucle['etapes'][number],
     texteFinal?: string | null,
   ) {
-    const contexte = await this.contexte(boucle, sujet);
     const lectureSeule = etape.type === 'plan' || etape.type === 'revue';
     const refus =
       lectureSeule &&
       (texteFinal === null || Buffer.byteLength(texteFinal ?? '') > TAILLE_MAX_REPONSE_BOUCLE);
-    const garderPage = lectureSeule && !refus && !texteFinal?.trim();
-    if ((etape.type === 'plan' || etape.type === 'revue') && !refus && texteFinal?.trim())
-      await this.enregistrerReponse(boucle, sujet, etape.type, texteFinal);
-
+    if (etape.type === 'revue' && (refus || !texteFinal?.trim())) {
+      await this.appliquer(boucle, sujet, { type: 'artefact_manquant' });
+      return;
+    }
+    const contexte = await this.contexte(boucle, sujet);
+    const revue = contexte.revue && texteFinal ? lireRevue(texteFinal, contexte.revue) : undefined;
+    const garderPage = etape.type === 'plan' && !refus && !texteFinal?.trim();
+    if (etape.type === 'plan' && !refus && texteFinal?.trim())
+      await this.enregistrerReponse(boucle, sujet, 'plan', texteFinal);
     const lectures = this.lectures(boucle, sujet, garderPage);
-    const artefact = !refus && (await artefactPresent(etape.type, contexte, lectures));
+    const artefact =
+      etape.type === 'revue'
+        ? revue?.ok === true
+        : !refus && (await artefactPresent(etape.type, contexte, lectures));
     if (artefact && etape.agentId) await this.deps.agents.arreter(etape.agentId);
     if (await this.planChange(boucle, sujet)) return;
     const tete = await this.git(sujet, 'rev-parse', 'HEAD');
     const { go, empreinte, tests } = boucle.etat;
+    const changementsDepot = await this.verifierDepot(boucle, sujet);
+    if (changementsDepot.length) {
+      await this.escalader(boucle, 'scope', changementsDepot);
+      return;
+    }
     let testsModifies = false;
     if (etape.type === 'dev' && tests) {
       const touches = (
@@ -694,6 +759,7 @@ export class ServiceBoucle {
           depot: sujet.worktree,
           base: options.base,
           chemins: options.chemins,
+          lireGit: gitBoucle,
         });
         if (!rapport.ok || !Object.keys(rapport.points).length) {
           await this.escalader(boucle, 'scope');
@@ -712,10 +778,15 @@ export class ServiceBoucle {
         await this.appliquer(boucle, sujet, { type: 'etape_terminee', etape: etape.type, tete });
         break;
       case 'revue': {
-        const events = await terminerRevue(contexte, lectures);
-        const revue = lireRevue(this.page(boucle.etat, sujet, 'review') ?? '', contexte.revue!);
-        if (revue.ok) boucle.etat.findings = JSON.stringify(revue.findings);
-        for (const evenement of events) await this.appliquer(boucle, sujet, evenement);
+        if (!revue?.ok || !texteFinal) return;
+        const trace = await this.enregistrerReponse(boucle, sujet, 'revue', texteFinal);
+        etape.revisionRevue = trace.revision;
+        boucle.etat.findings = JSON.stringify(revue.findings);
+        await this.appliquer(boucle, sujet, { type: 'revue_terminee', tete });
+        await this.appliquer(boucle, sujet, {
+          type: 'triage_termine',
+          categories: revue.categories,
+        });
         break;
       }
     }
@@ -764,15 +835,36 @@ export class ServiceBoucle {
     );
   }
 
+  private async nettoyerReprise(sujetId: string) {
+    for (const pid of await processusDansWorktree(this.sujet(sujetId).worktree)) {
+      if (pid <= 1 || pid === process.pid) continue;
+      try {
+        process.kill(pid, 'SIGKILL');
+      } catch (erreur) {
+        if ((erreur as NodeJS.ErrnoException).code !== 'ESRCH') throw erreur;
+      }
+    }
+  }
+
+  private async escaladerReprise(boucle: Boucle) {
+    let constats: string[] | undefined;
+    try {
+      await this.nettoyerReprise(boucle.sujetId);
+    } catch {
+      constats = ['Le nettoyage des processus du worktree à la reprise a échoué'];
+    }
+    await this.escalader(boucle, 'cannot_evaluate', constats);
+  }
+
   async reprendre() {
     for (const boucle of depotBoucle.reprendre(this.deps.db, this.maintenant())) {
-      await this.escalader(boucle, 'cannot_evaluate');
+      await this.escaladerReprise(boucle);
     }
     for (const id of this.sujetsActifs()) {
       const boucle = this.chercher(id);
       if (!boucle?.etat.phaseSuspendue) continue;
       delete boucle.etat.phaseSuspendue;
-      await this.escalader(boucle, 'cannot_evaluate');
+      await this.escaladerReprise(boucle);
     }
   }
 

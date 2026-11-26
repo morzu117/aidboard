@@ -1,14 +1,15 @@
-import { execFile } from 'node:child_process';
-import { homedir } from 'node:os';
+import { homedir, tmpdir } from 'node:os';
 import {
   avertissements,
   comparerEmpreintes,
+  constatsEmpreinteHome,
   empreinteEnvironnement,
   releverDiff,
   type EmpreinteEnvironnement,
 } from './controles.js';
 import type { ActionBoucle, EvenementBoucle, Tentative } from './etat.js';
 import { lancerGate, type ResultatGate } from './gate.js';
+import { gitBoucle } from './git.js';
 import { messageEtape, type ContexteMessage } from './messages.js';
 import { lireReglagesBoucle, type ReglagesBoucle, type RoleEtape } from './reglages.js';
 import { lireRevue, type AttenduRevue } from './revue.js';
@@ -51,6 +52,7 @@ interface DependancesConduite extends LecturesArtefact {
   gate?: {
     consignerEmpreinte(empreinte: EmpreinteEnvironnement): Promise<void>;
     lireEmpreinte(): Promise<EmpreinteEnvironnement | undefined>;
+    verifierDepot?(): Promise<string[]>;
     consignerResultat(
       resultat: ResultatGate,
       alertes: Awaited<ReturnType<typeof avertissements>>,
@@ -65,6 +67,8 @@ async function controlerGate(contexte: ContexteConduite, deps: DependancesCondui
 
   let constat;
   try {
+    const changementsDepot = (await deps.gate.verifierDepot?.()) ?? [];
+    if (changementsDepot.length) return deps.escalader('scope', changementsDepot);
     const { entrees, alertes } = await releverDiff(depot, go, tete);
     if (entrees.length) {
       return deps.escalader(
@@ -98,7 +102,10 @@ async function controlerGate(contexte: ContexteConduite, deps: DependancesCondui
       resultat,
       alertes,
       apresGate,
-      changementsGate: comparerEmpreintes(avantGate, apresGate),
+      changementsGate: [
+        ...comparerEmpreintes(avantGate, apresGate),
+        ...((await deps.gate.verifierDepot?.()) ?? []),
+      ],
     };
   } catch {
     return deps.escalader('cannot_evaluate');
@@ -124,7 +131,10 @@ export async function executer(
       const role = action.etape === 'revue' ? 'review' : action.etape;
       const texte = messageEtape(role, { ...contexte.message, revue: contexte.revue });
       if (role === 'dev' && deps.gate) {
-        await deps.gate.consignerEmpreinte(await empreinteEnvironnement(homedir()));
+        const empreinte = await empreinteEnvironnement(homedir());
+        const constats = constatsEmpreinteHome(empreinte);
+        if (constats.length) return deps.escalader('scope', constats);
+        await deps.gate.consignerEmpreinte(empreinte);
       }
       const acteur = await deps.lancer({
         depot: contexte.depot,
@@ -151,15 +161,9 @@ export async function executer(
   }
 }
 
-function porteTrailerAcceptation(message: string): Promise<boolean> {
-  return new Promise((resolve, reject) => {
-    const processus = execFile('git', ['interpret-trailers', '--parse'], (erreur, stdout) => {
-      if (erreur) reject(erreur);
-      else resolve(/^Acceptation:[ \t]*\S/im.test(stdout));
-    });
-    processus.stdin?.on('error', reject);
-    processus.stdin?.end(message);
-  });
+async function porteTrailerAcceptation(message: string): Promise<boolean> {
+  const trailers = await gitBoucle(tmpdir(), ['interpret-trailers', '--parse'], message);
+  return /^Acceptation:[ \t]*\S/im.test(trailers);
 }
 
 export async function artefactPresent(
@@ -185,7 +189,6 @@ export async function artefactPresent(
       );
     }
     case 'revue':
-      return (await terminerRevue(contexte, deps))[0].type === 'revue_terminee';
     case 'gate':
     case 'triage':
       return false;
@@ -199,10 +202,11 @@ export async function terminerRevue(
   const { revue, slug } = contexte;
   if (!revue) return [{ type: 'artefact_manquant' }];
 
-  const page = await deps.lirePage(`${revue.namespace}/review/${slug}`);
-  if (page === undefined) return [{ type: 'artefact_manquant' }];
+  // Cet adaptateur reçoit la réponse finale de l'appelant.
+  const texteFinal = await deps.lirePage(`${revue.namespace}/review/${slug}`);
+  if (texteFinal === undefined) return [{ type: 'artefact_manquant' }];
 
-  const resultat = lireRevue(page, revue);
+  const resultat = lireRevue(texteFinal, revue);
   if (!resultat.ok) return [{ type: 'artefact_manquant' }];
   return [
     { type: 'revue_terminee', tete: revue.tete },
