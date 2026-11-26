@@ -66,10 +66,13 @@ interface Constat {
   raison: string;
 }
 
-async function releverDiff(depot: string, go: string, tete: string) {
+export async function releverDiff(depot: string, go: string, tete: string) {
+  if (go === tete && /^[a-f0-9]{40}$/.test(go)) return { entrees: [], alertes: [] };
   const [base, arrivee] = await Promise.all(
     [go, tete].map((revision) =>
-      lireGit(depot, ['rev-parse', '--verify', '--end-of-options', `${revision}^{commit}`]),
+      /^[a-f0-9]{40}$/.test(revision)
+        ? revision
+        : lireGit(depot, ['rev-parse', '--verify', '--end-of-options', `${revision}^{commit}`]),
     ),
   );
   const fichiers = (
@@ -235,6 +238,7 @@ export async function empreinteEnvironnement(
 ): Promise<EmpreinteEnvironnement> {
   const racine = await fichiers.realpath(home);
   const empreinte: EmpreinteEnvironnement = {};
+  const descendants: { chemin: string; nom: string }[] = [];
 
   async function inspecter(chemin: string, nom: string, parcourir: boolean) {
     try {
@@ -246,7 +250,7 @@ export async function empreinteEnvironnement(
       } else if (meta.isDirectory()) {
         if (parcourir) {
           for (const enfant of await fichiers.readdir(chemin)) {
-            await inspecter(join(chemin, enfant), join(nom, enfant), true);
+            descendants.push({ chemin: join(chemin, enfant), nom: join(nom, enfant) });
           }
         }
         return true;
@@ -262,8 +266,12 @@ export async function empreinteEnvironnement(
             empreinte[nom] = `projection:${hash.digest('hex')}`;
             return false;
           }
-          for await (const octets of fichier.createReadStream({ autoClose: false }))
-            hash.update(octets);
+          const tampon = Buffer.allocUnsafe(Math.max(4096, Math.min(meta.size, 64 * 1024)));
+          for (;;) {
+            const { bytesRead } = await fichier.read(tampon);
+            if (!bytesRead) break;
+            hash.update(tampon.subarray(0, bytesRead));
+          }
           empreinte[nom] = `fichier:${droits}:${meta.size}:${meta.mtimeMs}:${hash.digest('hex')}`;
         } finally {
           await fichier.close();
@@ -289,17 +297,30 @@ export async function empreinteEnvironnement(
     return true;
   }
 
-  for (const chemin of cheminsHome) await relever(chemin, true);
+  await Promise.all(cheminsHome.map((chemin) => relever(chemin, true)));
   const projets = '.claude/projects';
   if (await relever(projets, false)) {
     try {
-      for (const projet of await fichiers.readdir(join(racine, projets))) {
-        await relever(posix.join(projets, projet, 'memory'), true);
+      const noms = await fichiers.readdir(join(racine, projets));
+      for (let indice = 0; indice < noms.length; indice += 16) {
+        await Promise.all(
+          noms.slice(indice, indice + 16).map(async (projet) => {
+            const chemin = join(projets, projet);
+            if (await inspecter(join(racine, chemin), join(home, chemin), false))
+              await inspecter(join(racine, chemin, 'memory'), join(home, chemin, 'memory'), true);
+          }),
+        );
       }
     } catch (erreur) {
       if ((erreur as NodeJS.ErrnoException).code !== 'ENOENT')
         empreinte[join(home, projets)] = 'illisible';
     }
+  }
+  let indice = 0;
+  while (indice < descendants.length) {
+    const lot = descendants.slice(indice, indice + 16);
+    indice += lot.length;
+    await Promise.all(lot.map(({ chemin, nom }) => inspecter(chemin, nom, true)));
   }
   return empreinte;
 }

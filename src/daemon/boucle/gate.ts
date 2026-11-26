@@ -9,6 +9,7 @@ import { verifierAcceptation } from '../../acceptation/verifier.js';
 import { gitSujet, processusDansWorktree } from './controles.js';
 
 interface OptionsGate {
+  signal?: AbortSignal;
   depot: string;
   tete: string;
   commande: string;
@@ -92,6 +93,7 @@ function executerCommande(
   delai: number,
   grace: number,
   maximum: number,
+  signal?: AbortSignal,
 ): Promise<{ codeSortie: number | null; journal: string }> {
   return new Promise((rendre) => {
     const enfant = spawn('/bin/sh', ['-c', commande], {
@@ -147,6 +149,7 @@ function executerCommande(
       terminee = true;
       clearTimeout(echeance);
       clearTimeout(tuer);
+      signal?.removeEventListener('abort', arreter);
       rendre({ codeSortie, journal });
     }
 
@@ -157,12 +160,16 @@ function executerCommande(
       finir(null);
     }
 
-    const echeance = setTimeout(() => {
+    function arreter() {
+      if (expire || terminee) return;
       expire = true;
       signaler('SIGTERM');
       if (sorti) forcerArret();
       else tuer = setTimeout(forcerArret, grace);
-    }, delai);
+    }
+    const echeance = setTimeout(arreter, delai);
+    signal?.addEventListener('abort', arreter, { once: true });
+    if (signal?.aborted) arreter();
 
     enfant.on('error', () => finir(null));
     enfant.on('exit', () => {
@@ -174,6 +181,7 @@ function executerCommande(
 }
 
 export async function lancerGate({
+  signal,
   depot,
   tete,
   commande,
@@ -200,7 +208,7 @@ export async function lancerGate({
   }
 
   async function evaluer(env: NodeJS.ProcessEnv): Promise<ResultatGate> {
-    if ((await lireTete(depot)) !== tete) return resultat('cannot_evaluate');
+    if (signal?.aborted || (await lireTete(depot)) !== tete) return resultat('cannot_evaluate');
 
     ({ codeSortie, journal } = await executerCommande(
       depot,
@@ -209,6 +217,7 @@ export async function lancerGate({
       delaiMs,
       graceMs,
       journalMaxOctets,
+      signal,
     ));
     if (codeSortie === null || (await lireTete(depot)) !== tete) return resultat('cannot_evaluate');
     if (codeSortie !== 0) return resultat('fail');
@@ -228,7 +237,7 @@ export async function lancerGate({
     ];
     if (!verification.ok) return resultat('fail');
 
-    const preuves = await produire({ depot, base, chemins, lancer }, delaiMs, env);
+    const preuves = await produire({ depot, base, chemins, lancer }, delaiMs, env, signal);
     if (
       (await lireTete(depot)) !== tete ||
       !preuves.length ||

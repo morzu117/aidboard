@@ -5,6 +5,7 @@ import type { RoleEtape } from './reglages.js';
 import type { AttenduRevue } from './revue.js';
 
 export interface ContexteMessage {
+  sujet?: { namespace: string; slug: string };
   plan: string;
   empreintePlan: string;
   commitTests?: string;
@@ -16,7 +17,14 @@ export interface ContexteMessage {
 
 export function messageEtape(role: RoleEtape, contexte: ContexteMessage): string {
   const consignes = readFileSync(join(packageRoot(), 'kernel/roles', `${role}.md`), 'utf8').trim();
-  const parties = [consignes, `Plan gelé (empreinte ${contexte.empreintePlan})\n${contexte.plan}`];
+  const parties = [consignes];
+  if (contexte.sujet) parties.push(`Sujet : ${contexte.sujet.namespace}/${contexte.sujet.slug}`);
+  parties.push(`Plan gelé (empreinte ${contexte.empreintePlan})\n${contexte.plan}`);
+
+  if (role === 'plan' || role === 'review')
+    parties.push(
+      "Dans la boucle, n'écris pas la page toi-même : rends-la entière comme réponse finale. Le daemon l'enregistre.",
+    );
 
   if (role === 'dev') {
     if (contexte.commitTests) parties.push(`Commit marqué des tests : ${contexte.commitTests}`);

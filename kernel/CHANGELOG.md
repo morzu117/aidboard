@@ -17,6 +17,8 @@ Changement sans migration. Le manifeste peut redéclarer chaque délai de
 Changement sans migration. Le rôle de revue décrit le bloc JSON attendu
 par le daemon, avec un verdict par fichier et par point d’acceptation.
 
+Le daemon enregistre les réponses finales des rôles plan et review en pages mémoire (chantier 69.6).
+
 ## Profil d'environnement (chantier 63)
 
 Changement mineur, sans migration. Le manifeste déclare les outils et leurs

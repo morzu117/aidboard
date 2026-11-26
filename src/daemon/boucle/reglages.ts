@@ -35,7 +35,11 @@ function genre(capacite: string, valeur: unknown): GenreAgent {
   throw erreur;
 }
 
-export async function lireReglagesBoucle(depot: string, commit: string): Promise<ReglagesBoucle> {
+export async function lireReglagesBoucle(
+  depot: string,
+  commit: string,
+  revueParDefaut?: GenreAgent,
+): Promise<ReglagesBoucle> {
   const resultat = await git(depot, ['show', '--end-of-options', `${commit}:agent.yml`]);
   if (!resultat.ok) {
     throw new Error(`Impossible de lire agent.yml au commit du GO : ${resultat.stderr}`);
@@ -59,7 +63,10 @@ export async function lireReglagesBoucle(depot: string, commit: string): Promise
       plan: dev,
       acceptation: dev,
       dev,
-      review: genre('review_agent', capacites.review_agent),
+      review: genre(
+        'review_agent',
+        projet.capabilities?.review_agent ?? revueParDefaut ?? capacites.review_agent,
+      ),
     },
     delais: { ...defauts.boucle.delais, ...projet.boucle?.delais },
   };

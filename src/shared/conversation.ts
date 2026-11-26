@@ -9,7 +9,7 @@ export interface AttachmentInfo {
 
 /** Flux d'événements normalisés D59 : format A-I-D, jamais celui d'une CLI d'agent donnée. */
 export type ConversationEvent =
-  | { type: 'session'; sessionId: string }
+  | { type: 'session'; sessionId: string; modele?: string }
   | { type: 'message'; role: 'assistant' | 'user'; text: string; attachments?: AttachmentInfo[] }
   | { type: 'thinking' }
   | { type: 'tool_start'; toolId: string; name: string; input: unknown }

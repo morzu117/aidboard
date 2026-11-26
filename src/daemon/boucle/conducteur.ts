@@ -4,7 +4,7 @@ import {
   avertissements,
   comparerEmpreintes,
   empreinteEnvironnement,
-  entreesGelees,
+  releverDiff,
   type EmpreinteEnvironnement,
 } from './controles.js';
 import type { ActionBoucle, EvenementBoucle, Tentative } from './etat.js';
@@ -23,6 +23,8 @@ interface ContexteConduite {
   revue?: AttenduRevue & { namespace: string };
   gate?: {
     go: string;
+    reglagesGeles?: boolean;
+    signal?: AbortSignal;
     tete: string;
     acceptation?: Parameters<typeof lancerGate>[0]['acceptation'];
   };
@@ -45,6 +47,7 @@ interface DependancesConduite extends LecturesArtefact {
   arreter(sessionId: string): Promise<void>;
   consignerActeur(acteur: Acteur & { role: RoleEtape }): Promise<void>;
   escalader(raison: string, details?: string[]): Promise<void>;
+  lancerGate?: typeof lancerGate;
   gate?: {
     consignerEmpreinte(empreinte: EmpreinteEnvironnement): Promise<void>;
     lireEmpreinte(): Promise<EmpreinteEnvironnement | undefined>;
@@ -62,7 +65,7 @@ async function controlerGate(contexte: ContexteConduite, deps: DependancesCondui
 
   let constat;
   try {
-    const entrees = await entreesGelees(depot, go, tete);
+    const { entrees, alertes } = await releverDiff(depot, go, tete);
     if (entrees.length) {
       return deps.escalader(
         'scope',
@@ -75,23 +78,26 @@ async function controlerGate(contexte: ContexteConduite, deps: DependancesCondui
     const changementsDev = comparerEmpreintes(avantDev, avantGate);
     if (changementsDev.length) return deps.escalader('scope', changementsDev);
 
-    const alertes = await avertissements(depot, go, tete);
-    const reglages = await lireReglagesBoucle(depot, go);
+    const reglages = contexte.gate.reglagesGeles
+      ? contexte.reglages
+      : await lireReglagesBoucle(depot, go);
     const avecAcceptation = reglages.phases.includes('acceptation');
     if (!reglages.gate || (avecAcceptation && !acceptation)) {
       return deps.escalader('cannot_evaluate');
     }
-    const resultat = await lancerGate({
+    const resultat = await (deps.lancerGate ?? lancerGate)({
       depot,
       tete,
       commande: reglages.gate,
       delaiMs: reglages.delais.gate * 60_000,
       acceptation: avecAcceptation ? acceptation : undefined,
+      ...(contexte.gate.signal && { signal: contexte.gate.signal }),
     });
     const apresGate = await empreinteEnvironnement(homedir());
     constat = {
       resultat,
       alertes,
+      apresGate,
       changementsGate: comparerEmpreintes(avantGate, apresGate),
     };
   } catch {
@@ -104,6 +110,7 @@ async function controlerGate(contexte: ContexteConduite, deps: DependancesCondui
       constat.alertes,
     );
   }
+  await deps.gate.consignerEmpreinte(constat.apresGate);
   return deps.gate.consignerResultat(constat.resultat, constat.alertes);
 }
 

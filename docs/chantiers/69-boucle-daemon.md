@@ -219,6 +219,9 @@ Les tests utilisent un dépôt temporaire et une fausse commande de gate.
   - les dix phases de la vue, GO sous le plan et seulement en `attente_go`, Arrêter seulement pendant une étape.
 
   L'e2e clique chaque bouton contre le vrai daemon, avec un faux agent, et prend cinq captures aux deux tailles. Les six boutons entrent dans l'inventaire de la garde des CTA. Échec attendu au commit marqué : le service n'existe pas, les routes répondent 404, et le bouton « Boucle » est absent.
+- _Révision 69.6._ Une passe Codex et une reprise. Ma relecture a relevé un écart que les faux agents ne pouvaient pas montrer, et je l'ai vérifié avec le vrai `claude` sur le VPS : en mode plan, il lance une commande shell en lecture, mais il refuse d'écrire. Chez codex, le bac à sable en lecture seule coupe aussi le réseau. Une étape de plan ou de revue n'aurait donc jamais écrit sa page. Le daemon l'enregistre désormais à partir de la réponse finale de l'agent, bornée à 256 Kio. Les rôles plan et review le disent. La reprise rend aussi les constats d'escalade, avec les chemins du home en `~/…`.
+
+  Vingt lignes existantes remplacées hors des fichiers du chantier : le gestionnaire d'agents, les pilotes de conversation, `env check`, l'écran du sujet et les preuves du 67. Deux tests existants sont complétés pour typer la nouvelle action signée de la porte. Quatre cas ajoutés dans `test/boucle/service-pages.test.ts`. J'ai relu les dix captures. Le plan s'affiche en Markdown brut, ce qui suffit pour la v1. Mon gate : 5 150.
 
 ### 69.7 Le scénario de bout en bout
 

@@ -266,7 +266,11 @@ export class ClaudeDriver implements ConversationDriver {
     if (!parsed || typeof parsed !== 'object') return;
     const o = parsed as Record<string, unknown>;
     if (o.type === 'system' && o.subtype === 'init' && typeof o.session_id === 'string') {
-      this.emit({ type: 'session', sessionId: o.session_id });
+      this.emit({
+        type: 'session',
+        sessionId: o.session_id,
+        ...(typeof o.model === 'string' && { modele: o.model }),
+      });
       this.readCommands(o);
     } else if (o.type === 'assistant') {
       this.handleAssistant(o);

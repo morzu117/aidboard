@@ -13,6 +13,7 @@ import { verifierAssertion } from '../src/daemon/pda/webauthn.js';
 
 const tete = 'abcdef0' + '1'.repeat(33);
 const exemples: ParametresActions = {
+  boucle: { topicId: 'sujet_1', commande: 'go', reponse: null },
   'mesh.commandant.repondre': {
     mesh: 'principal',
     requestId: 1235,
@@ -215,6 +216,7 @@ it('valide les bornes et types des paramètres sans conversion implicite', () =>
 });
 it('construit exactement les invites D229', () => {
   const attendus: Record<ActionConfirmee, string> = {
+    boucle: 'Boucle du sujet sujet_1 : go',
     'mesh.commandant.repondre': 'Demande #1235 : oui',
     'mesh.avis.motion': 'Ouvrir la motion : avis-test',
     'mesh.avis': 'Ouvrir avis-test, carte 42',

@@ -1,3 +1,4 @@
+import type { ServiceBoucle } from '../boucle/service.js';
 import type { ServiceCommandant } from '../commandant/service.js';
 import { creerActionCommandant } from './commandant.js';
 import type { CreationsCartes } from './cartes.js';
@@ -48,6 +49,7 @@ const LIVE = ['starting', 'working', 'needs_input', 'idle'];
 
 export function creerActionsConfirmation(
   deps: DependancesHost & {
+    boucle?: ServiceBoucle;
     commandant?: ServiceCommandant;
     avis?: AvisMeshService;
     cartes?: CreationsCartes;
@@ -172,6 +174,31 @@ export function creerActionsConfirmation(
     }) as ActionsPorte[A];
   return {
     ...creerActionsHost(deps),
+    boucle: {
+      async preparer({ topicId, commande, reponse }) {
+        if (!topicId || !commande) throw new AidHttpError(400, 'Commande de boucle invalide');
+        if (
+          commande === 'reponse' &&
+          (typeof reponse !== 'string' || !reponse.trim() || reponse.length > 4096)
+        )
+          throw new AidHttpError(400, 'Réponse invalide');
+        return { topicId, commande, reponse: commande === 'reponse' ? reponse! : null };
+      },
+      async executer({ topicId, commande, reponse }) {
+        const boucle = deps.boucle;
+        if (!boucle) throw new AidHttpError(404, 'Service de boucle indisponible');
+        switch (commande) {
+          case 'lancer':
+            return boucle.lancer(topicId);
+          case 'go':
+            return boucle.go(topicId);
+          case 'reponse':
+            return boucle.repondre(topicId, reponse!);
+          case 'arreter':
+            return boucle.arreter(topicId);
+        }
+      },
+    },
     'mesh.commandant.repondre': creerActionCommandant(deps.commandant),
     'mesh.avis': parMesh('mesh.avis'),
     'mesh.avis.motion': parMesh('mesh.avis.motion'),

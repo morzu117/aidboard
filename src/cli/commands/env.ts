@@ -1,3 +1,4 @@
+import { resolveOnPath } from '../../daemon/pty/spawn.js';
 import { execFile } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
@@ -25,16 +26,18 @@ async function lireFichierFacultatif(fichier: string): Promise<string | undefine
   }
 }
 
-async function lireOutils(root: string): Promise<[string, OutilDeclare][]> {
+async function lireOutils(
+  root: string,
+): Promise<{ outils: [string, OutilDeclare][]; capacites?: unknown }> {
   const texte = await lireFichierFacultatif(join(root, 'agent.yml'));
-  if (texte === undefined) return [['git', {}]];
+  if (texte === undefined) return { outils: [['git', {}]] };
   const document = parseDocument(texte);
   if (document.errors.length) throw document.errors[0];
-  if (document.contents === null) return [['git', {}]];
+  if (document.contents === null) return { outils: [['git', {}]] };
   const manifeste: unknown = document.toJS();
   if (!Value.Check(ManifesteOutils, manifeste)) throw new Error('structure du manifeste invalide');
   const declarations = manifeste.outils;
-  if (declarations === undefined) return [['git', {}]];
+  if (declarations === undefined) return { outils: [['git', {}]] };
 
   // Les clés numériques d'un objet JS sont réordonnées, contrairement aux clés d'une Map.
   const sections: Map<unknown, unknown> = document.toJS({ mapAsMap: true });
@@ -46,7 +49,7 @@ async function lireOutils(root: string): Promise<[string, OutilDeclare][]> {
     return [nom, outil];
   });
   if (!Object.hasOwn(declarations, 'git')) outils.push(['git', { requis: true }]);
-  return outils;
+  return { outils, capacites: (manifeste as { capabilities?: unknown }).capabilities };
 }
 
 async function outilsMise(root: string): Promise<Set<string>> {
@@ -101,6 +104,27 @@ function verifierOutil(
   });
 }
 
+function verifierBoucle(outil: OutilDeclare, capacites: unknown): ResultatOutil {
+  const { dev_agent, review_agent } = (capacites ?? {}) as {
+    dev_agent?: string;
+    review_agent?: string;
+  };
+  const chercher = (nom: string) => resolveOnPath(nom, process.env.PATH ?? '');
+  const binaires = new Set([
+    (dev_agent ?? 'claude').split('-')[0]!,
+    (review_agent ?? (chercher('codex') ? 'codex' : 'claude')).split('-')[0]!,
+  ]);
+  const absents = [...binaires].filter(
+    (nom) => !['claude', 'codex'].includes(nom) || !chercher(nom),
+  );
+  return {
+    nom: 'boucle',
+    requis: outil.requis ?? true,
+    etat: absents.length ? 'absent' : 'ok',
+    detail: absents.length ? `Introuvable dans le PATH : ${absents.join(', ')}` : undefined,
+  };
+}
+
 function bloquant(outil: ResultatOutil): boolean {
   return outil.requis && (outil.etat === 'absent' || outil.etat === 'hors-plage');
 }
@@ -124,7 +148,7 @@ export async function runEnv(args: string[], timeout = 5000): Promise<number> {
     });
     if (args[0] !== 'check') throw new Error('usage : aid env check [--root <dir>] [--json]');
     const root = resolve(values.root ?? '.');
-    const profil = await lireOutils(root);
+    const { outils: profil, capacites } = await lireOutils(root);
     const verifications = profil.map(([nom, outil]) => {
       if (outil.verifier?.[0] === '') throw new Error(`agent.yml : outils.${nom}.verifier vide`);
       try {
@@ -144,7 +168,9 @@ export async function runEnv(args: string[], timeout = 5000): Promise<number> {
     }
     const outils = await Promise.all(
       actifs.map(({ nom, outil, conforme }) =>
-        verifierOutil(root, nom, outil, conforme, mise, timeout),
+        nom === 'boucle' && outil.verifier === undefined
+          ? verifierBoucle(outil, capacites)
+          : verifierOutil(root, nom, outil, conforme, mise, timeout),
       ),
     );
     const ok = !outils.some(bloquant);

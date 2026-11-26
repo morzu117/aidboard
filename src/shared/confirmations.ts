@@ -9,6 +9,11 @@ import {
 } from './ecritures.js';
 import { lireParamsEtat, resumeEtat, type ActionEtat, type Etat } from './etats.js';
 export interface ParametresActions {
+  boucle: {
+    topicId: string;
+    commande: 'lancer' | 'go' | 'reponse' | 'arreter';
+    reponse: string | null;
+  };
   'mesh.commandant.repondre': {
     mesh: string;
     requestId: number;
@@ -81,6 +86,7 @@ export const CLASSE_ACTION = Object.freeze({
   'host.option': 'toujours',
   reglage: 'toujours',
   desarmement: 'toujours',
+  boucle: 'toujours',
   essai: 'defaut',
 } as const satisfies Record<ActionConfirmee, ClasseConfirmation>);
 
@@ -237,6 +243,11 @@ const schemas: Record<ActionConfirmee, Record<string, Validation>> = {
     actif: choix(false),
   },
   desarmement: {},
+  boucle: {
+    topicId: identifiant,
+    commande: choix('lancer', 'go', 'reponse', 'arreter'),
+    reponse: nullable(texte(4096)),
+  },
   essai: {},
 };
 
@@ -321,6 +332,9 @@ export function resumeAction(
       break;
     case 'essai':
       resume = "Demande d'essai";
+      break;
+    case 'boucle':
+      resume = `Boucle du sujet ${p.params.topicId} : ${p.params.commande}`;
       break;
     case 'desarmement':
       resume = 'Désarmer les confirmations';

@@ -231,7 +231,12 @@ export class CodexDriver implements ConversationDriver {
         const thread = (result as { thread?: { id?: unknown } } | undefined)?.thread;
         if (thread && typeof thread.id === 'string') this.threadId = thread.id;
       }
-      this.emit({ type: 'session', sessionId: this.threadId });
+      const modele = (result as { model?: unknown } | undefined)?.model;
+      this.emit({
+        type: 'session',
+        sessionId: this.threadId,
+        ...(typeof modele === 'string' && { modele }),
+      });
       this.loadCatalog();
       this.loadSkills();
       this.advanceQueue();

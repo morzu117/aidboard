@@ -1,3 +1,4 @@
+import type { ServiceBoucle } from './boucle/service.js';
 import { CreationsCartes } from './confirmations/cartes.js';
 import { registerRejoindreRoutes } from './routes/rejoindre.js';
 import { registerCommandantRoutes } from './routes/commandant.js';
@@ -80,6 +81,7 @@ export interface ServerDeps {
   db: Db;
   store: EventStore;
   agents: AgentManager;
+  boucle?: ServiceBoucle;
   memory?: MemoryService;
   memoryProposals?: MemoryProposals;
   paths: AidPaths;
@@ -280,6 +282,29 @@ export async function buildServer(deps: ServerDeps): Promise<FastifyInstance> {
     file: () => deps.pda?.obtenir() ?? null,
     signaler: () => deps.pda?.obtenir()?.signaler(),
   });
+  if (deps.boucle) {
+    const boucle = deps.boucle;
+    const chemin = '/api/topics/:id/boucle';
+    app.get<{ Params: { id: string } }>(chemin, async (req) => boucle.lire(req.params.id));
+    for (const [suffixe, commande] of [
+      ['', 'lancer'],
+      ['/go', 'go'],
+      ['/reponse', 'reponse'],
+      ['/arreter', 'arreter'],
+    ] as const) {
+      app.post<{ Params: { id: string }; Body: { reponse?: string } }>(
+        chemin + suffixe,
+        async (req, reply) => {
+          const entree = { topicId: req.params.id, commande, reponse: req.body?.reponse };
+          const demande = await porte.demander('boucle', entree, req);
+          if ('confirmation' in demande)
+            return reply.code(202).send({ confirmation: demande.confirmation });
+          await porte.executer('boucle', demande.direct, entree);
+          return boucle.lire(req.params.id);
+        },
+      );
+    }
+  }
   registerCommandantRoutes(app, deps.commandant, true, porte);
   registerAvisMeshRoutes(app, { avis: avis ?? null, porte, meshes: deps.meshes });
   registerEcrituresRoutes(app, {
