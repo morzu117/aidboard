@@ -60,6 +60,7 @@ async function lancerDansWorktree(
   head: string,
   argv: string[],
   delai: number,
+  env?: NodeJS.ProcessEnv,
 ): Promise<Commande> {
   const dossier = await mkdtemp(join(tmpdir(), 'aid-preuve-worktree-'));
   let ajoute = false;
@@ -74,7 +75,12 @@ async function lancerDansWorktree(
 
     const [programme, ...args] = argv;
     try {
-      await executer(programme!, args, { cwd: dossier, timeout: delai, killSignal: 'SIGKILL' });
+      await executer(programme!, args, {
+        cwd: dossier,
+        timeout: delai,
+        killSignal: 'SIGKILL',
+        env,
+      });
       return { argv, exit: 0, head };
     } catch (erreur) {
       const arret = erreur as { code?: number; killed?: boolean; signal?: string };
@@ -108,6 +114,7 @@ function noter(suite: Suite, fichier: string, commande: Commande): void {
 export async function produirePreuves(
   { depot, base, chemins, lancer }: OptionsPreuve,
   delai = delaiDixMinutes,
+  env?: NodeJS.ProcessEnv,
 ): Promise<{ point: string; preuve: PreuveD5; fautes: string[] }[]> {
   depot = await racineDepot(depot);
   const head = (await git(depot, ['rev-parse', 'HEAD'])).trim();
@@ -157,8 +164,8 @@ export async function produirePreuves(
         .trim()
         .split(/\s+/)
         .map((arg) => (arg === '{fichiers}' ? fichier : arg));
-      const avant = await lancerDansWorktree(depot, commit.sha, argv, delai);
-      const apres = await lancerDansWorktree(depot, head, argv, delai);
+      const avant = await lancerDansWorktree(depot, commit.sha, argv, delai, env);
+      const apres = await lancerDansWorktree(depot, head, argv, delai, env);
       preuve.commands.push(avant, apres);
       noter(preuve.suites.base, fichier, avant);
       noter(preuve.suites.head, fichier, apres);

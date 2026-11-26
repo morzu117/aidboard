@@ -167,6 +167,13 @@ Les tests utilisent un dépôt temporaire et une fausse commande de gate.
   - les avertissements, l'empreinte du home et l'invalidation par la tête.
 
   Un choix du testeur : seul le script de `package.json` que lance le gate est gelé, et un autre script est un avertissement. Échec attendu au commit marqué : les deux modules n'existent pas.
+- _Révision 69.4._ Une passe Codex et une reprise. La première passe rendait chaque dev suspect, et la reprise corrige quatre points :
+  - l'empreinte suivait les dossiers de session et `~/.claude.json` entier, réécrits à chaque lancement de Claude ou de Codex : les dossiers de session sortent de la liste, et `~/.claude.json` est réduit à la projection de ses serveurs MCP et outils permis ;
+  - le gate héritait de tout l'environnement du daemon : il reçoit une liste blanche et un TMPDIR propre, et les preuves du 67 aussi, par un paramètre optionnel (3 lignes de `src/acceptation/preuve.ts`) ;
+  - la grâce avant SIGKILL passait de 100 ms à 5 s, abrégée si la commande sort ;
+  - les escalades `scope` portent la liste des fichiers.
+
+  Trois cas ajoutés dans `test/boucle/gate-garde.test.ts`. Le branchement des rappels du conducteur au daemon vient au 69.6. Limites : le relevé des scripts ne suit que les appels npm statiques, et la liste des processus dépend de `/proc` sous Linux et de `lsof` sous macOS. Le parcours macOS est joué au 69.7. Mon gate : 5 094.
 
 ### 69.5 La revue et le triage (DM65, DM66)
 

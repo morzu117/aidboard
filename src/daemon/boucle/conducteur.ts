@@ -1,7 +1,16 @@
 import { execFile } from 'node:child_process';
+import { homedir } from 'node:os';
+import {
+  avertissements,
+  comparerEmpreintes,
+  empreinteEnvironnement,
+  entreesGelees,
+  type EmpreinteEnvironnement,
+} from './controles.js';
 import type { ActionBoucle, Tentative } from './etat.js';
+import { lancerGate, type ResultatGate } from './gate.js';
 import { messageEtape, type ContexteMessage } from './messages.js';
-import type { ReglagesBoucle, RoleEtape } from './reglages.js';
+import { lireReglagesBoucle, type ReglagesBoucle, type RoleEtape } from './reglages.js';
 
 interface ContexteConduite {
   depot: string;
@@ -10,6 +19,11 @@ interface ContexteConduite {
   sessionId?: string;
   reglages: ReglagesBoucle;
   message: ContexteMessage;
+  gate?: {
+    go: string;
+    tete: string;
+    acceptation?: Parameters<typeof lancerGate>[0]['acceptation'];
+  };
 }
 
 interface Acteur {
@@ -28,7 +42,67 @@ interface DependancesConduite extends LecturesArtefact {
   ecrire(sessionId: string, texte: string): Promise<void>;
   arreter(sessionId: string): Promise<void>;
   consignerActeur(acteur: Acteur & { role: RoleEtape }): Promise<void>;
-  escalader(raison: string): Promise<void>;
+  escalader(raison: string, details?: string[]): Promise<void>;
+  gate?: {
+    consignerEmpreinte(empreinte: EmpreinteEnvironnement): Promise<void>;
+    lireEmpreinte(): Promise<EmpreinteEnvironnement | undefined>;
+    consignerResultat(
+      resultat: ResultatGate,
+      alertes: Awaited<ReturnType<typeof avertissements>>,
+    ): Promise<void>;
+  };
+}
+
+async function controlerGate(contexte: ContexteConduite, deps: DependancesConduite): Promise<void> {
+  if (!contexte.gate || !deps.gate) return deps.escalader('cannot_evaluate');
+  const { depot } = contexte;
+  const { go, tete, acceptation } = contexte.gate;
+
+  let constat;
+  try {
+    const entrees = await entreesGelees(depot, go, tete);
+    if (entrees.length) {
+      return deps.escalader(
+        'scope',
+        entrees.map(({ fichier, raison }) => `${fichier} : ${raison}`),
+      );
+    }
+    const avantDev = await deps.gate.lireEmpreinte();
+    if (!avantDev) return deps.escalader('cannot_evaluate');
+    const avantGate = await empreinteEnvironnement(homedir());
+    const changementsDev = comparerEmpreintes(avantDev, avantGate);
+    if (changementsDev.length) return deps.escalader('scope', changementsDev);
+
+    const alertes = await avertissements(depot, go, tete);
+    const reglages = await lireReglagesBoucle(depot, go);
+    const avecAcceptation = reglages.phases.includes('acceptation');
+    if (!reglages.gate || (avecAcceptation && !acceptation)) {
+      return deps.escalader('cannot_evaluate');
+    }
+    const resultat = await lancerGate({
+      depot,
+      tete,
+      commande: reglages.gate,
+      delaiMs: reglages.delais.gate * 60_000,
+      acceptation: avecAcceptation ? acceptation : undefined,
+    });
+    const apresGate = await empreinteEnvironnement(homedir());
+    constat = {
+      resultat,
+      alertes,
+      changementsGate: comparerEmpreintes(avantGate, apresGate),
+    };
+  } catch {
+    return deps.escalader('cannot_evaluate');
+  }
+  if (constat.changementsGate.length) {
+    await deps.escalader('scope', constat.changementsGate);
+    return deps.gate.consignerResultat(
+      { ...constat.resultat, issue: 'cannot_evaluate' },
+      constat.alertes,
+    );
+  }
+  return deps.gate.consignerResultat(constat.resultat, constat.alertes);
 }
 
 export async function executer(
@@ -40,6 +114,9 @@ export async function executer(
     case 'lancer_etape': {
       const role = action.etape === 'revue' ? 'review' : action.etape;
       const texte = messageEtape(role, contexte.message);
+      if (role === 'dev' && deps.gate) {
+        await deps.gate.consignerEmpreinte(await empreinteEnvironnement(homedir()));
+      }
       const acteur = await deps.lancer({
         depot: contexte.depot,
         role,
@@ -61,7 +138,7 @@ export async function executer(
       if (contexte.sessionId) await deps.arreter(contexte.sessionId);
       return;
     case 'lancer_gate':
-      throw new Error('Le lancement du gate relève du contrôle du gate');
+      return controlerGate(contexte, deps);
   }
 }
 
