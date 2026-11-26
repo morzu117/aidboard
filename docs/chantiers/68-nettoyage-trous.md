@@ -99,6 +99,7 @@ Les en-têtes, les paramètres d'URL, les URL de webhook, les préfixes connus. 
 La mesure sur le corpus, à la base et à la tête, et sa conclusion dans la note de révision.
 
 - _Acceptation._ Non testable à l'avance : c'est une mesure sur le corpus du dépôt, qui n'existe qu'une fois le code des 68.2 à 68.4 écrit.
+- _Révision 68.5._ Une passe Codex. Mesure du DM60 : 127 fichiers Markdown suivis de `docs/` et `kernel/`, en 157 blocs, à `origin/main` (2427d91) et à la tête, sans liste d'hôtes configurée. Avant correction, un seul bloc était refusé à la tête seulement : le faux positif connu de `docs/chantiers/README.md`. Il est corrigé par une règle générale sur la prose (une clé simple en minuscules entre deux mots, un deux-points entouré d'espaces, une valeur qui est un mot latin minuscule avec une lettre hors ASCII), couverte par `test/shared/nettoyage-prose.test.ts`. Après correction : 45 blocs refusés par les deux versions, aucun par une seule, aucun vrai trou. Les 45 refus communs existaient déjà à la base : surtout des exemples d'hôte privé, d'adresse privée et de clé dans les fiches de recette ; ce chantier ne les change pas. Jamais plus permissif : les 130 refus de la base sur les appels des tests `nettoyage*` restent refusés. Gate 4 801.
 
 ## 5. Pièges
 

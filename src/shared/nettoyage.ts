@@ -145,6 +145,7 @@ const affectationCleSecrete = new RegExp(
   'giu',
 );
 const reference = /^(?:\{|\$(?:\{|[\p{L}_])|%\()/u;
+const motDeProse = /^(?=[a-z]*[^a-z])(?:(?=\p{Script=Latin})\p{Ll})+$/u;
 const modesCredentials = ['omit', 'include', 'same-origin'];
 // Un champ HTTP commence la ligne ou une chaîne citée. Une référence shell seule
 // à la place de l’identifiant d’autorisation ne contient pas sa valeur.
@@ -286,11 +287,24 @@ function controler(controle: string, hotesPrives: string[]): ReturnType<typeof n
     )
       return refus('ressemble à une clé API');
   }
-  for (const [, , cle, double, simple, sansGuillemets] of controle.matchAll(
-    affectationCleSecrete,
-  )) {
+  for (const candidat of controle.matchAll(affectationCleSecrete)) {
+    const [affectation, guillemet, cle, double, simple, sansGuillemets] = candidat;
     const valeur = (double ?? simple ?? sansGuillemets)!;
     const valeurNormalisee = valeur.toLowerCase();
+    // La prose encadre le deux-points d’espaces et continue après le premier mot.
+    // Les motifs historiques et les autres porteurs de secret restent contrôlés.
+    if (
+      guillemet === '' &&
+      sansGuillemets !== undefined &&
+      /^[a-z]+$/.test(cle!) &&
+      motDeProse.test(valeur) &&
+      /^[ \t]+:[ \t]+$/.test(affectation.slice(cle!.length, -valeur.length)) &&
+      /\p{L}[ \t]+$/u.test(controle.slice(0, candidat.index)) &&
+      /^[ \t]+\p{L}+(?=[ \t.,;:!?»”*)\x60\r\n]|$)/u.test(
+        controle.slice(candidat.index! + affectation.length),
+      )
+    )
+      continue;
     if (
       Array.from(valeur).length >= 4 &&
       !reference.test(valeur) &&
