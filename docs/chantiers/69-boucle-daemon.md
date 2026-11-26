@@ -132,6 +132,8 @@ Les tests portent sur la fonction pure : chaque transition, le délai dépassé,
 
 Les tests utilisent un faux pilote de conversation, sans claude ni codex réels.
 
+- _Acceptation._ Couvert par `test/boucle/reglages.test.ts`, `test/boucle/messages.test.ts` et `test/boucle/conducteur.test.ts` (e20a0d4), trente-quatre cas écrits par le testeur depuis le plan seul. Le testeur fixe l'interface : `lireReglagesBoucle(depot, commit)`, `messageEtape(role, contexte)`, `executer(action, contexte, deps)` et `artefactPresent(etape, contexte, deps)`, le monde passant par des dépendances injectées. Les cas : les réglages lus au commit du GO dans un dépôt temporaire (un `gates.gate` changé ensuite ne compte pas), les défauts du noyau et leur redéclaration, le refus d'un genre inconnu ; le message de chaque rôle ; une session neuve par lancement, le testeur et le dev jamais la même session, l'acteur réel consigné, la relance et l'arrêt de la même session, l'escalade ; la fin d'étape par artefact, jamais par un simple `turn_end`. Échec attendu au commit marqué : les trois modules n'existent pas. Le message du rôle `acceptation` lit `kernel/roles/acceptation.md`, qui arrive avec #212 : le dev de ce point attend donc le merge de #212, comme le 69.4.
+
 ### 69.4 Le gate et les contrôles du daemon (DM66)
 
 - Le lancement de `gates.gate`, lu au commit du GO, à la tête exacte, avec son délai et son issue lue sur le code de sortie (DM67).
