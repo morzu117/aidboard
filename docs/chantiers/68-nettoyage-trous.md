@@ -116,6 +116,8 @@ La mesure sur le corpus, à la base et à la tête, et sa conclusion dans la not
 
 Les six formes du DM63, ajoutées après la relecture du lab, sur la même branche. La mesure du DM60 est refaite à la fin du point.
 
+- _Acceptation._ Couvert par `test/shared/nettoyage-relecture.test.ts` (01db051), vingt-quatre cas écrits par le testeur depuis le plan seul. Refusés comme secret : les trois en-têtes préfixés, les clés `dbPassword`, `apiToken` et `clientSecret`, `DB_PASS` et `SMTP_PASS`, `--token` et `--api-key` suivis d'une valeur, la ligne `.netrc`, la passphrase dans la prose, la charge `Basic` en milieu de ligne. Qui passent : un en-tête préfixé sans valeur, `keyboard` et `monkey`, une référence dans `apiToken`, `pass` seul et `bypass`, deux mentions de clé en prose, l'exemption de prose pour `token`, deux mentions de `Basic`. Échec attendu au commit marqué : treize cas, sur une assertion. Les onze textes qui passent sont déjà verts.
+
 ## 5. Pièges
 
 - **Le filtre qui refuse tout.** C'est le DM60. Une heure, une adresse de documentation, un sha et un mot de passe d'exemple doivent continuer de passer.
