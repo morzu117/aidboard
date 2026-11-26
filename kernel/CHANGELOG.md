@@ -7,6 +7,11 @@ ajoute rien. Format : chaque version majeure du noyau décrit sa
 **migration**, que `/sync` applique avant de rendre le bloc ; les mineures
 et patchs n'en ont pas, sauf mention contraire.
 
+## Délais de la boucle du daemon (chantier 69.3)
+
+Changement sans migration. Le manifeste peut redéclarer chaque délai de
+`boucle.delais` en minutes.
+
 ## Phase d'acceptation (chantier 67)
 
 Changement mineur, sans migration. La phase facultative écrit les tests

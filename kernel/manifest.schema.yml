@@ -94,6 +94,14 @@ guardrails: # [hérité]
 
 phases: [string] # [hérité] sous-ensemble de policy/phases.md, dans l'ordre
 
+boucle: # [hérité]
+  delais: # minutes, redéclarables par étape
+    plan: integer
+    acceptation: integer
+    dev: integer
+    gate: integer
+    revue: integer
+
 acceptation: # si la phase est déclarée
   chemins: [string] # par défaut : [test/, e2e/]
   lancer:
