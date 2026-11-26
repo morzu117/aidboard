@@ -7,7 +7,7 @@
 | Base | `main`, **après le merge de #212** (chantier 67) : la boucle appelle ses fonctions d'acceptation. Jamais une branche empilée sur une PR ouverte (contrainte 6 du lab). |
 | Organisation | Comme au 68. cell-gestion gère le chantier ; Codex CLI écrit les tests et le code ; chaque point testable passe d'abord par un testeur, puis par un dev distinct. |
 | Dépend de | #212 (67) mergé. Rien d'autre : la v1 n'appelle ni le 65 (bwrap, Linux seul), ni le 66 (avis sans outil, qui ne lit pas un diff). |
-| Validation | Le gate à chaque point, puis `gate:e2e`. Relecture du lab sur le plan avant tout code, puis sur la PR. La recette se fait sur le Mac de Julien, sur un vrai petit sujet. Merge sur le oui de Julien, CI verte. |
+| Validation | Le gate à chaque point, puis `gate:e2e`. Relecture du lab sur le plan avant tout code, puis sur la PR. Pas de recette manuelle (Julien, 26 novembre) : un e2e de scénario joue la boucle de bout en bout. Merge sur le oui de Julien, CI verte. |
 
 ## 1. Pourquoi
 
@@ -160,14 +160,22 @@ Les tests utilisent un dépôt temporaire et une fausse commande de gate.
 - Les trois mesures du sujet.
 - La politique des tests d'interface s'applique : chaque bouton est cliqué par un e2e, avec les captures de chaque écran en 1280 × 800 et en 390 × 844.
 
-### 69.7 La recette sur le Mac
+### 69.7 Le scénario de bout en bout
 
-La fiche `docs/recette-chantier-69-boucle.md`. Julien confie à la boucle un vrai petit sujet d'A-I-D, du plan à « livraison prête », sur son Mac. La note de révision rend les trois mesures du sujet.
+Julien ne fait pas de recette manuelle (26 novembre) : « les tests front, back et les tests e2e et scénarisés d'interface doivent le couvrir ». Le 69.7 remplace donc la recette sur le Mac par un e2e de scénario, `e2e/boucle-scenario.spec.ts`, dans le vrai navigateur et contre le vrai daemon. Seuls les agents sont simulés : de faux binaires `claude` et `codex` dans le PATH du daemon jouent chaque rôle en écrivant de vrais artefacts (la page de plan, un commit `Acceptation:`, un commit de dev et son handoff, un JSON de revue). Le gate est une vraie commande du dépôt de test.
+
+Le scénario part d'un sujet dans un dépôt git temporaire. On écrit le plan, on clique GO, et la vue « Boucle » montre chaque étape jusqu'à « livraison prête ». Les trois mesures s'affichent. Quatre variantes :
+- un dev qui s'arrête sans artefact, relancé une fois, puis escaladé ;
+- un gate rouge, avec un re-dev puis le cap ;
+- une revue vide, refusée ;
+- un clic sur Arrêter au milieu du dev, et la session est tuée.
+
+Le scénario vérifie aussi deux refus : un second GO sur le même sujet, et le redémarrage du daemon au milieu d'une étape. Les captures sont prises en 1280 × 800 et en 390 × 844. Julien peut ensuite essayer la v1 sur son Mac quand il le veut, mais rien n'attend cet essai.
 
 ## 5. Réponses de Julien (26 novembre)
 
 - **Q1. Les permissions sur le Mac, sans isolation : le mode `auto`, vérifié après coup.** Les sessions d'acceptation et de dev enchaînent sans demander. Le daemon vérifie ensuite le worktree, les tests d'acceptation, la branche et l'empreinte de l'environnement (DM67). Le plan et la revue restent en lecture seule. C'est une règle vérifiée après coup, pas une barrière : pendant l'étape, l'agent garde l'accès au home.
-- **Q2. L'ordre.** Julien fait d'abord la recette de #212. En attendant, le 69.2 part de `main` : il ne dépend pas du 67, et il n'y a donc pas d'empilement (le lab est d'accord). Les points suivants partent de `main` après le merge de #212.
+- **Q2. L'ordre.** Julien fait d'abord la recette de #212. Le même jour, il a renoncé aux recettes manuelles (voir 69.7) : #212 attend seulement son oui de merge. En attendant, le 69.2 part de `main` : il ne dépend pas du 67, et il n'y a donc pas d'empilement (le lab est d'accord). Les points suivants partent de `main` après le merge de #212.
 - **Q3. Le relecteur.** Codex est installé et connecté sur le Mac. Le dev est claude, la revue est codex en session neuve.
 
 ## 6. Pièges
@@ -176,7 +184,7 @@ La fiche `docs/recette-chantier-69-boucle.md`. Julien confie à la boucle un vra
 - **Le faux pass.** Un lancement sans code de sortie, un délai, une session qui dit « tests verts » : rien de cela n'est un `pass`.
 - **La relance infinie.** Une seule relance par étape sans artefact, et le cap compte le testeur.
 - **Le daemon qui redémarre au milieu d'une étape.** Le verrou et la reprise, jamais une seconde instance.
-- **Le Mac.** Le daemon hérite du PATH de l'utilisateur (claude et codex y sont résolus). AID.app le lance par un shell de connexion. La fiche de recette le vérifie avec `aid env check`.
+- **Le Mac.** Le daemon hérite du PATH de l'utilisateur (claude et codex y sont résolus). AID.app le lance par un shell de connexion. Le 69.6 ajoute l'outil `boucle` au profil d'environnement d'`aid env check` : un `claude` ou un `codex` introuvable dans le PATH du daemon est signalé avant le GO.
 - **Aucun vrai nom** de cell, de dépôt ni d'hôte dans les fixtures (gardes 49 et 54). Aucune forme de jeton en clair dans les tests.
 
 ## 7. Fini quand
