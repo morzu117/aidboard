@@ -9,7 +9,7 @@ import { migrate, openDb } from '../src/daemon/db.js';
 import { propositionsSwairm, releverEtatsSwairm } from '../src/daemon/swairm/propositions.js';
 import type { lireBoardSwairm } from '../src/daemon/swairm/board.js';
 import { registerSwairmRoutes } from '../src/daemon/routes/swairm.js';
-import { SwairmAsk } from '../src/daemon/swairm/ask.js';
+import { ServiceAvis } from '../src/daemon/avis/service.js';
 import { SwairmStatut } from '../src/daemon/swairm/statut.js';
 import { BoardReader } from '../src/daemon/mesh/board.js';
 
@@ -69,7 +69,7 @@ test('027 : montée depuis 026, réglages préservés et migration idempotente',
     db.pragma('user_version = 26');
     const avant = db.prepare('SELECT * FROM confirmations_reglage').all();
     migrate(db);
-    expect(db.pragma('user_version', { simple: true })).toBe(37);
+    expect(db.pragma('user_version', { simple: true })).toBe(39);
     expect(db.prepare('SELECT * FROM confirmations_reglage').all()).toEqual(avant);
     releverEtatsSwairm(db, lecture());
     migrate(db);
@@ -153,7 +153,7 @@ test('route D286 : une transition ne déclenche aucune écriture mesh ni demande
       erreurs: [],
     },
   }));
-  registerSwairmRoutes(app, new SwairmAsk(), board, statut, db);
+  registerSwairmRoutes(app, new ServiceAvis('/inexistant'), board, statut, db);
   try {
     await app.inject('/api/swairm/board');
     etat = 'merged';

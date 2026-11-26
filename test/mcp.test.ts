@@ -86,6 +86,10 @@ describe.skipIf(!built)('aid mcp en sous-processus', () => {
     ]);
     expect(tools.tools.find((x) => x.name === 'memory_put')?.description).toContain('se complète');
 
+    expect(tools.tools.find((x) => x.name === 'memory_search')?.description).toContain(
+      'Un résultat candidat est un fait extrait automatiquement, pas encore établi, à vérifier avant de s’appuyer dessus.',
+    );
+
     const invalid = await c.callTool({
       name: 'memory_put',
       arguments: { slug: 'aid/page/a', text: '---\nliens:\n  inconnu: [aid/page/b]\n---\nA' },
@@ -135,6 +139,23 @@ describe.skipIf(!built)('aid mcp en sous-processus', () => {
       mode: 'fts',
       hits: [{ slug: 'aid/plan/alpha' }],
     });
+
+    t.d.memory.store.put(
+      'aid/fait/alpha.regle',
+      '---\nstatut: candidat\nliens: { issu_de: [aid/plan/alpha] }\n---\nun feldspath',
+      { kind: 'create' },
+      'maintenance',
+    );
+    for (const [query, field] of [
+      ['feldspath', 'hits'],
+      ['plan', 'voisins'],
+    ] as const) {
+      const result = await c.callTool({ name: 'memory_search', arguments: { query } });
+      expect(result.isError).toBeFalsy();
+      expect(JSON.parse(text(result))[field]).toContainEqual(
+        expect.objectContaining({ slug: 'aid/fait/alpha.regle', candidat: true }),
+      );
+    }
 
     t.d.memory.store.put(
       'aid/page/archive',

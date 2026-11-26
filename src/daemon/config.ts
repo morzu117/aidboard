@@ -33,6 +33,7 @@ export interface AidConfig {
   host: '127.0.0.1';
   port: number;
   editor: string[];
+  hotesPrives: string[];
   env: { strip: string[] };
   terminal: { scrollback: number; logMaxBytes: number; logRetentionDays: number };
   memory: MemoryConfig;
@@ -86,7 +87,9 @@ export interface MemoryConfig {
     duplicateDistance?: number;
     maxPerNight?: number;
     splitLines?: number;
+    hotesPrives?: string[];
   };
+  capture: { enabled: boolean; delayMinutes: number; maxPerDay: number };
   git: { push: boolean };
 }
 
@@ -137,6 +140,7 @@ export const DEFAULT_CONFIG: AidConfig = {
   host: '127.0.0.1',
   port: 4870,
   editor: [],
+  hotesPrives: [],
   env: { strip: ['ANTHROPIC_API_KEY', 'ANTHROPIC_AUTH_TOKEN'] },
   terminal: { scrollback: 5000, logMaxBytes: 50 * 1024 * 1024, logRetentionDays: 30 },
   memory: {
@@ -149,6 +153,7 @@ export const DEFAULT_CONFIG: AidConfig = {
       maxPerNight: DEFAULT_MAINTENANCE_MAX_PER_NIGHT,
       splitLines: DEFAULT_MAINTENANCE_SPLIT_LINES,
     },
+    capture: { enabled: false, delayMinutes: 5, maxPerDay: 30 },
     git: { push: false },
   },
   structural: { engine: 'codegraph', bin: 'codegraph', timeoutMs: 60_000, exclude: [] },
@@ -209,6 +214,7 @@ export function parseConfig(text: string): AidConfig {
       'host',
       'port',
       'editor',
+      'hotesPrives',
       'env',
       'terminal',
       'memory',
@@ -225,6 +231,7 @@ export function parseConfig(text: string): AidConfig {
   );
 
   const cfg = structuredClone(DEFAULT_CONFIG);
+  if (doc.hotesPrives !== undefined) cfg.hotesPrives = stringList(doc.hotesPrives, 'hotesPrives');
   if (doc.avatars !== undefined) cfg.avatars = parseAvatars(doc.avatars);
   if (doc.host !== undefined && doc.host !== '127.0.0.1') {
     throw new ConfigError("A-I-D n'écoute que sur 127.0.0.1 : `host` ne peut pas changer");
@@ -324,7 +331,7 @@ function bool(v: unknown, name: string): boolean {
 
 function parseMemory(raw: unknown, cfg: MemoryConfig): void {
   if (!isRecord(raw)) throw new ConfigError('config.yaml : memory doit être un objet');
-  rejectUnknown(raw, ['embeddings', 'maintenance', 'git'], 'memory.');
+  rejectUnknown(raw, ['embeddings', 'maintenance', 'capture', 'git'], 'memory.');
   const e = raw.embeddings;
   if (e !== undefined) {
     if (!isRecord(e)) throw new ConfigError('config.yaml : memory.embeddings doit être un objet');
@@ -343,13 +350,24 @@ function parseMemory(raw: unknown, cfg: MemoryConfig): void {
     if (!isRecord(m)) throw new ConfigError('config.yaml : memory.maintenance doit être un objet');
     rejectUnknown(
       m,
-      ['enabled', 'model', 'window', 'duplicateDistance', 'maxPerNight', 'splitLines'],
+      [
+        'enabled',
+        'model',
+        'window',
+        'duplicateDistance',
+        'maxPerNight',
+        'splitLines',
+        'hotesPrives',
+      ],
       'memory.maintenance.',
     );
     // Les deux limites sont des entiers strictement positifs, comme les autres limites de config.
     for (const key of ['maxPerNight', 'splitLines'] as const) {
       if (m[key] !== undefined)
         cfg.maintenance[key] = positiveInt(m[key], `memory.maintenance.${key}`);
+    }
+    if (m.hotesPrives !== undefined) {
+      cfg.maintenance.hotesPrives = stringList(m.hotesPrives, 'memory.maintenance.hotesPrives');
     }
     if (m.duplicateDistance !== undefined) {
       const distance = m.duplicateDistance;
@@ -373,6 +391,15 @@ function parseMemory(raw: unknown, cfg: MemoryConfig): void {
         throw new ConfigError('config.yaml : memory.maintenance.window attend "HH:MM-HH:MM"');
       }
       cfg.maintenance.window = w;
+    }
+  }
+  const c = raw.capture;
+  if (c !== undefined) {
+    if (!isRecord(c)) throw new ConfigError('config.yaml : memory.capture doit être un objet');
+    rejectUnknown(c, ['enabled', 'delayMinutes', 'maxPerDay'], 'memory.capture.');
+    if (c.enabled !== undefined) cfg.capture.enabled = bool(c.enabled, 'memory.capture.enabled');
+    for (const key of ['delayMinutes', 'maxPerDay'] as const) {
+      if (c[key] !== undefined) cfg.capture[key] = positiveInt(c[key], `memory.capture.${key}`);
     }
   }
   const g = raw.git;
@@ -705,6 +732,7 @@ export function loadConfig(p: AidPaths): AidConfig {
 const DEFAULT_FILE = `# Configuration d'A-I-D. Tout est facultatif : ce sont les valeurs par défaut.
 # port: 4870
 # editor: []              # vide = détection (code, open, xdg-open) ; "{path}" est remplacé
+# hotesPrives: []         # noms ou suffixes DNS privés supplémentaires, sans point initial
 # env:
 #   strip:                # retirées de l'environnement des agents
 #     - ANTHROPIC_API_KEY
@@ -725,6 +753,11 @@ const DEFAULT_FILE = `# Configuration d'A-I-D. Tout est facultatif : ce sont les
 #     duplicateDistance: ${DEFAULT_DUPLICATE_DISTANCE} # distance cosinus maximale des candidats doublons (]0, 2])
 #     maxPerNight: 20        # jobs créés depuis le début de la fenêtre courante
 #     splitLines: 40         # découpage au-delà de ce nombre de lignes non vides
+#     hotesPrives: []       # hôtes dont la présence bloque l'envoi d'un récit au modèle
+#   capture:
+#     enabled: false         # extraction de faits après un handoff ou une review
+#     delayMinutes: 5        # délai après la dernière écriture
+#     maxPerDay: 30          # jobs créés depuis minuit, heure locale
 #   git:
 #     push: false            # true : git push de ~/.aid/memory après chaque commit, si un remote origin existe
 # structural:

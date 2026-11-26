@@ -8,6 +8,10 @@ Tu exécutes le plan.
 
 ## Travail
 
+0. Lance `aid env check`. Sur un code 7, arrête-toi : nomme l'outil absent
+   ou hors plage dans ta page de sortie, et n'essaie ni de l'installer ni de
+   contourner.
+
 1. Lis le plan avant de toucher au code.
 2. Pour comprendre le code existant, interroge l'index structurel
    directement. Le source qu'il rend est déjà lu — ne le re-vérifie pas.

@@ -291,3 +291,33 @@ test('DM17 : les purges et les écritures partagent une file, instantané compri
   expect((await second).slugs).toEqual(['a/review/alpha']);
   expect(memory.get('a/review/alpha')).toBeUndefined();
 });
+
+test('62.4 : la purge rattache le fait à la tâche jusqu’au dernier point', async () => {
+  t = await startTestDaemon();
+  const pages = ['exemple/fait/tache.v2.regle', 'exemple/plan/tache.v2'];
+  const sansPoint = 'exemple/fait/sanspoint';
+  for (const slug of [...pages, sansPoint]) await put(slug);
+
+  expect((await purge({})).json()).toMatchObject({ tasks: [], slugs: [] });
+  expect((await purge({ orphelines: true })).json()).toMatchObject({
+    tasks: ['exemple/tache.v2'],
+    slugs: pages,
+  });
+  expect(await cli(['--orphelines'])).toEqual({
+    code: 0,
+    out: ['exemple/tache.v2', '1 tâche(s) orpheline(s)'],
+    err: [],
+  });
+  expect(await slugs()).toEqual([sansPoint, ...pages]);
+
+  const retro = 'exemple/retro/nuit';
+  await put(retro, 'Rétro du cycle tache.v2');
+  expect(await cli(['--dry-run'])).toEqual({
+    code: 0,
+    out: [...pages, '2 page(s) à purger'],
+    err: [],
+  });
+  expect(await slugs()).toEqual([sansPoint, ...pages, retro]);
+  expect((await purge({})).json()).toMatchObject({ tasks: ['exemple/tache.v2'], slugs: pages });
+  expect(await slugs()).toEqual([sansPoint, retro]);
+});

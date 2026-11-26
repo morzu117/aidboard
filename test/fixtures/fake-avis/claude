@@ -1,0 +1,31 @@
+#!/bin/sh
+set -eu
+
+modele=
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --model) modele="$2"; break ;;
+  esac
+  shift
+done
+case "$modele" in
+  sonnet|opus) ;;
+  *) exit 2 ;;
+esac
+
+/bin/cat > /dev/null
+printf '%s\n' "$modele" >>"$CLAUDE_CONFIG_DIR/avis-cli.log"
+verdict=oui
+case "$(/bin/cat "$CLAUDE_CONFIG_DIR/avis-mode")" in
+  ok) ;;
+  partage)
+    if [ "$modele" = opus ]; then
+      verdict=non
+    fi
+    ;;
+  aucun) exit 3 ;;
+  lent) sleep 60 ;;
+  *) exit 2 ;;
+esac
+
+printf '{"type":"result","subtype":"success","is_error":false,"total_cost_usd":0.04,"modelUsage":{"%s":{"costUSD":0.04}},"result":"{\\"reponses\\":[{\\"n\\":1,\\"verdict\\":\\"oui\\",\\"justification\\":\\"Oui.\\"},{\\"n\\":2,\\"verdict\\":\\"%s\\",\\"justification\\":\\"Avis de test.\\"}]}"}\n' "$modele" "$verdict"

@@ -28,7 +28,12 @@ import { hooksStatus } from '../../daemon/hooks/claudeSettings.js';
 import { daemonFetch, runningDaemon } from '../daemonInfo.js';
 import { readVersion } from '../version.js';
 import { currentServer, installMode } from '../../daemon/install.js';
-import type { InstallMode, MeshTailscale } from '../../shared/model.js';
+import type {
+  Environnement,
+  InstallMode,
+  MachineLocale,
+  MeshTailscale,
+} from '../../shared/model.js';
 import { racineDepot } from '../../acceptation/verifier.js';
 import { lireChemins, lireLanceurs, lireManifesteAcceptation } from './acceptation.js';
 
@@ -71,6 +76,7 @@ export interface Probes {
   bwrapVersion?(): Promise<string | undefined>;
   /** chantier 30 (D162) : le second port, celui des artefacts ; `aid` = ouvert par le daemon */
   artefactsPort(): Promise<{ port: number; state: 'aid' | 'libre' | 'occupe'; raison?: string }>;
+  environnement?(): Promise<Environnement | null>;
   claudeHooks(): boolean; // les hooks d'A-I-D sont-ils dans la configuration de Claude Code ?
   memoryHealth(): Promise<MemoryHealth | null>; // null = daemon arrêté ou injoignable
   mcpRegistration(): boolean; // true si `aid-memory` (06.5) est encore enregistré dans ~/.claude.json (DS10)
@@ -231,6 +237,22 @@ export async function runChecks(p: Probes): Promise<Check[]> {
         ? 'off'
         : `bwrap ${bwrapVersion.replace(/^bubblewrap\s+/, '')} (expérimental). L’agent peut lire et remplacer le jeton d’abonnement. Le réseau reste ouvert. À la racine, .claude/ et .mcp.json sont en lecture seule. Leurs équivalents imbriqués et .github/ restent modifiables et relèvent du relevé de fin d’étape de la boucle (chantier 69). L’agent peut modifier CLAUDE.md et AGENTS.md, que lit la session suivante. Ces changements sont visibles dans le diff. Un agent qui doit modifier .claude/ ou .mcp.json à la racine travaille sans isolation.`;
     add('ok', `Isolation : ${isolation}`);
+  }
+
+  const environnement = await p.environnement?.();
+  if (environnement) {
+    const segments = [
+      `Environnement : ${environnement.os} ${environnement.arch}${environnement.wsl ? ' (WSL)' : ''}`,
+    ];
+    const outils = Object.entries(environnement.outils)
+      .flatMap(([nom, version]) => (version === null ? [] : [`${nom} ${version}`]))
+      .join(', ');
+    if (outils) segments.push(outils);
+    if (environnement.modelesOllama !== null) {
+      const n = environnement.modelesOllama.length;
+      segments.push(`Ollama : ${n} modèle${n === 1 ? '' : 's'}`);
+    }
+    add('ok', segments.join(' · '));
   }
 
   const artefacts = await p.artefactsPort();
@@ -444,6 +466,22 @@ export async function runChecks(p: Probes): Promise<Check[]> {
       );
     }
     verify(reasons.length === 0, label, { level: 'warn', label, detail: reasons.join(' ; ') });
+    if (mem.faits) {
+      const { candidats, aujourdhui, plafond } = mem.faits;
+      add(
+        plafond > 0 && aujourdhui >= plafond ? 'warn' : 'ok',
+        plafond === 0
+          ? 'Faits candidats : capture éteinte'
+          : `Faits candidats : ${candidats} en mémoire, ${aujourdhui} extraits aujourd'hui sur ${plafond}`,
+      );
+    }
+    if (mem.retros) {
+      const { manquantes, proposees, abandonnees } = mem.retros;
+      add(
+        abandonnees > 0 ? 'warn' : 'ok',
+        `Rétros : ${manquantes} manquantes, ${proposees} proposées, ${abandonnees} à écrire à la main`,
+      );
+    }
   }
   return c;
 }
@@ -513,6 +551,16 @@ export function realProbes(paths: AidPaths): Probes {
         if (status === 200 && typeof json.bwrapVersion === 'string') return json.bwrapVersion;
       } catch {
         return undefined;
+      }
+    },
+    async environnement() {
+      const info = await runningDaemon(paths);
+      if (!info) return null;
+      try {
+        const { status, json } = await daemonFetch(info, 'GET', '/api/machines/local');
+        return status === 200 ? ((json as Partial<MachineLocale>)?.environnement ?? null) : null;
+      } catch {
+        return null;
       }
     },
     async artefactsPort() {

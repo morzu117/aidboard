@@ -15,6 +15,9 @@
 # bouge vite et des projets qui ne doivent pas casser. Tout changement ici
 # est une version majeure du noyau.
 
+# La section `outils` fait exception à la règle des écarts. Son ajout
+# facultatif est un changement mineur, compatible avec les manifestes existants.
+
 kernel:
   version: string
   # "1.2.0"  exact, le plus sûr
@@ -65,6 +68,14 @@ models: # [hérité]
   standard: string
   complex: string
 
+routage: # [hérité]
+  niveaux:
+    leger: { fournisseur: claude | codex | vibe, modele: string }
+    standard: { fournisseur: claude | codex | vibe, modele: string }
+    fort: { fournisseur: claude | codex | vibe, modele: string }
+  # Un avis par fournisseur. Codex et Vibe utilisent leur modèle par défaut au niveau fort.
+  challenge: [claude | codex | vibe]
+
 stack: # [fusionné]
   # Le seul champ vraiment manuel : des faits en prose qu'aucune inspection
   # ne donne. /sync le propose rempli depuis ce qu'il a lu du repo.
@@ -78,6 +89,14 @@ commands: # [détecté]
   test: string
   lint: string
   build: string # facultatif
+
+outils: # facultatif, écrit après validation de la proposition de /sync
+  # Chaque clé nomme un outil et suit le motif ^[a-z0-9][a-z0-9._-]*$.
+  # `git` est ajouté d'office. `git: { requis: false }` le retire du contrôle.
+  <nom>:
+    version: string # plage semver facultative, présence seule par défaut
+    verifier: [string] # argv non vide, sans shell, par défaut [<nom>, "--version"]
+    requis: boolean # true par défaut, false donne un avertissement en cas d'échec
 
 gates: # [détecté]
   # Une entrée par couche testable. Chacune se lance EN ENTIER — un gate

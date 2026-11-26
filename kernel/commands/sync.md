@@ -30,6 +30,16 @@ champ manquant : c'est un champ à résoudre.
 | `capabilities.memory.source`      | `project.namespace`                                                                     |
 | `commands.test` / `commands.lint` | scripts de `package.json` ; `[tool.pytest]` / `[tool.ruff]` de `pyproject.toml`         |
 | `gates`                           | une entrée par couche testable détectée                                                 |
+| `outils`                          | fichiers de configuration et `git` (voir ci-dessous)                                    |
+
+Pour `outils`, relève :
+
+- dans `package.json`, `engines` pour `node` et `npm`, ainsi que `packageManager` ;
+- dans `mise.toml`, les entrées de `[tools]` et, si le fichier existe, `mise` en
+  `requis: false` ;
+- dans `pyproject.toml`, `requires-python` ;
+- dans `Cargo.toml`, `rust-version` ;
+- dans tous les cas, `git`.
 
 **Un `AGENTS.md` ou `CLAUDE.md` déjà présent dans le repo est ta meilleure
 source pour les gates.** S'il en documente un, reprends-le **verbatim** : il
@@ -42,6 +52,10 @@ Après détection et héritage, il ne devrait rester que `stack` — des faits e
 prose qu'aucune inspection ne donne. **Propose-le rempli** depuis ce que tu
 as lu du repo, et demande validation.
 
+`outils` fait exception à « n'écrire que les écarts » : c'est un fait écrit
+car `aid env check` ne lit que le manifeste. `/sync` propose la section
+remplie à partir de la détection et l'écrit après validation explicite.
+
 Si un champ non détectable manque vraiment, demande-le. Un seul, pas une
 liste : chaque question de plus est une détection que le noyau aurait dû
 savoir faire.
@@ -53,6 +67,8 @@ s'écarte** des défauts et de la détection. Un manifeste qui recopie
 `defaults.yml` est une copie de plus à maintenir — et elle dérivera.
 
 En pratique, un manifeste sain tient en une dizaine de lignes.
+
+`routage` est hérité de `defaults.yml`. Un projet le surcharge dans `agent.yml` seulement s'il s'en écarte.
 
 ## 2. Version
 
@@ -117,6 +133,10 @@ Prends `~/.agent-kernel/templates/instructions.tmpl.md` et substitue :
 - `{{phases.table}}` — un tableau des phases listées dans `phases`, avec
   pour chacune ce qu'elle lit et ce qu'elle écrit, repris de
   `~/.agent-kernel/policy/phases.md`. Seulement les phases déclarées.
+- `{{outils.block}}` — une puce par outil de la section `outils` du manifeste,
+  dans l'ordre de déclaration, au format « nom plage » (nom seul sans
+  plage), suivi de « (facultatif) » pour un outil en `requis: false`. Si la section est absente, la liste est vide. Après la liste,
+  écris « Vérifie avec `aid env check` avant tout travail. »
 - `{{gates.block}}` — un bloc de code par entrée de `gates`, préfixé du nom
   de la couche. Une seule entrée : un seul bloc, sans nom de couche.
 - `{{capabilities.block}}` — pour chaque capacité déclarée non nulle, la

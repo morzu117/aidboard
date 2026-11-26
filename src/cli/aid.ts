@@ -14,11 +14,13 @@ const HELP = `aidboard ${readVersion()} : cockpit local des agents de code
   aid status      dit si le daemon tourne, et combien de sujets et d'agents
   aid stop        arrête le daemon (refusé s'il reste des agents ; --force pour tout arrêter)
   aid doctor      vérifie la machine (node-pty, git, claude, codex, codegraph…)
+  aid env check [--root <dir>] [--json]  vérifie le profil d'environnement du projet
   aid relais      lance le relais PDA (options : --port, --origine, --cle-daemon)
   aid daemon      lance le daemon au premier plan
   aid emit        publie un événement d'agent (appelé par les hooks ; sans effet hors A-I-D)
   aid hooks       état des hooks Claude Code ; install | uninstall modifient ~/.claude/settings.json
   aid kernel install [--check]   matérialise le noyau multi-agents dans ~/.agent-kernel
+  aid avis "<question>"   recueille des avis et affiche leur accord
   aid acceptation <verifier|preuve|couverture> --base <ref> [--plan <fichier>] [--json]   contrôle les tests d’acceptation
   aid mem …       la mémoire des agents : get, put, search, list, rm, export, import, reindex
   aid mcp         serveur MCP « aid » (stdio) : mémoire et index structurel pour un agent
@@ -29,6 +31,10 @@ async function main(): Promise<number> {
   // ces sous-commandes ont leurs propres options, appelées par les hooks ou directement :
   // avant l'analyse stricte des options globales
   const first = process.argv[2];
+  if (first === 'env') {
+    const { runEnv } = await import('./commands/env.js');
+    return runEnv(process.argv.slice(3));
+  }
   if (first === 'relais') {
     const { runRelais } = await import('./commands/relais.js');
     return runRelais(process.argv.slice(3));
@@ -40,6 +46,11 @@ async function main(): Promise<number> {
   if (first === 'hook') {
     const { runHook } = await import('./commands/hook.js');
     return runHook(process.argv[3] ?? '');
+  }
+  if (first === 'avis') {
+    const { resolvePaths } = await import('../daemon/paths.js');
+    const { runAvis } = await import('./commands/avis.js');
+    return runAvis(process.argv.slice(3), resolvePaths());
   }
   if (first === 'mem') {
     const { resolvePaths } = await import('../daemon/paths.js');

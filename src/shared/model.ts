@@ -463,8 +463,18 @@ export interface Memoire {
   mesureA: string;
 }
 
-/** D154 : `GET /api/machines/local`, recalculé à chaque appel. */
+export interface Environnement {
+  os: string;
+  arch: string;
+  wsl?: true;
+  outils: Record<string, string | null>;
+  modelesOllama: string[] | null;
+  mesureA: string;
+}
+
+/** D154 : `GET /api/machines/local`, avec l’environnement mesuré séparément. */
 export interface MachineLocale {
+  environnement: Environnement;
   agents: AgentDisponible[];
   transport: 'pty' | 'stream';
   /** null si la mesure a échoué */
