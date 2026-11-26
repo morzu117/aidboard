@@ -12,6 +12,11 @@ et patchs n'en ont pas, sauf mention contraire.
 Changement mineur, sans migration. Le noyau documente la nouvelle section
 `routage` et ajoute l'adaptateur `avis` et la règle du challenge dans le rôle plan.
 
+## Phase d'acceptation (chantier 67)
+
+Changement mineur, sans migration. La phase facultative écrit les tests
+avant le dev et ajoute un contrôle au gate.
+
 ## Liens typés, pages closes et décisions (chantier 60)
 
 Changement mineur, sans migration. La politique mémoire décrit la fermeture,

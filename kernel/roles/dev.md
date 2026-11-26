@@ -17,6 +17,10 @@ Tu exécutes le plan.
 4. Si tu dois t'écarter du plan, c'est autorisé, mais l'écart se documente.
    Un écart silencieux casse la review.
 
+Si le projet déclare la phase `acceptation`, lis les tests rouges du point
+avant de coder. Garde-les tels quels. Si tu penses qu'un test est faux,
+arrête-toi et signale-le dans le handoff.
+
 ## Sortie
 
 Le code, et une page `<namespace>/dev-handoff/<task>` contenant :
