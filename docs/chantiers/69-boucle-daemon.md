@@ -235,6 +235,20 @@ Le scénario part d'un sujet dans un dépôt git temporaire. On écrit le plan, 
 
 Le scénario vérifie aussi deux refus : un second GO sur le même sujet, et le redémarrage du daemon au milieu d'une étape. Les captures sont prises en 1280 × 800 et en 390 × 844. Julien peut ensuite essayer la v1 sur son Mac quand il le veut, mais rien n'attend cet essai.
 
+- _Acceptation._ Couvert par `e2e/boucle-scenario.spec.ts` (74e694e), sept scénarios écrits par le testeur, avec un faux `claude` et un faux `codex` (`test/fixtures/faux-agent-scenario-boucle.mjs`). Ces deux binaires parlent le vrai transport stream. Chaque scénario a son dépôt et son home temporaires.
+
+  Six scénarios passent au commit marqué :
+  - le dev sans artefact, relancé une fois puis escaladé `ambiguity` ;
+  - le gate rouge sur deux têtes, avec un re-dev puis `redev_cap` ;
+  - la revue « CLEAN » en prose, relancée puis escaladée ;
+  - Arrêter pendant le dev, où l'agent et son enfant disparaissent ;
+  - le second GO, refusé en 409 avec son bandeau ;
+  - le redémarrage du daemon pendant le dev, sans second lancement.
+
+  Le parcours nominal atteint « livraison prête », avec ses trois mesures justes. Mais il reste rouge : le triage s'exécute sans apparaître dans la vue ni dans l'historique, alors que §2 et le 69.7 demandent de montrer chaque étape.
+
+  Le testeur a relu les trente-quatre captures aux deux tailles.
+
 ## 5. Réponses de Julien (26 novembre)
 
 - **Q1. Les permissions sur le Mac, sans isolation : le mode `auto`, vérifié après coup.** Les sessions d'acceptation et de dev enchaînent sans demander. Le daemon vérifie ensuite le worktree, les tests d'acceptation, la branche et l'empreinte de l'environnement (DM67). Le plan et la revue restent en lecture seule. C'est une règle vérifiée après coup, pas une barrière : pendant l'étape, l'agent garde l'accès au home.
