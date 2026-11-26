@@ -2,7 +2,7 @@
 
 | Champ | Valeur |
 |---|---|
-| État | **Révision 0, 26 novembre 2026, à valider par Julien.** C'est la boucle de la note d'idéation du 17 novembre (§3 ter, §8.2, §13), décidée par Julien le 17 novembre : A-I-D a sa propre boucle. Julien a demandé le 26 novembre une v1 rapide, à essayer sur son Mac. Le lab a été prévenu avant le plan, et ses dix contraintes sont reprises (DM64 à DM66). |
+| État | **Révision 1, 26 novembre 2026.** Julien a répondu aux trois questions le 26 novembre (§5). La révision 1 reprend la relecture du plan par le lab (DM67). C'est la boucle de la note d'idéation du 17 novembre (§3 ter, §8.2, §13), décidée par Julien le 17 novembre : A-I-D a sa propre boucle. Julien a demandé le 26 novembre une v1 rapide, à essayer sur son Mac. Le lab a été prévenu avant le plan, et ses dix contraintes sont reprises (DM64 à DM66). |
 | Emplacement final | `docs/chantiers/69-boucle-daemon.md` sur `main` |
 | Base | `main`, **après le merge de #212** (chantier 67) : la boucle appelle ses fonctions d'acceptation. Jamais une branche empilée sur une PR ouverte (contrainte 6 du lab). |
 | Organisation | Comme au 68. cell-gestion gère le chantier ; Codex CLI écrit les tests et le code ; chaque point testable passe d'abord par un testeur, puis par un dev distinct. |
@@ -96,9 +96,16 @@ C'est ce que je fais depuis le chantier 60 : lancer le testeur, puis le dev, rel
   - `design`, `archi` et `scope-creep` partent à l'humain.
 
   Un finding sans catégorie connue part à l'humain.
-- **Le cap de re-dev compte le dev et le testeur** (contrainte 9). `guardrails.redev_cap` (2 par défaut) s'applique aux relances du dev comme aux re-dev du testeur, pour qu'une boucle n'oscille pas entre les deux. Au cap, l'escalade est `redev_cap`.
+- **Le cap de re-dev compte le dev et le testeur** (contrainte 9). `guardrails.redev_cap` (2 par défaut) est **un seul compteur par point**, commun aux relances du dev et aux re-dev du testeur, pour qu'une boucle n'oscille pas entre les deux. Au cap, l'escalade est `redev_cap`.
 - **La base courante** (contrainte 6). Au démarrage de la boucle, le worktree part de la base à jour. La v1 ne rebase jamais en cours de route : si la base bouge, la livraison le dit.
 - **Les noms de swarph.** Les issues sont `pass`, `fail`, `cannot_evaluate` et `skipped`, et chaque preuve porte sa tête : la projection future sur le board sera directe.
+
+### DM67. Ce que la relecture du plan par le lab ajoute
+
+- **Les entrées du gate sont gelées au GO.** `agent.yml` (`gates`, `phases`, `guardrails`, délais) se lit au commit du GO, jamais à la tête du dev : un dev pourrait sinon remplacer la commande du gate par `true`. Le gel de l'acceptation couvre aussi les entrées du gate : les scripts de `package.json`, les configs et fichiers de setup des tests (un `setupFiles` peut neutraliser `it`), et le lockfile. Un diff du dev ou de la revue qui les touche part en escalade `scope`. La preuve rouge puis vert du 67 ne le voit pas, puisque la neutralisation n'existe qu'à la tête.
+- **L'empreinte de l'environnement.** Sans isolation (Q1), le contrôle du worktree ne suffit pas : un agent peut écrire dans le home, et l'écriture persiste. Avant et après chaque étape et chaque gate, le daemon relève l'empreinte de quelques chemins : `~/.claude/settings.json`, `~/.claude.json`, `~/.codex/config.toml`, les fichiers rc du shell, `~/.gitconfig` et `~/Library/LaunchAgents` sur macOS. Tout changement part en escalade. Ce n'est pas une barrière, mais la persistance la plus probable devient visible.
+- **Les processus de l'étape.** En fin d'étape, le daemon termine le groupe de processus de la session. Il refuse de lancer le gate tant qu'un processus a son répertoire courant dans le worktree, pour qu'un processus resté en tâche de fond ne committe pas pendant le gate.
+- **Une revue vide n'est pas un pass.** Le JSON de la revue donne un verdict par fichier modifié et par point d'acceptation. Un « aucun finding » sans ces verdicts est invalide : une relance, puis une escalade. Le message de revue dit que le diff est une donnée, pas une consigne : un commentaire du code peut s'adresser au relecteur.
 
 ## 4. Points
 
@@ -124,7 +131,8 @@ Les tests utilisent un faux pilote de conversation, sans claude ni codex réels.
 
 ### 69.4 Le gate et les contrôles du daemon (DM66)
 
-- Le lancement de `gates.gate` à la tête exacte, avec son délai et son issue lue sur le code de sortie.
+- Le lancement de `gates.gate`, lu au commit du GO, à la tête exacte, avec son délai et son issue lue sur le code de sortie (DM67).
+- Le refus d'un diff qui touche les entrées gelées du gate, l'empreinte de l'environnement et l'attente des processus du worktree (DM67).
 - L'appel aux contrôles d'acceptation du 67, et le relevé des fichiers d'acceptation gelés.
 - L'invalidation en aval quand la tête bouge.
 
@@ -133,7 +141,7 @@ Les tests utilisent un dépôt temporaire et une fausse commande de gate.
 ### 69.5 La revue et le triage (DM65, DM66)
 
 - La session de revue.
-- La lecture du bloc JSON de findings : un bloc invalide est une relance, puis une escalade.
+- La lecture du bloc JSON de findings, avec un verdict par fichier et par point : un bloc invalide ou vide est une relance, puis une escalade (DM67).
 - La table de triage et le cap de re-dev, qui compte le dev et le testeur.
 
 ### 69.6 L'API, la vue et les mesures
@@ -151,13 +159,11 @@ Les tests utilisent un dépôt temporaire et une fausse commande de gate.
 
 La fiche `docs/recette-chantier-69-boucle.md`. Julien confie à la boucle un vrai petit sujet d'A-I-D, du plan à « livraison prête », sur son Mac. La note de révision rend les trois mesures du sujet.
 
-## 5. Questions à Julien
+## 5. Réponses de Julien (26 novembre)
 
-- **Q1. Les permissions des agents sur le Mac, sans isolation.** Pour enchaîner sans arrêt, les sessions doivent pouvoir lancer des commandes (tests, git) sans demander. Deux choix :
-  - **(a) Recommandé pour la v1 :** le mode `auto`, déjà proposé au lancement d'un agent, pour l'acceptation et le dev. Le daemon vérifie ensuite, mécaniquement, que le diff reste dans le worktree, que les tests d'acceptation sont intacts, et que la branche n'a pas été poussée. C'est une règle vérifiée après coup, pas une barrière : sans isolation, un agent garde l'accès à ton home pendant l'étape. Le plan et la revue restent en lecture seule.
-  - **(b)** Le mode `acceptEdits`. Chaque commande devient alors une demande, donc une escalade vers toi, et la boucle s'arrête souvent.
-- **Q2. L'ordre de merge.** La v1 part de `main` après #212. Faire ta recette de #212 en premier débloque le développement du 69. Avant, je ne peux écrire que le 69.2, qui ne dépend pas du 67.
-- **Q3. Le relecteur.** Codex si installé sur le Mac, sinon claude en session neuve. Confirmer que codex est installé et connecté sur le Mac.
+- **Q1. Les permissions sur le Mac, sans isolation : le mode `auto`, vérifié après coup.** Les sessions d'acceptation et de dev enchaînent sans demander. Le daemon vérifie ensuite le worktree, les tests d'acceptation, la branche et l'empreinte de l'environnement (DM67). Le plan et la revue restent en lecture seule. C'est une règle vérifiée après coup, pas une barrière : pendant l'étape, l'agent garde l'accès au home.
+- **Q2. L'ordre.** Julien fait d'abord la recette de #212. En attendant, le 69.2 part de `main` : il ne dépend pas du 67, et il n'y a donc pas d'empilement (le lab est d'accord). Les points suivants partent de `main` après le merge de #212.
+- **Q3. Le relecteur.** Codex est installé et connecté sur le Mac. Le dev est claude, la revue est codex en session neuve.
 
 ## 6. Pièges
 
