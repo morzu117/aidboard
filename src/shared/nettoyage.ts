@@ -39,8 +39,8 @@ const motifs = [
   { source: '\\beyJ[A-Za-z0-9_\\-]+\\.eyJ[A-Za-z0-9_\\-]+(?:\\.[A-Za-z0-9_\\-]+)?', flags: '' },
   { source: '\\bAKIA[0-9A-Z]{16}\\b', flags: '' },
   {
-    source: '-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----.*?-----END [A-Z0-9 ]*PRIVATE KEY-----',
-    flags: 's',
+    source: '-----BEGIN [A-Z0-9 ]*PRIVATE KEY[^\\r\\n]*?-----',
+    flags: '',
   },
   {
     source: '\\b(password|passwd|pwd|api[_-]?key|auth[_-]?token|secret)\\b\\s*[:=]\\s*\\S+',
@@ -85,7 +85,7 @@ const motifs = [
   },
   { source: '\\b(Bearer\\s+)(?!\\[REDACTED)[A-Za-z0-9\\-._~+/]{12,}=*', flags: 'i' },
   {
-    source: '\\b([a-zA-Z][a-zA-Z0-9+.\\-]*://[^/\\s:@]+:)(?!\\[REDACTED)([^@\\s/]+)(@[^\\s/]+)',
+    source: '\\b([a-zA-Z][a-zA-Z0-9+.\\-]*://[^/\\s:@]*:)(?!\\[REDACTED)([^@\\s]+)(@[^\\s/]+)',
     flags: '',
   },
   {
@@ -235,7 +235,18 @@ export function nettoyer(
 ): { ok: true } | { ok: false; classe: string } {
   const refus = (classe: string) => ({ ok: false as const, classe });
   if (Array.from(texte).length > 20000) return refus('texte trop long');
-  const controle = texte.normalize('NFKC').replace(/[\u200b-\u200f\u2060\ufeff]/g, '');
+  const normalise = texte.normalize('NFKC');
+  const controle = normalise.replace(/[\p{Cf}\u180e]/gu, '');
+  const resultat = controler(controle, hotesPrives);
+  if (!resultat.ok) return resultat;
+
+  // Une suppression peut aussi fusionner deux candidats et masquer un refus historique.
+  const historique = normalise.replace(/[\u200b-\u200f\u2060\ufeff]/g, '');
+  return historique === controle ? resultat : controler(historique, hotesPrives);
+}
+
+function controler(controle: string, hotesPrives: string[]): ReturnType<typeof nettoyer> {
+  const refus = (classe: string) => ({ ok: false as const, classe });
   if (motifs.some((motif) => motif.test(controle))) return refus('ressemble à une clé API');
   for (const m of controle.matchAll(affectation)) {
     const valeur = m[4]!;
@@ -272,5 +283,10 @@ export function nettoyer(
   }
   if ([...controle.matchAll(/[0-9A-Fa-f:.]+(?:%[A-Za-z0-9_-]+)?/g)].some(([c]) => adressePrivee(c)))
     return refus('adresse privée');
+  for (const [, valeur] of controle.matchAll(
+    /(?<![\w:])[a-z_][\w-]*:(\d+(?:\.\d+){3})(?![\w]|\.\d)/gi,
+  )) {
+    if (adressePrivee(valeur!)) return refus('adresse privée');
+  }
   return { ok: true };
 }
