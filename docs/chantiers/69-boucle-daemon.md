@@ -130,6 +130,23 @@ Le lab a relu la PR #214 à la tête e941fcd (DM 106876), en lecture statique, e
   - `arreter` ne marque l'étape arrêtée qu'après la mort de l'agent.
 - **Les limites qui restent, dites dans la vue et dans `aid doctor`.** Les contrôles tournent aux bornes d'étape (Q1, « vérifié après coup ») : un changement fait puis défait pendant l'étape n'est pas vu. Un processus qui quitte son groupe (`setsid`) échappe à l'arrêt. Au même utilisateur, l'environnement du daemon reste lisible. Sous Linux, l'isolation bwrap du chantier 65 réduit ces limites ; sur le Mac, non.
 
+### DM69. Ce que la seconde relecture du lab ajoute
+
+Le lab a relu le 69.8 à la tête 94b0707 (DM 106893). Les trois bloquants sont fermés dans la boucle. Il reste quatre points avant le merge, plus trois points moins graves qu'on règle tant qu'on y est.
+
+- **Le lancement garde l'accès au dépôt distant.** Le `ls-remote` du lancement a besoin des identifiants de l'utilisateur : agent ssh, `credential.helper` global. Il passe donc par un appel à part, le seul de la boucle qui garde l'environnement de l'utilisateur et sa config globale. Les hooks et le fsmonitor restent coupés, et le protocole `ext` refusé. Le lancement précède toute session d'agent, et la config locale du dépôt entre dans l'empreinte relevée à ce moment. Une modification faite ensuite par un agent est donc vue au relevé suivant. Les autres git de la boucle restent dans `gitBoucle`.
+- **La livraison lit le verdict de la boucle, pas la page.** Pour un sujet qui a une boucle, la fraîcheur de la revue et le blocage du merge viennent du verdict enregistré par la boucle : la tête et l'issue de la dernière tentative de revue. Une page de revue, même datée de la bonne tête, ne change rien. Un sujet sans boucle garde le parcours actuel, où l'humain lit la page. `terminerRevue`, qui relisait la page et n'a plus d'appelant, est supprimé. La révision de la trace est soit vérifiée, soit retirée.
+- **La reprise ne tue que ce que la boucle a lancé.** Le daemon enregistre, dans l'état de la boucle, le groupe de chaque processus qu'il lance (agent, gate, preuve), avec son heure de départ. À la reprise, il ne tue un groupe que si son chef existe encore avec la même heure de départ. Un shell, un éditeur ou un serveur de dev de l'utilisateur ouvert dans le worktree n'est jamais touché.
+- **L'empreinte ne lit que la mémoire du projet du sujet.** La mémoire des autres projets de `~/.claude/projects` n'entre pas dans l'empreinte. D'autres sessions l'écrivent, et un home réel dépasse la borne. Seul le dossier du projet du worktree compte. La borne reste, et un home ordinaire ne doit pas l'atteindre.
+- **Moins graves.**
+  - Le texte final est remonté par une option explicite du driver, posée par le daemon au lancement d'une session de boucle (claude comme codex), au lieu d'être déduit d'un drapeau de la ligne de commande ou du bac à sable.
+  - Le groupe des preuves est choisi par une option explicite, pas par l'identité de la fonction git.
+  - Le délai de `gitBoucle` dépend de l'appel : plus long pour `worktree add` et `status --ignored`.
+- **Reste hors de portée, dit dans la vue et `aid doctor`.**
+  - Un dossier remplacé par un lien pendant le relevé.
+  - Un fichier FUSE qui bloque la lecture.
+  - `apiKeyHelper`, les scripts des serveurs MCP, les fichiers d'`includeIf` et les métadonnées des worktrees git.
+
 ## 4. Points
 
 ### 69.1 Le plan
@@ -283,6 +300,10 @@ Les règles de DM68, avec un test négatif chacune. Le testeur écrit d'abord le
   Un test négatif par règle, sans aucune fonction publique nouvelle. Neuf cas passent déjà au commit marqué, et trente-neuf échouent sur leur assertion. Les tests du parcours nominal et du conducteur fournissent désormais la revue comme réponse finale : 27 lignes existantes remplacées, dans des tests de ce chantier.
 - _Révision._ Code du 69.8 (Codex, deux passes). La première lisait tout `~/.codex` moins des exclusions : codex y écrit pendant qu'il tourne (bases sqlite, cache, tmp), donc chaque dev aurait escaladé. La seconde passe en liste blanche, avec un relevé borné. Les tests du service lisaient le vrai home : leurs fixtures ont un faux home (405cded). Gate 5 260, les 8 e2e de la boucle passent.
 
+### 69.9 La seconde relecture du lab (DM69)
+
+Les règles de DM69, avec un test négatif chacune. Le testeur écrit d'abord les tests à partir de DM69 seul, puis le dev les fait passer.
+
 ## 5. Réponses de Julien (26 novembre)
 
 - **Q1. Les permissions sur le Mac, sans isolation : le mode `auto`, vérifié après coup.** Les sessions d'acceptation et de dev enchaînent sans demander. Le daemon vérifie ensuite le worktree, les tests d'acceptation, la branche et l'empreinte de l'environnement (DM67). Le plan et la revue restent en lecture seule. C'est une règle vérifiée après coup, pas une barrière : pendant l'étape, l'agent garde l'accès au home.
@@ -300,5 +321,5 @@ Les règles de DM68, avec un test négatif chacune. Le testeur écrit d'abord le
 
 ## 7. Fini quand
 
-- Les points 69.2 à 69.8 sont mergés, avec la CI verte et le oui de Julien.
+- Les points 69.2 à 69.9 sont mergés, avec la CI verte et le oui de Julien.
 - Un vrai sujet est allé du plan à « livraison prête » sur le Mac de Julien, avec ses trois mesures écrites.
