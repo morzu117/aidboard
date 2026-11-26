@@ -174,10 +174,19 @@ describe('artefact de fin d’étape', () => {
   });
 
   it.each([
-    ['un commit marqué', ['Retouche fictive', 'Acceptation: point-fictif\n\nDétails.'], true],
+    [
+      'un commit avec le trailer du point',
+      ['Retouche fictive', 'Tests fictifs\n\nDétails.\n\nAcceptation: point-fictif'],
+      true,
+    ],
     ['un commit ordinaire', ['Retouche fictive'], false],
-    ['une mention dans le corps', ['Retouche fictive\n\nAcceptation: point-fictif'], false],
-    ['un marqueur sans point', ['Acceptation: '], false],
+    ['une mention dans le titre', ['Acceptation: point-fictif\n\nDétails.'], false],
+    [
+      'une mention dans le corps',
+      ['Retouche fictive\n\nAcceptation: point-fictif\n\nDétails.'],
+      false,
+    ],
+    ['un trailer sans point', ['Tests fictifs\n\nAcceptation: '], false],
     ['aucun commit', [], false],
   ] as const)(
     'vérifie les commits depuis la tête de départ avec %s',
