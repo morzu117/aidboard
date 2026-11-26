@@ -151,6 +151,23 @@ Les tests utilisent un faux pilote de conversation, sans claude ni codex réels.
 
 Les tests utilisent un dépôt temporaire et une fausse commande de gate.
 
+- _Acceptation._ Couvert par `test/boucle/gate.test.ts` et `test/boucle/controles.test.ts` (0183991), vingt cas écrits par le testeur depuis le plan seul. L'interface :
+  - `lancerGate({ depot, tete, commande, delaiMs, listerProcessus, acceptation? })` rend `{ issue, tete, codeSortie, dureeMs, journal }` ;
+  - `entreesGelees` et `avertissements` rendent des `{ fichier, raison }` ;
+  - `empreinteEnvironnement` et `comparerEmpreintes` ;
+  - `processusDansWorktree` ;
+  - `invaliderSiTeteBouge`.
+
+  Les cas portent sur :
+  - l'issue du gate, lue sur le code de sortie seul, à la tête exacte ;
+  - le journal borné, et l'arrêt du shell et de ses enfants au délai ;
+  - l'attente bornée des processus du worktree ;
+  - l'appel au vérificateur et au producteur de preuves du 67 ;
+  - les entrées gelées et la config de projet, imbriquée comprise, ainsi que `.github/` ;
+  - les avertissements, l'empreinte du home et l'invalidation par la tête.
+
+  Un choix du testeur : seul le script de `package.json` que lance le gate est gelé, et un autre script est un avertissement. Échec attendu au commit marqué : les deux modules n'existent pas.
+
 ### 69.5 La revue et le triage (DM65, DM66)
 
 - La session de revue.
