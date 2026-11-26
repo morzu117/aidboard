@@ -121,6 +121,8 @@ Ce document, et une ligne dans `README.md`.
 
 Les tests portent sur la fonction pure : chaque transition, le délai dépassé, le cap, la tête qui bouge, le plan modifié après le GO. Ils portent aussi sur la reprise après un redémarrage simulé.
 
+- _Acceptation._ Couvert par `test/boucle/etat.test.ts` et `test/boucle/depot.test.ts` (32d78c6), vingt-huit cas écrits par le testeur depuis le plan seul. Le testeur fixe l'interface : `transition(etat, evenement, maintenant)` dans `src/daemon/boucle/etat.ts`, qui rend `{ etat, actions }` sans rien exécuter ; `creer`, `lire`, `enregistrer` et `reprendre` dans `src/daemon/boucle/depot.ts`. Les cas : le chemin nominal avec et sans acceptation, le GO hors de `attente_go`, le plan modifié après le GO, le délai sur un tic sans événement d'agent, le gate `pass`, `fail` et `cannot_evaluate`, la tête qui bouge après le gate ou la revue, les sept catégories du triage, le cap commun au dev et au testeur, l'étape sans artefact, la tête qui n'a pas 40 caractères, la relecture, le verrou par sujet et la reprise après un redémarrage. Échec attendu au commit marqué : les deux modules n'existent pas, les fichiers échouent à l'import. Le testeur renvoie au 69.3, 69.4 et 69.5 la relance de la même session, les verdicts de la revue et les contrôles d'environnement.
+
 ### 69.3 Le lanceur d'étape (DM65)
 
 - Le lancement avec un rôle, et la construction du message par rôle.
