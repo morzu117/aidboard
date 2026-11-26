@@ -11,7 +11,10 @@ import { ensureHome, resolvePaths } from '../src/daemon/paths.js';
 function bwrapDeTest() {
   try {
     return sonderBwrap().bin;
-  } catch {
+  } catch (cause) {
+    if (process.env.AID_BWRAP_REQUIS === '1') {
+      throw new Error(`AID_BWRAP_REQUIS=1 : ${(cause as Error).message}`, { cause });
+    }
     return undefined;
   }
 }
@@ -21,12 +24,14 @@ const bwrap = bwrapDeTest();
 it.skipIf(!bwrap)('borne les écritures et masque les identités avec le vrai bwrap', () => {
   // Le profil recouvre /tmp : le faux home doit rester sous le montage racine en lecture seule.
   const temporaire = fs.realpathSync(tmpdir());
-  const parent = temporaire === '/tmp' || temporaire.startsWith('/tmp/') ? '/var/tmp' : temporaire;
+  const parent =
+    temporaire === '/tmp' || temporaire.startsWith('/tmp/') ? process.cwd() : temporaire;
   const racine = fs.realpathSync(fs.mkdtempSync(join(parent, 'aid-bwrap-')));
   try {
     const home = join(racine, 'home');
     const paths = resolvePaths(join(racine, 'aid'));
     const depot = join(racine, 'depot');
+    const distant = join(racine, 'distant.git');
     const worktree = join(paths.worktrees, 'sujet');
     const agentId = 'ag_test';
     const env = {
@@ -38,6 +43,9 @@ it.skipIf(!bwrap)('borne les écritures et masque les identités avec le vrai bw
     };
     const git = (bin: string, args: string[]) => execFileSync(bin, args, { encoding: 'utf8', env });
     ensureHome(paths);
+    for (const secret of [paths.config, paths.db, paths.sessionSecret]) {
+      fs.writeFileSync(secret, 'factice');
+    }
     fs.mkdirSync(join(paths.attachments, agentId), { recursive: true });
     fs.mkdirSync(join(home, '.ssh'), { recursive: true });
     fs.writeFileSync(join(home, '.ssh/id_test'), 'factice');
@@ -55,7 +63,9 @@ it.skipIf(!bwrap)('borne les écritures et masque les identités avec le vrai bw
       '--allow-empty',
     ]);
     git('git', ['-C', depot, 'worktree', 'add', '-qb', 'sujet', worktree]);
+    git('git', ['init', '-q', '--bare', distant]);
     fs.mkdirSync(join(depot, '.git/hooks'), { recursive: true });
+    const configGit = fs.readFileSync(join(depot, '.git/config'), 'utf8');
     const profil = profilPour({ worktree, home, paths, agentId }, git, fs);
 
     const stdout = execFileSync(
@@ -68,18 +78,31 @@ it.skipIf(!bwrap)('borne les écritures et masque les identités avec le vrai bw
         `
           touch dans-worktree || exit 1
           if touch "$HOME/hors-worktree"; then exit 2; fi
+          git add dans-worktree || exit 5
+          git -c user.name=Test -c user.email=test@example.invalid commit -qm 'Commit isolé' || exit 6
+          for secret in "$AID_HOME/config.yaml" "$AID_HOME/state.db" "$AID_HOME/session.secret"; do
+            if test -e "$secret"; then exit 7; fi
+          done
+          if git push -q "$2" HEAD:refs/heads/sujet; then exit 8; fi
           cd "$1" || exit 3
-          if touch .git/hooks/x; then exit 4; fi
+          if printf '#!/bin/sh\\n' > .git/hooks/pre-commit; then exit 4; fi
+          if printf '\\n' >> .git/config; then exit 9; fi
           ls -A "$HOME/.ssh"
         `,
         'sh',
         depot,
+        distant,
       ],
       { cwd: worktree, env, encoding: 'utf8', timeout: 5000, stdio: ['ignore', 'pipe', 'pipe'] },
     );
     expect(fs.existsSync(join(worktree, 'dans-worktree'))).toBe(true);
     expect(fs.existsSync(join(home, 'hors-worktree'))).toBe(false);
-    expect(fs.existsSync(join(depot, '.git/hooks/x'))).toBe(false);
+    expect(fs.existsSync(join(depot, '.git/hooks/pre-commit'))).toBe(false);
+    expect(fs.readFileSync(join(depot, '.git/config'), 'utf8')).toBe(configGit);
+    expect(git('git', ['-C', worktree, 'log', '-1', '--format=%s']).trim()).toBe('Commit isolé');
+    expect(git('git', ['-C', distant, 'for-each-ref'])).toBe('');
+    // La même poussée réussit hors du bac à sable avec ce dépôt nu.
+    git('git', ['-C', worktree, 'push', '-q', distant, 'HEAD:refs/heads/sujet']);
     expect(stdout).toBe('');
   } finally {
     fs.rmSync(racine, { recursive: true, force: true });

@@ -170,6 +170,7 @@ Le test d'intégration couvre ce que vérifiait la fiche :
 Un second cas lance un faux `claude` et un faux `codex` par le vrai lanceur (`spawnChildIsole`), en stream et en PTY, sous le vrai bwrap, puis vérifie les mêmes bornes.
 
 Ce que la CI ne peut pas vérifier, faute de vrai compte : le rafraîchissement du jeton d'abonnement, la session qui survit au lendemain, et la reprise d'une vraie session. `agents.isolation` reste donc à `off` par défaut, et ces trois points restent les limites connues du chantier. La fiche `docs/recette-chantier-65-isolation-agents.md` est retirée.
+- _Révision 65.5._ Une passe Codex. Quatre lignes existantes remplacées dans le test d'intégration, la fiche de 53 lignes retirée. Le bac à sable n'a pas bwrap : les cas réels sont joués par le job `isolation` de la CI de la PR. Sans bwrap, les tests sont sautés ; avec `AID_BWRAP_REQUIS=1`, ils échouent sur un message clair. Mon gate : 4 712, et un seul échec, `noms-neutres`, qui lisait encore la fiche supprimée dans l'index avant le commit.
 
 ## 5. Pièges
 
