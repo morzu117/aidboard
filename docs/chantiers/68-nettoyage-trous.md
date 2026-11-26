@@ -2,7 +2,7 @@
 
 | Champ | Valeur |
 |---|---|
-| État | **Révision 0, 25 novembre 2026.** Julien a dit oui le 25 novembre pour un chantier à part, après la revue du lab sur la PR #211 (chantier 66). |
+| État | **Révision 1, 26 novembre 2026.** Julien a dit oui le 25 novembre pour un chantier à part, après la revue du lab sur la PR #211 (chantier 66). La révision 1 ajoute le point 68.6, les trous de la relecture du lab sur #213. |
 | Emplacement final | `docs/chantiers/68-nettoyage-trous.md` sur `main` |
 | Base | `main` (2427d91) |
 | Organisation | cell-gestion gère le chantier ; Codex CLI écrit les tests et le code. Chaque point testable passe d'abord par une session de testeur, puis par une session de dev distincte (chantier 67, DM53). |
@@ -50,6 +50,17 @@ Relevés par le lab à la lecture du plan.
 - **Les paramètres d'URL.** Un paramètre de requête dont le nom est une clé de secret (DM58), ou `sig`, `signature`, `X-Amz-Signature` ou `X-Amz-Credential`, est refusé dès qu'il a une valeur : `?access_token=…`, `&sig=…`.
 - **Les URL de webhook.** Une URL dont le chemin est lui-même le secret est refusée : les webhooks Slack (`hooks.slack.com/services/…`) et Discord (`…/api/webhooks/<id>/<jeton>`).
 - **Les préfixes connus.** `ya29.` (OAuth Google), `AGE-SECRET-KEY-1`, `dop_v1_`, `SG.` suivi de deux segments, `xapp-`, et le jeton de bot Telegram (`<8 à 10 chiffres>:AA<33 caractères>`), avec une longueur minimale qui exclut les mots courants. `sk_test_` et `rk_test_` aussi, comme `sk_live_`.
+
+### DM63. Les trous de la relecture de #213
+
+Relevés par le lab dans sa relecture de #213, avec de vraies sondes. Ils passaient déjà à la base : ce ne sont pas des régressions.
+
+- **L'en-tête préfixé.** Un champ `Authorization`, `Cookie` ou `Set-Cookie` précédé d'un préfixe de trace, comme `> ` ou `< ` dans la sortie de `curl -v`, est refusé comme en début de ligne.
+- **La clé en camelCase.** Une clé dont le dernier mot est une clé de secret du DM58, écrite en camelCase (`dbPassword`, `apiToken`), citée ou non, suit la même règle que `db_password`. Attention : avec le drapeau `i`, une classe de majuscules reconnaît aussi les minuscules ; la frontière du mot se teste sans ce drapeau.
+- **Le segment `pass`.** `pass` rejoint les clés de secret, comme dernier segment après un préfixe (`DB_PASS`, `SMTP_PASS`), jamais seul.
+- **La forme séparée par une espace.** Une option en ligne de commande `--<clé de secret>` suivie d'une valeur (`--token abcd1234efgh`), et la ligne `.netrc` (`machine … login … password …`), sont refusées. La prose n'est pas concernée : une clé suivie d'une espace hors de ces deux formes reste libre.
+- **L'exemption de prose plus étroite.** L'exemption du 68.5 ne vaut plus que pour les clés `key` et `token`.
+- **`Basic` partout.** Une charge `Basic` suivie d'un base64 qui décode en `identifiant:mot de passe` est refusée où qu'elle soit dans la ligne. Le mot « Basic » suivi d'un mot ordinaire reste libre.
 
 ### DM60. Les faux positifs se mesurent
 
@@ -100,6 +111,10 @@ La mesure sur le corpus, à la base et à la tête, et sa conclusion dans la not
 
 - _Acceptation._ Non testable à l'avance : c'est une mesure sur le corpus du dépôt, qui n'existe qu'une fois le code des 68.2 à 68.4 écrit.
 - _Révision 68.5._ Une passe Codex. Mesure du DM60 : 127 fichiers Markdown suivis de `docs/` et `kernel/`, en 157 blocs, à `origin/main` (2427d91) et à la tête, sans liste d'hôtes configurée. Avant correction, un seul bloc était refusé à la tête seulement : le faux positif connu de `docs/chantiers/README.md`. Il est corrigé par une règle générale sur la prose (une clé simple en minuscules entre deux mots, un deux-points entouré d'espaces, une valeur qui est un mot latin minuscule avec une lettre hors ASCII), couverte par `test/shared/nettoyage-prose.test.ts`. Après correction : 45 blocs refusés par les deux versions, aucun par une seule, aucun vrai trou. Les 45 refus communs existaient déjà à la base : surtout des exemples d'hôte privé, d'adresse privée et de clé dans les fiches de recette ; ce chantier ne les change pas. Jamais plus permissif : les 130 refus de la base sur les appels des tests `nettoyage*` restent refusés. Gate 4 801.
+
+### 68.6 Les trous de la relecture (DM63)
+
+Les six formes du DM63, ajoutées après la relecture du lab, sur la même branche. La mesure du DM60 est refaite à la fin du point.
 
 ## 5. Pièges
 
