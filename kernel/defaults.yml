@@ -16,10 +16,18 @@ capabilities:
   dev_agent: claude-dev # Anthropic — choix opérateur 2026-09-01 (quotas Codex trop courts). Ex-codex.
   review_agent: claude # Anthropic — MÊME fournisseur que dev_agent depuis le 2026-09-01 : review = repli assumé, instance neuve sans outil. Ex-vibe (Mistral).
 
+# Pour les avis, voir routage ci-dessous.
 models:
   trivial: claude-haiku-4-5-20251001
   standard: claude-sonnet-5
   complex: claude-opus-5
+
+routage:
+  niveaux:
+    leger: { fournisseur: claude, modele: haiku }
+    standard: { fournisseur: claude, modele: sonnet }
+    fort: { fournisseur: claude, modele: opus }
+  challenge: [claude, codex, vibe]
 
 guardrails:
   redev_cap: 2

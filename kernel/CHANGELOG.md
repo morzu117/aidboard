@@ -19,6 +19,11 @@ par le daemon, avec un verdict par fichier et par point d’acceptation.
 
 Le daemon enregistre les réponses finales des rôles plan et review en pages mémoire (chantier 69.6).
 
+## Avis de plusieurs fournisseurs (chantier 66)
+
+Changement mineur, sans migration. Le noyau documente la nouvelle section
+`routage` et ajoute l'adaptateur `avis` et la règle du challenge dans le rôle plan.
+
 ## Profil d'environnement (chantier 63)
 
 Changement mineur, sans migration. Le manifeste déclare les outils et leurs

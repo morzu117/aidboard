@@ -34,6 +34,7 @@ export async function callDaemon(
   path: string,
   body?: unknown,
   timeoutMs = 10_000,
+  headers?: Record<string, string>,
 ): Promise<ClientResponse> {
   if (!target) throw new DaemonUnreachable();
   let res: Response;
@@ -41,6 +42,7 @@ export async function callDaemon(
     res = await fetch(`${target.base}${path}`, {
       method,
       headers: {
+        ...headers,
         authorization: `Bearer ${target.token}`,
         ...(body !== undefined && { 'content-type': 'application/json' }),
       },

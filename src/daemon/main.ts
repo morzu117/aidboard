@@ -3,7 +3,6 @@ import { ServiceBoucle, TAILLE_MAX_REPONSE_BOUCLE } from './boucle/service.js';
 import { MeshRegistry } from './mesh/registre.js';
 import { ServiceCommandant } from './commandant/service.js';
 import { notifierCommandant } from './push/commandant.js';
-import { SwairmAsk } from './swairm/ask.js';
 import type { LigneDemande } from './pda/file.js';
 import { FilePda } from './pda/file.js';
 import { ClientRelais } from './pda/relais.js';
@@ -526,6 +525,7 @@ export async function startDaemon(
       webRoot,
       modeHost,
       onRoute: opts.onRoute,
+      hotesPrives: config.hotesPrives,
       config,
       auth,
       db: opened,
@@ -541,7 +541,6 @@ export async function startDaemon(
       meshes,
       board,
       swarph,
-      swairmAsk: new SwairmAsk(config.swairm.bin),
       requestStop: opts.onStopRequested,
       requestUpdate: opts.onUpdateRequested,
       requestCycle: opts.onCycleRequested,

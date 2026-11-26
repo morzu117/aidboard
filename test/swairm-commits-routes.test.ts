@@ -2,7 +2,7 @@ import Fastify from 'fastify';
 import { afterEach, expect, test, vi } from 'vitest';
 import { registerSwairmRoutes } from '../src/daemon/routes/swairm.js';
 import { BoardReader } from '../src/daemon/mesh/board.js';
-import { SwairmAsk } from '../src/daemon/swairm/ask.js';
+import { ServiceAvis } from '../src/daemon/avis/service.js';
 import { SwairmPr } from '../src/daemon/swairm/pr.js';
 import { issueRunToken } from '../src/daemon/security.js';
 import { startTestDaemon, type TestDaemon } from './helpers/daemon.js';
@@ -55,7 +55,7 @@ test('route : lien unique, conflit et plusieurs sujets, sans lecture PR si ambig
     });
     const pr = new SwairmPr('/tmp/aid-gh-inexistant/gh');
     const lire = vi.spyOn(pr, 'lire').mockResolvedValue({ pr: null, commits: [], etat: 'ok' });
-    registerSwairmRoutes(app, new SwairmAsk(), board, undefined, undefined, pr);
+    registerSwairmRoutes(app, new ServiceAvis('/inexistant'), board, undefined, undefined, pr);
     const r = await app.inject({ url: '/api/swairm/board/1/commits' });
     expect(r.statusCode).toBe(statut);
     expect(lire).toHaveBeenCalledTimes(statut === 200 ? 1 : 0);
