@@ -1,4 +1,4 @@
-import { expect, test } from 'vitest';
+import { expect, test, vi } from 'vitest';
 import { chmodSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
@@ -15,6 +15,9 @@ import {
 import { resolvePaths } from '../src/daemon/paths.js';
 import type { EtatModeHost } from '../src/shared/host.js';
 import type { IndexStatus } from '../src/shared/structural.js';
+
+import * as daemonInfo from '../src/cli/daemonInfo.js';
+import type { Environnement } from '../src/shared/model.js';
 
 const good: Probes = {
   nodeVersion: 'v22.23.3',
@@ -59,6 +62,7 @@ test('57.5 : doctor signale le distant absent, les écarts et les conflits mémo
         pendingJobs: 0,
         failedJobs: 0,
         mirrorDirty: false,
+        faits: { candidats: 0, aujourdhui: 0, plafond: 0 },
         retros: { manquantes: 0, proposees: 0, abandonnees: 0 },
         mirrorSync,
       }),
@@ -248,6 +252,7 @@ test('mémoire : N pages par namespace, triées, aucune anomalie → ✓', async
       pendingJobs: 0,
       failedJobs: 0,
       mirrorDirty: false,
+      faits: { candidats: 0, aujourdhui: 0, plafond: 0 },
       retros: { manquantes: 0, proposees: 0, abandonnees: 0 },
       mirrorSync: { push: false, origin: false, ahead: null, behind: null, conflicts: [] },
     }),
@@ -270,6 +275,7 @@ test.each([
       failedJobs: 0,
       mirrorDirty: false,
       mirrorSync: { push: false, origin: false, ahead: null, behind: null, conflicts: [] },
+      faits: { candidats: 0, aujourdhui: 0, plafond: 0 },
       retros: { manquantes: 2, proposees: 3, abandonnees },
     }),
   });
@@ -290,6 +296,7 @@ test('mémoire : miroir non commité ou jobs en échec → ⚠ avec la commande 
       pendingJobs: 0,
       failedJobs: 0,
       mirrorDirty: true,
+      faits: { candidats: 0, aujourdhui: 0, plafond: 0 },
       retros: { manquantes: 0, proposees: 0, abandonnees: 0 },
       mirrorSync: { push: false, origin: false, ahead: null, behind: null, conflicts: [] },
     }),
@@ -309,6 +316,7 @@ test('mémoire : miroir non commité ou jobs en échec → ⚠ avec la commande 
       pendingJobs: 0,
       failedJobs: 2,
       mirrorDirty: false,
+      faits: { candidats: 0, aujourdhui: 0, plafond: 0 },
       retros: { manquantes: 0, proposees: 0, abandonnees: 0 },
       mirrorSync: { push: false, origin: false, ahead: null, behind: null, conflicts: [] },
     }),
@@ -704,4 +712,67 @@ test('WSL : diagnostic de version, repli navigateur et chemins Linux', async () 
     level: 'warn',
     detail: expect.stringContaining('ouverture automatique indisponible'),
   });
+});
+
+test.each([
+  [['a', 'b', 'c'], ' · Ollama : 3 modèles'],
+  [null, ''],
+] as const)('63.3 : doctor affiche la mesure de la cell (%j)', async (modeles, suffixe) => {
+  const environnement: Environnement = {
+    os: 'linux',
+    arch: 'x64',
+    wsl: true,
+    outils: { node: '22.12.0', git: '2.43.0', cargo: null },
+    modelesOllama: modeles === null ? null : [...modeles],
+    mesureA: '2026-11-24T00:00:00.000Z',
+  };
+  const lignes = await runDoctorLines({ ...good, environnement: async () => environnement });
+  expect(lignes).toContain(
+    `  ✓ Environnement : linux x64 (WSL) · node 22.12.0, git 2.43.0${suffixe}`,
+  );
+});
+
+test('63.3 : doctor omet la ligne si le daemon ne livre pas la mesure', async () => {
+  const daemon = vi.spyOn(daemonInfo, 'runningDaemon').mockResolvedValue({
+    pid: 1,
+    port: 4870,
+    token: 'test',
+    startedAt: '',
+  });
+  const requete = vi.spyOn(daemonInfo, 'daemonFetch').mockResolvedValue({ status: 200, json: {} });
+  try {
+    const { environnement } = realProbes(resolvePaths('/nonexistent/aid-home'));
+    const lignes = await runDoctorLines({ ...good, environnement });
+    expect(requete).toHaveBeenCalledWith(expect.any(Object), 'GET', '/api/machines/local');
+    expect(lignes.some((ligne) => ligne.includes('Environnement'))).toBe(false);
+
+    requete.mockRejectedValue(new Error('daemon arrêté'));
+    expect(await environnement?.()).toBeNull();
+  } finally {
+    requete.mockRestore();
+    daemon.mockRestore();
+  }
+});
+
+test.each([
+  [1, 3, "ok:Faits candidats : 2 en mémoire, 1 extraits aujourd'hui sur 3"],
+  [3, 3, "warn:Faits candidats : 2 en mémoire, 3 extraits aujourd'hui sur 3"],
+  [1, 0, 'ok:Faits candidats : capture éteinte'],
+])('mémoire : la ligne des faits avec %i jobs sur %i', async (aujourdhui, plafond, line) => {
+  const checks = await levels({
+    memoryHealth: async () => ({
+      pages: {},
+      closed: 0,
+      links: { total: 0, pendants: 0 },
+      fts: true,
+      vectors: 'off',
+      pendingJobs: 0,
+      failedJobs: 0,
+      mirrorDirty: false,
+      mirrorSync: { push: false, origin: false, ahead: null, behind: null, conflicts: [] },
+      retros: { manquantes: 0, proposees: 0, abandonnees: 0 },
+      faits: { candidats: 2, aujourdhui, plafond },
+    }),
+  });
+  expect(checks).toContain(line);
 });

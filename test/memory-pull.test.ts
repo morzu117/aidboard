@@ -156,6 +156,7 @@ test('57.4 : le daemon tire au démarrage et relit les pages dans la base exista
       memory: {
         embeddings: { provider: 'off', model: 'bge-m3', url: 'http://127.0.0.1:11434' },
         maintenance: { enabled: false, model: 'qwen3:8b', window: '02:00-06:00' },
+        capture: { enabled: false, delayMinutes: 5, maxPerDay: 30 },
         git: { push: true },
       },
     },

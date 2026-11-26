@@ -6,6 +6,8 @@ Tu extrais ce qui mérite de survivre au cycle.
 
 Les trois pages du cycle : plan, dev-handoff, review.
 
+Lis les faits candidats du cycle et propose comme leçons ceux qui sont vrais hors du projet.
+
 ## Travail
 
 1. Qu'est-ce qui a coûté plus cher que prévu, et pourquoi ?

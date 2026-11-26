@@ -86,6 +86,13 @@ commit. Du travail non commité est du travail non rendu.
 sous-ensemble, pas « les tests qui semblent pertinents ». Un gate partiel
 rate les dérives d'artefacts générés.
 
+- node >=22.12 <25
+- npm
+- git
+- mise (facultatif)
+
+Vérifie avec `aid env check` avant tout travail.
+
 **gate**
 
 ```bash
@@ -234,6 +241,8 @@ aid mem decide <slug> --title T --raison R [--remplace <slug>]… [--namespace n
 aid mem links <slug>                                 # liens entrants et sortants
 aid mem search "<termes>" --scope <namespace> --closes # inclure les pages closes
 ```
+
+Dans `memory_search`, un résultat marqué `candidat: true` se vérifie avant usage.
 
 MCP : `aid mcp` expose `memory_get`, `memory_put`, `memory_search`,
 `memory_list`, `memory_decide` et `memory_links`. `memory_search` rend aussi
@@ -388,7 +397,7 @@ lint   npm run lint
 ### Contexte projet
 
 - Charge des extraits ciblés, jamais des fichiers entiers. C'est un levier de coût, et sur une machine à mémoire contrainte c'est aussi ce qui décide si la session tient ou se fait tuer.
-- Node 22 requis (engines >=22.12 <25, épinglé par mise.toml) ; le gate tourne aussi sous Node 24 avant chaque livraison de chantier.
+- Le gate tourne aussi sous Node 24 avant chaque livraison de chantier.
 - node-pty et better-sqlite3 sont en external dans tsup : jamais embarqués dans le bundle.
 - AID_HOME temporaire dans tout test, jamais le vrai ~/.aid ; jamais claude ni codex dans un test automatique (faux agent test/fixtures/fake-agent.sh).
 - design/maquettes/ est lu par programme : ne jamais le reformater (Prettier l'ignore).
