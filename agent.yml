@@ -7,6 +7,8 @@
 #   memory.source        = namespace
 #   commands             scripts npm de package.json
 #   capabilities, models, guardrails, phases    defaults.yml
+#
+# La section outils fait exception : elle est écrite pour aid env check.
 
 kernel:
   version: "0.9.1"
@@ -18,6 +20,12 @@ gates:                     # détecté : « npm test » seul ; le vrai gate fait
   gate: npm run gate       # typecheck + lint + test + build
   e2e: npm run gate:e2e    # build + Playwright
 
+outils:
+  node: { version: ">=22.12 <25" }
+  npm: {}
+  git: {}
+  mise: { requis: false }
+
 phases: [plan, acceptation, dev, review, triage, retro]
 
 acceptation:
@@ -27,7 +35,7 @@ acceptation:
     e2e/: npx playwright test {fichiers}
 
 stack:
-  node: "Node 22 requis (engines >=22.12 <25, épinglé par mise.toml) ; le gate tourne aussi sous Node 24 avant chaque livraison de chantier."
+  node: "Le gate tourne aussi sous Node 24 avant chaque livraison de chantier."
   natifs: "node-pty et better-sqlite3 sont en external dans tsup : jamais embarqués dans le bundle."
   tests: "AID_HOME temporaire dans tout test, jamais le vrai ~/.aid ; jamais claude ni codex dans un test automatique (faux agent test/fixtures/fake-agent.sh)."
   maquettes: "design/maquettes/ est lu par programme : ne jamais le reformater (Prettier l'ignore)."

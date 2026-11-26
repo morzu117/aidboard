@@ -1,9 +1,22 @@
 import { chmodSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, delimiter, join } from 'node:path';
-import { afterEach, expect, test } from 'vitest';
+import { afterEach, expect, test, vi } from 'vitest';
 import { resolveOnPath } from '../src/daemon/pty/spawn.js';
 import type { Fournisseurs, MachineLocale, MachineServeur, Server } from '../src/shared/model.js';
 import { startTestDaemon, type TestDaemon } from './helpers/daemon.js';
+
+vi.mock('../src/daemon/machines/environnement.js', async (importOriginal) => {
+  const { creerSondeEnvironnement } =
+    await importOriginal<typeof import('../src/daemon/machines/environnement.js')>();
+  return {
+    creerSondeEnvironnement: (url: string) =>
+      creerSondeEnvironnement(url, {
+        exec: async (outil) => ({ stdout: outil === 'node' ? 'v22.12.0' : '', stderr: '' }),
+        fetch: async () => Response.json({ models: [{ name: 'modele:test' }] }),
+        procVersion: async () => null,
+      }),
+  };
+});
 
 // Chantier 29 : les routes de l'écran Machines. Jamais le vrai claude ni le vrai codex : le PATH ne garde que les
 // faux (test/fixtures/bin-stream), git et le système.
@@ -66,6 +79,13 @@ test('D154 : le Mac, ses agents et versions, le transport et la mémoire', async
     ['codex', true, expect.any(String)],
   ]);
   expect(m.transport).toBe('stream');
+  expect(m.environnement).toMatchObject({
+    os: process.platform,
+    arch: process.arch,
+    outils: { node: '22.12.0', git: null },
+    modelesOllama: ['modele:test'],
+    mesureA: expect.any(String),
+  });
   expect(Number.isNaN(Date.parse(m.mesureA))).toBe(false);
   if (process.platform === 'darwin' || process.platform === 'linux') {
     expect(m.memoire?.octets).toBeGreaterThan(0);
