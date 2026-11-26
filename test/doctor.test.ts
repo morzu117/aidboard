@@ -41,7 +41,12 @@ const levels = async (over: Partial<Probes>) =>
   (await runChecks({ ...good, ...over })).map((c) => `${c.level}:${c.label}`);
 
 test.each([
-  ['bubblewrap 1.2.3', ['ok:Isolation : bwrap 1.2.3']],
+  [
+    'bubblewrap 1.2.3',
+    [
+      'ok:Isolation : bwrap 1.2.3 (expérimental). L’agent peut lire et remplacer le jeton d’abonnement. Le réseau reste ouvert. À la racine, .claude/ et .mcp.json sont en lecture seule. Leurs équivalents imbriqués et .github/ restent modifiables et relèvent du relevé de fin d’étape de la boucle (chantier 69). L’agent peut modifier CLAUDE.md et AGENTS.md, que lit la session suivante. Ces changements sont visibles dans le diff. Un agent qui doit modifier .claude/ ou .mcp.json à la racine travaille sans isolation.',
+    ],
+  ],
   ['off', ['ok:Isolation : off']],
   [undefined, []],
 ] as const)(

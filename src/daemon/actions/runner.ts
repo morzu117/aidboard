@@ -1,5 +1,7 @@
 import { spawn } from 'node:child_process';
 import { createWriteStream } from 'node:fs';
+import { AidHttpError } from '../errors.js';
+import { environnementScriptGitSujet } from '../git/exec.js';
 
 export interface ScriptOutcome {
   exitCode: number | null;
@@ -22,7 +24,15 @@ export interface RunScriptOptions {
 const MARKER = '::aid:: ';
 const TAIL = 50;
 
-export function runScript(o: RunScriptOptions): Promise<ScriptOutcome> {
+export async function runScript(o: RunScriptOptions): Promise<ScriptOutcome> {
+  let env: NodeJS.ProcessEnv;
+  try {
+    env = await environnementScriptGitSujet(o.cwd, o.env);
+  } catch (cause) {
+    if (!(cause instanceof AidHttpError) || cause.extra.code !== 'GIT_COMMUN_INATTENDU')
+      throw cause;
+    return { outcome: 'failed', exitCode: null, result: cause.extra, tail: [cause.message] };
+  }
   return new Promise((resolve) => {
     const log = createWriteStream(o.logPath, { flags: 'a', mode: 0o600 });
     const result: Record<string, unknown> = {};
@@ -46,7 +56,7 @@ export function runScript(o: RunScriptOptions): Promise<ScriptOutcome> {
 
     const child = spawn('bash', [o.script], {
       cwd: o.cwd,
-      env: o.env,
+      env,
       stdio: ['ignore', 'pipe', 'pipe'],
       detached: true,
     });

@@ -1,4 +1,4 @@
-import { mkdtempSync, realpathSync } from 'node:fs';
+import { mkdtempSync, realpathSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, expect, test } from 'vitest';
@@ -113,4 +113,24 @@ test('gitLiveInfo : onTopicBranch vrai sur la branche du sujet, faux en HEAD dé
 
   // Sans branche de sujet précisée, la question ne se pose pas : pas de signal de dérive.
   expect((await gitLiveInfo(clone, 'main')).onTopicBranch).toBe(true);
+});
+
+test('GET /api/topics/:id/git/log : refuse un dépôt différent du workspace', async () => {
+  const { origin, ws } = await setup();
+  const created = (
+    await t.d.app.inject({
+      method: 'POST',
+      url: '/api/topics',
+      headers: t.headers,
+      payload: { workspaceId: ws.id, title: 'Journal', type: 'feat' },
+    })
+  ).json<{ topicId: string; actionId: string; slug: string }>();
+  await finished(created.actionId);
+  writeFileSync(join(ws.worktreesDir, created.slug, '.git'), `gitdir: ${origin}\n`);
+  const res = await t.d.app.inject({
+    url: `/api/topics/${created.topicId}/git/log`,
+    headers: t.headers,
+  });
+  expect(res.statusCode).toBe(409);
+  expect(res.json().code).toBe('GIT_COMMUN_INATTENDU');
 });

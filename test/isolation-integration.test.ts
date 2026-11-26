@@ -66,7 +66,44 @@ it.skipIf(!bwrap)('borne les écritures et masque les identités avec le vrai bw
     git('git', ['init', '-q', '--bare', distant]);
     fs.mkdirSync(join(depot, '.git/hooks'), { recursive: true });
     const configGit = fs.readFileSync(join(depot, '.git/config'), 'utf8');
+    fs.mkdirSync(join(worktree, '.claude'));
+    fs.writeFileSync(join(worktree, '.mcp.json'), '');
     const profil = profilPour({ worktree, home, paths, agentId }, git, fs);
+
+    const gitDir = git('git', [
+      '-C',
+      worktree,
+      'rev-parse',
+      '--path-format=absolute',
+      '--git-dir',
+    ]).trim();
+    const argumentsBwrap = argvBwrap(profil, { pty: false }, fs);
+    const verifier = (script: string, args: string[] = []) =>
+      execFileSync(bwrap!, [...argumentsBwrap, '--', '/bin/sh', '-ec', script, 'sh', ...args], {
+        cwd: worktree,
+        env,
+        timeout: 10000,
+        stdio: ['ignore', 'pipe', 'pipe'],
+      });
+    verifier(
+      String.raw`
+      for fichier in .git "$1/commondir" "$1/gitdir"; do
+        test -f "$fichier"
+        if (printf '%s' factice >> "$fichier"); then exit 1; fi
+      done
+    `,
+      [gitDir],
+    );
+    verifier(
+      String.raw`
+      if test -d /run/user; then test -z "$(ls -A /run/user)"; fi
+      if test "$1" = oui; then
+        test -s /etc/resolv.conf
+        getent ahostsv4 example.com >/dev/null
+      fi
+    `,
+      [fs.existsSync('/etc/resolv.conf') ? 'oui' : 'non'],
+    );
 
     const stdout = execFileSync(
       bwrap!,

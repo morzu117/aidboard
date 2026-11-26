@@ -53,15 +53,13 @@ Une écriture dans ces fichiers s'exécuterait plus tard, hors du bac à sable. 
   - `refs/heads/main` et `packed-refs`.
 
   Un agent ne peut ni déplacer `main` ni ajouter un hook. Un `git pack-refs` ou une suppression de branche échoue dans le bac à sable : c'est accepté et documenté.
-- **dans `~/.claude`** :
-  - `settings.json`, où vivent les hooks, dont ceux d'A-I-D ;
-  - `CLAUDE.md` ;
-  - `commands/`, `agents/`, `skills/` et `plugins/`.
-- **dans `~/.codex`** : `config.toml`.
+- **`~/.claude` et `~/.codex`** sont montés intégralement en lecture seule. Les fichiers d'authentification et les répertoires de sessions sont remontés en écriture s'ils existent. Claude peut écrire dans le seul dossier de transcriptions de son worktree, sous `~/.claude/projects/`, avec `memory/` remonté en lecture seule. Le lanceur crée ce dossier et le point de montage `memory/` s'ils manquent. Les dossiers de travail `todos`, `shell-snapshots`, `statsig`, `debug` et `session-env` sont recouverts par un tmpfs s'ils existent.
+- **Le dossier `.claude/` et le fichier `.mcp.json` à la racine du worktree** sont remontés en lecture seule. Le lanceur crée les points manquants vides. Après la sortie du dernier agent qui les utilise, il retire ceux qu'il a créés s'ils sont toujours vides. Un agent qui doit légitimement modifier ces chemins travaille sans isolation.
+- **`~/.claude.json`** est monté depuis une copie temporaire propre au lancement. Les écritures sur la copie sont perdues à la fin de la session.
 
-Un fichier absent n'est pas monté. Il n'est pas créé, pour ne pas changer la machine.
+En dehors de ces points de montage, les fichiers absents sont ignorés.
 
-**Le risque qui reste.** `~/.claude.json` reste inscriptible, parce que Claude Code y écrit sans cesse. Or il porte les serveurs MCP déclarés. Le risque est nommé dans la fiche, et sera revu au chantier de la boucle.
+**Le risque qui reste.** Le rafraîchissement réel des jetons d'abonnement et la reprise de sessions réelles restent à vérifier. L'isolation bwrap reste expérimentale. Un agent isolé peut lire et remplacer le jeton d'abonnement. Le réseau reste ouvert. Les fichiers `CLAUDE.md` et `AGENTS.md` à la racine du worktree restent inscriptibles. La session suivante lit ces consignes et leurs modifications sont visibles dans le diff.
 
 ### DM44. Ce qui est caché
 
@@ -111,8 +109,9 @@ Les corrections :
 - **E.** Une liste blanche d'environnement, sur le modèle de #211 : `PATH`, `HOME`, `USER`, `LOGNAME`, `SHELL`, `TERM`, `LANG`, les `LC_*`, `TZ`, `TMPDIR`, les variables d'A-I-D dont l'agent a besoin (`AID_URL`, son jeton de run, `AID_SPOOL`), et les variables propres à `claude` et `codex` qui ne portent pas de secret de tiers. Tout le reste est retiré, à commencer par les jetons, les sockets d'agent et le bus.
 - **F.**
   - `~/.claude` et `~/.codex` passent en lecture seule entière. Seul l'état de session que les CLI écrivent y est remonté en écriture : le fichier du jeton d'abonnement, les transcriptions et les dossiers de travail des sessions.
-  - Un fichier qui configure ou exécute (réglages, mémoire, commandes, agents, skills, plugins, hooks, MCP) ne peut donc plus être créé ni modifié.
+  - Dans le home, les chemins de réglages, mémoire, commandes, agents, skills, plugins, hooks et MCP restent en lecture seule.
   - `~/.claude.json` est remplacé, pour la session, par une copie temporaire. Ce qui s'y écrit est perdu à la fin de la session.
+  - **Configuration du projet.** Un essai avec Claude Code 2.x dans un dépôt temporaire a confirmé que `--setting-sources user` exclut le `CLAUDE.md` du projet et que `user,project` le charge. Le lanceur laisse les sources de réglages de Claude intactes et ajoute uniquement `--strict-mcp-config` pour écarter `.mcp.json`. Les montages en lecture seule de `.claude/` et `.mcp.json` à la racine protègent les réglages Claude et la configuration MCP, même si les chemins sont absents au départ. Les `.claude/` et `.mcp.json` imbriqués ainsi que `.github/` restent modifiables. Ces chemins relèvent du relevé de fin d'étape de la boucle au chantier 69. Les fichiers `CLAUDE.md` et `AGENTS.md` à la racine restent accessibles en écriture et leurs modifications apparaissent dans le diff.
 
 Chaque sortie devient un test négatif dans le job `isolation`. Comme le bus utilisateur n'existe sans doute pas sur un runner GitHub, le test de D vérifie directement que `/run/user` est invisible de l'intérieur, sans compter sur l'échec de `systemd-run`. En attendant ces corrections, `aid doctor` et la doc disent que `bwrap` n'est pas encore une frontière de sécurité.
 
@@ -203,6 +202,13 @@ Ce que la CI ne peut pas vérifier, faute de vrai compte : le rafraîchissement 
 - Le test de F écrit, de l'intérieur, `~/.claude/settings.json`, `~/.claude/settings.local.json` (absent au départ), `~/.claude.json` et `~/.codex/config.toml`. Après la session, aucun ne doit avoir changé dehors, alors que le fichier du jeton reste inscriptible.
 - Le test de E injecte de fausses variables à secret (des valeurs factices, assemblées à l'exécution) et vérifie que l'environnement intérieur se limite à la liste blanche.
 - `aid doctor` dit « expérimental » à côté de `bwrap` tant que le passage par défaut n'est pas décidé.
+- _Révision 65.6._ Une passe Codex et quatre reprises :
+  1. la mémoire de Claude, codex et sa config, le jeton, la config de projet (lab, DM 106264 et 106267) ;
+  2. le retrait de `--setting-sources user`, que j'ai vérifié avec le vrai `claude` dans un dépôt témoin : avec `user`, le `CLAUDE.md` du projet n'est pas chargé ; avec `user,project`, il l'est. À la place, `.claude/` est monté en lecture seule ;
+  3. `.mcp.json` en lecture seule, et le nettoyage des points de montage créés (lab, DM 106271) ;
+  4. un seul dossier de projet de Claude en écriture, au lieu d'un montage par transcription, qui donnait un argv sans borne.
+
+  Soixante-dix lignes existantes remplacées ou retirées, toutes dans le périmètre du chantier. Les cas sous vrai bwrap sont joués par le job `isolation` de la CI ; le lab relance son harnais à cette tête. Mon gate : 4 914.
 
 ## 5. Pièges
 

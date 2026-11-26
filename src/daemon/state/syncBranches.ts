@@ -1,6 +1,7 @@
 import { existsSync } from 'node:fs';
 import { currentBranchFast } from '../git/inspect.js';
 import type { Db } from '../db.js';
+import { AidHttpError } from '../errors.js';
 import type { EventStore } from '../events/store.js';
 
 interface TopicRow {
@@ -19,7 +20,11 @@ export async function syncTopicBranches(db: Db, store: EventStore): Promise<void
   await Promise.all(
     topics.map(async (t) => {
       if (!existsSync(t.worktree)) return;
-      const head = await currentBranchFast(t.worktree);
+      const head = await currentBranchFast(t.worktree).catch((cause: unknown) => {
+        if (cause instanceof AidHttpError && cause.extra.code === 'GIT_COMMUN_INATTENDU')
+          return null;
+        throw cause;
+      });
       // relue juste avant d'écrire : une relecture simultanée (deux GET, un rattachement) a pu l'écrire pendant l'attente
       const now = db.prepare('SELECT branch FROM topics WHERE id = ?').get(t.id) as
         { branch: string } | undefined;

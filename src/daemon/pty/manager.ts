@@ -1,13 +1,22 @@
 import { execFileSync } from 'node:child_process';
-import { envelopper, profilPour, spawnChildIsole } from '../isolation/lanceur.js';
+import { GIT_ENV_DECOUVERTE } from '../git/exec.js';
+import {
+  environnementIsole,
+  envelopper,
+  profilPour,
+  spawnChildIsole,
+} from '../isolation/lanceur.js';
 import { envSwarph } from '../mesh/env.js';
 import type { MeshRegistry } from '../mesh/registre.js';
 import {
   closeSync,
   existsSync,
+  lstatSync,
   mkdirSync,
   openSync,
   readSync,
+  readlinkSync,
+  realpathSync,
   statSync,
   writeFileSync,
 } from 'node:fs';
@@ -49,7 +58,7 @@ import { homedir } from 'node:os';
 import { poseUneQuestion } from '../../shared/question.js';
 import { REMOTE_CONTROL, type RemoteControlState } from '../../shared/agentSettings.js';
 
-const fsIsolation = { existsSync, statSync };
+const fsIsolation = { existsSync, lstatSync, statSync, readlinkSync, realpathSync };
 const ulid = monotonicFactory();
 /** D70 : bornes des pièces jointes d'un message. */
 const ATTACHMENTS_MAX = 5;
@@ -267,16 +276,29 @@ export class AgentManager {
     return [...this.live.values()].filter((a) => !a.exited);
   }
 
-  private isolationPour(kind: SpawnKind, worktree: string, agentId: string) {
+  private isolationPour(kind: SpawnKind, topic: TopicRow, agentId: string) {
     const { config, paths, bwrapBin } = this.deps;
     if (config.agents.isolation !== 'bwrap' || (kind !== 'claude' && kind !== 'codex'))
       return undefined;
     if (!bwrapBin) throw new AidHttpError(422, 'isolation demandée mais bubblewrap indisponible');
     try {
+      const depot = this.deps.db
+        .prepare('SELECT root FROM workspaces WHERE id = ?')
+        .get(topic.workspace_id) as { root: string };
       const profil = profilPour(
-        { worktree, home: process.env.HOME ?? homedir(), paths, agentId },
+        {
+          worktree: topic.worktree,
+          home: process.env.HOME ?? homedir(),
+          paths,
+          agentId,
+          depot: depot.root,
+        },
         (bin, args) =>
-          execFileSync(bin, args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }),
+          execFileSync(bin, args, {
+            encoding: 'utf8',
+            stdio: ['ignore', 'pipe', 'pipe'],
+            env: { ...process.env, ...GIT_ENV_DECOUVERTE },
+          }),
         fsIsolation,
       );
       return { bwrapBin, profil };
@@ -358,20 +380,23 @@ export class AgentManager {
         ...hookEnv(),
       },
     );
-    const isolation = this.isolationPour(o.kind, topic.worktree, agentId);
+    const isolation = this.isolationPour(o.kind, topic, agentId);
     let pty: IPty;
+    let nettoyerIsolation: (() => void) | undefined;
     try {
       if (isolation) mkdirSync(isolation.profil.piecesJointes, { recursive: true, mode: 0o700 });
       const lancement = isolation
         ? envelopper(isolation.bwrapBin, isolation.profil, { pty: true }, fsIsolation, file, args)
         : { file, args };
+      nettoyerIsolation = lancement.nettoyer;
       pty = getPty().spawn(lancement.file, lancement.args, {
         name: 'xterm-256color',
         ...INITIAL,
         cwd: topic.worktree,
-        env,
+        env: isolation ? environnementIsole(env) : env,
       });
     } catch (err) {
+      nettoyerIsolation?.();
       throw new AidHttpError(422, `impossible de lancer ${bin} : ${(err as Error).message}`);
     }
 
@@ -412,6 +437,7 @@ export class AgentManager {
       for (const cb of subscribers) cb(chunk);
     });
     pty.onExit(({ exitCode, signal }) => {
+      nettoyerIsolation?.();
       live.exited = true;
       const reason = live.stopReason ?? 'exit';
       live.exit = { exitCode: signal ? null : exitCode, signal: signal ?? null, reason };
@@ -511,7 +537,7 @@ export class AgentManager {
       AID_AGENT: o.agentId,
       AID_SPOOL: paths.spool,
     });
-    const isolation = this.isolationPour(o.kind, o.topic.worktree, o.agentId);
+    const isolation = this.isolationPour(o.kind, o.topic, o.agentId);
     // D70 : le dossier existe avant le lancement, `--add-dir` le désigne à claude
     const attachmentsDir = join(paths.attachments, o.agentId);
     mkdirSync(attachmentsDir, { recursive: true, mode: 0o700 });

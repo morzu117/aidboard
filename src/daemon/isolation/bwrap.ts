@@ -1,4 +1,6 @@
-import { isAbsolute, join } from 'node:path';
+import { basename, dirname, isAbsolute, join, resolve } from 'node:path';
+
+import { OPTIONS_GIT_SUJET } from '../git/exec.js';
 
 export interface ProfilIsolation {
   worktree: string;
@@ -8,10 +10,24 @@ export interface ProfilIsolation {
   spool: string;
   piecesJointes: string;
   tmp?: string;
+  gitDir?: string;
+  copieClaude?: string;
+  projetClaude?: string;
 }
+
+export const POINTS_PROJET = [
+  ['.claude', true],
+  ['.mcp.json', false],
+] as const;
 
 interface FsIsolation {
   existsSync(path: string): boolean;
+  lstatSync?(
+    path: string,
+    options: { throwIfNoEntry: false },
+  ): { isDirectory(): boolean; isFile(): boolean } | undefined;
+  readlinkSync?(path: string): string;
+  realpathSync?(path: string): string;
   statSync(path: string): { isDirectory(): boolean; isFile(): boolean };
 }
 
@@ -27,11 +43,11 @@ export function argvBwrap(
   fs: FsIsolation,
 ): string[] {
   for (const [nom, chemin] of Object.entries(profil)) {
-    if (nom === 'tmp' && chemin === undefined) continue;
+    if (chemin === undefined) continue;
     validerChemin(nom, chemin);
   }
 
-  const { worktree, gitCommun, home, aidHome, spool, piecesJointes } = profil;
+  const { worktree, gitCommun, gitDir, home, aidHome, spool, piecesJointes } = profil;
   const argv = [
     '--ro-bind',
     '/',
@@ -42,10 +58,34 @@ export function argvBwrap(
     '/proc',
     '--tmpfs',
     '/tmp',
+    '--tmpfs',
+    '/run',
     '--die-with-parent',
     '--unshare-pid',
   ];
   if (!pty) argv.push('--new-session');
+  // node-pty ajoute PWD après le filtrage de l’environnement.
+  else argv.push('--unsetenv', 'PWD');
+
+  const resolv = '/etc/resolv.conf';
+  if (fs.existsSync(resolv) && fs.readlinkSync && fs.realpathSync) {
+    let lien: string | undefined;
+    try {
+      lien = resolve(dirname(resolv), fs.readlinkSync(resolv));
+    } catch (cause) {
+      if ((cause as NodeJS.ErrnoException).code !== 'EINVAL') throw cause;
+    }
+    const cible = fs.realpathSync(resolv);
+    const destination = lien?.startsWith('/run/') ? lien : cible;
+    if (
+      cible.startsWith('/run/') &&
+      destination !== '/run/user' &&
+      !destination.startsWith('/run/user/') &&
+      fs.statSync(cible).isFile()
+    ) {
+      argv.push('--ro-bind', cible, destination);
+    }
+  }
 
   argv.push('--tmpfs', aidHome);
   for (const relatif of ['.ssh', '.gnupg', '.config/gh']) {
@@ -60,19 +100,79 @@ export function argvBwrap(
   for (const chemin of [worktree, gitCommun, spool, piecesJointes]) {
     argv.push('--bind', chemin, chemin);
   }
-  for (const relatif of ['.claude', '.claude.json', '.codex', '.npm', '.cache']) {
+  for (const [relatif, dossier] of POINTS_PROJET) {
+    const chemin = join(worktree, relatif);
+    const statut = fs.lstatSync
+      ? fs.lstatSync(chemin, { throwIfNoEntry: false })
+      : fs.existsSync(chemin)
+        ? fs.statSync(chemin)
+        : undefined;
+    if (statut && !(dossier ? statut.isDirectory() : statut.isFile())) {
+      throw new Error(
+        `Isolation bwrap : ${chemin} doit être un ${dossier ? 'dossier' : 'fichier'} ordinaire`,
+      );
+    }
+    argv.push('--ro-bind', chemin, chemin);
+  }
+
+  for (const relatif of ['.npm', '.cache']) {
     const chemin = join(home, relatif);
     if (fs.existsSync(chemin)) argv.push('--bind', chemin, chemin);
   }
 
+  for (const relatif of ['.claude', '.codex']) {
+    const chemin = join(home, relatif);
+    if (fs.existsSync(chemin)) argv.push('--ro-bind', chemin, chemin);
+  }
+  for (const relatif of [
+    '.claude/.credentials.json',
+    '.claude/sessions',
+    '.codex/auth.json',
+    '.codex/sessions',
+    '.codex/archived_sessions',
+  ]) {
+    const chemin = join(home, relatif);
+    if (!fs.existsSync(chemin)) continue;
+    const dossierCli = join(home, relatif.split('/')[0]!);
+    if (
+      fs.realpathSync &&
+      fs.realpathSync(chemin) !== join(fs.realpathSync(dossierCli), basename(chemin))
+    )
+      continue;
+    argv.push('--bind', chemin, chemin);
+  }
+  if (profil.projetClaude) {
+    const projet = profil.projetClaude;
+    const memoire = join(projet, 'memory');
+    argv.push('--bind', projet, projet, '--ro-bind', memoire, memoire);
+    for (const relatif of ['todos', 'shell-snapshots', 'statsig', 'debug', 'session-env']) {
+      const chemin = join(home, '.claude', relatif);
+      const statut = fs.lstatSync
+        ? fs.lstatSync(chemin, { throwIfNoEntry: false })
+        : fs.existsSync(chemin)
+          ? fs.statSync(chemin)
+          : undefined;
+      if (!statut) continue;
+      if (!statut.isDirectory()) {
+        throw new Error(`Isolation bwrap : ${chemin} doit être un dossier ordinaire`);
+      }
+      argv.push('--tmpfs', chemin);
+    }
+  }
+  if (profil.copieClaude) {
+    argv.push('--bind', profil.copieClaude, join('/tmp', basename(dirname(profil.copieClaude))));
+    argv.push('--bind', profil.copieClaude, join(home, '.claude.json'));
+  }
+
+  const pointeur = join(worktree, '.git');
   const recouvrements = [
+    ...(fs.existsSync(pointeur) && fs.statSync(pointeur).isFile() ? [pointeur] : []),
+    ...(gitDir && gitDir !== gitCommun
+      ? ['commondir', 'gitdir'].map((relatif) => join(gitDir, relatif))
+      : []),
     ...['config', 'hooks', 'refs/heads/main', 'packed-refs'].map((relatif) =>
       join(gitCommun, relatif),
     ),
-    ...['settings.json', 'CLAUDE.md', 'commands', 'agents', 'skills', 'plugins'].map((relatif) =>
-      join(home, '.claude', relatif),
-    ),
-    join(home, '.codex/config.toml'),
   ];
   for (const chemin of recouvrements) {
     if (fs.existsSync(chemin)) argv.push('--ro-bind', chemin, chemin);
@@ -88,6 +188,7 @@ export function gitCommunDe(
   let sortie: string;
   try {
     sortie = exec('git', [
+      ...OPTIONS_GIT_SUJET,
       '-C',
       worktree,
       'rev-parse',

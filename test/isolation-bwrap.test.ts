@@ -31,54 +31,78 @@ const base = [
   '/proc',
   '--tmpfs',
   '/tmp',
+  '--tmpfs',
+  '/run',
   '--die-with-parent',
   '--unshare-pid',
 ];
 
+const claudeProjet = `${profil.worktree}/.claude`;
+const mcpProjet = `${profil.worktree}/.mcp.json`;
+const montagesProjet = ['--ro-bind', claudeProjet, claudeProjet, '--ro-bind', mcpProjet, mcpProjet];
 const inscriptibles = [profil.worktree, profil.gitCommun, profil.spool, profil.piecesJointes];
 
 test.each([true, false])('base PTY=%s et absence de montages facultatifs', (pty) => {
   expect(argvBwrap(profil, { pty }, fsSimule())).toEqual([
     ...base,
-    ...(pty ? [] : ['--new-session']),
+    ...(pty ? ['--unsetenv', 'PWD'] : ['--new-session']),
     '--tmpfs',
     profil.aidHome,
     ...inscriptibles.flatMap((chemin) => ['--bind', chemin, chemin]),
+    ...montagesProjet,
   ]);
 });
 
 test('monte les zones cachées, les exceptions inscriptibles sous AID_HOME et les recouvrements dans cet ordre', () => {
   const identites = ['.ssh', '.gnupg', '.config/gh'].map((p) => `${profil.home}/${p}`);
   const credentials = `${profil.home}/.git-credentials`;
-  const etat = ['.claude', '.claude.json', '.codex', '.npm', '.cache'].map(
-    (p) => `${profil.home}/${p}`,
-  );
+  const etat = ['.npm', '.cache'].map((p) => `${profil.home}/${p}`);
+  const cli = ['.claude', '.codex'].map((p) => `${profil.home}/${p}`);
+  const sessions = cli.map((p) => `${p}/sessions`);
   const recouvrements = [
     '/depot/.git/config',
     '/depot/.git/hooks',
     '/depot/.git/refs/heads/main',
     '/depot/.git/packed-refs',
-    '/home/agent/.claude/settings.json',
-    '/home/agent/.claude/CLAUDE.md',
-    '/home/agent/.claude/commands',
-    '/home/agent/.claude/agents',
-    '/home/agent/.claude/skills',
-    '/home/agent/.claude/plugins',
-    '/home/agent/.codex/config.toml',
   ];
-  const fs = fsSimule(identites, [credentials, ...etat, ...recouvrements]);
+  const fs = fsSimule(
+    [...identites, ...cli, ...sessions],
+    [credentials, ...etat, ...recouvrements],
+  );
 
   expect(argvBwrap(profil, { pty: true }, fs)).toEqual([
     ...base,
+    '--unsetenv',
+    'PWD',
     '--tmpfs',
     profil.aidHome,
     ...identites.flatMap((chemin) => ['--tmpfs', chemin]),
     '--ro-bind',
     '/dev/null',
     credentials,
-    ...[...inscriptibles, ...etat].flatMap((chemin) => ['--bind', chemin, chemin]),
+    ...inscriptibles.flatMap((chemin) => ['--bind', chemin, chemin]),
+    ...montagesProjet,
+    ...etat.flatMap((chemin) => ['--bind', chemin, chemin]),
+    ...cli.flatMap((chemin) => ['--ro-bind', chemin, chemin]),
+    ...sessions.flatMap((chemin) => ['--bind', chemin, chemin]),
     ...recouvrements.flatMap((chemin) => ['--ro-bind', chemin, chemin]),
   ]);
+});
+
+test('remonte la configuration du projet après le worktree', () => {
+  const args = argvBwrap(profil, { pty: false }, fsSimule([claudeProjet], [mcpProjet]));
+  const montage = args.indexOf(claudeProjet);
+  expect(montage).toBeGreaterThan(args.lastIndexOf(profil.worktree));
+  expect(args.slice(montage - 1, montage + 5)).toEqual(montagesProjet);
+});
+
+test.each([claudeProjet, mcpProjet])('refuse un lien symbolique au point %s', (chemin) => {
+  const fs = {
+    ...fsSimule(),
+    lstatSync: (p: string) =>
+      p === chemin ? { isDirectory: () => false, isFile: () => false } : undefined,
+  };
+  expect(() => argvBwrap(profil, { pty: false }, fs)).toThrow(chemin);
 });
 
 test('ignore les identités de type inattendu', () => {
@@ -100,6 +124,10 @@ test('demande à git le chemin absolu du répertoire commun', () => {
   const exec = vi.fn(() => '/depot avec espaces/.git\n');
   expect(gitCommunDe(profil.worktree, exec)).toBe('/depot avec espaces/.git');
   expect(exec).toHaveBeenCalledExactlyOnceWith('git', [
+    '-c',
+    'core.fsmonitor=false',
+    '-c',
+    'core.hooksPath=/dev/null',
     '-C',
     profil.worktree,
     'rev-parse',
@@ -127,4 +155,29 @@ test('agents.isolation invalide produit une ConfigError', () => {
   const lire = () => parseConfig('agents:\n  isolation: inconnue\n');
   expect(lire).toThrow(ConfigError);
   expect(lire).toThrow("agents.isolation vaut 'off' ou 'bwrap'");
+});
+
+test('recouvre les pointeurs Git et ne rend visible que le fichier DNS sous /run', () => {
+  const gitDir = '/depot/.git/worktrees/sujet';
+  const resolv = '/etc/resolv.conf';
+  const cible = '/run/systemd/resolve/stub-resolv.conf';
+  const pointeurs = [`${profil.worktree}/.git`, `${gitDir}/commondir`, `${gitDir}/gitdir`];
+  const fs = {
+    ...fsSimule([], [resolv, cible, ...pointeurs]),
+    readlinkSync: () => '../run/systemd/resolve/stub-resolv.conf',
+    realpathSync: () => cible,
+  };
+  const args = argvBwrap({ ...profil, gitDir }, { pty: false }, fs);
+  expect(args.slice(args.indexOf('/run') - 1, args.indexOf('/run') + 2)).toEqual([
+    '--tmpfs',
+    '/run',
+    '--die-with-parent',
+  ]);
+  expect(args.slice(args.indexOf(cible) - 1, args.indexOf(cible) + 2)).toEqual([
+    '--ro-bind',
+    cible,
+    cible,
+  ]);
+  expect(args.slice(-9)).toEqual(pointeurs.flatMap((chemin) => ['--ro-bind', chemin, chemin]));
+  expect(args).not.toContain('--unshare-net');
 });

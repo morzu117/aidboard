@@ -227,7 +227,9 @@ export async function runChecks(p: Probes): Promise<Check[]> {
   const bwrapVersion = await p.bwrapVersion?.();
   if (bwrapVersion !== undefined) {
     const isolation =
-      bwrapVersion === 'off' ? 'off' : `bwrap ${bwrapVersion.replace(/^bubblewrap\s+/, '')}`;
+      bwrapVersion === 'off'
+        ? 'off'
+        : `bwrap ${bwrapVersion.replace(/^bubblewrap\s+/, '')} (expérimental). L’agent peut lire et remplacer le jeton d’abonnement. Le réseau reste ouvert. À la racine, .claude/ et .mcp.json sont en lecture seule. Leurs équivalents imbriqués et .github/ restent modifiables et relèvent du relevé de fin d’étape de la boucle (chantier 69). L’agent peut modifier CLAUDE.md et AGENTS.md, que lit la session suivante. Ces changements sont visibles dans le diff. Un agent qui doit modifier .claude/ ou .mcp.json à la racine travaille sans isolation.`;
     add('ok', `Isolation : ${isolation}`);
   }
 

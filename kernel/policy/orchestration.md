@@ -40,6 +40,8 @@ principale sans aval humain.
 
 ## Sous isolation
 
+L’isolation par bubblewrap est expérimentale.
+
 Quand A-I-D lance un agent dans bubblewrap, les écritures hors du worktree
 et du `.git` du dépôt échouent, sauf dans les emplacements prévus pour la
 session et ses outils. Les hooks et la configuration Git, ainsi que les

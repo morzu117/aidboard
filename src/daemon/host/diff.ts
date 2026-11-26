@@ -1,7 +1,7 @@
 import { spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import type { Db } from '../db.js';
-import { GIT_ENV_LECTURE } from '../git/exec.js';
+import { GIT_ENV_LECTURE, verifierGitSujet } from '../git/exec.js';
 import { gitLivraison } from '../git/inspect.js';
 import { fichierSensible, filtrerDiff } from './filtreCode.js';
 
@@ -9,13 +9,15 @@ const MAX_OCTETS = 200 * 1024;
 const MAX_LIGNES = 2000;
 
 /** Lecture bornée, sans shell ni exécution des pilotes diff du dépôt. */
-function lireDiff(worktree: string, base: string, tete: string, chemin: string) {
+async function lireDiff(worktree: string, base: string, tete: string, chemin: string) {
+  const sujet = await verifierGitSujet(worktree);
   return new Promise<{ etat: 'ok' | 'coupe'; lignes: string[] }>((resolve, reject) => {
     // Les attributs du worktree peuvent choisir un pilote, mais --no-textconv et
     // --no-ext-diff interdisent son exécution. Les attributs globaux sont ignorés.
     const enfant = spawn(
       'git',
       [
+        ...(sujet?.args ?? []),
         '--literal-pathspecs',
         '-c',
         'core.attributesFile=/dev/null',
@@ -33,7 +35,7 @@ function lireDiff(worktree: string, base: string, tete: string, chemin: string) 
       ],
       {
         cwd: worktree,
-        env: { ...process.env, ...GIT_ENV_LECTURE },
+        env: { ...process.env, ...GIT_ENV_LECTURE, ...sujet?.env },
         stdio: ['ignore', 'pipe', 'ignore'],
       },
     );
