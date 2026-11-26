@@ -201,6 +201,25 @@ Les tests utilisent un dépôt temporaire et une fausse commande de gate.
 - Les trois mesures du sujet.
 - La politique des tests d'interface s'applique : chaque bouton est cliqué par un e2e, avec les captures de chaque écran en 1280 × 800 et en 390 × 844.
 
+- _Acceptation._ Couvert par `test/boucle/service.test.ts`, `test/boucle/routes.test.ts`, `test/boucle/env.test.ts`, `test/web/boucle.test.tsx` et `e2e/boucle-vue.spec.ts` (254ac9d), écrits par le testeur depuis le plan seul. L'interface :
+  - `ServiceBoucle({ db, memory, agents, maintenant, lancerGate })`, avec `lancer`, `go`, `repondre`, `arreter`, `traiterEvenementAgent`, `tic`, `reprendre` et `lire` ;
+  - `buildServer` accepte `boucle` pour les tests ;
+  - `GET /api/topics/:id/boucle` rend `{ phase, etapeCourante, historique, plan, escalade, mesures }`, et les quatre `POST` passent par la porte de confirmation ;
+  - `mesures` vaut `{ tempsParEtapeMs, interventionsHumaines, redevs }`. Un GO, une réponse ou un arrêt réussis comptent une intervention ;
+  - la vue s'ouvre par le bouton « Boucle » (`boucle-ouvrir`) et offre `boucle-lancer`, `boucle-go`, `boucle-reponse`, `boucle-envoyer-reponse` et `boucle-arreter`.
+
+  Les cas portent sur :
+  - le cycle jusqu'à « livraison prête » sur la tête du dev ;
+  - le double lancement et le double GO refusés en 409 ;
+  - la reprise d'une session perdue sans second lancement ;
+  - le délai posé par l'horloge du daemon, sans événement d'agent ;
+  - l'arrêt de la session et les trois mesures ;
+  - le refus des `POST` par une porte armée sans appareil ;
+  - le binaire manquant nommé par `env check` ;
+  - les dix phases de la vue, GO sous le plan et seulement en `attente_go`, Arrêter seulement pendant une étape.
+
+  L'e2e clique chaque bouton contre le vrai daemon, avec un faux agent, et prend cinq captures aux deux tailles. Les six boutons entrent dans l'inventaire de la garde des CTA. Échec attendu au commit marqué : le service n'existe pas, les routes répondent 404, et le bouton « Boucle » est absent.
+
 ### 69.7 Le scénario de bout en bout
 
 Julien ne fait pas de recette manuelle (26 novembre) : « les tests front, back et les tests e2e et scénarisés d'interface doivent le couvrir ». Le 69.7 remplace donc la recette sur le Mac par un e2e de scénario, `e2e/boucle-scenario.spec.ts`, dans le vrai navigateur et contre le vrai daemon. Seuls les agents sont simulés : de faux binaires `claude` et `codex` dans le PATH du daemon jouent chaque rôle en écrivant de vrais artefacts (la page de plan, un commit `Acceptation:`, un commit de dev et son handoff, un JSON de revue). Le gate est une vraie commande du dépôt de test.
