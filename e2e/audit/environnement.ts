@@ -227,6 +227,10 @@ export async function preparerAudit(
   };
   try {
     home = mkdtempSync(join(tmpdir(), 'aid-audit-host-'));
+    const archive = readFileSync(join(FIXTURES, 'swairm/ask-ok.json'), 'utf8');
+    const { id } = JSON.parse(archive) as { id: string };
+    mkdirSync(join(home, 'avis'));
+    writeFileSync(join(home, 'avis', `${id}.json`), archive);
     mkdirSync(bin);
     for (const [nom, fichier] of Object.entries({
       claude: 'fake-agent.sh',

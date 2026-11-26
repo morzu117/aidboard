@@ -68,6 +68,8 @@ s'écarte** des défauts et de la détection. Un manifeste qui recopie
 
 En pratique, un manifeste sain tient en une dizaine de lignes.
 
+`routage` est hérité de `defaults.yml`. Un projet le surcharge dans `agent.yml` seulement s'il s'en écarte.
+
 ## 2. Version
 
 Compare `kernel.version` du manifeste à la version du paquet `aid` installé

@@ -33,6 +33,7 @@ export interface AidConfig {
   host: '127.0.0.1';
   port: number;
   editor: string[];
+  hotesPrives: string[];
   env: { strip: string[] };
   terminal: { scrollback: number; logMaxBytes: number; logRetentionDays: number };
   memory: MemoryConfig;
@@ -138,6 +139,7 @@ export const DEFAULT_CONFIG: AidConfig = {
   host: '127.0.0.1',
   port: 4870,
   editor: [],
+  hotesPrives: [],
   env: { strip: ['ANTHROPIC_API_KEY', 'ANTHROPIC_AUTH_TOKEN'] },
   terminal: { scrollback: 5000, logMaxBytes: 50 * 1024 * 1024, logRetentionDays: 30 },
   memory: {
@@ -211,6 +213,7 @@ export function parseConfig(text: string): AidConfig {
       'host',
       'port',
       'editor',
+      'hotesPrives',
       'env',
       'terminal',
       'memory',
@@ -227,6 +230,7 @@ export function parseConfig(text: string): AidConfig {
   );
 
   const cfg = structuredClone(DEFAULT_CONFIG);
+  if (doc.hotesPrives !== undefined) cfg.hotesPrives = stringList(doc.hotesPrives, 'hotesPrives');
   if (doc.avatars !== undefined) cfg.avatars = parseAvatars(doc.avatars);
   if (doc.host !== undefined && doc.host !== '127.0.0.1') {
     throw new ConfigError("A-I-D n'écoute que sur 127.0.0.1 : `host` ne peut pas changer");
@@ -721,6 +725,7 @@ export function loadConfig(p: AidPaths): AidConfig {
 const DEFAULT_FILE = `# Configuration d'A-I-D. Tout est facultatif : ce sont les valeurs par défaut.
 # port: 4870
 # editor: []              # vide = détection (code, open, xdg-open) ; "{path}" est remplacé
+# hotesPrives: []         # noms ou suffixes DNS privés supplémentaires, sans point initial
 # env:
 #   strip:                # retirées de l'environnement des agents
 #     - ANTHROPIC_API_KEY

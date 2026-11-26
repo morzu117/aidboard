@@ -6,6 +6,7 @@ import {
   type AskResult,
   type ModeleAsk,
 } from '../../../src/shared/swairm-ask.js';
+import { marqueVerification, routage, type Fournisseur } from '../../../src/shared/routage.js';
 import { AidApiError } from '../data/api.js';
 import { annulerAvis, demanderAvis, type EtatAsk } from '../data/swairm.js';
 import { FormulaireAvisMesh } from './FormulaireAvisMesh.js';
@@ -30,7 +31,10 @@ export function DemanderAvis({
   const mesh = destination === 'mesh' && instantaneMesh(state, nomMesh)?.state.connected;
   const [question, setQuestion] = useState('');
   const [n, setN] = useState(3);
-  const [modeles, setModeles] = useState<ModeleAsk[]>(['sonnet', 'opus']);
+  const [modeles, setModeles] = useState<(ModeleAsk | `${Fournisseur}:defaut`)[]>([
+    'sonnet',
+    'opus',
+  ]);
   const [depuis, setDepuis] = useState<string | null>(etat.enCours ? etat.depuis : null);
   const [attente, setAttente] = useState(etat.enCours);
   const [maintenant, setMaintenant] = useState(() => Date.now());
@@ -134,10 +138,16 @@ export function DemanderAvis({
               </label>
               <fieldset>
                 <legend>Modèles</legend>
-                {MODELES_ASK.map((modele) => (
-                  <label key={modele}>
+                {[
+                  ...MODELES_ASK,
+                  ...routage.challenge
+                    .filter((f) => f !== 'claude')
+                    .map((f) => `${f}:defaut` as const),
+                ].map((modele) => (
+                  <label key={modele} className="case" style={{ flexDirection: 'row' }}>
                     <input
                       type="checkbox"
+                      data-node={`swarph.ask.modele-${modele}`}
                       checked={modeles.includes(modele)}
                       onChange={(e) =>
                         setModeles(
@@ -147,7 +157,13 @@ export function DemanderAvis({
                         )
                       }
                     />
-                    {modele}
+                    <span>
+                      {modele.replace(':defaut', '')}
+                      {marqueVerification(
+                        etat.verifications,
+                        modele.includes(':') ? modele.split(':')[0]! : 'claude',
+                      )}
+                    </span>
                   </label>
                 ))}
               </fieldset>

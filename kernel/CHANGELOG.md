@@ -7,6 +7,11 @@ ajoute rien. Format : chaque version majeure du noyau décrit sa
 **migration**, que `/sync` applique avant de rendre le bloc ; les mineures
 et patchs n'en ont pas, sauf mention contraire.
 
+## Avis de plusieurs fournisseurs (chantier 66)
+
+Changement mineur, sans migration. Le noyau documente la nouvelle section
+`routage` et ajoute l'adaptateur `avis` et la règle du challenge dans le rôle plan.
+
 ## Profil d'environnement (chantier 63)
 
 Changement mineur, sans migration. Le manifeste déclare les outils et leurs
