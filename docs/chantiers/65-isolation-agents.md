@@ -92,6 +92,30 @@ L'agent parle au daemon par `AID_URL` et son jeton de run, comme aujourd'hui. Il
 - La carte de l'agent dans la vue du sujet porte une petite marque « isolé » ou « non isolé ».
 - Le bloc rendu du noyau dit que, sous isolation, un `git push`, un `gh` ou une écriture hors du worktree échouent normalement, et qu'il ne faut pas les contourner.
 
+### DM68. Les quatre sorties relevées par le lab (26 novembre)
+
+Le lab a relu le 65.5 et relancé à sa tête quatre sorties qu'il avait mesurées le 25, avec un vrai bwrap. Les quatre tiennent :
+- **C. Les pointeurs git.** Le fichier `.git` du worktree, puis le `commondir` de `.git/worktrees/<nom>/`, peuvent être réécrits de l'intérieur vers un dépôt qui déclare `core.fsmonitor`. Le git du daemon, lancé hors du bac à sable (par exemple par `GET /api/topics/:id/git/log`), exécute alors le moniteur dehors.
+- **D. Le bus de l'utilisateur.** `systemd-run --user`, par `/run/user/<uid>/bus`, lance un service hors du bac à sable, en stream comme en PTY.
+- **E. L'environnement.** Les variables du daemon passent à l'agent : jetons (`GH_TOKEN`, clés de cloud), `SSH_AUTH_SOCK`, `DBUS_SESSION_BUS_ADDRESS` et `XDG_RUNTIME_DIR`.
+- **F. La configuration de Claude.** Une écriture de `~/.claude/settings.json` ou de `~/.claude.json` faite de l'intérieur reste dehors. C'est le cas d'un fichier absent, que DM43 ne monte pas, et de `~/.claude.json`, laissé inscriptible.
+
+Les corrections :
+- **C.**
+  - Le fichier `.git` du worktree et les fichiers `commondir` et `gitdir` de son dossier dans `.git/worktrees/` sont remontés en lecture seule.
+  - Tout git que le daemon lance sur un worktree de sujet passe `-c core.fsmonitor=false` et `-c core.hooksPath=/dev/null`, par l'aide git commune du daemon, et vérifie que le dossier git résolu est bien celui du dépôt du sujet.
+- **D.**
+  - `--tmpfs /run`, puis seulement ce qui sert à la résolution de noms (la cible de `/etc/resolv.conf` si elle est sous `/run`).
+  - `/run/user` reste invisible.
+  - Pas de `--unshare-net` : les agents ont besoin du réseau.
+- **E.** Une liste blanche d'environnement, sur le modèle de #211 : `PATH`, `HOME`, `USER`, `LOGNAME`, `SHELL`, `TERM`, `LANG`, les `LC_*`, `TZ`, `TMPDIR`, les variables d'A-I-D dont l'agent a besoin (`AID_URL`, son jeton de run, `AID_SPOOL`), et les variables propres à `claude` et `codex` qui ne portent pas de secret de tiers. Tout le reste est retiré, à commencer par les jetons, les sockets d'agent et le bus.
+- **F.**
+  - `~/.claude` et `~/.codex` passent en lecture seule entière. Seul l'état de session que les CLI écrivent y est remonté en écriture : le fichier du jeton d'abonnement, les transcriptions et les dossiers de travail des sessions.
+  - Un fichier qui configure ou exécute (réglages, mémoire, commandes, agents, skills, plugins, hooks, MCP) ne peut donc plus être créé ni modifié.
+  - `~/.claude.json` est remplacé, pour la session, par une copie temporaire. Ce qui s'y écrit est perdu à la fin de la session.
+
+Chaque sortie devient un test négatif dans le job `isolation`. Comme le bus utilisateur n'existe sans doute pas sur un runner GitHub, le test de D vérifie directement que `/run/user` est invisible de l'intérieur, sans compter sur l'échec de `systemd-run`. En attendant ces corrections, `aid doctor` et la doc disent que `bwrap` n'est pas encore une frontière de sécurité.
+
 ## 4. Points
 
 ### 65.1 Le plan
@@ -171,6 +195,14 @@ Un second cas lance un faux `claude` et un faux `codex` par le vrai lanceur (`sp
 
 Ce que la CI ne peut pas vérifier, faute de vrai compte : le rafraîchissement du jeton d'abonnement, la session qui survit au lendemain, et la reprise d'une vraie session. `agents.isolation` reste donc à `off` par défaut, et ces trois points restent les limites connues du chantier. La fiche `docs/recette-chantier-65-isolation-agents.md` est retirée.
 - _Révision 65.5._ Une passe Codex. Quatre lignes existantes remplacées dans le test d'intégration, la fiche de 53 lignes retirée. Le bac à sable n'a pas bwrap : les cas réels sont joués par le job `isolation` de la CI de la PR. Sans bwrap, les tests sont sautés ; avec `AID_BWRAP_REQUIS=1`, ils échouent sur un message clair. Mon gate : 4 712, et un seul échec, `noms-neutres`, qui lisait encore la fiche supprimée dans l'index avant le commit.
+
+### 65.6 Les quatre sorties fermées (DM68)
+
+- C, D, E et F, chacune avec son test négatif sous le vrai bwrap, dans le job `isolation`.
+- Le test de C passe aussi par le daemon : un worktree dont le pointeur git vise un dépôt à `core.fsmonitor`, puis `GET /api/topics/:id/git/log`. Le témoin du moniteur ne doit pas apparaître.
+- Le test de F écrit, de l'intérieur, `~/.claude/settings.json`, `~/.claude/settings.local.json` (absent au départ), `~/.claude.json` et `~/.codex/config.toml`. Après la session, aucun ne doit avoir changé dehors, alors que le fichier du jeton reste inscriptible.
+- Le test de E injecte de fausses variables à secret (des valeurs factices, assemblées à l'exécution) et vérifie que l'environnement intérieur se limite à la liste blanche.
+- `aid doctor` dit « expérimental » à côté de `bwrap` tant que le passage par défaut n'est pas décidé.
 
 ## 5. Pièges
 
