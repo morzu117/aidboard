@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { packageRoot } from '../../cli/version.js';
 import type { RoleEtape } from './reglages.js';
+import type { AttenduRevue } from './revue.js';
 
 export interface ContexteMessage {
   plan: string;
@@ -9,6 +10,7 @@ export interface ContexteMessage {
   commitTests?: string;
   diff?: string;
   rapportGate?: string;
+  revue?: AttenduRevue;
   findings?: string;
 }
 
@@ -22,6 +24,14 @@ export function messageEtape(role: RoleEtape, contexte: ContexteMessage): string
   }
 
   if (role === 'review') {
+    if (contexte.revue) {
+      const { tete, fichiers, points } = contexte.revue;
+      parties.push(
+        `Tête à vérifier : ${tete}`,
+        `Fichiers du diff : ${JSON.stringify(fichiers)}`,
+        `Identifiants des points d’acceptation : ${JSON.stringify(points)}`,
+      );
+    }
     if (contexte.rapportGate) parties.push(`Rapport du gate\n${contexte.rapportGate}`);
     if (contexte.diff !== undefined) {
       // Le diff ne peut pas fermer son propre bloc.

@@ -7,10 +7,11 @@ import {
   entreesGelees,
   type EmpreinteEnvironnement,
 } from './controles.js';
-import type { ActionBoucle, Tentative } from './etat.js';
+import type { ActionBoucle, EvenementBoucle, Tentative } from './etat.js';
 import { lancerGate, type ResultatGate } from './gate.js';
 import { messageEtape, type ContexteMessage } from './messages.js';
 import { lireReglagesBoucle, type ReglagesBoucle, type RoleEtape } from './reglages.js';
+import { lireRevue, type AttenduRevue } from './revue.js';
 
 interface ContexteConduite {
   depot: string;
@@ -19,6 +20,7 @@ interface ContexteConduite {
   sessionId?: string;
   reglages: ReglagesBoucle;
   message: ContexteMessage;
+  revue?: AttenduRevue & { namespace: string };
   gate?: {
     go: string;
     tete: string;
@@ -113,7 +115,7 @@ export async function executer(
   switch (action.type) {
     case 'lancer_etape': {
       const role = action.etape === 'revue' ? 'review' : action.etape;
-      const texte = messageEtape(role, contexte.message);
+      const texte = messageEtape(role, { ...contexte.message, revue: contexte.revue });
       if (role === 'dev' && deps.gate) {
         await deps.gate.consignerEmpreinte(await empreinteEnvironnement(homedir()));
       }
@@ -175,8 +177,27 @@ export async function artefactPresent(
         Boolean((await deps.lirePage(`aid/dev-handoff/${contexte.slug}`))?.trim())
       );
     }
-    case 'gate':
     case 'revue':
+      return (await terminerRevue(contexte, deps))[0].type === 'revue_terminee';
+    case 'gate':
       return false;
   }
+}
+
+export async function terminerRevue(
+  contexte: Pick<ContexteConduite, 'slug' | 'revue'>,
+  deps: Pick<LecturesArtefact, 'lirePage'>,
+): Promise<[EvenementBoucle] | [EvenementBoucle, EvenementBoucle]> {
+  const { revue, slug } = contexte;
+  if (!revue) return [{ type: 'artefact_manquant' }];
+
+  const page = await deps.lirePage(`${revue.namespace}/review/${slug}`);
+  if (page === undefined) return [{ type: 'artefact_manquant' }];
+
+  const resultat = lireRevue(page, revue);
+  if (!resultat.ok) return [{ type: 'artefact_manquant' }];
+  return [
+    { type: 'revue_terminee', tete: revue.tete },
+    { type: 'triage_termine', categories: resultat.categories },
+  ];
 }

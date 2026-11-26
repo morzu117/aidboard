@@ -12,6 +12,11 @@ et patchs n'en ont pas, sauf mention contraire.
 Changement sans migration. Le manifeste peut redéclarer chaque délai de
 `boucle.delais` en minutes.
 
+### Revue structurée de la boucle du daemon (chantier 69.5)
+
+Changement sans migration. Le rôle de revue décrit le bloc JSON attendu
+par le daemon, avec un verdict par fichier et par point d’acceptation.
+
 ## Profil d'environnement (chantier 63)
 
 Changement mineur, sans migration. Le manifeste déclare les outils et leurs

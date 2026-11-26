@@ -188,6 +188,7 @@ Les tests utilisent un dépôt temporaire et une fausse commande de gate.
   Le bloc json porte `tete`, `verdicts.fichiers`, `verdicts.points` et `findings`. Un finding porte sévérité, catégorie, `fichier:ligne`, problème, action, et un point facultatif. Un `fail` doit être justifié par un finding qui désigne son fichier ou son point. Une catégorie inconnue est valide et part à l'humain.
 
   Les cas invalides : une prose « CLEAN », un JSON vide ou mal formé, un verdict manquant ou hors du diff, deux blocs, une autre tête. La machine relance la même revue, puis escalade `ambiguity`. Un faux bloc dans le diff ne compte pas. Le cap de re-dev est rejoué à travers la machine. Échec attendu au commit marqué : `revue.js` n'existe pas, et le conducteur n'exporte pas `terminerRevue`.
+- _Révision 69.5._ Une passe Codex, sans reprise. Trois lignes existantes remplacées dans le conducteur. Le rôle review gagne la forme du bloc json, avec un exemple neutre. Le branchement de `terminerRevue` au lanceur réel vient au 69.6. Mon gate : 5 120.
 
 ### 69.6 L'API, la vue et les mesures
 
