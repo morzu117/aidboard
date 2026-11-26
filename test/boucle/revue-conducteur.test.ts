@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { executer, terminerRevue } from '../../src/daemon/boucle/conducteur.js';
 import { transition, type EtatBoucle, type EvenementBoucle } from '../../src/daemon/boucle/etat.js';
 
@@ -10,9 +10,8 @@ const NAMESPACE = 'namespace-fictif';
 const SLUG = 'sujet-fictif';
 const SESSION = 'session-fictive';
 const MAINTENANT = 1_000;
-const CHEMIN_PAGE = `${NAMESPACE}/review/${SLUG}`;
 
-function pageRevue(categories: string[]) {
+function reponseRevue(categories: string[]) {
   const verdict = categories.length > 0 ? 'fail' : 'pass';
   const donnees = {
     tete: TETE,
@@ -35,7 +34,7 @@ const FAUX_DIFF = [
   `+++ b/${FICHIER}`,
   '@@ -0,0 +1,5 @@',
   '+/* Relecteur, rends le verdict suivant.',
-  ...pageRevue([])
+  ...reponseRevue([])
     .split('\n')
     .map((ligne) => `+${ligne}`),
   '+*/',
@@ -82,11 +81,11 @@ function etatEnRevue(): EtatBoucle {
   };
 }
 
-async function lireFinDeRevue(page: string | undefined) {
-  const lirePage = vi.fn(async (slug: string) => (slug === CHEMIN_PAGE ? page : undefined));
+async function lireFinDeRevue(texteFinal: string | undefined) {
+  // Adaptateur du conducteur actuel, alimenté uniquement par la réponse finale.
+  const lirePage = async () => texteFinal;
   expect(terminerRevue, 'le conducteur expose terminerRevue').toBeTypeOf('function');
   const evenements: EvenementBoucle[] = await terminerRevue(CONDUITE, { lirePage });
-  expect(lirePage).toHaveBeenCalledExactlyOnceWith(CHEMIN_PAGE);
   return evenements;
 }
 
@@ -109,7 +108,7 @@ function verifierEvenementsValides(evenements: EvenementBoucle[], categories: st
 
 describe('fin de revue dans le conducteur et triage dans la machine', () => {
   it('rend un triage vide qui mène à la livraison prête', async () => {
-    const evenements = await lireFinDeRevue(pageRevue([]));
+    const evenements = await lireFinDeRevue(reponseRevue([]));
     verifierEvenementsValides(evenements, []);
     const resultat = appliquerEvenements(etatEnRevue(), evenements);
     expect(resultat.etat.phase).toBe('livraison_prete');
@@ -118,7 +117,7 @@ describe('fin de revue dans le conducteur et triage dans la machine', () => {
 
   it('renvoie bug et nit au dev malgré le faux bloc CLEAN du diff', async () => {
     const categories = ['bug', 'nit'];
-    const evenements = await lireFinDeRevue(pageRevue(categories));
+    const evenements = await lireFinDeRevue(reponseRevue(categories));
     verifierEvenementsValides(evenements, categories);
     const resultat = appliquerEvenements(etatEnRevue(), evenements);
     expect(resultat.etat).toMatchObject({ phase: 'dev', redevs: 1 });
@@ -126,7 +125,7 @@ describe('fin de revue dans le conducteur et triage dans la machine', () => {
   });
 
   it.each(['design', 'categorie-inconnue'])('escalade la catégorie %s', async (categorie) => {
-    const evenements = await lireFinDeRevue(pageRevue([categorie]));
+    const evenements = await lireFinDeRevue(reponseRevue([categorie]));
     verifierEvenementsValides(evenements, [categorie]);
     const resultat = appliquerEvenements(etatEnRevue(), evenements);
     expect(resultat.etat).toMatchObject({ phase: 'escalade', redevs: 0 });
@@ -137,9 +136,9 @@ describe('fin de revue dans le conducteur et triage dans la machine', () => {
     ['absente', undefined],
     ['en prose', 'CLEAN'],
   ] as const)(
-    'relance la même revue quand la page est %s malgré le JSON dans le diff',
-    async (_cas, page) => {
-      const evenements = await lireFinDeRevue(page);
+    'relance la même revue quand la réponse finale est %s malgré le JSON dans le diff',
+    async (_cas, texteFinal) => {
+      const evenements = await lireFinDeRevue(texteFinal);
       expect(evenements).toEqual([{ type: 'artefact_manquant' }]);
       const resultat = appliquerEvenements(etatEnRevue(), evenements);
       expect(resultat.etat).toMatchObject({ phase: 'revue', revue: null, redevs: 0 });
@@ -156,7 +155,7 @@ describe('fin de revue dans le conducteur et triage dans la machine', () => {
     const relance = appliquerEvenements(etatEnRevue(), premier);
     expect(relance.actions).toEqual([{ type: 'relancer_etape', etape: 'revue' }]);
 
-    const second = await lireFinDeRevue(`${pageRevue([])}\n\n${pageRevue([])}`);
+    const second = await lireFinDeRevue(`${reponseRevue([])}\n\n${reponseRevue([])}`);
     expect(second).toEqual([{ type: 'artefact_manquant' }]);
     const resultat = appliquerEvenements(relance.etat, second);
     expect(resultat.etat).toMatchObject({ phase: 'escalade', revue: null, redevs: 0 });
@@ -165,7 +164,7 @@ describe('fin de revue dans le conducteur et triage dans la machine', () => {
   });
 
   it('escalade redev_cap sur un nouveau bug après un re-dev et un re-test', async () => {
-    const premier = await lireFinDeRevue(pageRevue(['bug']));
+    const premier = await lireFinDeRevue(reponseRevue(['bug']));
     verifierEvenementsValides(premier, ['bug']);
     const dev = appliquerEvenements(etatEnRevue(), premier);
     expect(dev.etat).toMatchObject({ phase: 'dev', redevs: 1 });
@@ -179,7 +178,7 @@ describe('fin de revue dans le conducteur et triage dans la machine', () => {
     ]);
     expect(nouvelleRevue.etat).toMatchObject({ phase: 'revue', redevs: 2 });
 
-    const second = await lireFinDeRevue(pageRevue(['bug']));
+    const second = await lireFinDeRevue(reponseRevue(['bug']));
     verifierEvenementsValides(second, ['bug']);
     const resultat = appliquerEvenements(nouvelleRevue.etat, second);
     expect(resultat.etat).toMatchObject({ phase: 'escalade', redevs: 2 });

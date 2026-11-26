@@ -151,18 +151,17 @@ test('enchaîne plan, GO, dev, gate et revue jusqu’à livraison prête sur la 
   );
   expect(lireBoucle()).toMatchObject({ phase: 'revue' });
   heure += 40;
-  await terminer('session-fictive-3', () =>
-    page(
-      'review',
+  await service.traiterEvenementAgent('session-fictive-3', {
+    type: 'turn_end',
+    texteFinal:
       '```json\n' +
-        JSON.stringify({
-          tete,
-          verdicts: { fichiers: { 'note.md': 'pass' }, points: {} },
-          findings: [],
-        }) +
-        '\n```',
-    ),
-  );
+      JSON.stringify({
+        tete,
+        verdicts: { fichiers: { 'note.md': 'pass' }, points: {} },
+        findings: [],
+      }) +
+      '\n```',
+  });
 
   expect(lancer.mock.calls.map(([appel]) => [appel.role, appel.genre])).toEqual([
     ['plan', 'claude'],
