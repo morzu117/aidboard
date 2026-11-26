@@ -52,6 +52,7 @@ export interface SearchHit {
   title: string;
   snippet: string;
   score: number;
+  candidat?: true;
   via?: { slug: string; type: LinkType; sens?: 'sortant' | 'entrant' };
 }
 
@@ -69,7 +70,7 @@ export type PutMode =
   | { kind: 'replace'; expectedRevision: number }
   | { kind: 'force' };
 
-export type ProposalKind = 'tags' | 'duplicate' | 'split';
+export type ProposalKind = 'tags' | 'duplicate' | 'split' | 'retro';
 export type ProposalState = 'open' | 'applied' | 'rejected';
 
 export interface MemoryProposal {

@@ -19,6 +19,8 @@ import type { Db } from '../db.js';
 import { AidHttpError } from '../errors.js';
 import type { VectorIndex } from './embed.js';
 import type { MemoryJob, MemoryJobs } from './jobs.js';
+import { CYCLES_TERMINES, PLAFOND_ECHECS_RETRO, RETRO_MANQUANTE } from './retro-queries.js';
+import type { RetroPayload } from './retro.js';
 import type { MemoryService, WriteContext } from './service.js';
 import { isValidMemSlug } from './slug.js';
 import { renderMarkdown } from './store.js';
@@ -101,6 +103,18 @@ export class MemoryProposals {
       .get(slug, kind);
   }
 
+  hasRetro(slug: string): boolean {
+    return !!this.db
+      .prepare("SELECT 1 FROM memory_proposals WHERE slug = ? AND kind = 'retro' LIMIT 1")
+      .get(slug);
+  }
+
+  retroSeen(slug: string): boolean {
+    return !!this.db
+      .prepare("SELECT 1 FROM memory_maintenance_seen WHERE slug = ? AND kind = 'retro'")
+      .get(slug);
+  }
+
   seen(page: MemoryPage, kind: ProposalKind, key: string): boolean {
     return !!this.db
       .prepare(
@@ -109,7 +123,7 @@ export class MemoryProposals {
       .get(page.slug, kind, page.revision, key);
   }
 
-  recordSeen(page: MemoryPage, kind: ProposalKind, key: string): void {
+  recordSeen(page: Pick<MemoryPage, 'slug' | 'revision'>, kind: ProposalKind, key: string): void {
     this.db
       .prepare(
         'INSERT OR REPLACE INTO memory_maintenance_seen (slug, kind, revision, at, vocabulary) VALUES (?, ?, ?, ?, ?)',
@@ -117,7 +131,13 @@ export class MemoryProposals {
       .run(page.slug, kind, page.revision, new Date().toISOString(), key);
   }
 
-  decide(id: string, state: 'applied' | 'rejected'): void {
+  decide(id: string, state: 'applied' | 'rejected', payload?: RetroPayload): void {
+    if (payload) {
+      this.db
+        .prepare('UPDATE memory_proposals SET state = ?, decided_at = ?, payload = ? WHERE id = ?')
+        .run(state, new Date().toISOString(), JSON.stringify(payload), id);
+      return;
+    }
     this.db
       .prepare('UPDATE memory_proposals SET state = ?, decided_at = ? WHERE id = ?')
       .run(state, new Date().toISOString(), id);
@@ -182,7 +202,7 @@ const SplitPayload = Type.Object(
   { additionalProperties: false },
 );
 
-function parseJson(text: string): unknown {
+export function parseJson(text: string): unknown {
   try {
     return JSON.parse(text);
   } catch {
@@ -199,7 +219,7 @@ function rejectedKinds(fm: Record<string, unknown>): ProposalKind[] {
 // les suivantes seront reprises une prochaine nuit si la décision libère le slot.
 const PRIORITY: ProposalKind[] = ['tags', 'duplicate', 'split'];
 
-function existingTags(store: MemoryStore, namespace: string): string[] {
+export function existingTags(store: MemoryStore, namespace: string): string[] {
   const seen = new Set<string>();
   for (const p of store.all()) {
     if (p.namespace !== namespace) continue;
@@ -259,7 +279,32 @@ function inWindow(now: Date, window: string): boolean {
   return s <= e ? cur >= s && cur < e : cur >= s || cur < e;
 }
 
+export { RETRO_MAX_FAILED_NIGHTS } from './retro-queries.js';
+
+export function retroCandidates(db: Db, limit: number): string[] {
+  const rows = db
+    .prepare(
+      `SELECT t.id,
+            (SELECT max(e.ts) FROM events e INDEXED BY events_topic
+             WHERE e.topic_id = t.id AND e.type = 'topic.state'
+               AND json_extract(e.data, '$.state') = 'merged') AS merged_at
+     ${CYCLES_TERMINES}
+       AND ${RETRO_MANQUANTE}
+       AND NOT EXISTS (
+         SELECT 1 FROM memory_jobs j WHERE j.slug = t.id AND j.kind = 'retro'
+           AND j.state IN ('pending', 'running')
+       )
+       AND NOT (${PLAFOND_ECHECS_RETRO})
+     ORDER BY merged_at DESC, (merged_at IS NULL AND t.state = 'merged') DESC,
+              t.created_at DESC, t.id
+     LIMIT ?`,
+    )
+    .all(limit) as { id: string }[];
+  return rows.map(({ id }) => id);
+}
+
 export interface SchedulerDeps {
+  db: Db;
   vectors?: VectorIndex;
   store: MemoryStore;
   jobs: MemoryJobs;
@@ -271,7 +316,7 @@ export interface SchedulerDeps {
   splitLines?: number;
 }
 
-// Un job `maintain` par page éligible, au plus `maxPerNight`, seulement dans la fenêtre et si activé.
+// Le plafond de la fenêtre est partagé, avec priorité aux jobs `retro`.
 export function scheduleMaintenance(now: Date, deps: SchedulerDeps): number {
   if (!deps.enabled || !inWindow(now, deps.window)) return 0;
   // La fenêtre suit l'heure locale du planificateur, y compris après minuit.
@@ -281,12 +326,17 @@ export function scheduleMaintenance(now: Date, deps: SchedulerDeps): number {
   if (start > now) start.setDate(start.getDate() - 1);
   const max =
     (deps.maxPerNight ?? DEFAULT_MAINTENANCE_MAX_PER_NIGHT) -
-    deps.jobs.countCreatedSince('maintain', start.toISOString());
+    deps.jobs.countCreatedSince(['maintain', 'retro'], start.toISOString());
+  if (max <= 0) return 0;
+  let n = 0;
+  for (const id of retroCandidates(deps.db, max)) {
+    if (deps.jobs.enqueue('retro', id)) n++;
+  }
+  if (n >= max) return n;
   const tags = existingTags(deps.store, LESSON_NS);
   // Matérialiser la liste avant d'enfiler : `jobs.enqueue` exécute d'autres requêtes sur la même
   // connexion, ce que better-sqlite3 refuse tant qu'un `.iterate()` est encore ouvert.
   const pages = [...deps.store.all()];
-  let n = 0;
   for (const page of pages) {
     if (n >= max) break;
     if (
@@ -447,11 +497,49 @@ function splitFrontmatter(fm: Record<string, unknown>, source: string): Record<s
 
 const MAINTENANCE_CTX: WriteContext = { author: 'maintenance' };
 
+async function applyRetro(
+  payload: RetroPayload,
+  memory: MemoryService,
+  selection?: string[],
+): Promise<RetroPayload> {
+  if (selection?.some((slug) => !payload.lecons.some((lecon) => lecon.slug === slug))) {
+    throw new AidHttpError(400, 'proposition retro : leçon inconnue');
+  }
+  const lecons = payload.lecons.filter(({ slug }) => !selection || selection.includes(slug));
+  const created: string[] = [];
+  let creationEnCours: string | undefined;
+  try {
+    for (const { slug, text } of [payload.retro, ...lecons]) {
+      creationEnCours = slug;
+      await memory.put(slug, text, { kind: 'create' }, MAINTENANCE_CTX);
+      created.push(slug);
+      creationEnCours = undefined;
+    }
+  } catch (err) {
+    // Le put peut avoir réussi en base avant un échec du miroir.
+    if (creationEnCours && !(err instanceof RevisionConflict) && memory.get(creationEnCours)) {
+      created.push(creationEnCours);
+    }
+    for (const slug of created.reverse()) {
+      try {
+        await memory.remove(slug, MAINTENANCE_CTX);
+      } catch (erreurRetrait) {
+        console.error(`rétro : échec du retrait de ${slug} : ${String(erreurRetrait)}`);
+      }
+    }
+    throw err;
+  }
+  return { ...payload, lecons };
+}
+
 // `apply` : MemoryService.put, author 'maintenance'. `reject` : frontmatter `entretien_rejete` +=  kind.
 export async function applyProposal(
   proposal: MemoryProposal,
   memory: MemoryService,
-): Promise<void> {
+  lecons?: string[],
+): Promise<RetroPayload | void> {
+  if (proposal.kind === 'retro')
+    return applyRetro(proposal.payload as RetroPayload, memory, lecons);
   const page = memory.get(proposal.slug);
   if (!page) throw new Error('page absente');
   if (page.closed) throw new AidHttpError(409, 'page close');
@@ -543,6 +631,7 @@ export async function rejectProposal(
   proposal: MemoryProposal,
   memory: MemoryService,
 ): Promise<void> {
+  if (proposal.kind === 'retro') return;
   const page = memory.get(proposal.slug);
   if (page) {
     const already = rejectedKinds(page.frontmatter);

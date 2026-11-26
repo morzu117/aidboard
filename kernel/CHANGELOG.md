@@ -14,6 +14,21 @@ plages de versions dans `outils`. `/sync` propose ce profil et le rend près
 des gates. Les rôles plan et dev exécutent `aid env check` à l'étape 0.
 Pour un projet sans `outils`, seul `git` est vérifié comme auparavant.
 
+## Faits candidats en journée (chantier 62)
+
+Changement mineur, sans migration. La politique mémoire décrit les faits
+candidats, leur signalement à la recherche et leur promotion par la rétro.
+
+## Rétro proposée par le moteur (chantier 61)
+
+Changement mineur, sans migration. Le daemon propose la nuit une rétro pour
+les cycles mergés qui en sont dépourvus. Le rôle retro précise le slug attendu.
+
+## Phase d'acceptation (chantier 67)
+
+Changement mineur, sans migration. La phase facultative écrit les tests
+avant le dev et ajoute un contrôle au gate.
+
 ## Liens typés, pages closes et décisions (chantier 60)
 
 Changement mineur, sans migration. La politique mémoire décrit la fermeture,

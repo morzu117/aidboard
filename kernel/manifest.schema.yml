@@ -104,3 +104,8 @@ guardrails: # [hérité]
   max_price: string # plafond budget passé au review_agent
 
 phases: [string] # [hérité] sous-ensemble de policy/phases.md, dans l'ordre
+
+acceptation: # si la phase est déclarée
+  chemins: [string] # par défaut : [test/, e2e/]
+  lancer:
+    <chemin>: string # une commande par chemin, avec {fichiers}

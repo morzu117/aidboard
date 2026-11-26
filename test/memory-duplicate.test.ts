@@ -170,6 +170,7 @@ test('seuil inclusif et configurable', async () => {
   const maintenant = new Date(2026, 10, 18, 23);
   const planifier = (duplicateDistance: number) =>
     scheduleMaintenance(maintenant, {
+      db,
       vectors,
       store,
       jobs,
@@ -387,6 +388,7 @@ test.each([0.1, 0.3])('daemon : vecteurs et seuil %s transmis au job doublon', a
           window: '00:00-00:00',
           duplicateDistance: distance,
         },
+        capture: { enabled: false, delayMinutes: 5, maxPerDay: 30 },
         git: { push: false },
       },
     },

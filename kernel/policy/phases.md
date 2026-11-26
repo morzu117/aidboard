@@ -20,6 +20,18 @@ le blackboard : il passe de narratif à vérifiable.
 Sortie : le rayon d'impact est déclaré, ou la page dit explicitement pourquoi
 il n'a pas pu l'être.
 
+## acceptation
+
+Cette phase existe seulement si le projet la déclare dans `phases`.
+
+**Lit** — le plan et son contrat d'acceptation, le code de la base.
+
+**Écrit** — les tests dans un commit marqué par point et une section
+« Acceptation » pour chaque point du plan.
+
+Sortie : le point est couvert par des tests rouges, ou le plan donne la
+raison pour laquelle il ne peut pas être testé à l'avance.
+
 ## dev
 
 **Lit** — `<namespace>/plan/<task>`, l'index structurel.
@@ -74,6 +86,9 @@ Sortie : chaque finding est routé, ou le cycle est clos.
 C'est la seule phase autorisée à écrire dans l'espace transverse. Une leçon
 n'est promue que si elle est vraie hors de ce projet. Dans le doute, elle
 reste dans la rétro.
+
+La rétro par un agent reste la règle. Si un cycle mergé n'a pas de rétro, le daemon en propose une la nuit, à partir des pages du cycle et avec le modèle local.
+Aucune page n'est écrite sans décision de l'admin.
 
 Sortie : les pages de cycle sont purgeables.
 

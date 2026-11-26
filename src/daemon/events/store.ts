@@ -96,6 +96,22 @@ export class EventStore extends EventEmitter {
     this.emit('ephemeral', msg);
   }
 
+  latestMemoryPageContext(slug: string): Pick<AidEvent, 'topicId' | 'runId' | 'agentId'> {
+    const row = this.db
+      .prepare(
+        `SELECT topic_id, run_id, agent_id FROM events
+         WHERE type = 'memory.page' AND json_extract(data, '$.slug') = ?
+           AND (topic_id IS NOT NULL OR run_id IS NOT NULL OR agent_id IS NOT NULL)
+         ORDER BY seq DESC LIMIT 1`,
+      )
+      .get(slug) as Pick<Row, 'topic_id' | 'run_id' | 'agent_id'> | undefined;
+    return {
+      topicId: row?.topic_id ?? undefined,
+      runId: row?.run_id ?? undefined,
+      agentId: row?.agent_id ?? undefined,
+    };
+  }
+
   since(afterId: string | null, filter: { topicId?: string; runId?: string } = {}): StoredEvent[] {
     const after = afterId
       ? (this.db.prepare('SELECT seq FROM events WHERE id = ?').get(afterId) as

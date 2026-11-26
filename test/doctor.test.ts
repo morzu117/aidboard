@@ -62,6 +62,8 @@ test('57.5 : doctor signale le distant absent, les écarts et les conflits mémo
         pendingJobs: 0,
         failedJobs: 0,
         mirrorDirty: false,
+        faits: { candidats: 0, aujourdhui: 0, plafond: 0 },
+        retros: { manquantes: 0, proposees: 0, abandonnees: 0 },
         mirrorSync,
       }),
     });
@@ -250,10 +252,36 @@ test('mémoire : N pages par namespace, triées, aucune anomalie → ✓', async
       pendingJobs: 0,
       failedJobs: 0,
       mirrorDirty: false,
+      faits: { candidats: 0, aujourdhui: 0, plafond: 0 },
+      retros: { manquantes: 0, proposees: 0, abandonnees: 0 },
       mirrorSync: { push: false, origin: false, ahead: null, behind: null, conflicts: [] },
     }),
   });
   expect(checks).toContainEqual({ level: 'ok', label: 'mémoire : 2 pages (aid 1, lesson 1)' });
+});
+
+test.each([
+  { abandonnees: 0, level: 'ok' },
+  { abandonnees: 1, level: 'warn' },
+])('mémoire : la ligne des rétros au niveau $level', async ({ abandonnees, level }) => {
+  const checks = await levels({
+    memoryHealth: async () => ({
+      pages: {},
+      closed: 0,
+      links: { total: 0, pendants: 0 },
+      fts: true,
+      vectors: 'off',
+      pendingJobs: 0,
+      failedJobs: 0,
+      mirrorDirty: false,
+      mirrorSync: { push: false, origin: false, ahead: null, behind: null, conflicts: [] },
+      faits: { candidats: 0, aujourdhui: 0, plafond: 0 },
+      retros: { manquantes: 2, proposees: 3, abandonnees },
+    }),
+  });
+  expect(checks).toContain(
+    `${level}:Rétros : 2 manquantes, 3 proposées, ${abandonnees} à écrire à la main`,
+  );
 });
 
 test('mémoire : miroir non commité ou jobs en échec → ⚠ avec la commande ou le journal', async () => {
@@ -268,6 +296,8 @@ test('mémoire : miroir non commité ou jobs en échec → ⚠ avec la commande 
       pendingJobs: 0,
       failedJobs: 0,
       mirrorDirty: true,
+      faits: { candidats: 0, aujourdhui: 0, plafond: 0 },
+      retros: { manquantes: 0, proposees: 0, abandonnees: 0 },
       mirrorSync: { push: false, origin: false, ahead: null, behind: null, conflicts: [] },
     }),
   });
@@ -286,6 +316,8 @@ test('mémoire : miroir non commité ou jobs en échec → ⚠ avec la commande 
       pendingJobs: 0,
       failedJobs: 2,
       mirrorDirty: false,
+      faits: { candidats: 0, aujourdhui: 0, plafond: 0 },
+      retros: { manquantes: 0, proposees: 0, abandonnees: 0 },
       mirrorSync: { push: false, origin: false, ahead: null, behind: null, conflicts: [] },
     }),
   });
@@ -720,4 +752,27 @@ test('63.3 : doctor omet la ligne si le daemon ne livre pas la mesure', async ()
     requete.mockRestore();
     daemon.mockRestore();
   }
+});
+
+test.each([
+  [1, 3, "ok:Faits candidats : 2 en mémoire, 1 extraits aujourd'hui sur 3"],
+  [3, 3, "warn:Faits candidats : 2 en mémoire, 3 extraits aujourd'hui sur 3"],
+  [1, 0, 'ok:Faits candidats : capture éteinte'],
+])('mémoire : la ligne des faits avec %i jobs sur %i', async (aujourdhui, plafond, line) => {
+  const checks = await levels({
+    memoryHealth: async () => ({
+      pages: {},
+      closed: 0,
+      links: { total: 0, pendants: 0 },
+      fts: true,
+      vectors: 'off',
+      pendingJobs: 0,
+      failedJobs: 0,
+      mirrorDirty: false,
+      mirrorSync: { push: false, origin: false, ahead: null, behind: null, conflicts: [] },
+      retros: { manquantes: 0, proposees: 0, abandonnees: 0 },
+      faits: { candidats: 2, aujourdhui, plafond },
+    }),
+  });
+  expect(checks).toContain(line);
 });
