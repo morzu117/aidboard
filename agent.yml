@@ -18,6 +18,14 @@ gates:                     # détecté : « npm test » seul ; le vrai gate fait
   gate: npm run gate       # typecheck + lint + test + build
   e2e: npm run gate:e2e    # build + Playwright
 
+phases: [plan, acceptation, dev, review, triage, retro]
+
+acceptation:
+  chemins: [test/, e2e/]
+  lancer:
+    test/: npx vitest run {fichiers}
+    e2e/: npx playwright test {fichiers}
+
 stack:
   node: "Node 22 requis (engines >=22.12 <25, épinglé par mise.toml) ; le gate tourne aussi sous Node 24 avant chaque livraison de chantier."
   natifs: "node-pty et better-sqlite3 sont en external dans tsup : jamais embarqués dans le bundle."
