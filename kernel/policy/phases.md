@@ -20,6 +20,18 @@ le blackboard : il passe de narratif à vérifiable.
 Sortie : le rayon d'impact est déclaré, ou la page dit explicitement pourquoi
 il n'a pas pu l'être.
 
+## acceptation
+
+Cette phase existe seulement si le projet la déclare dans `phases`.
+
+**Lit** — le plan et son contrat d'acceptation, le code de la base.
+
+**Écrit** — les tests dans un commit marqué par point et une section
+« Acceptation » pour chaque point du plan.
+
+Sortie : le point est couvert par des tests rouges, ou le plan donne la
+raison pour laquelle il ne peut pas être testé à l'avance.
+
 ## dev
 
 **Lit** — `<namespace>/plan/<task>`, l'index structurel.

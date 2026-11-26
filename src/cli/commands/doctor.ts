@@ -29,6 +29,8 @@ import { daemonFetch, runningDaemon } from '../daemonInfo.js';
 import { readVersion } from '../version.js';
 import { currentServer, installMode } from '../../daemon/install.js';
 import type { InstallMode, MeshTailscale } from '../../shared/model.js';
+import { racineDepot } from '../../acceptation/verifier.js';
+import { lireChemins, lireLanceurs, lireManifesteAcceptation } from './acceptation.js';
 
 export type Level = 'ok' | 'warn' | 'ko';
 export interface Check {
@@ -631,6 +633,35 @@ function mcpServerNames(path: string): string[] {
 
 const MARK: Record<Level, string> = { ok: '✓', warn: '⚠', ko: '✗' };
 
+async function verifierLanceursAcceptation(): Promise<Check[]> {
+  const cwd = process.cwd();
+  const depot = await racineDepot(cwd).catch(() => cwd);
+  const manifeste = await lireManifesteAcceptation(depot).catch(() => null);
+  if (!Array.isArray(manifeste?.phases) || !manifeste.phases.includes('acceptation')) return [];
+
+  const lancer = manifeste.acceptation?.lancer;
+  let prefixes: string[];
+  try {
+    prefixes = Object.keys(lireLanceurs(lancer));
+  } catch {
+    return [{ level: 'warn', label: 'acceptation.lancer invalide dans agent.yml' }];
+  }
+  if (prefixes.length === 0) {
+    return [{ level: 'warn', label: 'acceptation.lancer absent ou vide dans agent.yml' }];
+  }
+
+  try {
+    return lireChemins(manifeste.acceptation?.chemins)
+      .filter((chemin) => !prefixes.some((prefixe) => chemin.startsWith(prefixe)))
+      .map((chemin) => ({
+        level: 'warn',
+        label: `acceptation.lancer : aucune commande pour ${chemin}`,
+      }));
+  } catch {
+    return [];
+  }
+}
+
 export async function runDoctor(
   paths: AidPaths,
   probes: Probes = realProbes(paths),
@@ -638,6 +669,7 @@ export async function runDoctor(
 ): Promise<number> {
   out(`aidboard ${readVersion()}`);
   const checks = await runChecks(probes);
+  checks.push(...(await verifierLanceursAcceptation()));
   for (const k of checks) out(`  ${MARK[k.level]} ${k.label}${k.detail ? ` : ${k.detail}` : ''}`);
   return checks.some((k) => k.level === 'ko') ? 1 : 0;
 }
