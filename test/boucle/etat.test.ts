@@ -102,6 +102,30 @@ describe('transition de boucle', () => {
     avancer(triage, { type: 'triage_termine', categories: [] }, 'livraison_prete', []);
   });
 
+  it.each([
+    { categories: [], route: 'livraison' },
+    { categories: ['bug'], route: 'dev' },
+    { categories: ['design'], route: 'humain' },
+  ])('triage_termine laisse une tentative close pour la route $route', ({ categories, route }) => {
+    const triage = validerRevue();
+    const instantTriage = MAINTENANT + 1;
+    const { etat } = transition(triage, { type: 'triage_termine', categories }, instantTriage);
+
+    expect(etat.etapes).toContainEqual(
+      expect.objectContaining({
+        type: 'triage',
+        issue: 'pass',
+        agentId: null,
+        debut: instantTriage,
+        fin: instantTriage,
+        teteDepart: TETE,
+        teteArrivee: TETE,
+        categories,
+        route,
+      }),
+    );
+  });
+
   it('enchaîne le GO directement vers le dev si l’acceptation est désactivée', () => {
     const dev = lancerDev(false);
     expect(dev.etapes).toMatchObject([{ type: 'plan' }, { type: 'dev' }]);

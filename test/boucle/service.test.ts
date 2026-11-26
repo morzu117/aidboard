@@ -178,6 +178,7 @@ test('enchaîne plan, GO, dev, gate et revue jusqu’à livraison prête sur la 
       { type: 'dev', issue: 'pass', teteArrivee: tete },
       { type: 'gate', issue: 'pass', teteArrivee: tete },
       { type: 'revue', issue: 'pass', teteArrivee: tete },
+      { type: 'triage', issue: 'pass', route: 'livraison' },
     ],
     mesures: { interventionsHumaines: 1, redevs: 0 },
   });
