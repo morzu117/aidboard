@@ -12,6 +12,11 @@ et patchs n'en ont pas, sauf mention contraire.
 Changement mineur, sans migration. La politique d'orchestration décrit le
 travail sous bubblewrap. L'isolation est désactivée par défaut.
 
+## Phase d'acceptation (chantier 67)
+
+Changement mineur, sans migration. La phase facultative écrit les tests
+avant le dev et ajoute un contrôle au gate.
+
 ## Liens typés, pages closes et décisions (chantier 60)
 
 Changement mineur, sans migration. La politique mémoire décrit la fermeture,

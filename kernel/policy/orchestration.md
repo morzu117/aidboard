@@ -22,6 +22,8 @@ routage modèle est visible dans le plan et peut être écrasé à ce moment-là
 Ensuite, pour chaque sous-tâche, dans l'ordre des dépendances :
 
 ```
+0. ACCEPTATION  si la phase est déclarée, l'orchestrateur lance le testeur
+                dans une nouvelle session, avant le dev
 1. BUILD    l'agent de dev exécute le brief
 2. GATE     l'orchestrateur vérifie la DoD, lance la suite complète,
             et le contrôle anti-dépassement de périmètre
@@ -48,7 +50,7 @@ pousse. Si un accès lui manque, l'agent le nomme dans sa page de sortie.
 
 ## Le gate
 
-Quatre vérifications, toutes obligatoires, dans cet ordre :
+Vérifications obligatoires dans cet ordre. Le contrôle 5 dépend de la phase déclarée.
 
 **1. Le commit existe.** Un point de plan est un commit. Un agent qui rend du
 travail non commité n'a rien rendu — le rappeler dans le brief, parce que ça
@@ -72,6 +74,13 @@ dépassement : reformatage automatique, refactor non demandé, réindentation.
 La sanction est le revert ou l'escalade, pas la discussion.
 
 **4. Le handoff existe.** Voir `policy/phases.md`.
+
+**5. Les tests d'acceptation sont vérifiés.** Ce contrôle s'applique
+seulement si le projet déclare la phase `acceptation`.
+`aid acceptation verifier --base <ref>` et `aid acceptation preuve --base <ref>`
+doivent passer. `aid acceptation couverture --base <ref> --plan <fichier>`
+ne doit signaler aucun point manquant. Un échec de `verifier` remonte à
+l'humain comme un dépassement de périmètre au contrôle 3.
 
 ## Échec pré-existant
 
@@ -122,6 +131,8 @@ Rien d'autre que ça :
 
 - un finding de conception ou d'architecture ;
 - un dépassement de périmètre détecté au gate ;
+- un échec de `aid acceptation verifier` ou un test d'acceptation signalé
+  comme faux par le dev, si la phase est déclarée ;
 - une sous-tâche encore rouge après le cap de re-dev ;
 - un garde-fou budget atteint ;
 - une ambiguïté irréductible dans le besoin ou le plan.
