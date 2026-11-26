@@ -91,6 +91,8 @@ Les URL avec un utilisateur vide ou un mot de passe à `/`, l'en-tête PGP et l'
 
 Les en-têtes, les paramètres d'URL, les URL de webhook, les préfixes connus. Les tests ajoutent les cas qui doivent continuer de passer : `Authorization:` seul dans une phrase, `https://example.com/?page=2`, une URL Discord sans webhook, le mot `SG.` dans une phrase.
 
+- _Acceptation._ Couvert par `test/shared/nettoyage-porteurs.test.ts` (7c6f05c), vingt-huit cas écrits par le testeur depuis le plan seul. Refusés comme secret : les en-têtes `Authorization` Basic, Token et Digest, `Cookie` et `Set-Cookie` ; les paramètres `access_token`, `token`, `sig`, `signature`, `X-Amz-Signature` et `X-Amz-Credential` ; les webhooks Slack et Discord ; les huit formes de jeton du DM62. Qui passent : la mention de l'en-tête `Authorization`, une URL de pagination, un paramètre `sig` vide, une URL de canal Discord, l'abréviation `SG.`, `ya29` sans point, une heure. Échec attendu au commit marqué : seize cas, sur une assertion. Les cinq refus existants et les sept textes qui passent sont déjà verts. Lecture du testeur : un paramètre de secret est refusé dès qu'il a une valeur, même d'un caractère. Chaque jeton fabriqué est assemblé à l'exécution : la protection de GitHub a refusé une première version qui les écrivait en clair, et elle n'a pas été débloquée.
+
 ### 68.5 La mesure des faux positifs (DM60)
 
 La mesure sur le corpus, à la base et à la tête, et sa conclusion dans la note de révision.
@@ -100,7 +102,7 @@ La mesure sur le corpus, à la base et à la tête, et sa conclusion dans la not
 ## 5. Pièges
 
 - **Le filtre qui refuse tout.** C'est le DM60. Une heure, une adresse de documentation, un sha et un mot de passe d'exemple doivent continuer de passer.
-- **Un vrai secret dans un test.** Les fixtures utilisent des valeurs fabriquées, jamais un jeton réel, et aucun vrai nom d'hôte, de cell ou de projet (gardes 49 et 54).
+- **Un vrai secret dans un test.** Les fixtures utilisent des valeurs fabriquées, jamais un jeton réel, et assemblent à l'exécution toute valeur à la forme d'un jeton connu, que la protection de GitHub refuserait au push, et aucun vrai nom d'hôte, de cell ou de projet (gardes 49 et 54).
 - **Les doublons de motifs.** `nettoyage.ts` répète déjà plusieurs motifs. Le dev n'en ajoute pas un troisième : il corrige celui qui existe.
 
 ## 6. Fini quand
