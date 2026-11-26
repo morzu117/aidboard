@@ -1,10 +1,12 @@
 import { homedir } from 'node:os';
 import { join } from 'node:path';
+import type { DatesVerification } from '../../shared/routage.js';
 import { nettoyer } from '../../shared/nettoyage.js';
 import { ID_ASK, type Ask, type Asks, type AskResult } from '../../shared/swairm-ask.js';
 import { lancerAvis, liste, relire } from './demande.js';
 import { validerBudget, validerModele, type EnvironnementAvis } from './fournisseurs.js';
 import { decouper, type SousQuestion } from './prompt.js';
+import { enregistrerVerifications, lireVerifications } from './verification.js';
 
 const BUDGET_ASK_USD = 0.5;
 const DELAI_AVIS_MS = 600000;
@@ -89,6 +91,7 @@ export class ServiceAvis {
       enCours: this.courant !== null,
       depuis: this.courant?.depuis ?? null,
       budgetUsd: BUDGET_ASK_USD,
+      verifications: lireVerifications(this.dossier),
     };
   }
 
@@ -96,7 +99,7 @@ export class ServiceAvis {
     this.courant?.controle.abort();
   }
 
-  async demander(d: unknown): Promise<AskResult<Ask>> {
+  async demander(d: unknown): Promise<AskResult<Ask> & { verifications?: DatesVerification }> {
     if (this.courant) throw new AskOccupe('demande déjà en cours');
     validerDemande(d);
     const filtrer = (texte: string) => {
@@ -135,7 +138,8 @@ export class ServiceAvis {
         },
         { ...this.deps, dossier: this.dossier, signal: controle.signal },
       );
-      return resultatAvis(data);
+      await enregistrerVerifications(this.dossier, data);
+      return { ...resultatAvis(data), verifications: lireVerifications(this.dossier) };
     } catch {
       return {
         ok: false,

@@ -1,6 +1,12 @@
 import { parseArgs } from 'node:util';
 import type { AidPaths } from '../../daemon/paths.js';
-import { modelesAvis, routage, type NiveauAvis } from '../../shared/routage.js';
+import {
+  marqueVerification,
+  modelesAvis,
+  routage,
+  type DatesVerification,
+  type NiveauAvis,
+} from '../../shared/routage.js';
 import { parseAsk, type Ask } from '../../shared/swairm-ask.js';
 import { callDaemon, resolveTarget } from '../client.js';
 
@@ -8,13 +14,15 @@ function montant(cout: number | null): string {
   return cout === null ? 'inconnu' : `${cout} USD`;
 }
 
-function afficher(data: Ask): void {
+function afficher(data: Ask, verifications?: DatesVerification): void {
   for (const avis of data.avis) {
     const [fournisseur, ...modele] = avis.modele_demande.split(':');
     let etat: string = avis.etat;
     if (avis.etat === 'delai') etat = 'Délai dépassé';
     if (avis.etat === 'echec') etat = avis.brut === 'CLI absent' ? 'CLI absent' : 'Échec du CLI';
-    console.log(`${fournisseur}\t${modele.join(':')}\t${etat}\t${montant(avis.cout_usd)}`);
+    console.log(
+      `${fournisseur}${marqueVerification(verifications, fournisseur!)}\t${modele.join(':')}\t${etat}\t${montant(avis.cout_usd)}`,
+    );
   }
   console.log('n\taccord\tverdict\tcompte');
   for (const accord of data.accord) {
@@ -78,7 +86,7 @@ export async function runAvis(args: string[], paths: AidPaths): Promise<number> 
       throw new Error(typeof message === 'string' ? message : 'Demande d’avis impossible.');
     }
     if (values.json) console.log(JSON.stringify(data));
-    else afficher(data);
+    else afficher(data, json.verifications as DatesVerification | undefined);
     if (!data.avis.some((avis) => avis.etat === 'ok')) return 3;
     return data.accord.every(({ accord }) => accord === 'unanime' || accord === 'majorite') ? 0 : 4;
   } catch (err) {

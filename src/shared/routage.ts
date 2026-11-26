@@ -1,5 +1,11 @@
 export type Fournisseur = 'claude' | 'codex' | 'vibe';
 
+export type DatesVerification = Partial<Record<Fournisseur, string>>;
+
+export function marqueVerification(dates: DatesVerification | undefined, fournisseur: string) {
+  return dates && !Object.hasOwn(dates, fournisseur) ? ' — non vérifié' : '';
+}
+
 interface Cible {
   fournisseur: Fournisseur;
   modele: string;

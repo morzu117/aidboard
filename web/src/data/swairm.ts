@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from 'react';
 import type { Ask, AskResult, Asks, ModeleAsk } from '../../../src/shared/swairm-ask.js';
+import type { DatesVerification, Fournisseur } from '../../../src/shared/routage.js';
 import { boardStore } from './board.js';
 import type { AidClient } from './client.js';
 import { useAidClient } from './useAidState.js';
@@ -8,9 +9,10 @@ export interface EtatAsk {
   enCours: boolean;
   depuis: string | null;
   budgetUsd: number;
+  verifications?: DatesVerification;
 }
 export function demanderAvis(
-  demande: { question: string; n: number; modeles: ModeleAsk[] },
+  demande: { question: string; n: number; modeles: (ModeleAsk | `${Fournisseur}:defaut`)[] },
   client: AidClient,
 ): Promise<AskResult<Ask>> {
   return client.request('POST', '/api/swairm/ask', demande, { 'X-AID-Confirm': 'ask' });

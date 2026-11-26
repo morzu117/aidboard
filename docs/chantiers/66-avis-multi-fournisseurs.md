@@ -188,6 +188,7 @@ Julien ne fait plus de recette manuelle (26 novembre) : « les tests front, back
 - **vibe reste « non vérifié »** tant qu'aucun avis réel n'a abouti. Le daemon garde, par fournisseur, la date du premier avis réel qui rend une réponse lisible. L'écran d'avis et `aid avis` marquent « non vérifié » un fournisseur qui n'a pas de date, sans le bloquer. Un e2e montre la marque, puis son retrait après un avis réussi d'un faux binaire.
 
 Ce que la CI ne vérifie pas, faute de compte : une vraie réponse de chaque fournisseur. La marque « non vérifié » rend cette limite visible.
+- _Révision 66.7._ Une passe Codex, quatorze lignes existantes modifiées dans le chantier. Le contrat de codex est joué en local sur la vraie aide de la 0.172.0 ; celui de vibe est réservé à la CI, faute de vibe sur le serveur. Les captures du formulaire, avant et après, en 1280 × 800 et en 390 × 844, sont revues : la marque se lit et disparaît. Les cadres du formulaire, au style par défaut, existaient déjà avant ce point. e2e ciblé 5 sur 5, `gate:e2e` 190 sur 191 (un délai de `branche-creer`, vert seul). Mon gate : 4 742, et un délai de `cartes-reliees` sous charge, vert seul (63 sur 63).
 
 ## 5. Pièges
 

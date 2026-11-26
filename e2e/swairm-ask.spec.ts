@@ -12,6 +12,7 @@ import { tmpdir } from 'node:os';
 import { delimiter, join } from 'node:path';
 import { expect, test } from './test.js';
 import { node } from './helpers.js';
+import { detecterVisuel } from './visuel.js';
 
 const cli = join(import.meta.dirname, '../dist/cli/aid.js');
 const fixtures = join(import.meta.dirname, '../test/fixtures');
@@ -32,7 +33,7 @@ test.afterEach(() => {
 });
 
 // Un daemon par mode : le faux CLI lit son mode dans son dossier de configuration.
-for (const [indice, mode] of ['ok', 'refus', 'hôte privé', 'aucun'].entries()) {
+for (const [indice, mode] of ['ok', 'refus', 'hôte privé', 'aucun', 'vérification'].entries()) {
   test(`demande d’avis via le service interne : ${mode}`, async ({ browser }) => {
     const dossier = realpathSync(mkdtempSync(join(tmpdir(), 'aid-e2e-ask-')));
     const port = Number(process.env.AID_E2E_PORT ?? 4871) + 20 + indice;
@@ -66,6 +67,91 @@ for (const [indice, mode] of ['ok', 'refus', 'hôte privé', 'aucun'].entries())
       await page.goto(`http://127.0.0.1:${port}/swarph`);
       await node(page, 'swarph.ask').click();
       const boite = page.getByRole('dialog', { name: 'Demander N avis' });
+      if (mode === 'vérification') {
+        const captures = process.env.AID_E2E_CAPTURES;
+        const etatServeur = () =>
+          page.evaluate(async () => {
+            const reponse = await fetch('/api/swairm/ask/etat');
+            if (!reponse.ok) throw new Error(`Lecture de l'état des avis : ${reponse.status}`);
+            return (await reponse.json()).verifications;
+          });
+        const verifierMarque = async (verifie: boolean) => {
+          const tailleInitiale = page.viewportSize()!;
+          const libelle = verifie ? 'vibe' : 'vibe — non vérifié';
+          await expect(boite.getByRole('checkbox', { name: libelle, exact: true })).toBeVisible();
+          for (const [width, height] of [
+            [1280, 800],
+            [390, 844],
+          ] as const) {
+            await page.setViewportSize({ width, height });
+            const defauts = [];
+            for (const trouvaille of await detecterVisuel(page)) {
+              if (
+                await page
+                  .locator(trouvaille.selecteur)
+                  .evaluate((e) => !!e.closest('[role="dialog"], dialog'))
+              )
+                defauts.push(trouvaille);
+            }
+            expect(defauts).toEqual([]);
+            if (captures)
+              await page.screenshot({
+                path: join(
+                  captures,
+                  `avis-vibe-${verifie ? 'apres' : 'avant'}-${width}x${height}.png`,
+                ),
+              });
+          }
+          await page.setViewportSize(tailleInitiale);
+        };
+        expect(await etatServeur()).toEqual({});
+        await verifierMarque(false);
+        const choisirFournisseurs = async () => {
+          await node(page, 'swarph.ask.modele-sonnet').uncheck();
+          await node(page, 'swarph.ask.modele-opus').uncheck();
+          await node(page, 'swarph.ask.modele-haiku').check();
+          await node(page, 'swarph.ask.modele-haiku').uncheck();
+          await node(page, 'swarph.ask.modele-vibe:defaut').check();
+          await node(page, 'swarph.ask.modele-codex:defaut').check();
+        };
+        const champ = boite.getByRole('textbox', { name: 'Question', exact: true });
+        const envoyer = boite.getByRole('button', { name: 'Envoyer' });
+        await choisirFournisseurs();
+        await champ.fill('Faut-il vérifier example.com ?');
+        await expect(envoyer).toBeEnabled();
+        await envoyer.click();
+        await expect(boite.getByRole('status')).toHaveText('Question refusée : hôte privé');
+        expect(await etatServeur()).toEqual({});
+        await boite.getByRole('button', { name: 'Fermer', exact: true }).click();
+        await node(page, 'swarph.ask').click();
+        await choisirFournisseurs();
+        await champ.fill('Faut-il vérifier les tests ?');
+        await boite.getByRole('combobox', { name: 'N', exact: true }).selectOption('2');
+        const retour = page.waitForResponse(
+          (r) => new URL(r.url()).pathname === '/api/swairm/ask' && r.request().method() === 'POST',
+        );
+        await envoyer.click();
+        const resultat = await (await retour).json();
+        expect(resultat.ok).toBe(true);
+        expect(
+          resultat.data.avis.map((avis: { modele_demande: string; etat: string }) => [
+            avis.modele_demande,
+            avis.etat,
+          ]),
+        ).toEqual([
+          ['vibe:defaut', 'ok'],
+          ['codex:defaut', 'ok'],
+        ]);
+        await expect(boite.getByRole('columnheader', { name: 'vibe:defaut — ok' })).toBeVisible();
+        expect(await etatServeur()).toEqual({
+          vibe: resultat.data.genere_a,
+          codex: resultat.data.genere_a,
+        });
+        await boite.getByRole('button', { name: 'Fermer', exact: true }).click();
+        await node(page, 'swarph.ask').click();
+        await verifierMarque(true);
+        return;
+      }
       await expect(boite).toContainText('Coût maximal : 1.50 USD');
       await expect(boite).toContainText(
         "Le texte part chez le fournisseur de Swairm. N'y mets ni secret ni contenu de carte.",

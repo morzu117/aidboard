@@ -649,3 +649,24 @@ test('les mots ordinaires ne sont pas traités comme des suffixes DNS privés', 
     await service.demander({ ...demandeService, n: 1, question: 'Faut-il un test local ?' }),
   ).toMatchObject({ ok: true });
 });
+
+test('conserve la date du premier avis lisible indépendamment pour chaque fournisseur', async () => {
+  const service = new ServiceAvis(racine, { env });
+  const demande = { question, n: 1, modeles: ['vibe:defaut'] };
+  expect(service.etat().verifications).toEqual({});
+  await writeFile(join(racine, 'vibe-sortie'), 'Réponse illisible');
+  expect(await service.demander(demande)).toMatchObject({ kind: 'aucun-avis', verifications: {} });
+  await writeFile(join(racine, 'vibe-sortie'), reponse);
+  const premier = await service.demander(demande);
+  expect(premier.ok).toBe(true);
+  if (!premier.ok) throw new Error('Avis Vibe attendu.');
+  const date = premier.data.genere_a;
+  expect(premier.verifications).toEqual({ vibe: date });
+  await expect(service.demander(demande)).resolves.toMatchObject({ verifications: { vibe: date } });
+  expect((await service.demander({ ...demande, modeles: ['codex:defaut'] })).ok).toBe(true);
+  expect(new ServiceAvis(racine, { env }).etat().verifications).toEqual({
+    vibe: date,
+    codex: expect.any(String),
+  });
+  expect((await liste(join(racine, 'avis'))).erreurs).toEqual([]);
+});

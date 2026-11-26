@@ -182,7 +182,11 @@ const FONCTIONNALITES_CODEX_DESACTIVEES = [
   'workspace_dependencies',
 ];
 
-function argumentsAvis(fournisseur: Fournisseur, options: OptionsAvis, fichier: string): string[] {
+export function argumentsAvis(
+  fournisseur: Fournisseur,
+  options: OptionsAvis,
+  fichier: string,
+): string[] {
   const { prompt, modele, budgetUsd } = options;
   switch (fournisseur) {
     case 'claude':

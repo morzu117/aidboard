@@ -188,3 +188,22 @@ test.each([
   expect(await lancer()).toBe(3);
   expect(console.log).toHaveBeenCalledWith(`claude\tsonnet\t${message}\tinconnu`);
 });
+
+test.each([{}, { vibe: '2026-11-26T12:00:00.000Z' }])(
+  'affiche l’état de vérification d’un fournisseur dans la sortie texte (%j)',
+  async (verifications) => {
+    repondre({
+      ok: false,
+      kind: 'aucun-avis',
+      data: {
+        ...donnees,
+        avis: [{ ...donnees.avis[0], modele_demande: 'vibe:defaut', etat: 'echec' }],
+      },
+      verifications,
+    });
+    expect(await lancer('--challenge')).toBe(3);
+    expect(vi.mocked(console.log).mock.calls[0]?.[0]).toBe(
+      `vibe${'vibe' in verifications ? '' : ' — non vérifié'}\tdefaut\tÉchec du CLI\t0.04 USD`,
+    );
+  },
+);

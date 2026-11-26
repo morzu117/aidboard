@@ -71,7 +71,7 @@ test('403 sans confirmation et 400 invalides : aucun processus ; lectures et ét
   expect(existsSync(lance)).toBe(false);
   expect(
     (await t!.d.app.inject({ url: '/api/swairm/ask/etat', headers: t!.headers })).json(),
-  ).toEqual({ enCours: false, depuis: null, budgetUsd: 0.5 });
+  ).toEqual({ enCours: false, depuis: null, budgetUsd: 0.5, verifications: {} });
   const idHistorique = '20261109T071500Z-3f2a';
   const historique = join(dossier, '.swairm', 'asks');
   mkdirSync(historique, { recursive: true });

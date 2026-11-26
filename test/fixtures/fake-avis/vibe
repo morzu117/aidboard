@@ -1,0 +1,4 @@
+#!/bin/sh
+set -eu
+
+printf '%s\n' '{"reponses":[{"n":1,"verdict":"oui","justification":"Avis Vibe de test."}]}'
