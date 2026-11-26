@@ -304,6 +304,14 @@ Les règles de DM68, avec un test négatif chacune. Le testeur écrit d'abord le
 
 Les règles de DM69, avec un test négatif chacune. Le testeur écrit d'abord les tests à partir de DM69 seul, puis le dev les fait passer.
 
+- _Acceptation._ Couvert par `test/boucle/relecture2-*.test.ts` et `test/livraison-boucle.test.ts` (7d548c7), écrits par le testeur depuis DM69 seul, avec la condition du lab (DM 106896) : un lancement escalade sans `ls-remote` si la config locale a changé depuis la dernière empreinte. Interfaces fixées :
+  - `ConversationDriverOptions.remonterTexteFinal` ;
+  - `EtatBoucle.groupes` ;
+  - `empreinteEnvironnement(home, fichiers?, { worktree }?)` ;
+  - l'option `{ enGroupe }` de `produirePreuves`.
+
+  Le testeur a trouvé un vrai défaut : une revue fail était enregistrée pass. Trois tests du 69.8 sont alignés sur DM69 (79 lignes, dans des tests de ce chantier). Vingt-quatre cas échouent sur assertion avant le dev.
+
 ## 5. Réponses de Julien (26 novembre)
 
 - **Q1. Les permissions sur le Mac, sans isolation : le mode `auto`, vérifié après coup.** Les sessions d'acceptation et de dev enchaînent sans demander. Le daemon vérifie ensuite le worktree, les tests d'acceptation, la branche et l'empreinte de l'environnement (DM67). Le plan et la revue restent en lecture seule. C'est une règle vérifiée après coup, pas une barrière : pendant l'étape, l'agent garde l'accès au home.
