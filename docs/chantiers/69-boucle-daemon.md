@@ -181,6 +181,14 @@ Les tests utilisent un dépôt temporaire et une fausse commande de gate.
 - La lecture du bloc JSON de findings, avec un verdict par fichier et par point : un bloc invalide ou vide est une relance, puis une escalade (DM67).
 - La table de triage et le cap de re-dev, qui compte le dev et le testeur.
 
+- _Acceptation._ Couvert par `test/boucle/revue.test.ts` et `test/boucle/revue-conducteur.test.ts` (53e690d), vingt-six cas écrits par le testeur depuis le plan seul. L'interface :
+  - `lireRevue(texte, { fichiers, points, tete })` rend `{ ok: true, verdicts, findings, categories }` ou `{ ok: false, raison }` ;
+  - `terminerRevue(contexte, deps)` lit `<namespace>/review/<slug>` et rend les événements existants de la machine : `revue_terminee` puis `triage_termine`, ou `artefact_manquant`.
+
+  Le bloc json porte `tete`, `verdicts.fichiers`, `verdicts.points` et `findings`. Un finding porte sévérité, catégorie, `fichier:ligne`, problème, action, et un point facultatif. Un `fail` doit être justifié par un finding qui désigne son fichier ou son point. Une catégorie inconnue est valide et part à l'humain.
+
+  Les cas invalides : une prose « CLEAN », un JSON vide ou mal formé, un verdict manquant ou hors du diff, deux blocs, une autre tête. La machine relance la même revue, puis escalade `ambiguity`. Un faux bloc dans le diff ne compte pas. Le cap de re-dev est rejoué à travers la machine. Échec attendu au commit marqué : `revue.js` n'existe pas, et le conducteur n'exporte pas `terminerRevue`.
+
 ### 69.6 L'API, la vue et les mesures
 
 - Les routes : `GET /api/topics/:id/boucle`, puis `POST` sur `…/boucle` (lancer), `…/boucle/go`, `…/boucle/reponse` et `…/boucle/arreter`, toutes sous la porte de confirmation existante.
