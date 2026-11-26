@@ -22,6 +22,7 @@ const node = (id: string) => document.querySelector(`[data-node="${id}"]`) as HT
 const MESURE = '2026-11-06T10:00:00.000Z';
 
 const local = (over: Partial<MachineLocale> = {}): MachineLocale => ({
+  environnement: { os: 'linux', arch: 'x64', outils: {}, modelesOllama: null, mesureA: MESURE },
   agents: [
     { kind: 'claude', trouve: true, version: '2.1.0', options: agentOptions('claude', []) },
     { kind: 'codex', trouve: false, version: null, options: agentOptions('codex', []) },

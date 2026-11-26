@@ -85,6 +85,7 @@ test('31.8 (D174) : chaque route du Mac rend 404 sur le port des appareils, hors
     '/ws/events',
     '/api/artefacts/etat',
     '/api/host/couper',
+    '/api/machines/local',
   ]) {
     expect(urls.has(u), u).toBe(true);
   }

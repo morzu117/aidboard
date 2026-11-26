@@ -21,11 +21,15 @@ export interface MemoryHealth {
   failedJobs: number;
   mirrorDirty: boolean;
   mirrorSync: MirrorSyncHealth;
+  retros: { manquantes: number; proposees: number; abandonnees: number };
+  faits: { candidats: number; aujourdhui: number; plafond: number };
 }
 import type { WorkspaceQueue } from '../actions/queue.js';
+import type { MemoryConfig } from '../config.js';
 import { AidHttpError } from '../errors.js';
 import type { EventStore } from '../events/store.js';
 import type { Embedder, VectorIndex } from './embed.js';
+import type { MemoryJobs } from './jobs.js';
 import { type MemoryMirror, type MirrorSyncHealth, walkMarkdown } from './mirror.js';
 import {
   InvalidMemSlug,
@@ -76,6 +80,7 @@ export interface MemoryServiceDeps {
   mirror: MemoryMirror;
   events: EventStore;
   queue: WorkspaceQueue;
+  capture?: { config: MemoryConfig['capture']; jobs: MemoryJobs };
   log?: (line: string) => void;
   onWrite?: (slug: string) => void; // enfile un job d'embedding
   onRemove?: (slug: string) => void;
@@ -86,12 +91,13 @@ export interface MemoryServiceDeps {
 const RRF_K = 60;
 const NEIGHBOR_TYPES = ['contredit', 'precise', 'issu_de', 'cite'] as const;
 
-function pageHit(page: MemoryPage): SearchHit {
+function pageHit(page: MemoryPage, fts?: Pick<SearchHit, 'snippet' | 'score'>): SearchHit {
   return {
     slug: page.slug,
     title: page.title,
-    snippet: page.body.replace(/\s+/g, ' ').slice(0, 160),
-    score: 0,
+    snippet: fts?.snippet ?? page.body.replace(/\s+/g, ' ').slice(0, 160),
+    score: fts?.score ?? 0,
+    ...(page.frontmatter.statut === 'candidat' && { candidat: true }),
   };
 }
 
@@ -136,7 +142,9 @@ export class MemoryService {
     const pages = [...this.deps.store.all()];
     const tasks = new Map<string, { namespace: string; task: string; slugs: string[] }>();
     for (const page of pages) {
-      const match = /^([^/]+)\/(?:plan|dev-handoff|review)\/([^/]+)$/.exec(page.slug);
+      const match =
+        /^([^/]+)\/(?:plan|dev-handoff|review)\/([^/]+)$/.exec(page.slug) ??
+        /^([^/]+)\/fait\/([^/]+)\.[^/.]+$/.exec(page.slug);
       if (!match) continue;
       const [, namespace, task] = match;
       if (!namespace || !task || namespace === LESSON_NS) continue;
@@ -226,7 +234,12 @@ export class MemoryService {
       const hits: SearchHit[] = [];
       for (const [slug, { rank, via }] of ftsRanks) {
         const hit = fts[rank - 1]!;
-        hits.push(via ? { ...pageHit(store.get(slug)!), score: hit.score, via } : hit);
+        const page = store.get(slug)!;
+        hits.push({
+          ...pageHit(page, via ? undefined : hit),
+          score: hit.score,
+          ...(via && { via }),
+        });
         if (hits.length >= limit) break;
       }
       return finish('fts', hits);
@@ -250,10 +263,10 @@ export class MemoryService {
         best = vectorRank;
       }
       const known = ftsRank && !ftsRank.via ? fts[ftsRank.rank - 1] : undefined;
-      const page = known ? undefined : store.get(slug);
-      if (!known && !page) continue;
+      const page = store.get(slug);
+      if (!page) continue;
       hits.push({
-        ...(known ?? pageHit(page!)),
+        ...pageHit(page, known),
         score: Math.round(score * 1e6) / 1e6,
         ...(best?.via && { via: best.via }),
       });
@@ -333,10 +346,19 @@ export class MemoryService {
   }
 
   async health(): Promise<MemoryHealth> {
+    const { capture } = this.deps;
+    const midnight = new Date();
+    midnight.setHours(0, 0, 0, 0);
     const jobs = this.deps.store.jobCounts();
     return {
       pages: this.deps.store.countByNamespace(),
       ...this.deps.store.derivedCounts(),
+      retros: this.deps.store.retroCounts(),
+      faits: {
+        candidats: this.deps.store.countCandidates(),
+        aujourdhui: capture?.jobs.countCreatedSince('faits', midnight.toISOString()) ?? 0,
+        plafond: capture?.config.enabled ? capture.config.maxPerDay : 0,
+      },
       fts: true,
       vectors: this.deps.hybrid?.enabled() ? 'ollama' : 'off',
       pendingJobs: jobs.pending,

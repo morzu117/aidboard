@@ -37,6 +37,7 @@ afterEach(() => {
 const put = (slug: string, text = 'contenu') => store.put(slug, text, { kind: 'create' }, 'test');
 const schedule = (extra = {}) =>
   scheduleMaintenance(new Date(), {
+    db,
     store,
     jobs,
     proposals,

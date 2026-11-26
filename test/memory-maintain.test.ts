@@ -26,6 +26,7 @@ const MEMORY_CFG = (maintenance: { enabled: boolean; window: string; model?: str
     window: maintenance.window,
     model: maintenance.model ?? 'qwen3:8b',
   },
+  capture: { enabled: false, delayMinutes: 5, maxPerDay: 30 },
   git: { push: false },
 });
 
@@ -135,6 +136,7 @@ test('hors fenêtre : aucun job créé', () => {
   store.put('aid/plan/x', 'contenu', { kind: 'create' }, 'test');
   const now = new Date('2026-01-01T12:00:00');
   const n = scheduleMaintenance(now, {
+    db,
     store,
     jobs,
     proposals,
@@ -152,6 +154,7 @@ test('désactivé : aucun job créé même dans la fenêtre', () => {
   store.put('aid/plan/x', 'contenu', { kind: 'create' }, 'test');
   const now = new Date('2026-01-01T03:00:00');
   const n = scheduleMaintenance(now, {
+    db,
     store,
     jobs,
     proposals,
@@ -167,6 +170,7 @@ test('page éligible, dans la fenêtre : un job par page, plafonné à maxPerNig
   store.put('lesson/test/b', '---\na_decouper: true\n---\ncontenu b', { kind: 'create' }, 'test');
   const now = new Date('2026-01-01T03:00:00');
   const n = scheduleMaintenance(now, {
+    db,
     store,
     jobs,
     proposals,
@@ -191,6 +195,7 @@ test('page close : ni job nocturne ni proposition depuis un job déjà en file',
   );
   expect(
     scheduleMaintenance(new Date('2026-01-01T03:00:00'), {
+      db,
       store,
       jobs,
       proposals,

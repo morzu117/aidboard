@@ -3,7 +3,8 @@ import type { Db } from '../db.js';
 
 const ulid = monotonicFactory();
 
-export type JobKind = 'embed' | 'maintain';
+// Pour un job `retro`, le champ slug porte l'id du sujet.
+export type JobKind = 'embed' | 'maintain' | 'retro' | 'faits';
 export interface MemoryJob {
   id: string;
   kind: JobKind;
@@ -50,6 +51,36 @@ export class MemoryJobs {
     return id;
   }
 
+  hasPending(kind: JobKind, slug: string | null): boolean {
+    return !!this.db
+      .prepare(
+        "SELECT 1 FROM memory_jobs WHERE kind = ? AND slug IS ? AND state = 'pending' LIMIT 1",
+      )
+      .get(kind, slug);
+  }
+
+  enqueueAfter(kind: JobKind, slug: string | null, runAfter: string): string | null {
+    return this.db
+      .transaction(() => {
+        const now = new Date().toISOString();
+        const postponed = this.db
+          .prepare(
+            "UPDATE memory_jobs SET run_after = ?, updated_at = ? WHERE kind = ? AND slug IS ? AND state = 'pending'",
+          )
+          .run(runAfter, now, kind, slug);
+        if (postponed.changes) return null;
+
+        const id = `job_${ulid()}`;
+        this.db
+          .prepare(
+            "INSERT INTO memory_jobs (id, kind, slug, state, attempts, created_at, updated_at, run_after) VALUES (?, ?, ?, 'pending', 0, ?, ?, ?)",
+          )
+          .run(id, kind, slug, now, now, runAfter);
+        return id;
+      })
+      .immediate();
+  }
+
   enqueueMissingEmbeddings(reprendreÉchecs: boolean): number {
     // La table vec0 n'existe qu'après le premier embedding valide.
     const tableVecteurs = this.db
@@ -74,10 +105,14 @@ export class MemoryJobs {
     return enfilés;
   }
 
-  countCreatedSince(kind: JobKind, since: string): number {
+  countCreatedSince(kind: JobKind | readonly JobKind[], since: string): number {
+    const kinds = typeof kind === 'string' ? [kind] : kind;
+    const placeholders = kinds.map(() => '?').join(', ');
     const row = this.db
-      .prepare('SELECT count(*) AS n FROM memory_jobs WHERE kind = ? AND created_at >= ?')
-      .get(kind, since) as { n: number };
+      .prepare(
+        `SELECT count(*) AS n FROM memory_jobs WHERE kind IN (${placeholders}) AND created_at >= ?`,
+      )
+      .get(...kinds, since) as { n: number };
     return row.n;
   }
 

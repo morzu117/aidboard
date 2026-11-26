@@ -78,6 +78,8 @@ commit. Du travail non commité est du travail non rendu.
 sous-ensemble, pas « les tests qui semblent pertinents ». Un gate partiel
 rate les dérives d'artefacts générés.
 
+{{outils.block}}
+
 {{gates.block}}
 
 **3. Le diff est resté dans le périmètre** — voir ci-dessous.

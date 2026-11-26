@@ -25,6 +25,8 @@ import { replaySpool } from './events/spool.js';
 import { EventStore } from './events/store.js';
 import { WorkspaceQueue } from './actions/queue.js';
 import { type Embedder, ollamaEmbedder, VectorIndex } from './memory/embed.js';
+import type { StoredEvent } from '../shared/events.js';
+import { onMemoryEvent } from './memory/capture.js';
 import { MemoryJobs } from './memory/jobs.js';
 import {
   type ChatModel,
@@ -33,6 +35,8 @@ import {
   runMaintainJob,
   scheduleMaintenance,
 } from './memory/maintain.js';
+import { runFaitsJob } from './memory/faits.js';
+import { runRetroJob } from './memory/retro.js';
 import { MemoryMirror } from './memory/mirror.js';
 import { MemoryWorker } from './memory/worker.js';
 import { MemoryService } from './memory/service.js';
@@ -197,6 +201,32 @@ export async function startDaemon(
             log,
             backoffMs: opts.memory?.backoffMs,
             pollMs: opts.memory?.pollMs,
+            faits: chatModel
+              ? async (job) => {
+                  await runFaitsJob(job, {
+                    memory,
+                    events: store,
+                    model: chatModel,
+                    hotesPrives: maintCfg.hotesPrives,
+                    log,
+                  });
+                }
+              : undefined,
+            retro: chatModel
+              ? (job) =>
+                  runRetroJob(job, {
+                    db: opened,
+                    memory: memStore,
+                    events: store,
+                    proposals,
+                    model: chatModel,
+                    hotesPrives: maintCfg.hotesPrives,
+                    duplicateDistance: maintCfg.duplicateDistance,
+                    vectors: vectors ?? undefined,
+                    embedder: hybridOn ? (embedder ?? undefined) : undefined,
+                    log,
+                  })
+              : undefined,
             maintain: chatModel
               ? (job) =>
                   runMaintainJob(job, {
@@ -212,6 +242,7 @@ export async function startDaemon(
           })
         : null;
     const memory = new MemoryService({
+      capture: { config: config.memory.capture, jobs },
       store: memStore,
       mirror,
       events: store,
@@ -247,6 +278,7 @@ export async function startDaemon(
             availabilityChecked = true;
           }
           const n = scheduleMaintenance(new Date(), {
+            db: opened,
             vectors: vectors ?? undefined,
             store: memStore,
             jobs,
@@ -521,6 +553,13 @@ export async function startDaemon(
     });
     signalerPda = declencheurPush.signaler;
     await pda.synchroniser();
+    if (config.memory.capture.enabled && !chatModel) {
+      log("capture allumée sans modèle d'entretien");
+    }
+    const observerCapture = (event: StoredEvent) => {
+      if (chatModel) onMemoryEvent(event, { config: config.memory.capture, jobs, log });
+    };
+    store.on('event', observerCapture);
     return {
       app,
       port,
@@ -538,6 +577,7 @@ export async function startDaemon(
         await commandant.arreter();
         await basculePda;
         await filePda?.arreter();
+        store.off('event', observerCapture);
         await declencheurPush.arreter();
         await meshes.arreter();
         await agents.stopAll('daemon_stop', 5000);
