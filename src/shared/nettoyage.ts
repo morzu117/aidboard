@@ -135,22 +135,59 @@ const affectation = new RegExp(
   'ig',
 );
 // DM58 : détecte les clés à segment final sensible sans modifier les refus historiques.
-const nomCleSecrete = String.raw`(?:[\p{L}\p{N}_-]*[_-])?(?:password|passwd|pwd|passphrase|secret|token|key|credentials?)`;
+const segmentSecret = 'password|passwd|pwd|passphrase|secret|token|key|credentials?';
+const nomCleSecrete = String.raw`(?:[\p{L}\p{N}_-]*[_-])?(?:${segmentSecret})`;
 const parametreSecret = new RegExp(
   String.raw`[?&](?:${nomCleSecrete}|sig(?:nature)?|X-Amz-(?:Signature|Credential))=[^\s&#'"\x60<>]`,
   'iu',
 );
-const affectationCleSecrete = new RegExp(
-  String.raw`(?<![\p{L}\p{N}_'"-])(['"]?)(${nomCleSecrete})\1[^\S\r\n]*[:=][^\S\r\n]*(?:"((?:[^"\\\r\n]|\\[^\r\n])*)"|'((?:[^'\\\r\n]|\\[^\r\n])*)'|(<[^<>\r\n]+>|[^\s'"\x60,;&)\]}]+))`,
-  'giu',
+// Le motif des clés composées s’exécute sans « i » pour préserver la frontière camelCase.
+const lettresSansCasse = (segment: string) =>
+  segment.replace(/[a-z]/g, (c) => `[${c}${c.toUpperCase()}]`);
+const segmentsCamel = [...segmentSecret.split('|'), 'pass'];
+const motCamelSecret = segmentsCamel
+  .map((segment) => segment[0]!.toUpperCase() + lettresSansCasse(segment.slice(1)))
+  .join('|');
+const motApresSigle = segmentsCamel
+  .map((segment) => segment[0]!.toUpperCase() + segment[1]! + lettresSansCasse(segment.slice(2)))
+  .join('|');
+const cleComposee = String.raw`(?:[\p{L}\p{N}_-]*(?:[\p{Ll}\p{N}](?:${motCamelSecret})|\p{Lu}(?:${motApresSigle}))|[_-]*[\p{L}\p{N}][\p{L}\p{N}_-]*[_-]${lettresSansCasse('pass')})`;
+const valeurSecrete = String.raw`(?:"((?:[^"\\\r\n]|\\[^\r\n])*)"|'((?:[^'\\\r\n]|\\[^\r\n])*)'|(<[^<>\r\n]+>|[^\s'"\x60,;&)\]}]+))`;
+const motifAffectation = (nom: string, drapeaux: string) =>
+  new RegExp(
+    String.raw`(?<![\p{L}\p{N}_'"-])(['"]?)(${nom})\1[^\S\r\n]*[:=][^\S\r\n]*${valeurSecrete}`,
+    drapeaux,
+  );
+const affectationCleSecrete = motifAffectation(nomCleSecrete, 'giu');
+const affectationCleComposee = motifAffectation(cleComposee, 'gu');
+const motifOption = (nom: string, drapeaux: string) =>
+  new RegExp(String.raw`(?<![\p{L}\p{N}_-])--(${nom})[ \t]+(?!--)${valeurSecrete}`, drapeaux);
+const optionSecrete = motifOption(nomCleSecrete, 'giu');
+const optionComposee = motifOption(cleComposee, 'gu');
+const ligneNetrc = new RegExp(
+  String.raw`^[ \t]*machine[ \t]+\S+[ \t]+login[ \t]+\S+[ \t]+(password)[ \t]+${valeurSecrete}`,
+  'gim',
 );
+const parametreCompose = new RegExp(String.raw`[?&]${cleComposee}=[^\s&#'"\x60<>]`, 'u');
+const chargeBasic = /\bBasic[^\S\r\n]+([a-z0-9+/]+={0,2})(?![a-z0-9+/=_-])/gi;
+function identifiantsBasic(charge: string): boolean {
+  const octets = Buffer.from(charge, 'base64');
+  const canonique = octets.toString('base64');
+  if (charge !== canonique && charge !== canonique.replace(/=+$/, '')) return false;
+  const separateur = octets.indexOf(0x3a);
+  return (
+    separateur > 0 &&
+    separateur < octets.length - 1 &&
+    octets.every((octet) => octet >= 0x20 && octet !== 0x7f)
+  );
+}
 const reference = /^(?:\{|\$(?:\{|[\p{L}_])|%\()/u;
 const motDeProse = /^(?=[a-z]*[^a-z])(?:(?=\p{Script=Latin})\p{Ll})+$/u;
 const modesCredentials = ['omit', 'include', 'same-origin'];
 // Un champ HTTP commence la ligne ou une chaîne citée. Une référence shell seule
 // à la place de l’identifiant d’autorisation ne contient pas sa valeur.
 const enteteSecret =
-  /(?:^|['"\x60])[ \t]*(?:Authorization:[ \t]*[!#$%&'*+.^_\x60|~0-9a-z-]+[ \t]+(?!\$(?:[a-z_][a-z0-9_]*|\{[a-z_][a-z0-9_]*\})[ \t]*(?:['"\x60]|$))|(?:Set-)?Cookie:[ \t]*)[^\s'"\x60]/im;
+  /(?:^|['"\x60])[ \t]*(?:[<>][ \t]+)?(?:Authorization:[ \t]*[!#$%&'*+.^_\x60|~0-9a-z-]+[ \t]+(?!\$(?:[a-z_][a-z0-9_]*|\{[a-z_][a-z0-9_]*\})[ \t]*(?:['"\x60]|$))|(?:Set-)?Cookie:[ \t]*)[^\s'"\x60]/im;
 const isole = new RegExp(
   '(?<![A-Za-z0-9/+\\-_/.])([A-Za-z0-9/+\\-_]{24,}=*)(?![A-Za-z0-9/+\\-_/.])',
   'g',
@@ -170,6 +207,17 @@ const exemples = [
   'your_token_here',
 ];
 
+function valeurSensible(cle: string, valeur: string): boolean {
+  const valeurNormalisee = valeur.toLowerCase();
+  return (
+    valeur !== '' &&
+    !reference.test(valeur) &&
+    !(cle.toLowerCase() === 'credentials' && modesCredentials.includes(valeurNormalisee)) &&
+    !exemples.includes(valeurNormalisee) &&
+    valeurNormalisee !== 'changeme' &&
+    !/^<[^<>]+>$/.test(valeur)
+  );
+}
 const hexadecimal = /^[0-9a-f]+$/i;
 const uuid = /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i;
 function entropie(texte: string): number {
@@ -287,16 +335,18 @@ function controler(controle: string, hotesPrives: string[]): ReturnType<typeof n
     )
       return refus('ressemble à une clé API');
   }
-  for (const candidat of controle.matchAll(affectationCleSecrete)) {
+  for (const candidat of [
+    ...controle.matchAll(affectationCleSecrete),
+    ...controle.matchAll(affectationCleComposee),
+  ]) {
     const [affectation, guillemet, cle, double, simple, sansGuillemets] = candidat;
     const valeur = (double ?? simple ?? sansGuillemets)!;
-    const valeurNormalisee = valeur.toLowerCase();
     // La prose encadre le deux-points d’espaces et continue après le premier mot.
     // Les motifs historiques et les autres porteurs de secret restent contrôlés.
     if (
       guillemet === '' &&
       sansGuillemets !== undefined &&
-      /^[a-z]+$/.test(cle!) &&
+      /^(?:key|token)$/.test(cle!) &&
       motDeProse.test(valeur) &&
       /^[ \t]+:[ \t]+$/.test(affectation.slice(cle!.length, -valeur.length)) &&
       /\p{L}[ \t]+$/u.test(controle.slice(0, candidat.index)) &&
@@ -305,15 +355,18 @@ function controler(controle: string, hotesPrives: string[]): ReturnType<typeof n
       )
     )
       continue;
-    if (
-      Array.from(valeur).length >= 4 &&
-      !reference.test(valeur) &&
-      !(cle!.toLowerCase() === 'credentials' && modesCredentials.includes(valeurNormalisee)) &&
-      !exemples.includes(valeurNormalisee) &&
-      valeurNormalisee !== 'changeme' &&
-      !/^<[^<>]+>$/.test(valeur)
-    )
+    if (Array.from(valeur).length >= 4 && valeurSensible(cle!, valeur))
       return refus('ressemble à une clé API');
+  }
+  for (const motif of [optionSecrete, optionComposee, ligneNetrc]) {
+    for (const [, cle, double, simple, sansGuillemets] of controle.matchAll(motif)) {
+      if (valeurSensible(cle!, (double ?? simple ?? sansGuillemets)!))
+        return refus('ressemble à une clé API');
+    }
+  }
+  if (parametreCompose.test(controle)) return refus('ressemble à une clé API');
+  for (const [, charge] of controle.matchAll(chargeBasic)) {
+    if (identifiantsBasic(charge!)) return refus('ressemble à une clé API');
   }
   if ([...controle.matchAll(isole)].some((m) => secretIsole(m[1]!)))
     return refus('ressemble à une clé API');
