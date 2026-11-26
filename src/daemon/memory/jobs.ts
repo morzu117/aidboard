@@ -3,7 +3,8 @@ import type { Db } from '../db.js';
 
 const ulid = monotonicFactory();
 
-export type JobKind = 'embed' | 'maintain';
+// Pour un job `retro`, le champ slug porte l'id du sujet.
+export type JobKind = 'embed' | 'maintain' | 'retro';
 export interface MemoryJob {
   id: string;
   kind: JobKind;
@@ -74,10 +75,14 @@ export class MemoryJobs {
     return enfilés;
   }
 
-  countCreatedSince(kind: JobKind, since: string): number {
+  countCreatedSince(kind: JobKind | readonly JobKind[], since: string): number {
+    const kinds = typeof kind === 'string' ? [kind] : kind;
+    const placeholders = kinds.map(() => '?').join(', ');
     const row = this.db
-      .prepare('SELECT count(*) AS n FROM memory_jobs WHERE kind = ? AND created_at >= ?')
-      .get(kind, since) as { n: number };
+      .prepare(
+        `SELECT count(*) AS n FROM memory_jobs WHERE kind IN (${placeholders}) AND created_at >= ?`,
+      )
+      .get(...kinds, since) as { n: number };
     return row.n;
   }
 

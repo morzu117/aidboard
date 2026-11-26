@@ -33,6 +33,7 @@ import {
   runMaintainJob,
   scheduleMaintenance,
 } from './memory/maintain.js';
+import { runRetroJob } from './memory/retro.js';
 import { MemoryMirror } from './memory/mirror.js';
 import { MemoryWorker } from './memory/worker.js';
 import { MemoryService } from './memory/service.js';
@@ -197,6 +198,21 @@ export async function startDaemon(
             log,
             backoffMs: opts.memory?.backoffMs,
             pollMs: opts.memory?.pollMs,
+            retro: chatModel
+              ? (job) =>
+                  runRetroJob(job, {
+                    db: opened,
+                    memory: memStore,
+                    events: store,
+                    proposals,
+                    model: chatModel,
+                    hotesPrives: maintCfg.hotesPrives,
+                    duplicateDistance: maintCfg.duplicateDistance,
+                    vectors: vectors ?? undefined,
+                    embedder: hybridOn ? (embedder ?? undefined) : undefined,
+                    log,
+                  })
+              : undefined,
             maintain: chatModel
               ? (job) =>
                   runMaintainJob(job, {
@@ -247,6 +263,7 @@ export async function startDaemon(
             availabilityChecked = true;
           }
           const n = scheduleMaintenance(new Date(), {
+            db: opened,
             vectors: vectors ?? undefined,
             store: memStore,
             jobs,

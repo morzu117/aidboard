@@ -17,7 +17,7 @@ Les trois pages du cycle : plan, dev-handoff, review.
 
 ## Sortie
 
-Une page `<namespace>/retro/<cycle>`.
+Écris la rétro sous `<namespace>/retro/<slug du sujet>`, avec le slug exact du sujet, pour que le moteur la trouve et ne la propose pas une seconde fois.
 
 Et, **seulement si la leçon est vraie hors de ce projet**, une ou plusieurs
 pages `lesson/<domaine>/<slug>`. Tu es la seule phase autorisée à écrire dans

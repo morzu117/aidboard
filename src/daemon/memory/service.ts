@@ -21,6 +21,7 @@ export interface MemoryHealth {
   failedJobs: number;
   mirrorDirty: boolean;
   mirrorSync: MirrorSyncHealth;
+  retros: { manquantes: number; proposees: number; abandonnees: number };
 }
 import type { WorkspaceQueue } from '../actions/queue.js';
 import { AidHttpError } from '../errors.js';
@@ -337,6 +338,7 @@ export class MemoryService {
     return {
       pages: this.deps.store.countByNamespace(),
       ...this.deps.store.derivedCounts(),
+      retros: this.deps.store.retroCounts(),
       fts: true,
       vectors: this.deps.hybrid?.enabled() ? 'ollama' : 'off',
       pendingJobs: jobs.pending,
