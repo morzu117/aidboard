@@ -6,7 +6,7 @@
 | Emplacement final | `docs/chantiers/65-isolation-agents.md` sur `main` |
 | Base | `main` |
 | Organisation | Comme au 63 : cell-gestion gère le chantier, Codex CLI écrit le code et les tests, cell-gestion relit, lance le gate, commite et ouvre la PR. |
-| Validation | Le gate est vert à chaque point, puis `gate:e2e`. La recette se fait sur la tour (WSL), avec un vrai `claude` et un vrai `codex`. Le merge se fait sur le oui de Julien, CI verte. |
+| Validation | Le gate est vert à chaque point, puis `gate:e2e`. Pas de recette manuelle : le vrai bwrap tourne en CI (65.5). Le merge se fait sur le oui de Julien, CI verte. |
 
 ## 1. Pourquoi
 
@@ -84,7 +84,7 @@ L'agent parle au daemon par `AID_URL` et son jeton de run, comme aujourd'hui. Il
   - `--unshare-pid` ;
   - pas de `--unshare-net`.
 - Au démarrage du daemon, avec `isolation: bwrap`, `bwrap` doit être dans le PATH et passer une sonde (`bwrap --ro-bind / / true`). Sinon, le daemon refuse de démarrer, avec le message « isolation demandée mais bubblewrap indisponible : … ». Il ne retombe jamais en silence sur un lancement non isolé.
-- `agents.isolation` vaut `off` par défaut dans ce chantier. Le passage à `bwrap` par défaut sera décidé après la recette.
+- `agents.isolation` vaut `off` par défaut dans ce chantier. Le passage à `bwrap` par défaut sera décidé plus tard : la CI ne vérifie pas le jeton d'abonnement d'un vrai compte (65.5).
 
 ### DM46. Ce que l'agent et l'humain voient
 
@@ -156,6 +156,20 @@ Les tests utilisent un faux `bwrap`, qui écrit son argv et lance la commande. U
   - la fiche, avec neuf contrôles et les risques connus.
 
   Gate 4 713 au second passage. Au premier, `appareil.test.tsx` (D176) a dépassé son délai de 5 s sous charge ; il passe trois fois sur trois en isolé.
+
+### 65.5 Le vrai bwrap en CI, à la place de la recette
+
+Julien ne fait plus de recette manuelle (26 novembre) : « les tests front, back et les tests e2e et scénarisés d'interface doivent le couvrir ». La fiche de la tour est remplacée par un job de CI, `isolation`, sur un runner Ubuntu qui installe bubblewrap. Dans ce job, `AID_BWRAP_REQUIS=1` fait échouer le test d'intégration si `bwrap` manque, au lieu de le sauter. Ailleurs, le test reste sauté.
+
+Le test d'intégration couvre ce que vérifiait la fiche :
+- une écriture dans le worktree passe, et un commit aussi ;
+- une écriture dans le home échoue, `~/.ssh` est vide, et les secrets d'A-I-D sont invisibles ;
+- `.git/hooks` et `.git/config` sont en lecture seule, et l'ajout d'un hook échoue ;
+- un `git push` vers un dépôt nu hors du worktree échoue.
+
+Un second cas lance un faux `claude` et un faux `codex` par le vrai lanceur (`spawnChildIsole`), en stream et en PTY, sous le vrai bwrap, puis vérifie les mêmes bornes.
+
+Ce que la CI ne peut pas vérifier, faute de vrai compte : le rafraîchissement du jeton d'abonnement, la session qui survit au lendemain, et la reprise d'une vraie session. `agents.isolation` reste donc à `off` par défaut, et ces trois points restent les limites connues du chantier. La fiche `docs/recette-chantier-65-isolation-agents.md` est retirée.
 
 ## 5. Pièges
 
