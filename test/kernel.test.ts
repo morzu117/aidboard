@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, test } from 'vitest';
+import { parse } from 'yaml';
 import { kernelInstall, runKernel, type KernelPaths } from '../src/cli/commands/kernel.js';
 
 const tmp = () => mkdtempSync(join(tmpdir(), 'aid-kernel-'));
@@ -151,5 +152,55 @@ describe('runKernel (CLI aid kernel install [--check])', () => {
     mkdirSync(join(p.targetDir, '.git'), { recursive: true });
     expect(runKernel('install', [], p, () => undefined)).toBe(1);
     expect(existsSync(join(p.targetDir, 'defaults.yml'))).toBe(false);
+  });
+});
+
+describe('/sync et la phase acceptation (chantier 67.2)', () => {
+  const lire = (chemin: string) => readFileSync(new URL(`../${chemin}`, import.meta.url), 'utf8');
+  const defauts = parse(lire('kernel/defaults.yml')) as { phases: string[] };
+  const manifeste = parse(lire('agent.yml')) as {
+    phases: string[];
+    acceptation: { chemins: string[]; lancer: Record<string, string> };
+  };
+
+  // /sync est une consigne Markdown. On applique sa règle de substitution à la section Phases.
+  function rendrePhases(phases: string[]): string {
+    const politique = lire('kernel/policy/phases.md');
+    const gabarit = lire('kernel/templates/instructions.tmpl.md');
+    const lignes = phases.map((phase) => {
+      const section = politique.split(`\n## ${phase}\n`)[1]?.split('\n## ')[0];
+      const lecture = section?.match(/\*\*Lit\*\* — ([\s\S]+?)\n\n/)?.[1];
+      const ecriture = section?.match(/\*\*Écrit\*\* — ([\s\S]+?)\n\n/)?.[1];
+      if (!lecture || !ecriture) throw new Error(`Phase incomplète : ${phase}`);
+      return `| ${phase} | ${lecture.replaceAll('\n', ' ')} | ${ecriture.replaceAll('\n', ' ')} |`;
+    });
+    return gabarit.replace(
+      '{{phases.table}}',
+      ['| Phase | Lit | Écrit |', '| --- | --- | --- |', ...lignes].join('\n'),
+    );
+  }
+
+  test('le manifeste A-I-D rend acceptation entre plan et dev', () => {
+    const rendu = rendrePhases(manifeste.phases);
+    expect(rendu).toMatch(
+      /\| plan \|[^\n]+\n\| acceptation \| le plan et son contrat d'acceptation, le code de la base\. \| les tests dans un commit marqué par point[^\n]+\n\| dev \|/,
+    );
+  });
+
+  test('un projet sans phases explicites hérite des phases sans acceptation', () => {
+    expect(defauts.phases).toEqual(['plan', 'dev', 'review', 'triage', 'retro']);
+    const rendu = rendrePhases(defauts.phases);
+    expect(rendu).toMatch(/\| plan \|[^\n]+\n\| dev \|/);
+    expect(rendu).not.toContain('| acceptation |');
+  });
+
+  test('le schéma décrit les chemins et les commandes déclarés par A-I-D', () => {
+    const schema = parse(lire('kernel/manifest.schema.yml')) as { acceptation: unknown };
+    expect(schema.acceptation).toEqual({ chemins: ['string'], lancer: { '<chemin>': 'string' } });
+    expect(manifeste.acceptation.chemins).toEqual(['test/', 'e2e/']);
+    expect(manifeste.acceptation.lancer).toEqual({
+      'test/': 'npx vitest run {fichiers}',
+      'e2e/': 'npx playwright test {fichiers}',
+    });
   });
 });
