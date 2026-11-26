@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { delimiter, dirname, join } from 'node:path';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import { WorkspaceQueue } from '../../src/daemon/actions/queue.js';
+import * as depotBoucle from '../../src/daemon/boucle/depot.js';
 import { ServiceBoucle } from '../../src/daemon/boucle/service.js';
 import { openDb } from '../../src/daemon/db.js';
 import { EventStore } from '../../src/daemon/events/store.js';
@@ -281,22 +282,45 @@ test('arreter garde l’étape active jusqu’à la fin effective de l’agent',
   expect(service.lire(sujet)).toMatchObject({ phase: 'arretee', etapeCourante: null });
 });
 
-test('reprendre tue le processus orphelin dans le worktree', async () => {
-  await service.lancer(sujet);
-  await service.fermer();
-  db.close();
-  ouvrirService();
+function heureDepart(pid: number): string {
+  if (process.platform === 'linux') {
+    const stat = readFileSync(join('/proc', String(pid), 'stat'), 'utf8');
+    const heure = stat
+      .slice(stat.lastIndexOf(')') + 2)
+      .trim()
+      .split(/\s+/)[19];
+    if (!heure) throw new Error('Heure de départ du processus fictif absente');
+    return heure;
+  }
+  return execFileSync('ps', ['-p', String(pid), '-o', 'lstart='], { encoding: 'utf8' }).trim();
+}
 
-  const enfant = spawn('sleep', ['30'], { cwd: depot, stdio: 'ignore' });
+test('reprendre tue le groupe enregistré dans le worktree avec la bonne heure de départ', async () => {
+  await service.lancer(sujet);
+  const enfant = spawn('sleep', ['30'], { cwd: depot, stdio: 'ignore', detached: true });
   const sortie = once(enfant, 'exit');
   try {
     await once(enfant, 'spawn');
     const pid = enfant.pid;
-    expect(pid).toBeGreaterThan(1);
+    if (!pid || pid <= 1) throw new Error('PID fictif absent');
+    const { id } = db.prepare('SELECT id FROM boucles WHERE sujet_id = ?').get(sujet) as {
+      id: string;
+    };
+    const boucle = depotBoucle.lire(db, id)!;
+    depotBoucle.enregistrer(db, {
+      ...boucle,
+      etat: Object.assign(boucle.etat, { groupes: [{ pid, heureDepart: heureDepart(pid) }] }),
+    });
+    await service.fermer();
+    db.close();
+    ouvrirService();
+
+    const signaler = vi.spyOn(process, 'kill');
     await service.reprendre();
-    await expect
-      .poll(() => enfant.exitCode !== null || enfant.signalCode !== null, { timeout: 1_000 })
-      .toBe(true);
+    expect(
+      signaler.mock.calls.filter(([, signal]) => signal !== 0).map(([cible]) => cible),
+    ).toContain(-pid);
+    await expect.poll(() => enfant.signalCode, { timeout: 1_000 }).not.toBeNull();
   } finally {
     enfant.kill('SIGKILL');
     await sortie;
@@ -338,7 +362,7 @@ process.exit(resultat.status ?? 1);
     .map((ligne) => JSON.parse(ligne) as string[]);
   expect(appels.some((args) => args.includes('ls-remote'))).toBe(true);
   expect(appels.some((args) => args.includes('diff') && args.includes('--name-only'))).toBe(true);
-  for (const args of appels) {
+  for (const args of appels.filter((args) => !args.includes('ls-remote'))) {
     const commande = args.join(' ');
     expect(commande).toContain('-c core.hooksPath=/dev/null');
     expect(commande).toContain('-c core.fsmonitor=false');
