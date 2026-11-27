@@ -241,12 +241,16 @@ La fusion de main, avec la boucle du 69. Les quatre conflits ont été résolus 
 - `/run/user` a son témoin dehors.
 - `aid doctor` et la doc disent que le réseau n'est pas isolé.
 
+- _Acceptation._ Couvert par `test/isolation-acceptation-65-8.test.ts` (0a8764d), écrit par le testeur depuis DM73 seul. Le cas se joue sous le vrai bwrap, dans le job `isolation`. Le faux codex de l'étape dev reste isolé, et son home témoin est intact. Le PID consigné est celui du moniteur, et le petit-fils cesse d'écrire après l'arrêt du groupe. `mv`, ou `rm` puis la recréation de `.git` et de `commondir`, échouent : le contenu et l'inode restent identiques dehors. `/run/user` est vide dedans, avec un témoin dehors. Doctor dit que le réseau reste ouvert, sockets Unix abstraites comprises.
+
 ### 65.9 Le gate dans le bac (DM74)
 
 - Sous isolation, le gate et les preuves tournent sous bwrap, avec le profil du sujet.
 - Si bwrap manque, la boucle escalade et le gate ne se lance pas.
 - Le délai et l'arrêt tuent tout le groupe.
 - C à F, refaits depuis un script du gate, échouent sous le vrai bwrap.
+
+- _Acceptation._ Couvert par `test/isolation-acceptation-65-9.test.ts` et `test/isolation-acceptation-boucle.test.ts` (0a8764d), écrits depuis DM74 seul. Sous le vrai bwrap, le gate écrit puis exécute un script qui tente C à F : les écritures dans le home, dans les hooks git et dans `settings.json` échouent, et la variable factice est absente. L'écriture dans le worktree et dans le TMPDIR passe. Même chose pour les preuves. Le délai et l'arrêt figent le témoin petit-fils. Sans bwrap, la boucle escalade et le témoin de commande reste absent. En `off`, l'argv est l'argv habituel. La limite affichée dit que bwrap couvre le gate. Interface : `lancerGate({ …, isolation?: { bwrapBin, profil } })` et la même option pour `produirePreuves`.
 
 ## 5. Pièges
 
