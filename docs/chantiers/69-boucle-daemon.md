@@ -356,6 +356,7 @@ Les règles de DM70, avec un test négatif chacune. Le testeur écrit d'abord le
 Les règles de DM71, avec un test négatif chacune. Le testeur écrit d'abord les tests à partir de DM71 seul, puis le dev les fait passer.
 
 - _Acceptation._ Couvert par `test/boucle/relecture4-*.test.ts` (d359dcf), écrits par le testeur depuis DM71 seul, avec les précisions du lab (DM 107042) : un alias sans `=`, sans espace et sans tiret initial ; `GIT_CONFIG_GLOBAL` et `XDG_CONFIG_HOME` pris dans l'environnement du daemon à l'ouverture du service. Un cas du 69.10 passe du cwd vide au cwd `/` (1 ligne).
+- _Révision._ Code du 69.11 (Codex, deux passes : la seconde déplace l'entrée du journal dans `kernel/CHANGELOG.md`). Quatre fixtures qui posaient la config globale après l'ouverture du service ont été corrigées par le testeur (e24eab5). Gate 5 342, et les 14 e2e de la boucle et de la livraison passent.
 
 ## 5. Réponses de Julien (26 novembre)
 
