@@ -173,6 +173,14 @@ Le lab a donné son oui de sécurité à la tête 5509963 (DM 106912), et la PR 
   Restent refusés : `git://`, `file:`, `ext::`, un chemin local, et tout utilisateur ou hôte qui commence par un tiret.
 - **Les limites** nomment aussi les cibles d'`include.path`, qui ne sont pas suivies. `XDG_CONFIG_HOME` et `GIT_CONFIG_GLOBAL` passent dans l'environnement de `gitBoucle` et sont relevés par l'empreinte du home quand ils sont posés. La première escalade d'une boucle en cours après la mise à jour est dite dans le journal des versions.
 
+### DM72. L'hôte vérifié est celui que ssh contacte
+
+Le lab a relu la #215 (DM 107068) et corrigé sa relecture du 69.10 : le contrôle des origines de la #214 se contourne. Pour trouver l'hôte, git cherche « @[ » dans toute la chaîne, chemin compris, et retire les crochets. En `ssh://`, il décode d'abord les `%` de toute l'URL. Une origine comme `u@h:x@[autre.exemple]:z` passe donc le contrôle sur `h`, mais ssh se connecte à `autre.exemple`. Avec un OpenSSH antérieur à 9.6 et un `ProxyCommand` ou un `Match exec` qui utilise `%h`, c'est une injection connue.
+
+- **Hors `https://`, une origine qui contient `[` ou `%` est refusée** (409, sans `ls-remote`), dans les trois formes `ssh://`, `user@hôte:chemin` et alias.
+- **Une valeur non absolue de `GIT_CONFIG_GLOBAL` ou de `XDG_CONFIG_HOME` est ignorée.** Sinon, elle serait résolue par rapport au worktree, et un fichier que l'agent peut modifier deviendrait la config globale.
+- `aid doctor` affiche la version d'OpenSSH et avertit si elle est antérieure à 9.6.
+
 ## 4. Points
 
 ### 69.1 Le plan
@@ -358,6 +366,10 @@ Les règles de DM71, avec un test négatif chacune. Le testeur écrit d'abord le
 - _Acceptation._ Couvert par `test/boucle/relecture4-*.test.ts` (d359dcf), écrits par le testeur depuis DM71 seul, avec les précisions du lab (DM 107042) : un alias sans `=`, sans espace et sans tiret initial ; `GIT_CONFIG_GLOBAL` et `XDG_CONFIG_HOME` pris dans l'environnement du daemon à l'ouverture du service. Un cas du 69.10 passe du cwd vide au cwd `/` (1 ligne).
 - _Révision._ Code du 69.11 (Codex, deux passes : la seconde déplace l'entrée du journal dans `kernel/CHANGELOG.md`). Quatre fixtures qui posaient la config globale après l'ouverture du service ont été corrigées par le testeur (e24eab5). Gate 5 342, et les 14 e2e de la boucle et de la livraison passent.
 
+### 69.12 L'hôte vérifié (DM72)
+
+Les règles de DM72, avec un test négatif chacune. Le testeur écrit d'abord les tests à partir de DM72 seul, puis le dev les fait passer.
+
 ## 5. Réponses de Julien (26 novembre)
 
 - **Q1. Les permissions sur le Mac, sans isolation : le mode `auto`, vérifié après coup.** Les sessions d'acceptation et de dev enchaînent sans demander. Le daemon vérifie ensuite le worktree, les tests d'acceptation, la branche et l'empreinte de l'environnement (DM67). Le plan et la revue restent en lecture seule. C'est une règle vérifiée après coup, pas une barrière : pendant l'étape, l'agent garde l'accès au home.
@@ -375,5 +387,5 @@ Les règles de DM71, avec un test négatif chacune. Le testeur écrit d'abord le
 
 ## 7. Fini quand
 
-- Les points 69.2 à 69.11 sont mergés, avec la CI verte et le oui de Julien.
+- Les points 69.2 à 69.12 sont mergés, avec la CI verte et le oui de Julien.
 - Un vrai sujet est allé du plan à « livraison prête » sur le Mac de Julien, avec ses trois mesures écrites.
