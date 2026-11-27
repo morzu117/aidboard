@@ -370,6 +370,14 @@ Les règles de DM71, avec un test négatif chacune. Le testeur écrit d'abord le
 
 Les règles de DM72, avec un test négatif chacune. Le testeur écrit d'abord les tests à partir de DM72 seul, puis le dev les fait passer.
 
+- _Acceptation._ Couvert par `test/boucle/relecture5-service.test.ts` (5516a3c, 20 cas), écrit par le testeur depuis DM72 seul :
+  - les quatre chaînes mesurées par le lab, plus deux autres, donnent un 409 sans `ls-remote` ;
+  - `https` avec `%` ou `[` et les formes du 69.11 restent acceptés ;
+  - les valeurs relatives de la config globale sont ignorées ;
+  - `aid doctor` dit la version d'OpenSSH.
+
+  Aucune ligne existante modifiée.
+
 ## 5. Réponses de Julien (26 novembre)
 
 - **Q1. Les permissions sur le Mac, sans isolation : le mode `auto`, vérifié après coup.** Les sessions d'acceptation et de dev enchaînent sans demander. Le daemon vérifie ensuite le worktree, les tests d'acceptation, la branche et l'empreinte de l'environnement (DM67). Le plan et la revue restent en lecture seule. C'est une règle vérifiée après coup, pas une barrière : pendant l'étape, l'agent garde l'accès au home.
