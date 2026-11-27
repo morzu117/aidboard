@@ -147,6 +147,17 @@ Le lab a relu le 69.8 à la tête 94b0707 (DM 106893). Les trois bloquants sont 
   - Un fichier FUSE qui bloque la lecture.
   - `apiKeyHelper`, les scripts des serveurs MCP, les fichiers d'`includeIf` et les métadonnées des worktrees git.
 
+### DM70. Ce que la troisième relecture du lab ajoute
+
+Le lab a relu le 69.9 à la tête e824ad0 (DM 106904). Les points 2 à 5 de DM69 sont fermés. Le point 1 ne l'est qu'en partie : au premier lancement d'un sujet, aucune empreinte n'existe. Or `.git/config` est partagé par tous les worktrees du dépôt, donc un agent d'un autre sujet peut l'avoir modifié. Deux régressions, qui échouent fermées, viennent avec.
+
+- **Le ls-remote ne lit plus la config du dépôt.** Le lancement lit `remote.origin.url` par `gitBoucle`, et ne l'accepte que dans trois formes : `https://hôte/chemin`, `ssh://[user@]hôte[:port]/chemin`, ou `user@hôte:chemin`. L'hôte n'a que des lettres, des chiffres, des points et des tirets, et ne commence pas par un tiret. Toute autre forme (`file:`, `ext::`, un chemin local, un hôte qui commence par un tiret) donne un 409. Le `ls-remote` tourne sur cette URL, depuis un dossier temporaire vide hors du dépôt, avec l'environnement et la config globale de l'utilisateur. Les hooks et le fsmonitor sont coupés, et les protocoles `ext` et `file` refusés. Aucune config locale n'atteint alors l'appel : la comparaison à la dernière empreinte du lancement (DM 106896) est retirée.
+- **Le contrôle de session active passe avant le ls-remote.**
+- **Les scripts du daemon ne font plus escalader.** `git push -u` et `git branch -D` réécrivent les sections `branch.*` de la config partagée. L'empreinte de la config locale ignore donc les sections `branch.*`, et un lancement ne fait plus escalader la boucle précédente.
+- **`gitBoucle` lit la config globale et système**, que l'empreinte du home couvre (`~/.gitconfig`). Les options qui neutralisent les hooks, le fsmonitor, les identifiants et ssh, passées en `-c`, l'emportent sur elles. Un `core.excludesFile` global (`.DS_Store` sur le Mac) et un filtre LFS global restent donc en vigueur.
+- **La mémoire du projet.** Claude Code peut ranger la mémoire d'un worktree lié sous le dossier de la racine du dépôt principal, qui se déduit de `git rev-parse --git-common-dir`. L'empreinte relève donc les deux dossiers, celui du worktree et celui de la racine du dépôt. La mémoire des autres projets non surveillée entre dans les limites de la vue et de `aid doctor`.
+- **Une issue de tentative absente vaut `fail`, jamais `pass`.**
+
 ## 4. Points
 
 ### 69.1 Le plan
@@ -313,6 +324,10 @@ Les règles de DM69, avec un test négatif chacune. Le testeur écrit d'abord le
   Le testeur a trouvé un vrai défaut : une revue fail était enregistrée pass. Trois tests du 69.8 sont alignés sur DM69 (79 lignes, dans des tests de ce chantier). Vingt-quatre cas échouent sur assertion avant le dev.
 - _Révision._ Code du 69.9 (Codex). Deux fixtures du 69.4 ont été alignées par le testeur (caa0b6f, 66d8516) : le relevé de mémoire passe un worktree qui existe. Gate 5 286, et les 14 e2e de la boucle et de la livraison passent. La reprise est vérifiée sous Linux ; la branche macOS (`ps -o lstart=`) reste à vérifier sur le Mac.
 
+### 69.10 La troisième relecture du lab (DM70)
+
+Les règles de DM70, avec un test négatif chacune. Le testeur écrit d'abord les tests à partir de DM70 seul, puis le dev les fait passer.
+
 ## 5. Réponses de Julien (26 novembre)
 
 - **Q1. Les permissions sur le Mac, sans isolation : le mode `auto`, vérifié après coup.** Les sessions d'acceptation et de dev enchaînent sans demander. Le daemon vérifie ensuite le worktree, les tests d'acceptation, la branche et l'empreinte de l'environnement (DM67). Le plan et la revue restent en lecture seule. C'est une règle vérifiée après coup, pas une barrière : pendant l'étape, l'agent garde l'accès au home.
@@ -330,5 +345,5 @@ Les règles de DM69, avec un test négatif chacune. Le testeur écrit d'abord le
 
 ## 7. Fini quand
 
-- Les points 69.2 à 69.9 sont mergés, avec la CI verte et le oui de Julien.
+- Les points 69.2 à 69.10 sont mergés, avec la CI verte et le oui de Julien.
 - Un vrai sujet est allé du plan à « livraison prête » sur le Mac de Julien, avec ses trois mesures écrites.
