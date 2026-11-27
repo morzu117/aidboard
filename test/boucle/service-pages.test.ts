@@ -87,6 +87,7 @@ test('le daemon enregistre la réponse finale du plan avant l’attente du GO', 
   expect(boucle.lire(sujet)).toMatchObject({ phase: 'attente_go', plan });
 });
 
+// Ce scénario enchaîne des dizaines de vrais appels git.
 test('le daemon enregistre et valide le bloc JSON de la revue', async () => {
   await boucle.lancer(sujet);
   await finirPlan();
@@ -108,7 +109,7 @@ test('le daemon enregistre et valide le bloc JSON de la revue', async () => {
   await boucle.traiterEvenementAgent('review', { type: 'turn_end', texteFinal });
   expect(memory.get('aid/review/s')).toMatchObject({ author: 'review', body: texteFinal });
   expect(boucle.lire(sujet).phase).toBe('livraison_prete');
-});
+}, 20_000);
 
 test('une réponse au-delà de 256 Kio relance la même session sans créer de page', async () => {
   await boucle.lancer(sujet);

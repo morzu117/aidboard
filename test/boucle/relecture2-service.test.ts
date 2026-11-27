@@ -70,8 +70,6 @@ beforeEach(() => {
   sh(clone, 'worktree', 'add', '-qb', 'feat/s', depot, 'main');
   poserOrigineBoucle(depot);
   cheminInitial = process.env.PATH;
-  temoin = poserTemoinGitBoucle(racine, depot, 'identifiants');
-  vi.stubEnv('PATH', temoin.chemin);
   ouvrirService();
   seedTopic(db);
   db.prepare('DELETE FROM agents').run();
@@ -90,6 +88,8 @@ afterEach(async () => {
 });
 
 function configurerIdentifiants() {
+  temoin = poserTemoinGitBoucle(racine, depot, 'identifiants');
+  vi.stubEnv('PATH', temoin.chemin);
   const agentSsh = join(home, 'socket-fictif');
   const helper = 'assistant-fictif';
   writeFileSync(join(home, '.gitconfig'), `[credential]\n\thelper = ${helper}\n`);
@@ -148,6 +148,7 @@ async function preparerFinDev() {
   return sh(depot, 'rev-parse', 'HEAD');
 }
 
+// Ce scénario enchaîne des dizaines de vrais appels git.
 test('les git du dev, du gate et des preuves perdent le socket SSH et le helper global', async () => {
   const base = sh(depot, 'rev-parse', 'HEAD');
   nommerDepotPourLesPreuves(depot);
@@ -189,9 +190,11 @@ test('les git du dev, du gate et des preuves perdent le socket SSH et le helper 
   for (const appel of [...appelsDev, ...appelsGate]) {
     expect(appel).toMatchObject({ agentSsh: null, helper: '' });
   }
-}, 15_000);
+}, 20_000);
 
+// Ce scénario enchaîne des dizaines de vrais appels git.
 test('une réponse finale de revue avec un fail justifié consigne un fail à la tête relue', async () => {
+  vi.stubEnv('PATH', poserTemoinGitBoucle(racine, depot).chemin);
   await allerAuDev();
   const tete = await preparerFinDev();
   await service.traiterEvenementAgent('dev', { type: 'turn_end' });
@@ -218,9 +221,10 @@ test('une réponse finale de revue avec un fail justifié consigne un fail à la
     issue: 'fail',
     teteArrivee: tete,
   });
-});
+}, 20_000);
 
 test('la fin du plan ignore une modification de mémoire Claude hors du projet du sujet', async () => {
+  vi.stubEnv('PATH', poserTemoinGitBoucle(racine, depot).chemin);
   const autreMemoire = join(home, '.claude', 'projects', '-autre-projet-fictif', 'memory');
   mkdirSync(autreMemoire, { recursive: true });
   const fichier = join(autreMemoire, 'MEMORY.md');
@@ -258,6 +262,7 @@ function heureDepart(pid: number): string {
 async function reprendreAvecProcessus(
   cas: 'sans-enregistrement' | 'meme-depart' | 'pid-reutilise',
 ) {
+  vi.stubEnv('PATH', poserTemoinGitBoucle(racine, depot).chemin);
   await service.lancer(sujet);
   const enfant = spawn('sleep', ['30'], {
     // Le groupe valide a quitté le worktree. Le groupe réutilisé a le même cwd que la boucle.

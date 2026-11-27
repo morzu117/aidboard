@@ -21,7 +21,6 @@ const pageRevue = 'aid/review/s';
 let dossier: string;
 let depot: string;
 let cheminInitial: string | undefined;
-let temoin: ReturnType<typeof poserTemoinGitBoucle>;
 let commun: string;
 let db: ReturnType<typeof openDb>;
 let memoire: MemoryService;
@@ -76,8 +75,7 @@ beforeEach(() => {
   sh(clone, 'worktree', 'add', '-qb', 'feat/s', depot, 'main');
   poserOrigineBoucle(depot);
   cheminInitial = process.env.PATH;
-  temoin = poserTemoinGitBoucle(dossier, depot, 'commandes');
-  vi.stubEnv('PATH', temoin.chemin);
+  vi.stubEnv('PATH', poserTemoinGitBoucle(dossier, depot).chemin);
   ouvrirService(() => 1_000);
   seedTopic(db);
   db.prepare('DELETE FROM agents').run();
@@ -336,6 +334,9 @@ test('reprendre tue le groupe enregistré dans le worktree avec la bonne heure d
 });
 
 test('le service et le conducteur passent les réglages git neutralisés', async () => {
+  vi.stubEnv('PATH', cheminInitial);
+  const temoin = poserTemoinGitBoucle(dossier, depot, 'commandes');
+  vi.stubEnv('PATH', temoin.chemin);
   const debut = temoin.lire().length;
   await allerAuDev();
   vi.stubEnv('PATH', cheminInitial);

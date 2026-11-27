@@ -145,6 +145,7 @@ async function allerAuDev() {
   expect(lireBoucle()).toMatchObject({ phase: 'dev', etapeCourante: { type: 'dev' } });
 }
 
+// Ce scénario enchaîne des dizaines de vrais appels git.
 test('enchaîne plan, GO, dev, gate et revue jusqu’à livraison prête sur la tête du dev', async () => {
   await allerAuDev();
   heure += 80;
@@ -188,7 +189,7 @@ test('enchaîne plan, GO, dev, gate et revue jusqu’à livraison prête sur la 
     ],
     mesures: { interventionsHumaines: 1, redevs: 0 },
   });
-});
+}, 20_000);
 
 test('le daemon reprend la tentative persistée avec une session perdue et sans nouveau lancement', async () => {
   await service.lancer(sujet);
@@ -222,6 +223,7 @@ test('le tic du daemon arrête la session au délai, sans événement d’agent'
   });
 });
 
+// Ce scénario enchaîne des dizaines de vrais appels git.
 test('cumule les durées closes, une relance de dev et les trois interventions humaines', async () => {
   await allerAuDev();
   await service.traiterEvenementAgent('session-fictive-2', {
@@ -262,7 +264,7 @@ test('cumule les durées closes, une relance de dev et les trois interventions h
       redevs: 1,
     },
   });
-});
+}, 20_000);
 
 test('la porte refuse les quatre POST valides, puis les doublons de lancement et de GO restent refusés', async () => {
   const config = structuredClone(DEFAULT_CONFIG);

@@ -89,8 +89,8 @@ afterEach(async () => {
   }
 });
 
-function poserTemoinGit() {
-  const temoin = poserTemoinGitBoucle(racine, depot, 'config');
+function poserTemoinGit(observer?: 'config') {
+  const temoin = poserTemoinGitBoucle(racine, depot, observer);
   vi.stubEnv('PATH', temoin.chemin);
   return {
     ...temoin,
@@ -119,7 +119,7 @@ test.each([
 ])('le premier ls-remote ne voit pas le réglage local %s', async (cle) => {
   const valeur = cle.endsWith('insteadOf') ? url : 'valeur-locale-fictive';
   sh(depot, 'config', '--local', cle, valeur);
-  const temoin = poserTemoinGit();
+  const temoin = poserTemoinGit('config');
   await lancer();
   expect(service.lire(sujet).etapeCourante?.teteDepart).toBe(temoin.tete);
   const appels = temoin.distants();
@@ -138,7 +138,7 @@ test.each([
 });
 
 test('le ls-remote refuse les transports ext et file', async () => {
-  const temoin = poserTemoinGit();
+  const temoin = poserTemoinGit('config');
   await lancer();
   expect(temoin.distants()).toHaveLength(1);
   expect(temoin.distants()[0]!.commande).toEqual(
@@ -150,7 +150,7 @@ test.each([url, 'ssh://git@exemple.test/x.git', 'git@exemple.test:x.git'])(
   'le lancement accepte et transmet l’URL %s',
   async (adresse) => {
     sh(depot, 'remote', 'set-url', 'origin', adresse);
-    const temoin = poserTemoinGit();
+    const temoin = poserTemoinGit('config');
     await lancer();
     expect.soft(service.lire(sujet).phase).toBe('plan');
     expect(temoin.distants()).toHaveLength(1);
@@ -171,14 +171,14 @@ test.each([
   ['utilisateur SCP commençant par un tiret', (): string => '-x@exemple.test:y.git'],
 ] as const)('le lancement refuse %s avant tout ls-remote', async (_nom, adresse) => {
   sh(depot, 'config', '--local', 'remote.origin.url', adresse());
-  const temoin = poserTemoinGit();
+  const temoin = poserTemoinGit('config');
   const [resultat] = await Promise.allSettled([lancer()]);
   expect.soft(resultat).toMatchObject({ status: 'rejected', reason: { status: 409 } });
   expect(temoin.distants()).toEqual([]);
 });
 
 test('une session active fait refuser le lancement avant tout ls-remote', async () => {
-  const temoin = poserTemoinGit();
+  const temoin = poserTemoinGit('config');
   await expect(service.lancer(sujet)).rejects.toMatchObject({ status: 409 });
   expect(temoin.distants()).toEqual([]);
 });
@@ -255,6 +255,7 @@ test.each(['remote', 'pushRemote'])(
   },
 );
 
+// Ce scénario enchaîne des dizaines de vrais appels git.
 test('après livraison et push -u, une nouvelle boucle démarre et la précédente reste livrable', async () => {
   poserTemoinGit();
   await lancer();
@@ -283,10 +284,10 @@ test('après livraison et push -u, une nouvelle boucle démarre et la précéden
   expect.soft(resultat).toMatchObject({ status: 'fulfilled' });
   expect.soft(service.lire(sujet).phase).toBe('plan');
   expect(depotBoucle.lire(db, precedente!.id)?.etat.phase).toBe('livraison_prete');
-});
+}, 20_000);
 
 test('un nouveau lancement ne compare pas la config locale à l’empreinte précédente', async () => {
-  const temoin = poserTemoinGit();
+  const temoin = poserTemoinGit('config');
   await lancer();
   await service.arreter(sujet);
   const precedente = depotBoucle.lireDerniere(db, sujet);
@@ -312,6 +313,7 @@ test.each(['core.hooksPath', 'credential.helper'])(
   },
 );
 
+// Ce scénario enchaîne des dizaines de vrais appels git.
 test('le fichier d’exclusions global protège .DS_Store d’une escalade', async () => {
   const exclusions = join(home, 'exclusions');
   writeFileSync(exclusions, '.DS_Store\n');
@@ -326,7 +328,7 @@ test('le fichier d’exclusions global protège .DS_Store d’une escalade', asy
   writeFileSync(join(depot, '.DS_Store'), 'Fichier ignoré.');
   await service.traiterEvenementAgent('dev-2', { type: 'turn_end' });
   expect(service.lire(sujet).phase).toBe('revue');
-});
+}, 20_000);
 
 test.each([
   ['core', 'hooksPath', '/dev/null'],
@@ -335,7 +337,7 @@ test.each([
   const valeur = 'valeur-globale-fictive';
   writeFileSync(join(home, '.gitconfig'), `[${section}]\n  ${cle} = ${valeur}\n`);
   vi.stubEnv('GIT_CONFIG_GLOBAL', undefined);
-  const temoin = poserTemoinGit();
+  const temoin = poserTemoinGit('config');
   await lancer();
   await finirPlan();
   const appels = temoin.lire().filter(({ commande }) => commande.includes('status'));

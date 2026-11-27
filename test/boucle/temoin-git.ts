@@ -37,7 +37,8 @@ export function poserTemoinGitBoucle(
   writeFileSync(journal, '');
   writeFileSync(
     join(bin, 'git'),
-    `#!/usr/bin/env node
+    observer
+      ? `#!/usr/bin/env node
 const { appendFileSync, readdirSync } = require('node:fs');
 const { spawnSync } = require('node:child_process');
 const git = ${JSON.stringify(git)};
@@ -68,6 +69,26 @@ if (distante) {
 }
 const resultat = spawnSync(git, commande, { stdio: 'inherit' });
 process.exit(resultat.status ?? 1);
+`
+      : `#!/bin/sh
+est_ls_remote() {
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      -c|-C|--git-dir|--work-tree)
+        [ "$#" -ge 2 ] || return 1
+        shift 2 ;;
+      --git-dir=*|--work-tree=*) shift ;;
+      ls-remote) return 0 ;;
+      *) return 1 ;;
+    esac
+  done
+  return 1
+}
+if est_ls_remote "$@"; then
+  printf '%s\\trefs/heads/main\\n' '${tete}'
+  exit 0
+fi
+exec '${git.replaceAll("'", "'\\''")}' "$@"
 `,
     { mode: 0o755 },
   );
