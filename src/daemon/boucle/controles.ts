@@ -2,10 +2,20 @@ import { execFile } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { constants } from 'node:fs';
 import * as fs from 'node:fs/promises';
-import { basename, dirname, isAbsolute, join, posix, relative, resolve, sep } from 'node:path';
+import {
+  basename,
+  dirname,
+  isAbsolute,
+  join,
+  parse as analyserChemin,
+  posix,
+  relative,
+  resolve,
+  sep,
+} from 'node:path';
 import { promisify } from 'node:util';
 import { parse } from 'yaml';
-import { gitBoucle } from './git.js';
+import { configGitGlobale, gitBoucle } from './git.js';
 
 export function gitSujet(depot: string, args: string[]) {
   return gitBoucle(depot, args).then(
@@ -309,8 +319,8 @@ function collecteurEmpreinte(
   racine: string,
   fichiers = fs,
   budget?: { entrees: number; octets: number },
+  empreinte: EmpreinteEnvironnement = Object.create(null) as EmpreinteEnvironnement,
 ) {
-  const empreinte: EmpreinteEnvironnement = Object.create(null) as EmpreinteEnvironnement;
   const profondeurMax = 32;
 
   function compter(type: 'entrees' | 'octets', quantite: number): boolean {
@@ -356,7 +366,11 @@ function collecteurEmpreinte(
       liens.push(`${interne ? 'lien' : 'lien sortant'}:${lien}`);
       if (!interne || profondeur >= profondeurMax) return undefined;
       const absolu = isAbsolute(lien);
-      if (absolu && lien !== racine && !lien.startsWith(racine + sep)) {
+      if (
+        absolu &&
+        lien !== racine &&
+        !lien.startsWith(racine.endsWith(sep) ? racine : racine + sep)
+      ) {
         liens.push('lien sortant');
         return undefined;
       }
@@ -552,7 +566,22 @@ export async function empreinteEnvironnement(
   { worktree }: { worktree?: string } = {},
 ): Promise<EmpreinteEnvironnement> {
   const racine = await fichiers.realpath(home);
-  const { empreinte, relever } = collecteurEmpreinte(racine, fichiers, { ...limitesHome });
+  const budget = { ...limitesHome };
+  const { empreinte, relever } = collecteurEmpreinte(racine, fichiers, budget);
+  const { GIT_CONFIG_GLOBAL, XDG_CONFIG_HOME } = configGitGlobale();
+  const configsGit = new Set([
+    ...(GIT_CONFIG_GLOBAL ? [resolve(GIT_CONFIG_GLOBAL)] : []),
+    ...(XDG_CONFIG_HOME ? [resolve(XDG_CONFIG_HOME, 'git', 'config')] : []),
+  ]);
+  for (const chemin of configsGit) {
+    const { relever: releverConfig } = collecteurEmpreinte(
+      analyserChemin(chemin).root,
+      fichiers,
+      budget,
+      empreinte,
+    );
+    await releverConfig(chemin, chemin, { fichierSeul: true });
+  }
   const scripts = new Set<string>();
   const codex = join(racine, '.codex');
   const exclureCibleCodex = (cible: string) => {
@@ -561,6 +590,7 @@ export async function empreinteEnvironnement(
     return !cheminsCodex.has(racineCodex ?? '') || descendants.some(fichierVolatil);
   };
   for (const chemin of cheminsHome) {
+    if (configsGit.has(join(home, chemin))) continue;
     await relever(join(racine, chemin), join(home, chemin), {
       ...(chemin === '.claude.json' && { projeter: projeterConfigClaude }),
       ...(chemin.startsWith('.claude/settings') && {

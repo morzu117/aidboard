@@ -87,7 +87,7 @@ afterEach(async () => {
   }
 });
 
-function configurerIdentifiants() {
+async function configurerIdentifiants() {
   temoin = poserTemoinGitBoucle(racine, depot, 'identifiants');
   vi.stubEnv('PATH', temoin.chemin);
   const agentSsh = join(home, 'socket-fictif');
@@ -95,12 +95,15 @@ function configurerIdentifiants() {
   writeFileSync(join(home, '.gitconfig'), `[credential]\n\thelper = ${helper}\n`);
   vi.stubEnv('GIT_CONFIG_GLOBAL', undefined);
   vi.stubEnv('SSH_AUTH_SOCK', agentSsh);
+  await service.fermer();
+  db.close();
+  ouvrirService();
   return { agentSsh, helper };
 }
 
 test('le ls-remote de lancement garde le socket SSH et le helper global du faux home', async () => {
   const tete = sh(depot, 'rev-parse', 'HEAD');
-  const identifiants = configurerIdentifiants();
+  const identifiants = await configurerIdentifiants();
   await service.lancer(sujet);
   expect(service.lire(sujet).etapeCourante?.teteDepart).toBe(tete);
   const appels = temoin.lire().filter(({ commande }) => commande.includes('ls-remote'));
@@ -110,7 +113,7 @@ test('le ls-remote de lancement garde le socket SSH et le helper global du faux 
 
 test('le ls-remote de lancement coupe les hooks et le fsmonitor et refuse protocol.ext', async () => {
   const tete = sh(depot, 'rev-parse', 'HEAD');
-  configurerIdentifiants();
+  await configurerIdentifiants();
   await service.lancer(sujet);
   expect(service.lire(sujet).etapeCourante?.teteDepart).toBe(tete);
   const appels = temoin.lire().filter(({ commande }) => commande.includes('ls-remote'));
@@ -152,7 +155,7 @@ async function preparerFinDev() {
 test('les git du dev, du gate et des preuves perdent le socket SSH et le helper global', async () => {
   const base = sh(depot, 'rev-parse', 'HEAD');
   nommerDepotPourLesPreuves(depot);
-  configurerIdentifiants();
+  await configurerIdentifiants();
   await allerAuDev();
 
   vi.stubEnv('PATH', cheminInitial);

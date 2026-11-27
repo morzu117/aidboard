@@ -59,6 +59,13 @@ beforeEach(() => {
     events: new EventStore(db),
     queue: new WorkspaceQueue(),
   });
+  ouvrirService();
+  seedTopic(db);
+  db.prepare('UPDATE workspaces SET root = ?, worktrees_dir = ?').run(clone, racine);
+  db.prepare('UPDATE topics SET worktree = ? WHERE id = ?').run(depot, sujet);
+});
+
+function ouvrirService() {
   let sessions = 0;
   service = new ServiceBoucle({
     db,
@@ -73,10 +80,7 @@ beforeEach(() => {
       ecrire: async () => {},
     },
   });
-  seedTopic(db);
-  db.prepare('UPDATE workspaces SET root = ?, worktrees_dir = ?').run(clone, racine);
-  db.prepare('UPDATE topics SET worktree = ? WHERE id = ?').run(depot, sujet);
-});
+}
 
 afterEach(async () => {
   try {
@@ -127,7 +131,7 @@ test.each([
   const appel = appels[0]!;
   expect.soft(dansDepot(appel.cwd, depot)).toBe(false);
   expect.soft(dansDepot(appel.cwd, clone)).toBe(false);
-  expect.soft(appel.entrees).toEqual([]);
+  expect.soft(appel.cwd).toBe('/');
   expect
     .soft(appel.commande.filter((arg) => /^(?:-C|--git-dir|--work-tree)/.test(arg)))
     .toEqual([]);
@@ -319,6 +323,8 @@ test('le fichier d’exclusions global protège .DS_Store d’une escalade', asy
   writeFileSync(exclusions, '.DS_Store\n');
   writeFileSync(join(home, '.gitconfig'), `[core]\n  excludesFile = ${exclusions}\n`);
   vi.stubEnv('GIT_CONFIG_GLOBAL', undefined);
+  await service.fermer();
+  ouvrirService();
   poserTemoinGit();
   await lancer();
   await finirPlan();
@@ -337,6 +343,8 @@ test.each([
   const valeur = 'valeur-globale-fictive';
   writeFileSync(join(home, '.gitconfig'), `[${section}]\n  ${cle} = ${valeur}\n`);
   vi.stubEnv('GIT_CONFIG_GLOBAL', undefined);
+  await service.fermer();
+  ouvrirService();
   const temoin = poserTemoinGit('config');
   await lancer();
   await finirPlan();

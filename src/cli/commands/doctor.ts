@@ -498,7 +498,7 @@ export function realProbes(paths: AidPaths): Probes {
       return { home: paths.home, depots };
     },
     has: (b) => onPath(b),
-    version: run,
+    version: (bin, args) => run(bin, args, bin === 'ssh'),
     async loadPty() {
       try {
         const { ptyPreflight } = await import('../../daemon/pty/native.js');
@@ -702,6 +702,19 @@ export async function runDoctor(
 ): Promise<number> {
   out(`aidboard ${readVersion()}`);
   const checks = await runChecks(probes);
+  if (!probes.has('ssh')) {
+    checks.push({ level: 'warn', label: 'ssh introuvable' });
+  } else {
+    const ssh = await probes.version('ssh', ['-V']);
+    const version = /\bOpenSSH[_ ](\d+\.\d+)/.exec(ssh ?? '')?.[1];
+    if (!ssh || !version) {
+      checks.push({ level: 'warn', label: ssh || 'ssh : version illisible' });
+    } else if (gitAtLeast(version, 9, 6)) {
+      checks.push({ level: 'ok', label: ssh });
+    } else {
+      checks.push({ level: 'warn', label: ssh, detail: 'OpenSSH 9.6 ou plus recommandé' });
+    }
+  }
   checks.push(...(await verifierLanceursAcceptation()));
   for (const k of checks) out(`  ${MARK[k.level]} ${k.label}${k.detail ? ` : ${k.detail}` : ''}`);
   out(`  Boucle — ${limitesBoucle}`);

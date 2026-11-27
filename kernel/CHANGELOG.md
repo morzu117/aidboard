@@ -7,6 +7,14 @@ ajoute rien. Format : chaque version majeure du noyau décrit sa
 **migration**, que `/sync` applique avant de rendre le bloc ; les mineures
 et patchs n'en ont pas, sauf mention contraire.
 
+## Suite de la boucle du daemon (chantier 69.11)
+
+Changement sans migration. Le relevé du home des boucles inclut désormais
+les fichiers Git désignés par `GIT_CONFIG_GLOBAL` et `XDG_CONFIG_HOME`.
+Une boucle déjà en cours lors de la mise à jour peut escalader au premier
+contrôle si son empreinte précédente ne contenait pas ces fichiers.
+Le point 69.12 refuse les origines SSH contenant `[` ou `%`, ignore les chemins relatifs de configuration Git globale et signale les versions OpenSSH antérieures à 9.6 dans `aid doctor`.
+
 ## Délais de la boucle du daemon (chantier 69.3)
 
 Changement sans migration. Le manifeste peut redéclarer chaque délai de

@@ -22,7 +22,12 @@ import * as depotBoucle from './depot.js';
 import { transition, type EtatBoucle, type EvenementBoucle } from './etat.js';
 import { lancerGate, type ResultatGate } from './gate.js';
 import { lireReglagesBoucle, type ReglagesBoucle } from './reglages.js';
-import { gitBoucle, lireBaseDistante } from './git.js';
+import {
+  contexteConfigGitGlobale,
+  gitBoucle,
+  lireBaseDistante,
+  lireConfigGitGlobale,
+} from './git.js';
 import { heureDepartGroupe, memeGroupe, type ConsignerGroupe } from './groupes.js';
 import { lireRevue } from './revue.js';
 
@@ -84,6 +89,7 @@ type CauseInterruptionGate = 'arreter' | 'tic' | 'plan' | 'fermer';
 
 export class ServiceBoucle {
   private readonly verrous = new Map<string, Promise<unknown>>();
+  private readonly configGitGlobale = lireConfigGitGlobale();
   private readonly maintenant: () => number;
   private fermeture?: Promise<void>;
   private readonly gates = new Map<
@@ -104,7 +110,9 @@ export class ServiceBoucle {
   }
 
   private avecVerrou<T>(sujetId: string, action: () => Promise<T>): Promise<T> {
-    const suite = (this.verrous.get(sujetId) ?? Promise.resolve()).catch(() => {}).then(action);
+    const suite = (this.verrous.get(sujetId) ?? Promise.resolve())
+      .catch(() => {})
+      .then(() => contexteConfigGitGlobale.run(this.configGitGlobale, action));
     this.verrous.set(sujetId, suite);
     return suite.finally(() => {
       if (this.verrous.get(sujetId) === suite) this.verrous.delete(sujetId);
@@ -209,6 +217,18 @@ export class ServiceBoucle {
     return reglages;
   }
 
+  private verifierAbsenceSession(sujetId: string) {
+    if (
+      this.deps.db
+        .prepare(
+          `SELECT 1 FROM agents a JOIN runs r ON r.id = a.run_id
+      WHERE r.topic_id = ? AND a.status IN ('starting', 'working', 'needs_input', 'idle')`,
+        )
+        .get(sujetId)
+    )
+      throw new AidHttpError(409, 'Une session est déjà active sur ce sujet');
+  }
+
   lancer(sujetId: string) {
     return this.avecVerrou(sujetId, async () => {
       const sujet = this.sujet(sujetId);
@@ -219,15 +239,7 @@ export class ServiceBoucle {
         (precedente && !terminal(precedente.etat.phase))
       )
         throw new AidHttpError(409, 'Le sujet ne peut pas démarrer une boucle');
-      if (
-        this.deps.db
-          .prepare(
-            `SELECT 1 FROM agents a JOIN runs r ON r.id = a.run_id
-        WHERE r.topic_id = ? AND a.status IN ('starting', 'working', 'needs_input', 'idle')`,
-          )
-          .get(sujetId)
-      )
-        throw new AidHttpError(409, 'Une session est déjà active sur ce sujet');
+      this.verifierAbsenceSession(sujetId);
       const metadonneesGit = await empreinteMetadonnees(sujet.worktree);
       const tete = await this.git(sujet, 'rev-parse', 'HEAD');
       const distante = await gitSujet(sujet.worktree, [
@@ -282,6 +294,7 @@ export class ServiceBoucle {
           ],
         },
       };
+      this.verifierAbsenceSession(sujetId);
       depotBoucle.creer(this.deps.db, boucle);
       await this.conduire(boucle, sujet, { type: 'lancer_etape', etape: 'plan' });
     });
