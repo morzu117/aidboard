@@ -219,14 +219,16 @@ export class ServiceBoucle {
         (precedente && !terminal(precedente.etat.phase))
       )
         throw new AidHttpError(409, 'Le sujet ne peut pas démarrer une boucle');
+      if (
+        this.deps.db
+          .prepare(
+            `SELECT 1 FROM agents a JOIN runs r ON r.id = a.run_id
+        WHERE r.topic_id = ? AND a.status IN ('starting', 'working', 'needs_input', 'idle')`,
+          )
+          .get(sujetId)
+      )
+        throw new AidHttpError(409, 'Une session est déjà active sur ce sujet');
       const metadonneesGit = await empreinteMetadonnees(sujet.worktree);
-      if (precedente?.etat.metadonneesGit) {
-        const changements = comparerEmpreintes(precedente.etat.metadonneesGit, metadonneesGit);
-        if (changements.length) {
-          await this.escalader(precedente, 'scope', changements);
-          throw new AidHttpError(409, 'Les réglages git ont changé avant le lancement');
-        }
-      }
       const tete = await this.git(sujet, 'rev-parse', 'HEAD');
       const distante = await gitSujet(sujet.worktree, [
         'rev-parse',
@@ -251,15 +253,6 @@ export class ServiceBoucle {
       }
       const reglages = await this.reglages(sujet, tete);
       const manifeste = await this.manifeste(sujet, tete);
-      if (
-        this.deps.db
-          .prepare(
-            `SELECT 1 FROM agents a JOIN runs r ON r.id = a.run_id
-        WHERE r.topic_id = ? AND a.status IN ('starting', 'working', 'needs_input', 'idle')`,
-          )
-          .get(sujetId)
-      )
-        throw new AidHttpError(409, 'Une session est déjà active sur ce sujet');
       const debut = this.maintenant();
       const boucle: Boucle = {
         id: randomUUID(),

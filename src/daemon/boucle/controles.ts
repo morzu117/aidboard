@@ -2,7 +2,7 @@ import { execFile } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { constants } from 'node:fs';
 import * as fs from 'node:fs/promises';
-import { basename, isAbsolute, join, posix, relative, resolve, sep } from 'node:path';
+import { basename, dirname, isAbsolute, join, posix, relative, resolve, sep } from 'node:path';
 import { promisify } from 'node:util';
 import { parse } from 'yaml';
 import { gitBoucle } from './git.js';
@@ -377,7 +377,7 @@ function collecteurEmpreinte(
     chemin: string,
     nom: string,
     options: {
-      projeter?: (texte: string) => string;
+      projeter?: (texte: string) => string | Promise<string>;
       lire?: (texte: string) => void;
       exclure?: (nom: string) => boolean;
       exclureCible?: (chemin: string) => boolean;
@@ -456,7 +456,7 @@ function collecteurEmpreinte(
             const contenu = tampon.toString('utf8', 0, lus);
             lire?.(contenu);
             if (projeter) {
-              valeur = `projection:${hash.update(projeter(contenu)).digest('hex')}`;
+              valeur = `projection:${hash.update(await projeter(contenu)).digest('hex')}`;
               return;
             }
             hash.update(contenu);
@@ -616,9 +616,19 @@ export async function empreinteEnvironnement(
     }
   }
   if (worktree) {
-    const projet = (await fichiers.realpath(worktree)).replace(/[^a-zA-Z0-9]/g, '-');
-    const chemin = join('.claude', 'projects', projet, 'memory');
-    await relever(join(racine, chemin), join(home, chemin));
+    const reel = await fichiers.realpath(worktree);
+    const commun = await gitSujet(reel, [
+      'rev-parse',
+      '--path-format=absolute',
+      '--git-common-dir',
+    ]);
+    const projets = new Set([reel]);
+    if (commun.ok) projets.add(dirname(await fichiers.realpath(commun.stdout)));
+    for (const projet of projets) {
+      const code = projet.replace(/[^a-zA-Z0-9]/g, '-');
+      const chemin = join('.claude', 'projects', code, 'memory');
+      await relever(join(racine, chemin), join(home, chemin));
+    }
   }
   for (const script of scripts)
     await relever(script, join(home, relative(racine, script)), {
@@ -626,6 +636,27 @@ export async function empreinteEnvironnement(
       exclureCible: exclureCibleCodex,
     });
   return empreinte;
+}
+
+async function projeterConfigGit(depot: string, contenu: string): Promise<string> {
+  // Déléguer la syntaxe à Git sans suivre les directives include de la config.
+  const resultat = await gitBoucle(
+    depot,
+    ['config', '--file', '-', '--no-includes', '--null', '--list'],
+    contenu,
+  ).catch(() => undefined);
+  if (resultat === undefined) return `invalide:${contenu}`;
+  return resultat
+    .split('\0')
+    .filter((entree) => {
+      const separateur = entree.indexOf('\n');
+      const cle = separateur < 0 ? entree : entree.slice(0, separateur);
+      if (!cle.startsWith('branch.')) return true;
+      if (!/\.(?:remote|pushremote)$/.test(cle)) return false;
+      const destination = separateur < 0 ? '' : entree.slice(separateur + 1);
+      return destination !== 'origin' && destination !== '.';
+    })
+    .join('\0');
 }
 
 export async function empreinteMetadonnees(depot: string): Promise<EmpreinteEnvironnement> {
@@ -646,6 +677,9 @@ export async function empreinteMetadonnees(depot: string): Promise<EmpreinteEnvi
       await git.relever(
         join(racineGit, fichier),
         join(dossier === commun ? '.git' : '.git/worktree', fichier),
+        fichier.startsWith('config')
+          ? { projeter: (contenu) => projeterConfigGit(depot, contenu) }
+          : {},
       );
     Object.assign(empreinte, git.empreinte);
   }

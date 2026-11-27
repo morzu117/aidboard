@@ -202,7 +202,7 @@ export function transition(
       ) {
         return lancer('gate', { ...etat, ...portes, etapes: clore('skipped', evenement.tete) });
       }
-      const issue = evenement.issue ?? 'pass';
+      const issue = evenement.issue ?? 'fail';
       return modifier({
         phase: 'triage',
         revue: { tete: evenement.tete, issue },

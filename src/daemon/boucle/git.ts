@@ -1,4 +1,7 @@
 import { execFile } from 'node:child_process';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { dirname, join } from 'node:path';
 
 const variablesGate = new Set([
   'PATH',
@@ -65,17 +68,60 @@ export function gitBoucle(depot: string, args: string[], entree?: string): Promi
   return executerGit(
     depot,
     ['-c', 'credential.helper=', '-c', 'core.sshCommand=false', ...args],
-    { ...environnementGate(), GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_NOSYSTEM: '1' },
+    environnementGate(),
     lectureLongue ? 60_000 : 10_000,
     entree,
   );
 }
 
-export function lireBaseDistante(depot: string, base: string): Promise<string> {
-  return executerGit(
-    depot,
-    ['ls-remote', '--exit-code', 'origin', `refs/heads/${base}`],
-    process.env,
-    10_000,
-  );
+const hote = '[a-zA-Z0-9.][a-zA-Z0-9.-]*';
+const utilisateur = '[a-zA-Z0-9_][a-zA-Z0-9_.-]*';
+const adressesDistantes = [
+  new RegExp(`^https://${hote}/.+$`),
+  new RegExp(`^ssh://(?:${utilisateur}@)?${hote}(?::[0-9]+)?/.+$`),
+  new RegExp(`^${utilisateur}@${hote}:.+$`),
+];
+
+export async function lireBaseDistante(depot: string, base: string): Promise<string> {
+  const valeur = await gitBoucle(depot, [
+    'config',
+    '--local',
+    '--null',
+    '--get',
+    'remote.origin.url',
+  ]);
+  const adresse = valeur.slice(0, -1);
+  if (/[\p{Cc}\s]/u.test(adresse) || !adressesDistantes.some((forme) => forme.test(adresse))) {
+    throw new Error('Adresse distante non autorisée');
+  }
+  const temporaire = await mkdtemp(join(tmpdir(), 'aid-git-distant-'));
+  try {
+    // Conserver les identifiants et la config utilisateur sans hériter du dépôt courant.
+    const env: NodeJS.ProcessEnv = { ...process.env, GIT_CEILING_DIRECTORIES: dirname(temporaire) };
+    for (const nom of [
+      'GIT_DIR',
+      'GIT_COMMON_DIR',
+      'GIT_WORK_TREE',
+      'GIT_CONFIG',
+      'GIT_CONFIG_COUNT',
+      'GIT_CONFIG_PARAMETERS',
+    ] as const)
+      delete env[nom];
+    return await executerGit(
+      temporaire,
+      [
+        '-c',
+        'protocol.file.allow=never',
+        'ls-remote',
+        '--exit-code',
+        '--',
+        adresse,
+        `refs/heads/${base}`,
+      ],
+      env,
+      10_000,
+    );
+  } finally {
+    await rm(temporaire, { recursive: true, force: true });
+  }
 }

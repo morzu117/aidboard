@@ -334,6 +334,7 @@ Les règles de DM70, avec un test négatif chacune. Le testeur écrit d'abord le
   - `branch.<x>.remote` et `pushRemote` vers un autre remote que `origin` escaladent.
 
   Les fixtures existantes passent à une origine `https` fictive servie par un témoin commun (`test/boucle/temoin-git.ts`), dans quatre suites et les deux e2e de la boucle. Le test de DM 106896, inversé par DM70, est retiré. 121 lignes existantes remplacées, dans des tests de ce chantier.
+- _Révision._ Code du 69.10 (Codex, une passe). Sous la charge du gate, quatre scénarios dépassaient 5 s : le témoin git commun lançait node à chaque appel. Le testeur l'a remplacé par un script `/bin/sh` hors observation (d539710). Gate 5 319, et les 14 e2e de la boucle et de la livraison passent.
 
 ## 5. Réponses de Julien (26 novembre)
 
