@@ -328,6 +328,13 @@ Les règles de DM69, avec un test négatif chacune. Le testeur écrit d'abord le
 
 Les règles de DM70, avec un test négatif chacune. Le testeur écrit d'abord les tests à partir de DM70 seul, puis le dev les fait passer.
 
+- _Acceptation._ Couvert par `test/boucle/relecture3-*.test.ts` (bdd5b07), écrits par le testeur depuis DM70 seul, avec les précisions du lab (DM 106907, 106908) :
+  - l'utilisateur ssh ne commence pas par un tiret ;
+  - l'URL passe après `--` ;
+  - `branch.<x>.remote` et `pushRemote` vers un autre remote que `origin` escaladent.
+
+  Les fixtures existantes passent à une origine `https` fictive servie par un témoin commun (`test/boucle/temoin-git.ts`), dans quatre suites et les deux e2e de la boucle. Le test de DM 106896, inversé par DM70, est retiré. 121 lignes existantes remplacées, dans des tests de ce chantier.
+
 ## 5. Réponses de Julien (26 novembre)
 
 - **Q1. Les permissions sur le Mac, sans isolation : le mode `auto`, vérifié après coup.** Les sessions d'acceptation et de dev enchaînent sans demander. Le daemon vérifie ensuite le worktree, les tests d'acceptation, la branche et l'empreinte de l'environnement (DM67). Le plan et la revue restent en lecture seule. C'est une règle vérifiée après coup, pas une barrière : pendant l'étape, l'agent garde l'accès au home.
