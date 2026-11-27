@@ -127,7 +127,7 @@ test.each([
   const appel = appels[0]!;
   expect.soft(dansDepot(appel.cwd, depot)).toBe(false);
   expect.soft(dansDepot(appel.cwd, clone)).toBe(false);
-  expect.soft(appel.entrees).toEqual([]);
+  expect.soft(appel.cwd).toBe('/');
   expect
     .soft(appel.commande.filter((arg) => /^(?:-C|--git-dir|--work-tree)/.test(arg)))
     .toEqual([]);
