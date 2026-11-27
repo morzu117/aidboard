@@ -279,6 +279,14 @@ export class AgentManager {
     return [...this.live.values()].filter((a) => !a.exited);
   }
 
+  isolationGate(sujetId: string, agentId: string) {
+    if (this.deps.config.agents.isolation !== 'bwrap') return undefined;
+    const topic = this.deps.db.prepare('SELECT * FROM topics WHERE id = ?').get(sujetId) as
+      TopicRow | undefined;
+    if (!topic) throw new AidHttpError(404, 'sujet inconnu');
+    return this.isolationPour('codex', topic, agentId);
+  }
+
   private isolationPour(kind: SpawnKind, topic: TopicRow, agentId: string) {
     const { config, paths, bwrapBin } = this.deps;
     if (config.agents.isolation !== 'bwrap' || (kind !== 'claude' && kind !== 'codex'))

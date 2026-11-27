@@ -325,6 +325,7 @@ export async function startDaemon(
     });
     const journalBoucle = () => log('Événement de boucle non traité');
     const boucle = new ServiceBoucle({
+      isolationGate: (sujetId, agentId) => agents.isolationGate(sujetId, agentId),
       db: opened,
       memory,
       agents: {

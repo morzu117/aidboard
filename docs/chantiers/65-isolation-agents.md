@@ -23,9 +23,10 @@ Swairm avait des drones avec un HOME jetable et zéro credential. A-I-D ne peut 
   - le système de fichiers est lisible, et inscriptible seulement là où il le faut ;
   - les secrets d'A-I-D et ceux qui servent à pousser sont invisibles.
 - La configuration qui s'exécute plus tard hors du bac à sable reste en lecture seule : les hooks git, la configuration git, les réglages de Claude Code. Sinon, une écriture dans le bac à sable deviendrait une exécution hors de lui.
+- Le gate de la boucle et les commandes de preuve d’acceptation tournent dans le même type de bac, avec le profil du sujet et leur TMPDIR monté en écriture.
 
 **Hors-périmètre.**
-- Le réseau. L'agent garde l'accès à son fournisseur et au daemon, en `127.0.0.1`.
+- Le réseau reste ouvert, y compris les sockets Unix abstraites de l’hôte. L'agent garde l'accès à son fournisseur et au daemon, en `127.0.0.1`.
 - macOS. Il n'y a pas d'équivalent maintenu de bubblewrap, et `isolation: bwrap` y est refusé au démarrage, avec un message.
 - `shell`, `swarph-cell` et `swairm-cell`. Ce sont des sessions de l'humain ou des cells du maillage, pas des agents de sujet. Elles restent hors du bac à sable, et l'écran le dit.
 - Les bacs à sable propres aux agents (`codex --sandbox`, celui de Claude Code). Ils restent utilisables en plus du nôtre. Ce chantier ne s'appuie pas sur eux : il veut une règle commune aux deux.
@@ -251,6 +252,7 @@ La fusion de main, avec la boucle du 69. Les quatre conflits ont été résolus 
 - C à F, refaits depuis un script du gate, échouent sous le vrai bwrap.
 
 - _Acceptation._ Couvert par `test/isolation-acceptation-65-9.test.ts` et `test/isolation-acceptation-boucle.test.ts` (0a8764d), écrits depuis DM74 seul. Sous le vrai bwrap, le gate écrit puis exécute un script qui tente C à F : les écritures dans le home, dans les hooks git et dans `settings.json` échouent, et la variable factice est absente. L'écriture dans le worktree et dans le TMPDIR passe. Même chose pour les preuves. Le délai et l'arrêt figent le témoin petit-fils. Sans bwrap, la boucle escalade et le témoin de commande reste absent. En `off`, l'argv est l'argv habituel. La limite affichée dit que bwrap couvre le gate. Interface : `lancerGate({ …, isolation?: { bwrapBin, profil } })` et la même option pour `produirePreuves`.
+- _Révision 65.8 et 65.9._ Une passe Codex. Trente-huit lignes existantes remplacées, toutes dans le périmètre. Le testeur a ajouté une origine fictive au dépôt témoin des preuves (6300bbd). Mon gate : 5 412, et les 14 e2e de la boucle et de la livraison passent. Les cas sous le vrai bwrap sont joués par le job `isolation` de la CI.
 
 ## 5. Pièges
 

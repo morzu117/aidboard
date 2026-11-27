@@ -4,6 +4,12 @@ import { lstat, mkdtemp, rm, symlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
+import { environnementGate } from '../daemon/boucle/git.js';
+import {
+  BubblewrapIndisponible,
+  envelopperCommande,
+  type IsolationCommande,
+} from '../daemon/isolation/lanceur.js';
 import { git, lireCommits, racineDepot } from './verifier.js';
 
 const executer = promisify(execFile);
@@ -57,6 +63,7 @@ async function nomDepot(depot: string, lireGit: typeof git): Promise<string> {
 }
 
 interface OptionsProcessusPreuve {
+  isolation?: IsolationCommande;
   enGroupe?: boolean;
   consignerGroupe?: ConsignerGroupe;
 }
@@ -69,10 +76,20 @@ function lancerEnGroupe(
   env?: NodeJS.ProcessEnv,
   signal?: AbortSignal,
   consignerGroupe?: ConsignerGroupe,
+  isolation?: IsolationCommande,
+  sourcePreuve?: string,
 ): Promise<Commande> {
-  return new Promise((resoudre, rejeter) => {
-    const [programme, ...args] = argv;
-    const enfant = spawn(programme!, args, { cwd: dossier, env, detached: true, stdio: 'ignore' });
+  const [programme, ...args] = argv;
+  const lancement =
+    isolation &&
+    envelopperCommande(isolation, programme!, args, env ?? environnementGate(), sourcePreuve);
+  return new Promise<Commande>((resoudre, rejeter) => {
+    const enfant = spawn(lancement?.file ?? programme!, lancement?.args ?? args, {
+      cwd: dossier,
+      env: lancement?.env ?? env,
+      detached: true,
+      stdio: 'ignore',
+    });
     let expire = false;
     let erreurSuivi: unknown;
     let oublier: (() => void) | undefined;
@@ -101,7 +118,7 @@ function lancerEnGroupe(
     if (signal?.aborted) tuer();
     enfant.once('error', (erreur) => {
       nettoyer();
-      rejeter(erreur);
+      rejeter(isolation ? new BubblewrapIndisponible() : erreur);
     });
     enfant.once('exit', (code) => {
       tuer();
@@ -122,7 +139,7 @@ function lancerEnGroupe(
         tuer();
       }
     }
-  });
+  }).finally(lancement?.nettoyer);
 }
 
 async function lancerDansWorktree(
@@ -147,9 +164,17 @@ async function lancerDansWorktree(
     });
     if (dependances) await symlink(modules, join(dossier, 'node_modules'), 'dir');
 
+    let isolation = options.isolation;
+    if (isolation) {
+      const gitDir = (
+        await lireGit(dossier, ['rev-parse', '--path-format=absolute', '--git-dir'])
+      ).trimEnd();
+      isolation = { ...isolation, profil: { ...isolation.profil, worktree: dossier, gitDir } };
+    }
+
     const [programme, ...args] = argv;
     try {
-      if (options.enGroupe)
+      if (options.enGroupe || isolation)
         return await lancerEnGroupe(
           dossier,
           head,
@@ -158,6 +183,8 @@ async function lancerDansWorktree(
           env,
           signal,
           options.consignerGroupe,
+          isolation,
+          dependances ? options.isolation?.profil.worktree : undefined,
         );
       await executer(programme!, args, {
         cwd: dossier,
@@ -168,6 +195,7 @@ async function lancerDansWorktree(
       });
       return { argv, exit: 0, head };
     } catch (erreur) {
+      if (erreur instanceof BubblewrapIndisponible) throw erreur;
       const arret = erreur as { code?: number; killed?: boolean; signal?: string };
       if (arret.killed && arret.signal === 'SIGKILL') {
         return { argv, exit: null, head, delai_depasse: true };

@@ -1,23 +1,39 @@
 import { spawn } from 'node:child_process';
 import {
   copyFileSync,
+  existsSync,
   lstatSync,
   mkdirSync,
   mkdtempSync,
+  readlinkSync,
+  realpathSync,
   rmdirSync,
   rmSync,
+  statSync,
   unlinkSync,
   writeFileSync,
   type Stats,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { basename, join } from 'node:path';
+import { basename, join, resolve } from 'node:path';
 import type { SpawnChild } from '../conversation/driver.js';
 import { OPTIONS_GIT_SUJET } from '../git/exec.js';
 import type { AidPaths } from '../paths.js';
+import { resolveOnPath } from '../pty/spawn.js';
 import { argvBwrap, gitCommunDe, POINTS_PROJET, type ProfilIsolation } from './bwrap.js';
 
 type FsIsolation = Parameters<typeof argvBwrap>[2];
+
+export interface IsolationCommande {
+  bwrapBin: string;
+  profil: ProfilIsolation;
+}
+
+export class BubblewrapIndisponible extends Error {
+  constructor() {
+    super('isolation demandée mais bubblewrap indisponible');
+  }
+}
 
 export function profilPour(
   {
@@ -189,7 +205,7 @@ function preparerProjetClaude(home: string, worktree: string): string {
 export function envelopper(
   bwrapBin: string,
   profil: ProfilIsolation,
-  { pty }: { pty: boolean },
+  { pty, sourcePreuve }: Parameters<typeof argvBwrap>[1],
   fs: FsIsolation,
   file: string,
   args: string[],
@@ -212,7 +228,7 @@ export function envelopper(
     if (etat) nettoyages.push(etat.nettoyer);
     const argv = argvBwrap(
       { ...profil, copieClaude: etat?.copie ?? profil.copieClaude, projetClaude },
-      { pty },
+      { pty, sourcePreuve },
       fs,
     );
     return {
@@ -224,6 +240,26 @@ export function envelopper(
     nettoyer();
     throw cause;
   }
+}
+
+export function envelopperCommande(
+  { bwrapBin, profil }: IsolationCommande,
+  file: string,
+  args: string[],
+  env: NodeJS.ProcessEnv,
+  sourcePreuve?: string,
+) {
+  const binaire = resolveOnPath(bwrapBin, env.PATH ?? '');
+  if (!binaire) throw new BubblewrapIndisponible();
+  const lancement = envelopper(
+    resolve(binaire),
+    { ...profil, tmp: env.TMPDIR },
+    { pty: false, sourcePreuve },
+    { existsSync, lstatSync, readlinkSync, realpathSync, statSync },
+    file,
+    args,
+  );
+  return { ...lancement, env: environnementIsole(env) };
 }
 
 export function spawnChildIsole(

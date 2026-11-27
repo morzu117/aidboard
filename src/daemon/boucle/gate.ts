@@ -6,11 +6,17 @@ import { StringDecoder } from 'node:string_decoder';
 import { setTimeout as attendre } from 'node:timers/promises';
 import { produirePreuves } from '../../acceptation/preuve.js';
 import { verifierAcceptation } from '../../acceptation/verifier.js';
+import {
+  BubblewrapIndisponible,
+  envelopperCommande,
+  type IsolationCommande,
+} from '../isolation/lanceur.js';
 import type { ConsignerGroupe } from './groupes.js';
 import { environnementGate, gitBoucle } from './git.js';
 import { gitSujet, processusDansWorktree } from './controles.js';
 
 interface OptionsGate {
+  isolation?: IsolationCommande;
   signal?: AbortSignal;
   consignerGroupe?: ConsignerGroupe;
   depot: string;
@@ -34,6 +40,7 @@ export interface ResultatGate {
   dureeMs: number;
   journal: string;
   fichiersAcceptation?: string[];
+  erreurIsolation?: string;
 }
 
 async function attendreWorktree(
@@ -74,11 +81,14 @@ function executerCommande(
   maximum: number,
   signal?: AbortSignal,
   consignerGroupe?: ConsignerGroupe,
+  isolation?: IsolationCommande,
 ): Promise<{ codeSortie: number | null; journal: string }> {
-  return new Promise((rendre) => {
-    const enfant = spawn('/bin/sh', ['-c', commande], {
+  const args = ['-c', commande];
+  const lancement = isolation && envelopperCommande(isolation, '/bin/sh', args, env);
+  return new Promise<{ codeSortie: number | null; journal: string }>((rendre, rejeter) => {
+    const enfant = spawn(lancement?.file ?? '/bin/sh', lancement?.args ?? args, {
       cwd: depot,
-      env,
+      env: lancement?.env ?? env,
       detached: true,
       stdio: ['ignore', 'pipe', 'pipe'],
     });
@@ -143,7 +153,7 @@ function executerCommande(
       signaler('SIGKILL');
       enfant.stdout.destroy();
       enfant.stderr.destroy();
-      finir(null);
+      if (!isolation || sorti || !enfant.pid) finir(null);
     }
 
     function arreter() {
@@ -156,7 +166,10 @@ function executerCommande(
     const echeance = setTimeout(arreter, delai);
     signal?.addEventListener('abort', arreter, { once: true });
 
-    enfant.on('error', () => finir(null));
+    enfant.on('error', () => {
+      if (isolation) rejeter(new BubblewrapIndisponible());
+      finir(null);
+    });
     enfant.on('exit', () => {
       sorti = true;
       if (expire && !terminee) forcerArret();
@@ -171,10 +184,20 @@ function executerCommande(
       }
     }
     if (signal?.aborted) arreter();
-  });
+  }).finally(lancement?.nettoyer);
+}
+
+async function avecEnvironnementGate<T>(evaluer: (env: NodeJS.ProcessEnv) => Promise<T>) {
+  const temporaire = await mkdtemp(join(tmpdir(), 'aid-gate-'));
+  try {
+    return await evaluer(environnementGate(temporaire));
+  } finally {
+    await rm(temporaire, { recursive: true, force: true });
+  }
 }
 
 export async function lancerGate({
+  isolation,
   signal,
   consignerGroupe,
   depot,
@@ -202,18 +225,23 @@ export async function lancerGate({
     };
   }
 
-  async function evaluer(env: NodeJS.ProcessEnv): Promise<ResultatGate> {
+  async function evaluer(env?: NodeJS.ProcessEnv): Promise<ResultatGate> {
     if (signal?.aborted || (await lireTete(depot)) !== tete) return resultat('cannot_evaluate');
 
-    ({ codeSortie, journal } = await executerCommande(
-      depot,
-      commande,
-      env,
-      delaiMs,
-      graceMs,
-      journalMaxOctets,
-      signal,
-    ));
+    const executer = (env: NodeJS.ProcessEnv) =>
+      executerCommande(
+        depot,
+        commande,
+        env,
+        delaiMs,
+        graceMs,
+        journalMaxOctets,
+        signal,
+        consignerGroupe,
+        isolation,
+      );
+    // Le TMPDIR isolé disparaît avant les relectures Git, y compris celles des preuves.
+    ({ codeSortie, journal } = await (env ? executer(env) : avecEnvironnementGate(executer)));
     if (codeSortie === null || (await lireTete(depot)) !== tete) return resultat('cannot_evaluate');
     if (codeSortie !== 0) return resultat('fail');
     if (!acceptation) return resultat('pass');
@@ -229,10 +257,13 @@ export async function lancerGate({
     if (!verification.ok) return resultat('fail');
 
     const options = { depot, base, chemins, lancer };
-    const preuves = await (produire ?? produirePreuves)(options, delaiMs, env, signal, gitBoucle, {
-      enGroupe: true,
-      consignerGroupe,
-    });
+    const produireRapports = (env: NodeJS.ProcessEnv) =>
+      (produire ?? produirePreuves)(options, delaiMs, env, signal, gitBoucle, {
+        enGroupe: true,
+        consignerGroupe,
+        ...(isolation && { isolation }),
+      });
+    const preuves = await (env ? produireRapports(env) : avecEnvironnementGate(produireRapports));
     if (
       (await lireTete(depot)) !== tete ||
       !preuves.length ||
@@ -263,13 +294,11 @@ export async function lancerGate({
     if (!(await attendreWorktree(depot, listerProcessus, delaiAttenteMs))) {
       return resultat('cannot_evaluate');
     }
-    const temporaire = await mkdtemp(join(tmpdir(), 'aid-gate-'));
-    try {
-      return await evaluer(environnementGate(temporaire));
-    } finally {
-      await rm(temporaire, { recursive: true, force: true });
+    return isolation ? await evaluer() : await avecEnvironnementGate(evaluer);
+  } catch (erreur) {
+    if (erreur instanceof BubblewrapIndisponible) {
+      return { ...resultat('cannot_evaluate'), erreurIsolation: erreur.message };
     }
-  } catch {
     return resultat('cannot_evaluate');
   }
 }

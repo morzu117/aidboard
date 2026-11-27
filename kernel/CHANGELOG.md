@@ -11,6 +11,7 @@ et patchs n'en ont pas, sauf mention contraire.
 
 Changement mineur, sans migration. La politique d'orchestration décrit le
 travail sous bubblewrap. L'isolation est désactivée par défaut.
+Sous bubblewrap, la boucle isole aussi son gate et ses preuves d’acceptation. Le réseau reste ouvert.
 
 ## Suite de la boucle du daemon (chantier 69.11)
 

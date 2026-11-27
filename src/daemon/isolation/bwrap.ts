@@ -39,7 +39,7 @@ function validerChemin(nom: string, chemin: string): void {
 
 export function argvBwrap(
   profil: ProfilIsolation,
-  { pty }: { pty: boolean },
+  { pty, sourcePreuve }: { pty: boolean; sourcePreuve?: string },
   fs: FsIsolation,
 ): string[] {
   for (const [nom, chemin] of Object.entries(profil)) {
@@ -97,9 +97,15 @@ export function argvBwrap(
     argv.push('--ro-bind', '/dev/null', credentials);
   }
 
+  // node_modules dans le checkout de preuve pointe vers le worktree du sujet.
+  if (sourcePreuve) {
+    validerChemin('sourcePreuve', sourcePreuve);
+    argv.push('--ro-bind', sourcePreuve, sourcePreuve);
+  }
   for (const chemin of [worktree, gitCommun, spool, piecesJointes]) {
     argv.push('--bind', chemin, chemin);
   }
+  if (profil.tmp) argv.push('--bind', profil.tmp, profil.tmp);
   for (const [relatif, dossier] of POINTS_PROJET) {
     const chemin = join(worktree, relatif);
     const statut = fs.lstatSync
