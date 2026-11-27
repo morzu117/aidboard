@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import * as fs from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -164,7 +164,9 @@ describe('empreinte de l’environnement', () => {
 
   it('relève par chemin les réglages modifiés, la mémoire ajoutée et le réglage supprimé', async () => {
     const worktree = join(home, 'projet-fictif');
-    const projet = join('.claude', 'projects', worktree.replace(/[^a-zA-Z0-9]/g, '-'));
+    mkdirSync(worktree);
+    const cheminReel = realpathSync(worktree);
+    const projet = join('.claude', 'projects', cheminReel.replace(/[^a-zA-Z0-9]/g, '-'));
     const memoire = join(projet, 'memory', 'MEMORY.md');
     ecrire(home, '.claude/settings.json', '{"mode":"avant"}\n');
     ecrire(home, '.bashrc', 'export EXEMPLE=1\n');
