@@ -158,6 +158,21 @@ Le lab a relu le 69.9 à la tête e824ad0 (DM 106904). Les points 2 à 5 de DM69
 - **La mémoire du projet.** Claude Code peut ranger la mémoire d'un worktree lié sous le dossier de la racine du dépôt principal, qui se déduit de `git rev-parse --git-common-dir`. L'empreinte relève donc les deux dossiers, celui du worktree et celui de la racine du dépôt. La mémoire des autres projets non surveillée entre dans les limites de la vue et de `aid doctor`.
 - **Une issue de tentative absente vaut `fail`, jamais `pass`.**
 
+### DM71. Les points non bloquants de la dernière relecture
+
+Le lab a donné son oui de sécurité à la tête 5509963 (DM 106912), et la PR #214 est mergée avec le oui de Julien. Restent trois points non bloquants, plus de petits ajustements. Julien a choisi de les traiter après le merge, dans une PR à part.
+
+- **La course au lancement.** Entre le contrôle de session active et la création de la boucle, plusieurs attentes s'écoulent : `ls-remote`, `merge-base`, réglages, manifeste. Une session normale lancée pendant ce temps passe le contrôle. Le même contrôle, synchrone, est donc refait juste avant la création de la boucle, et un refus y donne le même 409.
+- **Le ls-remote part de `/`.** Un non-root ne peut pas y créer de `.git`. Le dossier temporaire et sa suppression disparaissent.
+- **Les origines légitimes.** Sont aussi acceptées :
+  - `https://user@hôte/chemin` et `https://hôte:port/chemin` ;
+  - `ssh://` avec un port, comme avant ;
+  - un alias ssh sans `user@` (`hôte:chemin`) quand l'hôte contient au moins une lettre et que le chemin ne commence pas par `/` ni `\` ;
+  - un schéma en majuscules, ramené en minuscules.
+
+  Restent refusés : `git://`, `file:`, `ext::`, un chemin local, et tout utilisateur ou hôte qui commence par un tiret.
+- **Les limites** nomment aussi les cibles d'`include.path`, qui ne sont pas suivies. `XDG_CONFIG_HOME` et `GIT_CONFIG_GLOBAL` passent dans l'environnement de `gitBoucle` et sont relevés par l'empreinte du home quand ils sont posés. La première escalade d'une boucle en cours après la mise à jour est dite dans le journal des versions.
+
 ## 4. Points
 
 ### 69.1 Le plan
@@ -336,6 +351,10 @@ Les règles de DM70, avec un test négatif chacune. Le testeur écrit d'abord le
   Les fixtures existantes passent à une origine `https` fictive servie par un témoin commun (`test/boucle/temoin-git.ts`), dans quatre suites et les deux e2e de la boucle. Le test de DM 106896, inversé par DM70, est retiré. 121 lignes existantes remplacées, dans des tests de ce chantier.
 - _Révision._ Code du 69.10 (Codex, une passe). Sous la charge du gate, quatre scénarios dépassaient 5 s : le témoin git commun lançait node à chaque appel. Le testeur l'a remplacé par un script `/bin/sh` hors observation (d539710). Gate 5 319, et les 14 e2e de la boucle et de la livraison passent.
 
+### 69.11 Les points non bloquants (DM71)
+
+Les règles de DM71, avec un test négatif chacune. Le testeur écrit d'abord les tests à partir de DM71 seul, puis le dev les fait passer.
+
 ## 5. Réponses de Julien (26 novembre)
 
 - **Q1. Les permissions sur le Mac, sans isolation : le mode `auto`, vérifié après coup.** Les sessions d'acceptation et de dev enchaînent sans demander. Le daemon vérifie ensuite le worktree, les tests d'acceptation, la branche et l'empreinte de l'environnement (DM67). Le plan et la revue restent en lecture seule. C'est une règle vérifiée après coup, pas une barrière : pendant l'étape, l'agent garde l'accès au home.
@@ -353,5 +372,5 @@ Les règles de DM70, avec un test négatif chacune. Le testeur écrit d'abord le
 
 ## 7. Fini quand
 
-- Les points 69.2 à 69.10 sont mergés, avec la CI verte et le oui de Julien.
+- Les points 69.2 à 69.11 sont mergés, avec la CI verte et le oui de Julien.
 - Un vrai sujet est allé du plan à « livraison prête » sur le Mac de Julien, avec ses trois mesures écrites.
