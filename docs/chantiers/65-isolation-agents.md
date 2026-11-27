@@ -115,6 +115,25 @@ Les corrections :
 
 Chaque sortie devient un test négatif dans le job `isolation`. Comme le bus utilisateur n'existe sans doute pas sur un runner GitHub, le test de D vérifie directement que `/run/user` est invisible de l'intérieur, sans compter sur l'échec de `systemd-run`. En attendant ces corrections, `aid doctor` et la doc disent que `bwrap` n'est pas encore une frontière de sécurité.
 
+### DM73. La boucle sous isolation (27 novembre)
+
+La #210 reprend main, et donc la boucle du chantier 69. Le lab a donné son oui de sécurité pour C à F à f0abcc0 (DM 107562). Il a fait trois suggestions et relevé un trou propre à la boucle (DM 107566).
+
+- **Les agents de la boucle sont isolés comme les autres.** Ils passent par `agents.spawn` et `isolationPour`, sans exception de rôle. Sous isolation, le groupe consigné par la boucle est celui du moniteur bwrap. Arrêter la boucle doit tuer l'agent et tous ses descendants dans le bac.
+- **Le remplacement de `.git`.** Un `mv`, ou un `rm` suivi d'une recréation du fichier `.git` du worktree ou du `commondir`, échoue de l'intérieur, comme l'ajout à la fin.
+- **Un témoin pour `/run/user`.** Le test vérifie qu'il existe dehors avant de vérifier qu'il est vide dedans. S'il n'existe pas sur le runner, le test le crée pour le témoin ou échoue clairement, au lieu de passer sans rien prouver.
+- **Le réseau n'est pas isolé.** `aid doctor` et la doc le disent : pas de `--unshare-net`, donc les sockets Unix abstraites de l'hôte restent joignables depuis le bac.
+
+### DM74. Le gate dans le bac (27 novembre)
+
+Le gate de la boucle lance `/bin/sh` dans le daemon, hors du bac, sur du code écrit par l'agent : tests, build, script de gate. Un agent isolé pourrait donc sortir en écrivant un script que le gate exécutera. Julien a tranché (27 novembre) : le gate entre dans le bac, dans la #210.
+
+- **Sous `agents.isolation: bwrap`, tout ce que la boucle exécute sur le code du worktree tourne sous bwrap.** C'est le gate (`boucle/gate.ts`), mais aussi les preuves d'acceptation (`acceptation/preuve.ts`). Le profil est celui de l'agent du sujet (`profilPour`, `envelopper`) : le worktree en écriture et le reste en lecture seule. L'environnement passe par la liste blanche de la boucle, puis par celle du bac. Le dossier temporaire du gate est le seul ajout en écriture.
+- **On ne retombe jamais en silence.** Si l'isolation est demandée mais que bwrap manque, le gate n'est pas lancé, et la boucle escalade avec un message clair.
+- **Les groupes de processus marchent toujours.** Le délai et l'arrêt de la boucle tuent tout le gate dans le bac.
+- **Sans isolation, rien ne change**, sur macOS par exemple. La limite reste écrite dans `limites-boucle.ts`, et elle dit maintenant que l'isolation couvre aussi le gate.
+- Les sorties C à F, refaites depuis un script lancé par le gate, échouent comme depuis l'agent, sous le vrai bwrap, dans le job `isolation`.
+
 ## 4. Points
 
 ### 65.1 Le plan
@@ -210,6 +229,25 @@ Ce que la CI ne peut pas vérifier, faute de vrai compte : le rafraîchissement 
 
   Soixante-dix lignes existantes remplacées ou retirées, toutes dans le périmètre du chantier. Les cas sous vrai bwrap sont joués par le job `isolation` de la CI ; le lab relance son harnais à cette tête. Mon gate : 4 914.
 
+### 65.7 Reprendre main
+
+La fusion de main, avec la boucle du 69. Les quatre conflits ont été résolus par Codex, en gardant les deux côtés. Les agents de boucle passent par `isolationPour`.
+- _Révision 65.7._ Une passe Codex. Neuf lignes existantes remplacées dans `pty/manager.ts`. Mon gate : 5 407. Les e2e de la boucle et de la livraison passent, 14/14.
+
+### 65.8 La boucle isolée et les suggestions du lab (DM73)
+
+- Sous le vrai bwrap : un agent de boucle est lancé isolé, et l'arrêt de la boucle tue ses descendants.
+- `.git` et `commondir` ne peuvent pas être remplacés.
+- `/run/user` a son témoin dehors.
+- `aid doctor` et la doc disent que le réseau n'est pas isolé.
+
+### 65.9 Le gate dans le bac (DM74)
+
+- Sous isolation, le gate et les preuves tournent sous bwrap, avec le profil du sujet.
+- Si bwrap manque, la boucle escalade et le gate ne se lance pas.
+- Le délai et l'arrêt tuent tout le groupe.
+- C à F, refaits depuis un script du gate, échouent sous le vrai bwrap.
+
 ## 5. Pièges
 
 - **Ne jamais retomber en silence.** Un daemon réglé en `bwrap` qui lancerait un agent non isolé parce que bwrap manque est pire qu'un daemon en `off` : on croit être protégé.
@@ -221,4 +259,4 @@ Ce que la CI ne peut pas vérifier, faute de vrai compte : le rafraîchissement 
 
 - Avec `agents.isolation: bwrap` sur la tour, un agent de sujet peut lire tout le système et travailler dans son worktree. Il ne peut ni écrire ailleurs, ni pousser, ni lire les secrets d'A-I-D.
 - Le daemon refuse de démarrer si l'isolation est demandée et indisponible.
-- La boucle dans le daemon et le merge automatique peuvent s'appuyer sur cette garantie.
+- La boucle dans le daemon et le merge automatique peuvent s'appuyer sur cette garantie, y compris pour le gate et les preuves que la boucle lance (DM74).
