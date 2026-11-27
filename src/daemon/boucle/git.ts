@@ -1,9 +1,13 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { execFile } from 'node:child_process';
+import { isAbsolute } from 'node:path';
 
 export function lireConfigGitGlobale() {
   const { GIT_CONFIG_GLOBAL, XDG_CONFIG_HOME } = process.env;
-  return { GIT_CONFIG_GLOBAL, XDG_CONFIG_HOME };
+  return {
+    GIT_CONFIG_GLOBAL: isAbsolute(GIT_CONFIG_GLOBAL ?? '') ? GIT_CONFIG_GLOBAL : undefined,
+    XDG_CONFIG_HOME: isAbsolute(XDG_CONFIG_HOME ?? '') ? XDG_CONFIG_HOME : undefined,
+  };
 }
 
 // Tous les appels Git et relevés d'une action utilisent le même environnement de démarrage.
@@ -106,7 +110,11 @@ export async function lireBaseDistante(depot: string, base: string): Promise<str
   const adresse = valeur
     .slice(0, -1)
     .replace(/^(?:https|ssh)(?=:\/\/)/i, (schema) => schema.toLowerCase());
-  if (/[\p{Cc}\s]/u.test(adresse) || !adressesDistantes.some((forme) => forme.test(adresse))) {
+  if (
+    /[\p{Cc}\s]/u.test(adresse) ||
+    (!adresse.startsWith('https://') && /[[%]/.test(adresse)) ||
+    !adressesDistantes.some((forme) => forme.test(adresse))
+  ) {
     throw new Error('Adresse distante non autorisée');
   }
   // Conserver les identifiants et la config utilisateur sans hériter du dépôt courant.

@@ -570,10 +570,8 @@ export async function empreinteEnvironnement(
   const { empreinte, relever } = collecteurEmpreinte(racine, fichiers, budget);
   const { GIT_CONFIG_GLOBAL, XDG_CONFIG_HOME } = configGitGlobale();
   const configsGit = new Set([
-    ...(GIT_CONFIG_GLOBAL ? [resolve(worktree ?? process.cwd(), GIT_CONFIG_GLOBAL)] : []),
-    ...(XDG_CONFIG_HOME
-      ? [resolve(worktree ?? process.cwd(), XDG_CONFIG_HOME, 'git', 'config')]
-      : []),
+    ...(GIT_CONFIG_GLOBAL ? [resolve(GIT_CONFIG_GLOBAL)] : []),
+    ...(XDG_CONFIG_HOME ? [resolve(XDG_CONFIG_HOME, 'git', 'config')] : []),
   ]);
   for (const chemin of configsGit) {
     const { relever: releverConfig } = collecteurEmpreinte(

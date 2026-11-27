@@ -377,6 +377,7 @@ Les règles de DM72, avec un test négatif chacune. Le testeur écrit d'abord le
   - `aid doctor` dit la version d'OpenSSH.
 
   Aucune ligne existante modifiée.
+- _Révision._ Code du 69.12 (Codex, une passe). Gate 5 362, et les 14 e2e de la boucle et de la livraison passent.
 
 ## 5. Réponses de Julien (26 novembre)
 
