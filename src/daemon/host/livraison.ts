@@ -6,10 +6,12 @@ import {
   citations,
   compterControles,
   fraicheurRevue,
+  fraicheurRevueBoucle,
   lireControles,
   lirePr,
   sourceRevue,
 } from '../../shared/livraison.js';
+import { verdictRevueBoucle } from '../boucle/depot.js';
 import type { Db } from '../db.js';
 import { gitLivraison } from '../git/inspect.js';
 import type { MemoryService } from '../memory/service.js';
@@ -57,14 +59,21 @@ export async function livraisonPourAppareil(db: Db, memory: MemoryService, topic
       : null;
   };
   const pr = lirePr(derniere('pr.rafraichir', true)?.result ?? null);
-  const page = memory.get(`${sujet.namespace ?? sujet.name}/review/${sujet.slug}`) ?? null;
-  const source = sourceRevue(page, pr?.reviews ?? []);
+  const verdict = verdictRevueBoucle(db, topicId);
+  const source = verdict
+    ? null
+    : sourceRevue(
+        memory.get(`${sujet.namespace ?? sujet.name}/review/${sujet.slug}`) ?? null,
+        pr?.reviews ?? [],
+      );
   const revue =
     source?.commit && /^[0-9a-f]{4,40}$/.test(source.commit) ? source.commit : undefined;
   const manque = !sujet.worktree || !existsSync(sujet.worktree);
   const sansBranche = !sujet.branch;
   const git = manque || sansBranche ? null : await gitLivraison(sujet.worktree, sujet.base, revue);
-  const fraicheur = fraicheurRevue(source, git?.revue ?? null);
+  const fraicheur = verdict
+    ? fraicheurRevueBoucle(verdict, git?.head ?? null)
+    : fraicheurRevue(source, git?.revue ?? null);
   const controles = lireControles(pr, derniere('topic.test'));
   const head = pr?.headRefOid ?? git?.head ?? null;
   const blocage = manque
@@ -77,6 +86,7 @@ export async function livraisonPourAppareil(db: Db, memory: MemoryService, topic
           pr,
           teteLocale: git?.head ?? null,
           fraicheur,
+          revueBoucleRequise: Boolean(verdict),
         });
   return {
     head,

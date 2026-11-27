@@ -311,6 +311,7 @@ Les règles de DM69, avec un test négatif chacune. Le testeur écrit d'abord le
   - l'option `{ enGroupe }` de `produirePreuves`.
 
   Le testeur a trouvé un vrai défaut : une revue fail était enregistrée pass. Trois tests du 69.8 sont alignés sur DM69 (79 lignes, dans des tests de ce chantier). Vingt-quatre cas échouent sur assertion avant le dev.
+- _Révision._ Code du 69.9 (Codex). Deux fixtures du 69.4 ont été alignées par le testeur (caa0b6f, 66d8516) : le relevé de mémoire passe un worktree qui existe. Gate 5 286, et les 14 e2e de la boucle et de la livraison passent. La reprise est vérifiée sous Linux ; la branche macOS (`ps -o lstart=`) reste à vérifier sur le Mac.
 
 ## 5. Réponses de Julien (26 novembre)
 

@@ -355,7 +355,7 @@ export class CodexDriver implements ConversationDriver {
     if (!item || typeof item.id !== 'string') return;
     const toolId = item.id;
     if (
-      this.opts.sandbox === 'read-only' &&
+      this.opts.remonterTexteFinal &&
       this.phase === 'turn' &&
       (!this.activeTurnId || !params?.turnId || params.turnId === this.activeTurnId)
     ) {

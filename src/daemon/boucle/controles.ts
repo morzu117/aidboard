@@ -549,6 +549,7 @@ function installationsClaude(contenu: string) {
 export async function empreinteEnvironnement(
   home: string,
   fichiers = fs,
+  { worktree }: { worktree?: string } = {},
 ): Promise<EmpreinteEnvironnement> {
   const racine = await fichiers.realpath(home);
   const { empreinte, relever } = collecteurEmpreinte(racine, fichiers, { ...limitesHome });
@@ -614,13 +615,9 @@ export async function empreinteEnvironnement(
       await relever(join(racine, chemin), join(home, chemin), { fichierSeul: true });
     }
   }
-  const projets = '.claude/projects';
-  const noms: string[] = [];
-  await relever(join(racine, projets), join(home, projets), {
-    lister: (enfants) => noms.push(...enfants),
-  });
-  for (const projet of noms) {
-    const chemin = join(projets, projet, 'memory');
+  if (worktree) {
+    const projet = (await fichiers.realpath(worktree)).replace(/[^a-zA-Z0-9]/g, '-');
+    const chemin = join('.claude', 'projects', projet, 'memory');
     await relever(join(racine, chemin), join(home, chemin));
   }
   for (const script of scripts)

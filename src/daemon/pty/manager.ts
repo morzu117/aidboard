@@ -1,4 +1,5 @@
 import { spawn as spawnProcess } from 'node:child_process';
+import type { ConsignerGroupe } from '../boucle/groupes.js';
 import type { RoleEtape } from '../boucle/reglages.js';
 import { envSwarph } from '../mesh/env.js';
 import type { MeshRegistry } from '../mesh/registre.js';
@@ -283,12 +284,18 @@ export class AgentManager {
       throw new AidHttpError(409, 'Utilisez la vue Boucle pour cette session');
   }
 
-  spawn(o: { topicId: string; kind: SpawnKind; mesh?: string; roleBoucle?: RoleEtape }): Agent {
+  spawn(o: {
+    topicId: string;
+    kind: SpawnKind;
+    mesh?: string;
+    roleBoucle?: RoleEtape;
+    consignerGroupe?: ConsignerGroupe;
+  }): Agent {
     const boucleActive = this.boucleActive(o.topicId);
     if (o.roleBoucle) {
       if (!boucleActive || (o.kind !== 'claude' && o.kind !== 'codex'))
         throw new AidHttpError(409, 'Aucune étape de boucle à lancer');
-      return this.spawnStream({ topicId: o.topicId, kind: o.kind, roleBoucle: o.roleBoucle });
+      return this.spawnStream({ ...o, kind: o.kind });
     }
     if (boucleActive) throw new AidHttpError(409, 'Le sujet est tenu par la boucle');
     if (
@@ -497,6 +504,7 @@ export class AgentManager {
     seq: number;
     settings: AgentSettings;
     roleBoucle?: RoleEtape;
+    consignerGroupe?: ConsignerGroupe;
   }): { stream: LiveStream; command: string[] } {
     const { paths, config, auth } = this.deps;
     const file = resolveOnPath(o.kind, process.env.PATH ?? '');
@@ -515,6 +523,7 @@ export class AgentManager {
     mkdirSync(attachmentsDir, { recursive: true, mode: 0o700 });
     const driverOpts = {
       ...(o.roleBoucle && {
+        remonterTexteFinal: true,
         extraArgs: o.kind === 'claude' ? ['--strict-mcp-config'] : [],
         sandbox: o.roleBoucle === 'plan' || o.roleBoucle === 'review' ? 'read-only' : undefined,
         spawnChild: ((bin, args, opts) => {
@@ -525,6 +534,13 @@ export class AgentManager {
               enfant.once('exit', () => resoudre());
             });
             this.groupesBoucle.set(o.agentId, { pid, sortie });
+            try {
+              o.consignerGroupe?.(pid);
+            } catch (erreur) {
+              process.kill(-pid, 'SIGKILL');
+              this.groupesBoucle.delete(o.agentId);
+              throw erreur;
+            }
             enfant.kill = (signal = 'SIGTERM') => {
               try {
                 return process.kill(-pid, signal);
@@ -606,6 +622,7 @@ export class AgentManager {
     topicId: string;
     kind: 'claude' | 'codex';
     roleBoucle?: RoleEtape;
+    consignerGroupe?: ConsignerGroupe;
   }): Agent {
     const { db, store } = this.deps;
     const topic = db.prepare('SELECT * FROM topics WHERE id = ?').get(o.topicId) as
@@ -634,6 +651,7 @@ export class AgentManager {
       seq: 0,
       settings,
       roleBoucle: o.roleBoucle,
+      consignerGroupe: o.consignerGroupe,
     });
 
     const now = new Date().toISOString();

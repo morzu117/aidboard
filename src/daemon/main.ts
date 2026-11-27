@@ -325,8 +325,13 @@ export async function startDaemon(
       memory,
       agents: {
         disponible: (genre) => Boolean(resolveOnPath(genre, process.env.PATH ?? '')),
-        async lancer({ sujetId, genre, role }) {
-          const agent = agents.spawn({ topicId: sujetId, kind: genre, roleBoucle: role });
+        async lancer({ sujetId, genre, role, consignerGroupe }) {
+          const agent = agents.spawn({
+            topicId: sujetId,
+            kind: genre,
+            roleBoucle: role,
+            consignerGroupe,
+          });
           const lectureSeule = role === 'plan' || role === 'review';
           let texteFinal: string | null | undefined;
           agents.observerBoucle(agent.id, (evenement) => {

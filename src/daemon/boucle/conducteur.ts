@@ -7,12 +7,12 @@ import {
   releverDiff,
   type EmpreinteEnvironnement,
 } from './controles.js';
-import type { ActionBoucle, EvenementBoucle, Tentative } from './etat.js';
+import type { ActionBoucle, Tentative } from './etat.js';
 import { lancerGate, type ResultatGate } from './gate.js';
 import { gitBoucle } from './git.js';
 import { messageEtape, type ContexteMessage } from './messages.js';
 import { lireReglagesBoucle, type ReglagesBoucle, type RoleEtape } from './reglages.js';
-import { lireRevue, type AttenduRevue } from './revue.js';
+import type { AttenduRevue } from './revue.js';
 
 interface ContexteConduite {
   depot: string;
@@ -26,6 +26,7 @@ interface ContexteConduite {
     go: string;
     reglagesGeles?: boolean;
     signal?: AbortSignal;
+    consignerGroupe?: Parameters<typeof lancerGate>[0]['consignerGroupe'];
     tete: string;
     acceptation?: Parameters<typeof lancerGate>[0]['acceptation'];
   };
@@ -78,7 +79,9 @@ async function controlerGate(contexte: ContexteConduite, deps: DependancesCondui
     }
     const avantDev = await deps.gate.lireEmpreinte();
     if (!avantDev) return deps.escalader('cannot_evaluate');
-    const avantGate = await empreinteEnvironnement(homedir());
+    const avantGate = await empreinteEnvironnement(homedir(), undefined, {
+      worktree: contexte.depot,
+    });
     const changementsDev = comparerEmpreintes(avantDev, avantGate);
     if (changementsDev.length) return deps.escalader('scope', changementsDev);
 
@@ -94,10 +97,13 @@ async function controlerGate(contexte: ContexteConduite, deps: DependancesCondui
       tete,
       commande: reglages.gate,
       delaiMs: reglages.delais.gate * 60_000,
+      consignerGroupe: contexte.gate.consignerGroupe,
       acceptation: avecAcceptation ? acceptation : undefined,
       ...(contexte.gate.signal && { signal: contexte.gate.signal }),
     });
-    const apresGate = await empreinteEnvironnement(homedir());
+    const apresGate = await empreinteEnvironnement(homedir(), undefined, {
+      worktree: contexte.depot,
+    });
     constat = {
       resultat,
       alertes,
@@ -131,7 +137,9 @@ export async function executer(
       const role = action.etape === 'revue' ? 'review' : action.etape;
       const texte = messageEtape(role, { ...contexte.message, revue: contexte.revue });
       if (role === 'dev' && deps.gate) {
-        const empreinte = await empreinteEnvironnement(homedir());
+        const empreinte = await empreinteEnvironnement(homedir(), undefined, {
+          worktree: contexte.depot,
+        });
         const constats = constatsEmpreinteHome(empreinte);
         if (constats.length) return deps.escalader('scope', constats);
         await deps.gate.consignerEmpreinte(empreinte);
@@ -193,23 +201,4 @@ export async function artefactPresent(
     case 'triage':
       return false;
   }
-}
-
-export async function terminerRevue(
-  contexte: Pick<ContexteConduite, 'slug' | 'revue'>,
-  deps: Pick<LecturesArtefact, 'lirePage'>,
-): Promise<[EvenementBoucle] | [EvenementBoucle, EvenementBoucle]> {
-  const { revue, slug } = contexte;
-  if (!revue) return [{ type: 'artefact_manquant' }];
-
-  // Cet adaptateur reçoit la réponse finale de l'appelant.
-  const texteFinal = await deps.lirePage(`${revue.namespace}/review/${slug}`);
-  if (texteFinal === undefined) return [{ type: 'artefact_manquant' }];
-
-  const resultat = lireRevue(texteFinal, revue);
-  if (!resultat.ok) return [{ type: 'artefact_manquant' }];
-  return [
-    { type: 'revue_terminee', tete: revue.tete },
-    { type: 'triage_termine', categories: resultat.categories },
-  ];
 }

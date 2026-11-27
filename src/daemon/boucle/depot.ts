@@ -86,6 +86,27 @@ export function lire(db: Db, id: string): Boucle | undefined {
   })();
 }
 
+export function lireDerniere(db: Db, sujetId: string): Boucle | undefined {
+  const ligne = db
+    .prepare('SELECT * FROM boucles WHERE sujet_id = ? ORDER BY rowid DESC LIMIT 1')
+    .get(sujetId) as LigneBoucle | undefined;
+  if (ligne) return decoder(db, ligne);
+}
+
+export function verdictRevueBoucle(db: Db, sujetId: string) {
+  const boucle = lireDerniere(db, sujetId);
+  if (!boucle) return undefined;
+  const revue = boucle.etat.etapes.findLast(({ type }) => type === 'revue');
+  return { tete: revue?.teteArrivee ?? null, issue: revue?.issue ?? null };
+}
+
+export function lireAvecGroupes(db: Db): Boucle[] {
+  const lignes = db
+    .prepare("SELECT * FROM boucles WHERE json_array_length(donnees, '$.groupes') > 0")
+    .all() as LigneBoucle[];
+  return lignes.map((ligne) => decoder(db, ligne));
+}
+
 export function reprendre(db: Db, maintenant: number): (Boucle & { actions: ActionBoucle[] })[] {
   return db
     .transaction(() => {

@@ -508,7 +508,7 @@ export class ClaudeDriver implements ConversationDriver {
       type: 'turn_end',
       ok,
       ...(ok &&
-        this.opts.extraArgs?.includes('--strict-mcp-config') &&
+        this.opts.remonterTexteFinal &&
         typeof o.result === 'string' && { texteFinal: o.result }),
       costUsd: typeof o.total_cost_usd === 'number' ? o.total_cost_usd : undefined,
       durationMs: typeof o.duration_ms === 'number' ? o.duration_ms : undefined,

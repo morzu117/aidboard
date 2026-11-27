@@ -14,7 +14,6 @@ import {
   empreinteEnvironnement,
   entreesGelees,
   gitSujet,
-  processusDansWorktree,
   empreinteDepot,
   empreinteMetadonnees,
   type EmpreinteEnvironnement,
@@ -23,14 +22,18 @@ import * as depotBoucle from './depot.js';
 import { transition, type EtatBoucle, type EvenementBoucle } from './etat.js';
 import { lancerGate, type ResultatGate } from './gate.js';
 import { lireReglagesBoucle, type ReglagesBoucle } from './reglages.js';
-import { gitBoucle } from './git.js';
+import { gitBoucle, lireBaseDistante } from './git.js';
+import { heureDepartGroupe, memeGroupe, type ConsignerGroupe } from './groupes.js';
 import { lireRevue } from './revue.js';
 
 type DependancesConducteur = Parameters<typeof executer>[2];
 type Agents = Pick<DependancesConducteur, 'ecrire' | 'arreter'> & {
   disponible?(genre: 'claude' | 'codex'): boolean;
   lancer(
-    options: Parameters<DependancesConducteur['lancer']>[0] & { sujetId: string },
+    options: Parameters<DependancesConducteur['lancer']>[0] & {
+      sujetId: string;
+      consignerGroupe: ConsignerGroupe;
+    },
   ): ReturnType<DependancesConducteur['lancer']>;
 };
 type EvenementAgent =
@@ -117,10 +120,7 @@ export class ServiceBoucle {
   }
 
   private chercher(sujetId: string): Boucle | undefined {
-    const ligne = this.deps.db
-      .prepare('SELECT id FROM boucles WHERE sujet_id = ? ORDER BY rowid DESC LIMIT 1')
-      .get(sujetId) as { id: string } | undefined;
-    if (ligne) return depotBoucle.lire(this.deps.db, ligne.id);
+    return depotBoucle.lireDerniere(this.deps.db, sujetId);
   }
 
   private exiger(sujetId: string, phase?: EtatBoucle['phase']): Boucle {
@@ -219,6 +219,14 @@ export class ServiceBoucle {
         (precedente && !terminal(precedente.etat.phase))
       )
         throw new AidHttpError(409, 'Le sujet ne peut pas démarrer une boucle');
+      const metadonneesGit = await empreinteMetadonnees(sujet.worktree);
+      if (precedente?.etat.metadonneesGit) {
+        const changements = comparerEmpreintes(precedente.etat.metadonneesGit, metadonneesGit);
+        if (changements.length) {
+          await this.escalader(precedente, 'scope', changements);
+          throw new AidHttpError(409, 'Les réglages git ont changé avant le lancement');
+        }
+      }
       const tete = await this.git(sujet, 'rev-parse', 'HEAD');
       const distante = await gitSujet(sujet.worktree, [
         'rev-parse',
@@ -226,8 +234,9 @@ export class ServiceBoucle {
         `refs/remotes/origin/${sujet.base}`,
       ]);
       if (distante.ok) {
-        const reference = `refs/heads/${sujet.base}`;
-        const connue = await this.git(sujet, 'ls-remote', '--exit-code', 'origin', reference);
+        const connue = await lireBaseDistante(sujet.worktree, sujet.base).catch(() => {
+          throw new AidHttpError(409, 'Impossible de lire la base distante');
+        });
         const [teteBase] = connue.split('\t');
         if (!teteBase || !/^[a-f0-9]{40}$/.test(teteBase))
           throw new AidHttpError(409, 'La tête de la base est introuvable');
@@ -263,7 +272,7 @@ export class ServiceBoucle {
           redevs: 0,
           tete,
           empreintePlan: null,
-          metadonneesGit: await empreinteMetadonnees(sujet.worktree),
+          metadonneesGit,
           gate: null,
           revue: null,
           namespace: manifeste.project?.namespace ?? 'aid',
@@ -449,6 +458,7 @@ export class ServiceBoucle {
         reglagesGeles: true,
         signal: this.gates.get(sujet.id)?.controle.signal,
         acceptation: etat.optionsAcceptation,
+        consignerGroupe: (pid: number) => this.consignerGroupe(boucle, pid),
       },
     };
   }
@@ -498,7 +508,9 @@ export class ServiceBoucle {
           if (action.etape !== 'revue')
             boucle.etat.revisionAttendue = this.pageMemoire(boucle.etat, sujet, page)?.revision;
           if (action.etape === 'plan' || action.etape === 'acceptation') {
-            const empreinte = await empreinteEnvironnement(homedir());
+            const empreinte = await empreinteEnvironnement(homedir(), undefined, {
+              worktree: sujet.worktree,
+            });
             const constats = constatsEmpreinteHome(empreinte);
             if (constats.length) return await this.escalader(boucle, 'scope', constats);
             boucle.etat.empreinte = empreinte;
@@ -509,7 +521,12 @@ export class ServiceBoucle {
 
       await executer(action, contexte, {
         ...this.lectures(boucle, sujet),
-        lancer: (options) => this.deps.agents.lancer({ ...options, sujetId: sujet.id }),
+        lancer: (options) =>
+          this.deps.agents.lancer({
+            ...options,
+            sujetId: sujet.id,
+            consignerGroupe: contexte.gate.consignerGroupe,
+          }),
         ecrire: (session, texte) => this.deps.agents.ecrire(session, texte),
         arreter: (session) => this.deps.agents.arreter(session),
         consignerActeur: async (acteur) => {
@@ -715,7 +732,10 @@ export class ServiceBoucle {
     const versGate = etape.type === 'dev' && artefact && !testsModifies;
     if (!versGate) {
       const changements = empreinte
-        ? comparerEmpreintes(empreinte, await empreinteEnvironnement(homedir()))
+        ? comparerEmpreintes(
+            empreinte,
+            await empreinteEnvironnement(homedir(), undefined, { worktree: sujet.worktree }),
+          )
         : [];
       const interdits = await entreesGelees(sujet.worktree, go ?? contexte.teteDepart, tete);
       if (changements.length || interdits.length) {
@@ -779,10 +799,15 @@ export class ServiceBoucle {
         break;
       case 'revue': {
         if (!revue?.ok || !texteFinal) return;
-        const trace = await this.enregistrerReponse(boucle, sujet, 'revue', texteFinal);
-        etape.revisionRevue = trace.revision;
+        await this.enregistrerReponse(boucle, sujet, 'revue', texteFinal);
+        const issue = [
+          ...Object.values(revue.verdicts.fichiers),
+          ...Object.values(revue.verdicts.points),
+        ].includes('fail')
+          ? 'fail'
+          : 'pass';
         boucle.etat.findings = JSON.stringify(revue.findings);
-        await this.appliquer(boucle, sujet, { type: 'revue_terminee', tete });
+        await this.appliquer(boucle, sujet, { type: 'revue_terminee', tete, issue });
         await this.appliquer(boucle, sujet, {
           type: 'triage_termine',
           categories: revue.categories,
@@ -835,36 +860,56 @@ export class ServiceBoucle {
     );
   }
 
-  private async nettoyerReprise(sujetId: string) {
-    for (const pid of await processusDansWorktree(this.sujet(sujetId).worktree)) {
-      if (pid <= 1 || pid === process.pid) continue;
+  private consignerGroupe(boucle: Boucle, pid: number) {
+    const heureDepart = heureDepartGroupe(pid);
+    if (!heureDepart) return;
+    const groupe = { pid, heureDepart };
+    boucle.etat.groupes = [...(boucle.etat.groupes ?? []).filter(memeGroupe), groupe];
+    this.sauver(boucle);
+    return () => {
+      boucle.etat.groupes = boucle.etat.groupes?.filter((entree) => entree !== groupe);
+      this.sauver(boucle);
+    };
+  }
+
+  private nettoyerReprise(boucle: Boucle) {
+    for (const groupe of boucle.etat.groupes ?? []) {
+      if (!memeGroupe(groupe)) continue;
       try {
-        process.kill(pid, 'SIGKILL');
+        process.kill(-groupe.pid, 'SIGKILL');
       } catch (erreur) {
         if ((erreur as NodeJS.ErrnoException).code !== 'ESRCH') throw erreur;
       }
     }
-  }
-
-  private async escaladerReprise(boucle: Boucle) {
-    let constats: string[] | undefined;
-    try {
-      await this.nettoyerReprise(boucle.sujetId);
-    } catch {
-      constats = ['Le nettoyage des processus du worktree à la reprise a échoué'];
-    }
-    await this.escalader(boucle, 'cannot_evaluate', constats);
+    delete boucle.etat.groupes;
   }
 
   async reprendre() {
+    const echecs = new Set<string>();
+    for (const boucle of depotBoucle.lireAvecGroupes(this.deps.db)) {
+      try {
+        this.nettoyerReprise(boucle);
+        this.sauver(boucle);
+      } catch {
+        echecs.add(boucle.id);
+      }
+    }
+    const escalader = (boucle: Boucle) =>
+      this.escalader(
+        boucle,
+        'cannot_evaluate',
+        echecs.has(boucle.id)
+          ? ['Le nettoyage des groupes de la boucle à la reprise a échoué']
+          : undefined,
+      );
     for (const boucle of depotBoucle.reprendre(this.deps.db, this.maintenant())) {
-      await this.escaladerReprise(boucle);
+      await escalader(boucle);
     }
     for (const id of this.sujetsActifs()) {
       const boucle = this.chercher(id);
       if (!boucle?.etat.phaseSuspendue) continue;
       delete boucle.etat.phaseSuspendue;
-      await this.escaladerReprise(boucle);
+      await escalader(boucle);
     }
   }
 

@@ -6,11 +6,13 @@ import { StringDecoder } from 'node:string_decoder';
 import { setTimeout as attendre } from 'node:timers/promises';
 import { produirePreuves } from '../../acceptation/preuve.js';
 import { verifierAcceptation } from '../../acceptation/verifier.js';
+import type { ConsignerGroupe } from './groupes.js';
 import { environnementGate, gitBoucle } from './git.js';
 import { gitSujet, processusDansWorktree } from './controles.js';
 
 interface OptionsGate {
   signal?: AbortSignal;
+  consignerGroupe?: ConsignerGroupe;
   depot: string;
   tete: string;
   commande: string;
@@ -71,6 +73,7 @@ function executerCommande(
   grace: number,
   maximum: number,
   signal?: AbortSignal,
+  consignerGroupe?: ConsignerGroupe,
 ): Promise<{ codeSortie: number | null; journal: string }> {
   return new Promise((rendre) => {
     const enfant = spawn('/bin/sh', ['-c', commande], {
@@ -79,6 +82,7 @@ function executerCommande(
       detached: true,
       stdio: ['ignore', 'pipe', 'pipe'],
     });
+    let oublier: (() => void) | undefined;
     let restant = maximum;
     let octetsJournal = 0;
     let journal = '';
@@ -127,6 +131,11 @@ function executerCommande(
       clearTimeout(echeance);
       clearTimeout(tuer);
       signal?.removeEventListener('abort', arreter);
+      try {
+        oublier?.();
+      } catch {
+        codeSortie = null;
+      }
       rendre({ codeSortie, journal });
     }
 
@@ -146,7 +155,6 @@ function executerCommande(
     }
     const echeance = setTimeout(arreter, delai);
     signal?.addEventListener('abort', arreter, { once: true });
-    if (signal?.aborted) arreter();
 
     enfant.on('error', () => finir(null));
     enfant.on('exit', () => {
@@ -155,11 +163,20 @@ function executerCommande(
       else signaler('SIGKILL');
     });
     enfant.on('close', (code) => finir(expire ? null : code));
+    if (enfant.pid) {
+      try {
+        oublier = consignerGroupe?.(enfant.pid);
+      } catch {
+        forcerArret();
+      }
+    }
+    if (signal?.aborted) arreter();
   });
 }
 
 export async function lancerGate({
   signal,
+  consignerGroupe,
   depot,
   tete,
   commande,
@@ -212,9 +229,10 @@ export async function lancerGate({
     if (!verification.ok) return resultat('fail');
 
     const options = { depot, base, chemins, lancer };
-    const preuves = produire
-      ? await produire(options, delaiMs, env, signal)
-      : await produirePreuves(options, delaiMs, env, signal, gitBoucle);
+    const preuves = await (produire ?? produirePreuves)(options, delaiMs, env, signal, gitBoucle, {
+      enGroupe: true,
+      consignerGroupe,
+    });
     if (
       (await lireTete(depot)) !== tete ||
       !preuves.length ||

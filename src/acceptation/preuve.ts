@@ -1,3 +1,4 @@
+import type { ConsignerGroupe } from '../daemon/boucle/groupes.js';
 import { execFile, spawn } from 'node:child_process';
 import { lstat, mkdtemp, rm, symlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -55,6 +56,11 @@ async function nomDepot(depot: string, lireGit: typeof git): Promise<string> {
   return segments.slice(-2).join('/');
 }
 
+interface OptionsProcessusPreuve {
+  enGroupe?: boolean;
+  consignerGroupe?: ConsignerGroupe;
+}
+
 function lancerEnGroupe(
   dossier: string,
   head: string,
@@ -62,11 +68,14 @@ function lancerEnGroupe(
   delai: number,
   env?: NodeJS.ProcessEnv,
   signal?: AbortSignal,
+  consignerGroupe?: ConsignerGroupe,
 ): Promise<Commande> {
   return new Promise((resoudre, rejeter) => {
     const [programme, ...args] = argv;
     const enfant = spawn(programme!, args, { cwd: dossier, env, detached: true, stdio: 'ignore' });
     let expire = false;
+    let erreurSuivi: unknown;
+    let oublier: (() => void) | undefined;
     function tuer() {
       if (!enfant.pid) return;
       try {
@@ -82,6 +91,11 @@ function lancerEnGroupe(
     function nettoyer() {
       clearTimeout(minuteur);
       signal?.removeEventListener('abort', tuer);
+      try {
+        oublier?.();
+      } catch (erreur) {
+        rejeter(erreur);
+      }
     }
     signal?.addEventListener('abort', tuer, { once: true });
     if (signal?.aborted) tuer();
@@ -90,8 +104,9 @@ function lancerEnGroupe(
       rejeter(erreur);
     });
     enfant.once('exit', (code) => {
-      nettoyer();
       tuer();
+      nettoyer();
+      if (erreurSuivi !== undefined) return rejeter(erreurSuivi);
       resoudre({
         argv,
         head,
@@ -99,6 +114,14 @@ function lancerEnGroupe(
         ...(expire && { delai_depasse: true as const }),
       });
     });
+    if (enfant.pid) {
+      try {
+        oublier = consignerGroupe?.(enfant.pid);
+      } catch (erreur) {
+        erreurSuivi = erreur;
+        tuer();
+      }
+    }
   });
 }
 
@@ -107,9 +130,10 @@ async function lancerDansWorktree(
   head: string,
   argv: string[],
   delai: number,
-  env?: NodeJS.ProcessEnv,
-  signal?: AbortSignal,
-  lireGit = git,
+  env: NodeJS.ProcessEnv | undefined,
+  signal: AbortSignal | undefined,
+  lireGit: typeof git,
+  options: OptionsProcessusPreuve,
 ): Promise<Commande> {
   signal?.throwIfAborted();
   const dossier = await mkdtemp(join(tmpdir(), 'aid-preuve-worktree-'));
@@ -125,7 +149,16 @@ async function lancerDansWorktree(
 
     const [programme, ...args] = argv;
     try {
-      if (lireGit !== git) return await lancerEnGroupe(dossier, head, argv, delai, env, signal);
+      if (options.enGroupe)
+        return await lancerEnGroupe(
+          dossier,
+          head,
+          argv,
+          delai,
+          env,
+          signal,
+          options.consignerGroupe,
+        );
       await executer(programme!, args, {
         cwd: dossier,
         timeout: delai,
@@ -169,6 +202,7 @@ export async function produirePreuves(
   env?: NodeJS.ProcessEnv,
   signal?: AbortSignal,
   lireGit = git,
+  options: OptionsProcessusPreuve = {},
 ): Promise<{ point: string; preuve: PreuveD5; fautes: string[] }[]> {
   depot = await racineDepot(depot, lireGit);
   const head = (await lireGit(depot, ['rev-parse', 'HEAD'])).trim();
@@ -218,8 +252,26 @@ export async function produirePreuves(
         .trim()
         .split(/\s+/)
         .map((arg) => (arg === '{fichiers}' ? fichier : arg));
-      const avant = await lancerDansWorktree(depot, commit.sha, argv, delai, env, signal, lireGit);
-      const apres = await lancerDansWorktree(depot, head, argv, delai, env, signal, lireGit);
+      const avant = await lancerDansWorktree(
+        depot,
+        commit.sha,
+        argv,
+        delai,
+        env,
+        signal,
+        lireGit,
+        options,
+      );
+      const apres = await lancerDansWorktree(
+        depot,
+        head,
+        argv,
+        delai,
+        env,
+        signal,
+        lireGit,
+        options,
+      );
       preuve.commands.push(avant, apres);
       noter(preuve.suites.base, fichier, avant);
       noter(preuve.suites.head, fichier, apres);

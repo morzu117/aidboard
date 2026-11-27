@@ -1,3 +1,5 @@
+import { verdictRevueBoucle } from '../boucle/depot.js';
+import { gitSujet } from '../boucle/controles.js';
 import type { ServiceBoucle } from '../boucle/service.js';
 import type { ServiceCommandant } from '../commandant/service.js';
 import { creerActionCommandant } from './commandant.js';
@@ -18,7 +20,7 @@ import {
   type ParametresActions,
   type ParamsAction,
 } from '../../shared/confirmations.js';
-import { lirePr } from '../../shared/livraison.js';
+import { fraicheurRevueBoucle, lirePr } from '../../shared/livraison.js';
 import { startAction, scriptEnv, type ActionContext, type ActionSpec } from '../actions/service.js';
 import { findAssetDir } from '../assets.js';
 import type { AidConfig } from '../config.js';
@@ -63,6 +65,19 @@ export function creerActionsConfirmation(
 ): ActionsPorte {
   const scripts = findAssetDir('scripts/git', 'topic-create.sh');
   const reglage = creerReglage(deps.db);
+  async function verifierRevuePourFusion(topic: Sujet, tete: string) {
+    if (!verdictRevueBoucle(deps.db, topic.id)) return;
+    const locale = await gitSujet(topic.worktree, ['rev-parse', '--verify', 'HEAD']);
+    const verdict = verdictRevueBoucle(deps.db, topic.id);
+    if (
+      !verdict ||
+      !locale.ok ||
+      locale.stdout !== tete ||
+      fraicheurRevueBoucle(verdict, tete).etat !== 'a-jour'
+    )
+      throw new AidHttpError(409, 'La boucle doit valider la revue sur cette tête.');
+  }
+
   const lireSujet = (id?: string) => {
     const topic = deps.db.prepare('SELECT * FROM topics WHERE id = ?').get(id ?? '') as
       Sujet | undefined;
@@ -280,6 +295,7 @@ export function creerActionsConfirmation(
         const tete = entree.head ?? (pr?.number === topic.pr_number ? pr.headRefOid : null) ?? '';
         if (ctx.confirmation && !/^[0-9a-f]{40}$/.test(tete))
           throw new AidHttpError(409, 'tête de la PR inconnue : rafraîchis la PR');
+        await verifierRevuePourFusion(topic, tete);
         const remote = ctx.confirmation
           ? await git(ws.root, ['remote', 'get-url', ws.remote ?? 'origin'])
           : null;
@@ -304,6 +320,7 @@ export function creerActionsConfirmation(
       },
       async executer(params, ctx) {
         const { topic, ws } = lireSujet(params.topicId);
+        await verifierRevuePourFusion(topic, params.tete);
         let nettoyage: (() => Promise<void>) | undefined;
         const attendre = lancer(
           {

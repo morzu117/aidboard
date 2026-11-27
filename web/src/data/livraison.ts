@@ -6,6 +6,7 @@ import type { ActionRun, Topic } from '../../../src/shared/model.js';
 import {
   type Fraicheur,
   fraicheurRevue,
+  fraicheurRevueBoucle,
   lirePr,
   type PrLue,
   type SourceRevue,
@@ -164,16 +165,21 @@ export function useLivraison(topic: Topic, namespace: string): Livraison {
 
   const verif = git && git.pour === revue ? (git.g.revue ?? null) : null;
   const enLecture = lisible && (page === undefined || (revue !== null && verif === null));
+  const verdict = git?.g.revueBoucle;
   return {
     pr,
     lecturePr: { enCours: lecture.enCours, echec: lecture.echec },
     git: git?.g ?? null,
     erreurGit,
-    erreurRevue,
+    erreurRevue: verdict ? null : erreurRevue,
     test: dernierTest(state?.actions ?? [], topic.id),
-    page,
-    source,
-    fraicheur: erreurRevue !== null || enLecture ? null : fraicheurRevue(source, verif),
+    page: verdict ? null : page,
+    source: verdict ? null : source,
+    fraicheur: verdict
+      ? fraicheurRevueBoucle(verdict, git.g.head)
+      : erreurRevue !== null || enLecture
+        ? null
+        : fraicheurRevue(source, verif),
     relire: () => setVersion((v) => v + 1),
   };
 }

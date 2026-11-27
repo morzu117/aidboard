@@ -164,6 +164,20 @@ export function fraicheurRevue(source: SourceRevue | null, verif: VerifRevue | n
     : { etat: 'obsolete', commit: source.commit, retard: verif.retard };
 }
 
+export interface VerdictRevueBoucle {
+  tete: string | null;
+  issue: string | null;
+}
+
+export function fraicheurRevueBoucle(
+  verdict: VerdictRevueBoucle,
+  teteLocale: string | null,
+): Fraicheur {
+  if (verdict.issue !== 'pass' || !verdict.tete) return { etat: 'aucune' };
+  if (verdict.tete === teteLocale) return { etat: 'a-jour', commit: verdict.tete };
+  return { etat: 'obsolete', commit: verdict.tete, retard: null };
+}
+
 /** D127 : la raison qui bloque le merge (une seule, la première), ou null. */
 export function blocageMerge(p: {
   fusionne: boolean;
@@ -171,6 +185,7 @@ export function blocageMerge(p: {
   pr: PrLue | null;
   teteLocale: string | null;
   fraicheur: Fraicheur;
+  revueBoucleRequise?: boolean;
 }): string | null {
   if (p.fusionne || p.pr?.state === 'MERGED') return 'le sujet est déjà fusionné.';
   if (p.pr?.state === 'CLOSED') return 'la PR est fermée.';
@@ -181,6 +196,8 @@ export function blocageMerge(p: {
       ? `la tête locale ${court(p.teteLocale)} n’est pas sur la PR.`
       : 'la tête locale est inconnue.';
   if (p.fraicheur.etat === 'obsolete') return 'la revue ne porte pas sur cette tête.';
+  if (p.revueBoucleRequise && p.fraicheur.etat !== 'a-jour')
+    return 'la boucle doit valider la revue sur cette tête.';
   if (p.pr.mergeable === 'CONFLICTING') return 'GitHub signale un conflit avec la base.';
   return null;
 }

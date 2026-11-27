@@ -1,3 +1,5 @@
+import type { GroupeBoucle } from './groupes.js';
+
 type Etape = 'plan' | 'acceptation' | 'dev' | 'gate' | 'revue';
 type EtapeAgent = Exclude<Etape, 'gate'>;
 export type Issue = 'pass' | 'fail' | 'cannot_evaluate' | 'skipped' | 'delai_depasse';
@@ -16,7 +18,6 @@ export interface Tentative {
   teteArrivee?: string;
   preuve?: { codeSortie?: number; comptes?: Record<string, number> };
   categories?: string[];
-  revisionRevue?: number;
   route?: 'dev' | 'humain' | 'livraison';
 }
 
@@ -35,6 +36,7 @@ export interface EtatBoucle {
   gate: ResultatEtape | null;
   revue: ResultatEtape | null;
   etapes: Tentative[];
+  groupes?: GroupeBoucle[];
 }
 
 export type EvenementBoucle =
@@ -42,7 +44,8 @@ export type EvenementBoucle =
   | { type: 'go' | 'tic' | 'tests_modifies' | 'artefact_manquant' | 'arreter' | 'etape_perdue' }
   | { type: 'etape_terminee'; etape: 'acceptation' | 'dev'; tete: string }
   | { type: 'gate_termine'; tete: string; issue: Issue }
-  | { type: 'revue_terminee' | 'tete_modifiee'; tete: string }
+  | { type: 'revue_terminee'; tete: string; issue?: 'pass' | 'fail' }
+  | { type: 'tete_modifiee'; tete: string }
   | { type: 'triage_termine'; categories: string[] };
 
 export type ActionBoucle =
@@ -199,10 +202,11 @@ export function transition(
       ) {
         return lancer('gate', { ...etat, ...portes, etapes: clore('skipped', evenement.tete) });
       }
+      const issue = evenement.issue ?? 'pass';
       return modifier({
         phase: 'triage',
-        revue: { tete: evenement.tete, issue: 'pass' },
-        etapes: clore('pass'),
+        revue: { tete: evenement.tete, issue },
+        etapes: clore(issue, evenement.tete),
       });
     },
     tete_modifiee: () => {
