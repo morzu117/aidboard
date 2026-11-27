@@ -163,25 +163,23 @@ describe('empreinte de l’environnement', () => {
   });
 
   it('relève par chemin les réglages modifiés, la mémoire ajoutée et le réglage supprimé', async () => {
+    const worktree = join(home, 'projet-fictif');
+    const projet = join('.claude', 'projects', worktree.replace(/[^a-zA-Z0-9]/g, '-'));
+    const memoire = join(projet, 'memory', 'MEMORY.md');
     ecrire(home, '.claude/settings.json', '{"mode":"avant"}\n');
     ecrire(home, '.bashrc', 'export EXEMPLE=1\n');
     ecrire(home, '.gitconfig', '# Initial\n');
-    const avant = await empreinteEnvironnement(home, fs);
+    const avant = await empreinteEnvironnement(home, fs, { worktree });
 
     ecrire(home, '.claude/settings.json', '{"mode":"apres"}\n');
     ecrire(home, '.bashrc', 'export EXEMPLE=2\n');
-    ecrire(home, '.claude/projects/projet-fictif/memory/MEMORY.md', '# Exemple\n');
-    ecrire(home, '.claude/projects/projet-fictif/notes.txt', 'Hors liste\n');
+    ecrire(home, memoire, '# Exemple\n');
+    ecrire(home, join(projet, 'notes.txt'), 'Hors liste\n');
     rmSync(join(home, '.gitconfig'));
-    const apres = await empreinteEnvironnement(home, fs);
+    const apres = await empreinteEnvironnement(home, fs, { worktree });
 
     expect([...comparerEmpreintes(avant, apres)].sort()).toEqual(
-      [
-        '.claude/settings.json',
-        '.bashrc',
-        '.gitconfig',
-        '.claude/projects/projet-fictif/memory/MEMORY.md',
-      ]
+      ['.claude/settings.json', '.bashrc', '.gitconfig', memoire]
         .map((fichier) => join(home, fichier))
         .sort(),
     );
