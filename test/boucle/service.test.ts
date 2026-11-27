@@ -20,6 +20,7 @@ import { createAuthState } from '../../src/daemon/security.js';
 import { buildServer } from '../../src/daemon/server.js';
 import { seedTopic } from '../helpers/daemon.js';
 import { commitFile, makeOriginAndClone, sh } from '../helpers/git.js';
+import { poserOrigineBoucle, poserTemoinGitBoucle } from './temoin-git.js';
 
 const sujet = 'tp_1';
 const plan = '## Point exemple\nModifier la note.';
@@ -114,6 +115,8 @@ boucle: { delais: { plan: 1 } }
   sh(clone, 'push', '-q', 'origin', 'main');
   depot = join(dossier, 'sujet-fictif');
   sh(clone, 'worktree', 'add', '-q', '-b', 'feat/s', depot, 'main');
+  poserOrigineBoucle(depot);
+  vi.stubEnv('PATH', poserTemoinGitBoucle(dossier, depot).chemin);
   service = ouvrirService();
   seedTopic(db);
   db.prepare('DELETE FROM agents').run();

@@ -89,7 +89,7 @@ function validerGate(etat = lancerGate()) {
 }
 
 function validerRevue(etat = validerGate()) {
-  return avancer(etat, { type: 'revue_terminee', tete: TETE }, 'triage', []);
+  return avancer(etat, { type: 'revue_terminee', tete: TETE, issue: 'pass' }, 'triage', []);
 }
 
 describe('transition de boucle', () => {

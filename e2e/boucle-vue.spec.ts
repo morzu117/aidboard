@@ -11,6 +11,7 @@ import { tmpdir } from 'node:os';
 import { delimiter, join } from 'node:path';
 import { makeOriginAndClone } from '../test/helpers/git.js';
 import type { EtatBoucle } from '../src/daemon/boucle/etat.js';
+import { poserOrigineBoucle, poserTemoinGitBoucle } from '../test/boucle/temoin-git.js';
 import { capturerBoutons } from './captures-boutons.js';
 import { createTopic, registerWorkspace, state } from './helpers.js';
 import { expect, type Page, test } from './test.js';
@@ -68,13 +69,6 @@ test('vue Boucle : chaque commande est active, affiche le refus du daemon, puis 
         { mode: 0o700 },
       );
     }
-    execFileSync(process.execPath, [cli], { env, timeout: 40_000 });
-    demarre = true;
-    const info = JSON.parse(readFileSync(join(dossier, 'daemon.json'), 'utf8')) as {
-      token: string;
-    };
-    await page.goto(`http://127.0.0.1:${port}/?token=${encodeURIComponent(info.token)}`);
-
     const { clone: depot } = makeOriginAndClone(dossier, { name: 'depot-boucle-fictif' });
     const git = (...args: string[]) => execFileSync('git', args, { cwd: depot });
     writeFileSync(
@@ -93,8 +87,17 @@ test('vue Boucle : chaque commande est active, affiche le refus du daemon, puis 
     );
     git('push', '-q', 'origin', 'HEAD');
 
+    env.PATH = poserTemoinGitBoucle(dossier, depot, undefined, env.PATH).chemin;
+    execFileSync(process.execPath, [cli], { env, timeout: 40_000 });
+    demarre = true;
+    const info = JSON.parse(readFileSync(join(dossier, 'daemon.json'), 'utf8')) as {
+      token: string;
+    };
+    await page.goto(`http://127.0.0.1:${port}/?token=${encodeURIComponent(info.token)}`);
+
     await registerWorkspace(page, depot);
     const sujetId = await createTopic(page, 'Sujet boucle fictif');
+    poserOrigineBoucle(depot);
     const sujet = (await state(page)).topics.find(({ id }) => id === sujetId);
     if (!sujet || !('slug' in sujet) || typeof sujet.slug !== 'string') {
       throw new Error('Slug du sujet fictif absent');

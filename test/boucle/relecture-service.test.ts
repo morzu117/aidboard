@@ -2,7 +2,7 @@ import { execFileSync, spawn } from 'node:child_process';
 import { once } from 'node:events';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { delimiter, dirname, join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import { WorkspaceQueue } from '../../src/daemon/actions/queue.js';
 import * as depotBoucle from '../../src/daemon/boucle/depot.js';
@@ -14,11 +14,14 @@ import { MemoryService } from '../../src/daemon/memory/service.js';
 import { MemoryStore } from '../../src/daemon/memory/store.js';
 import { seedTopic } from '../helpers/daemon.js';
 import { commitFile, makeOriginAndClone, sh } from '../helpers/git.js';
+import { poserOrigineBoucle, poserTemoinGitBoucle } from './temoin-git.js';
 
 const sujet = 'tp_1';
 const pageRevue = 'aid/review/s';
 let dossier: string;
 let depot: string;
+let cheminInitial: string | undefined;
+let temoin: ReturnType<typeof poserTemoinGitBoucle>;
 let commun: string;
 let db: ReturnType<typeof openDb>;
 let memoire: MemoryService;
@@ -71,6 +74,10 @@ beforeEach(() => {
   commitFile(clone, '.gitignore', '.mcp.json\n.npmrc\nnode_modules/\n');
   sh(clone, 'push', '-q', 'origin', 'main');
   sh(clone, 'worktree', 'add', '-qb', 'feat/s', depot, 'main');
+  poserOrigineBoucle(depot);
+  cheminInitial = process.env.PATH;
+  temoin = poserTemoinGitBoucle(dossier, depot, 'commandes');
+  vi.stubEnv('PATH', temoin.chemin);
   ouvrirService(() => 1_000);
   seedTopic(db);
   db.prepare('DELETE FROM agents').run();
@@ -329,37 +336,18 @@ test('reprendre tue le groupe enregistré dans le worktree avec la bonne heure d
 });
 
 test('le service et le conducteur passent les réglages git neutralisés', async () => {
-  const vraiGit = execFileSync('which', ['git'], { encoding: 'utf8' }).trim();
-  const bin = join(dossier, 'bin');
-  const journal = join(dossier, 'git.jsonl');
-  mkdirSync(bin);
-  writeFileSync(
-    join(bin, 'git'),
-    `#!/usr/bin/env node
-const { appendFileSync } = require('node:fs');
-const { spawnSync } = require('node:child_process');
-const args = process.argv.slice(2);
-appendFileSync(${JSON.stringify(journal)}, JSON.stringify(args) + '\\n');
-const resultat = spawnSync(${JSON.stringify(vraiGit)}, args, { stdio: 'inherit' });
-process.exit(resultat.status ?? 1);
-`,
-    { mode: 0o755 },
-  );
-  const cheminInitial = process.env.PATH;
-  const chemin = [bin, cheminInitial].join(delimiter);
-
-  vi.stubEnv('PATH', chemin);
+  const debut = temoin.lire().length;
   await allerAuDev();
   vi.stubEnv('PATH', cheminInitial);
   await preparerFinDev();
-  vi.stubEnv('PATH', chemin);
+  vi.stubEnv('PATH', temoin.chemin);
   await finirDev();
   expect(service.lire(sujet).phase).toBe('revue');
 
-  const appels = readFileSync(journal, 'utf8')
-    .trim()
-    .split('\n')
-    .map((ligne) => JSON.parse(ligne) as string[]);
+  const appels = temoin
+    .lire()
+    .slice(debut)
+    .map(({ commande }) => commande);
   expect(appels.some((args) => args.includes('ls-remote'))).toBe(true);
   expect(appels.some((args) => args.includes('diff') && args.includes('--name-only'))).toBe(true);
   for (const args of appels.filter((args) => !args.includes('ls-remote'))) {

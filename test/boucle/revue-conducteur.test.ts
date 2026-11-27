@@ -55,7 +55,7 @@ function lireFinDeRevue(texteFinal: string): EvenementBoucle[] {
   const revue = lireRevue(texteFinal, ATTENDU);
   if (!revue.ok) return [{ type: 'artefact_manquant' }];
   return [
-    { type: 'revue_terminee', tete: TETE },
+    { type: 'revue_terminee', tete: TETE, issue: 'pass' },
     { type: 'triage_termine', categories: revue.categories },
   ];
 }
@@ -72,7 +72,7 @@ function appliquerEvenements(etat: EtatBoucle, evenements: EvenementBoucle[]) {
 
 function verifierEvenementsValides(evenements: EvenementBoucle[], categories: string[]) {
   expect(evenements).toEqual([
-    { type: 'revue_terminee', tete: TETE },
+    { type: 'revue_terminee', tete: TETE, issue: 'pass' },
     { type: 'triage_termine', categories },
   ]);
 }

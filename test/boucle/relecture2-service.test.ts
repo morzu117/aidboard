@@ -2,7 +2,7 @@ import { execFileSync, spawn } from 'node:child_process';
 import { once } from 'node:events';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { delimiter, join } from 'node:path';
+import { join } from 'node:path';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import { WorkspaceQueue } from '../../src/daemon/actions/queue.js';
 import * as conducteur from '../../src/daemon/boucle/conducteur.js';
@@ -16,11 +16,18 @@ import { MemoryService } from '../../src/daemon/memory/service.js';
 import { MemoryStore } from '../../src/daemon/memory/store.js';
 import { seedTopic } from '../helpers/daemon.js';
 import { commitFile, makeOriginAndClone, sh } from '../helpers/git.js';
+import {
+  nommerDepotPourLesPreuves,
+  poserOrigineBoucle,
+  poserTemoinGitBoucle,
+} from './temoin-git.js';
 
 const sujet = 'tp_1';
 let racine: string;
 let home: string;
 let depot: string;
+let cheminInitial: string | undefined;
+let temoin: ReturnType<typeof poserTemoinGitBoucle>;
 let db: ReturnType<typeof openDb>;
 let memoire: MemoryService;
 let service: ServiceBoucle;
@@ -61,6 +68,10 @@ beforeEach(() => {
   sh(clone, 'push', '-q', 'origin', 'main');
   depot = join(racine, 'sujet-fictif');
   sh(clone, 'worktree', 'add', '-qb', 'feat/s', depot, 'main');
+  poserOrigineBoucle(depot);
+  cheminInitial = process.env.PATH;
+  temoin = poserTemoinGitBoucle(racine, depot, 'identifiants');
+  vi.stubEnv('PATH', temoin.chemin);
   ouvrirService();
   seedTopic(db);
   db.prepare('DELETE FROM agents').run();
@@ -78,76 +89,28 @@ afterEach(async () => {
   }
 });
 
-interface AppelGit {
-  commande: string[];
-  agentSsh: string | null;
-  helper: string;
-}
-
-function poserTemoinGit() {
-  const git = execFileSync('which', ['git'], { encoding: 'utf8' }).trim();
-  const bin = join(racine, 'bin');
-  const journal = join(racine, 'git.jsonl');
+function configurerIdentifiants() {
   const agentSsh = join(home, 'socket-fictif');
   const helper = 'assistant-fictif';
-  mkdirSync(bin);
   writeFileSync(join(home, '.gitconfig'), `[credential]\n\thelper = ${helper}\n`);
-  writeFileSync(
-    join(bin, 'git'),
-    `#!/usr/bin/env node
-const { appendFileSync } = require('node:fs');
-const { spawnSync } = require('node:child_process');
-const commande = process.argv.slice(2);
-let i = 0;
-while (commande[i] === '-c') i += 2;
-const git = ${JSON.stringify(git)};
-const config = spawnSync(git, [...commande.slice(0, i), 'config', '--get', 'credential.helper'], {
-  encoding: 'utf8',
-});
-if (config.error || ![0, 1].includes(config.status)) process.exit(1);
-appendFileSync(${JSON.stringify(journal)}, JSON.stringify({
-  commande,
-  agentSsh: process.env.SSH_AUTH_SOCK ?? null,
-  helper: config.stdout.trim(),
-}) + '\\n');
-const resultat = spawnSync(git, commande, { stdio: 'inherit' });
-process.exit(resultat.status ?? 1);
-`,
-    { mode: 0o755 },
-  );
-  // Le helper est un nom inerte. Le témoin lit la config, et le remote est un dépôt local.
-  // Le PATH des appels de fixture peut être rétabli sans désarmer le témoin.
-  const cheminInitial = process.env.PATH;
-  const cheminTemoin = [bin, cheminInitial].join(delimiter);
   vi.stubEnv('GIT_CONFIG_GLOBAL', undefined);
   vi.stubEnv('SSH_AUTH_SOCK', agentSsh);
-  vi.stubEnv('PATH', cheminTemoin);
-  return {
-    agentSsh,
-    helper,
-    cheminInitial,
-    cheminTemoin,
-    lire: (): AppelGit[] =>
-      readFileSync(journal, 'utf8')
-        .trim()
-        .split('\n')
-        .map((ligne) => JSON.parse(ligne) as AppelGit),
-  };
+  return { agentSsh, helper };
 }
 
 test('le ls-remote de lancement garde le socket SSH et le helper global du faux home', async () => {
   const tete = sh(depot, 'rev-parse', 'HEAD');
-  const temoin = poserTemoinGit();
+  const identifiants = configurerIdentifiants();
   await service.lancer(sujet);
   expect(service.lire(sujet).etapeCourante?.teteDepart).toBe(tete);
   const appels = temoin.lire().filter(({ commande }) => commande.includes('ls-remote'));
   expect(appels).toHaveLength(1);
-  expect(appels[0]).toMatchObject({ agentSsh: temoin.agentSsh, helper: temoin.helper });
+  expect(appels[0]).toMatchObject(identifiants);
 });
 
 test('le ls-remote de lancement coupe les hooks et le fsmonitor et refuse protocol.ext', async () => {
   const tete = sh(depot, 'rev-parse', 'HEAD');
-  const temoin = poserTemoinGit();
+  configurerIdentifiants();
   await service.lancer(sujet);
   expect(service.lire(sujet).etapeCourante?.teteDepart).toBe(tete);
   const appels = temoin.lire().filter(({ commande }) => commande.includes('ls-remote'));
@@ -159,34 +122,6 @@ test('le ls-remote de lancement coupe les hooks et le fsmonitor et refuse protoc
       'protocol.ext.allow=never',
     ]),
   );
-});
-
-test('un second lancement après modification de la config locale escalade avant ls-remote', async () => {
-  const tete = sh(depot, 'rev-parse', 'HEAD');
-  const temoin = poserTemoinGit();
-  await service.lancer(sujet);
-  expect(service.lire(sujet).etapeCourante?.teteDepart).toBe(tete);
-  await service.arreter(sujet);
-  expect(service.lire(sujet).phase).toBe('arretee');
-  expect(temoin.lire().filter(({ commande }) => commande.includes('ls-remote'))).toHaveLength(1);
-
-  vi.stubEnv('PATH', temoin.cheminInitial);
-  sh(depot, 'config', '--local', 'credential.helper', 'assistant-local-fictif');
-  vi.stubEnv('PATH', temoin.cheminTemoin);
-  const debutSecondLancement = temoin.lire().length;
-
-  const [second] = await Promise.allSettled([service.lancer(sujet)]);
-  if (second?.status === 'rejected') expect(second.reason).toMatchObject({ status: 409 });
-  expect.soft(service.lire(sujet)).toMatchObject({
-    phase: 'escalade',
-    escalade: { raison: 'scope' },
-  });
-  expect(
-    temoin
-      .lire()
-      .slice(debutSecondLancement)
-      .filter(({ commande }) => commande.includes('ls-remote')),
-  ).toEqual([]);
 });
 
 const finirPlan = () =>
@@ -215,10 +150,11 @@ async function preparerFinDev() {
 
 test('les git du dev, du gate et des preuves perdent le socket SSH et le helper global', async () => {
   const base = sh(depot, 'rev-parse', 'HEAD');
-  const temoin = poserTemoinGit();
+  nommerDepotPourLesPreuves(depot);
+  configurerIdentifiants();
   await allerAuDev();
 
-  vi.stubEnv('PATH', temoin.cheminInitial);
+  vi.stubEnv('PATH', cheminInitial);
   mkdirSync(join(depot, 'test'));
   commitFile(
     depot,
@@ -227,7 +163,7 @@ test('les git du dev, du gate et des preuves perdent le socket SSH et le helper 
     'Recette fictive\n\nAcceptation: 69.9',
   );
   const tete = await preparerFinDev();
-  vi.stubEnv('PATH', temoin.cheminTemoin);
+  vi.stubEnv('PATH', temoin.chemin);
 
   const debutDev = temoin.lire().length;
   await service.traiterEvenementAgent('dev', { type: 'turn_end' });

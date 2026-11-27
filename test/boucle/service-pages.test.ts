@@ -11,6 +11,7 @@ import { MemoryService } from '../../src/daemon/memory/service.js';
 import { MemoryStore } from '../../src/daemon/memory/store.js';
 import { seedTopic } from '../helpers/daemon.js';
 import { commitFile, makeOriginAndClone, sh } from '../helpers/git.js';
+import { poserOrigineBoucle, poserTemoinGitBoucle } from './temoin-git.js';
 
 const sujet = 'tp_1';
 const plan = 'Ajouter une note.';
@@ -36,6 +37,8 @@ beforeEach(() => {
     'project: { namespace: aid }\nphases: [plan, dev, review]\ngates: { gate: "exit 0" }\n',
   );
   sh(depot, 'push', '-q', 'origin', 'main');
+  poserOrigineBoucle(depot);
+  vi.stubEnv('PATH', poserTemoinGitBoucle(dossier, depot).chemin);
   db = openDb(join(dossier, 'state.db'));
   seedTopic(db);
   db.prepare('DELETE FROM agents').run();

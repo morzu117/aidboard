@@ -13,6 +13,11 @@ import { tmpdir } from 'node:os';
 import { delimiter, join } from 'node:path';
 import type { ServiceBoucle } from '../src/daemon/boucle/service.js';
 import { commitFile, makeOriginAndClone, sh } from '../test/helpers/git.js';
+import {
+  nommerDepotPourLesPreuves,
+  poserOrigineBoucle,
+  poserTemoinGitBoucle,
+} from '../test/boucle/temoin-git.js';
 import { capturerBoutons } from './captures-boutons.js';
 import { createTopic, registerWorkspace } from './helpers.js';
 import { expect, test as base, type Page } from './test.js';
@@ -146,9 +151,12 @@ const test = base.extend<{
         ].join('\n') + '\n',
       );
       sh(depot, 'push', '-q', 'origin', 'HEAD');
+      env.PATH = poserTemoinGitBoucle(dossier, depot, undefined, env.PATH).chemin;
       await demarrer();
       await registerWorkspace(page, depot);
       const sujet = await createTopic(page, 'Sujet scénario fictif');
+      poserOrigineBoucle(depot);
+      nommerDepotPourLesPreuves(depot);
       const url = `${origine}/api/topics/${sujet}/boucle`;
       await ouvrir(page);
       await cliquer(page, 'lancer');
