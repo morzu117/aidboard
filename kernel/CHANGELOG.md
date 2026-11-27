@@ -7,6 +7,18 @@ ajoute rien. Format : chaque version majeure du noyau décrit sa
 **migration**, que `/sync` applique avant de rendre le bloc ; les mineures
 et patchs n'en ont pas, sauf mention contraire.
 
+## Délais de la boucle du daemon (chantier 69.3)
+
+Changement sans migration. Le manifeste peut redéclarer chaque délai de
+`boucle.delais` en minutes.
+
+### Revue structurée de la boucle du daemon (chantier 69.5)
+
+Changement sans migration. Le rôle de revue décrit le bloc JSON attendu
+par le daemon, avec un verdict par fichier et par point d’acceptation.
+
+Le daemon enregistre les réponses finales des rôles plan et review en pages mémoire (chantier 69.6).
+
 ## Avis de plusieurs fournisseurs (chantier 66)
 
 Changement mineur, sans migration. Le noyau documente la nouvelle section

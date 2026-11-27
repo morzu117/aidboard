@@ -1,3 +1,4 @@
+import { limitesBoucle } from '../../shared/limites-boucle.js';
 import { lireVersionCommande as run } from '../../shared/version-commande.js';
 import {
   swarphAtLeast,
@@ -703,5 +704,6 @@ export async function runDoctor(
   const checks = await runChecks(probes);
   checks.push(...(await verifierLanceursAcceptation()));
   for (const k of checks) out(`  ${MARK[k.level]} ${k.label}${k.detail ? ` : ${k.detail}` : ''}`);
+  out(`  Boucle — ${limitesBoucle}`);
   return checks.some((k) => k.level === 'ko') ? 1 : 0;
 }

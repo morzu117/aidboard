@@ -125,7 +125,7 @@ export interface Agent {
   id: string;
   runId: string;
   kind: AgentKind;
-  role: 'orchestrator' | Phase | 'free';
+  role: 'orchestrator' | Phase | 'free' | 'acceptation';
   transport: 'pty' | 'headless' | 'remote' | 'stream';
   status: AgentStatus;
   cwd: string;

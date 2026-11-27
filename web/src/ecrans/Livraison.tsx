@@ -78,6 +78,7 @@ function Ecran({ topic }: { topic: Topic }) {
     !topic.worktreeMissing &&
     !fusionne &&
     (l.lecturePr.enCours || (!l.git && !l.erreurGit) || l.fraicheur === null);
+  const verdictBoucle = l.git?.revueBoucle;
   const raisonRevue = l.erreurRevue === null ? null : 'La revue n’a pas pu être lue.';
   const blocage = topic.worktreeMissing
     ? 'le worktree du sujet manque.'
@@ -90,6 +91,7 @@ function Ecran({ topic }: { topic: Topic }) {
             pr: l.pr,
             teteLocale: l.git?.head ?? null,
             fraicheur: l.fraicheur ?? { etat: 'aucune' },
+            revueBoucleRequise: Boolean(verdictBoucle),
           })));
   const merge = useActionSuivie(topic.id);
   // D128 : fini, dans un sens ou dans l'autre, l'écran relit ; refusé, le refus reste sous le bouton
@@ -216,7 +218,11 @@ function Ecran({ topic }: { topic: Topic }) {
 
       <div className="livraison-tuiles">
         <TuileControles compte={compte} tete={tete} />
-        <TuileRevue fraicheur={l.fraicheur} raisonRevue={raisonRevue} />
+        <TuileRevue
+          fraicheur={l.fraicheur}
+          raisonRevue={raisonRevue}
+          verdictBoucle={verdictBoucle}
+        />
         <TuileAutorisation fusionne={fusionne} enCours={merge.enCours} tete={tete} />
       </div>
 
@@ -228,10 +234,11 @@ function Ecran({ topic }: { topic: Topic }) {
             raisonRevue={raisonRevue}
             page={l.page}
             source={l.source}
+            verdictBoucle={verdictBoucle}
             fraicheur={l.fraicheur}
             tete={tete}
           >
-            {!fusionne && (
+            {!fusionne && !verdictBoucle && (
               <RelancerRevue
                 topic={topic}
                 pageRevue={memorySlug(namespace, 'review', topic.slug)}
@@ -329,15 +336,22 @@ function TuileControles({ compte, tete }: { compte: Compte; tete: string | null 
 function TuileRevue({
   fraicheur,
   raisonRevue,
+  verdictBoucle,
 }: {
   fraicheur: Fraicheur | null;
   raisonRevue: string | null;
+  verdictBoucle?: LivraisonGit['revueBoucle'];
 }) {
   const { titre, note } = raisonRevue
     ? { titre: 'Lecture impossible', note: raisonRevue }
-    : fraicheur
-      ? libelleFraicheur(fraicheur)
-      : { titre: 'Lecture…', note: 'La revue est en cours de lecture' };
+    : verdictBoucle && fraicheur?.etat !== 'a-jour'
+      ? {
+          titre: verdictBoucle.issue === 'fail' ? 'Revue échouée' : 'Revue à valider',
+          note: 'La boucle doit valider la revue sur la tête courante',
+        }
+      : fraicheur
+        ? libelleFraicheur(fraicheur)
+        : { titre: 'Lecture…', note: 'La revue est en cours de lecture' };
   const ton = raisonRevue
     ? 'rouge'
     : fraicheur?.etat === 'obsolete'
@@ -484,6 +498,7 @@ function AvisRevue({
   raisonRevue,
   page,
   source,
+  verdictBoucle,
   fraicheur,
   tete,
   children,
@@ -492,6 +507,7 @@ function AvisRevue({
   raisonRevue: string | null;
   page: MemoryPage | null | undefined;
   source: SourceRevue | null;
+  verdictBoucle?: LivraisonGit['revueBoucle'];
   fraicheur: Fraicheur | null;
   tete: string | null;
   /** chantier 27 (D129) : « Relancer la revue » */
@@ -507,7 +523,13 @@ function AvisRevue({
           {court(tete)}.
         </p>
       )}
-      {raisonRevue ? null : page === undefined ? (
+      {raisonRevue ? null : verdictBoucle ? (
+        <p className="texte-discret">
+          {verdictBoucle.tete
+            ? `Verdict de la boucle sur ${court(verdictBoucle.tete)}.`
+            : 'La boucle attend un verdict de revue.'}
+        </p>
+      ) : page === undefined ? (
         <p className="texte-discret">Lecture de la mémoire…</p>
       ) : avis ? (
         <>

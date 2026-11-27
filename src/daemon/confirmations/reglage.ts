@@ -8,6 +8,7 @@ const TOUJOURS = new Set([
   'host.option',
   'reglage',
   'desarmement',
+  'boucle',
   ...ACTIONS_MESH,
 ]);
 interface LigneReglage {

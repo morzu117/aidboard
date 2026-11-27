@@ -39,6 +39,8 @@ avec le critère « le build vide passe ».
 
 ## Sortie
 
+Dans la boucle, n'écris pas la page toi-même : rends-la entière comme réponse finale. Le daemon l'enregistre.
+
 Une page `<namespace>/plan/<task>` contenant :
 
 - l'intention, en une phrase

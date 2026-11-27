@@ -95,3 +95,43 @@
   margin: 0;
   color: var(--s-attente);
 }
+
+.sujet-boucle {
+  display: grid;
+  justify-items: start;
+  min-width: 0;
+  gap: var(--sp-3);
+  padding: var(--sp-4);
+  border: 1px solid var(--line);
+  overflow-wrap: anywhere;
+}
+
+.sujet-boucle-plan {
+  white-space: pre-wrap;
+}
+
+.sujet-boucle-reponse {
+  display: grid;
+  justify-items: start;
+  gap: var(--sp-2);
+  min-width: 0;
+}
+
+.sujet-boucle-reponse input {
+  display: block;
+  max-width: 100%;
+}
+
+.sujet-boucle-mesures {
+  display: grid;
+  grid-template-columns: auto auto;
+  gap: var(--sp-1) var(--sp-3);
+}
+
+.sujet-boucle-mesures > div {
+  display: contents;
+}
+
+.sujet-boucle-mesures dd {
+  margin: 0;
+}

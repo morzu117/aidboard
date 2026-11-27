@@ -35,6 +35,14 @@ guardrails:
 
 phases: [plan, dev, review, triage, retro]
 
+boucle:
+  delais: # minutes
+    plan: 30
+    acceptation: 60
+    dev: 90
+    gate: 30
+    revue: 30
+
 stack:
   # Faits vrais de cette machine, donc de tous ses projets. Fusionnés dans le
   # `stack` de chaque manifeste — le projet gagne sur une clé homonyme.

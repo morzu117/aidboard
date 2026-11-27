@@ -1,3 +1,4 @@
+import { Boucle } from './Boucle.js';
 import { libelleAid } from '../data/aid-board.js';
 import { useEffect, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router';
@@ -68,14 +69,31 @@ function vueComplete(topic: Topic | undefined): boolean {
   return !!topic && topic.state !== 'draft' && !topic.worktreeMissing;
 }
 
+function BoutonBoucle({ ouverte = false, onClick }: { ouverte?: boolean; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      className="bouton"
+      data-testid="boucle-ouvrir"
+      data-node="boucle-ouvrir"
+      aria-expanded={ouverte}
+      onClick={onClick}
+    >
+      Boucle
+    </button>
+  );
+}
+
 function Contenu({
   topicId,
   selectedAgent,
   onSelectAgent,
+  onOuvrirBoucle,
 }: {
   topicId: string;
   selectedAgent: string | null;
   onSelectAgent: (id: string) => void;
+  onOuvrirBoucle?: () => void;
 }) {
   const { state, outputs, daemon, retry, call } = useAid();
   const navigate = useNavigate();
@@ -469,6 +487,7 @@ function Contenu({
             )}
           </div>
           <div className="sujet-actions" data-node="1-3.actions">
+            {onOuvrirBoucle && <BoutonBoucle onClick={onOuvrirBoucle} />}
             <button
               className="bouton"
               data-node="1-3.actions.editeur"
@@ -1150,10 +1169,30 @@ function SujetPanneau({
   // review D (finding 2) : une pop-up ouverte rend inerte tout le reste — colonne centrale,
   // le bouton flottant — pour que Tab/aria-modal décrivent une vraie modale.
   const popupOuvert = overlay !== 'aucun';
+  const [boucleOuverte, ouvrirBoucle] = useState(false);
+  if (boucleOuverte) {
+    return (
+      <main className="page sujet-contenu">
+        <div className="sujet-entete">
+          <div className="sujet-titre-ligne">
+            <h1 className="titre-ecran">{topic.title}</h1>
+            <BoutonBoucle ouverte onClick={() => ouvrirBoucle(false)} />
+          </div>
+        </div>
+        <Boucle key={topic.id} sujetId={topic.id} />
+      </main>
+    );
+  }
+
   return (
     <div className="sujet-corps">
       <div style={{ display: 'contents' }} inert={popupOuvert || undefined}>
-        <Contenu topicId={topicId} selectedAgent={selectedAgent} onSelectAgent={onSelectAgent} />
+        <Contenu
+          topicId={topicId}
+          selectedAgent={selectedAgent}
+          onSelectAgent={onSelectAgent}
+          onOuvrirBoucle={() => ouvrirBoucle(true)}
+        />
       </div>
       <Volet
         screen="1-3"

@@ -238,7 +238,7 @@ test('039 conserve les jobs de 038, leur délai et leur index', () => {
     const indexes = () => previous.pragma('index_list(memory_jobs)');
     const indexesBefore = indexes();
     migrate(previous, migrations);
-    expect(previous.pragma('user_version', { simple: true })).toBe(39);
+    expect(previous.pragma('user_version', { simple: true })).toBe(40);
     expect(previous.prepare('SELECT * FROM memory_jobs ORDER BY id').all()).toEqual(jobsBefore);
     expect(indexes()).toEqual(indexesBefore);
   } finally {

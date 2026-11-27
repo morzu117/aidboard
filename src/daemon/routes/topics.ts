@@ -1,3 +1,4 @@
+import { verdictRevueBoucle } from '../boucle/depot.js';
 import { creerActionsConfirmation } from '../confirmations/actions.js';
 import {
   creerPorte,
@@ -361,7 +362,9 @@ export function registerTopicRoutes(app: FastifyInstance, deps: TopicRouteDeps):
       { worktree: string; base: string } | undefined;
     if (!row) throw new AidHttpError(404, 'sujet inconnu');
     if (!existsSync(row.worktree)) throw new AidHttpError(409, 'worktree introuvable');
-    return gitLivraison(row.worktree, row.base, revue);
+    const verdict = verdictRevueBoucle(deps.db, id);
+    const livraison = await gitLivraison(row.worktree, row.base, verdict ? undefined : revue);
+    return verdict ? { ...livraison, revueBoucle: verdict } : livraison;
   });
 
   // Chantier 28 (D148) : la branche que Transférer confie à un autre agent. Lecture seule.
