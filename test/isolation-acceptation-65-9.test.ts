@@ -25,6 +25,7 @@ function preparerGate() {
   const { depot, worktree, git, profil } = sujet;
   const reglagesClaude = join(home, '.claude', 'settings.json');
   const hook = join(depot, '.git', 'hooks', 'temoin');
+  fs.mkdirSync(join(depot, '.git', 'hooks'), { recursive: true });
   const ecritureHome = join(home, 'hors-sujet');
   fs.mkdirSync(join(home, '.claude'));
   fs.writeFileSync(reglagesClaude, '{}');

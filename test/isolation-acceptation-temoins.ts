@@ -53,6 +53,7 @@ export function preparerSujet(racine: string, home: string) {
   const git = (cwd: string, ...args: string[]) => executer('git', ['-C', cwd, ...args]).trim();
   fs.mkdirSync(depot);
   git(depot, 'init', '-q');
+  git(depot, 'remote', 'add', 'origin', 'https://exemple.test/temoin/depot.git');
   git(depot, 'config', 'user.name', 'Test');
   git(depot, 'config', 'user.email', 'test@example.com');
   git(depot, 'commit', '-qm', 'Base', '--allow-empty');
