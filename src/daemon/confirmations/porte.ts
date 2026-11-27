@@ -14,6 +14,7 @@ import type { FilePda, LigneDemande } from '../pda/file.js';
 import { creerReglage } from './reglage.js';
 
 export type ActionPorte =
+  | 'boucle'
   | 'mesh.commandant.repondre'
   | 'mesh.avis.motion'
   | 'mesh.avis'
@@ -30,6 +31,8 @@ export type ActionPorte =
   | 'host.option'
   | 'desarmement';
 export interface EntreeAction {
+  commande?: ParametresActions['boucle']['commande'];
+  reponse?: string | null;
   mesh?: string;
   params?: unknown;
   topicId?: string;

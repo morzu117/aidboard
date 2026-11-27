@@ -15,6 +15,7 @@ export interface ConversationDriverOptions {
   sessionId: string;
   resume: boolean;
   extraArgs?: string[];
+  remonterTexteFinal?: boolean;
   /** Chantier 16 (D67) : réglages au lancement ; absent = ceux de la CLI. */
   settings?: AgentSettings;
   /** D70 : dossier des pièces jointes, lisible par l'agent sans demande. */

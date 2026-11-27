@@ -1,3 +1,5 @@
+import type { VerdictRevueBoucle } from './livraison.js';
+
 // 11.2/11.3 : formes partagées daemon/web pour le journal de commits (D24, jamais de
 // géométrie de graphe calculée côté serveur — reconstruite côté client à partir de ces champs).
 
@@ -52,6 +54,7 @@ export interface GitCommitDetail {
  * appel, jamais stocké. `revue` seulement si la requête nomme le commit d'une revue.
  */
 export interface LivraisonGit {
+  revueBoucle?: VerdictRevueBoucle;
   /** HEAD du worktree ; null dans un dépôt sans commit. */
   head: string | null;
   base: string;

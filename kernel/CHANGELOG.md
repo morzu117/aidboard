@@ -12,6 +12,26 @@ et patchs n'en ont pas, sauf mention contraire.
 Changement mineur, sans migration. La politique d'orchestration décrit le
 travail sous bubblewrap. L'isolation est désactivée par défaut.
 
+## Suite de la boucle du daemon (chantier 69.11)
+
+Changement sans migration. Le relevé du home des boucles inclut désormais
+les fichiers Git désignés par `GIT_CONFIG_GLOBAL` et `XDG_CONFIG_HOME`.
+Une boucle déjà en cours lors de la mise à jour peut escalader au premier
+contrôle si son empreinte précédente ne contenait pas ces fichiers.
+Le point 69.12 refuse les origines SSH contenant `[` ou `%`, ignore les chemins relatifs de configuration Git globale et signale les versions OpenSSH antérieures à 9.6 dans `aid doctor`.
+
+## Délais de la boucle du daemon (chantier 69.3)
+
+Changement sans migration. Le manifeste peut redéclarer chaque délai de
+`boucle.delais` en minutes.
+
+### Revue structurée de la boucle du daemon (chantier 69.5)
+
+Changement sans migration. Le rôle de revue décrit le bloc JSON attendu
+par le daemon, avec un verdict par fichier et par point d’acceptation.
+
+Le daemon enregistre les réponses finales des rôles plan et review en pages mémoire (chantier 69.6).
+
 ## Avis de plusieurs fournisseurs (chantier 66)
 
 Changement mineur, sans migration. Le noyau documente la nouvelle section

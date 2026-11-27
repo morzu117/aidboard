@@ -1,4 +1,4 @@
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawn as spawnProcess } from 'node:child_process';
 import { GIT_ENV_DECOUVERTE } from '../git/exec.js';
 import {
   environnementIsole,
@@ -6,6 +6,8 @@ import {
   profilPour,
   spawnChildIsole,
 } from '../isolation/lanceur.js';
+import type { ConsignerGroupe } from '../boucle/groupes.js';
+import type { RoleEtape } from '../boucle/reglages.js';
 import { envSwarph } from '../mesh/env.js';
 import type { MeshRegistry } from '../mesh/registre.js';
 import {
@@ -200,6 +202,7 @@ export class AgentManager {
   /** D71 : dernier catalogue annoncé par un pilote codex, gardé après sa sortie. */
   private codexCatalog: ModelOption[] = [];
   // à part de `LiveStream` (interface publique, D62) : `recordStreamEvent` et `inputStream` en ont besoin hors du closure de `spawnStream`.
+  private groupesBoucle = new Map<string, { pid: number; sortie: Promise<void> }>();
   private streamSubscribers = new Map<string, Set<(ev: ConversationEvent) => void>>();
   private readonly ticker: NodeJS.Timeout;
 
@@ -307,7 +310,39 @@ export class AgentManager {
     }
   }
 
-  spawn(o: { topicId: string; kind: SpawnKind; mesh?: string }): Agent {
+  private boucleActive(sujetId: string): boolean {
+    return Boolean(
+      this.deps.db
+        .prepare(
+          "SELECT 1 FROM boucles WHERE sujet_id = ? AND phase NOT IN ('arretee', 'livraison_prete')",
+        )
+        .get(sujetId),
+    );
+  }
+
+  verifierAgentHorsBoucle(agentId: string): void {
+    if (
+      this.deps.db
+        .prepare("SELECT 1 FROM boucle_etapes WHERE json_extract(donnees, '$.agentId') = ? LIMIT 1")
+        .get(agentId)
+    )
+      throw new AidHttpError(409, 'Utilisez la vue Boucle pour cette session');
+  }
+
+  spawn(o: {
+    topicId: string;
+    kind: SpawnKind;
+    mesh?: string;
+    roleBoucle?: RoleEtape;
+    consignerGroupe?: ConsignerGroupe;
+  }): Agent {
+    const boucleActive = this.boucleActive(o.topicId);
+    if (o.roleBoucle) {
+      if (!boucleActive || (o.kind !== 'claude' && o.kind !== 'codex'))
+        throw new AidHttpError(409, 'Aucune étape de boucle à lancer');
+      return this.spawnStream({ ...o, kind: o.kind });
+    }
+    if (boucleActive) throw new AidHttpError(409, 'Le sujet est tenu par la boucle');
     if (
       this.deps.config.agents.transport === 'stream' &&
       (o.kind === 'claude' || o.kind === 'codex')
@@ -524,6 +559,8 @@ export class AgentManager {
     resume: boolean;
     seq: number;
     settings: AgentSettings;
+    roleBoucle?: RoleEtape;
+    consignerGroupe?: ConsignerGroupe;
   }): { stream: LiveStream; command: string[] } {
     const { paths, config, auth } = this.deps;
     const file = resolveOnPath(o.kind, process.env.PATH ?? '');
@@ -541,7 +578,40 @@ export class AgentManager {
     // D70 : le dossier existe avant le lancement, `--add-dir` le désigne à claude
     const attachmentsDir = join(paths.attachments, o.agentId);
     mkdirSync(attachmentsDir, { recursive: true, mode: 0o700 });
+    const spawnGroupe = o.roleBoucle
+      ? (((bin, args, opts) => {
+          const enfant = spawnProcess(bin, args, { ...opts, detached: true });
+          const pid = enfant.pid;
+          if (pid) {
+            const sortie = new Promise<void>((resoudre) => {
+              enfant.once('exit', () => resoudre());
+            });
+            this.groupesBoucle.set(o.agentId, { pid, sortie });
+            try {
+              o.consignerGroupe?.(pid);
+            } catch (erreur) {
+              process.kill(-pid, 'SIGKILL');
+              this.groupesBoucle.delete(o.agentId);
+              throw erreur;
+            }
+            enfant.kill = (signal = 'SIGTERM') => {
+              try {
+                return process.kill(-pid, signal);
+              } catch (erreur) {
+                if ((erreur as NodeJS.ErrnoException).code === 'ESRCH') return false;
+                throw erreur;
+              }
+            };
+          }
+          return enfant;
+        }) satisfies import('../conversation/driver.js').SpawnChild)
+      : undefined;
     const driverOpts = {
+      ...(o.roleBoucle && {
+        remonterTexteFinal: true,
+        extraArgs: o.kind === 'claude' ? ['--strict-mcp-config'] : [],
+        sandbox: o.roleBoucle === 'plan' || o.roleBoucle === 'review' ? 'read-only' : undefined,
+      }),
       bin: file,
       cwd: o.topic.worktree,
       env,
@@ -549,9 +619,9 @@ export class AgentManager {
       resume: o.resume,
       settings: o.settings,
       attachmentsDir,
-      ...(isolation && {
-        spawnChild: spawnChildIsole(isolation.bwrapBin, isolation.profil, fsIsolation),
-      }),
+      spawnChild: isolation
+        ? spawnChildIsole(isolation.bwrapBin, isolation.profil, fsIsolation, spawnGroupe)
+        : spawnGroupe,
     };
     const driver: ConversationDriver =
       o.kind === 'claude' ? new ClaudeDriver(driverOpts) : new CodexDriver(driverOpts);
@@ -584,7 +654,39 @@ export class AgentManager {
   }
 
   /** Agent conversationnel (D59-D62) : même sujet/run/worktree que la voie PTY, process piloté par `ConversationDriver`. */
-  private spawnStream(o: { topicId: string; kind: 'claude' | 'codex' }): Agent {
+  observerBoucle(agentId: string, observer: (event: ConversationEvent) => void) {
+    this.streamSubscribers.get(agentId)?.add(observer);
+  }
+
+  ecrireBoucle(agentId: string, texte: string) {
+    this.streamOr409(agentId);
+    const demande = this.pendingOf(agentId);
+    if (!demande) return this.inputStream(agentId, texte, []);
+    const option = demande.options.find(({ label, answer }) => label === texte || answer === texte);
+    if (!option) throw new AidHttpError(422, 'Choisissez une réponse proposée');
+    this.answerStream(agentId, demande.id, option.answer);
+  }
+
+  async arreterBoucle(agentId: string) {
+    await this.stop(agentId, 'user');
+    const groupe = this.groupesBoucle.get(agentId);
+    if (!groupe) return;
+    const { pid, sortie } = groupe;
+    try {
+      process.kill(-pid, 'SIGKILL');
+    } catch (erreur) {
+      if ((erreur as NodeJS.ErrnoException).code !== 'ESRCH') throw erreur;
+    }
+    await sortie;
+    this.groupesBoucle.delete(agentId);
+  }
+
+  private spawnStream(o: {
+    topicId: string;
+    kind: 'claude' | 'codex';
+    roleBoucle?: RoleEtape;
+    consignerGroupe?: ConsignerGroupe;
+  }): Agent {
     const { db, store } = this.deps;
     const topic = db.prepare('SELECT * FROM topics WHERE id = ?').get(o.topicId) as
       TopicRow | undefined;
@@ -600,6 +702,8 @@ export class AgentManager {
     const agentId = `ag_${ulid()}`;
     const sessionId = o.kind === 'claude' ? randomUUID() : '';
     const settings = this.defaultSettings(o.kind);
+    const role = o.roleBoucle ?? 'free';
+    if (o.roleBoucle) settings.mode = role === 'dev' || role === 'acceptation' ? 'auto' : 'plan';
     const { stream, command } = this.createStream({
       agentId,
       topic,
@@ -609,6 +713,8 @@ export class AgentManager {
       resume: false,
       seq: 0,
       settings,
+      roleBoucle: o.roleBoucle,
+      consignerGroupe: o.consignerGroupe,
     });
 
     const now = new Date().toISOString();
@@ -620,17 +726,18 @@ export class AgentManager {
         topicId: topic.id,
         runId: run.id,
         agentId,
-        data: { kind: o.kind, role: 'free', cwd: topic.worktree, pid: null, command },
+        data: { kind: o.kind, role, cwd: topic.worktree, pid: null, command },
       },
       (tx) =>
         tx
           .prepare(
-            "INSERT INTO agents (id, run_id, kind, role, transport, status, cwd, command, pid, session_id, created_at, updated_at) VALUES (?, ?, ?, 'free', 'stream', 'starting', ?, ?, NULL, ?, ?, ?)",
+            "INSERT INTO agents (id, run_id, kind, role, transport, status, cwd, command, pid, session_id, created_at, updated_at) VALUES (?, ?, ?, ?, 'stream', 'starting', ?, ?, NULL, ?, ?, ?)",
           )
           .run(
             agentId,
             run.id,
             o.kind,
+            role,
             topic.worktree,
             JSON.stringify(command),
             sessionId || null,
@@ -651,7 +758,7 @@ export class AgentManager {
       id: agentId,
       runId: run.id,
       kind: o.kind,
-      role: 'free',
+      role,
       transport: 'stream',
       ...(stream.isole && { isole: true }),
       status: 'starting',
@@ -696,6 +803,7 @@ export class AgentManager {
    * repart sur sa session et attend, comme un agent neuf.
    */
   reprendre(agentId: string): void {
+    this.verifierAgentHorsBoucle(agentId);
     const row = this.deps.db
       .prepare('SELECT transport, closed_at FROM agents WHERE id = ?')
       .get(agentId) as { transport: string; closed_at: string | null } | undefined;
@@ -717,6 +825,8 @@ export class AgentManager {
     const run = db.prepare('SELECT id, topic_id FROM runs WHERE id = ?').get(row.run_id) as
       { id: string; topic_id: string } | undefined;
     if (!run) throw new AidHttpError(409, 'ce sujet n’a pas de run');
+    if (this.boucleActive(run.topic_id))
+      throw new AidHttpError(409, 'Le sujet est tenu par la boucle');
     const topic = db.prepare('SELECT * FROM topics WHERE id = ?').get(run.topic_id) as
       TopicRow | undefined;
     if (!topic) throw new AidHttpError(404, 'sujet inconnu');
@@ -1004,6 +1114,7 @@ export class AgentManager {
 
   /** Arrêt du tour en cours (D64) : réservé aux agents conversationnels, l'équivalent de la pause pour eux. */
   interrupt(agentId: string): void {
+    this.verifierAgentHorsBoucle(agentId);
     if (this.live.has(agentId))
       throw new AidHttpError(409, 'interruption réservée aux agents conversationnels');
     this.streamOr409(agentId).driver.interrupt();
@@ -1173,6 +1284,7 @@ export class AgentManager {
 
   /** Un message tapé pour l'agent : le texte, puis Entrée. Plusieurs lignes passent en collage encadré. */
   input(agentId: string, raw: string, attachments: AttachmentUpload[] = []): void {
+    this.verifierAgentHorsBoucle(agentId);
     if (this.streams.has(agentId) || this.dormantStream(agentId)) {
       this.inputStream(agentId, raw, attachments);
       return;
@@ -1268,6 +1380,7 @@ export class AgentManager {
 
   /** Répond à la demande en cours, au clavier, après avoir vérifié que l'écran la montre toujours (E4). */
   answer(agentId: string, pendingId: string, answer: string): void {
+    this.verifierAgentHorsBoucle(agentId);
     if (this.streams.has(agentId)) {
       this.answerStream(agentId, pendingId, answer);
       return;

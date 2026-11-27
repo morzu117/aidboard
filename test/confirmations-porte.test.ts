@@ -43,6 +43,7 @@ afterEach(async () => {
 
 type ActionGit = Exclude<
   ActionPorte,
+  | 'boucle'
   | 'mesh.commandant.repondre'
   | 'mesh.avis.motion'
   | 'mesh.avis'

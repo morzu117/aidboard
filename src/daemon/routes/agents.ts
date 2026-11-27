@@ -79,7 +79,9 @@ export function registerAgentRoutes(
       mesh?: string;
       kind: 'claude' | 'codex' | 'shell' | 'swarph-cell' | 'swairm-cell';
     };
-    return reply.code(201).send(deps.agents.spawn(body));
+    return reply
+      .code(201)
+      .send(deps.agents.spawn({ topicId: body.topicId, kind: body.kind, mesh: body.mesh }));
   });
 
   // Chantier 28 (D143) : « Vérifié à l'instant » de l'écran Nouveau sujet. Lecture seule, sans fetch.
@@ -193,6 +195,7 @@ export function registerAgentRoutes(
     { schema: { body: RemoteControlBody } },
     async (req) => {
       const { id } = req.params as { id: string };
+      deps.agents.verifierAgentHorsBoucle(id);
       return deps.agents.setRemoteControl(id, (req.body as { enabled: boolean }).enabled);
     },
   );
@@ -205,6 +208,7 @@ export function registerAgentRoutes(
 
   app.patch('/api/agents/:id/settings', { schema: { body: SettingsBody } }, async (req) => {
     const { id } = req.params as { id: string };
+    deps.agents.verifierAgentHorsBoucle(id);
     return deps.agents.setSettings(id, req.body as Partial<AgentSettings>);
   });
 
@@ -216,6 +220,7 @@ export function registerAgentRoutes(
     const live = deps.agents.get(id);
     const stream = deps.agents.getStream(id);
     if ((live && !live.exited) || (stream && !stream.exited)) {
+      deps.agents.verifierAgentHorsBoucle(id);
       void deps.agents.stop(id, 'user');
       return reply.code(202).send({ id });
     }

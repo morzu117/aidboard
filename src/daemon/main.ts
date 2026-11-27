@@ -1,4 +1,6 @@
 import { sonderBwrap } from './isolation/sonde.js';
+import { resolveOnPath } from './pty/spawn.js';
+import { ServiceBoucle, TAILLE_MAX_REPONSE_BOUCLE } from './boucle/service.js';
 import { MeshRegistry } from './mesh/registre.js';
 import { ServiceCommandant } from './commandant/service.js';
 import { notifierCommandant } from './push/commandant.js';
@@ -321,6 +323,66 @@ export async function startDaemon(
       port: () => livePort,
       meshes: () => meshes,
     });
+    const journalBoucle = () => log('Événement de boucle non traité');
+    const boucle = new ServiceBoucle({
+      db: opened,
+      memory,
+      agents: {
+        disponible: (genre) => Boolean(resolveOnPath(genre, process.env.PATH ?? '')),
+        async lancer({ sujetId, genre, role, consignerGroupe }) {
+          const agent = agents.spawn({
+            topicId: sujetId,
+            kind: genre,
+            roleBoucle: role,
+            consignerGroupe,
+          });
+          const lectureSeule = role === 'plan' || role === 'review';
+          let texteFinal: string | null | undefined;
+          agents.observerBoucle(agent.id, (evenement) => {
+            if (role === 'plan' && evenement.type === 'message' && evenement.role === 'assistant') {
+              texteFinal =
+                Buffer.byteLength(evenement.text) <= TAILLE_MAX_REPONSE_BOUCLE
+                  ? evenement.text
+                  : null;
+            }
+            if (lectureSeule && evenement.type === 'turn_end') {
+              const reponse = evenement.texteFinal ?? (role === 'plan' ? texteFinal : undefined);
+              const texte =
+                !evenement.ok ||
+                (typeof reponse === 'string' &&
+                  Buffer.byteLength(reponse) > TAILLE_MAX_REPONSE_BOUCLE)
+                  ? null
+                  : reponse;
+              texteFinal = undefined;
+              void boucle
+                .traiterEvenementAgent(agent.id, { type: 'turn_end', texteFinal: texte })
+                .catch(journalBoucle);
+              return;
+            }
+            const normalise =
+              evenement.type === 'request'
+                ? { type: 'needs_input' as const, question: evenement.request.question }
+                : evenement;
+            if (
+              normalise.type === 'needs_input' ||
+              normalise.type === 'turn_end' ||
+              normalise.type === 'exit' ||
+              normalise.type === 'session'
+            ) {
+              void boucle.traiterEvenementAgent(agent.id, normalise).catch(journalBoucle);
+            }
+          });
+          return { genre, modele: agent.model ?? 'défaut', sessionId: agent.id };
+        },
+        async ecrire(agentId, texte) {
+          agents.ecrireBoucle(agentId, texte);
+        },
+        async arreter(agentId) {
+          await agents.arreterBoucle(agentId);
+        },
+      },
+    });
+    await boucle.reprendre();
     const devOrigin = process.env.AID_DEV_ORIGIN;
     if (devOrigin) console.error(`AID_DEV_ORIGIN actif : ${devOrigin} accepté comme origine`);
     // 13.2 (DR5) : lu une fois, le build ne bouge pas sous un daemon qui tourne
@@ -486,6 +548,7 @@ export async function startDaemon(
       store,
       agents,
       memory,
+      boucle,
       memoryProposals: proposals,
       paths,
       structural,
@@ -513,6 +576,8 @@ export async function startDaemon(
       if ((err as NodeJS.ErrnoException).code === 'EADDRINUSE') throw new AidPortInUse(config.port);
       throw err;
     }
+    const horlogeBoucle = setInterval(() => void boucle.tic().catch(journalBoucle), 1_000);
+    horlogeBoucle.unref();
     const port = (app.server.address() as AddressInfo).port;
     livePort = port;
     // un port occupé n'empêche pas le daemon de démarrer : l'onglet et `aid doctor` le disent
@@ -584,6 +649,8 @@ export async function startDaemon(
         store.off('event', observerCapture);
         await declencheurPush.arreter();
         await meshes.arreter();
+        clearInterval(horlogeBoucle);
+        await boucle.fermer();
         await agents.stopAll('daemon_stop', 5000);
         agents.dispose();
         updates?.dispose();
