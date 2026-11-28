@@ -11,6 +11,7 @@ export interface ProfilIsolation {
   piecesJointes: string;
   tmp?: string;
   gitDir?: string;
+  fichierVide?: string;
   copieClaude?: string;
   projetClaude?: string;
 }
@@ -19,6 +20,8 @@ export const POINTS_PROJET = [
   ['.claude', true],
   ['.mcp.json', false],
 ] as const;
+
+const IDENTIFIANTS_AGENTS = ['.claude/.credentials.json', '.claude.json', '.codex/auth.json'];
 
 interface FsIsolation {
   existsSync(path: string): boolean;
@@ -39,7 +42,11 @@ function validerChemin(nom: string, chemin: string): void {
 
 export function argvBwrap(
   profil: ProfilIsolation,
-  { pty, sourcePreuve }: { pty: boolean; sourcePreuve?: string },
+  {
+    pty,
+    sourcePreuve,
+    masquerIdentifiants,
+  }: { pty: boolean; sourcePreuve?: string; masquerIdentifiants?: boolean },
   fs: FsIsolation,
 ): string[] {
   for (const [nom, chemin] of Object.entries(profil)) {
@@ -92,9 +99,13 @@ export function argvBwrap(
     const chemin = join(home, relatif);
     if (fs.existsSync(chemin) && fs.statSync(chemin).isDirectory()) argv.push('--tmpfs', chemin);
   }
+  const monterFichierVide = (destination: string) => {
+    if (!profil.fichierVide) throw new Error('Isolation bwrap : fichier vide de masquage absent');
+    argv.push('--ro-bind', profil.fichierVide, destination);
+  };
   const credentials = join(home, '.git-credentials');
   if (fs.existsSync(credentials) && fs.statSync(credentials).isFile()) {
-    argv.push('--ro-bind', '/dev/null', credentials);
+    monterFichierVide(credentials);
   }
 
   // node_modules dans le checkout de preuve pointe vers le worktree du sujet.
@@ -137,6 +148,7 @@ export function argvBwrap(
     '.codex/sessions',
     '.codex/archived_sessions',
   ]) {
+    if (masquerIdentifiants && IDENTIFIANTS_AGENTS.includes(relatif)) continue;
     const chemin = join(home, relatif);
     if (!fs.existsSync(chemin)) continue;
     const dossierCli = join(home, relatif.split('/')[0]!);
@@ -165,7 +177,14 @@ export function argvBwrap(
       argv.push('--tmpfs', chemin);
     }
   }
-  if (profil.copieClaude) {
+  if (masquerIdentifiants) {
+    for (const relatif of IDENTIFIANTS_AGENTS) {
+      const chemin = join(home, relatif);
+      if (fs.existsSync(chemin) && fs.statSync(chemin).isFile()) {
+        monterFichierVide(chemin);
+      }
+    }
+  } else if (profil.copieClaude) {
     argv.push('--bind', profil.copieClaude, join('/tmp', basename(dirname(profil.copieClaude))));
     argv.push('--bind', profil.copieClaude, join(home, '.claude.json'));
   }

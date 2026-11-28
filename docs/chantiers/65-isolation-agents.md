@@ -135,6 +135,14 @@ Le gate de la boucle lance `/bin/sh` dans le daemon, hors du bac, sur du code é
 - **Sans isolation, rien ne change**, sur macOS par exemple. La limite reste écrite dans `limites-boucle.ts`, et elle dit maintenant que l'isolation couvre aussi le gate.
 - Les sorties C à F, refaites depuis un script lancé par le gate, échouent comme depuis l'agent, sous le vrai bwrap, dans le job `isolation`.
 
+### DM75. Les remarques non bloquantes du lab (28 novembre)
+
+Le lab a donné son oui pour la #210 à 7a1fd95 (DM 107579). Elle est mergée sur le oui de Julien. Ses trois remarques passent dans une PR de suite.
+
+- **Le gate et les preuves ne voient pas les identifiants des agents.** Pour ces commandes, `~/.claude/.credentials.json`, `~/.claude.json` et `~/.codex/auth.json` sont masqués par un fichier vide ordinaire, en lecture seule (0444), que le daemon prépare dans un de ses dossiers et monte avec `--ro-bind`. bwrap monte tout `--ro-bind` en nodev : `/dev/null` monté ainsi sur un fichier devient illisible (EACCES), au lieu d'être vide. Le lab l'a mesuré (DM 107914). `.git-credentials` passe au même fichier vide, par cohérence. L'agent garde son accès, il en a besoin. Le profil du gate est donc dérivé de celui du sujet, sans ces fichiers.
+- **Le test de remplacement couvre aussi `gitdir`**, en plus de `.git` et de `commondir`.
+- **Le script du gate tente C à F à la lettre.** Il essaie aussi de réécrire les pointeurs git et de joindre `/run/user`, avec un témoin dehors pour chaque sortie.
+
 ## 4. Points
 
 ### 65.1 Le plan
@@ -253,6 +261,13 @@ La fusion de main, avec la boucle du 69. Les quatre conflits ont été résolus 
 
 - _Acceptation._ Couvert par `test/isolation-acceptation-65-9.test.ts` et `test/isolation-acceptation-boucle.test.ts` (0a8764d), écrits depuis DM74 seul. Sous le vrai bwrap, le gate écrit puis exécute un script qui tente C à F : les écritures dans le home, dans les hooks git et dans `settings.json` échouent, et la variable factice est absente. L'écriture dans le worktree et dans le TMPDIR passe. Même chose pour les preuves. Le délai et l'arrêt figent le témoin petit-fils. Sans bwrap, la boucle escalade et le témoin de commande reste absent. En `off`, l'argv est l'argv habituel. La limite affichée dit que bwrap couvre le gate. Interface : `lancerGate({ …, isolation?: { bwrapBin, profil } })` et la même option pour `produirePreuves`.
 - _Révision 65.8 et 65.9._ Une passe Codex. Trente-huit lignes existantes remplacées, toutes dans le périmètre. Le testeur a ajouté une origine fictive au dépôt témoin des preuves (6300bbd). Mon gate : 5 412, et les 14 e2e de la boucle et de la livraison passent. Les cas sous le vrai bwrap sont joués par le job `isolation` de la CI.
+
+### 65.10 Les remarques du lab (DM75)
+
+Les trois règles de DM75, chacune avec son test sous le vrai bwrap, dans le job `isolation`. Le testeur écrit d'abord les tests à partir de DM75 seul.
+- _Acceptation._ Couvert par `test/isolation-acceptation-65-10.test.ts` (adabb8c), écrit par le testeur depuis DM75 seul. Les cas se jouent sous le vrai bwrap, dans le job `isolation`. Le gate et les deux exécutions de la preuve lisent les trois fichiers d'identifiants à travers `/dev/null`, alors que le faux agent de boucle lit les valeurs factices. `gitdir` ne peut être remplacé ni par `mv`, ni par `rm` puis recréation. Son contenu et son inode restent identiques dehors. Le script du gate tente de réécrire `.git`, `commondir`, `gitdir` et les réglages Claude, cherche les variables factices et essaie d'atteindre `/run/user/<uid>`, avec des témoins dehors. Tout échoue.
+- _Révision 65.10._ Une passe Codex. Six lignes existantes remplacées, dans `bwrap.ts` et `lanceur.ts`. Mon gate : 5 412. Les cas sous le vrai bwrap sont joués par le job `isolation` de la CI.
+- _Révision 65.10, deuxième passe._ Le job `isolation` a échoué à be18614 : `/dev/null` monté avec `--ro-bind` est illisible (nodev). Sur la préférence du lab, le masquage passe à un fichier vide du daemon. Le testeur a aligné les tests (d43e047, 180691c), puis une passe Codex a changé quatre lignes existantes. Mon gate : 5 412.
 
 ## 5. Pièges
 
