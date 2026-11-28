@@ -1,6 +1,7 @@
-import { lstatSync, realpathSync } from 'node:fs';
-import { sep } from 'node:path';
-import { expect, test, vi } from 'vitest';
+import { chmodSync, lstatSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join, sep } from 'node:path';
+import { expect, onTestFinished, test, vi } from 'vitest';
 import { ConfigError, parseConfig } from '../src/daemon/config.js';
 import { argvBwrap, gitCommunDe, type ProfilIsolation } from '../src/daemon/isolation/bwrap.js';
 
@@ -72,7 +73,13 @@ test('monte les zones cachées, les exceptions inscriptibles sous AID_HOME et le
     [credentials, ...etat, ...recouvrements],
   );
 
-  const args = argvBwrap(profil, { pty: true }, fs);
+  const dossierMasquage = mkdtempSync(join(tmpdir(), 'aid-masquage-'));
+  onTestFinished(() => rmSync(dossierMasquage, { recursive: true, force: true }));
+  const fichierVide = join(dossierMasquage, 'vide');
+  writeFileSync(fichierVide, '');
+  chmodSync(fichierVide, 0o444);
+  const profilAvecMasquage = { ...profil, fichierVide };
+  const args = argvBwrap(profilAvecMasquage, { pty: true }, fs);
   const source = args[args.indexOf(credentials) - 1] ?? '';
   expect(args).toEqual([
     ...base,
