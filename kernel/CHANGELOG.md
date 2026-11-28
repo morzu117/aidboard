@@ -7,6 +7,12 @@ ajoute rien. Format : chaque version majeure du noyau décrit sa
 **migration**, que `/sync` applique avant de rendre le bloc ; les mineures
 et patchs n'en ont pas, sauf mention contraire.
 
+## Isolation des agents (chantier 65)
+
+Changement mineur, sans migration. La politique d'orchestration décrit le
+travail sous bubblewrap. L'isolation est désactivée par défaut.
+Sous bubblewrap, la boucle isole aussi son gate et ses preuves d’acceptation. Le réseau reste ouvert.
+
 ## Suite de la boucle du daemon (chantier 69.11)
 
 Changement sans migration. Le relevé du home des boucles inclut désormais

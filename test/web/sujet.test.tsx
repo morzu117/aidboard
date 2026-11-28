@@ -299,6 +299,24 @@ test('un binaire absent : le message du daemon est affiché', async () => {
   );
 });
 
+test('onglets : seuls les agents isolés portent la marque « isolé »', async () => {
+  open(
+    snapshot({
+      workspaces: [ws()],
+      topics: [topic()],
+      runs: [run],
+      agents: [
+        agent({ id: 'ag_1', kind: 'claude', isole: true }),
+        agent({ id: 'ag_2', kind: 'codex', isole: false }),
+        agent({ id: 'ag_3', kind: 'shell' }),
+      ],
+    }),
+  );
+  expect((await screen.findByRole('tab', { name: /claude/ })).textContent).toContain('isolé');
+  expect(screen.getByRole('tab', { name: /codex/ }).textContent).not.toContain('isolé');
+  expect(screen.getByRole('tab', { name: /shell/ }).textContent).not.toContain('isolé');
+});
+
 test('onglets : un terminal monté par agent, un seul visible ; bouton unique « Arrêter »/« Fermer » sur l’agent actif, confirmation en deux temps', async () => {
   const h = open(
     snapshot({

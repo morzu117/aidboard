@@ -1,3 +1,4 @@
+import { avecGitSujets } from './git/exec.js';
 import type { ServiceBoucle } from './boucle/service.js';
 import { CreationsCartes } from './confirmations/cartes.js';
 import { registerRejoindreRoutes } from './routes/rejoindre.js';
@@ -76,6 +77,7 @@ import { registerEventSocket } from './ws/events.js';
 import { registerPtySocket } from './ws/pty.js';
 
 export interface ServerDeps {
+  bwrapVersion?: string;
   config: AidConfig;
   auth: AuthState;
   db: Db;
@@ -184,6 +186,7 @@ export async function buildServer(deps: ServerDeps): Promise<FastifyInstance> {
   });
   await app.register(fastifyCookie);
   await app.register(fastifyWebsocket);
+  app.addHook('onRequest', (_req, _reply, done) => avecGitSujets(deps.db, done));
   registerSecurity(app, deps.auth, {
     getPort: () => (app.server.address() as AddressInfo | null)?.port ?? deps.config.port,
     devOrigin: deps.devOrigin,
@@ -211,6 +214,8 @@ export async function buildServer(deps: ServerDeps): Promise<FastifyInstance> {
     !!deps.config.swairm.bin,
     deps.config.agents.transport,
     deps.meshes,
+    deps.bwrapVersion,
+    deps.agents,
   );
   registerRejoindreRoutes(app, { config: deps.config, paths: deps.paths });
   registerMeshRoutes(app, {

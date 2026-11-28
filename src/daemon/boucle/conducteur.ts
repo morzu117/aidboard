@@ -51,6 +51,7 @@ interface DependancesConduite extends LecturesArtefact {
   escalader(raison: string, details?: string[]): Promise<void>;
   lancerGate?: typeof lancerGate;
   gate?: {
+    isolation?(): Parameters<typeof lancerGate>[0]['isolation'];
     consignerEmpreinte(empreinte: EmpreinteEnvironnement): Promise<void>;
     lireEmpreinte(): Promise<EmpreinteEnvironnement | undefined>;
     verifierDepot?(): Promise<string[]>;
@@ -92,7 +93,14 @@ async function controlerGate(contexte: ContexteConduite, deps: DependancesCondui
     if (!reglages.gate || (avecAcceptation && !acceptation)) {
       return deps.escalader('cannot_evaluate');
     }
+    let isolation;
+    try {
+      isolation = deps.gate.isolation?.();
+    } catch (erreur) {
+      return deps.escalader('cannot_evaluate', [String(erreur)]);
+    }
     const resultat = await (deps.lancerGate ?? lancerGate)({
+      ...(isolation && { isolation }),
       depot,
       tete,
       commande: reglages.gate,
@@ -101,6 +109,9 @@ async function controlerGate(contexte: ContexteConduite, deps: DependancesCondui
       acceptation: avecAcceptation ? acceptation : undefined,
       ...(contexte.gate.signal && { signal: contexte.gate.signal }),
     });
+    if (resultat.erreurIsolation) {
+      return deps.escalader('cannot_evaluate', [resultat.erreurIsolation]);
+    }
     const apresGate = await empreinteEnvironnement(homedir(), undefined, {
       worktree: contexte.depot,
     });

@@ -1,3 +1,4 @@
+import { sonderBwrap } from './isolation/sonde.js';
 import { resolveOnPath } from './pty/spawn.js';
 import { ServiceBoucle, TAILLE_MAX_REPONSE_BOUCLE } from './boucle/service.js';
 import { MeshRegistry } from './mesh/registre.js';
@@ -97,6 +98,7 @@ export async function startDaemon(
     config?: Partial<AidConfig>;
     logger?: boolean;
     codegraphBin?: string;
+    sondeBwrap?: Parameters<typeof sonderBwrap>[0];
     structuralEngine?: IndexEngine;
     onStopRequested?: () => void;
     onUpdateRequested?: () => void;
@@ -138,6 +140,7 @@ export async function startDaemon(
       config.meshes = {
         principal: { ...config.mesh, home: config.mesh.home ?? process.env.HOME ?? homedir() },
       };
+    const bwrap = config.agents.isolation === 'bwrap' ? sonderBwrap(opts.sondeBwrap) : undefined;
     purgeOldLogs(paths, config.terminal.logRetentionDays);
     const opened = openDb(paths.db);
     db = opened;
@@ -311,6 +314,7 @@ export async function startDaemon(
     let livePort = config.port;
     const auth = createAuthState(loadSessionToken(paths.sessionSecret));
     const agents = new AgentManager({
+      bwrapBin: bwrap?.bin,
       store,
       db: opened,
       paths,
@@ -321,6 +325,7 @@ export async function startDaemon(
     });
     const journalBoucle = () => log('Événement de boucle non traité');
     const boucle = new ServiceBoucle({
+      isolationGate: (sujetId, agentId) => agents.isolationGate(sujetId, agentId),
       db: opened,
       memory,
       agents: {
@@ -530,6 +535,7 @@ export async function startDaemon(
       },
     };
     const app = await buildServer({
+      bwrapVersion: bwrap?.version ?? 'off',
       commandant,
       clePda: fournisseurPda,
       pda,

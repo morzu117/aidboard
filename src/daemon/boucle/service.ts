@@ -104,6 +104,10 @@ export class ServiceBoucle {
       agents: Agents;
       maintenant?: () => number;
       lancerGate?: typeof lancerGate;
+      isolationGate?: (
+        sujetId: string,
+        agentId: string,
+      ) => Parameters<typeof lancerGate>[0]['isolation'];
     },
   ) {
     this.maintenant = deps.maintenant ?? Date.now;
@@ -549,6 +553,10 @@ export class ServiceBoucle {
         escalader: (raison, constats) => this.escalader(boucle, raison, constats),
         lancerGate: this.deps.lancerGate,
         gate: {
+          isolation: () => {
+            const dev = boucle.etat.etapes.findLast(({ type }) => type === 'dev');
+            return this.deps.isolationGate?.(sujet.id, dev?.agentId ?? boucle.id);
+          },
           lireEmpreinte: async () => boucle.etat.empreinte,
           verifierDepot: () => this.verifierDepot(boucle, sujet),
           consignerEmpreinte: async (empreinte) => {

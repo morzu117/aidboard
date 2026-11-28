@@ -7,6 +7,7 @@ export interface StateSnapshot {
   runs: Run[];
   agents: Agent[];
   actions: ActionRun[];
+  bwrapVersion?: string;
   /** chantier 27 (D129) : `agents.transport` de la config, le transport des agents claude et codex lancés */
   agentTransport?: 'pty' | 'stream';
   /** présent seulement quand `swairm.bin` est configuré (D43) */

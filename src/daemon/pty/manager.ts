@@ -1,4 +1,11 @@
-import { spawn as spawnProcess } from 'node:child_process';
+import { execFileSync, spawn as spawnProcess } from 'node:child_process';
+import { GIT_ENV_DECOUVERTE } from '../git/exec.js';
+import {
+  environnementIsole,
+  envelopper,
+  profilPour,
+  spawnChildIsole,
+} from '../isolation/lanceur.js';
 import type { ConsignerGroupe } from '../boucle/groupes.js';
 import type { RoleEtape } from '../boucle/reglages.js';
 import { envSwarph } from '../mesh/env.js';
@@ -6,9 +13,12 @@ import type { MeshRegistry } from '../mesh/registre.js';
 import {
   closeSync,
   existsSync,
+  lstatSync,
   mkdirSync,
   openSync,
   readSync,
+  readlinkSync,
+  realpathSync,
   statSync,
   writeFileSync,
 } from 'node:fs';
@@ -50,6 +60,7 @@ import { homedir } from 'node:os';
 import { poseUneQuestion } from '../../shared/question.js';
 import { REMOTE_CONTROL, type RemoteControlState } from '../../shared/agentSettings.js';
 
+const fsIsolation = { existsSync, lstatSync, statSync, readlinkSync, realpathSync };
 const ulid = monotonicFactory();
 /** D70 : bornes des pièces jointes d'un message. */
 const ATTACHMENTS_MAX = 5;
@@ -80,6 +91,7 @@ export interface LiveAgent {
   exit: { exitCode: number | null; signal: number | null; reason: string } | null;
   stopReason?: StopReason;
   kind: SpawnKind;
+  isole?: boolean;
   mesh?: string;
   /** dernière sortie du terminal (ms) : le silence fonde l'estimation */
   lastOutputAt: number;
@@ -99,6 +111,7 @@ export interface LiveStream {
   runId: string;
   workspaceId: string;
   kind: SpawnKind;
+  isole?: boolean;
   driver: ConversationDriver;
   exited: boolean;
   exit: { exitCode: number | null; signal: NodeJS.Signals | null; reason: string } | null;
@@ -119,6 +132,7 @@ export interface ManagerDeps {
   db: Db;
   paths: AidPaths;
   config: AidConfig;
+  bwrapBin?: string;
   meshes?: () => MeshRegistry;
   auth: AuthState;
   port: () => number;
@@ -265,6 +279,45 @@ export class AgentManager {
     return [...this.live.values()].filter((a) => !a.exited);
   }
 
+  isolationGate(sujetId: string, agentId: string) {
+    if (this.deps.config.agents.isolation !== 'bwrap') return undefined;
+    const topic = this.deps.db.prepare('SELECT * FROM topics WHERE id = ?').get(sujetId) as
+      TopicRow | undefined;
+    if (!topic) throw new AidHttpError(404, 'sujet inconnu');
+    return this.isolationPour('codex', topic, agentId);
+  }
+
+  private isolationPour(kind: SpawnKind, topic: TopicRow, agentId: string) {
+    const { config, paths, bwrapBin } = this.deps;
+    if (config.agents.isolation !== 'bwrap' || (kind !== 'claude' && kind !== 'codex'))
+      return undefined;
+    if (!bwrapBin) throw new AidHttpError(422, 'isolation demandée mais bubblewrap indisponible');
+    try {
+      const depot = this.deps.db
+        .prepare('SELECT root FROM workspaces WHERE id = ?')
+        .get(topic.workspace_id) as { root: string };
+      const profil = profilPour(
+        {
+          worktree: topic.worktree,
+          home: process.env.HOME ?? homedir(),
+          paths,
+          agentId,
+          depot: depot.root,
+        },
+        (bin, args) =>
+          execFileSync(bin, args, {
+            encoding: 'utf8',
+            stdio: ['ignore', 'pipe', 'pipe'],
+            env: { ...process.env, ...GIT_ENV_DECOUVERTE },
+          }),
+        fsIsolation,
+      );
+      return { bwrapBin, profil };
+    } catch (err) {
+      throw new AidHttpError(422, (err as Error).message);
+    }
+  }
+
   private boucleActive(sujetId: string): boolean {
     return Boolean(
       this.deps.db
@@ -370,15 +423,23 @@ export class AgentManager {
         ...hookEnv(),
       },
     );
+    const isolation = this.isolationPour(o.kind, topic, agentId);
     let pty: IPty;
+    let nettoyerIsolation: (() => void) | undefined;
     try {
-      pty = getPty().spawn(file, args, {
+      if (isolation) mkdirSync(isolation.profil.piecesJointes, { recursive: true, mode: 0o700 });
+      const lancement = isolation
+        ? envelopper(isolation.bwrapBin, isolation.profil, { pty: true }, fsIsolation, file, args)
+        : { file, args };
+      nettoyerIsolation = lancement.nettoyer;
+      pty = getPty().spawn(lancement.file, lancement.args, {
         name: 'xterm-256color',
         ...INITIAL,
         cwd: topic.worktree,
-        env,
+        env: isolation ? environnementIsole(env) : env,
       });
     } catch (err) {
+      nettoyerIsolation?.();
       throw new AidHttpError(422, `impossible de lancer ${bin} : ${(err as Error).message}`);
     }
 
@@ -396,6 +457,7 @@ export class AgentManager {
       exited: false,
       exit: null,
       kind: o.kind,
+      ...(isolation && { isole: true }),
       ...(configMesh && { mesh: nomMesh }),
       lastOutputAt: Date.now(),
       hooked: false,
@@ -418,6 +480,7 @@ export class AgentManager {
       for (const cb of subscribers) cb(chunk);
     });
     pty.onExit(({ exitCode, signal }) => {
+      nettoyerIsolation?.();
       live.exited = true;
       const reason = live.stopReason ?? 'exit';
       live.exit = { exitCode: signal ? null : exitCode, signal: signal ?? null, reason };
@@ -472,6 +535,7 @@ export class AgentManager {
       kind: o.kind,
       role: 'free',
       transport: 'pty',
+      ...(live.isole && { isole: true }),
       status: 'starting',
       cwd: topic.worktree,
       command,
@@ -518,15 +582,12 @@ export class AgentManager {
       AID_AGENT: o.agentId,
       AID_SPOOL: paths.spool,
     });
+    const isolation = this.isolationPour(o.kind, o.topic, o.agentId);
     // D70 : le dossier existe avant le lancement, `--add-dir` le désigne à claude
     const attachmentsDir = join(paths.attachments, o.agentId);
     mkdirSync(attachmentsDir, { recursive: true, mode: 0o700 });
-    const driverOpts = {
-      ...(o.roleBoucle && {
-        remonterTexteFinal: true,
-        extraArgs: o.kind === 'claude' ? ['--strict-mcp-config'] : [],
-        sandbox: o.roleBoucle === 'plan' || o.roleBoucle === 'review' ? 'read-only' : undefined,
-        spawnChild: ((bin, args, opts) => {
+    const spawnGroupe = o.roleBoucle
+      ? (((bin, args, opts) => {
           const enfant = spawnProcess(bin, args, { ...opts, detached: true });
           const pid = enfant.pid;
           if (pid) {
@@ -551,7 +612,13 @@ export class AgentManager {
             };
           }
           return enfant;
-        }) satisfies import('../conversation/driver.js').SpawnChild,
+        }) satisfies import('../conversation/driver.js').SpawnChild)
+      : undefined;
+    const driverOpts = {
+      ...(o.roleBoucle && {
+        remonterTexteFinal: true,
+        extraArgs: o.kind === 'claude' ? ['--strict-mcp-config'] : [],
+        sandbox: o.roleBoucle === 'plan' || o.roleBoucle === 'review' ? 'read-only' : undefined,
       }),
       bin: file,
       cwd: o.topic.worktree,
@@ -560,6 +627,9 @@ export class AgentManager {
       resume: o.resume,
       settings: o.settings,
       attachmentsDir,
+      spawnChild: isolation
+        ? spawnChildIsole(isolation.bwrapBin, isolation.profil, fsIsolation, spawnGroupe)
+        : spawnGroupe,
     };
     const driver: ConversationDriver =
       o.kind === 'claude' ? new ClaudeDriver(driverOpts) : new CodexDriver(driverOpts);
@@ -574,6 +644,7 @@ export class AgentManager {
       workspaceId: o.topic.workspace_id,
       kind: o.kind,
       driver,
+      ...(isolation && { isole: true }),
       exited: false,
       exit: null,
       seq: o.seq,
@@ -641,7 +712,7 @@ export class AgentManager {
     const settings = this.defaultSettings(o.kind);
     const role = o.roleBoucle ?? 'free';
     if (o.roleBoucle) settings.mode = role === 'dev' || role === 'acceptation' ? 'auto' : 'plan';
-    const { command } = this.createStream({
+    const { stream, command } = this.createStream({
       agentId,
       topic,
       runId: run.id,
@@ -697,6 +768,7 @@ export class AgentManager {
       kind: o.kind,
       role,
       transport: 'stream',
+      ...(stream.isole && { isole: true }),
       status: 'starting',
       cwd: topic.worktree,
       command,

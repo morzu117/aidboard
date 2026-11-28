@@ -74,6 +74,7 @@ export interface Probes {
   loadSqlite(): Promise<string | null>;
   homeMode(): number | null; // null = ~/.aid absent
   port(): Promise<{ port: number; state: 'aid' | 'libre' | 'occupe' }>;
+  bwrapVersion?(): Promise<string | undefined>;
   /** chantier 30 (D162) : le second port, celui des artefacts ; `aid` = ouvert par le daemon */
   artefactsPort(): Promise<{ port: number; state: 'aid' | 'libre' | 'occupe'; raison?: string }>;
   environnement?(): Promise<Environnement | null>;
@@ -229,6 +230,18 @@ export async function runChecks(p: Probes): Promise<Check[]> {
       detail: 'par autre chose qu’A-I-D : changer `port` dans ~/.aid/config.yaml',
     },
   );
+
+  const bwrapVersion = await p.bwrapVersion?.();
+  if (bwrapVersion !== undefined) {
+    const isolation =
+      bwrapVersion === 'off'
+        ? 'off'
+        : `bwrap ${bwrapVersion.replace(/^bubblewrap\s+/, '')} (expérimental). L’agent peut lire et remplacer le jeton d’abonnement. Le réseau reste ouvert. À la racine, .claude/ et .mcp.json sont en lecture seule. Leurs équivalents imbriqués et .github/ restent modifiables et relèvent du relevé de fin d’étape de la boucle (chantier 69). L’agent peut modifier CLAUDE.md et AGENTS.md, que lit la session suivante. Ces changements sont visibles dans le diff. Un agent qui doit modifier .claude/ ou .mcp.json à la racine travaille sans isolation.`;
+    add('ok', `Isolation : ${isolation}`);
+    if (bwrapVersion !== 'off') {
+      add('ok', 'Réseau : les sockets Unix abstraites de l’hôte restent accessibles sous bwrap.');
+    }
+  }
 
   const environnement = await p.environnement?.();
   if (environnement) {
@@ -533,6 +546,16 @@ export function realProbes(paths: AidPaths): Probes {
         s.once('error', () => resolve({ port, state: 'occupe' }));
         s.listen(port, '127.0.0.1', () => s.close(() => resolve({ port, state: 'libre' })));
       });
+    },
+    async bwrapVersion() {
+      const info = await runningDaemon(paths);
+      if (!info) return undefined;
+      try {
+        const { status, json } = await daemonFetch(info, 'GET', '/api/state');
+        if (status === 200 && typeof json.bwrapVersion === 'string') return json.bwrapVersion;
+      } catch {
+        return undefined;
+      }
     },
     async environnement() {
       const info = await runningDaemon(paths);

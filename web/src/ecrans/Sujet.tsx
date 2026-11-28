@@ -897,6 +897,7 @@ function Contenu({
                         >
                           {etatOnglet(a)}
                         </span>
+                        {a.isole && <span className="agent-role">isolé</span>}
                         {a.role !== 'free' && (
                           <span
                             className="agent-role"
