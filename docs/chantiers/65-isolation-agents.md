@@ -265,6 +265,7 @@ La fusion de main, avec la boucle du 69. Les quatre conflits ont été résolus 
 ### 65.10 Les remarques du lab (DM75)
 
 Les trois règles de DM75, chacune avec son test sous le vrai bwrap, dans le job `isolation`. Le testeur écrit d'abord les tests à partir de DM75 seul.
+- _Acceptation._ Couvert par `test/isolation-acceptation-65-10.test.ts` (adabb8c), écrit par le testeur depuis DM75 seul. Les cas se jouent sous le vrai bwrap, dans le job `isolation`. Le gate et les deux exécutions de la preuve lisent les trois fichiers d'identifiants à travers `/dev/null`, alors que le faux agent de boucle lit les valeurs factices. `gitdir` ne peut être remplacé ni par `mv`, ni par `rm` puis recréation. Son contenu et son inode restent identiques dehors. Le script du gate tente de réécrire `.git`, `commondir`, `gitdir` et les réglages Claude, cherche les variables factices et essaie d'atteindre `/run/user/<uid>`, avec des témoins dehors. Tout échoue.
 
 ## 5. Pièges
 
