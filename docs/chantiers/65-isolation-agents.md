@@ -139,7 +139,7 @@ Le gate de la boucle lance `/bin/sh` dans le daemon, hors du bac, sur du code é
 
 Le lab a donné son oui pour la #210 à 7a1fd95 (DM 107579). Elle est mergée sur le oui de Julien. Ses trois remarques passent dans une PR de suite.
 
-- **Le gate et les preuves ne voient pas les identifiants des agents.** Pour ces commandes, `~/.claude/.credentials.json`, `~/.claude.json` et `~/.codex/auth.json` sont masqués par `/dev/null`, comme `.git-credentials`. L'agent garde son accès, il en a besoin. Le profil du gate est donc dérivé de celui du sujet, sans ces fichiers.
+- **Le gate et les preuves ne voient pas les identifiants des agents.** Pour ces commandes, `~/.claude/.credentials.json`, `~/.claude.json` et `~/.codex/auth.json` sont masqués par un fichier vide ordinaire, en lecture seule (0444), que le daemon prépare dans un de ses dossiers et monte avec `--ro-bind`. bwrap monte tout `--ro-bind` en nodev : `/dev/null` monté ainsi sur un fichier devient illisible (EACCES), au lieu d'être vide. Le lab l'a mesuré (DM 107914). `.git-credentials` passe au même fichier vide, par cohérence. L'agent garde son accès, il en a besoin. Le profil du gate est donc dérivé de celui du sujet, sans ces fichiers.
 - **Le test de remplacement couvre aussi `gitdir`**, en plus de `.git` et de `commondir`.
 - **Le script du gate tente C à F à la lettre.** Il essaie aussi de réécrire les pointeurs git et de joindre `/run/user`, avec un témoin dehors pour chaque sortie.
 
