@@ -205,7 +205,7 @@ function preparerProjetClaude(home: string, worktree: string): string {
 export function envelopper(
   bwrapBin: string,
   profil: ProfilIsolation,
-  { pty, sourcePreuve }: Parameters<typeof argvBwrap>[1],
+  options: Parameters<typeof argvBwrap>[1],
   fs: FsIsolation,
   file: string,
   args: string[],
@@ -224,11 +224,11 @@ export function envelopper(
       }
       if (basename(file) === 'claude') projetClaude = preparerProjetClaude(profil.home, worktree);
     }
-    const etat = copieConfigurationClaude(profil, fs);
+    const etat = options.masquerIdentifiants ? undefined : copieConfigurationClaude(profil, fs);
     if (etat) nettoyages.push(etat.nettoyer);
     const argv = argvBwrap(
       { ...profil, copieClaude: etat?.copie ?? profil.copieClaude, projetClaude },
-      { pty, sourcePreuve },
+      options,
       fs,
     );
     return {
@@ -254,7 +254,7 @@ export function envelopperCommande(
   const lancement = envelopper(
     resolve(binaire),
     { ...profil, tmp: env.TMPDIR },
-    { pty: false, sourcePreuve },
+    { pty: false, sourcePreuve, masquerIdentifiants: true },
     { existsSync, lstatSync, readlinkSync, realpathSync, statSync },
     file,
     args,
