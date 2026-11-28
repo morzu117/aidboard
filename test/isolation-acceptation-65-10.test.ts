@@ -95,8 +95,11 @@ touch temoin-agent
 
     const verifierMasquage = identifiants
       .map(
-        ({ chemin, relatif }) => `lu=$(cat ${citer(chemin)}) || exit 42
-if test -n "$lu" || ! test ${citer(chemin)} -ef /dev/null; then
+        ({
+          chemin,
+          relatif,
+        }) => `octets=$({ cat ${citer(chemin)} || printf '.'; } | wc -c) || exit 42
+if test "$octets" -ne 0; then
   printf '%s\\n' ${citer(`Masquage absent : ${relatif}`)} >&2
   exit 41
 fi`,

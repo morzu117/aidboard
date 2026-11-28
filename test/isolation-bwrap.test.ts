@@ -1,3 +1,5 @@
+import { lstatSync, realpathSync } from 'node:fs';
+import { sep } from 'node:path';
 import { expect, test, vi } from 'vitest';
 import { ConfigError, parseConfig } from '../src/daemon/config.js';
 import { argvBwrap, gitCommunDe, type ProfilIsolation } from '../src/daemon/isolation/bwrap.js';
@@ -70,7 +72,9 @@ test('monte les zones cachées, les exceptions inscriptibles sous AID_HOME et le
     [credentials, ...etat, ...recouvrements],
   );
 
-  expect(argvBwrap(profil, { pty: true }, fs)).toEqual([
+  const args = argvBwrap(profil, { pty: true }, fs);
+  const source = args[args.indexOf(credentials) - 1] ?? '';
+  expect(args).toEqual([
     ...base,
     '--unsetenv',
     'PWD',
@@ -78,7 +82,7 @@ test('monte les zones cachées, les exceptions inscriptibles sous AID_HOME et le
     profil.aidHome,
     ...identites.flatMap((chemin) => ['--tmpfs', chemin]),
     '--ro-bind',
-    '/dev/null',
+    source,
     credentials,
     ...inscriptibles.flatMap((chemin) => ['--bind', chemin, chemin]),
     ...montagesProjet,
@@ -87,6 +91,16 @@ test('monte les zones cachées, les exceptions inscriptibles sous AID_HOME et le
     ...sessions.flatMap((chemin) => ['--bind', chemin, chemin]),
     ...recouvrements.flatMap((chemin) => ['--ro-bind', chemin, chemin]),
   ]);
+  expect(source).not.toBe('/dev/null');
+  const statut = lstatSync(source);
+  expect(statut.isFile()).toBe(true);
+  expect(statut.size).toBe(0);
+  expect(statut.mode & 0o777).toBe(0o444);
+  const cheminReel = realpathSync(source);
+  for (const dossier of [profil.home, profil.worktree]) {
+    expect(cheminReel).not.toBe(dossier);
+    expect(cheminReel.startsWith(dossier + sep)).toBe(false);
+  }
 });
 
 test('remonte la configuration du projet après le worktree', () => {
