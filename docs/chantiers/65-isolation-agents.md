@@ -135,6 +135,14 @@ Le gate de la boucle lance `/bin/sh` dans le daemon, hors du bac, sur du code é
 - **Sans isolation, rien ne change**, sur macOS par exemple. La limite reste écrite dans `limites-boucle.ts`, et elle dit maintenant que l'isolation couvre aussi le gate.
 - Les sorties C à F, refaites depuis un script lancé par le gate, échouent comme depuis l'agent, sous le vrai bwrap, dans le job `isolation`.
 
+### DM75. Les remarques non bloquantes du lab (28 novembre)
+
+Le lab a donné son oui pour la #210 à 7a1fd95 (DM 107579). Elle est mergée sur le oui de Julien. Ses trois remarques passent dans une PR de suite.
+
+- **Le gate et les preuves ne voient pas les identifiants des agents.** Pour ces commandes, `~/.claude/.credentials.json`, `~/.claude.json` et `~/.codex/auth.json` sont masqués par `/dev/null`, comme `.git-credentials`. L'agent garde son accès, il en a besoin. Le profil du gate est donc dérivé de celui du sujet, sans ces fichiers.
+- **Le test de remplacement couvre aussi `gitdir`**, en plus de `.git` et de `commondir`.
+- **Le script du gate tente C à F à la lettre.** Il essaie aussi de réécrire les pointeurs git et de joindre `/run/user`, avec un témoin dehors pour chaque sortie.
+
 ## 4. Points
 
 ### 65.1 Le plan
@@ -253,6 +261,10 @@ La fusion de main, avec la boucle du 69. Les quatre conflits ont été résolus 
 
 - _Acceptation._ Couvert par `test/isolation-acceptation-65-9.test.ts` et `test/isolation-acceptation-boucle.test.ts` (0a8764d), écrits depuis DM74 seul. Sous le vrai bwrap, le gate écrit puis exécute un script qui tente C à F : les écritures dans le home, dans les hooks git et dans `settings.json` échouent, et la variable factice est absente. L'écriture dans le worktree et dans le TMPDIR passe. Même chose pour les preuves. Le délai et l'arrêt figent le témoin petit-fils. Sans bwrap, la boucle escalade et le témoin de commande reste absent. En `off`, l'argv est l'argv habituel. La limite affichée dit que bwrap couvre le gate. Interface : `lancerGate({ …, isolation?: { bwrapBin, profil } })` et la même option pour `produirePreuves`.
 - _Révision 65.8 et 65.9._ Une passe Codex. Trente-huit lignes existantes remplacées, toutes dans le périmètre. Le testeur a ajouté une origine fictive au dépôt témoin des preuves (6300bbd). Mon gate : 5 412, et les 14 e2e de la boucle et de la livraison passent. Les cas sous le vrai bwrap sont joués par le job `isolation` de la CI.
+
+### 65.10 Les remarques du lab (DM75)
+
+Les trois règles de DM75, chacune avec son test sous le vrai bwrap, dans le job `isolation`. Le testeur écrit d'abord les tests à partir de DM75 seul.
 
 ## 5. Pièges
 
