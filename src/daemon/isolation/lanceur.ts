@@ -1,7 +1,9 @@
 import { spawn } from 'node:child_process';
 import {
+  chmodSync,
   copyFileSync,
   existsSync,
+  linkSync,
   lstatSync,
   mkdirSync,
   mkdtempSync,
@@ -15,7 +17,7 @@ import {
   type Stats,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { basename, join, resolve } from 'node:path';
+import { basename, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import type { SpawnChild } from '../conversation/driver.js';
 import { OPTIONS_GIT_SUJET } from '../git/exec.js';
 import type { AidPaths } from '../paths.js';
@@ -33,6 +35,57 @@ export class BubblewrapIndisponible extends Error {
   constructor() {
     super('isolation demandée mais bubblewrap indisponible');
   }
+}
+
+let dossierMasquage: string | undefined;
+
+function preparerFichierVide(profil: ProfilIsolation, depot?: string): string {
+  const racines = [profil.home, profil.worktree, ...(depot ? [depot] : [])].map((chemin) =>
+    realpathSync(chemin),
+  );
+  const horsRacines = (dossier: string) =>
+    racines.every((racine) => {
+      const chemin = relative(racine, dossier);
+      return chemin === '..' || chemin.startsWith('..' + sep) || isAbsolute(chemin);
+    });
+  let dossier = realpathSync(profil.aidHome);
+  if (!horsRacines(dossier)) {
+    const temporaire = realpathSync(tmpdir());
+    if (!horsRacines(temporaire)) {
+      throw new Error('Isolation bwrap : aucun dossier de masquage hors du home et du worktree');
+    }
+    if (!dossierMasquage) {
+      const prive = mkdtempSync(join(temporaire, 'aid-masquage-'));
+      process.once('exit', () => rmSync(prive, { recursive: true, force: true }));
+      dossierMasquage = prive;
+    }
+    dossier = dossierMasquage;
+    if (!horsRacines(dossier)) {
+      throw new Error('Isolation bwrap : dossier de masquage dans le home ou le worktree');
+    }
+  }
+  const chemin = join(dossier, 'masque-vide');
+  if (!lstatSync(chemin, { throwIfNoEntry: false })) {
+    // Publie le fichier seulement une fois son mode définitif appliqué.
+    const provisoire = mkdtempSync(join(dossier, 'aid-masquage-'));
+    try {
+      const vide = join(provisoire, 'vide');
+      writeFileSync(vide, '', { flag: 'wx', mode: 0o444 });
+      chmodSync(vide, 0o444);
+      try {
+        linkSync(vide, chemin);
+      } catch (cause) {
+        if ((cause as NodeJS.ErrnoException).code !== 'EEXIST') throw cause;
+      }
+    } finally {
+      rmSync(provisoire, { recursive: true, force: true });
+    }
+  }
+  const statut = lstatSync(chemin);
+  if (!statut.isFile() || statut.size !== 0 || (statut.mode & 0o7777) !== 0o444) {
+    throw new Error(`Isolation bwrap : ${chemin} doit être un fichier ordinaire vide en 0444`);
+  }
+  return chemin;
 }
 
 export function profilPour(
@@ -75,6 +128,7 @@ export function profilPour(
       '--git-dir',
     ]).replace(/\r?\n$/, '');
   }
+  if (fs.existsSync(paths.home)) profil.fichierVide = preparerFichierVide(profil, depot);
   // Valide les chemins avant que le manager ne démarre le pilote.
   argvBwrap(profil, { pty: false }, fs);
   return profil;

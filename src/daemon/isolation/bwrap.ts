@@ -11,6 +11,7 @@ export interface ProfilIsolation {
   piecesJointes: string;
   tmp?: string;
   gitDir?: string;
+  fichierVide?: string;
   copieClaude?: string;
   projetClaude?: string;
 }
@@ -98,9 +99,13 @@ export function argvBwrap(
     const chemin = join(home, relatif);
     if (fs.existsSync(chemin) && fs.statSync(chemin).isDirectory()) argv.push('--tmpfs', chemin);
   }
+  const monterFichierVide = (destination: string) => {
+    if (!profil.fichierVide) throw new Error('Isolation bwrap : fichier vide de masquage absent');
+    argv.push('--ro-bind', profil.fichierVide, destination);
+  };
   const credentials = join(home, '.git-credentials');
   if (fs.existsSync(credentials) && fs.statSync(credentials).isFile()) {
-    argv.push('--ro-bind', '/dev/null', credentials);
+    monterFichierVide(credentials);
   }
 
   // node_modules dans le checkout de preuve pointe vers le worktree du sujet.
@@ -176,7 +181,7 @@ export function argvBwrap(
     for (const relatif of IDENTIFIANTS_AGENTS) {
       const chemin = join(home, relatif);
       if (fs.existsSync(chemin) && fs.statSync(chemin).isFile()) {
-        argv.push('--ro-bind', '/dev/null', chemin);
+        monterFichierVide(chemin);
       }
     }
   } else if (profil.copieClaude) {

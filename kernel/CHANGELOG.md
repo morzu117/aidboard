@@ -12,7 +12,7 @@ et patchs n'en ont pas, sauf mention contraire.
 Changement mineur, sans migration. La politique d'orchestration décrit le
 travail sous bubblewrap. L'isolation est désactivée par défaut.
 Sous bubblewrap, la boucle isole aussi son gate et ses preuves d’acceptation. Le réseau reste ouvert.
-Le gate et les preuves masquent les fichiers d’identifiants de Claude et Codex sous bubblewrap.
+Sous bubblewrap, un fichier ordinaire vide en 0444 masque `.git-credentials` et, pour le gate et les preuves, les fichiers d’identifiants de Claude et Codex.
 
 ## Suite de la boucle du daemon (chantier 69.11)
 
